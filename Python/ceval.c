@@ -2805,6 +2805,13 @@ _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home)
  * owner closes it on every path. */
 
 PyValue
+_PyRop_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                uint32_t index)
+{
+    return _PyEval_LoadName(tstate, frame, _PyRop_NameAt(frame, index));
+}
+
+PyValue
 _PyRop_LoadLocals(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
     PyObject *l = frame->f_locals;
@@ -2833,25 +2840,27 @@ _PyRop_LoadBuildClass(PyThreadState *tstate, _PyInterpreterFrame *frame)
 }
 
 _PyStatusValue
-_PyRop_LoadFromDict(PyThreadState *tstate, PyValueBorrow mapping,
-                    PyObject *name)
+_PyRop_LoadFromDict(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValueBorrow mapping, uint32_t index)
 {
     assert(PyValue_IsObject(mapping));
     return value_load_from_dict(tstate, PyValue_AsKnownObjectBorrow(mapping),
-                                name);
+                                _PyRop_NameAt(frame, index));
 }
 
 PyValue
-_PyRop_LoadGlobalOrBuiltin(_PyInterpreterFrame *frame, PyObject *name)
+_PyRop_LoadGlobalOrBuiltin(_PyInterpreterFrame *frame, uint32_t index)
 {
+    PyObject *name = _PyRop_NameAt(frame, index);
     return value_load_global(frame->f_globals, frame->f_builtins, name);
 }
 
 /* A NULL value deletes: _PyEval_StoreName's convention */
 int
 _PyRop_StoreName(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                 PyObject *name, PyValue v)
+                 uint32_t index, PyValue v)
 {
+    PyObject *name = _PyRop_NameAt(frame, index);
     int error = _PyEval_StoreName(tstate, PyValue_Borrow(v), name,
                                   frame->f_locals);
     PyValue_XCLOSE(v);
@@ -2860,15 +2869,16 @@ _PyRop_StoreName(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 int
 _PyRop_DeleteName(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                  PyObject *name)
+                  uint32_t index)
 {
-    return _PyRop_StoreName(tstate, frame, name, PyValue_NULL);
+    return _PyRop_StoreName(tstate, frame, index, PyValue_NULL);
 }
 
 int
 _PyRop_StoreGlobal(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                   PyObject *name, PyValue v)
+                   uint32_t index, PyValue v)
 {
+    PyObject *name = _PyRop_NameAt(frame, index);
     int err = PyDict_SetValue(frame->f_globals, PyValue_FromObjectBorrow(name),
                               PyValue_Borrow(v));
     PyValue_XCLOSE(v);
@@ -2877,8 +2887,9 @@ _PyRop_StoreGlobal(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 int
 _PyRop_DeleteGlobal(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                    PyObject *name)
+                    uint32_t index)
 {
+    PyObject *name = _PyRop_NameAt(frame, index);
     int err = PyDict_PopValue(frame->f_globals, PyValue_FromObjectBorrow(name),
                               NULL);
     if (err == 0) {
@@ -2950,8 +2961,9 @@ _PyRop_ImportName(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 PyValue
 _PyRop_ImportFrom(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                  PyValue module, PyObject *name)
+                  PyValue module, uint32_t index)
 {
+    PyObject *name = _PyRop_NameAt(frame, index);
     // The module may be a number, if __import__ returned one
     PyObject *from_o = PyValue_ObjectOrNull(PyValue_Borrow(module));
     PyValue res;

@@ -207,6 +207,7 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
 #define IR_D(W)         ((uint32_t)((W) >> 52))
 #define IR_CD(W)        ((uint32_t)((W) >> 40))
+#define IR_AB(W)        ((uint32_t)((W) >> 16) & IR_CD_MAX)
 #define IR_BC(W)        ((uint32_t)((W) >> 28) & IR_CD_MAX)
 /* D as a signed distance */
 #define IR_DS(W)        ((int)(IR_D(W) ^ 0x800) - 0x800)

@@ -559,7 +559,7 @@ static const uint16_t _PyRop_Ops_Import[] = {IMPORT_NAME};
 static const _PyRopOperand _PyRop_Operands_ImportFrom[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"module", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
-    {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Name */
+    {"name", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 16, 40, 0},  /* U16 */
 };
 static const uint16_t _PyRop_Ops_ImportFrom[] = {IMPORT_FROM};
 static const _PyRopOperand _PyRop_Operands_InitResult[] = {
@@ -618,23 +618,23 @@ static const _PyRopOperand _PyRop_Operands_Move[] = {
 };
 static const uint16_t _PyRop_Ops_Move[] = {SWAP, COPY, POP_TOP};
 static const _PyRopOperand _PyRop_Operands_NamespaceDelete[] = {
-    {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 16, 0},  /* Name */
+    {"name", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 16, 16, 0},  /* U16 */
 };
 static const uint16_t _PyRop_Ops_NamespaceDelete[] = {STORE_NAME, STORE_GLOBAL};
 static const _PyRopOperand _PyRop_Operands_NamespaceRead[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
-    {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 28, 0},  /* Name */
+    {"name", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 16, 28, 0},  /* U16 */
 };
 static const uint16_t _PyRop_Ops_NamespaceRead[] = {LOAD_NAME, LOAD_LOCALS, LOAD_BUILD_CLASS};
 static const _PyRopOperand _PyRop_Operands_NamespaceReadFrom[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"mapping", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
-    {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Name */
+    {"name", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 16, 40, 0},  /* U16 */
 };
 static const uint16_t _PyRop_Ops_NamespaceReadFrom[] = {LOAD_FROM_DICT_OR_GLOBALS};
 static const _PyRopOperand _PyRop_Operands_NamespaceWrite[] = {
-    {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 16, 0},  /* Name */
-    {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
+    {"name", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 16, 16, 0},  /* U16 */
+    {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
 };
 static const uint16_t _PyRop_Ops_NamespaceWrite[] = {STORE_NAME, STORE_GLOBAL};
 static const _PyRopOperand _PyRop_Operands_Nop[] = {

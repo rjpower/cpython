@@ -1297,7 +1297,7 @@ _PyIR_Rop_Stub_NamespaceRead_Name(
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
     IR_STUB_ESCAPE();
-    ret1 = _PyEval_LoadName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_B(ir_word)));
+    ret1 = _PyRop_LoadName(tstate, frame, ((uint32_t)IR_B(ir_word) | ((uint32_t)IR_C(ir_word) << 12)));
     if (PyValue_IsNull(ret1)) {
         goto rop_NamespaceRead_Name_Failed;
     }
@@ -1409,7 +1409,7 @@ _PyIR_Rop_Stub_NamespaceReadFrom_Mapping(
     PyValue z;
     a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}});
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_LoadFromDict(tstate, _PyRop_AnchorArg(&a, 0), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    ret1 = _PyRop_LoadFromDict(tstate, frame, _PyRop_AnchorArg(&a, 0), ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)));
     if (ret1.status == 0) {
         goto rop_NamespaceReadFrom_Mapping_Fallback;
     }
@@ -1430,7 +1430,7 @@ _PyIR_Rop_Stub_NamespaceReadFrom_Mapping(
     DISPATCH();
     rop_NamespaceReadFrom_Mapping_Fallback:
     IR_STUB_ESCAPE();
-    ret2 = _PyRop_LoadGlobalOrBuiltin(frame, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    ret2 = _PyRop_LoadGlobalOrBuiltin(frame, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)));
     if (!PyValue_IsNull(ret2)) {
         z = ret2;
         goto rop_NamespaceReadFrom_Mapping_Done;
@@ -1458,12 +1458,12 @@ _PyIR_Rop_Stub_NamespaceWrite_Name(
     IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceWrite_Name);
-    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
     PyValue v;
     int ret1;
-    v = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+    v = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_StoreName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_A(ir_word)), v);
+    ret1 = _PyRop_StoreName(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)), v);
     if (ret1 < 0) {
         goto rop_NamespaceWrite_Name_Failed;
     }
@@ -1489,12 +1489,12 @@ _PyIR_Rop_Stub_NamespaceWrite_Global(
     IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceWrite_Global);
-    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
     PyValue v;
     int ret1;
-    v = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+    v = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_StoreGlobal(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_A(ir_word)), v);
+    ret1 = _PyRop_StoreGlobal(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)), v);
     if (ret1 < 0) {
         goto rop_NamespaceWrite_Global_Failed;
     }
@@ -1522,7 +1522,7 @@ _PyIR_Rop_Stub_NamespaceDelete_Name(
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceDelete_Name);
     int ret1;
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_DeleteName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_A(ir_word)));
+    ret1 = _PyRop_DeleteName(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)));
     if (ret1 < 0) {
         goto rop_NamespaceDelete_Name_Failed;
     }
@@ -1550,7 +1550,7 @@ _PyIR_Rop_Stub_NamespaceDelete_Global(
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceDelete_Global);
     int ret1;
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_DeleteGlobal(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_A(ir_word)));
+    ret1 = _PyRop_DeleteGlobal(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)));
     if (ret1 < 0) {
         goto rop_NamespaceDelete_Global_Failed;
     }
@@ -1738,7 +1738,7 @@ _PyIR_Rop_Stub_ImportFrom_From(
     PyValue z;
     m = PyValue_DUP(PyValue_Borrow(*home_module));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_ImportFrom(tstate, frame, m, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    ret1 = _PyRop_ImportFrom(tstate, frame, m, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)));
     if (PyValue_IsNull(ret1)) {
         goto rop_ImportFrom_From_Failed;
     }
@@ -1777,7 +1777,7 @@ _PyIR_Rop_Stub_ImportFrom_FromLast(
     PyValue z;
     m = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_module) : _PyFrame_TakeHome(frame, home_module));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_ImportFrom(tstate, frame, m, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    ret1 = _PyRop_ImportFrom(tstate, frame, m, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)));
     if (PyValue_IsNull(ret1)) {
         goto rop_ImportFrom_FromLast_Failed;
     }

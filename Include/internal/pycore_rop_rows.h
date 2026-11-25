@@ -243,23 +243,32 @@ int _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 /* The members of ImportKind in declaration order */
 enum { IMPORT_EAGER, IMPORT_POLICY, IMPORT_LAZY };
 
-/* Python/ceval.c: the namespace rows (Python/register_ops/namespaces.rop) */
+/* Python/ceval.c: the namespace rows (Python/register_ops/namespaces.rop).
+ * A name is passed as its index in co_names, which an operand holds in 16
+ * bits, wider than a name field. */
+static inline PyObject *
+_PyRop_NameAt(_PyInterpreterFrame *frame, uint32_t index)
+{
+    return _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_names, index);
+}
+
+PyAPI_FUNC(PyValue) _PyRop_LoadName(PyThreadState *, _PyInterpreterFrame *, uint32_t);
 PyAPI_FUNC(PyValue) _PyRop_LoadLocals(PyThreadState *, _PyInterpreterFrame *);
 PyAPI_FUNC(PyValue) _PyRop_LoadBuildClass(PyThreadState *, _PyInterpreterFrame *);
-PyAPI_FUNC(_PyStatusValue) _PyRop_LoadFromDict(PyThreadState *, PyValueBorrow,
-                                               PyObject *);
-PyAPI_FUNC(PyValue) _PyRop_LoadGlobalOrBuiltin(_PyInterpreterFrame *, PyObject *);
+PyAPI_FUNC(_PyStatusValue) _PyRop_LoadFromDict(PyThreadState *, _PyInterpreterFrame *,
+                                               PyValueBorrow, uint32_t);
+PyAPI_FUNC(PyValue) _PyRop_LoadGlobalOrBuiltin(_PyInterpreterFrame *, uint32_t);
 PyAPI_FUNC(int) _PyRop_StoreName(PyThreadState *, _PyInterpreterFrame *,
-                                 PyObject *, PyValue);
-PyAPI_FUNC(int) _PyRop_DeleteName(PyThreadState *, _PyInterpreterFrame *, PyObject *);
+                                 uint32_t, PyValue);
+PyAPI_FUNC(int) _PyRop_DeleteName(PyThreadState *, _PyInterpreterFrame *, uint32_t);
 PyAPI_FUNC(int) _PyRop_StoreGlobal(PyThreadState *, _PyInterpreterFrame *,
-                                   PyObject *, PyValue);
-PyAPI_FUNC(int) _PyRop_DeleteGlobal(PyThreadState *, _PyInterpreterFrame *, PyObject *);
+                                   uint32_t, PyValue);
+PyAPI_FUNC(int) _PyRop_DeleteGlobal(PyThreadState *, _PyInterpreterFrame *, uint32_t);
 PyAPI_FUNC(int) _PyRop_SetupAnnotations(PyThreadState *, _PyInterpreterFrame *);
 PyAPI_FUNC(PyValue) _PyRop_ImportName(PyThreadState *, _PyInterpreterFrame *,
                                       PyObject *, PyValue, PyValue, uint32_t);
 PyAPI_FUNC(PyValue) _PyRop_ImportFrom(PyThreadState *, _PyInterpreterFrame *,
-                                      PyValue, PyObject *);
+                                      PyValue, uint32_t);
 
 /* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The
  * members of BranchMode in declaration order, the numbers the generated

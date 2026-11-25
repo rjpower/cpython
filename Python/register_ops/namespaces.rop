@@ -9,16 +9,16 @@
 // locals, then the globals, then the builtins; Locals is the namespace
 // itself; BuildClass is the builtins' __build_class__.  Locals and
 // BuildClass read no name: their word's name field is 0.
-family NamespaceRead(dst:Dst, name:Name)
+family NamespaceRead(dst:Dst, name:U16)
   exits(next, raise) ops(LOAD_NAME, LOAD_LOCALS, LOAD_BUILD_CLASS);
 
 point NamespaceRead.Failed(current, site, pending) keep() spent() defs() held();
 point NamespaceRead.Done(current, next_head, clear) keep() spent() defs(dst) held();
 
-extern helper load_name(t:Thread, fr:Frame, n:Name)
+extern helper load_name(t:Thread, fr:Frame, n:U16)
   cases(ok(z:O), err(e:Err))
   effects(raises, runs_python)
-  c _PyEval_LoadName as value_or_null
+  c _PyRop_LoadName as value_or_null
   evidence(
     review: "ceval.c _PyEval_LoadName: locals, then globals (a lazy import is reified), then builtins.",
     contract: "The result owned, or NULL with an exception set (NameError, SystemError for no locals). Callbacks: a mapping's __getitem__.");
@@ -92,7 +92,7 @@ arm NamespaceRead.BuildClass shared select(build_class_scope)
 
 // The class namespace (or any mapping) first, then the globals and
 // builtins.  The mapping is anchored for the lookups and spent at the end.
-family NamespaceReadFrom(dst:Dst, mapping:Src, name:Name)
+family NamespaceReadFrom(dst:Dst, mapping:Src, name:U16)
   exits(next, raise) ops(LOAD_FROM_DICT_OR_GLOBALS);
 
 point NamespaceReadFrom.Failed(current, site, pending) keep() spent(mapping) defs() held();
@@ -101,7 +101,7 @@ point NamespaceReadFrom.Done(current, next_head, clear) keep() spent(mapping) de
 // name in a mapping, with a lazy import in the result reified
 // (ceval.c value_load_from_dict): found, missing, or raised.  Unit CE
 // (cells: LOAD_FROM_DICT_OR_DEREF, the CellMapRead arm) uses this row too.
-extern helper load_from_dict(t:Thread, d:B, n:Name)
+extern helper load_from_dict(t:Thread, fr:Frame, d:B, n:U16)
   cases(found(z:O), missing(), err(e:Err))
   effects(reads, allocates, raises, runs_python)
   c _PyRop_LoadFromDict as status_optional
@@ -110,7 +110,7 @@ extern helper load_from_dict(t:Thread, d:B, n:Name)
     contract: "The mapping is borrowed. Found: the result owned; missing: nothing; error: the exception set. Callbacks: arbitrary Python (the mapping's __getitem__, the import system).");
 
 // name in the globals, then the builtins (ceval.c value_load_global)
-extern helper global_or_builtin_value(fr:Frame, n:Name)
+extern helper global_or_builtin_value(fr:Frame, n:U16)
   cases(ok(z:O), err(e:Err))
   effects(reads, allocates, raises, runs_python)
   c _PyRop_LoadGlobalOrBuiltin as value_or_null
@@ -125,7 +125,7 @@ arm NamespaceReadFrom.Mapping shared
 {
   entry():
     let a:Anchors = anchor_for_call([mapping]);
-    call load_from_dict(thread, arg(a, 0), name) {
+    call load_from_dict(thread, frame, arg(a, 0), name) {
       found -> Done();
       missing -> Fallback();
       err -> Failed();
@@ -145,13 +145,13 @@ arm NamespaceReadFrom.Mapping shared
 
 // NamespaceWrite: the value into the namespace, which takes its own owner.
 // Name is the locals (a mapping); Global is the globals dict.
-family NamespaceWrite(name:Name, value:Src)
+family NamespaceWrite(name:U16, value:Src)
   exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
 
 point NamespaceWrite.Failed(current, site, pending) keep() spent(value) defs() held();
 point NamespaceWrite.Done(current, next_head, clear) keep() spent(value) defs() held();
 
-extern helper store_name(t:Thread, fr:Frame, n:Name, v:O)
+extern helper store_name(t:Thread, fr:Frame, n:U16, v:O)
   cases(ok(), err(e:Err))
   effects(allocates, raises, releases, runs_python)
   c _PyRop_StoreName as int_zero_ok
@@ -159,7 +159,7 @@ extern helper store_name(t:Thread, fr:Frame, n:Name, v:O)
     review: "ceval.c _PyRop_StoreName: _PyEval_StoreName into the frame's locals, then the value closed.",
     contract: "Consumes the value on every path. 0, or -1 with the exception set (SystemError for no locals). Callbacks: a mapping's __setitem__, a finalizer.");
 
-extern helper store_global(t:Thread, fr:Frame, n:Name, v:O)
+extern helper store_global(t:Thread, fr:Frame, n:U16, v:O)
   cases(ok(), err(e:Err))
   effects(allocates, raises, releases, runs_python)
   c _PyRop_StoreGlobal as int_zero_ok
@@ -205,13 +205,13 @@ arm NamespaceWrite.Global shared select(global_scope)
 
 // NamespaceDelete: `del name`, which the compiler writes as a NULL store.
 // A missing name raises NameError.
-family NamespaceDelete(name:Name)
+family NamespaceDelete(name:U16)
   exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
 
 point NamespaceDelete.Failed(current, site, pending) keep() spent() defs() held();
 point NamespaceDelete.Done(current, next_head, clear) keep() spent() defs() held();
 
-extern helper delete_name(t:Thread, fr:Frame, n:Name)
+extern helper delete_name(t:Thread, fr:Frame, n:U16)
   cases(ok(), err(e:Err))
   effects(allocates, raises, runs_python)
   c _PyRop_DeleteName as int_zero_ok
@@ -219,7 +219,7 @@ extern helper delete_name(t:Thread, fr:Frame, n:Name)
     review: "ceval.c _PyRop_DeleteName: _PyEval_StoreName with no value: del of the name in the frame's locals.",
     contract: "0, or -1 with the exception set (NameError for a missing name, SystemError for no locals). Callbacks: a mapping's __delitem__.");
 
-extern helper delete_global(t:Thread, fr:Frame, n:Name)
+extern helper delete_global(t:Thread, fr:Frame, n:U16)
   cases(ok(), err(e:Err))
   effects(allocates, raises, runs_python)
   c _PyRop_DeleteGlobal as int_zero_ok
@@ -294,6 +294,8 @@ arm SetupAnnotations.Setup shared
 // compiler fixes how the import may be lazy: Eager is forced eager (inside
 // a handler or a function); Policy is lazy when the interpreter's policy
 // or __lazy_modules__ says so; Lazy is `lazy import`.
+// The name is a name field (an index below 4096): the head has no room for a
+// wider one beside dst, level and fromlist.
 family Import(dst:Dst, level:Src, fromlist:Src, name:Name)
   exits(next, raise) ops(IMPORT_NAME);
 
@@ -370,7 +372,7 @@ arm Import.Lazy shared select(lazy_import)
 // ImportFrom: `from m import name` (IMPORT_FROM).  From leaves the module
 // in its home for the next read; FromLast is the last read, which spends it
 // (no retirement follows).
-family ImportFrom(dst:Dst, module:Src, name:Name)
+family ImportFrom(dst:Dst, module:Src, name:U16)
   exits(next, raise) ops(IMPORT_FROM);
 
 point ImportFrom.Failed(current, site, pending) keep(module) spent() defs() held();
@@ -378,7 +380,7 @@ point ImportFrom.Done(current, next_head, clear) keep(module) spent() defs(dst) 
 point ImportFrom.LastFailed(current, site, pending) keep() spent(module) defs() held();
 point ImportFrom.LastDone(current, next_head, clear) keep() spent(module) defs(dst) held();
 
-extern helper import_from(t:Thread, fr:Frame, m:O, n:Name)
+extern helper import_from(t:Thread, fr:Frame, m:O, n:U16)
   cases(ok(z:O), err(e:Err))
   effects(allocates, raises, releases, runs_python)
   c _PyRop_ImportFrom as value_or_null

@@ -422,6 +422,8 @@ read_field(_PyIRWord word, int loc)
             return IR_D(word);
         case _PyIR_LOC_CD:
             return IR_CD(word);
+        case _PyIR_LOC_AB:
+            return IR_AB(word);
         case _PyIR_LOC_BC:
             return IR_BC(word);
         default:

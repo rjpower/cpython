@@ -4430,34 +4430,6 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     return f;
 }
 
-// Initialize frame free variables if needed
-static void
-frame_init_get_vars(_PyInterpreterFrame *frame)
-{
-    // COPY_FREE_VARS has no quickened forms, so no need to use _PyOpcode_Deopt
-    // here:
-    PyCodeObject *co = _PyFrame_GetCode(frame);
-    int lasti = _PyFrame_InstrOffset(frame, frame->instr_ptr);
-    if (!(lasti < 0
-          && _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS
-          && frame->f_funcobj != NULL))
-    {
-        /* Free vars are initialized */
-        return;
-    }
-
-    /* Free vars have not been initialized -- Do that */
-    PyFunctionObject *func = _PyFrame_GetFunction(frame);
-    PyObject *closure = func->func_closure;
-    int offset = PyUnstable_Code_GetFirstFree(co);
-    for (int i = 0; i < co->co_nfreevars; ++i) {
-        frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
-    }
-    // COPY_FREE_VARS doesn't have inline CACHEs, either:
-    frame->instr_ptr = _PyFrame_InstrAt(frame, 0);
-}
-
-
 // Return 1 and set *pvalue to a new reference (NULL if the variable is
 // unset), 0 if the variable is skipped, or -1 with an exception set.
 static int
@@ -4490,7 +4462,7 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
         }
         value = PyValue_AsKnownObjectBorrow(frame->base[i]);
         if (kind & CO_FAST_FREE) {
-            // The cell was set by COPY_FREE_VARS.
+            // The cell was set when the frame was entered.
             assert(value != NULL && PyCell_Check(value));
             PyValue cv = _PyCell_GetValue((PyCellObject *)value);
             value = PyValue_IsNull(cv) ? NULL : _PyValue_AsObjectAt(cv, BOX_SITE_CELL);
@@ -4586,7 +4558,6 @@ PyFrame_GetVar(PyFrameObject *frame_obj, PyObject *name)
     }
 
     _PyInterpreterFrame *frame = frame_obj->f_frame;
-    frame_init_get_vars(frame);
 
     PyCodeObject *co = _PyFrame_GetCode(frame);
     for (int i = 0; i < co->co_nlocalsplus; i++) {

@@ -1,7 +1,6 @@
 // Family interfaces of Appendix A, "Data, bindings, constructors, and
 // matching".  Arms come with their batches.
 
-enum CellMode(MAKE, GET, MAPPING_GET, CELL_SET, CELL_DELETE, COPY_FREE);
 enum TextKind(JOIN, INTERPOLATION, TEMPLATE);
 enum ConvertKind(STR, REPR, ASCII);
 enum PatternKind(Mapping, Sequence, Keys, Class);
@@ -12,10 +11,6 @@ family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpa
   exits(next, raise, miss, again) ops(UNPACK_SEQUENCE, UNPACK_EX);
 
 // 1F: namespaces, cells, globals, annotations, import
-
-family Cell(mode:Enum<CellMode>, cell:Cell, value:Maybe<Src>, dst:Maybe<Dst>,
-            frees:Span<Free>)
-  exits(next, raise) ops(MAKE_CELL, LOAD_DEREF, STORE_DEREF, DELETE_DEREF, COPY_FREE_VARS, LOAD_FROM_DICT_OR_DEREF);
 
 // 1G: text
 

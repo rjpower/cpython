@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_cell.h"         // _PyCell_GetValue()
 #include "pycore_ceval.h"         // _PyEval_LoadGlobalValue()
 #include "pycore_code.h"          // _PyBinaryOp_ExtendDescr()
 #include "pycore_feedback.h"      // _PyFbBinary
@@ -284,6 +285,51 @@ _PyRop_SaveLocal(PyValue *local)
     *local = PyValue_NULL;
     return saved;
 }
+
+/* The rows of the cell families (Python/register_ops/cells.rop).  A Cell
+ * operand's home holds a cell object, which MAKE_CELL or frame entry put
+ * there before any instruction reads it. */
+static inline PyCellObject *
+_PyRop_CellIn(PyValue *home)
+{
+    PyObject *cell = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*home));
+    assert(PyCell_Check(cell));
+    return (PyCellObject *)cell;
+}
+
+/* The contents of the cell as a new owner; false when it is empty */
+static inline bool
+_PyRop_CellContents(PyValue *home, PyValue *out)
+{
+    PyValue v = _PyCell_GetValue(_PyRop_CellIn(home));
+    *out = v;
+    return !PyValue_IsNull(v);
+}
+
+/* v moves into the cell; false when it was empty, else the previous owner
+ * comes out for the caller to close */
+static inline bool
+_PyRop_CellExchange(PyValue *home, PyValue v, PyValue *old)
+{
+    PyValue previous = _PyCell_SwapValue(_PyRop_CellIn(home), v);
+    *old = previous;
+    return !PyValue_IsNull(previous);
+}
+
+/* The cell emptied; false when it was already empty */
+static inline bool
+_PyRop_CellTake(PyValue *home, PyValue *old)
+{
+    return _PyRop_CellExchange(home, PyValue_NULL, old);
+}
+
+/* Python/ceval.c: the error of an empty cell */
+void _PyRop_UnboundCell(_PyInterpreterFrame *frame, PyValue *home);
+/* The binding taken out of the local into a new cell, or NULL with the
+ * exception set (the binding is closed) */
+PyValue _PyRop_MakeCell(_PyInterpreterFrame *frame, PyValue *home);
+PyAPI_FUNC(_PyStatusValue) _PyRop_LoadFromDictCell(
+    PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *);
 
 /* Python/ceval.c: UnboundLocalError for the local in home */
 void _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home);

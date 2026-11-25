@@ -3198,8 +3198,7 @@ class TestIRCases(unittest.TestCase):
     def test_home_helpers_keep_ordinary_escape_publication(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
-        expected = {"BUILD_STRING": "IR_BUILD_STRING", "BUILD_MAP": "IR_BUILD_MAP",
-                    "BUILD_SET": "IR_BUILD_SET", "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+        expected = {"BUILD_STRING": "IR_BUILD_STRING", "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
         for name, helper in expected.items():
             part = analysis.uops[name]
             self.assertTrue(ir_generator.home_operation_contract(part))
@@ -3208,14 +3207,6 @@ class TestIRCases(unittest.TestCase):
                                   for escape in part.properties.escaping_calls.values()})
         for name in ("_INSERT_NULL",):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
-        for name, marker in (("BUILD_TUPLE", "IR_BUILD_TUPLE"),
-                             ("BUILD_LIST", "IR_BUILD_LIST")):
-            part = analysis.uops[name]
-            self.assertTrue(ir_generator.home_operation_contract(part))
-            self.assertNotIn(marker, analyzer.IR_MARKER_EFFECTS)
-            escapes = {escape.call.text for escape in part.properties.escaping_calls.values()}
-            self.assertEqual(marker in escapes,
-                             bool(ir_contract.rows()[marker].effects & ir_contract.REENTRY))
 
     def test_input_drain_requires_its_sole_owning_array(self):
         def check(source):
@@ -3401,7 +3392,7 @@ class TestIRCases(unittest.TestCase):
                   outputs="out[2]")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
-        for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST", "BUILD_SET"):
+        for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST"):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
 
     def test_steal_success_handoff_requires_terminal_ownership_sequence(self):
@@ -3548,19 +3539,6 @@ class TestIRCases(unittest.TestCase):
                 self.assertFalse(ir_generator.generator_marker_contract(inst, formats[inst.name]))
             finally:
                 body.body.pop(0)
-        for name in ("MAKE_CELL", "COPY_FREE_VARS"):
-            with self.subTest(handler=name):
-                local = analysis.instructions[name]
-                fmt = formats[name]
-                self.assertEqual(ir_generator.normal_transfer_kind(local, fmt),
-                                 "_PyIR_TRANSFER_PRESERVE")
-                changed = self.analyze("\ninst(OP, (--)) { *slots = PyValue_NULL; }\n")
-                local.parts[0].body.body.append(changed.instructions["OP"].parts[0].body.body[0])
-                try:
-                    self.assertEqual(ir_generator.normal_transfer_kind(local, fmt),
-                                     "_PyIR_TRANSFER_UNKNOWN")
-                finally:
-                    local.parts[0].body.body.pop()
 
     def test_unused_scalar_passthrough_keeps_distinct_array_geometry(self):
         source = """
@@ -3608,8 +3586,7 @@ class TestIRCases(unittest.TestCase):
         real = analyzer.analyze_files([str(actual)])
         formats = ir_generator.compute_formats(real)
         contracts = ir_generator.handler_contracts(real, formats)
-        for name in ("DICT_MERGE", "LIST_APPEND",
-                     "POP_ITER", "INSTRUMENTED_POP_ITER"):
+        for name in ("POP_ITER", "INSTRUMENTED_POP_ITER"):
             with self.subTest(handler=name):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
@@ -3633,21 +3610,6 @@ class TestIRCases(unittest.TestCase):
             with self.subTest(handler=name):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"),))
-        self.assertEqual(contracts["BUILD_TUPLE"].ownership_events, (
-            ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS", flags=1),))
-        body = analysis.instructions["BUILD_TUPLE"].parts[0].body
-        changed = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
-        body.body.insert(0, changed.instructions["OP"].parts[0].body.body[0])
-        try:
-            self.assertFalse(ir_generator.normal_vacate_capability(
-                analysis.instructions["BUILD_TUPLE"], formats["BUILD_TUPLE"]))
-            # The opaque prefix also violates the mandatory success handoff;
-            # emission must reject it before any metadata grant is possible.
-            with self.assertRaisesRegex(SyntaxError,
-                    "steal-success helper needs its checked success handoff"):
-                ir_generator.handler_contracts(analysis, formats)
-        finally:
-            body.body.pop(0)
 
     def test_loop_completion_recipes_follow_actual_emitted_routes(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

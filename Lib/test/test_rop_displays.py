@@ -263,5 +263,44 @@ class Merge(unittest.TestCase):
                       str(cm.exception))
 
 
+class Observation(unittest.TestCase):
+    def test_trace_lines_of_a_display(self):
+        import sys
+
+        def f(a, b):
+            return [
+                a,
+                b,
+                {a: b},
+                (*a, *b),
+            ]
+        lines = []
+
+        def tracer(frame, event, arg):
+            if frame.f_code is f.__code__ and event == "line":
+                lines.append(frame.f_lineno - f.__code__.co_firstlineno)
+            return tracer
+        sys.settrace(tracer)
+        try:
+            f((1,), (2,))
+        finally:
+            sys.settrace(None)
+        # (The order is upstream's: the items, then the return's line)
+        self.assertEqual(lines, [2, 3, 4, 5, 1])
+
+    def test_error_line_is_the_display_start(self):
+        def f(a):
+            return {
+                1: 2,
+                a: 3,
+            }
+        try:
+            f([])
+        except TypeError as e:
+            line = e.__traceback__.tb_next.tb_lineno
+        self.assertEqual(line - f.__code__.co_firstlineno, 1)
+
+
+
 if __name__ == "__main__":
     unittest.main()

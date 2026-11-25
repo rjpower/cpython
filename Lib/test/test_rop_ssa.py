@@ -16,6 +16,7 @@ must change by exactly the number of homes that hold it afterwards."""
 
 import functools
 import sys
+import types
 import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -426,6 +427,22 @@ SCENARIOS = {
     "LocalDelete": Scenario("LocalDelete", {
         "delete": "def f(a):\n    b = a\n    del b\n    return a\n"},
         [{"local": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,)),
+    "CellRead": Scenario("CellRead", {
+        "get": "def f(a):\n    def g():\n        return a\n    return (g, a)\n"},
+        [{"cell": types.CellType(v)} for v in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType()}], warm=(1,)),
+    "CellStore": Scenario("CellStore", {
+        "set": "def f(a, b):\n    def g():\n        return a\n    a = b\n    return g\n"},
+        [{"cell": types.CellType(v), "value": w}
+         for v in (None, 1, Plain()) for w in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType(), "value": 1}], warm=(1, 2), holds=True),
+    "CellDelete": Scenario("CellDelete", {
+        "delete": "def f(a):\n    def g():\n        return a\n    del a\n    return g\n"},
+        [{"cell": types.CellType(v)} for v in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType()}], warm=(1,)),
+    "CellMake": Scenario("CellMake", {
+        "wrap": "def f(a):\n    return lambda: a\n"},
+        [{"local": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,), holds=True),
     "Move": Scenario("Move", {
         "join": "def f(a):\n    return (len(a) > 4 and\n            a[:2] == a[-2:] == '__'"
                 " and\n            a[2] != '_')\n",
@@ -546,6 +563,47 @@ SCENARIOS = {
         + [{"fn": fn, "args": [v]} for fn in (identity, Point().norm, Holder, two)
            for v in (1, "s")], warm=([],),
         monitored=("monitored",)),
+    "Build": Scenario("Build", {
+        "tuple": "def f(a, b):\n    return (a, b)\n",
+        "list": "def f(a, b):\n    return [a, b]\n",
+        "set": "def f(a, b):\n    return {a, b}\n",
+        "map": "def f(a, b):\n    return {a: b}\n"},
+        [{"items": [x, y]} for x, y in ((1, 2), ("s", 2.5), (2**70, "t"), ((), None))],
+        warm=(1, 2), holds=True),
+    "AddElement": Scenario("AddElement", {
+        "append": "def f(a):\n    return [x for x in a]\n",
+        "add": "def f(a):\n    return {x for x in a}\n"},
+        [{"container": c, "item": x} for c, x in (([], 1), ([3], "s"), ([], 2.5))],
+        warm=([1],), holds=True,
+        # (a set takes only a set: the word's arm is chosen by the display)
+        inputs_by_source={"add": [{"container": c, "item": x}
+                                  for c, x in ((set(), 1), ({3}, "s"), (set(), 2.5))]}),
+    "AddEntry": Scenario("AddEntry", {
+        "put": "def f(a):\n    return {x: x for x in a}\n"},
+        [{"container": {}, "key": 1, "value": "v"}, {"container": {2: 3}, "key": "s",
+                                                      "value": None}],
+        warm=([1],), holds=True),
+    "UpdateContainer": Scenario("UpdateContainer", {
+        "extend": "def f(a):\n    return [*a]\n",
+        "union": "def f(a):\n    return {*a}\n",
+        "overlay": "def f(a):\n    return {**a}\n"},
+        [{"container": [], "source": [1]}],
+        # (each arm takes only its own kind of container)
+        inputs_by_source={
+            "extend": [{"container": c, "source": x} for c, x in (
+                ([], [1]), ([0], (2, 3)), ([], "ab"), ([], 5), ([1], iter([2])))],
+            "union": [{"container": c, "source": x} for c, x in (
+                (set(), [1]), ({0}, (2, 3)), (set(), "ab"), (set(), 5), ({1}, {2: 3}))],
+            "overlay": [{"container": c, "source": x} for c, x in (
+                ({}, {1: 2}), ({"a": 1}, {"a": 2}), ({}, 5), ({}, [1]))]},
+        warm=([1],), holds=True),
+    "MergeKeywords": Scenario("MergeKeywords", {
+        "merge": "def f(g, a, b):\n    return g(**a, **b)\n"},
+        [{"fn": identity, "dict": {}, "source": {"k": 1}},
+         {"fn": identity, "dict": {"k": 1}, "source": {"j": 2}},
+         {"fn": identity, "dict": {"k": 1}, "source": {"k": 2}},
+         {"fn": identity, "dict": {}, "source": 5}],
+        warm=(identity, {}, {}), holds=True),
     "Function": Scenario("Function", {
         "def": "def f():\n    def g():\n        pass\n    return g\n",
         "defaults": "def f(a):\n    def g(x=a):\n        pass\n    return g\n",
@@ -920,19 +978,6 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
-    # The display families have no scenarios: their rows take spans of homes
-    # and run Python (test_rop_displays runs them)
-    "Build.Tuple": "no scenario; test_rop_displays runs it",
-    "Build.List": "no scenario; test_rop_displays runs it",
-    "AddElement.Append": "no scenario; test_rop_displays runs it",
-    "AddElement.Add": "no scenario; test_rop_displays runs it",
-    "AddEntry.Put": "no scenario; test_rop_displays runs it",
-    "UpdateContainer.Extend": "no scenario; test_rop_displays runs it",
-    "UpdateContainer.Overlay": "no scenario; test_rop_displays runs it",
-    "MergeKeywords.Merge": "no scenario; test_rop_displays runs it",
-    "Build.Set": "no scenario; test_rop_displays runs it",
-    "Build.Map": "no scenario; test_rop_displays runs it",
-    "UpdateContainer.Union": "no scenario; test_rop_displays runs it",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
@@ -941,6 +986,7 @@ NOT_RUN = {
                           "cannot call as a function",
     "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",
     "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
+    "CellMapRead.Lookup": "LOAD_FROM_DICT_OR_DEREF occurs in class code",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",

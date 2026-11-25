@@ -1313,14 +1313,7 @@ _PyGen_NewCall(PyThreadState *tstate, PyValue function, PyObject *locals,
     frame->instr_ptr = frame->ir_words + _PyCode_FirstTraceable(code);
     frame->return_slot = (uint16_t)_PyFrame_DiscardSlotForCodeObject(code);
     gen->gi_frame_state = FRAME_CREATED;
-    int nfree = code->co_nfreevars;
-    if (nfree) {
-        PyObject *closure = func->func_closure;
-        PyValue *free = frame->owned_slots + code->co_nlocalsplus - nfree;
-        for (int i = 0; i < nfree; i++) {
-            free[i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
-        }
-    }
+    _PyFrame_CopyFreeVars(frame, code);
     _PyObject_GC_TRACK(gen);
     return gen;
 }

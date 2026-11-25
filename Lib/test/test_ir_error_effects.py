@@ -82,6 +82,12 @@ class ErrorEffectTests(unittest.TestCase):
             ("original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);",
              "original_opcode = 42;"),
             ("int original_opcode = 0;", "int _Py_call_instrumentation_line = 0; int original_opcode = 0;"),
+            # Feedback is the running handler's: a plain scalar or the
+            # observed opcode does not name it
+            ("_PyFb_HasEntry(opcode)", "_PyFb_HasEntry(oparg)"),
+            ("FB_HEADER_OF(next_instr, opcode)", "FB_HEADER_OF(next_instr, oparg)"),
+            ("_PyFb_HasEntry(opcode)", "_PyFb_HasEntry(original_opcode)"),
+            ("FB_HEADER_OF(next_instr, opcode)", "FB_HEADER_OF(next_instr, original_opcode)"),
         )
         with tempfile.TemporaryDirectory() as directory:
             changed = Path(directory) / "bytecodes.c"

@@ -53,7 +53,6 @@ FEEDBACK = {
     "STORE_ATTR": ("ATTR", 48),
     "LOAD_SUPER_ATTR": ("ATTR", 48),
     "LOAD_GLOBAL": ("GLOBAL", 32),
-    "CALL": ("CALL", 40),
     "CALL_KW": ("CALL", 40),
     "CALL_FUNCTION_EX": ("CALL", 40),
 }
@@ -163,23 +162,15 @@ class ContractTests(unittest.TestCase):
         # Pin the finite family of calls: the words that name their operands
         # carry the transfers of their homes, not the head.
         calls = {
-            "CALL", "INSTRUMENTED_CALL", "CALL_BOUND_METHOD_EXACT_ARGS",
-            "CALL_PY_EXACT_ARGS", "CALL_PY_GENERATOR", "CALL_TYPE_1", "CALL_STR_1",
-            "CALL_TUPLE_1",
-            "CALL_BUILTIN_CLASS", "CALL_BUILTIN_O", "CALL_BUILTIN_FAST",
-            "CALL_BUILTIN_FAST_WITH_KEYWORDS", "CALL_LEN", "CALL_ISINSTANCE",
-            "CALL_LIST_APPEND", "CALL_METHOD_DESCRIPTOR_O",
-            "CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS",
-            "CALL_METHOD_DESCRIPTOR_NOARGS", "CALL_METHOD_DESCRIPTOR_FAST",
-            "CALL_ALLOC_AND_ENTER_INIT", "CALL_PY_GENERAL",
-            "CALL_BOUND_METHOD_GENERAL", "CALL_NON_PY_GENERAL",
+            "CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_PY", "CALL_KW_NON_PY",
+            "CALL_KW_BOUND_METHOD",
         }
-        legacy = calls - {"INSTRUMENTED_CALL"}
+        legacy = calls - {"INSTRUMENTED_CALL_KW"}
         self.assertEqual(legacy, {name for name, row in BY_NAME.items()
-                                 if row.base == opcode.opmap["CALL"]})
+                                 if row.base == opcode.opmap["CALL_KW"]})
         self.assertEqual(calls, {name for name, row in BY_NAME.items()
-                                 if row.base in (opcode.opmap["CALL"],
-                                                 opcode.opmap["INSTRUMENTED_CALL"])})
+                                 if row.base in (opcode.opmap["CALL_KW"],
+                                                 opcode.opmap["INSTRUMENTED_CALL_KW"])})
         # Every handler of the family admits the virtual self role, a flag
         # of the word
         self.assertEqual({BY_NAME[name].word_flags for name in calls},
@@ -267,13 +258,10 @@ class ContractTests(unittest.TestCase):
         # The deepest inputs that keep their slot and their value: not an
         # input that the body assigns or whose address it passes on
         # (null_or_index of FOR_ITER and SEND), nor one that it replaces
-        # with its result (the callable of CALL_BUILTIN_*), nor any of SWAP
+        # with its result, nor any of SWAP
         # (the middle keeps its place but lies above bottom)
         expected = {
-            "SWAP": 0, "CALL_BUILTIN_O": 0, "CALL_BUILTIN_CLASS": 0,
-            "CALL_BUILTIN_FAST": 0, "CALL_BUILTIN_FAST_WITH_KEYWORDS": 0,
-            "CALL_METHOD_DESCRIPTOR_FAST": 0,
-            "CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS": 0,
+            "SWAP": 0,
             "FOR_ITER": 1, "FOR_ITER_LIST": 1, "FOR_ITER_TUPLE": 1,
             "FOR_ITER_VIRTUAL": 1, "INSTRUMENTED_FOR_ITER": 1, "SEND": 1,
             "SEND_VIRTUAL": 1, "FOR_ITER_RANGE": 2, "FOR_ITER_GEN": 2,
@@ -443,10 +431,9 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(row.flags, ROWS[twin].flags)
                 self.assertTrue(ROWS[twin].effects & _opcode.IR_RUNS_PYTHON)
         expected = {
-            "INSTRUMENTED_CALL": {"CALL", "C_RETURN", "C_RAISE"},
+            "INSTRUMENTED_CALL_KW": {"CALL", "C_RETURN", "C_RAISE"},
             "INSTRUMENTED_LINE": {"LINE"},
             "INSTRUMENTED_INSTRUCTION": {"INSTRUCTION"},
-            "INSTRUMENTED_RETURN_VALUE": {"PY_RETURN"},
             "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
             "INSTRUMENTED_YIELD_DELEGATED": {"PY_YIELD"},
             "INSTRUMENTED_JUMP_FORWARD": {"JUMP"},
@@ -463,7 +450,7 @@ class ContractTests(unittest.TestCase):
                 bits = BY_NAME[name].events
                 for event in names:
                     self.assertTrue(bits & getattr(events, event), event)
-        self.assertEqual(BY_NAME["CALL"].twin, opcode.opmap["INSTRUMENTED_CALL"])
+        self.assertEqual(BY_NAME["CALL_KW"].twin, opcode.opmap["INSTRUMENTED_CALL_KW"])
 
     def test_monitoring_run(self):
         # Every declared event observed in a code object belongs to one of
@@ -551,12 +538,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
                                     "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
                                     "SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"})
-        for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN"):
+        for name in ("CALL_KW_PY", "SEND", "SEND_GEN", "FOR_ITER_GEN"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
                             name)
         for name in ("LOAD_FAST", "LOAD_CONST", "LOAD_SMALL_INT"):
             self.assertFalse(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        for name in ("CALL", "STORE_FAST", "DELETE_FAST", "LOAD_GLOBAL",
+        for name in ("CALL_KW", "STORE_FAST", "DELETE_FAST", "LOAD_GLOBAL",
                      "BINARY_OP"):
             self.assertTrue(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
         self.assertTrue(BY_NAME["JUMP_BACKWARD"].effects & _opcode.IR_POLLS)
@@ -611,8 +598,7 @@ class AnalyzerTests(unittest.TestCase):
         # (Tools/cases_generator/ir_records.py)
         formats = self.ir_generator.compute_formats(self.analysis)
         bits = ("RAISES", "ESCAPES", "RUNS_PYTHON", "DEOPTS", "SUSPENDS",
-                "PUSHES_FRAME", "POLLS", "PURE", "SPECIALIZES", "NATIVE_ONLY",
-                "LEARNED_ONLY")
+                "PUSHES_FRAME", "POLLS", "PURE", "SPECIALIZES", "LEARNED_ONLY")
         for name, inst in self.insts.items():
             record = self.ir_generator.build_record(
                 name, inst, formats[name], self.analysis, formats)
@@ -625,7 +611,7 @@ class AnalyzerTests(unittest.TestCase):
         # A handler that pushes a frame may raise and run Python: the
         # callee's exception propagates to its word; so may a yield, where
         # throw() raises
-        for name in ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL",
+        for name in ("CALL_KW_PY", "CALL_EX_PY",
                      "YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
             effects = BY_NAME[name].effects
             self.assertTrue(effects & _opcode.IR_RAISES, name)
@@ -854,8 +840,7 @@ class SourceScanTests(unittest.TestCase):
             if name in ops or name in macros:
                 result[h] = _scan_stack(ops, macros, name)
         names = {opcode.opname[h] for h in result}
-        self.assertLessEqual({"SWAP", "CALL_BUILTIN_O", "CALL_BUILTIN_FAST",
-                              "FOR_ITER", "FOR_ITER_RANGE", "SEND"}, names)
+        self.assertLessEqual({"SWAP", "FOR_ITER", "FOR_ITER_RANGE", "SEND"}, names)
         self.assertGreater(len(result), 200)
         return result
 
@@ -913,8 +898,7 @@ class SourceScanTests(unittest.TestCase):
                         invokes.add(name)
                         self.assertEqual(counts, (expected[0], expected[1] + 1))
         self.assertEqual(invokes, {
-            "CALL_PY_GENERAL", "CALL_BOUND_METHOD_GENERAL", "CALL_KW_PY",
-            "CALL_KW_BOUND_METHOD", "CALL_EX_PY"})
+            "CALL_KW_PY", "CALL_KW_BOUND_METHOD", "CALL_EX_PY"})
 
 
 VERIFY_SCRIPT = textwrap.dedent("""

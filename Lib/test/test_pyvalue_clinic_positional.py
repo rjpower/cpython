@@ -228,7 +228,7 @@ class PositionalCandidateTests(unittest.TestCase):
             import _testinternalcapi
             names = [row[0] for row in
                      _testinternalcapi.get_ir(driver.__code__, True)]
-            self.assertIn("CALL_NON_PY_GENERAL+NO_SELF", names)
+            self.assertIn("Call.Generic+NO_SELF", names)
 
     def test_new_ordinary_and_expanded(self):
         for expanded in (False, True):

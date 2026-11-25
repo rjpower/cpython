@@ -49,6 +49,7 @@ class ArmFormat:
     operands: str             # _PyIR_OPERANDS_*
     fixed_words: int          # operand words after the head
     writes: int
+    transfer: str             # _PyIR_TRANSFER_*: the normal edge's ownership
     target: str = "_PyIR_LOC_NONE"   # where a jump target lives (flag FORWARD)
     # The words the observer reads at the edges of a branch: the format
     # (reads, writes, through) says what the edge leaves in the homes

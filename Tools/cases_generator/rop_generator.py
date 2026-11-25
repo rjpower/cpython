@@ -373,8 +373,24 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
         fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
-        0 if has_args else enc.words, writes, target,
+        0 if has_args else enc.words, writes, arm_transfer(exits, ninputs), target,
         "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE")
+
+
+
+# The exits that end the word abnormally: they carry no normal-edge contract
+ABNORMAL_EXITS = frozenset({"raise", "redirect"})
+
+
+def arm_transfer(exits: set[str], ninputs: int) -> str:
+    """The normal-edge ownership contract (_PyIR_TRANSFER_*) that an arm's
+    declared exits give.  An arm whose every normal exit leaves the frame
+    (return, exit) takes its one input with it: EXIT.  The other contracts
+    name homes that exits alone do not, and stay UNKNOWN."""
+    normal = exits - ABNORMAL_EXITS
+    if normal and normal <= {"return", "exit"} and ninputs == 1:
+        return "_PyIR_TRANSFER_EXIT"
+    return "_PyIR_TRANSFER_UNKNOWN"
 
 
 def observer(program: Program, family: str) -> str | None:

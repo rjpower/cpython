@@ -18,8 +18,6 @@ if check_impl_detail(cpython=False):
 _testinternalcapi = import_module("_testinternalcapi")
 ARMS = _testinternalcapi.arm_handlers()
 CONTRACT = import_module("_opcode").get_ir_contract()
-# Native callees run Call.Generic until the Call family admits them
-NATIVE_ADMISSIONS = "native calls are not Call arms yet"
 
 # Canonical numeric values are mandatory in the private runtime.
 int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
@@ -2290,36 +2288,8 @@ class TestSpecializer(TestBase):
 
     @cpython_only
     @requires_specialization
-    @unittest.skip(NATIVE_ADMISSIONS)
-    def test_call_list_append(self):
-        # gh-141367: only exact lists should use
-        # CALL_LIST_APPEND instruction after specialization.
-
-        r = range(_testinternalcapi.SPECIALIZATION_THRESHOLD)
-
-        def list_append(l):
-            for _ in r:
-                l.append(1)
-
-        list_append([])
-        self.assert_specialized(list_append, "CALL_LIST_APPEND")
-        self.assert_no_opcode(list_append, "CALL_METHOD_DESCRIPTOR_FAST")
-        self.assert_no_opcode(list_append, "CALL")
-
-        def my_list_append(l):
-            for _ in r:
-                l.append(1)
-
-        class MyList(list): pass
-        my_list_append(MyList())
-        self.assert_specialized(my_list_append, "CALL_METHOD_DESCRIPTOR_FAST")
-        self.assert_no_opcode(my_list_append, "CALL_LIST_APPEND")
-        self.assert_no_opcode(my_list_append, "CALL")
-
-    @cpython_only
-    @requires_specialization
     def test_call_list_append_memory_error(self):
-        # gh-151818: if CALL_LIST_APPEND fails to resize the list,
+        # gh-151818: if a specialized list.append fails to resize the list,
         # the argument must be released exactly once.
         _testcapi = import_module("_testcapi")
 
@@ -2328,7 +2298,7 @@ class TestSpecializer(TestBase):
 
         def list_append(l, holder):
             # holder.item is pushed as a new reference, which
-            # CALL_LIST_APPEND steals.
+            # the append steals.
             l.append(holder.item)
 
         holder = Holder()
@@ -2349,99 +2319,6 @@ class TestSpecializer(TestBase):
         self.assertEqual(lst, [])
         if not Py_GC:
             self.assertEqual(sys.getrefcount(item), refcount)
-
-    @cpython_only
-    @requires_specialization
-    @unittest.skip(NATIVE_ADMISSIONS)
-    def test_call_c_function_extra_flags(self):
-        # METH_CLASS, METH_STATIC and METH_COEXIST do not change the C
-        # calling convention, so the specialized instructions must not
-        # miss because of them.
-        _testcapi = import_module("_testcapi")
-
-        def call_1(func, arg):
-            return func(arg)
-
-        def call_2(func, arg1, arg2):
-            return func(arg1, arg2)
-
-        def call_3(func, arg1, arg2, arg3):
-            return func(arg1, arg2, arg3)
-
-        def call_method(obj, arg):
-            return obj.__contains__(arg)
-
-        def call_method_o(obj, arg):
-            return obj.meth_o_coexist(arg)
-
-        def call_method_noargs(obj):
-            return obj.meth_noargs_coexist()
-
-        def call_method_fast(obj, arg1, arg2):
-            return obj.meth_fastcall_coexist(arg1, arg2)
-
-        def call_method_fast_with_keywords(obj, arg1, arg2):
-            return obj.meth_fastcall_keywords_coexist(arg1, arg2)
-
-        def call_site(f):
-            [call] = [instr for instr in dis.get_instructions(f, adaptive=True)
-                      if instr.baseopname == "CALL"]
-            cache = {name: data for name, _, data in call.cache_info}
-            return call.opname, cache["counter"]
-
-        def label(obj):
-            return getattr(obj, "__qualname__", type(obj).__name__)
-
-        coexist = _testcapi.MethInstance()
-        cases = [
-            # dict.__contains__ has METH_VALUE | METH_COEXIST, which calls
-            # the value vectorcall like METH_FASTCALL does.
-            (call_1, {}.__contains__, ("key",), "CALL_BUILTIN_FAST"),
-            (call_method, {}, ("key",), "CALL_METHOD_DESCRIPTOR_FAST"),
-            # meth_o_coexist has METH_O | METH_COEXIST
-            (call_1, _testcapi.DocStringNoSignatureTest().meth_o_coexist,
-             (1,), "CALL_BUILTIN_O"),
-            (call_method_o, _testcapi.DocStringNoSignatureTest(), (1,),
-             "CALL_METHOD_DESCRIPTOR_O"),
-            # meth_noargs_coexist has METH_NOARGS | METH_COEXIST
-            (call_method_noargs, _testcapi.DocStringNoSignatureTest(), (),
-             "CALL_METHOD_DESCRIPTOR_NOARGS"),
-            # METH_FASTCALL, with or without METH_KEYWORDS, and METH_COEXIST
-            (call_method_fast, coexist, (1, 2),
-             "CALL_METHOD_DESCRIPTOR_FAST"),
-            (call_method_fast_with_keywords, coexist, (1, 2),
-             "CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS"),
-            (call_3, _testcapi.MethInstance.meth_fastcall_coexist,
-             (coexist, 1, 2), "CALL_METHOD_DESCRIPTOR_FAST"),
-            (call_3, _testcapi.MethInstance.meth_fastcall_keywords_coexist,
-             (coexist, 1, 2), "CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS"),
-            (call_2, coexist.meth_fastcall_coexist, (1, 2),
-             "CALL_BUILTIN_FAST"),
-            (call_2, coexist.meth_fastcall_keywords_coexist, (1, 2),
-             "CALL_BUILTIN_FAST_WITH_KEYWORDS"),
-        ]
-        for owner in (_testcapi.MethClass, _testcapi.MethStatic):
-            cases += [
-                (call_1, owner.meth_o, (1,), "CALL_BUILTIN_O"),
-                (call_2, owner.meth_fastcall, (1, 2), "CALL_BUILTIN_FAST"),
-                (call_2, owner.meth_fastcall_keywords, (1, 2),
-                 "CALL_BUILTIN_FAST_WITH_KEYWORDS"),
-            ]
-
-        for f, func, args, opname in cases:
-            with self.subTest(call=f.__name__, func=label(func)):
-                reset_code(f)
-                expected = f(func, *args)
-                for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-                    f(func, *args)
-                self.assertEqual(call_site(f)[0], opname)
-
-                # A hit leaves the counter of the call site unchanged.
-                # A miss decrements it.
-                before = call_site(f)
-                for _ in range(10):
-                    self.assertEqual(f(func, *args), expected)
-                self.assertEqual(call_site(f), before)
 
     @cpython_only
     @requires_specialization

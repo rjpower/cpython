@@ -239,7 +239,7 @@ class CallOperandOwnershipTests(unittest.TestCase):
             self.assertIs(state[6][state[3] + 2], value)
             names = [word[0] for word in
                      _testinternalcapi.get_ir(driver.__code__, True)]
-            self.assertIn("CALL_KW_NON_PY" if keyword else "CALL_NON_PY_GENERAL", names)
+            self.assertIn("CALL_KW_NON_PY" if keyword else "Call.Generic", names)
             states.clear()
 
     def test_iterable_retirement_sees_final_tuple(self):

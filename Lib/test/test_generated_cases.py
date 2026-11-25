@@ -507,44 +507,6 @@ class TestIRCases(unittest.TestCase):
         self.assertLess(resolve, guard)
         self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", labels)
 
-    def test_generator_return_route_leaves_thread_return_unchanged(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        instructions = ir_generator.handler_instructions(analysis)
-        for name in ("RETURN_VALUE", "RETURN_VALUE_EMPTY",
-                     "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
-            with self.subTest(name=name):
-                output = io.StringIO()
-                out = CWriter(output, 0, False)
-                emitter = ir_generator.IREmitter(out, analysis, formats)
-                ir_generator.generate_handler(name, instructions[name], formats[name],
-                                              emitter, out)
-                body = output.getvalue()
-                branch = body.index("if (generator_return) {")
-                end = body.index("}\n", branch)
-                route = body[branch:end]
-                flag = 1 if name.endswith("_EMPTY") else 0
-                gen_return = f"IR_GEN_RETURN(temp, dying, {flag});"
-                self.assertIn(gen_return, route)
-                self.assertNotIn("generator_site_kind(", body)
-                self.assertNotIn("generator_outcome_target(", body)
-                self.assertNotIn("_PyEval_FrameClear", route)
-                self.assertNotIn("_PyEval_CompleteGeneratorReturn", route)
-                clear = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
-                         else "_PyEval_FrameClearAndPopGeneralWithResult")
-                # The generator's return leaves before the thread's clear
-                self.assertLess(body.index(gen_return),
-                                body.index(f"temp = {clear}("))
-                self.assertEqual(body.count(f"temp = {clear}(tstate, dying, temp);"), 1)
-                # The caller may be a compiled frame (IR_STORE_RETURN)
-                self.assertEqual(body.count("IR_STORE_RETURN(temp);"), 1)
-                self.assertEqual(body.count("_Py_LeaveRecursiveCallPy(tstate);"), 1)
-                self.assertEqual(body.count("DTRACE_FUNCTION_RETURN();"), 1)
-                self.assertEqual(body.count("frame = tstate->current_frame = dying->previous;"), 1)
-
     def test_generator_explicit_completion_consumer_targets(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -687,54 +649,6 @@ class TestIRCases(unittest.TestCase):
             ("(dict_st: consumed, sub_st: consumed -- res: owned)",
              "(sub_st: consumed, dict_st: consumed -- res: owned)"),
             (marker, "if (oparg) { " + marker + " }"),
-        )
-        for old, new in changes:
-            with self.subTest(new=new):
-                self.assertIn(old, source)
-                with self.assertRaises(SyntaxError):
-                    generate(source.replace(old, new, 1))
-
-    def test_guarded_python_call_contract(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-
-        def generate(text):
-            Path(self.temp_input_filename).write_text(text)
-            with handle_stderr():
-                analysis = analyzer.analyze_files([self.temp_input_filename])
-            out = io.StringIO()
-            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-            return out.getvalue()
-
-        output = generate(source)
-        # The guarded call is one helper, which binds the known function from
-        # the feedback entry and the operands, or runs the call generically
-        body = self.handler(output, "CALL_PY_GENERAL")
-        self.assertIn("call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, &fb->plan)", body)
-        self.assertIn("call_run_vector(", body)
-        self.assertIn("if (call_result.status < 0)", body)
-        other = self.handler(output, "CALL_BOUND_METHOD_GENERAL")
-        self.assertIn("call_run_vector(", other)
-        self.assertNotIn("call_bind_positional(", other)
-
-        changes = (
-            ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION +\n"
-             "            _CHECK_RECURSION_REMAINING +\n"
-             "            _PY_FRAME_GENERAL_GUARDED +",
-             "_CHECK_FUNCTION_VERSION +\n            _CHECK_RECURSION_REMAINING +\n"
-             "            _PY_FRAME_GENERAL_GUARDED +"),
-            ("_CHECK_FUNCTION_VERSION +\n            _CHECK_RECURSION_REMAINING +\n"
-             "            _PY_FRAME_GENERAL_GUARDED +",
-             "_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_GENERAL_GUARDED +"),
-            ("DEOPT_IF(IS_PEP523_HOOKED(tstate));",
-             "spam_call(); DEOPT_IF(IS_PEP523_HOOKED(tstate));"),
-            ("IR_INVOKE_GUARDED_PYTHON_CALL();",
-             "IR_INVOKE_GUARDED_PYTHON_CALL(); IR_INVOKE_GUARDED_PYTHON_CALL();"),
-            ("_CHECK_RECURSION_REMAINING +\n            _EXPAND_METHOD +",
-             "_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_GENERAL_GUARDED +\n"
-             "            _EXPAND_METHOD +"),
-            ("_MONITOR_CALL + _DO_CALL + _CHECK_PERIODIC_AT_END;",
-             "_MONITOR_CALL + _PY_FRAME_GENERAL_GUARDED + _CHECK_PERIODIC_AT_END;"),
         )
         for old, new in changes:
             with self.subTest(new=new):
@@ -980,24 +894,13 @@ class TestIRCases(unittest.TestCase):
                 return analyzer.analyze_files([self.temp_input_filename])
 
         original = analyze(source)
-        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
-            self.assertTrue(ir_generator.canonical_frame_transfer_input(
-                original.instructions[name]))
+        self.assertTrue(ir_generator.canonical_frame_transfer_input(
+            original.instructions["YIELD_VALUE"]))
 
         changes = (
             ("PyValue temp = retval;",
              "retval = PyValue_DUP(retval); PyValue temp = retval;",
-             ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE")),
-            ("IR_RETURN_TO_CALLER(temp, generator_return);",
-             "temp = PyValue_DUP(temp); IR_RETURN_TO_CALLER(temp, generator_return);",
-             ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE")),
-            ("PyValue held = TAKE(val);",
-             "val = PyValue_None; PyValue held = TAKE(val);",
-             ("INSTRUMENTED_RETURN_VALUE",)),
-            ("taken = held;", "taken = PyValue_DUP(held);",
-             ("INSTRUMENTED_RETURN_VALUE",)),
-            ("taken = held;", "transform(&held); taken = held;",
-             ("INSTRUMENTED_RETURN_VALUE",)),
+             ("YIELD_VALUE",)),
         )
         for old, new, affected in changes:
             with self.subTest(new=new):
@@ -1119,12 +1022,6 @@ class TestIRCases(unittest.TestCase):
         for name in ("FOR_ITER_GEN", "SEND_GEN"):
             handler = emitted(name)
             self.assertNotIn("PyValue new_frame;", handler)
-            self.assertNotIn("_PyEval_CompleteForIter(", handler)
-            self.assertNotIn("_PyEval_CompleteSend(", handler)
-        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
-                     "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
-            handler = emitted(name)
-            self.assertIn("_PyEval_CompleteGeneratorReturn(", handler)
             self.assertNotIn("_PyEval_CompleteForIter(", handler)
             self.assertNotIn("_PyEval_CompleteSend(", handler)
 
@@ -1329,13 +1226,12 @@ class TestIRCases(unittest.TestCase):
             with handle_stderr():
                 analysis = analyzer.analyze_files([self.temp_input_filename])
             formats = ir_generator.compute_formats(analysis)
-            for name in ("CALL_PY_GENERAL", "CALL_KW_PY"):
-                ir_generator.validate_guarded_python_call(
-                    analysis.instructions[name], formats[name])
+            ir_generator.validate_guarded_python_call(
+                analysis.instructions["CALL_KW_PY"], formats["CALL_KW_PY"])
 
         validate(source)
         version = ("-- callable: exact(PyFunction_Type) func_version(func_version), "
-                   "unused, unused[oparg]))")
+                   "unused, unused[oparg], unused))")
         for old, new in [('"the recursion budget is spent"', '"spam"'),
                          (version, version.replace(" func_version(func_version)", "")),
                          ("op(_CHECK_PEP_523, (--))\n            effects(reads)",
@@ -1413,24 +1309,6 @@ class TestIRCases(unittest.TestCase):
                 if name != "FOR_ITER_GEN":
                     detached = handler.index("IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;")
                     self.assertLess(detached, entered)
-        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
-                     "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
-            with self.subTest(name=name):
-                handler = self.handler(output.getvalue(), name)
-                if name.startswith("INSTRUMENTED_"):
-                    # The twin runs its event in a cold function and then
-                    # takes the base handler's body, which does the retirement.
-                    self.assertIn("IR_RUN_EVENT(ir_event_return,", handler)
-                    continue
-                helper = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
-                          else "_PyEval_FrameClearAndPopGeneralWithResult")
-                retired = handler.index(f"temp = {helper}(tstate, dying, temp);")
-                completed = handler.index("_PyEval_CompleteGeneratorReturn(")
-                published = handler.index("IR_STORE_RETURN(temp);")
-                self.assertLess(retired, completed)
-                self.assertLess(retired, published)
-                # The home value is returned as it is, not boxed
-                self.assertNotIn("_PyValue_Publish", handler)
         handler = self.handler(output.getvalue(), "CLEANUP_THROW")
         self.assertIn("_PyFrame_InstrAt(frame, oparg)", handler)
         self.assertNotIn("next_instr + oparg", handler)
@@ -3452,8 +3330,6 @@ class TestIRCases(unittest.TestCase):
                        if isinstance(part, analyzer.Uop)
                        for _, effect in ir_records.effect_sites(part))
         self.assertTrue(releases("POP_TOP"))
-        # A call reads its operands in place and releases nothing of its own
-        self.assertFalse(releases("CALL_BUILTIN_FAST_WITH_KEYWORDS"))
 
     def test_nullable_annotations_are_input_only(self):
         analysis = self.analyze("""
@@ -3609,35 +3485,6 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([str(source)])
         for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST", "BUILD_SET"):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
-
-    def test_native_entry_requires_actual_body_and_owning_scalar_io(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        inst = analysis.instructions["INTERPRETER_EXIT"]
-        self.assertTrue(ir_generator.native_entry_input_contract(inst))
-        part = inst.parts[0]
-        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
-        part.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
-        try:
-            with self.assertRaises(SyntaxError):
-                ir_generator.native_entry_input_contract(inst)
-        finally:
-            part.body.body.pop()
-        item = part.stack.inputs[0]
-        for attribute, changed in (("name", "other"), ("peek", True), ("size", "1")):
-            old = getattr(item, attribute)
-            setattr(item, attribute, changed)
-            try:
-                with self.assertRaises(SyntaxError):
-                    ir_generator.native_entry_input_contract(inst)
-            finally:
-                setattr(item, attribute, old)
-        old = inst.name
-        inst.name = "OTHER_NATIVE_SHAPE"
-        try:
-            self.assertFalse(ir_generator.native_entry_input_contract(inst))
-        finally:
-            inst.name = old
 
     def test_steal_success_handoff_requires_terminal_ownership_sequence(self):
         body = """{
@@ -3859,7 +3706,7 @@ class TestIRCases(unittest.TestCase):
         # The handlers of the call families take the role flags in the word
         roles = {name: contract.word_flags for name, contract in contracts.items()
                  if contract.word_flags}
-        self.assertEqual(len(roles), 32)
+        self.assertEqual(len(roles), 9)
         self.assertEqual(set(roles.values()),
                          {("IR_F_NO_SELF",), ("IR_F_NO_KW",)})
         self.assertEqual({name for name, flags in roles.items()
@@ -3925,8 +3772,8 @@ class TestIRCases(unittest.TestCase):
             "LOAD_FAST_CHECK": "LOCAL_DUP", "LOAD_FAST_AND_CLEAR": "LOCAL_MOVE",
             "STORE_FAST": "LOCAL_STORE", "DELETE_FAST": "LOCAL_CLEAR",
             "POP_TOP": "RETIRE", "COPY": "COPY", "SWAP": "SWAP",
-            "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE", "RETURN_VALUE": "EXIT",
-            "CALL": "UNKNOWN", "SEND": "UNKNOWN",
+            "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE",
+            "CALL_KW": "UNKNOWN", "SEND": "UNKNOWN",
         }
         for name, kind in expected.items():
             with self.subTest(handler=name):
@@ -4272,11 +4119,9 @@ class TestCallMarkers(unittest.TestCase):
         self.assertIn("(1u << PY_MONITORING_EVENT_STOP_ITERATION)", row)
 
     def test_real_callout_and_transfer_properties(self):
-        for name in ("_MAYBE_EXPAND_METHOD", "_MONITOR_CALL",
-                     "_MAKE_CALLARGS_A_TUPLE", "_DO_CALL", "_PY_FRAME_GENERAL",
-                     "_PY_FRAME_GENERAL_GUARDED", "_DO_CALL_KW", "_PY_FRAME_KW",
-                     "_PY_FRAME_KW_GUARDED",
-                     "_DO_CALL_FUNCTION_EX"):
+        for name in ("_MAYBE_EXPAND_METHOD_KW", "_MONITOR_CALL_KW",
+                     "_MAKE_CALLARGS_A_TUPLE", "_DO_CALL_KW", "_PY_FRAME_KW",
+                     "_PY_FRAME_KW_GUARDED", "_DO_CALL_FUNCTION_EX"):
             with self.subTest(name=name):
                 uop = self.analysis.uops[name]
                 self.assertTrue(uop.properties.escapes)
@@ -4285,20 +4130,11 @@ class TestCallMarkers(unittest.TestCase):
                 self.assertTrue(uop.properties.sync_sp)
                 self.assertTrue(uop.properties.needs_this)
                 self.assertFalse(uop.is_viable())
-        for name in ("_DO_CALL", "_PY_FRAME_GENERAL_GUARDED", "_PY_FRAME_KW_GUARDED"):
+        for name in ("_DO_CALL_KW", "_PY_FRAME_KW_GUARDED"):
             invoke = self.analysis.uops[name].properties
             self.assertTrue(invoke.always_exits)
             self.assertTrue(invoke.switches_frame)
-        self.assertFalse(self.analysis.uops["_MONITOR_CALL"].properties.always_exits)
-
-    def test_exact_activation_escapes_as_its_row_declares(self):
-        # call_push_exact releases the callable (its row: `releases`), which
-        # can run a finalizer; nothing else in the uop escapes
-        self.assertTrue(analyzer.call_escapes("call_push_exact"))
-        properties = self.analysis.uops["_INIT_CALL_PY_EXACT_ARGS"].properties
-        self.assertTrue(properties.escapes)
-        self.assertFalse(properties.error_without_pop)
-        self.assertFalse(properties.sync_sp)
+        self.assertFalse(self.analysis.uops["_MONITOR_CALL_KW"].properties.always_exits)
 
     def test_pure_latch_and_undeclared_macro(self):
         # A row decides, never an upper-case name: the latch declares no
@@ -4315,19 +4151,16 @@ class TestCallMarkers(unittest.TestCase):
             self.assertFalse(properties.sync_sp)
 
     def test_prelude_and_actual_destination_terminal_paths(self):
-        for name in ("CALL",
-                     "CALL_PY_GENERAL", "CALL_BOUND_METHOD_GENERAL",
-                     "CALL_KW", "CALL_KW_NON_PY", "CALL_KW_PY",
+        for name in ("CALL_KW", "CALL_KW_NON_PY", "CALL_KW_PY",
                      "CALL_FUNCTION_EX", "CALL_EX_NON_PY_GENERAL", "CALL_EX_PY",
-                     "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW",
-                     "INSTRUMENTED_CALL_FUNCTION_EX"):
+                     "INSTRUMENTED_CALL_KW", "INSTRUMENTED_CALL_FUNCTION_EX"):
             with self.subTest(name=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
                 # The out-of-line run reads the operand words; the handler
                 # keeps no record of the call of its own
                 invoke = min(body.index(run) for run in (
                     "call_run_", "call_bind_") if run in body)
-                for preparation in ("_Py_Specialize_Call",):
+                for preparation in ("_Py_Specialize_CallKw",):
                     if preparation in body:
                         self.assertLess(body.index(preparation), invoke)
                 self.assertNotIn("IR_MOVE_TO_DST", body[invoke:])
@@ -4337,23 +4170,6 @@ class TestCallMarkers(unittest.TestCase):
                 self.assertIn("DISPATCH_INLINED(call_result.child)", body)
                 # The call's locals live in the out-of-line run (R-c)
                 self.assertNotIn("&call", body)
-
-    def test_exact_method_guards_precede_the_push(self):
-        # Every guard, through the method's im_func, runs before the
-        # expansion, which only sets CALL_EXPANDED: the operands stay the
-        # method and NULL, call_push_exact() counts the function and the
-        # receiver, and a failed guard falls back to the generic call with
-        # the operands untouched
-        for name in ("CALL_BOUND_METHOD_EXACT_ARGS",):
-            with self.subTest(handler=name):
-                body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
-                push = body.index("call_push_exact(")
-                expand = body.index("call_state |= CALL_EXPANDED;")
-                self.assertGreaterEqual(body[:expand].count("JUMP_TO_PREDICTED("), 8)
-                self.assertNotIn("JUMP_TO_PREDICTED(", body[expand:])
-                self.assertLess(expand, push)
-                self.assertNotIn("_PyIR_AdoptTemp", body)
-                self.assertNotIn("call_fallback_", body)
 
     def test_handlers_take_no_local_address(self):
         # The generated handlers and labels take the address of none of

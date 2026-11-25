@@ -293,11 +293,17 @@ ir_run_Call_Generic(
     _PyRop_SpendArgs(frame, this_instr, home_dst);
     PyValue_XCLOSE(own_fn);
     PyValue_XCLOSE(old_dst);
+    if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+        goto rop_Call_Generic_Poll;
+    }
+    goto rop_Call_Generic_Next;
+    rop_Call_Generic_Poll:
     IR_STUB_ESCAPE();
     ret7 = _PyRop_EndPoll(tstate, frame);
     if (ret7 < 0) {
         goto rop_Call_Generic_PollFailed;
     }
+    rop_Call_Generic_Next:
     DISPATCH();
     rop_Call_Generic_NativeFailed:
     IR_STUB_ESCAPE();
@@ -2276,11 +2282,17 @@ ir_run_Call_Observed(
     _PyRop_SpendArgs(frame, this_instr, home_dst);
     PyValue_XCLOSE(own_fn);
     PyValue_XCLOSE(old_dst);
+    if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+        goto rop_Call_Observed_Poll;
+    }
+    goto rop_Call_Observed_Next;
+    rop_Call_Observed_Poll:
     IR_STUB_ESCAPE();
     ret4 = _PyRop_EndPoll(tstate, frame);
     if (ret4 < 0) {
         goto rop_Call_Observed_PollFailed;
     }
+    rop_Call_Observed_Next:
     DISPATCH();
     rop_Call_Observed_NativeFailed:
     IR_STUB_ESCAPE();

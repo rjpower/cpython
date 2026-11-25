@@ -407,7 +407,8 @@ enum {
  * the head and operand words, the width and, for a home in the head, the
  * word flag that says it names a local.  A vector follows in the payload. */
 enum { ROP_FIELD_HOME, ROP_FIELD_IMM, ROP_FIELD_NAME, ROP_FIELD_CONST,
-       ROP_FIELD_FEEDBACK, ROP_FIELD_TARGET, ROP_FIELD_VECTOR };
+       ROP_FIELD_FEEDBACK, ROP_FIELD_TARGET, ROP_FIELD_VECTOR,
+       ROP_FIELD_FLAG };
 enum { ROP_ROLE_NONE, ROP_ROLE_SRC, ROP_ROLE_DST, ROP_ROLE_LOCAL, ROP_ROLE_CELL,
        ROP_ROLE_FREE, ROP_ROLE_ITERPAIR };
 
@@ -525,6 +526,7 @@ static const _PyRopOperand _PyRop_Operands_Call[] = {
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Args */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Call> */
+    {"interrupt", ROP_FIELD_FLAG, ROP_ROLE_NONE, 0, 0, 15, 0},  /* Enum<Interrupt> */
 };
 static const uint16_t _PyRop_Ops_Call[] = {CALL};
 static const _PyRopOperand _PyRop_Operands_CallEx[] = {
@@ -936,7 +938,7 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
     [ROP_FAMILY_Build] = {"Build", 2, 0, _PyRop_Operands_Build, 4, _PyRop_Ops_Build},
     [ROP_FAMILY_BuildSlice] = {"BuildSlice", 2, 0, _PyRop_Operands_BuildSlice, 1, _PyRop_Ops_BuildSlice},
     [ROP_FAMILY_BuildText] = {"BuildText", 4, 0, _PyRop_Operands_BuildText, 3, _PyRop_Ops_BuildText},
-    [ROP_FAMILY_Call] = {"Call", 4, 0, _PyRop_Operands_Call, 1, _PyRop_Ops_Call},
+    [ROP_FAMILY_Call] = {"Call", 5, 0, _PyRop_Operands_Call, 1, _PyRop_Ops_Call},
     [ROP_FAMILY_CallEx] = {"CallEx", 5, 1, _PyRop_Operands_CallEx, 1, _PyRop_Ops_CallEx},
     [ROP_FAMILY_CallKw] = {"CallKw", 5, 1, _PyRop_Operands_CallKw, 1, _PyRop_Ops_CallKw},
     [ROP_FAMILY_CellDelete] = {"CellDelete", 1, 0, _PyRop_Operands_CellDelete, 1, _PyRop_Ops_CellDelete},

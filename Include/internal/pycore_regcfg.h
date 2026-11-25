@@ -56,6 +56,7 @@ extern "C" {
 #define _PyReg_COMPLETED       512 // frontend completion performed by its producer
 #define _PyReg_CALL_NO_SELF   1024 // the reserved self input is virtual NULL
 #define _PyReg_CALL_NO_KWARGS 2048 // EX's reserved kwargs input is virtual NULL
+#define _PyReg_CALL_UNINTERRUPTED 65536 // the call does not poll when it returns
 #define _PyReg_LOAD_FOLDED      1   // a load that its consumer reads in place
 #define _PyReg_STORE_FOLDED     2   // a store that its producer does
 #define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps

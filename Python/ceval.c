@@ -2246,6 +2246,14 @@ _PyRop_SpendArgs(_PyInterpreterFrame *frame, const _PyIRWord *head,
     }
 }
 
+/* The Interrupt operand of a call word: whether the call polls when it
+ * returns (INTERRUPTIBLE is 0) */
+static inline bool
+_PyRop_Polls(uint32_t interrupt)
+{
+    return interrupt == 0;
+}
+
 static inline int
 _PyRop_EndPoll(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {

@@ -2037,10 +2037,27 @@ rule_call(_PyRegTr *t, const _PyRegOp *src)
         return stack_underflow(src);
     }
     int dst;
+    // The call that follows a special-method lookup (`with` and `async
+    // with`) does not poll when it returns: the body runs before a pending
+    // signal or collection does.  Source-only ops between them (an elided
+    // PUSH_NULL) do not count.
+    int after_lookup = 0;
+    for (int i = t->nops - 1; i >= t->block_op; i--) {
+        const _PyRegOp *prev = &t->ops[i];
+        if (prev->opcode == NOP && prev->nread == 0 && prev->nout == 0) {
+            continue;
+        }
+        after_lookup = prev->opcode == ROP_HANDLER_SpecialLookup_Generic;
+        break;
+    }
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Call_Generic,
                                   &t->stack[t->sp - nuses], nuses, &dst, 1,
-                                  NULL));
+                                  &op));
+    if (after_lookup) {
+        op->flags |= _PyReg_CALL_UNINTERRUPTED;
+    }
     t->sp -= nuses;
     return _PyRegTr_Push(t, dst);
 }

@@ -46,8 +46,6 @@ FEEDBACK = {
     "BINARY_OP": ("BINARY", 32),
     "COMPARE_OP": ("BINARY", 32),
     "CONTAINS_OP": ("BINARY", 32),
-    "STORE_ATTR": ("ATTR", 48),
-    "LOAD_SUPER_ATTR": ("ATTR", 48),
     "CALL_KW": ("CALL", 40),
     "CALL_FUNCTION_EX": ("CALL", 40),
 }

@@ -591,9 +591,13 @@ class FieldKind(enum.Enum):
     feedback = "feedback"
     target = "target"
     vector = "vector"
+    flag = "flag"
 
 
 INDEX_BITS = 12
+# One-bit enums that live in a flag of the word's handler field rather than
+# in a field: the enum's name and the flag's bit (pycore_ir.h IR_F_*)
+HEAD_FLAG_ENUMS = {"Interrupt": 15}
 TARGET_BITS = {Handle.NearHead: 12, Handle.FarHead: 24}
 # Widest immediate the rule packs: two adjacent fields of one word
 WIDEST_IMMEDIATE = 32

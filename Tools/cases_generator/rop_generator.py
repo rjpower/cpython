@@ -367,6 +367,9 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     for slot in enc.elements:
         roles[HEAD_FIELDS[slot]] = "_PyIR_ROLE_ELEMENT"
     for pl in enc.placements:
+        if pl.kind is FieldKind.flag:
+            # A flag of the handler field: no field of the format
+            continue
         param = params[pl.operand]
         inner = param.type.arg if isinstance(param.type, WrapType) else param.type
         is_args = isinstance(inner, HandleType) and inner.handle is Handle.Args
@@ -609,7 +612,7 @@ def write_encodings(out: TextIO, p: Products) -> None:
         for pl in enc.placements:
             role, optional = operand_role(params[pl.operand])
             slots = pl.slots
-            offset = slots[0].offset + pl.shift if slots else 0
+            offset = slots[0].offset + pl.shift if slots else pl.shift
             flag = (f"IR_F_LOCAL_{slots[0].name}" if pl.kind is FieldKind.home
                     and slots and slots[0].word == 0 else "0")
             out.write(f'    {{"{pl.operand}", ROP_FIELD_{pl.kind.name.upper()}, '
@@ -675,7 +678,8 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
  * the head and operand words, the width and, for a home in the head, the
  * word flag that says it names a local.  A vector follows in the payload. */
 enum { ROP_FIELD_HOME, ROP_FIELD_IMM, ROP_FIELD_NAME, ROP_FIELD_CONST,
-       ROP_FIELD_FEEDBACK, ROP_FIELD_TARGET, ROP_FIELD_VECTOR };
+       ROP_FIELD_FEEDBACK, ROP_FIELD_TARGET, ROP_FIELD_VECTOR,
+       ROP_FIELD_FLAG };
 enum { ROP_ROLE_NONE, ROP_ROLE_SRC, ROP_ROLE_DST, ROP_ROLE_LOCAL, ROP_ROLE_CELL,
        ROP_ROLE_FREE, ROP_ROLE_ITERPAIR };
 

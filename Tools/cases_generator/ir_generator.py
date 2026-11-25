@@ -452,7 +452,7 @@ OPERAND_CALLS = {
 # operand.  A handler of the family reads them from its word, so
 # specialisation and instrumentation keep them by keeping the flags.
 CALL_ROLE_FLAGS = {
-    "CALL": ("IR_F_NO_SELF",),
+    "CALL": ("IR_F_NO_SELF", "IR_F_UNINTERRUPTED"),
     "CALL_KW": ("IR_F_NO_SELF",),
     "CALL_FUNCTION_EX": ("IR_F_NO_KW",),
 }

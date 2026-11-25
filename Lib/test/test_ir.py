@@ -3418,7 +3418,7 @@ class UnpackToLocalsTest(unittest.TestCase):
                 return a
             a, b = p
             return inner, b
-        for func, store in ((attribute, "STORE_ATTR"),
+        for func, store in ((attribute, "AttrWrite.Generic"),
                             (subscript, "SetItem.Generic"),
                             (cell, "CellStore.Set")):
             with self.subTest(func=func.__name__):

@@ -1876,6 +1876,84 @@ get_ir_raw(PyObject *self, PyObject *code_obj)
         ir->first_traceable, exec_words, feedback);
 }
 
+/* The spans of the span word at index I of CODE's lowering, read back by the
+ * runtime's own accessors (pycore_ir.h): per span (is_source, homes), then
+ * the homes in 0 .. nslots that the word reads, and the bounds that
+ * _PyIR_ReadBounds() gives. */
+static PyObject *
+ir_span_probe(PyObject *self, PyObject *args)
+{
+    PyObject *code_obj;
+    int index;
+    if (!PyArg_ParseTuple(args, "Oi", &code_obj, &index)) {
+        return NULL;
+    }
+    if (!PyCode_Check(code_obj)) {
+        PyErr_SetString(PyExc_TypeError, "argument must be a code object");
+        return NULL;
+    }
+    const _PyCodeIR *ir = _PyCode_GetIR((PyCodeObject *)code_obj);
+    if (ir == NULL) {
+        return NULL;
+    }
+    if (index < 0 || (uint32_t)index >= ir->nwords) {
+        PyErr_SetString(PyExc_IndexError, "word index out of range");
+        return NULL;
+    }
+    const _PyIRWord *wp = &ir->words[index];
+    int handler = IR_HANDLER(*wp);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (fmt->operands != _PyIR_OPERANDS_SPANS) {
+        PyErr_SetString(PyExc_ValueError, "not a span word");
+        return NULL;
+    }
+    PyObject *spans = PyList_New(0);
+    PyObject *reads = PyList_New(0);
+    if (spans == NULL || reads == NULL) {
+        goto error;
+    }
+    for (int k = 0; k < _PyIR_SpanCountFields(fmt); k++) {
+        int first, is_source;
+        int count = _PyIR_SpanBounds(wp, handler, k, &first, &is_source);
+        PyObject *homes = PyList_New(0);
+        if (homes == NULL) {
+            goto error;
+        }
+        for (int j = 0; j < count; j++) {
+            PyObject *h = PyLong_FromLong(_PyIR_SpanElement(wp, handler, first + j));
+            if (h == NULL || PyList_Append(homes, h) < 0) {
+                Py_XDECREF(h);
+                Py_DECREF(homes);
+                goto error;
+            }
+            Py_DECREF(h);
+        }
+        PyObject *item = Py_BuildValue("(iN)", is_source, homes);
+        if (item == NULL || PyList_Append(spans, item) < 0) {
+            Py_XDECREF(item);
+            goto error;
+        }
+        Py_DECREF(item);
+    }
+    for (int home = 0; home < (int)ir->nslots; home++) {
+        if (_PyIR_ReadsHome(wp, 0, home)) {
+            PyObject *h = PyLong_FromLong(home);
+            if (h == NULL || PyList_Append(reads, h) < 0) {
+                Py_XDECREF(h);
+                goto error;
+            }
+            Py_DECREF(h);
+        }
+    }
+    int lo, hi;
+    _PyIR_ReadBounds(wp, 0, &lo, &hi);
+    return Py_BuildValue("(NN(ii))", spans, reads, lo, hi);
+error:
+    Py_XDECREF(spans);
+    Py_XDECREF(reads);
+    return NULL;
+}
+
 /* The words that the lowering of CODE made, or with ADAPTIVE those of its
  * executing copy, which specialisation and instrumentation rewrite:
  * per word a tuple (handler, a, b, c, d) of the name of its handler and its
@@ -5515,6 +5593,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"ir_span_probe", ir_span_probe, METH_VARARGS, NULL},
     {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},

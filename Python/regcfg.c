@@ -2141,6 +2141,14 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     for (int k = 0; k < fmt->ninputs && k < 4; k++) {
         slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
     }
+    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+        // The outputs of a span word are new: its first is the destination
+        // that the format names, if any
+        slots->out[0] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
+                      : op->dst >= 0 ? op->dst
+                      : op->nout > 0 ? _PyRegCfg_Slot(cfg, out[0]) : 0;
+        return;
+    }
     if (op->flags & _PyReg_DISCARD) {
         slots->out[0] = IR_NO_DST;
     }
@@ -2538,8 +2546,7 @@ static int
 evict(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo, int hi)
 {
     int nl = cfg->nlocalsplus;
-    int move = _PyRegCfg_FormatOf(op->opcode, op->oparg)->operands
-               == _PyIR_OPERANDS_SPANS;
+    int move = _PyIR_IsMoveFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg));
     for (int s = lo; s < hi; s++) {
         int w = occ_at(o, s - nl);
         if (w < 0 || (!move && op_reads(cfg, op, w))) {
@@ -2643,8 +2650,7 @@ place_evicted(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo,
               int hi)
 {
     int nl = cfg->nlocalsplus;
-    int move = _PyRegCfg_FormatOf(op->opcode, op->oparg)->operands
-               == _PyIR_OPERANDS_SPANS;
+    int move = _PyIR_IsMoveFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg));
     for (int q = 0; q < op->nstage; q++) {
         int x = cfg->operands[op->stage + 2 * q + 1];
         if (!move && op_reads(cfg, op, x)) {

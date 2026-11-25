@@ -4,7 +4,7 @@
 // each leaves its home, a temporary's owner moving into the container and a
 // local's binding giving a count of its own.  UpdateContainer and
 // MergeKeywords read their sources, keep them on failure for the unwinder,
-// and retire the source (the stack op's pop) on success.
+// and retire the source on success.
 
 family Build(dst:Dst, items:Span<Src>)
   exits(next, raise) ops(BUILD_TUPLE, BUILD_LIST, BUILD_SET, BUILD_MAP);
@@ -296,7 +296,7 @@ arm UpdateContainer.Overlay shared select(overlay)
     exit next();
 }
 
-// The operands are in stack order: the callable, the dict, then the mapping
+// The operands are in operand order: the callable, the dict, then the mapping
 family MergeKeywords(fn:Src, dict:Src, source:Src)
   exits(next, raise) ops(DICT_MERGE);
 

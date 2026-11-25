@@ -453,8 +453,8 @@ OPERAND_CALLS = {
 # specialisation and instrumentation keep them by keeping the flags.
 CALL_ROLE_FLAGS = {
     "CALL": ("IR_F_NO_SELF",),
-    "CALL_KW": ("IR_F_NO_SELF",),
-    "CALL_FUNCTION_EX": ("IR_F_NO_KW",),
+    "CALL_KW": ("IR_F_NO_SELF", "IR_F_KW"),
+    "CALL_FUNCTION_EX": ("IR_F_NO_KW", "IR_F_EX"),
 }
 
 
@@ -1273,7 +1273,9 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
+STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "CALL_KW", "INSTRUMENTED_CALL_KW",
+              "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX", "MATERIALIZE_KWARGS",
+              "RETURN_VALUE",
               "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
               "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
               "LOAD_FAST_LOAD_FAST",
@@ -1304,7 +1306,7 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
 # co_code can hold.
 IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
+                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP")
 
 
 def ir_only_handler_names(analysis: Analysis) -> list[str]:

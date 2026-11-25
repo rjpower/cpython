@@ -2009,8 +2009,8 @@ get_ir(PyObject *self, PyObject *args)
         const char *name = _PyIR_HandlerName(handler);
         /* The canonical flags follow the name, as in dis; the executing
          * copy's slot-class flags are derived and not shown. */
-        const char *no_self = (word & IR_F_NO_SELF) ? "+NO_SELF" : "";
-        const char *no_kw = (word & IR_F_NO_KW) ? "+NO_KW" : "";
+        const char *no_self = (!(word & IR_F_EX) && (word & IR_F_NO_SELF)) ? "+NO_SELF" : "";
+        const char *no_kw = ((word & IR_F_EX) && (word & IR_F_NO_KW)) ? "+NO_KW" : "";
         PyObject *item = Py_BuildValue(
             "(NIIII)", PyUnicode_FromFormat("%s%s%s", name, no_self, no_kw),
             IR_A(word), IR_B(word), IR_C(word), IR_D(word));

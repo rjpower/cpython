@@ -10,6 +10,7 @@ extern "C" {
 
 #include "pycore_ir.h"          // IR_MAX_SLOTS
 #include "pycore_opcode_utils.h" // IS_NO_FALLTHROUGH_OPCODE
+#include "pycore_rop_metadata.h" // ROP_HANDLER_CallKw_Generic
 #include "pycore_symtable.h"    // _Py_SourceLocation
 
 /* The register CFG (boil/design/07-compiler-passes.md).
@@ -215,7 +216,7 @@ _PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
 static inline int
 _PyRegOp_CallBorrows(const _PyRegOp *op, int k)
 {
-    return k != 1 && !(op->opcode == CALL_KW && k == op->nread - 1);
+    return k != 1 && !(op->opcode == ROP_HANDLER_CallKw_Generic && k == op->nread - 1);
 }
 
 /* Whether op writes local z through its dst (a run of nout locals for an

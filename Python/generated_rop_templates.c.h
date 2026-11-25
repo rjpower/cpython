@@ -54,6 +54,8 @@ static_assert(_Generic(((_PyFbCall *)0)->func_version, uint32_t: 1, default: 0),
               "schema Call.func_version: _PyFbCall.func_version is not uint32_t");
 static_assert(_Generic(((_PyFbCall *)0)->type_version, uint32_t: 1, default: 0),
               "schema Call.type_version: _PyFbCall.type_version is not uint32_t");
+static_assert(_Generic(((_PyFbCall *)0)->plan, _PyBindPlan: 1, default: 0),
+              "schema Call.plan: _PyFbCall.plan is not _PyBindPlan");
 static_assert(_Generic(((_PyAttrRecipe *)0)->type_version, uint32_t: 1, default: 0),
               "recipe Attr.type_version: _PyAttrRecipe.type_version is not uint32_t");
 static_assert(_Generic(((_PyAttrRecipe *)0)->aux, uint32_t: 1, default: 0),

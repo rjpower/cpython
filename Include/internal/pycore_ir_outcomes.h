@@ -321,7 +321,7 @@ _PyIR_CallNumSlots(_PyIRWord word)
 static inline int
 _PyIR_CallOperandNullable(_PyIRWord word, int k)
 {
-    if (_PyIR_FormatOf(IR_HANDLER(word))->operands == _PyIR_OPERANDS_EX) {
+    if (word & IR_F_EX) {
         return k == 1;
     }
     return k == 0 && _PyIR_CallHasSelf(word);

@@ -983,7 +983,7 @@ kw_names_region(_PyRegCfg *cfg, int start, int end)
 {
     for (int i = start; i < end; i++) {
         _PyRegOp *call = &cfg->ops[i];
-        if (call->opcode != CALL_KW) {
+        if (call->opcode != ROP_HANDLER_CallKw_Generic) {
             continue;
         }
         int v = _PyReg_IN(cfg, call)[call->nread - 1];
@@ -1150,8 +1150,8 @@ call_roles(_PyRegCfg *cfg, int verify)
         _PyRegOp *op = &cfg->ops[i];
         needed |= verify
             ? (op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)) != 0
-            : op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW ||
-              op->opcode == CALL_FUNCTION_EX;
+            : op->opcode == ROP_HANDLER_Call_Generic || op->opcode == ROP_HANDLER_CallKw_Generic ||
+              op->opcode == ROP_HANDLER_CallEx_Generic;
     }
     if (!needed) {
         return SUCCESS;
@@ -1237,13 +1237,13 @@ call_roles(_PyRegCfg *cfg, int verify)
             }
             int roles = 0;
             if (proof.reached[b] && (op->opcode == ROP_HANDLER_Call_Generic ||
-                                    op->opcode == CALL_KW ||
-                                    op->opcode == CALL_FUNCTION_EX))
+                                    op->opcode == ROP_HANDLER_CallKw_Generic ||
+                                    op->opcode == ROP_HANDLER_CallEx_Generic))
             {
                 // CALL_FUNCTION_EX has no self operand, whatever its
                 // reserved input is; its kwargs input may be absent
                 int *in = _PyReg_IN(cfg, op);
-                if (op->opcode == CALL_FUNCTION_EX) {
+                if (op->opcode == ROP_HANDLER_CallEx_Generic) {
                     if (call_null_get(cfg, state, in[3])) {
                         roles |= _PyReg_CALL_NO_KWARGS;
                     }

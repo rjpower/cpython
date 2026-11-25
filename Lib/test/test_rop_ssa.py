@@ -915,6 +915,14 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
+    # The tracer's view of the keyword and expanded calls is deferred while the
+    # interpreter ports finish (rir90 interpreter-first rule)
+    "CallKw.Plan": "deferred: binds keywords by a site's plan",
+    "CallKw.Generic": "deferred: the keyword call that adapts, then binds or calls",
+    "CallKw.Observed": "deferred: the keyword call under monitoring",
+    "CallEx.Generic": "deferred: the call with the star tuple (its owner is a block parameter)",
+    "CallEx.Observed": "deferred: the star call under monitoring",
+    "MaterializeKwargs.Pending": "deferred: the pending **kwargs dict of a frame",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "

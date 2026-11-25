@@ -394,27 +394,6 @@ leaf_probe__BINARY_OP_XOR_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer
 }
 
 static int
-leaf_probe__CHECK_FUNCTION_VERSION_KW(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t func_version = (uint32_t)caches[0];
-    PyValue callable;
-    callable = stack_pointer[-3 - oparg];
-    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-    if (!PyFunction_Check(callable_o)) {
-        return LEAF_PROBE_EXIT;
-    }
-    PyFunctionObject *func = (PyFunctionObject *)callable_o;
-    if (func->func_version != func_version) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__COMPARE_OP_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1254,7 +1233,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_BINARY_OP_SUBTRACT_INT", leaf_probe__BINARY_OP_SUBTRACT_INT, 2},
     {"_BINARY_OP_TRUEDIV_FLOAT", leaf_probe__BINARY_OP_TRUEDIV_FLOAT, 2},
     {"_BINARY_OP_XOR_INT", leaf_probe__BINARY_OP_XOR_INT, 2},
-    {"_CHECK_FUNCTION_VERSION_KW", leaf_probe__CHECK_FUNCTION_VERSION_KW, 3},
     {"_COMPARE_OP_FLOAT", leaf_probe__COMPARE_OP_FLOAT, 2},
     {"_COMPARE_OP_INT", leaf_probe__COMPARE_OP_INT, 2},
     {"_END_FOR", leaf_probe__END_FOR, 1},

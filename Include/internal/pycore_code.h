@@ -200,8 +200,6 @@ PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValueBorrow owner, _PyInstr *instr,
                                      PyObject *name);
 #define _Py_Specialize_StoreAttr(V0, V1, V2) \
     (_Py_Specialize_StoreAttr)(PyValue_Borrow(V0), V1, V2)
-PyAPI_FUNC(void) _Py_Specialize_CallKw(PyValue callable, PyValue self_or_null,
-                                  PyValue kwnames, _PyInstr *instr, int nargs);
 PyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyValueBorrow lhs, PyValueBorrow rhs, _PyInstr *instr,
                                     int oparg, PyValue *locals);
 #define _Py_Specialize_BinaryOp(V0, V1, V2, V3, V4) \
@@ -219,7 +217,6 @@ PyAPI_FUNC(void) _Py_Specialize_ContainsOp(PyValueBorrow item, PyValueBorrow val
 #define _Py_Specialize_ContainsOp(V0, V1, V2) \
     (_Py_Specialize_ContainsOp)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2)
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(PyValue iterable);
-PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(PyValue func_st, PyValue args_st, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr);
 
 /* See InternalDocs/exception_handling.md for details.

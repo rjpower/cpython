@@ -1824,15 +1824,6 @@
      * heap state (nothing rewrites it), so the row reads nothing: `reads` is removed. */ \
     HELPER(_PyFb_HasEntry, int, (int), \
         ARGS(scalar), SCALAR, EFFECTS()) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the callee and its \
-     * argument tuple and builds the binding plan (_PyBindPlan_Init); no lowering. */ \
-    HELPER(_Py_Specialize_CallFunctionEx, void, (PyValue, PyValue, _PyInstr *), \
-        ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_py_call_kw / \
-     * specialize_keyword_binding build a binding plan (_PyBindPlan_Init) and lower \
-     * the callee. */ \
-    HELPER(_Py_Specialize_CallKw, void, (PyValue, PyValue, PyValue, _PyInstr *, int), \
-        ARGS(borrowed, borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the operands' types and \
      * inline-number tags; no lookup. */ \
     HELPER(_Py_Specialize_CompareOp, void, (PyValueBorrow, PyValueBorrow, _PyInstr *, int), \

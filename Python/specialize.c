@@ -2284,54 +2284,6 @@ store_subscr_fail_kind(PyObject *container, PyValueBorrow sub)
 }
 #endif
 
-Py_NO_INLINE void
-(_Py_Specialize_StoreSubscr)(PyValueBorrow container_st, PyValueBorrow sub_st, _PyInstr *instr)
-{
-    assert(ENABLE_SPECIALIZATION);
-    fb_begin_binary(instr, PyValue_TYPE(container_st), PyValue_TYPE(sub_st));
-    if (PyValue_IsInline(container_st)) {
-        SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *container = PyValue_AsKnownObjectBorrow(container_st);
-    PyTypeObject *container_type = Py_TYPE(container);
-    if (container_type == &PyList_Type) {
-        if (PyValue_LongCheckExact(sub_st)) {
-            if (PyValue_IsInlineInt(sub_st)
-                && PyValue_InlineInt64(sub_st) >= 0
-                && PyValue_InlineInt64(sub_st) < PyList_GET_SIZE(container))
-            {
-                specialize(instr, STORE_SUBSCR_LIST_INT);
-                return;
-            }
-            else {
-                SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_OUT_OF_RANGE);
-                unspecialize(instr);
-                return;
-            }
-        }
-        else if (PyValue_TYPE(sub_st) == &PySlice_Type) {
-            SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_SUBSCR_LIST_SLICE);
-            unspecialize(instr);
-            return;
-        }
-        else {
-            SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_OTHER);
-            unspecialize(instr);
-            return;
-        }
-    }
-    if (container_type->tp_as_mapping != NULL &&
-        container_type->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript)
-    {
-        specialize(instr, STORE_SUBSCR_DICT);
-        return;
-    }
-    SPECIALIZATION_FAIL(STORE_SUBSCR, store_subscr_fail_kind(container, sub_st));
-    unspecialize(instr);
-}
-
 /* Returns a strong reference. */
 static PyObject *
 get_init_for_simple_managed_python_class(PyTypeObject *tp, unsigned int *tp_version)
@@ -2583,6 +2535,80 @@ specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
     }
     specialize(instr, bound_method ? CALL_KW_BOUND_METHOD : CALL_KW_PY);
     return 0;
+}
+
+/* The evidence rows of GetItem and SetItem (classify_getitem and
+ * classify_setitem, Python/register_ops/items.rop): the arm that a subscript
+ * of v by k stands for, as the index of its case in the declared order, with
+ * the site's entry holding the operand type versions.  Every arm guards what
+ * it relies on, so the entry records evidence and guards nothing. */
+enum { GETITEM_LIST_INDEX, GETITEM_TUPLE_INDEX, GETITEM_ASCII, GETITEM_UNICODE_CHAR,
+       GETITEM_DICT, GETITEM_LIST_SLICE, GETITEM_NONE };
+enum { SETITEM_LIST_INDEX, SETITEM_DICT, SETITEM_NONE };
+
+static bool
+item_record(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
+{
+    if (is_shared_entry(&fb->h) || !PyValue_IsObject(v) ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return false;
+    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbBinary) - sizeof(_PyFbHeader));
+    fb->lhs_version = fb_type_version(PyValue_TYPE(v));
+    fb->rhs_version = fb_type_version(PyValue_TYPE(k));
+    return true;
+}
+
+int
+_PyRop_ClassifyGetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
+{
+    if (!item_record(fb, v, k)) {
+        return GETITEM_NONE;
+    }
+    PyObject *container = PyValue_AsKnownObjectBorrow(v);
+    PyTypeObject *tp = Py_TYPE(container);
+    bool int_key = PyValue_IsInlineInt(k);
+    if (tp == &PyList_Type) {
+        if (int_key) {
+            return GETITEM_LIST_INDEX;
+        }
+        return PyValue_TYPE(k) == &PySlice_Type ? GETITEM_LIST_SLICE : GETITEM_NONE;
+    }
+    if (tp == &PyTuple_Type) {
+        return int_key ? GETITEM_TUPLE_INDEX : GETITEM_NONE;
+    }
+    if (tp == &PyUnicode_Type) {
+        if (!int_key) {
+            return GETITEM_NONE;
+        }
+        return PyUnicode_IS_COMPACT_ASCII(container)
+            ? GETITEM_ASCII : GETITEM_UNICODE_CHAR;
+    }
+    if (tp->tp_as_mapping != NULL &&
+        tp->tp_as_mapping->mp_subscript == _PyDict_Subscript)
+    {
+        return GETITEM_DICT;
+    }
+    return GETITEM_NONE;
+}
+
+int
+_PyRop_ClassifySetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
+{
+    if (!item_record(fb, v, k)) {
+        return SETITEM_NONE;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
+    if (tp == &PyList_Type) {
+        return PyValue_IsInlineInt(k) ? SETITEM_LIST_INDEX : SETITEM_NONE;
+    }
+    if (tp->tp_as_mapping != NULL &&
+        tp->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript)
+    {
+        return SETITEM_DICT;
+    }
+    return SETITEM_NONE;
 }
 
 /* The evidence row of Call (classify_call, Python/register_ops/calls.rop):
@@ -2954,42 +2980,6 @@ binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
     return 0;
 }
 
-/* Nominate BINARY_OP_SUBSCR_GETITEM for a heap type whose __getitem__ is a
- * simple Python function of two arguments.  The lookup neither allocates nor
- * runs code; the type caches the function under its version, which
- * PyType_Modified() invalidates. */
-static bool
-specialize_subscr_getitem(PyTypeObject *container_type, _PyInstr *instr)
-{
-    /* Don't specialize if PEP 523 is active */
-    if (!(container_type->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
-        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
-    {
-        return false;
-    }
-    PyValue descriptor = PyValue_NULL;
-    unsigned int tp_version = 0;
-    bool nominated = false;
-    if (_PyType_TryLookupValueNoAlloc(container_type, &_Py_ID(__getitem__),
-                                      &descriptor, &tp_version) == 1 &&
-        PyValue_IsObject(descriptor) &&
-        PyFunction_Check(PyValue_AsKnownObjectBorrow(descriptor)))
-    {
-        PyObject *getitem = PyValue_AsKnownObjectBorrow(descriptor);
-        PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem);
-        if (function_signature(code) == SIMPLE_SIGNATURE && code->co_argcount == 2 &&
-            prepare_function_for_inline(code) &&
-            _PyType_CacheGetItemForSpecialization(
-                (PyHeapTypeObject *)container_type, getitem, tp_version))
-        {
-            specialize(instr, BINARY_OP_SUBSCR_GETITEM);
-            nominated = true;
-        }
-    }
-    PyValue_XCLOSE(descriptor);
-    return nominated;
-}
-
 /* Nominate GET_ITER_PY_GENERATOR for a heap type whose __iter__ is a
  * generator function of one argument.
  * The lookup neither allocates nor runs code; the type caches the function
@@ -3155,40 +3145,6 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
         case NB_INPLACE_RSHIFT:
             if (inline_ints && PyValue_InlineInt64(rhs_st) >= 0) {
                 specialize(instr, BINARY_OP_RSHIFT_INT);
-                return;
-            }
-            break;
-        case NB_SUBSCR:
-            if (PyValue_IsInlineInt(rhs_st) && PyValue_InlineInt64(rhs_st) >= 0) {
-                if (lhs_type == &PyList_Type) {
-                    specialize(instr, BINARY_OP_SUBSCR_LIST_INT);
-                    return;
-                }
-                if (lhs_type == &PyTuple_Type) {
-                    specialize(instr, BINARY_OP_SUBSCR_TUPLE_INT);
-                    return;
-                }
-                if (lhs_type == &PyUnicode_Type) {
-                    if (PyUnicode_IS_COMPACT_ASCII(lhs)) {
-                        specialize(instr, BINARY_OP_SUBSCR_STR_INT);
-                        return;
-                    } else {
-                        specialize(instr, BINARY_OP_SUBSCR_USTR_INT);
-                        return;
-                    }
-                }
-            }
-            if (lhs_type->tp_as_mapping != NULL &&
-                lhs_type->tp_as_mapping->mp_subscript == _PyDict_Subscript)
-            {
-                specialize(instr, BINARY_OP_SUBSCR_DICT);
-                return;
-            }
-            if (lhs_type == &PyList_Type && rhs_type == &PySlice_Type) {
-                specialize(instr, BINARY_OP_SUBSCR_LIST_SLICE);
-                return;
-            }
-            if (specialize_subscr_getitem(lhs_type, instr)) {
                 return;
             }
             break;

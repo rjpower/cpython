@@ -511,34 +511,11 @@ dummy_func(
             res = truth ? PyValue_True : PyValue_False;
         }
 
-        leaf op(_GUARD_NOS_LIST, (nos: object, unused -- nos: exact(PyList_Type), unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            EXIT_IF(!PyList_CheckExact(o));
-        }
-
         op(_GUARD_TOS_LIST, (tos: object -- tos: exact(PyList_Type)))
             effects(reads) exits(next, miss)
         {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
             EXIT_IF(!PyList_CheckExact(o));
-        }
-
-        op(_GUARD_TOS_SLICE, (tos: object -- tos))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *o = PyValue_AsKnownObjectBorrow(tos);
-            EXIT_IF(!PySlice_Check(o), "the operand is not a slice");
-        }
-
-        op(_GUARD_NOS_COMPACT_ASCII,
-                (nos: object, unused -- nos: exact(PyUnicode_Type), unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            EXIT_IF(!PyUnicode_CheckExact(o));
-            EXIT_IF(!PyUnicode_IS_COMPACT_ASCII(o), "the str is not compact ASCII");
         }
 
         op(_GUARD_NOS_UNICODE, (nos: object, unused -- nos: exact(PyUnicode_Type), unused))
@@ -584,13 +561,6 @@ dummy_func(
             BINARY_OP_SUBTRACT_FLOAT,
             BINARY_OP_TRUEDIV_FLOAT,
             BINARY_OP_ADD_UNICODE,
-            BINARY_OP_SUBSCR_LIST_INT,
-            BINARY_OP_SUBSCR_LIST_SLICE,
-            BINARY_OP_SUBSCR_TUPLE_INT,
-            BINARY_OP_SUBSCR_STR_INT,
-            BINARY_OP_SUBSCR_USTR_INT,
-            BINARY_OP_SUBSCR_DICT,
-            BINARY_OP_SUBSCR_GETITEM,
             BINARY_OP_INPLACE_ADD_UNICODE,
             BINARY_OP_EXTEND,
         };
@@ -1079,169 +1049,20 @@ dummy_func(
         macro(BINARY_OP_INPLACE_ADD_UNICODE) =
             _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_INPLACE_ADD_UNICODE;
 
-        specializing op(_SPECIALIZE_BINARY_SLICE,
-                (container, start, stop -- container, start, stop))
-            effects() exits(next)
+        /* Stack ops only: BINARY_SLICE and STORE_SLICE are the SliceRead and
+         * SliceWrite families (Python/register_ops/items.rop). */
+        tier1 inst(BINARY_SLICE, (container: consumed, start: consumed, stop: consumed -- res: owned))
+            exits(abort)
         {
-            // Placeholder until we implement BINARY_SLICE specialization
-            #if ENABLE_SPECIALIZATION
-            OPCODE_DEFERRED_INC(BINARY_SLICE);
-            #endif  /* ENABLE_SPECIALIZATION */
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        // Inline bounds slice a list, tuple or str without boxes or a slice
-        // object; see _PyEval_BinarySlice().
-        inline_ok op(_BINARY_SLICE,
-                (container: consumed, start: consumed, stop: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(STORE_SLICE, (v: consumed, container: consumed, start: consumed, stop: consumed --))
+            exits(abort)
         {
-            res = _PyEval_BinarySlice(container, start, stop);
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(res));
-        }
-
-        outlined macro(BINARY_SLICE) = _SPECIALIZE_BINARY_SLICE + _BINARY_SLICE;
-
-        specializing op(_SPECIALIZE_STORE_SLICE,
-                (v, container, start, stop -- v, container, start, stop))
-            effects() exits(next)
-        {
-            // Placeholder until we implement STORE_SLICE specialization
-            #if ENABLE_SPECIALIZATION
-            OPCODE_DEFERRED_INC(STORE_SLICE);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        // Inline bounds store to a list slice without boxes or a slice
-        // object; see _PyEval_StoreSlice().
-        inline_ok op(_STORE_SLICE,
-                (v: consumed, container: consumed, start: consumed, stop: consumed --))
-            effects(runs_python) exits(next, raise)
-        {
-            int err = _PyEval_StoreSlice(v, container, start, stop);
-            DECREF_INPUTS();
-            ERROR_IF(err);
-        }
-
-        outlined macro(STORE_SLICE) = _SPECIALIZE_STORE_SLICE + _STORE_SLICE;
-
-        leaf inline_ok op(_GUARD_ELEMENT_INT, (value -- value: inline_int))
-            effects() exits(next, miss)
-        {
-            IR_GUARD_INLINE_INT(value);
-        }
-
-        leaf inline_ok op(_GUARD_ELEMENT_LIST,
-                (container, unused -- container: exact(PyList_Type), unused))
-            effects(reads) exits(next, miss)
-        {
-            IR_GUARD_ELEMENT_TYPE(container, PyList_Type);
-        }
-
-        leaf inline_ok op(_GUARD_ELEMENT_TUPLE,
-                (container, unused -- container: exact(PyTuple_Type), unused))
-            effects(reads) exits(next, miss)
-        {
-            IR_GUARD_ELEMENT_TYPE(container, PyTuple_Type);
-        }
-
-        macro(BINARY_OP_SUBSCR_LIST_INT) =
-            _GUARD_ELEMENT_INT + _GUARD_ELEMENT_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + _POP_TOP_ANY;
-
-        leaf inline_ok op(_BINARY_OP_SUBSCR_LIST_INT,
-                (list_st: consumed, sub_st: consumed
-                 -- res: owned, ls: moved(list_st), ss: moved(sub_st) in_bounds(list_st)))
-            effects(reads) exits(next, miss)
-        {
-            IR_GUARD_ELEMENT_INDEX(list_st, sub_st, index, FROM_END);
-            res = IR_DUP_CANONICAL_ELEMENT(list_st, index);
-            assert(!PyValue_IsNull(res));
-            STAT_INC(BINARY_OP, hit);
-            ls = list_st;
-            ss = sub_st;
-            INPUTS_DEAD();
-        }
-
-        macro(BINARY_OP_SUBSCR_LIST_SLICE) =
-            _GUARD_TOS_SLICE + _GUARD_NOS_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_SLICE + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        op(_BINARY_OP_SUBSCR_LIST_SLICE,
-                (list_st: taken object, sub_st: taken object
-                 -- res: owned, ls: moved(list_st), ss: moved(sub_st)))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *sub = PyValue_AsKnownObjectBorrow(sub_st);
-            PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-
-            assert(PySlice_Check(sub));
-            assert(PyList_CheckExact(list));
-
-            PyObject *res_o = _PyList_SliceSubscript(list, sub);
-            STAT_INC(BINARY_OP, hit);
-            if (res_o == NULL) {
-                ERROR_NO_POP();
-            }
-            res = PyValue_FromNonNumberSteal(res_o);
-            ls = list_st;
-            ss = sub_st;
-            INPUTS_DEAD();
-        }
-
-        macro(BINARY_OP_SUBSCR_STR_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_COMPACT_ASCII + unused/5 + _BINARY_OP_SUBSCR_STR_INT + _POP_TOP_INT + _POP_TOP_UNICODE;
-
-        inline_ok op(_BINARY_OP_SUBSCR_STR_INT,
-                (str_st: consumed object, sub_st: consumed inline_int
-                 -- res: owned, s: moved(str_st), i: moved(sub_st)))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
-            assert(PyUnicode_CheckExact(str));
-
-            Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            EXIT_IF(index < 0, "the index is negative");
-            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index, "the index is out of range");
-            uint8_t c = PyUnicode_1BYTE_DATA(str)[index];
-            assert(c < 128);
-            STAT_INC(BINARY_OP, hit);
-            PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
-            s = str_st;
-            i = sub_st;
-            INPUTS_DEAD();
-            res = PyValue_DUP(PyValue_FromObjectBorrow(res_o));
-        }
-
-        macro(BINARY_OP_SUBSCR_USTR_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_SUBSCR_USTR_INT + _POP_TOP_INT + _POP_TOP_UNICODE;
-
-        inline_ok op(_BINARY_OP_SUBSCR_USTR_INT,
-                (str_st: consumed object, sub_st: consumed inline_int
-                 -- res: owned, s: moved(str_st), i: moved(sub_st)))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
-            assert(PyUnicode_CheckExact(str));
-
-            Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            EXIT_IF(index < 0, "the index is negative");
-            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index, "the index is out of range");
-            // Specialize for reading an ASCII character from any string:
-            Py_UCS4 c = PyUnicode_READ_CHAR(str, index);
-            EXIT_IF(Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c,
-                    "the character is not ASCII");
-            STAT_INC(BINARY_OP, hit);
-            PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
-            s = str_st;
-            i = sub_st;
-            INPUTS_DEAD();
-            res = PyValue_DUP(PyValue_FromObjectBorrow(res_o));
-        }
-
-        op(_GUARD_NOS_TUPLE, (nos: object, unused -- nos: exact(PyTuple_Type), unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            EXIT_IF(!PyTuple_CheckExact(o));
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         op(_GUARD_TOS_TUPLE, (tos: object -- tos: exact(PyTuple_Type)))
@@ -1251,109 +1072,12 @@ dummy_func(
             EXIT_IF(!PyTuple_CheckExact(o));
         }
 
-        macro(BINARY_OP_SUBSCR_TUPLE_INT) =
-            _GUARD_ELEMENT_INT +
-            _GUARD_ELEMENT_TUPLE +
-            unused/5 +
-            _BINARY_OP_SUBSCR_TUPLE_INT +
-            _POP_TOP_INT +
-            _POP_TOP_ANY;
-
-        leaf inline_ok op(_BINARY_OP_SUBSCR_TUPLE_INT,
-                (tuple_st: consumed, sub_st: consumed
-                 -- res: owned, ts: moved(tuple_st), ss: moved(sub_st) in_bounds(tuple_st)))
-            effects(reads) exits(next, miss)
-        {
-            IR_GUARD_ELEMENT_INDEX(tuple_st, sub_st, index, NONNEGATIVE);
-            res = IR_DUP_CANONICAL_ELEMENT(tuple_st, index);
-            STAT_INC(BINARY_OP, hit);
-            assert(!PyValue_IsNull(res));
-            ts = tuple_st;
-            ss = sub_st;
-            INPUTS_DEAD();
-        }
-
-        op(_GUARD_NOS_DICT_SUBSCRIPT, (nos: object, unused -- nos, unused))
-            effects(reads) exits(next, miss, deopt)
-        {
-            PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping, "the type has no mapping slots");
-            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript,
-                     "the type's mp_subscript is not dict's");
-        }
-
-        op(_GUARD_NOS_DICT_STORE_SUBSCRIPT,
-                (unused, nos: object, unused -- unused, nos, unused))
-            effects(reads) exits(next, miss, deopt)
-        {
-            PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping, "the type has no mapping slots");
-            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_ass_subscript != _PyDict_StoreSubscript,
-                     "the type's mp_ass_subscript is not dict's");
-        }
-
         op(_GUARD_TOS_ANY_DICT, (tos: object -- tos: exact(PyAnyDict_Type)))
             effects(reads) exits(next, miss)
         {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
             EXIT_IF(!PyAnyDict_CheckExact(o));
         }
-
-        macro(BINARY_OP_SUBSCR_DICT) =
-            _GUARD_NOS_DICT_SUBSCRIPT + unused/5 + _BINARY_OP_SUBSCR_DICT;
-
-        inline_ok op(_BINARY_OP_SUBSCR_DICT,
-                (dict_st: consumed, sub_st: consumed -- res: owned))
-            effects(reads, writes, raises, releases, runs_python) exits(next, raise)
-        {
-            IR_TRY_DICT_FIRST_PROBE();
-            STAT_INC(BINARY_OP, hit);
-            res = value_subscript(dict_st, sub_st);
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(res));
-        }
-
-        inline_ok op(_BINARY_OP_SUBSCR_CHECK_FUNC,
-                (container, unused -- container: object, unused, getitem: owned))
-            effects(reads) exits(next, miss)
-        {
-            EXIT_IF(!PyValue_IsObject(container));
-            PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(container));
-            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE), "the type is not a heap type");
-            PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
-            PyObject *getitem_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
-            EXIT_IF(getitem_o == NULL, "the type caches no __getitem__");
-            assert(PyFunction_Check(getitem_o));
-            uint32_t cached_version = FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.getitem_version);
-            EXIT_IF(((PyFunctionObject *)getitem_o)->func_version != cached_version,
-                    "the cached __getitem__ changed version");
-            PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem_o);
-            assert(code->co_argcount == 2);
-            EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize),
-                    "the thread has no stack space for the frame");
-            getitem = PyValue_DUP(PyValue_FromObjectBorrow(getitem_o));
-        }
-
-        op(_BINARY_OP_SUBSCR_INIT_CALL,
-                (container: consumed, sub: consumed, getitem: consumed -- new_frame: owned))
-            effects(reads, writes, allocates) exits(next)
-        {
-            STAT_INC(BINARY_OP, hit);
-            _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, frame);
-            pushed_frame->base[0] = TAKE(container);
-            pushed_frame->base[1] = TAKE(sub);
-            INPUTS_DEAD();
-            frame->return_slot = (uint16_t)IR_DST_SLOT;
-            frame->return_pc = next_instr;
-            new_frame = PyValue_Wrap(pushed_frame);
-        }
-
-        macro(BINARY_OP_SUBSCR_GETITEM) =
-            unused/5 + // Skip over the entry distance and reserved units
-            _CHECK_PEP_523 +
-            _BINARY_OP_SUBSCR_CHECK_FUNC +
-            _BINARY_OP_SUBSCR_INIT_CALL +
-            _PUSH_FRAME;
 
         /* A stack op only: LIST_APPEND is the AddElement family (Python/register_ops/displays.rop). */
         tier1 inst(LIST_APPEND,
@@ -1373,96 +1097,20 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        family(STORE_SUBSCR, INLINE_CACHE_ENTRIES_STORE_SUBSCR) = {
-            STORE_SUBSCR_DICT,
-            STORE_SUBSCR_LIST_INT,
-        };
-
-        specializing op(_SPECIALIZE_STORE_SUBSCR, (container, sub -- container, sub))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        /* Stack ops only: STORE_SUBSCR and DELETE_SUBSCR are the SetItem and
+         * DelItem families (Python/register_ops/items.rop). */
+        tier1 inst(STORE_SUBSCR, (unused/1, v: consumed, container: consumed, sub: consumed --))
+            exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_StoreSubscr(container, sub, next_instr);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(STORE_SUBSCR);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok op(_STORE_SUBSCR, (v: consumed, container: consumed, sub: consumed -- ))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(DELETE_SUBSCR, (container: consumed, sub: consumed --))
+            exits(abort)
         {
-            /* container[sub] = v */
-            int err = _PyValue_SetItem(container, sub, v);
-            DECREF_INPUTS();
-            ERROR_IF(err);
-        }
-
-        macro(STORE_SUBSCR) = unused/1 + _SPECIALIZE_STORE_SUBSCR + _STORE_SUBSCR;
-
-        // The index is released by _POP_TOP_ANY, which does not read it: the
-        // release of the replaced item before it can run code (S7)
-        macro(STORE_SUBSCR_LIST_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        // The index and stored value stay in canonical representation.
-        leaf inline_ok op(_STORE_SUBSCR_LIST_INT,
-                (value: consumed, list_st: taken exact(PyList_Type), sub_st: taken inline_int
-                 -- ls: moved(list_st) exact(PyList_Type), ss: moved(sub_st) inline_int))
-            effects(reads, writes, releases) exits(next, deopt)
-        {
-            PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-            assert(PyList_CheckExact(list));
-
-            Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            DEOPT_IF(!LOCK_OBJECT(list));
-            Py_ssize_t len = PyList_GET_SIZE(list);
-            // Ensure index < len(list)
-            if (index < 0) {
-                index += len;
-            }
-            if (index < 0 || index >= len) {
-                UNLOCK_OBJECT(list);
-                DEOPT_IF(true, "the index is out of range");
-            }
-            STAT_INC(STORE_SUBSCR, hit);
-
-            // A list's items are never NULL, and the index is in range
-            PyValue item = TAKE(value);
-            PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
-            UNLOCK_OBJECT(list);  // unlock before decrefs!
-            ls = list_st;
-            ss = sub_st;
-            INPUTS_DEAD();
-            PyValue_CLOSE(old_value);
-        }
-
-        macro(STORE_SUBSCR_DICT) =
-            _GUARD_NOS_DICT_STORE_SUBSCRIPT + unused/1 + _STORE_SUBSCR_DICT;
-
-        inline_ok op(_STORE_SUBSCR_DICT,
-                (value: consumed, dict_st: consumed object, sub: consumed --))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
-            assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
-            STAT_INC(STORE_SUBSCR, hit);
-            int err = _PyDict_SetValue((PyDictObject *)dict, sub, value);
-            DECREF_INPUTS();
-            ERROR_IF(err);
-        }
-
-        outlined inst(DELETE_SUBSCR, (container: consumed, sub: consumed --))
-            effects(runs_python) exits(next, raise)
-        {
-            /* del container[sub] */
-            int err = _PyValue_DelItem(container, sub);
-            DECREF_INPUTS();
-            ERROR_IF(err);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: its words are Intrinsic.*. */
@@ -4158,17 +3806,12 @@ dummy_func(
             res = PyValue_NULL;
         }
 
-        inst(BUILD_SLICE, (args[oparg]: consumed -- slice: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: BUILD_SLICE is the BuildSlice family (Python/register_ops/items.rop). */
+        tier1 inst(BUILD_SLICE, (args[oparg]: consumed -- slice: owned))
+            exits(abort)
         {
-            _PyValue_RecheckWindow(args, oparg);
-            // The bounds are stored as the values they are: no box of an
-            // inline one.
-            PyObject *slice_o = _PySlice_FromValues(
-                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
-            DECREF_INPUTS();
-            ERROR_IF(slice_o == NULL);
-            slice = PyValue_FromObjectSteal(slice_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         outlined inst(CONVERT_VALUE, (value: consumed -- result: owned))

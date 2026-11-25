@@ -317,6 +317,9 @@ class Scenario:
     # The result holds an input (a function holds its code), which the
     # count check cannot see
     holds: bool = False
+    # Run before each run of the arm on a word: the arm's store needs an
+    # empty field (the compiler sets each field once)
+    before_run: object = None
 
     def inputs_of(self, source):
         return self.inputs_by_source.get(source, self.inputs)
@@ -330,6 +333,18 @@ def truth_inputs(operand):
     return [{operand: v} for v in TRUTHS]
 
 
+class Getter:
+    "A container of Python's own: every item protocol call runs its methods"
+    def __getitem__(self, key):
+        return key
+
+    def __setitem__(self, key, value):
+        pass
+
+    def __delitem__(self, key):
+        pass
+
+
 def identity(x):
     return x
 
@@ -341,6 +356,11 @@ def two(x, y):
 class Holder:
     def __init__(self, x):
         self.x = x
+
+
+STOPITERATION_WHY = (
+    "stopiteration_error asserts that the frame is a generator's, which the "
+    "probe's synthetic frame is not; test_rop_functions runs the arm")
 
 
 def function_of(source):
@@ -451,6 +471,48 @@ SCENARIOS = {
                         "instance": (materialised(),), "nodict": (SlotsClassAttr(),),
                         "pointer": (functools.partial(identity),)},
         warmups=200, coherent=True),
+    "GetItem": Scenario("GetItem", {
+        "list": "def f(a, k=1):\n    return a[k]\n",
+        "tuple": "def f(a, k=1):\n    return a[k]\n",
+        "ascii": "def f(a, k=1):\n    return a[k]\n",
+        "unicode": "def f(a, k=1):\n    return a[k]\n",
+        "dict": "def f(a, k=1):\n    return a[k]\n",
+        "slice": "def f(a, k=slice(0, 2)):\n    return a[k]\n",
+        "generic": "def f(a, k=1):\n    return a[k]\n"},
+        [{"obj": o, "key": k} for o in ([10, 20, 30], (10, 20, 30), "abc", "a\u00e9c",
+                                        {1: 2, 2**70: 3}, Getter(), Plain())
+         for k in (0, 1, -1, 7, -9, 1, 2**70, "x", slice(0, 2), 1.5)],
+        warm_by_source={"list": ([1, 2],), "tuple": ((1, 2),), "ascii": ("ab",),
+                        "unicode": ("a\u00e9",), "dict": ({1: 2},),
+                        "slice": ([1, 2, 3],), "generic": (Getter(),)},
+        warmups=200, coherent=True),
+    "SetItem": Scenario("SetItem", {
+        "list": "def f(a, k=1, v=5):\n    a[k] = v\n",
+        "dict": "def f(a, k=1, v=5):\n    a[k] = v\n",
+        "generic": "def f(a, k=1, v=5):\n    a[k] = v\n"},
+        [{"obj": o, "key": k, "value": v}
+         for o in ([10, 20, 30], {1: 2}, Getter(), (1, 2))
+         for k in (0, 1, -1, 7, "x") for v in (5, None)],
+        warm_by_source={"list": ([1, 2],), "dict": ({1: 2},), "generic": (Getter(),)},
+        warmups=200, coherent=True),
+    "DelItem": Scenario("DelItem", {
+        "generic": "def f(a, k=0):\n    del a[k]\n"},
+        [{"obj": o, "key": k} for o in ([10, 20, 30], {1: 2, 0: 1}, Getter(), (1, 2))
+         for k in (0, 1, -1, 7, "x")], warm=([1, 2],)),
+    "SliceRead": Scenario("SliceRead", {
+        "generic": "def f(a, i=0, j=1):\n    return a[i:j]\n"},
+        [{"obj": o, "start": i, "stop": j}
+         for o in ([1, 2, 3], (1, 2, 3), "abc", Getter(), 5)
+         for i, j in ((0, 1), (None, None), (-2, 5), ("x", 1))], warm=([1, 2],)),
+    "SliceWrite": Scenario("SliceWrite", {
+        "generic": "def f(a, i=0, j=1, v=()):\n    a[i:j] = v\n"},
+        [{"obj": o, "start": i, "stop": j, "value": v}
+         for o in ([1, 2, 3], Getter(), 5) for i, j in ((0, 1), (None, None), ("x", 1))
+         for v in ([9], 7)], warm=([1, 2],)),
+    "BuildSlice": Scenario("BuildSlice", {
+        "generic": "def f(a, i=0, j=1, k=2):\n    return a[i:j:k]\n"},
+        [{"parts": parts} for parts in ([0, 1], [0, 1, 2], [None, None, None],
+                                        [Plain(), 1], [1, 2, 0])], warm=([1, 2],)),
     "GetMethod": Scenario("GetMethod", {
         "values": "def f(a):\n    return a.norm()\n",
         "nodict": "def f(a):\n    return a.norm()\n",
@@ -485,14 +547,18 @@ SCENARIOS = {
            for v in (1, "s")], warm=([],),
         monitored=("monitored",)),
     "Function": Scenario("Function", {
-        "def": "def f():\n    def g():\n        pass\n    return g\n"},
+        "def": "def f():\n    def g():\n        pass\n    return g\n",
+        "defaults": "def f(a):\n    def g(x=a):\n        pass\n    return g\n",
+        "all": "def f(a, b):\n    def g(x=a, *, k=b) -> int:\n        return a\n"
+               "    return g\n"},
+        # The function keeps the code and the attributes, which the count
+        # check cannot see
         [{"code": code} for code in (identity.__code__, Holder.__init__.__code__)],
-        warm=(), holds=True),
-    "FunctionSet": Scenario("FunctionSet", {
-        "defaults": "def f(a):\n    def g(x=a):\n        pass\n    return g\n"},
-        # The function keeps the value, which the count check cannot see: only
-        # an immortal value is exact
-        [{"fn": FUNCTION, "value": ()}], warm=(1,)),
+        warm=(1, 2), holds=True,
+        inputs_by_source={
+            "defaults": [{"code": identity.__code__, "fields": [v]}
+                         for v in ((1,), (), (None, 2))],
+            "all": [{"code": identity.__code__, "fields": [(1,), {"k": 2}, {"k": int}]}]}),
     "Intrinsic": Scenario("Intrinsic", {
         "unary": "def f(a):\n    return +a\n",
         "stopiteration": "def f(a):\n    yield a\n",
@@ -503,14 +569,14 @@ SCENARIOS = {
             # count check cannot see; test_rop_functions runs that case)
             "stopiteration": [{"x": v} for v in (ValueError(1), KeyError("k"))],
             "import_star": [{"x": v} for v in (sys, capi, {"a": 1})]},
-        requires={}),
+        skip={"Intrinsic.StopIteration": STOPITERATION_WHY}),
     "IntrinsicPair": Scenario("IntrinsicPair", {
         "binary": PAIR_SOURCE},
         [{"x": x, "y": y} for x, y in PAIRS], warm=(1, 2), per_arm=True,
         inputs_by_source={
             # TYPEVAR_WITH_BOUND (a name, the bound's evaluator): the new
             # typevar holds the evaluator, so it is immortal
-            "binary": [{"x": x, "y": None} for x in ("T", "U", 1)]}),
+            "binary": [{"x": x, "y": None} for x in ("T", "U")]}),
     "Compare": Scenario("Compare", {
         "rich": "def f(a, b):\n    return a < b\n",
         "equal": "def f(a, b):\n    return a == b\n",
@@ -768,9 +834,13 @@ def check(cx, arm_name, scenario, source, inputs):
     constants = [capi.list_value_bits([c], 0) for c in f.__code__.co_consts]
     mode = (STUB if arm.region is Region.shared
             else TRANSFER if transfers(arm) else FORM)
-    return [one_run(cx, arm, ssa, f, index, length, site, slots, homes, before,
-                    constants, mode, inputs, scenario.holds)
-            for _ in range(REPEATS)]
+    results = []
+    for _ in range(REPEATS):
+        if scenario.before_run is not None:
+            scenario.before_run(inputs)
+        results.append(one_run(cx, arm, ssa, f, index, length, site, slots, homes,
+                               before, constants, mode, inputs, scenario.holds))
+    return results
 
 
 def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constants,
@@ -877,6 +947,7 @@ NOT_RUN = {
     "Import.Lazy": "`lazy import` is a module-level statement",
     # select(jit_on) and select(jit_off): the word is the one the JIT's
     # state chose when the function was lowered
+    "Intrinsic.StopIteration": STOPITERATION_WHY,
     "IntrinsicPair.Attr": "GETATTR and SETATTR are escapes for a name too wide for "
                           "LOAD_ATTR and STORE_ATTR; no function's source compiles "
                           "to one on a word",

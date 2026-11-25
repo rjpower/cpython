@@ -1859,12 +1859,7 @@
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. The instance, slot and dict- \
      * hint paths read shapes and keys (specialize_dict_access), as for loads. */ \
     HELPER(_Py_Specialize_StoreAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
-        ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. store_subscr_fail_kind and \
-     * _PyType_LookupRef(__setitem__) (released with Py_XDECREF) classify the \
-     * container. */ \
-    HELPER(_Py_Specialize_StoreSubscr, void, (PyValueBorrow, PyValueBorrow, _PyInstr *), \
-        ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
+        ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
 
 /* The evaluator's labels (bytecodes.c label(...)): the routines behind them */
 #define _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \

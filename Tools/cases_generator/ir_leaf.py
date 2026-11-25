@@ -146,6 +146,7 @@ FIELDS = {f"{f.struct}.{f.name}": f for f in (
     Field("PyVarObject", "ob_size", "i64"),
     Field("PyTypeObject", "tp_version_tag", "u32"),
     Field("PyTypeObject", "tp_basicsize", "i64"),
+    Field("PyTypeObject", "tp_flags", "u64"),
     Field("PyListObject", "ob_item", "PyValue*"),
     Field("PyListObject", "allocated", "i64"),
     Field("PyTupleObject", "ob_item", "PyValue*"),   # an array in place
@@ -166,6 +167,7 @@ FIELDS = {f"{f.struct}.{f.name}": f for f in (
     Field("_PyRangeIterObject", "step", "i64"),
     Field("_PyRangeIterObject", "len", "i64"),
     Field("PyLongObject", "long_value.lv_tag", "u64"),
+    Field("PyASCIIObject", "length", "i64"),
     Field("_PyInterpreterFrame", "f_globals", "PyObject*"),
     Field("_PyInterpreterFrame", "f_builtins", "PyObject*"),
     Field("_PyInterpreterFrame", "f_executable", "PyCodeObject*"),

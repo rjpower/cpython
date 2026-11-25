@@ -60,6 +60,11 @@ typedef struct {
     _PyJitLabel release_tail[2];
     _PyJitLabel release_back[2];
     size_t release_end;         // the hot section's size after the last one
+    /* Whether a template that reads the word's feedback entry tests the
+       word's handler first (_PyJitTemplate_CheckHandler): the compiler has
+       not tested it, and specialisation may rewrite the word.  An entry is
+       evidence only for the arm whose install wrote it. */
+    int check_handler;
 } _PyJitWordCx;
 #define _PyJit_MAX_RELEASES 2
 
@@ -159,6 +164,7 @@ PyAPI_DATA(const void *const) _PyEval_JitRaiseExit;
 /* The pieces of the generated templates */
 PyAPI_FUNC(void) _PyJitTemplate_Branch(_PyJitWordCx *cx, int cond);
 PyAPI_FUNC(void) _PyJitTemplate_Raise(_PyJitWordCx *cx, _PyJitLabel label);
+PyAPI_FUNC(void) _PyJitTemplate_CheckHandler(_PyJitWordCx *cx);
 PyAPI_FUNC(void) _PyJitTemplate_PtrAdd(_PyJitWordCx *cx, _PyJitReg dst, _PyJitReg base,
                                        _PyJitReg index, size_t size);
 

@@ -311,6 +311,26 @@ class MonitorTests(unittest.TestCase):
                                 [(e[0], e[1]) for e in self.events],
                                 [("BRANCH_RIGHT" if taken else "BRANCH_LEFT", jump.offset)])
 
+    def test_monitoring_before_the_first_call(self):
+        for test in ("a < b", "a is b", "a in b"):
+            for condition in (test, f"not ({test})"):
+                f = make(f"def f(a, b):\n    if {condition}:\n        return 1\n"
+                         "    return 2\n")
+                jump = self.jump_of(f)
+                self.watch(f)
+                for a in ((1, [1]), (2, [1]), (1, 1), (1, 2)):
+                    try:
+                        answer = bool(eval(test, {"a": a[0], "b": a[1]}))
+                    except TypeError:
+                        continue
+                    self.events.clear()
+                    f(*a)
+                    taken = answer == (jump.opname == "POP_JUMP_IF_TRUE")
+                    with self.subTest(condition=condition, args=a):
+                        self.assertEqual(
+                            [(e[0], e[1]) for e in self.events],
+                            [("BRANCH_RIGHT" if taken else "BRANCH_LEFT", jump.offset)])
+
     def test_monitoring_a_warm_site_keeps_its_answers(self):
         f = make("def f(a, b):\n    if a in b:\n        return 1\n    return 2\n")
         warm(f, 1, {1})

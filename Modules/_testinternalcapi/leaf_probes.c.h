@@ -1233,7 +1233,7 @@ leaf_probe__POP_ITER(_PyInterpreterFrame *frame, PyValue *stack_pointer, int opa
 }
 
 static int
-leaf_probe__POP_TOP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+leaf_probe__POP_TOP_ANY(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -1525,7 +1525,7 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_NOP", leaf_probe__NOP, 0},
     {"_NULL_SLOT_CONDITIONAL", leaf_probe__NULL_SLOT_CONDITIONAL, 0},
     {"_POP_ITER", leaf_probe__POP_ITER, 2},
-    {"_POP_TOP", leaf_probe__POP_TOP, 1},
+    {"_POP_TOP_ANY", leaf_probe__POP_TOP_ANY, 1},
     {"_POP_TOP_FLOAT", leaf_probe__POP_TOP_FLOAT, 1},
     {"_POP_TOP_INT", leaf_probe__POP_TOP_INT, 1},
     {"_POP_TOP_NUMBER", leaf_probe__POP_TOP_NUMBER, 1},

@@ -837,7 +837,6 @@ static _PyIRTransfer ir_run_Move_Transfer(PyThreadState *tstate, _PyInterpreterF
 static _PyIRTransfer ir_run_NOP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_POP_EXCEPT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_POP_ITER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_POP_TOP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_PUSH_EXC_INFO(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RAISE_VARARGS(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RERAISE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -1350,13 +1349,13 @@ ir_run_BINARY_OP_EXTEND(
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -2416,7 +2415,7 @@ ir_run_BINARY_OP_SUBSCR_LIST_INT(
                 assert(PyValue_LongCheckExact(value));
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ls;
                 (void)value;
@@ -2503,13 +2502,13 @@ ir_run_BINARY_OP_SUBSCR_LIST_SLICE(
                 ir_own_B = IR_DETACH(ir_word, B, ls);
                 ir_own_C = IR_DETACH(ir_word, C, ss);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ss;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ls;
                 (void)value;
@@ -2693,7 +2692,7 @@ ir_run_BINARY_OP_SUBSCR_TUPLE_INT(
                 assert(PyValue_LongCheckExact(value));
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ts;
                 (void)value;
@@ -3729,7 +3728,7 @@ ir_run_CALL_INTRINSIC_1(
                 v = value;
                 ir_own_B = IR_DETACH(ir_word, B, v);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = v;
                 (void)value;
@@ -4989,13 +4988,13 @@ ir_run_CONTAINS_OP(
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -5070,13 +5069,13 @@ ir_run_CONTAINS_OP_DICT(
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -5143,13 +5142,13 @@ ir_run_CONTAINS_OP_JUMP(
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -5229,13 +5228,13 @@ ir_run_CONTAINS_OP_JUMP_DICT(
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -5316,13 +5315,13 @@ ir_run_CONTAINS_OP_JUMP_SEQUENCE(
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -5402,13 +5401,13 @@ ir_run_CONTAINS_OP_JUMP_SET(
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -5491,13 +5490,13 @@ ir_run_CONTAINS_OP_SET(
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -5689,7 +5688,7 @@ ir_run_DICT_MERGE(
                 }
                 u = update;
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = u;
                 window[4 + (oparg - 1)] = PyValue_NULL;
@@ -5754,7 +5753,7 @@ ir_run_DICT_UPDATE(
                 }
                 upd = update;
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = upd;
                 window[1 + (oparg - 1)] = PyValue_NULL;
@@ -7171,13 +7170,13 @@ ir_run_INSTRUMENTED_IS_OP_JUMP(
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -7521,13 +7520,13 @@ ir_run_IS_OP(
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -7578,13 +7577,13 @@ ir_run_IS_OP_JUMP(
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -7692,7 +7691,7 @@ ir_run_LIST_EXTEND(
                 assert(Py_IsNone(none_val));
                 i = iterable_st;
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = i;
                 window[1 + (oparg-1)] = PyValue_NULL;
@@ -8513,7 +8512,7 @@ ir_run_MAKE_FUNCTION(
                                    func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
                 func = PyValue_FromObjectSteal((PyObject *)func_obj);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = co;
                 (void)value;
@@ -8620,7 +8619,7 @@ ir_run_MATCH_CLASS(
                 tp = type;
                 n = names;
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = n;
                 IR_SET_TEMP(window[0], attrs);
@@ -8628,13 +8627,13 @@ ir_run_MATCH_CLASS(
                 IR_SET_TEMP(window[2], tp);
                 _PyValue_XCLOSE_POINTER(value);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = tp;
                 window[2] = PyValue_NULL;
                 PyValue_XCLOSE(value);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = s;
                 window[1] = PyValue_NULL;
@@ -8825,29 +8824,6 @@ ir_run_POP_ITER(
             (void)index_or_null;
             ir_own_B = IR_DETACH(ir_word, B, index_or_null);
             ir_own_A = IR_DETACH(ir_word, A, iter);
-            (void)(ir_own_A);
-            PyValue_XCLOSE(ir_own_A);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_POP_TOP(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = POP_TOP;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(POP_TOP);
-            PyValueBorrow value;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            value = IR_VIEW(IR_A(ir_word));
-            ir_own_A = IR_DETACH(ir_word, A, value);
             (void)(ir_own_A);
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
@@ -9999,7 +9975,7 @@ ir_run_SET_UPDATE(
                 }
                 i = iterable;
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = i;
                 window[1 + (oparg-1)] = PyValue_NULL;
@@ -10536,7 +10512,7 @@ ir_run_STORE_FAST(
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
                 trash = tmp;
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = trash;
                 PyValue_XCLOSE(value);
@@ -10890,13 +10866,13 @@ ir_run_STORE_SUBSCR_LIST_INT(
                 ir_own_B = IR_DETACH(ir_word, B, ss);
                 PyValue_CLOSE(old_value);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ss;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ls;
                 (void)value;
@@ -10937,7 +10913,7 @@ ir_run_UNARY_INVERT(
                 v = value;
                 ir_own_B = IR_DETACH(ir_word, B, v);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = v;
                 (void)value;
@@ -10987,7 +10963,7 @@ ir_run_UNARY_NEGATIVE(
                 v = value;
                 ir_own_B = IR_DETACH(ir_word, B, v);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = v;
                 (void)value;
@@ -11552,7 +11528,7 @@ static const _PyIRForm ir_handler_forms[512] = {
     [26] = ir_run_UNKNOWN_OPCODE,
     [27] = ir_run_POP_EXCEPT,
     [28] = ir_run_POP_ITER,
-    [29] = ir_run_POP_TOP,
+    [29] = ir_run_UNKNOWN_OPCODE,
     [30] = ir_run_PUSH_EXC_INFO,
     [31] = ir_run_UNKNOWN_OPCODE,
     [32] = ir_run_RETURN_GENERATOR,
@@ -12460,13 +12436,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -13416,7 +13392,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(PyValue_LongCheckExact(value));
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ls;
                 (void)value;
@@ -13499,13 +13475,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_B = IR_DETACH(ir_word, B, ls);
                 ir_own_C = IR_DETACH(ir_word, C, ss);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ss;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ls;
                 (void)value;
@@ -13681,7 +13657,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(PyValue_LongCheckExact(value));
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ts;
                 (void)value;
@@ -15171,13 +15147,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -15248,13 +15224,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -15331,13 +15307,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -15413,13 +15389,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -15498,13 +15474,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -16417,13 +16393,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -16745,13 +16721,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_B = IR_DETACH(ir_word, B, l);
                 ir_own_C = IR_DETACH(ir_word, C, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_C);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -16798,13 +16774,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_A = IR_DETACH(ir_word, A, l);
                 ir_own_B = IR_DETACH(ir_word, B, r);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = r;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = l;
                 (void)value;
@@ -17294,25 +17270,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)index_or_null;
             ir_own_B = IR_DETACH(ir_word, B, index_or_null);
             ir_own_A = IR_DETACH(ir_word, A, iter);
-            (void)(ir_own_A);
-            PyValue_XCLOSE(ir_own_A);
-            DISPATCH();
-        }
-
-        TARGET(POP_TOP) {
-            int opcode = POP_TOP;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(POP_TOP);
-            PyValueBorrow value;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            value = IR_VIEW(IR_A(ir_word));
-            ir_own_A = IR_DETACH(ir_word, A, value);
             (void)(ir_own_A);
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
@@ -18504,7 +18461,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
                 trash = tmp;
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = trash;
                 PyValue_XCLOSE(value);
@@ -18673,13 +18630,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_B = IR_DETACH(ir_word, B, ss);
                 PyValue_CLOSE(old_value);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ss;
                 (void)value;
                 (void)(ir_own_B);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = ls;
                 (void)value;
@@ -18716,7 +18673,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 v = value;
                 ir_own_B = IR_DETACH(ir_word, B, v);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = v;
                 (void)value;
@@ -18762,7 +18719,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 v = value;
                 ir_own_B = IR_DETACH(ir_word, B, v);
             }
-            // _POP_TOP
+            // _POP_TOP_ANY
             {
                 value = v;
                 (void)value;

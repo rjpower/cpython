@@ -104,28 +104,21 @@ class ContractTests(unittest.TestCase):
             return testapi.ir_normal_physical_transfer(
                 named[name], *fields, arg, edge, home, nl, limit)
 
-        # COPY and SWAP are stack ops that regcfg.c lowers by their own rules
+        # COPY, SWAP and POP_TOP are stack ops that regcfg.c lowers by
+        # their own rules
         store_fast = (4, 0, 0, 0)
         self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 4), set_null)
         self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 5), preserve)
 
-        pop_top = (4, 0, 0, 0)
-        row = BY_NAME["POP_TOP"]
-        self.assertEqual(row.roles, (_opcode.IR_ROLE_IN0,
-                                     _opcode.IR_ROLE_NONE,
-                                     _opcode.IR_ROLE_NONE,
-                                     _opcode.IR_ROLE_NONE))
-        self.assertEqual((extent(row.reads, 0), extent(row.writes, 0),
-                          extent(row.through, 0)), (1, 0, 0))
-        self.assertIsNone(row.twin)
-        self.assertEqual(transfer("POP_TOP", pop_top, 0, 0, 4), set_null)
-        self.assertEqual(transfer("POP_TOP", pop_top, 0, 0, 5), preserve)
+        # POP_TOP lowers to a retirement: Move.Retire([], [src]) is
+        # A = 0 destinations, B = 1 source, the source in C
+        retire = (0, 1, 4, 4095)
+        self.assertEqual(transfer("Move.Retire", retire, 0, 0, 4), set_null)
+        self.assertEqual(transfer("Move.Retire", retire, 0, 0, 5), preserve)
         # Successive retirements retain each other's NULL facts.
-        self.assertEqual(transfer("POP_TOP", (5, 0, 0, 0), 0, 0, 4), preserve)
-        self.assertEqual(transfer("POP_TOP", (5, 0, 0, 0), 0, 0, 5), set_null)
-        self.assertEqual(transfer("POP_TOP", (0, 0, 0, 0), 0, 0, 4), unknown)
-        self.assertEqual(transfer("POP_TOP", (10, 0, 0, 0), 0, 0, 4), unknown)
-        self.assertEqual(transfer("POP_TOP", pop_top, 0, 1, 4), unknown)
+        self.assertEqual(transfer("Move.Retire", (0, 1, 5, 4095), 0, 0, 4), preserve)
+        self.assertEqual(transfer("Move.Retire", (0, 1, 5, 4095), 0, 0, 5), set_null)
+        self.assertEqual(transfer("Move.Retire", retire, 0, 1, 4), unknown)
 
         for_iter = (6, 4, 0, 1)
         self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 4), set_null)

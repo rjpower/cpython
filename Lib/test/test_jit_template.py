@@ -735,8 +735,6 @@ TEMPLATE_CASES = [
     *[("def f(a, b):\n    a.p = b\n    return a", (cls(), 1), handler, "AB",
        [(o, v) for o in OWNERS for v in (7, 2.5)])
       for cls, handler in ((Shape, "STORE_ATTR_SHAPE"), (Slots, "STORE_ATTR_SLOT"))],
-    ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x", (1, 2), "POP_TOP", "A",
-     [(x,) for x in ANY + [Plain()]]),
     # Each run adds the attribute to a new instance
     ("def f(a, b):\n    a.z = b\n    return a", Fresh(lambda: (Shape(), 0)), "STORE_ATTR_SHAPE_ADD",
      "AB", [(Fresh(o), v) for o in (Shape, owners_with_z, reversed_shape, Slots, Other)
@@ -901,14 +899,20 @@ class TemplateTests(unittest.TestCase):
     def test_move_is_a_shared_stub(self):
         "A Move word calls its function form through the shared stub"
         # The resolver renames most moves away; a with statement still
-        # stages its exit and value with a Move of one pair
-        f = self.compile("def f(a, b):\n    with a:\n        return b",
-                         (contextlib.nullcontext(), 2))
-        index = word_of(f, "Move.Transfer")[0]
-        self.assertTrue(capi.jit_compile(f.__code__))
-        self.assertEqual(capi.jit_unit(f.__code__)["plans"][index],
-                         ("Move.Transfer", "shared", "stub", "Move.Transfer"))
-        self.assertEqual(f(contextlib.nullcontext(), 2), 2)
+        # stages its exit and value with a Move of one pair.  A chained
+        # comparison retires its middle operand when the first test fails.
+        for source, args, handler, result in (
+                ("def f(a, b):\n    with a:\n        return b",
+                 (contextlib.nullcontext(), 2), "Move.Transfer", 2),
+                ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x",
+                 (2, 1), "Move.Retire", False)):
+            with self.subTest(handler=handler):
+                f = self.compile(source, args)
+                index = word_of(f, handler)[0]
+                self.assertTrue(capi.jit_compile(f.__code__))
+                self.assertEqual(capi.jit_unit(f.__code__)["plans"][index],
+                                 (handler, "shared", "stub", handler))
+                self.assertEqual(f(*args), result)
 
     def test_resume_check_misses_when_instrumentation_changes(self):
         "RESUME_CHECK's template stays on its code until monitoring changes the version"

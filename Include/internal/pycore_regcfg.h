@@ -348,8 +348,6 @@ int _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical);
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
 int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);
-int _PyRegPass_PopTop(_PyRegCfg *cfg);
-int _PyRegPass_Discard(_PyRegCfg *cfg);
 int _PyRegPass_KwNames(_PyRegCfg *cfg);
 int _PyRegPass_ElideNull(_PyRegCfg *cfg);
 int _PyRegPass_CallRoles(_PyRegCfg *cfg);

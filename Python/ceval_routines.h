@@ -257,7 +257,7 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value)
         next_instr = exit;
         frame->instr_ptr = frame->return_pc = next_instr;
         if ((kind & ~GEN_THROWING) == GEN_COMPLETE_POP_TOP) {
-            INSTRUCTION_STATS(POP_TOP);
+            INSTRUCTION_STATS(ROP_HANDLER_Move_Retire);
             ++next_instr;
         }
         GEN_DISPATCH();

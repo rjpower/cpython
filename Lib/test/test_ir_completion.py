@@ -117,7 +117,7 @@ class SemanticCompletionTests(unittest.TestCase):
         iterator.close()
         gc.collect()
         self.assertEqual(released, ['released', 'released'])
-        self.assertNotIn('POP_TOP', code_names(gen))
+        self.assertNotIn('Move.Retire', code_names(gen))
         recipients = [i.dst for i in dis.get_instructions(gen)
                       if i.opname in ('RETURN_GENERATOR', 'YIELD_VALUE')]
         self.assertEqual(recipients, [None, None])

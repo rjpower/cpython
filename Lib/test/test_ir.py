@@ -2366,7 +2366,8 @@ class LocalArmTest(unittest.TestCase):
 
     def test_no_move_words(self):
         # Locals, saved bindings and swaps become stores and renames; the
-        # resolver has no parallel set left to move
+        # resolver has no parallel set left to move (a retirement moves
+        # nothing)
         def comp(xs):
             return [x * 2 for x in xs if x]
         def nested(xs, ys):
@@ -2388,7 +2389,8 @@ class LocalArmTest(unittest.TestCase):
             with self.subTest(f=f.__name__):
                 f(*args)
                 names = handlers(f)
-                self.assertEqual([n for n in names if n.startswith("Move.")], [])
+                self.assertEqual([n for n in names if n.startswith("Move.")
+                                  and n != "Move.Retire"], [])
         self.assertIn("SaveLocal.Take", handlers(comp))
         self.assertIn("LocalWrite.Restore", handlers(comp))
         self.assertEqual(handlers(swap).count("LocalWrite.Store"), 2)
@@ -2668,27 +2670,79 @@ class RegCfgTest(unittest.TestCase):
             x
             1
             return x
-        self.assertNotIn("POP_TOP", self.names(f))
+        self.assertNotIn("Move.Retire", self.names(f))
         # Each line keeps its event
         first = f.__code__.co_firstlineno
         _, events = trace(f, 0)
         self.assertEqual([e[2] - first for e in events if e[0] == "line"],
                          [1, 2, 3])
 
+    def test_pop_top_retires_each_value_once(self):
+        # A popped value that its producer cannot discard is closed by a
+        # Move.Retire, never by a POP_TOP word: here the intermediate
+        # objects of a dotted import, each finalized exactly once
+        deaths = []
+
+        class Part:
+            def __init__(self, depth):
+                self.depth = depth
+            def __getattr__(self, name):
+                return Part(self.depth + 1)
+            def __del__(self):
+                deaths.append(self.depth)
+
+        ns = {"__builtins__": {"__import__": lambda *args: Part(0)}}
+        exec("def f():\n import m.m.m.m as x\n return x.depth", ns)
+        f = ns["f"]
+        self.assertIn("Move.Retire", self.names(f))
+        for _ in range(3):
+            deaths.clear()
+            self.assertEqual(f(), 3)
+            gc.collect()
+            self.assertEqual(sorted(deaths), [0, 1, 2, 3])
+
+    def test_adjacent_retirements_share_a_word(self):
+        # The three values below a with statement's handler retire on one
+        # line: one Move.Retire closes them all, in pop order
+        class Suppress:
+            def __enter__(self):
+                return self
+            def __exit__(self, *exc):
+                return True
+        def f(cm):
+            with cm:
+                raise ValueError
+            return 1
+        retires = [w for w in get_ir(f.__code__) if w[0] == "Move.Retire"]
+        self.assertIn(3, [w[2] for w in retires])
+        for _ in range(3):
+            self.assertEqual(f(Suppress()), 1)
+
+    def test_slots_do_not_creep(self):
+        # IMPORT_FROM; SWAP 2; POP_TOP leaves the survivor above the slot
+        # it vacates; the next output reuses that slot
+        for n in (2, 50, 500):
+            with self.subTest(parts=n):
+                ns = {}
+                exec("def f():\n import " + ".".join(["m"] * n) + " as x\n"
+                     " return x", ns)
+                ir = IRCode(ns["f"].__code__)
+                self.assertLessEqual(ir.nslots - ir.nfixed, 2)
+
     def test_pop_top_of_a_call_is_folded(self):
-        # The call releases its result: no dst, no POP_TOP, as the return
+        # The call releases its result: no dst, no retirement, as the return
         # that follows is on its line
         def f(g):
             g()
-        self.assertNotIn("POP_TOP", self.names(f))
+        self.assertNotIn("Move.Retire", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
 
     def test_call_discard_across_source_lines(self):
-        # Source boundaries do not require a temporary result or a POP word.
+        # Source boundaries do not require a temporary result or a retirement.
         def f(g):
             g()
             return 1
-        self.assertNotIn("POP_TOP", self.names(f))
+        self.assertNotIn("Move.Retire", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
         call = next(word for word in get_ir(f.__code__) if word[0] == "Call.Generic+NO_SELF")
         self.assertEqual(call[1], IR_FIELD_MAX)
@@ -2709,7 +2763,7 @@ class RegCfgTest(unittest.TestCase):
         self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
         for f in conj, disj:
             self.assertNotIn("Move.Copy", self.names(f))
-            self.assertNotIn("POP_TOP", self.names(f))
+            self.assertNotIn("Move.Retire", self.names(f))
         empty, full = [], [1]
         for x, b in ((empty, "b"), (full, "b"), (0, None), (2.5, 0)):
             o = types.SimpleNamespace(x=x)
@@ -2732,7 +2786,7 @@ class RegCfgTest(unittest.TestCase):
         def window(a, b):
             return list((a or b(), 1))
         self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
-        self.assertNotIn("POP_TOP", self.names(disj))
+        self.assertNotIn("Move.Retire", self.names(disj))
         empty, full = [], [1]
         for a in empty, full, 0, 2.5:
             self.assertIs(disj(a, full), a or full)

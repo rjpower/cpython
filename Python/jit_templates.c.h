@@ -2,7 +2,7 @@
 // from the leaf IR of Python/bytecodes.c.
 // Do not edit!
 //
-// 38 templates.  The handlers whose uops are all leaf but that
+// 37 templates.  The handlers whose uops are all leaf but that
 // keep the call of their form:
 
 static void
@@ -1348,24 +1348,6 @@ jit_template_POP_ITER(_PyJitWordCx *cx)
 }
 
 static void
-jit_template_POP_TOP(_PyJitWordCx *cx)
-{
-    _PyJitAsm *a = cx->a;
-    _PyIRWord ir_word = cx->word;
-    (void)ir_word;
-    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Bind(a, L0);
-    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
-    if (!(ir_word & IR_F_LOCAL_A)) {
-        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
-    }
-    if (!(ir_word & IR_F_LOCAL_A)) {
-        cx->live = 0x0; cx->live_xmm = 0x0;
-        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
-    }
-}
-
-static void
 jit_template_RESUME_CHECK(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
@@ -1664,7 +1646,6 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [10] = jit_template_END_SEND,
     [25] = jit_template_NOP,
     [28] = jit_template_POP_ITER,
-    [29] = jit_template_POP_TOP,
     [70] = jit_template_IS_OP,
     [111] = jit_template_STORE_FAST,
     [129] = jit_template_BINARY_OP_ADD_FLOAT,

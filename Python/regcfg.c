@@ -489,6 +489,7 @@ struct _PyRegTr {
     int sp;
     int astack;
     int region_op;          // the first op of the current region
+    int block_op;           // the first op of the current block
     int *def;               // per fresh register, the op that defines it
     int *natural;           // per fresh register, its stack position there
     int adef;
@@ -1092,6 +1093,176 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL);
 }
 
+/* POP_TOP removes a use of the value on top and owes its release.  It
+ * runs no instruction of its own: the rule discharges the obligation at
+ * once, the first way that applies.
+ *
+ *   1. Nothing to release.  The producer only makes the value (a local
+ *      read, a constant, a second owner, a pure op over locals), takes no
+ *      temporary, and nothing else read the value: the producer goes too.
+ *      It must share the POP_TOP's line and handler, so no line event goes.
+ *   2. The producer absorbs it: an op that may discard its result
+ *      (_PyIR_DISCARDS), which nothing else read, writes it nowhere
+ *      (_PyReg_DISCARD).
+ *   3. A retirement: Move.Retire of the value, which closes it and may run
+ *      Python.  A retirement right after another on the same line and
+ *      under the same handler joins it: one word closes both, in pop
+ *      order.  An edge's Move set that follows takes it in (bind_edge()).
+ *
+ * The obligation never waits past the POP_TOP's own op, so every value is
+ * released where it was, or in the next word with no op between: a raise,
+ * a call, a yield or a join never sees it pending.  A POP_TOP that left no
+ * word of its own stays a source-only op, for its line and offset. */
+
+/* Whether the op only makes its one value, so that dropping both is
+ * unobservable */
+static int
+only_makes_value(const _PyRegCfg *cfg, const _PyRegOp *p)
+{
+    switch (p->opcode) {
+        case ROP_HANDLER_LocalRead_Bound:
+        case ROP_HANDLER_Const_Pool:
+        case ROP_HANDLER_Const_Small:
+        case ROP_HANDLER_Const_Common:
+        case ROP_HANDLER_Move_Copy:
+            break;
+        default: {
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode, p->oparg);
+            if (!(fmt->effects & _PyIR_PURE) ||
+                (fmt->effects & (_PyIR_RAISES | _PyIR_ESCAPES)))
+            {
+                return 0;
+            }
+        }
+    }
+    // It takes no temporary: its taken inputs are locals, which it borrows
+    const int *in = _PyReg_IN(cfg, p);
+    for (int k = p->nread - p->npop; k < p->nread; k++) {
+        if (in[k] >= cfg->nlocalsplus) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* The op in this region that made v, its only output, if no later op reads
+ * v; else NULL */
+static _PyRegOp *
+sole_producer(_PyRegTr *t, int v)
+{
+    _PyRegCfg *cfg = t->cfg;
+    if (v < _PyReg_FRESH0(cfg)) {
+        return NULL;
+    }
+    int p = t->def[v - _PyReg_FRESH0(cfg)];
+    if (p < t->region_op || p >= t->nops) {
+        return NULL;
+    }
+    _PyRegOp *prod = &t->ops[p];
+    if (prod->opcode == _PyReg_DEAD || prod->nout != 1 ||
+        _PyReg_OUT(cfg, prod)[0] != v || prod->dst >= 0 ||
+        (prod->flags & (_PyReg_MOVES | _PyReg_DISCARD)))
+    {
+        return NULL;
+    }
+    for (int i = p + 1; i < t->nops; i++) {
+        const _PyRegOp *op = &t->ops[i];
+        const int *in = _PyReg_IN(cfg, op);
+        for (int k = 0; k < op->nread + op->nimplicit; k++) {
+            if (in[k] == v) {
+                return NULL;
+            }
+        }
+    }
+    // v is on top; no position below holds it too
+    for (int k = 0; k < t->sp - 1; k++) {
+        if (t->stack[k] == v) {
+            return NULL;
+        }
+    }
+    return prod;
+}
+
+/* The retirement that the op being translated may join: the last op of the
+ * block, past source-only ops, if it is a Move.Retire on src's line under
+ * src's handler */
+static _PyRegOp *
+joinable_retire(_PyRegTr *t, const _PyRegOp *src)
+{
+    for (int i = t->nops - 1; i >= t->block_op; i--) {
+        _PyRegOp *op = &t->ops[i];
+        if (op->loc.lineno != src->loc.lineno || op->except != src->except) {
+            return NULL;
+        }
+        if (op->opcode == ROP_SELECT_Move_retire) {
+            return op->nout == 0 ? op : NULL;
+        }
+        if (op->opcode != NOP || op->nread != 0 || op->nout != 0) {
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
+/* Retirement op also closes v, after its other sources */
+static int
+retire_also(_PyRegTr *t, _PyRegOp *op, int v)
+{
+    _PyRegCfg *cfg = t->cfg;
+    int n = op->nread + op->nimplicit;
+    int in;
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, n + 1, &in));
+    int *old = &cfg->operands[op->in];
+    int *new = &cfg->operands[in];
+    memcpy(new, old, op->nread * sizeof(int));
+    new[op->nread] = v;
+    memcpy(new + op->nread + 1, old + op->nread, op->nimplicit * sizeof(int));
+    op->in = in;
+    op->nread++;
+    op->npop++;
+    note_op(t, op);
+    return SUCCESS;
+}
+
+static int
+rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int v = t->stack[t->sp - 1];
+    _PyRegOp *prod = sole_producer(t, v);
+    _PyRegOp *retire = NULL, *dead = NULL;
+    int handler = NOP;
+    if (prod != NULL && prod->loc.lineno == src->loc.lineno &&
+        prod->except == src->except && only_makes_value(t->cfg, prod))
+    {
+        prod->opcode = _PyReg_DEAD;
+        dead = prod;
+    }
+    else if (prod != NULL &&
+             (_PyRegCfg_FormatOf(prod->opcode, prod->oparg)->flags
+              & _PyIR_DISCARDS))
+    {
+        prod->flags |= _PyReg_DISCARD;
+    }
+    else if ((retire = joinable_retire(t, src)) != NULL) {
+        RETURN_IF_ERROR(retire_also(t, retire, v));
+    }
+    else {
+        handler = ROP_SELECT_Move_retire;
+    }
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &v,
+                                  handler == NOP ? 0 : 1, NULL, 0, &op));
+    if (dead != NULL) {
+        // The source-only op stands for both, with the producer's span
+        op->loc = dead->loc;
+        op->flags |= dead->flags & _PyReg_SOURCE_ORIGIN;
+    }
+    return _PyRegTr_Pop(t, 1, NULL);
+}
+
 /* LOAD_ATTR is the GetAttr family, or GetMethod when oparg's low bit asks
  * for a method.  The rule names its operands: the receiver is the one use;
  * GetAttr defines dst, GetMethod the callable and then self, pushed in the
@@ -1434,6 +1605,7 @@ static const _PyRegRule rules[256] = {
     [LOAD_FAST_LOAD_FAST] = rule_load_fast_load_fast,
     [LOAD_SMALL_INT] = rule_load_small_int,
     [NOP] = rule_nop,
+    [POP_TOP] = rule_pop_top,
     [RETURN_VALUE] = rule_return_value,
     [STORE_FAST] = rule_store_fast,
     [STORE_FAST_LOAD_FAST] = rule_store_fast_load_fast,
@@ -1585,7 +1757,7 @@ translate(_PyRegCfg *cfg)
                          "inconsistent stack depth at block %d", b);
             err = ERROR;
         }
-        blk->start = t.nops;
+        blk->start = t.block_op = t.nops;
         for (int i = start; err == SUCCESS && i < end; i++) {
             if (i + 1 < end && feeds_branch(&cfg->ops[i], &cfg->ops[i + 1])) {
                 err = hoist_edge(&t, &cfg->ops[i], &cfg->ops[i + 1]);
@@ -2554,6 +2726,62 @@ in_place_dst(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int *dst)
     return SUCCESS;
 }
 
+/* A vacant slot below the top for the one new output of op i, or -1.  A
+ * temporary that an op takes below others leaves its slot vacant (SWAP
+ * reorders the stack and emits no word), and without reuse the next output
+ * would go above the survivor: straight-line code would creep up one slot
+ * per such pair.  The slot keeps the three invariants of compaction:
+ *
+ *   - nothing holds it and no parameter whose home it is gets defined
+ *     while the output lives (fresh_conflict());
+ *   - it is no input's slot, so the op reads every input before it writes;
+ *   - every handler whose range the output lives across finds it at or
+ *     above the handler's first slot, where the unwinder releases it;
+ *
+ * A window that reads the output would stage it back to the top, so such
+ * an output keeps the top.
+ *
+ * Reuse stays clear of what relies on stack order.  A jump that gives its
+ * input as its output where it goes (_PyReg_JUMP_OUTPUT) leaves the value
+ * in place, so the value must sit in the home of the output's parameter,
+ * where stack order puts it: such a value keeps the top, and no reused slot
+ * is the home of a parameter that the region defines later. */
+static int
+reuse_slot(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
+           int through)
+{
+    int nl = cfg->nlocalsplus;
+    int v = _PyReg_OUT(cfg, op)[through];
+    int take = take_of(cfg, o, v);
+    if (v < _PyReg_FRESH0(cfg) || take <= i || take >= o->region_end ||
+        (cfg->ops[take].flags & _PyReg_JUMP_OUTPUT))
+    {
+        return -1;
+    }
+    // A window takes its inputs from consecutive slots at the top: a value
+    // it reads stays there rather than be staged back
+    const _PyRegOp *reader = &cfg->ops[take];
+    if (_PyRegCfg_FormatOf(reader->opcode, reader->oparg)->flags & _PyIR_WINDOW) {
+        return -1;
+    }
+    int floor = 0;
+    for (int j = i + 1; j <= take; j++) {
+        const _PyRegOp *u = &cfg->ops[j];
+        if (u->opcode != _PyReg_DEAD && u->except >= 0) {
+            floor = Py_MAX(floor, handler_base(cfg, u->except));
+        }
+    }
+    for (int s = floor; s < o->top; s++) {
+        if (occ_at(o, s) < 0 &&
+            !canon_defined(cfg, o, nl + s, i, o->region_end) &&
+            !fresh_conflict(cfg, o, op, i, nl + s - through, through, 1))
+        {
+            return nl + s;
+        }
+    }
+    return -1;
+}
+
 static int
 compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
 {
@@ -2653,6 +2881,11 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
                                       dst + op->nout));
                 in = _PyReg_IN(cfg, op);
                 out = _PyReg_OUT(cfg, op);
+            }
+            else if (op->nout - through == 1 &&
+                     (dst = reuse_slot(cfg, o, op, i, through)) >= 0)
+            {
+                dst -= through;
             }
             else {
                 dst = nl + o->top - through;
@@ -3176,6 +3409,16 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                 && !(fmt->flags & (_PyIR_STORE_DST | _PyIR_UNPACKS))) {
                 err = verify_error(after, op, "a local dst");
             }
+            // A jump gives a temporary where it goes by leaving it in
+            // place (a constant slot's readers name the slot itself)
+            if (physical && (op->flags & _PyReg_JUMP_OUTPUT)
+                && (op->nread != 1 || op->nout != 1
+                    || (in[0] >= nl && _PyRegCfg_Slot(cfg, in[0])
+                                       != _PyRegCfg_Slot(cfg, out[0]))))
+            {
+                err = verify_error(after, op, "a jump output that is not "
+                                   "its input's slot");
+            }
             if (cfg->nconst) {
                 int role = _PyIR_OpargRole(fmt);
                 int written = op->dst;
@@ -3441,10 +3684,7 @@ static const struct {
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},
     {"unpack to locals", _PyRegPass_UnpackLocals},
-    {"pop top", _PyRegPass_PopTop},
-    {"discard", _PyRegPass_Discard},
     {"truth folding", _PyRegPass_TruthFold},
-    {"discard after truth folding", _PyRegPass_Discard},
     {"jump fusion", _PyRegPass_FuseJump},
     {"call keyword names", _PyRegPass_KwNames},
     {"null elision", _PyRegPass_ElideNull},

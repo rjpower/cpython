@@ -463,7 +463,7 @@ class Expander:
                 self.fail(t.span, f"exit {kind} after the homes changed, with no point")
             return FrameState(FrameRole.current.value, pc, ExcRole.clear.value,
                               self.current_homes())
-        if kind == "raise":
+        if kind in ("raise", "unwind"):
             return _with(self.point_state(t.args[0].name, t.span), args)
         if kind == "again":
             if changed:
@@ -522,7 +522,7 @@ class Expander:
             self.switch(t)
         elif isinstance(t, Exit):
             args = tuple(self.expr(a) for a in t.args
-                         if not (t.kind == "raise" and a is t.args[0]))
+                         if not (t.kind in ("raise", "unwind") and a is t.args[0]))
             self.cur.term = ExitTerm(t.kind, args, self.exit_state(t, args))
         elif isinstance(t, Each):
             self.fail(t.span, "each: no pilot arm loops")

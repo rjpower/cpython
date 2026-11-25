@@ -283,6 +283,31 @@ class StubTests(unittest.TestCase):
             "_PyRop_CloseOwners(&v);")]
         self.assertEqual(order, sorted(order))
 
+    def test_unwind_enters_the_unwinder_without_a_raise_event(self):
+        program = rop_check.check([rop_syntax.parse(UNWIND, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        text = "\n".join(p.lowered["U.Restore"].body)
+        self.assertIn("PROCESS_ERROR_AT(UNWIND, ", text)
+        self.assertNotIn("PROCESS_ERROR_AT(RAISE, ", text)
+
+
+UNWIND = """\
+family U(exc:Src) exits(unwind) ops(NOP);
+point U.Raised(current, site, pending) keep(exc) spent() defs();
+extern helper restore(t:Thread, e:Src) cases(err(x:Err)) effects(runs_python, raises)
+  c RESTORE as raised
+  evidence(review: "r", contract: "c");
+arm U.Restore split effects(runs_python, raises) feedback() exits(unwind)
+{
+  entry():
+    call restore(thread, exc) { err -> Failed(); }
+  Failed(e:Err):
+    exit unwind(U.Raised, e);
+}
+"""
+
 
 OWNERS = """\
 family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);

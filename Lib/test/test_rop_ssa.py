@@ -65,7 +65,7 @@ class ExpansionTests(unittest.TestCase):
                     homes = {h for h, _ in t.state.homes}
                     self.assertEqual(homes, {n for n, k in arm.operands.items()
                                              if k in (FieldKind.home, FieldKind.vector)})
-                    if t.kind == "raise":
+                    if t.kind in ("raise", "unwind"):
                         self.assertIsNotNone(t.state.point)
                         self.assertEqual(t.state.exc, "pending")
 

@@ -172,11 +172,6 @@ INSTRUCTION_END_MARKER = "/* END INSTRUCTIONS */"
 LABEL_START_MARKER = "/* BEGIN LABELS */"
 LABEL_END_MARKER = "/* END LABELS */"
 
-def first_ir_only_handler(analysis: Analysis) -> int:
-    """The first handler of the IR only.  They follow the pseudo-instructions,
-    so that a number names one opcode, pseudo-instruction or handler."""
-    return analysis.first_ir_only
-
 # The fields of the word, and the C expressions that read them in a handler
 # (Include/internal/pycore_ir.h), from ir_word, which every handler receives.
 FIELDS = ("A", "B", "C", "D")
@@ -1321,15 +1316,22 @@ def ir_only_handler_names(analysis: Analysis) -> list[str]:
             + sorted(generator_boundaries(analysis)))
 
 
+def ir_only_numbers(analysis: Analysis, count: int) -> list[int]:
+    "The numbers of the first count IR-only handlers"
+    wide = max(0, count - len(analysis.free_ids))
+    return [*analysis.free_ids[:count], *range(256, 256 + wide)]
+
+
 def handler_ids(analysis: Analysis) -> dict[str, int]:
     """Handler index of each handler, by name.  The real opcodes keep their
-    opcode; the IR-only handlers follow the pseudo-instructions in a fixed
-    order, with no holes.  BINARY_OP itself has none: its operations do, and
-    a STACK_ONLY opcode has none."""
+    opcode.  The IR-only handlers, in a fixed order, take the numbers below
+    256 that no opcode holds, then continue from 256: a pseudo-instruction
+    has no handler, so its number is free to name one.  BINARY_OP itself has
+    none: its operations do, and a STACK_ONLY opcode has none."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
     names = ir_only_handler_names(analysis)
-    for number, name in enumerate(names, analysis.first_ir_only):
+    for number, name in zip(ir_only_numbers(analysis, len(names)), names):
         ids[name] = number
     return ids
 
@@ -9213,8 +9215,10 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 
 
 def num_old_handlers(analysis: Analysis) -> int:
-    "One past the last IR-only handler; the stack opcodes number below them"
-    return analysis.first_ir_only + len(ir_only_handler_names(analysis))
+    """The arms start here.  The IR-only handlers fill the free numbers below
+    256 and continue from 256, so the arms' range stays contiguous.  If they
+    do not fill the free numbers, the rest stay unused."""
+    return 256 + max(0, len(ir_only_handler_names(analysis)) - len(analysis.free_ids))
 
 
 def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:

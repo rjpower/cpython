@@ -577,6 +577,8 @@ class Path:
             self.set_slot(op.attr, a[0])
         elif k is OpKind.null:
             r = EMPTY
+        elif k is OpKind.count:
+            r = len(self.site.operands[op.attr]) if op.attr else len(a[0])
         elif k is OpKind.rest:
             r = a[0][len(self.site.operands[op.attr]):]
         elif k is OpKind.checkpoint:

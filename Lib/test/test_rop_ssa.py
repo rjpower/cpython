@@ -32,6 +32,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import rop_check
     import rop_ssa
     import rop_ssa_eval as ev
+    import rop_syntax
     import rop_verify
     from rop_catalog import FieldKind, Region
 
@@ -88,6 +89,32 @@ class ExpansionTests(unittest.TestCase):
                                ("release", rop_check.DebtKind.spent)])
         ops = [op.kind.value for op in SSA["Move.Copy"].entry.ops]
         self.assertEqual(ops, ["read", "dup", "old", "store", "checkpoint"])
+
+    def test_an_owners_publish_stores_the_items_then_closes_the_olds(self):
+        # d[] = v: count(d) is read from the word; the items of v go to the
+        # homes of d, whose displaced owners old(d) closes after the checkpoint
+        src = """\
+family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);
+point F.Done(current, next_head, clear) keep(x) spent() defs(dsts);
+extern helper split(v:B, n:Size) -> Span<O> effects(allocates) pending;
+arm F.Split shared effects(allocates, writes, releases on (dsts), runs_python) feedback()
+  exits(next)
+{
+  entry():
+    let n:Size = count(dsts);
+    let v:Span<O> = split(use(x), n);
+    publish [dsts[] = v] retire [old(dsts)] at F.Done;
+    exit next();
+}
+"""
+        program = rop_check.check([rop_syntax.parse(src, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        arm = rop_ssa.expand(program, program.arms["F.Split"])
+        ops = [(op.kind.value, op.attr) for op in arm.entry.ops]
+        self.assertEqual(ops, [("count", "dsts"), ("read", "x"), ("call", "split"),
+                               ("old", "dsts"), ("store", "dsts"),
+                               ("checkpoint", "F.Done"),
+                               ("release", rop_check.DebtKind.old)])
 
     def test_a_transfer_row_performs_its_edges_exits(self):
         for name in ("Jump.Warm", "Return.Generator", "Return.Observed"):

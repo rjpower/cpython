@@ -125,6 +125,8 @@ def c_type(t: Type) -> str | None:
         return c_type(t.arg)
     if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Candidate:
         return "int"
+    if t == WrapType(Wrap.Span, HandleType(Handle.O)):
+        return "_PyRopOwners"
     return None
 
 
@@ -539,6 +541,8 @@ class ArmLowerer:
                 return HandleType(Handle.O)
             if e.callee == "candidate":
                 return None
+            if e.callee == "count":
+                return ScalarType(Scalar.Size)
             x = self.program.externs.get(e.callee)
             if x is not None and not isinstance(x.result, Cases):
                 return x.result.type
@@ -706,6 +710,12 @@ class ArmLowerer:
         if e.callee == "unwrap":
             (arg,) = e.args
             return self.expr_text(arg)
+        if e.callee == "count":
+            (arg,) = e.args
+            assert isinstance(arg, Name)
+            if self.is_span(arg):
+                return f"(Py_ssize_t){self.field(arg.name)}"
+            return f"{arg.name}.count"
         if e.callee == "candidate":
             arm = e.args[0]
             assert isinstance(arm, Name)
@@ -844,7 +854,10 @@ class ArmLowerer:
         spent = sorted((d for d in s.debts if d.kind is DebtKind.spent),
                        key=lambda d: order.index(d.subject))
         olds = [d for d in s.debts if d.kind is DebtKind.old]
-        vectors = [b for b in s.bindings if b.vector]
+        # d[] = v: StoreOwners exchanges each item of v with its home's
+        # displaced owner, which old(d) closes with the storage
+        stored = {b.target: b.value.name for b in s.bindings if b.owners}
+        vectors = [b for b in s.bindings if b.vector and not b.owners]
         moved = {b.value.name for b in vectors if isinstance(b.value, Name)}
         owners: dict[str, str | None] = {}
         for b in vectors:
@@ -884,8 +897,12 @@ class ArmLowerer:
             self.emit(f"    {owner} = _PyFrame_TakeHome(frame, {home});")
             self.emit("}")
         for d in olds:
+            if d.subject in stored:
+                continue
             self.declare("old_" + d.subject, "PyValue")
             self.emit(f"old_{d.subject} = *{self.home(d.subject)};")
+        for target, value in stored.items():
+            self.emit(f"_PyRop_StoreOwners({self.span(target)}, &{value});")
         for b in s.bindings:
             if b.vector:
                 continue
@@ -910,6 +927,10 @@ class ArmLowerer:
                 self.emit(f"_PyRop_SpendArgs(frame, this_instr, {kept});")
             elif d.kind is DebtKind.spent and owners[d.subject] is not None:
                 self.emit(f"PyValue_XCLOSE({owners[d.subject]});")
+            elif d.kind is DebtKind.old and d.subject in stored:
+                # The closes may run finalizers, which a stub reports
+                self.emit("IR_STUB_ESCAPE();")
+                self.emit(f"_PyRop_CloseOwners(&{stored[d.subject]});")
             elif d.kind is DebtKind.old:
                 self.emit(f"PyValue_XCLOSE(old_{d.subject});")
             elif d.kind is DebtKind.roots:

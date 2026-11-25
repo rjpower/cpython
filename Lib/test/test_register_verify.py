@@ -773,6 +773,54 @@ arm F.Bad shared effects(writes, releases) feedback() exits(next) {
         (8, 15, 'F.Bad', 'facts: acquire(x) reads the optional operand x: it requires present(x), which no dominating fact proves'),
         (9, 18, 'F.Bad', 'facts: call eat reads the optional operand x: it requires present(x), which no dominating fact proves'),
     ]),
+    ('owners binding values', """\
+extern helper split(v:B) -> Span<O> effects(allocates) pending;
+family F(dsts:Span<Dst>, srcs:Span<Src>, x:Src) exits(next) ops(NOP);
+point F.Done(current, next_head, clear) keep(x) spent(srcs) defs(dsts);
+arm F.Bad shared effects(allocates, writes, releases) feedback() exits(next) {
+  entry():
+    let o:O = dup(use(x));
+    publish [dsts[] = srcs, dsts[] = o] retire [owned(o)] at F.Done;
+    exit next();
+}
+""", [
+        (7, 23, 'F.Bad', 'publish [dsts[] = srcs]: an operand span binds as srcs[]'),
+        (7, 29, 'F.Bad', 'publish binds dsts twice'),
+        (7, 38, 'F.Bad', 'publish [dsts[] = o]: o is O, expected Span<O>'),
+    ]),
+    ('count of a span', """\
+family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);
+arm F.Bad inline effects() feedback() exits(next) {
+  entry():
+    let n:Size = count(x);
+    let m:Size = count(dsts, x);
+    exit next();
+}
+""", [
+        (4, 18, 'F.Bad', 'count(x): Src is not a Span'),
+        (5, 18, 'F.Bad', 'count takes one argument'),
+    ]),
+    ('owners binding retires', """\
+extern helper split(v:B) -> Span<O> effects(allocates) pending;
+family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);
+point F.Done(current, next_head, clear) keep(x) spent() defs(dsts);
+arm F.Unretired shared effects(allocates, writes) feedback() exits(next) {
+  entry():
+    let v:Span<O> = split(use(x));
+    publish [dsts[] = v] retire [] at F.Done;
+    exit next();
+}
+arm F.Undeclared shared effects(allocates, writes, releases) feedback() exits(next) {
+  entry():
+    let v:Span<O> = split(use(x));
+    let n:Size = count(dsts);
+    publish [dsts[] = v] retire [old(dsts)] at F.Done;
+    exit next();
+}
+""", [
+        (7, 5, 'F.Unretired', 'publish: dsts is bound but its displaced owner is not retired: add old(dsts)'),
+        (14, 34, 'F.Undeclared', 'effects: publish at F.Done: old(dsts) releases the binding dsts displaces when it names a local\'s home, which may run Python: declare releases on (dsts)'),
+    ]),
     ('presence of no optional operand', """\
 family G(x:Src) exits(next) ops(NOP);
 arm G.Bad inline select(present) effects() feedback() exits(next) {
@@ -820,6 +868,13 @@ class LanguageTests(unittest.TestCase):
         src = src.replace("arm F.Read inline effects", "arm F.Read inline select(bound) effects")
         src += ("arm F.Checked inline select(checked) effects() feedback() exits(next) {\n"
                 "  entry():\n    exit next();\n}\n")
+        self.assertEqual(language_diagnostics(src), [])
+
+    def test_owners_binding(self):
+        src = dict((n, s) for n, s, _ in LANGUAGE_CASES)["owners binding retires"]
+        src = src[:src.index("arm F.Unretired")] + src[src.index("arm F.Undeclared"):]
+        src = src.replace("shared effects(allocates, writes, releases)",
+                          "shared effects(allocates, writes, releases on (dsts), runs_python)")
         self.assertEqual(language_diagnostics(src), [])
 
     def test_present_grants_an_optional_operand(self):

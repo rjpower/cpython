@@ -732,24 +732,10 @@ TEMPLATE_CASES = [
     *[("def f(a, b):\n    x = 'abc'\n    y = 2.5\n    z = 10**9\n    return x, y, z", (1, 2),
        handler, "A", [(Plain(),), (None,), (3,), ()])
       for handler in ("LOAD_CONST", "LOAD_CONST_INLINE_FLOAT", "LOAD_CONST_INLINE_INT")],
-    *[(f"def f(a, b):\n    x = 1\n    x = a.{name}\n    return x", (cls(), 1), handler,
-       "AB", [(old, o) for old in (Plain(), None) for o in OWNERS])
-      for cls, name, handler in ((Shape, "q", "LOAD_ATTR_SHAPE"), (Slots, "q", "LOAD_ATTR_SLOT"),
-                                 (Shape, "k", "LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES"),
-                                 (Slots, "k", "LOAD_ATTR_NONDESCRIPTOR_NO_DICT"))],
-    *[("def f(a, b):\n    return a.m()", (cls(), 1), handler, "B", [(o,) for o in OWNERS])
-      for cls, handler in ((Shape, "LOAD_ATTR_METHOD_WITH_VALUES"),
-                           (Slots, "LOAD_ATTR_METHOD_NO_DICT"))],
     # Inline values only, as for the list store
     *[("def f(a, b):\n    a.p = b\n    return a", (cls(), 1), handler, "AB",
        [(o, v) for o in OWNERS for v in (7, 2.5)])
       for cls, handler in ((Shape, "STORE_ATTR_SHAPE"), (Slots, "STORE_ATTR_SLOT"))],
-    # The attribute of a local into a temporary, which is empty before
-    ("def f(a, b):\n    return a.q + b", (Shape(), 2), "LOAD_ATTR_SHAPE_LOCAL_TEMP", "B",
-     [(o,) for o in OWNERS]),
-    ("import math\ndef f(a, b):\n    x = 1\n    x = math.pi\n    return x", (1, 2),
-     "LOAD_ATTR_MODULE", "AB",
-     [(old, m) for old in (Plain(), None) for m in (math, sys, Shape(), 4)]),
     ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x", (1, 2), "POP_TOP", "A",
      [(x,) for x in ANY + [Plain()]]),
     # Each run adds the attribute to a new instance
@@ -760,10 +746,6 @@ TEMPLATE_CASES = [
        "", [()]) for handler in ("LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN")],
     ("def f(a, b):\n    while a:\n        a -= 1\n    return a", (3, 0), "JUMP_BACKWARD", "",
      [()]),
-    # A site that has seen two shapes of one type reads the instance's values
-    ("def f(a, b):\n    x = 1\n    x = a.q\n    return x",
-     [(Shape(), 0), (reversed_shape(), 0)], "LOAD_ATTR_INSTANCE_VALUE",
-     "AB", [(old, o) for old in (Plain(), None) for o in OWNERS + [reversed_shape()]]),
     *[("def f(a, b):\n    s = 0\n    for x in a:\n        s = x\n    return s", (warm, 0), handler,
        ("A", "B", "B+1"), [(old, it, index) for old in (Plain(), 3) for it, index in iters])
       for warm, handler, iters in (
@@ -1102,7 +1084,7 @@ class TemplateGraphTests(unittest.TestCase):
 
     def test_without_a_nonnull_form_the_test_for_null_stays_in_the_primitive(self):
         with declared("PyValue_DUP", nonnull_form=""):
-            graph, names = self.graph_names("LOAD_ATTR_INSTANCE_VALUE")
+            graph, names = self.graph_names("LOAD_GLOBAL_MODULE")
         self.assertIn("PyValue_XDUP", names)
         self.assertNotIn("PyValue_DUP", names)
         # The form is chosen where the word is known not NULL
@@ -1162,12 +1144,6 @@ class TemplateGraphTests(unittest.TestCase):
                     if any(jit_template_generator.prim_name(op) == "PyValue_IsNull"
                            for op in b.ops)]
         self.assertTrue(any(op.kind == "call" for op in block.ops))
-
-    def test_attribute_has_one_test_for_null(self):
-        names = prims_of(graph_of("LOAD_ATTR_INSTANCE_VALUE"))
-        self.assertEqual(names.count("PyValue_IsNull"), 1)
-        self.assertNotIn("PyValue_XDUP", names)
-        self.assertIn("PyValue_DUP", names)
 
     def test_guards_leave_by_their_exit_without_a_bool(self):
         "A predicate that only guards leaves by the exit: no result, no branch on one"

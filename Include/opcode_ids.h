@@ -198,20 +198,6 @@ extern "C" {
 #define FOR_ITER_VIRTUAL                       186
 #define GET_ITER_SELF                          187
 #define GET_ITER_VIRTUAL                       188
-#define LOAD_ATTR_CLASS                        189
-#define LOAD_ATTR_CLASS_WITH_METACLASS_CHECK   190
-#define LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN      191
-#define LOAD_ATTR_INSTANCE_VALUE               192
-#define LOAD_ATTR_METHOD_LAZY_DICT             193
-#define LOAD_ATTR_METHOD_NO_DICT               194
-#define LOAD_ATTR_METHOD_WITH_VALUES           195
-#define LOAD_ATTR_MODULE                       196
-#define LOAD_ATTR_NONDESCRIPTOR_NO_DICT        197
-#define LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES    198
-#define LOAD_ATTR_PROPERTY                     199
-#define LOAD_ATTR_SHAPE                        200
-#define LOAD_ATTR_SLOT                         201
-#define LOAD_ATTR_WITH_HINT                    202
 #define LOAD_CONST_INLINE_FLOAT                203
 #define LOAD_CONST_INLINE_INT                  204
 #define LOAD_GLOBAL_BUILTIN                    205
@@ -280,7 +266,7 @@ extern "C" {
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                233
 #define IR_NUM_OLD_HANDLERS                    419
-#define IR_NUM_HANDLERS                        453
+#define IR_NUM_HANDLERS                        464
 
 #ifdef __cplusplus
 }

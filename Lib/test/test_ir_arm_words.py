@@ -147,7 +147,10 @@ MON = sys.monitoring
 from _opcode_metadata import _ir_opmap
 
 LOW = {"decoy": dis.opmap["RETURN_VALUE"], "marker": _ir_opmap["IR_OPERANDS"]}
-PAYLOAD = 0xDEAD_BEEF_0000_0000 | LOW[sys.argv[1]]
+# The operand word's low 16 bits are the site's feedback unit; the site
+# is the generator's only attribute load, so unit 0. The decoy or marker
+# value sits above them.
+PAYLOAD = 0xDEAD_BEEF_0000_0000 | (LOW[sys.argv[1]] << 16)
 
 
 def gen(flag, o):
@@ -342,17 +345,6 @@ class ForceArmTests(unittest.TestCase):
     def test_refuses_a_word_of_another_family(self):
         with self.assertRaisesRegex(ValueError, "no word at offset 0 stands for"):
             capi.force_arm(self.code, 0, "Add.Int")
-
-    def test_refuses_a_layout_the_arm_does_not_encode(self):
-        # LOAD_ATTR words keep the feedback entry in C and the name in D;
-        # GetAttr's encoding puts the name in C and the entry in D
-        def f(o):
-            return o.real
-        f(1)
-        offset = next(i.offset for i in dis.get_instructions(f)
-                      if i.opname == "LOAD_ATTR")
-        with self.assertRaisesRegex(ValueError, "operand layout"):
-            capi.force_arm(f.__code__, offset, "GetAttr.Instance")
 
     def test_refuses_an_unknown_arm(self):
         with self.assertRaisesRegex(ValueError, "no register instruction arm Add.Nope"):

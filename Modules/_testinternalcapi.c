@@ -1901,9 +1901,33 @@ get_ir(PyObject *self, PyObject *args)
     if (result == NULL) {
         return NULL;
     }
+    int fixed_left = 0;
     for (Py_ssize_t w = 0; w < (Py_ssize_t)ir->nwords; w++) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
+        if (fixed_left > 0) {
+            // An arm's operand word holds 16-bit fields, not an instruction
+            fixed_left--;
+            PyObject *item = Py_BuildValue(
+                "(sIIII)", "OPERAND", (unsigned)(word & 0xFFFF),
+                (unsigned)((word >> 16) & 0xFFFF),
+                (unsigned)((word >> 32) & 0xFFFF),
+                (unsigned)((word >> 48) & 0xFFFF));
+            if (item == NULL || PyList_Append(result, item) < 0) {
+                Py_XDECREF(item);
+                Py_DECREF(result);
+                return NULL;
+            }
+            Py_DECREF(item);
+            continue;
+        }
         int handler = IR_HANDLER(word);
+        /* The code object's own word names the arm even while the executing
+         * copy's word is wrapped by LINE or INSTRUCTION, whose length reads
+         * as 1 */
+        int original = IR_HANDLER(ir->words[w]);
+        if (original >= IR_NUM_OLD_HANDLERS) {
+            fixed_left = _PyIR_FormatOf(original)->fixed_words;
+        }
         const char *name = handler < IR_FIRST_ONLY_HANDLER
             ? _PyOpcode_OpName[handler]
             : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];

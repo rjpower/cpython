@@ -335,6 +335,14 @@ class StubTests(unittest.TestCase):
         self.assertLess(text.index("_PyRop_Complete_S_Complete("),
                         text.index('#pragma pop_macro("IR_BRANCH")'))
 
+    def test_a_yield_names_the_home_the_sent_value_resumes_into(self):
+        from test.test_register_verify import YIELD
+        program = rop_check.check([rop_syntax.parse(YIELD, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        self.assertIn("ROP_YIELD(v, IR_B(ir_word));", "\n".join(p.lowered["Y.Value"].body))
+
 
 UNWIND = """\
 family U(exc:Src) exits(unwind) ops(NOP);

@@ -7,6 +7,7 @@ import argparse
 
 from analyzer import (
     Analysis,
+    Uop,
     analyze_files,
 )
 from generators_common import (
@@ -18,8 +19,8 @@ from cwriter import CWriter
 from collections.abc import Sequence
 
 import ir_arms
-from ir_generator import (IR_BASE_ONLY, first_ir_only_handler, handler_ids,
-                          num_old_handlers)
+from ir_generator import (BINARY_OP_FAMILY, IR_BASE_ONLY, STACK_ONLY, all_instructions,
+                          first_ir_only_handler, handler_ids, num_old_handlers)
 from typing import TextIO
 
 
@@ -95,6 +96,37 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter,
     out.emit("})\n\n")
 
 
+def is_abort_body(analysis: Analysis, name: str) -> bool:
+    inst = all_instructions(analysis).get(name)
+    return inst is not None and any(
+        isinstance(part, Uop) and tuple(part.clauses.get("exits", ())) == ("abort",)
+        for part in inst.parts)
+
+
+def classify_handlers(analysis: Analysis) -> tuple[list[str], list[str]]:
+    """The handlers that bytecodes.c still defines, as (inherited register
+    instructions, stack-only stubs).  A stub is a stack op that has no
+    handler of its own (BINARY_OP has one handler per operation) or whose body
+    only aborts: the register instructions its lowering emits run instead.  The arms are not in either list."""
+    stubs = {*STACK_ONLY, BINARY_OP_FAMILY}
+    stubs.update(name for name in all_instructions(analysis)
+                 if is_abort_body(analysis, name))
+    inherited = set(handler_ids(analysis)) | set(IR_BASE_ONLY)
+    return sorted(inherited - stubs), sorted(stubs)
+
+
+def generate_handler_classes(analysis: Analysis, out: CWriter) -> None:
+    """The handlers outside the families, which only shrink as the families
+    port (Lib/test/test_ir_ceiling.py checks them against a ceiling)"""
+    inherited, stubs = classify_handlers(analysis)
+    for table, names in (("_ir_inherited_handlers", inherited),
+                         ("_ir_stack_stubs", stubs)):
+        out.emit(f"{table} = (\n")
+        for name in names:
+            out.emit(f'    "{name}",\n')
+        out.emit(")\n\n")
+
+
 def generate_py_metadata(
     filenames: list[str], analysis: Analysis, outfile: TextIO,
     arms: Sequence[ir_arms.ArmEntry] = ()
@@ -105,6 +137,7 @@ def generate_py_metadata(
     generate_specialized_opmap(analysis, out)
     generate_opmap(analysis, out)
     generate_ir_opmap(analysis, out, arms)
+    generate_handler_classes(analysis, out)
     out.emit(f"HAVE_ARGUMENT = {analysis.have_arg}\n")
     out.emit(f"MIN_INSTRUMENTED_OPCODE = {analysis.min_instrumented}\n")
 

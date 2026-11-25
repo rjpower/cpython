@@ -41,7 +41,7 @@ class AsyncExitTransferTests(unittest.TestCase):
             return result
 
         names = {row[0] for row in _testinternalcapi.get_ir(outer.__code__)}
-        self.assertTrue({"END_ASYNC_FOR", "CALL+NO_SELF"} <= names)
+        self.assertTrue({"END_ASYNC_FOR", "Call.Generic+NO_SELF"} <= names)
         for admitted in routes(outer.__code__):
             function = types.FunctionType(admitted, globals())
             seen = []

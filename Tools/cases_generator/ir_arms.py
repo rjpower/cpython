@@ -35,6 +35,7 @@ class ArmFormat:
     operands: str             # _PyIR_OPERANDS_*
     fixed_words: int          # operand words after the head
     writes: int
+    transfer: str             # _PyIR_TRANSFER_*: the normal edge's ownership
 
 
 @dataclass(frozen=True)

@@ -1562,7 +1562,7 @@ dummy_func(
         /* A stack op only: the entry trampoline's exit: its word is Return.External. */
         tier1 inst(INTERPRETER_EXIT,
                 (retval: consumed --))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -1578,7 +1578,7 @@ dummy_func(
         /* A stack op only: RETURN_VALUE is the Return family (Python/register_ops/calls.rop). */
         tier1 inst(RETURN_VALUE,
                 (retval: consumed --))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -1587,7 +1587,7 @@ dummy_func(
         /* A stack op only: RETURN_VALUE's instrumented form: the Return family's twins run Return.Observed. */
         tier1 inst(INSTRUMENTED_RETURN_VALUE,
                 (retval: consumed --))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -2865,7 +2865,7 @@ dummy_func(
          * GetAttr or GetMethod (Python/register_ops/getattr.rop). */
         tier1 inst(LOAD_ATTR,
                 (unused/9, owner: consumed -- attr: owned, self_or_null[oparg&1]: owned nullable))
-            effects(reads, runs_python) exits(abort)
+            exits(abort)
         {
             /* The name operand keeps dis and the name flag of the opcode */
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
@@ -3683,7 +3683,7 @@ dummy_func(
         }
 
         tier1 inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
@@ -3691,7 +3691,7 @@ dummy_func(
         }
 
         tier1 inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
@@ -4410,18 +4410,18 @@ dummy_func(
 
 
         /* A stack op only: CALL is the Call family (Python/register_ops/calls.rop). */
-        tier1 inst(CALL,
+        eval_break tier1 inst(CALL,
                 (unused/3, callable: consumed, self_or_null: consumed, args[oparg]: consumed -- res: owned))
-            effects(runs_python) exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: CALL's instrumented form: the Call family's twins run Call.Observed. */
-        tier1 inst(INSTRUMENTED_CALL,
+        eval_break tier1 inst(INSTRUMENTED_CALL,
                 (unused/3, callable: consumed, self_or_null: consumed, args[oparg]: consumed -- res: owned))
-            effects(runs_python) exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -4460,7 +4460,7 @@ dummy_func(
         /* A stack op only: the __init__ shim's check: its word is InitResult.Check. */
         tier1 inst(EXIT_INIT_CHECK,
                 (should_be_none: consumed --))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -4927,15 +4927,15 @@ dummy_func(
          * BranchNone and Jump families lower.  Stack ops only: the words are
          * the families' Observed arms (Python/register_ops/truth.rop). */
         tier1 inst(INSTRUMENTED_JUMP_FORWARD, ( -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(INSTRUMENTED_JUMP_BACKWARD, (unused/1 -- ))
-            effects() exits(abort)
+        eval_break tier1 inst(INSTRUMENTED_JUMP_BACKWARD, (unused/1 -- ))
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
@@ -4943,7 +4943,7 @@ dummy_func(
         }
 
         tier1 inst(INSTRUMENTED_POP_JUMP_IF_TRUE, (unused/1, cond: closed -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
@@ -4951,7 +4951,7 @@ dummy_func(
         }
 
         tier1 inst(INSTRUMENTED_POP_JUMP_IF_FALSE, (unused/1, cond: closed -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
@@ -4959,7 +4959,7 @@ dummy_func(
         }
 
         tier1 inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value: closed -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
@@ -4967,7 +4967,7 @@ dummy_func(
         }
 
         tier1 inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value: closed -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
@@ -4975,14 +4975,14 @@ dummy_func(
         }
 
         tier1 inst(CACHE, (--))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing a cache.");
             Py_FatalError("Executing a cache.");
         }
 
         tier1 inst(RESERVED, (--))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
@@ -4994,7 +4994,7 @@ dummy_func(
          * drops NOT_TAKEN and splits the superinstructions.  The stack
          * effects are the compiler's. */
         tier1 inst(EXTENDED_ARG, ( -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
@@ -5002,14 +5002,14 @@ dummy_func(
         }
 
         tier1 inst(NOT_TAKEN, ( -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
         tier1 inst(LOAD_FAST_LOAD_FAST, ( -- value1: owned, value2: owned))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
@@ -5017,7 +5017,7 @@ dummy_func(
         }
 
         tier1 inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1: owned, value2: owned))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
@@ -5025,7 +5025,7 @@ dummy_func(
         }
 
         tier1 inst(STORE_FAST_LOAD_FAST, (value1: consumed -- value2: owned))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
@@ -5033,7 +5033,7 @@ dummy_func(
         }
 
         tier1 inst(STORE_FAST_STORE_FAST, (value2: consumed, value1: consumed --))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
@@ -5046,7 +5046,7 @@ dummy_func(
          * statements before the abort keep the formats' operand roles and
          * transfers, which the CFG reads. */
         tier1 inst(LOAD_FAST, (-- value: owned))
-            effects() exits(abort)
+            exits(abort)
         {
             PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
             (void)local;
@@ -5055,7 +5055,7 @@ dummy_func(
         }
 
         tier1 inst(LOAD_FAST_BORROW, (-- value: owned))
-            effects() exits(abort)
+            exits(abort)
         {
             PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
             (void)local;
@@ -5064,7 +5064,7 @@ dummy_func(
         }
 
         tier1 inst(LOAD_FAST_CHECK, (-- value: owned))
-            effects() exits(abort)
+            exits(abort)
         {
             PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
             (void)local;
@@ -5073,7 +5073,7 @@ dummy_func(
         }
 
         tier1 inst(LOAD_FAST_AND_CLEAR, (-- value: owned))
-            effects() exits(abort)
+            exits(abort)
         {
             PyValueBorrow local = PyValue_Borrow(GETLOCAL(oparg));
             (void)local;
@@ -5082,7 +5082,7 @@ dummy_func(
         }
 
         tier1 inst(DELETE_FAST, (--))
-            effects(runs_python) exits(abort)
+            exits(abort)
         {
             PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
             GETLOCAL(oparg) = PyValue_NULL;
@@ -5092,7 +5092,7 @@ dummy_func(
         }
 
         tier1 inst(LOAD_CONST, (-- value: owned))
-            effects(reads) exits(abort)
+            exits(abort)
         {
             PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             (void)constant;
@@ -5101,7 +5101,7 @@ dummy_func(
         }
 
         tier1 inst(LOAD_SMALL_INT, (-- value: owned exact(PyLong_Type) inline_int))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
@@ -5110,7 +5110,7 @@ dummy_func(
 
         tier1 inst(COPY,
                 (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top: owned))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)bottom;
             assert(0 && "Executing a stack-only instruction.");
@@ -5118,7 +5118,7 @@ dummy_func(
         }
 
         tier1 inst(SWAP, (bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top))
-            effects() exits(abort)
+            exits(abort)
         {
             (void)bottom;
             (void)top;
@@ -5145,7 +5145,7 @@ dummy_func(
         // each (_PyIR_WordLength()).  The head consumes them, so no
         // dispatch reaches one.
         ir_only no_save_ip inst(IR_OPERANDS, ( -- ))
-            effects() exits(abort)
+            exits(abort)
         {
             assert(0 && "Executing operand words.");
             Py_FatalError("Executing operand words.");

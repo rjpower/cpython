@@ -2414,10 +2414,8 @@ class LocalArmTest(unittest.TestCase):
         self.check_jit_modes(REBOUND_READ_PROGRAM, REBOUND_READ_OUTPUT)
 
     def test_copy_across_running_code_survives(self):
-        # The compiler may turn a COPY of a local's load into a second load
-        # only where nothing between can rebind the local: not across a
-        # call or an attribute load (copy_local_as_load() in
-        # Python/flowgraph.c reads the stack ops' escape flags)
+        # The compiler does not turn a COPY of a local's load into a second
+        # load: code between the read and the copy may rebind the local
         def call(x, f):
             x[f()] += 1
         def attr(x, o):

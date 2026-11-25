@@ -500,6 +500,12 @@ def check_contract(c: Checker, contract: Contract, definition: str,
     effects = [e.effect for e in contract.effects]
     if len(set(effects)) != len(effects):
         c.report(contract.span, definition, "an effect is listed twice")
+    # A release of a named operand's old binding (a local's) may run its
+    # finalizer: the arm says so.  A plain `releases` closes temporaries.
+    if (any(e.effect is Effect.releases and e.on for e in contract.effects)
+            and Effect.runs_python not in effects):
+        c.report(contract.span, definition, "releases on (...) closes an operand's "
+                 "old binding, which may run Python: declare runs_python")
     names = {p.name for p in params}
     for e in contract.effects:
         for n in e.on:

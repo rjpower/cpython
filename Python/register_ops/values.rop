@@ -166,7 +166,7 @@ extern helper restore_local(x:Dst, v:Src) -> Unit
               "may run a finalizer. No failure.");
 
 arm LocalWrite.Store inline select(store)
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (local), runs_python)
   feedback()
   exits(next)
 {
@@ -177,7 +177,7 @@ arm LocalWrite.Store inline select(store)
 }
 
 arm LocalWrite.Restore shared select(restore)
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (local), runs_python)
   feedback()
   exits(next)
 {
@@ -200,7 +200,7 @@ extern helper save_local(d:Dst, x:Src) -> Unit
               "value is closed after, which may run a finalizer. No failure.");
 
 arm SaveLocal.Take shared
-  effects(reads, writes, releases)
+  effects(reads, writes on (dst, local), releases on (dst), runs_python)
   feedback()
   exits(next)
 {
@@ -225,7 +225,7 @@ extern helper delete_local(fr:Frame, x:Dst)
               "exception set when the local is unbound, and nothing changed.");
 
 arm LocalDelete.Checked shared
-  effects(writes, allocates, raises, releases)
+  effects(writes, allocates, raises, releases on (local), runs_python)
   feedback()
   exits(next, raise)
 {

@@ -1570,6 +1570,11 @@ def declared_contract(uop: Uop) -> Contract:
     return contract
 
 
+def is_stack_only(uop: Uop) -> bool:
+    "whether uop is a stack-only stub: its body only aborts"
+    return tuple(uop.clauses.get("exits", ())) == ("abort",)
+
+
 def contract_of(uop: Uop) -> Contract | None:
     "uop's declared contract, or None if it declares none"
     if id(uop) in _CONTRACTS:
@@ -1577,11 +1582,14 @@ def contract_of(uop: Uop) -> Contract | None:
     contract = None
     if uop.clauses:
         where = uop.body.open
-        for clause in ("effects", "exits"):
+        # A stack-only stub's body aborts and declares no effects: a stack
+        # op has no semantics beyond the rules that lower it
+        stub = is_stack_only(uop)
+        for clause in ("exits",) if stub else ("effects", "exits"):
             if clause not in uop.clauses:
                 raise analysis_error(f"{uop.name} declares a contract without {clause}()",
                                      where)
-        effects, confined = _parse_effects(uop.name, uop.clauses["effects"], where)
+        effects, confined = _parse_effects(uop.name, uop.clauses.get("effects", ()), where)
         exits = frozenset(uop.clauses["exits"])
         for e, on in confined:
             if not on <= exits:
@@ -1956,6 +1964,10 @@ def ends_path(row: Row) -> bool:
 def check_effects(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
     """V2: the body's effects lie within the declared ones; one declared
     only on some exits occurs at a call that leaves by them"""
+    if is_stack_only(uop):
+        # The stub's statements stand for operand roles and transfers; they
+        # never run
+        return
     confined = dict(contract.confined)
     free = contract.next_effects()
     for site in effect_sites(uop, table):

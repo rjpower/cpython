@@ -18,6 +18,7 @@
 #include "pycore_range.h"         // _PyRangeIterObject
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"
+#include "pycore_rop_metadata.h"  // ROP_HANDLER_SpecialLookup_Generic (ceval_macros.h)
 /* The evaluator's macros give the frame primitives their definitions; the
    header's out-of-line unpack helpers have no use here. */
 #pragma GCC diagnostic push

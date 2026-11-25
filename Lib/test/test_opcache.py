@@ -2460,6 +2460,8 @@ class TestFeedback(TestBase):
 
         # No handler of the register IR reads a COUNTER entry, so it has none
         no_entry = {op for op, kind in self.KINDS.items() if kind == "COUNTER"}
+        # SuperAttr has no feedback operand until it adapts
+        no_entry.add("LOAD_SUPER_ATTR")
         seen = set()
         for func in C.m, g:
             for instr in dis.get_instructions(func):

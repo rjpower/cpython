@@ -451,9 +451,6 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case ROP_HANDLER_GetAttr_NonDescriptorNoDict:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
-                case STORE_ATTR_SHAPE_ADD:
-                    row.payload.shape_to = ((_PyFbAttr *)h)->shape_to;
-                    break;
                 default:
                     break;
             }
@@ -728,6 +725,11 @@ typedef enum {
     ATTR_METHOD_WITH_VALUES,
     ATTR_METHOD_NO_DICT,
     ATTR_METHOD_LAZY_DICT,
+    ATTR_STORE_INSTANCE_VALUE,
+    ATTR_STORE_SLOT,
+    ATTR_STORE_HINT,
+    ATTR_STORE_SHAPE,
+    ATTR_STORE_SHAPE_ADD,
     ATTR_KIND_LIMIT,
 } attr_kind;
 
@@ -936,28 +938,6 @@ specialize_module_load_attr(
 
 /* Attribute specialization */
 
-Py_NO_INLINE void
-_Py_Specialize_LoadSuperAttr(PyValue global_super_st, PyValue cls_st, _PyInstr *instr, int load_method) {
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[LOAD_SUPER_ATTR] == INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR);
-    fb_begin(instr);
-    if (PyValue_IsInline(global_super_st) ||
-        PyValue_AsKnownObjectBorrow(global_super_st) != (PyObject *)&PySuper_Type)
-    {
-        SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_SHADOWED);
-        goto fail;
-    }
-    if (!PyType_FastSubclass(PyValue_TYPE(cls_st), Py_TPFLAGS_TYPE_SUBCLASS)) {
-        SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_BAD_CLASS);
-        goto fail;
-    }
-    uint8_t load_code = load_method ? LOAD_SUPER_ATTR_METHOD : LOAD_SUPER_ATTR_ATTR;
-    specialize(instr, load_code);
-    return;
-fail:
-    unspecialize(instr);
-}
-
 typedef enum {
     OVERRIDING, /* Is an overriding descriptor, and will remain so. */
     METHOD, /* Attribute has Py_TPFLAGS_METHOD_DESCRIPTOR set */
@@ -1119,8 +1099,7 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, uint8_t shape)
     _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
     for (int i = 0; i < FB_POLY_SIZE && poly->handler[i] != 0; i++) {
         int opcode = poly->handler[i];
-        if ((opcode == ROP_HANDLER_GetAttr_Shape || opcode == STORE_ATTR_SHAPE ||
-             opcode == STORE_ATTR_SHAPE_ADD) &&
+        if (opcode == ROP_HANDLER_GetAttr_Shape &&
             poly->type_version[i] == tp_version && poly->aux[i] != shape)
         {
             return true;
@@ -1146,7 +1125,7 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     }
     int opcode;
     if (_PyShape_HasSlot(type, shape, index)) {
-        opcode = base_op == LOAD_ATTR ? ATTR_KIND(ATTR_SHAPE) : STORE_ATTR_SHAPE;
+        opcode = ATTR_KIND(base_op == LOAD_ATTR ? ATTR_SHAPE : ATTR_STORE_SHAPE);
         if (base_op == LOAD_ATTR) {
             fb->read_kind = _Py_FB_READ_SHAPE;
         }
@@ -1160,7 +1139,7 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
             return 0;
         }
         fb->shape_to = shape_to;
-        opcode = STORE_ATTR_SHAPE_ADD;
+        opcode = ATTR_KIND(ATTR_STORE_SHAPE_ADD);
     }
     fb->shape = shape;
     return opcode;
@@ -1577,126 +1556,6 @@ attr_specialize(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name,
     if (fail) {
         unspecialize(instr);
     }
-}
-
-Py_NO_INLINE void
-(_Py_Specialize_StoreAttr)(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
-    PyValue descr = PyValue_NULL;
-    _PyFbAttr *fb = NULL;
-    if (!PyValue_IsObject(owner_st)) {
-        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *owner = PyValue_AsKnownObjectBorrow(owner_st);
-    PyTypeObject *type = Py_TYPE(owner);
-    PyValue proof = PyValue_NULL;
-    unsigned int version;
-    int eligible = _PyType_TryLookupValueNoAlloc(type, name, &proof, &version);
-    PyValue_XCLOSE(proof);
-    if (eligible != 1) {
-        unspecialize(instr);
-        return;
-    }
-    fb = (_PyFbAttr *)fb_begin(instr);
-    if (!_PyType_IsReady(type)) {
-        // We *might* not really need this check, but we inherited it from
-        // PyObject_GenericSetAttr and friends... and this way we still do the
-        // right thing if someone forgets to call PyType_Ready(type):
-        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
-        goto fail;
-    }
-    if (PyModule_CheckExact(owner)) {
-        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OVERRIDDEN);
-        goto fail;
-    }
-    unsigned int tp_version = 0;
-    DescriptorClassification kind = analyze_descriptor_store(type, name, &descr, &tp_version);
-    if (tp_version == 0) {
-        goto fail;
-    }
-    PyObject *descr_o = PyValue_IsObject(descr) ? PyValue_AsKnownObjectBorrow(descr) : NULL;
-    assert(!PyValue_IsNull(descr) || kind == ABSENT || kind == GETSET_OVERRIDDEN);
-    switch(kind) {
-        case OVERRIDING:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
-            goto fail;
-        case METHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_METHOD);
-            goto fail;
-        case PROPERTY:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_PROPERTY);
-            goto fail;
-        case OBJECT_SLOT:
-        {
-            PyMemberDescrObject *member = (PyMemberDescrObject *)descr_o;
-            struct PyMemberDef *dmem = member->d_member;
-            Py_ssize_t offset = dmem->offset;
-            if (!PyObject_TypeCheck(owner, member->d_common.d_type)) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_EXPECTED_ERROR);
-                goto fail;
-            }
-            if (dmem->flags & _Py_AFTER_ITEMS) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS);
-                goto fail;
-            }
-            if (dmem->flags & Py_READONLY) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_READ_ONLY);
-                goto fail;
-            }
-            if (offset != (uint32_t)offset) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OUT_OF_RANGE);
-                goto fail;
-            }
-            assert(dmem->type == _Py_T_VALUE_EX);
-            assert(offset > 0);
-            fb->index = (uint32_t)offset;
-            fb->type_version = tp_version;
-            specialize(instr, STORE_ATTR_SLOT);
-            goto success;
-        }
-        case DUNDER_CLASS:
-        case POINTER_SLOT:
-        case OTHER_SLOT:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
-            goto fail;
-        case MUTABLE:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
-            goto fail;
-        case GETATTRIBUTE_IS_PYTHON_FUNCTION:
-        case GETSET_OVERRIDDEN:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OVERRIDDEN);
-            goto fail;
-        case BUILTIN_CLASSMETHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_BUILTIN_CLASS_METHOD_OBJ);
-            goto fail;
-        case PYTHON_CLASSMETHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
-            goto fail;
-        case NON_OVERRIDING:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_DESCRIPTOR);
-            goto fail;
-        case INLINE_VALUE:
-        case NON_DESCRIPTOR:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
-            goto fail;
-        case ABSENT:
-            if (specialize_dict_access(owner, instr, type, kind, name, tp_version,
-                                       STORE_ATTR, STORE_ATTR_INSTANCE_VALUE,
-                                       STORE_ATTR_WITH_HINT)) {
-                goto success;
-            }
-    }
-fail:
-    PyValue_XCLOSE(descr);
-    unspecialize(instr);
-    return;
-success:
-    PyValue_XCLOSE(descr);
-    return;
 }
 
 /* Each LOAD_ATTR handler the specializer can nominate, the arm of the

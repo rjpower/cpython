@@ -838,7 +838,6 @@ INPLACE_READERS = {
     # Python/specialize.c: they read types and values
     "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp",
-    "_Py_Specialize_StoreAttr",
 }
 
 
@@ -858,15 +857,11 @@ OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
 # (OBJECT_READERS_SEEN); that a name only reads is checked by review.
 # Uses inside assert() vanish from release builds and are not checked.
 OBJECT_READERS = {
-    # Statements
-    "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
     "Py_TYPE", "PyAnyDict_CheckExact", "PyAnySet_CheckExact",
     "PyCoro_CheckExact", "PyGen_Check",
     "PyList_CheckExact",
     "PyTuple_CheckExact", "PyUnicode_CheckExact",
-    "_PyObject_GetManagedDict", "_PyObject_InlineValues",
-    "_PyObject_Shape", "_PyObject_ValueSlot",
     # Operations that read their operands and count what they keep
     "PyErr_GivenExceptionMatches",
     # The value-form container calls (they read the container object and
@@ -1296,7 +1291,9 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
               "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
               "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
-              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE")
+              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
+              "STORE_ATTR", "LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR",
+              "LOAD_SPECIAL")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -3540,7 +3537,6 @@ class IREmitter(Emitter):
         self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
         self._replacers["IR_BUILD_LIST"] = self.home_helper
-        self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
         for marker in ELEMENT_INTRINSICS:
             self._replacers[marker] = self.element_operation
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
@@ -3672,9 +3668,6 @@ class IREmitter(Emitter):
                 raise analysis_error("steal-success helper needs an unboxed terminal handoff", tkn)
             helper = IR_HELPER_CALLEES[tkn.text]
             expression = f"{helper}({local.name}, oparg)"
-        elif tkn.text == "IR_LOOKUP_SPECIAL":
-            expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
-                          f"&{local.name}[0], &{local.name}[1])")
         else:
             helper = {"IR_BUILD_STRING": "_Py_BuildString_ValueSteal",
                       "IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
@@ -7097,11 +7090,10 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR",
-                                   "STORE_ATTR_WITH_HINT", "LOAD_GLOBAL",
+                                   "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
-                                   "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
                                    "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
                                    "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr;\n")

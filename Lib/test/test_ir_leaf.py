@@ -649,21 +649,6 @@ def shape_caches(inputs):
                                   {"type_version": version, "shape": shape ^ 1, "offset": first}]
 
 
-# Owners that a store changes: made afresh, and kept alive here
-STORE_OWNERS = []
-
-
-def store_domain():
-    STORE_OWNERS.clear()
-    STORE_OWNERS.extend(Shaped(k, str(k)) for k in range(3))
-    values = [encode_int(5), word(None), word(BIG_INTS[0]), word(LISTS[0])]
-    return [(v, word(o)) for o in STORE_OWNERS for v in values]
-
-
-def store_caches(inputs):
-    return shape_caches(inputs[1:])
-
-
 def _type_version(tp):
     return ctypes.c_uint32.from_address(id(tp) + LAYOUT.offsets["PyTypeObject.tp_version_tag"]).value
 
@@ -684,7 +669,6 @@ HANDLERS = {
     "FOR_ITER_RANGE": (lambda: [(word(it), 0) for it in
                                 (iter(range(3)), iter(range(5, -2, -2)), iter(range(0)))]
                        + [(word(it), 0) for it in (iter([1]),)], None, [0]),
-    "STORE_ATTR_SHAPE": (store_domain, store_caches, [0]),
 }
 
 

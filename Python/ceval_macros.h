@@ -687,10 +687,10 @@ check_periodics(PyThreadState *tstate) {
  * in the handler and the rest runs here, out of line. */
 static Py_NO_INLINE _Py_COLD_FUNCTION int
 handle_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
-    // Do not handle pending interrupts if the previous instruction was LOAD_SPECIAL
+    // Do not handle pending interrupts if the previous instruction was a SpecialLookup
     // This may also not handle interrupts if a cache looks like LOAD_SPECIAL,
     // but this is benign as we won't skip periodic checks indefinitely.
-    if (IR_HANDLER(frame->instr_ptr[-1]) == LOAD_SPECIAL) {
+    if (IR_HANDLER(frame->instr_ptr[-1]) == ROP_HANDLER_SpecialLookup_Generic) {
         return 0;
     }
     return _Py_HandlePending(tstate);

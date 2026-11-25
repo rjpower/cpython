@@ -1,0 +1,317 @@
+// 1D: attribute writes, super and special-method resolution (batch AW).
+//
+// Every source of these families is read by a row that can run Python, so
+// each arm anchors its sources before the call and retires them after it,
+// as GetAttr.Generic does.
+
+enum Special(ENTER, EXIT, AENTER, AEXIT);
+
+// AttrWrite: o.name = value, or `del o.name` when the value is absent.  The
+// compiler writes a deletion as PUSH_NULL and the store, so the word names
+// the NULL temporary and the arm tests the home at run time.
+family AttrWrite(obj:Src, name:Name, value:Maybe<Src>, fb:Fb<Attr>)
+  exits(next, raise, redirect) ops(STORE_ATTR);
+
+point AttrWrite.Done(current, next_head, clear) keep() spent(obj, value) defs();
+point AttrWrite.Failed(current, site, pending) keep() spent(obj, value) defs();
+// A delete has no value to spend
+point AttrWrite.DeleteDone(current, next_head, clear) keep(value) spent(obj) defs();
+point AttrWrite.DeleteFailed(current, site, pending) keep(value) spent(obj) defs();
+
+extern helper value_setattr(o:B, n:Name, v:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_SetAttr as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_SetAttr: _PyValue_SetAttr(owner, name, value), both borrowed.",
+    contract: "The owner and the value are borrowed on every path. 0, or -1 with the exception set. Callbacks: arbitrary Python (a descriptor, __setattr__, a finalizer of the old value).");
+
+extern helper value_delattr(o:B, n:Name)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_DelAttr as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_DelAttr: _PyValue_SetAttr(owner, name, NULL), the deletion protocol.",
+    contract: "The owner is borrowed. 0, or -1 with the exception set. Callbacks: arbitrary Python.");
+
+macro setattr_at_origin(n:Name, a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_setattr(arg(a, 0), n, arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro delattr_at_origin(n:Name, a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_delattr(arg(a, 0), n) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm AttrWrite.Generic shared
+  effects(runs_python, raises, releases)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    branch present_src(value) -> Store(), Delete();
+  Store():
+    let a:Anchors = anchor_for_call([obj, value]);
+    call setattr_at_origin(name, a) {
+      ok -> Stored();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Stored():
+    publish [] retire [roots(a), spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj, value], e);
+    exit raise(AttrWrite.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+  Delete():
+    let d:Anchors = anchor_for_call([obj]);
+    call delattr_at_origin(name, d) {
+      ok -> Deleted();
+      err -> DeleteFailed();
+      redirected -> DeleteGone();
+    }
+  Deleted():
+    publish [] retire [roots(d), spent(obj)] at AttrWrite.DeleteDone;
+    exit next();
+  DeleteFailed(de:Err):
+    let dsaved:Err = retire_failed_call(d, [obj], de);
+    exit raise(AttrWrite.DeleteFailed, dsaved);
+  DeleteGone(droute:Route):
+    let dcurrent:Route = retire_abandoned(d, droute);
+    exit redirect(dcurrent);
+}
+
+// SuperAttr and SuperAttrExplicit: super(...).name.  The span holds the
+// loaded `super`, the class and the receiver, in the order the compiler loads them.  The
+// first family is `super()` (the class implied, so the call has no
+// arguments), the second `super(C, self)`: the call of a replaced `super`
+// and the CALL event differ.  The method form of the compiler's op is the family
+// followed by the vacant self the call expects.
+family SuperAttr(dst:Dst, parts:Span<Src>, name:Name)
+  exits(next, raise) ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+
+family SuperAttrExplicit(dst:Dst, parts:Span<Src>, name:Name)
+  exits(next, raise) ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+
+point SuperAttr.Done(current, next_head, clear) keep() spent(parts) defs(dst);
+point SuperAttr.Failed(current, site, pending) keep() spent(parts) defs();
+point SuperAttrExplicit.Done(current, next_head, clear) keep() spent(parts) defs(dst);
+point SuperAttrExplicit.Failed(current, site, pending) keep() spent(parts) defs();
+
+extern helper super_lookup(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperLookup as value_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup: the super call, then _PyValue_GetAttr of its result, as _LOAD_SUPER_ATTR did.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor).");
+
+extern helper super_lookup_observed(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  requires(instrumented(at))
+  c _PyRop_SuperLookupObserved as value_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup: the super call with the CALL, C_RETURN and C_RAISE events, then _PyValue_GetAttr of its result, as INSTRUMENTED_LOAD_SUPER_ATTR did.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor); a callback that raises in C_RETURN closes the super object.");
+
+extern helper super_lookup_explicit(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperLookupExplicit as value_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup: the super call, then _PyValue_GetAttr of its result, as _LOAD_SUPER_ATTR did.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor).");
+
+extern helper super_lookup_explicit_observed(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  requires(instrumented(at))
+  c _PyRop_SuperLookupExplicitObserved as value_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup: the super call with the CALL, C_RETURN and C_RAISE events, then _PyValue_GetAttr of its result, as INSTRUMENTED_LOAD_SUPER_ATTR did.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor); a callback that raises in C_RETURN closes the super object.");
+
+arm SuperAttr.Generic shared
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_lookup(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttr.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttr.Failed, e);
+}
+
+arm SuperAttr.Observed split observes
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_lookup_observed(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttr.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttr.Failed, e);
+}
+
+arm SuperAttrExplicit.Generic shared
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_lookup_explicit(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttrExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttrExplicit.Failed, e);
+}
+
+arm SuperAttrExplicit.Observed split observes
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_lookup_explicit_observed(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttrExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttrExplicit.Failed, e);
+}
+
+// SpecialLookup: the method of a special name on an object's type, for
+// `with` and `async with` (enter and exit).  An unbound method comes with
+// the receiver as its first argument; a bound one with no receiver.
+family SpecialLookup(fn:Dst, self_dst:Maybe<Dst>, obj:Src, which:Enum<Special>)
+  exits(next, raise, redirect) ops(LOAD_SPECIAL);
+
+point SpecialLookup.Done(current, next_head, clear) keep() spent(obj) defs(fn, self_dst);
+point SpecialLookup.Failed(current, site, pending) keep() spent(obj) defs();
+
+// The method and the receiver as an owner when the method is unbound.  A
+// missing method raises the protocol's TypeError, with the suggestion of the
+// asynchronous protocol when the type has that one.
+extern helper value_lookup_special(o:B, which:Enum<Special>)
+  cases(ok(f:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_LookupSpecial as value_out_or_null
+  evidence(
+    review: "ceval.c _PyRop_LookupSpecial: _PyObject_LookupSpecialMethod on a counted copy of the receiver, then the error of _LOAD_SPECIAL: _PyEval_SpecialMethodCanSuggest picks error_suggestion or error.",
+    contract: "The receiver is borrowed; the method owned and the self owned or absent, or NULL with an exception set. Callbacks: a descriptor's __get__.");
+
+macro special_at_origin(which:Enum<Special>, a:Anchors)
+  cases(ok(f:O, s:Maybe<O>), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_lookup_special(arg(a, 0), which) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(callable:O, receiver:Maybe<O>):
+    call redirect_status(frame) {
+      running -> Done(callable, receiver);
+      redirected -> Moved(callable, receiver);
+    }
+  Done(kept:O, self_kept:Maybe<O>):
+    exit ok(kept, self_kept);
+  Moved(r:Route, dropped:O, self_dropped:Maybe<O>):
+    let _:Unit = discard_result(dropped);
+    let _:Unit = discard_maybe_result(self_dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm SpecialLookup.Generic shared
+  effects(runs_python, raises, releases on (fn, self_dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj]);
+    call special_at_origin(which, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [fn = f, self_dst = s]
+      retire [roots(a), spent(obj), old(fn), old(self_dst)] at SpecialLookup.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj], e);
+    exit raise(SpecialLookup.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}

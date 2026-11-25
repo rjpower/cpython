@@ -1028,22 +1028,6 @@ _Py_BuildSet_ValueSteal(
     return set;
 }
 
-/* Out of line: the vectorcall's argument array is a local, which would be
- * the handler's (spec 3.5, R-c).  super(class, self), or super() when nargs
- * is 0. */
-static Py_NO_INLINE PyValue
-super_call(PyValueBorrow global_super, PyValueBorrow class, PyValue self, int nargs)
-{
-    PyValue stack[] = {PyValue_DUP(class), self};
-    PyValue super = _PyValue_Vectorcall(global_super, stack, nargs, NULL);
-    PyValue_CLOSE(stack[0]);
-    return super;
-}
-
-#define super_call(G, C, S, N) \
-    (super_call)(PyValue_Borrow(G), PyValue_Borrow(C), S, N)
-
-
 /* Out of line, as super_call: exit_func(exit_self, exc, val, tb), or
  * exit_func(exc, val, tb) when exit_self is NULL.  exit_func is any attribute
  * value of the context manager's type, an inline scalar included, which the
@@ -2266,6 +2250,161 @@ static inline int
 _PyRop_EndPoll(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
     return check_periodics_at_end(tstate, frame);
+}
+
+/* The rows of AttrWrite, SuperAttr, SuperMethod and SpecialLookup
+ * (Python/register_ops/attrs.rop).  Every source is borrowed. */
+
+static Py_NO_INLINE int
+_PyRop_SetAttr(PyValueBorrow owner, PyObject *name, PyValueBorrow value)
+{
+    return (_PyValue_SetAttr)(owner, name, value);
+}
+
+/* The deletion protocol: a store of no value */
+static Py_NO_INLINE int
+_PyRop_DelAttr(PyValueBorrow owner, PyObject *name)
+{
+    return (_PyValue_SetAttr)(owner, name, PyValue_Borrow(PyValue_NULL));
+}
+
+/* super(class, self), or super() when the class was implied; the class and
+ * the receiver are counted for the call as its argument vector needs. */
+static Py_NO_INLINE PyValue
+_PyRop_SuperCall(PyValueBorrow sup, PyValueBorrow cls, PyValueBorrow self,
+                 bool explicit)
+{
+    PyValue stack[] = {PyValue_DUP(cls), PyValue_DUP(self)};
+    PyValue super = _PyValue_Vectorcall(sup, stack, explicit ? 2 : 0, NULL);
+    PyValue_CLOSE(stack[1]);
+    PyValue_CLOSE(stack[0]);
+    return super;
+}
+
+static void rop_take_items(const _PyRopSpan *span, PyValue *vals);
+
+/* The argument that the CALL event reports besides `super`: the class, or
+ * MISSING when the class was implied */
+static inline PyValueBorrow
+_PyRop_SuperEventArg(PyValueBorrow cls, bool explicit)
+{
+    return explicit ? cls
+                    : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
+}
+
+/* The attribute of super(...): the span holds super, the class and the
+ * receiver, which the row owns and closes on both outcomes.  With observed
+ * set, the CALL event runs before the call and C_RETURN or C_RAISE after it,
+ * as INSTRUMENTED_LOAD_SUPER_ATTR did; a callback that raises in C_RETURN
+ * closes the super object. */
+static inline PyValue
+rop_super_lookup(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *site, const _PyRopSpan *parts, bool explicit,
+                 PyObject *name, bool observed)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    PyValueBorrow sup = PyValue_Borrow(vals[0]);
+    PyValueBorrow cls = PyValue_Borrow(vals[1]);
+    PyValueBorrow self = PyValue_Borrow(vals[2]);
+    PyValue attr = PyValue_NULL;
+    PyValueBorrow arg = _PyRop_SuperEventArg(cls, explicit);
+    if (observed &&
+        (_Py_call_instrumentation_2args)(tstate, PY_MONITORING_EVENT_CALL,
+                                         frame, site, sup, arg) < 0) {
+        goto done;
+    }
+    PyValue super = _PyRop_SuperCall(sup, cls, self, explicit);
+    if (PyValue_IsNull(super)) {
+        if (observed) {
+            (_Py_call_instrumentation_exc2)(
+                tstate, PY_MONITORING_EVENT_C_RAISE, frame, site, sup, arg);
+        }
+        goto done;
+    }
+    if (observed &&
+        (_Py_call_instrumentation_2args)(tstate, PY_MONITORING_EVENT_C_RETURN,
+                                         frame, site, sup, arg) < 0) {
+        PyValue_CLEAR(super);
+        goto done;
+    }
+    attr = (_PyValue_GetAttr)(PyValue_Borrow(super), name);
+    PyValue_CLOSE(super);
+done:
+    {
+        PyObject *exc = PyValue_IsNull(attr) ? PyErr_GetRaisedException()
+                                             : NULL;
+        for (int i = 0; i < 3; i++) {
+            PyValue_XCLOSE(vals[i]);
+        }
+        if (exc != NULL) {
+            PyErr_SetRaisedException(exc);
+        }
+    }
+    return attr;
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookup(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                   const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, false, name,
+                            false);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupObserved(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                           const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, false, name,
+                            true);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupExplicit(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                           const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, true, name,
+                            false);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupExplicitObserved(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                                   const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, true, name,
+                            true);
+}
+
+/* The method of a special name on the receiver's type.  The lookup works on
+ * a counted copy of the receiver, which it keeps (*self) when the method is
+ * unbound and closes when the method is bound.  A missing method raises the
+ * protocol's TypeError, naming the asynchronous protocol when the type has
+ * it. */
+static Py_NO_INLINE PyValue
+_PyRop_LookupSpecial(PyValueBorrow obj, int which, PyValue *self)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue receiver = PyValue_DUP(obj);
+    PyValue method = PyValue_NULL;
+    int rc = _PyObject_LookupSpecialMethod(NULL, _Py_SpecialMethods[which].name,
+                                           &method, &receiver);
+    *self = PyValue_NULL;
+    if (rc <= 0) {
+        if (rc == 0) {
+            PyTypeObject *owner_type = PyValue_TYPE(receiver);
+            const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner_type, which)
+                ? _Py_SpecialMethods[which].error_suggestion
+                : _Py_SpecialMethods[which].error;
+            assert(!_PyErr_Occurred(tstate));
+            assert(errfmt != NULL);
+            _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner_type);
+        }
+        PyValue_XCLOSE(receiver);
+        return PyValue_NULL;
+    }
+    *self = receiver;
+    return method;
 }
 
 static Py_NO_INLINE void

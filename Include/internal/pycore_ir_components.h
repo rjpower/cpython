@@ -1359,15 +1359,6 @@
      * `runs_python`. The seed said `consumed`. */ \
     HELPER(native_call_builtin_o, PyValue, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue *), \
         ARGS(tstate, frame, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
-    /* Python/ceval.c: takes a count of class for the argument vector \
-     * {class, self}, calls the super type through _PyValue_Vectorcall \
-     * (the vector is the caller's window: arguments are not consumed), \
-     * closes class's count and returns the new super object or \
-     * PyValue_NULL with an exception.  `self` is read and not closed: \
-     * the caller's DECREF_INPUTS closes it (the seed declared it \
-     * consumed) */ \
-    HELPER(super_call, PyValue, (PyValueBorrow, PyValueBorrow, PyValue, int), \
-        ARGS(borrowed, borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c value_dict_merge_uniq -> _PyDict_MergeUniq(dict, update, \
      * &dupkey): inserts each item of update into dict, stopping at a key \
      * dict already holds.  A non-dict update is read through keys() and \
@@ -1854,20 +1845,11 @@
      * (prepare_function_exec). */ \
     HELPER(_Py_Specialize_GetIter, void, (PyValue, _PyInstr *), \
         ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Compares the global `super` \
-     * with PySuper_Type by address and tests the class's type flag; no lookup and \
-     * no lowering. */ \
-    HELPER(_Py_Specialize_LoadSuperAttr, void, (PyValue, PyValue, _PyInstr *, int), \
-        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the receiver's type and \
      * its _tp_iteritem slot; no lookup and no lowering. 
      * The receiver is taken as an object without a test (PyValue_AsKnownObjectBorrow; the send loop's receiver is always one): the row requires `object`. */ \
     HELPER(_Py_Specialize_Send, void, (PyValue, _PyInstr *), \
-        ARGS(borrowed object, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. The instance, slot and dict- \
-     * hint paths read shapes and keys (specialize_dict_access), as for loads. */ \
-    HELPER(_Py_Specialize_StoreAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
-        ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
+        ARGS(borrowed object, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
 
 /* The evaluator's labels (bytecodes.c label(...)): the routines behind them */
 #define _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \
@@ -3031,12 +3013,6 @@
     MACRO(IR_BUILD_SET, ARGS(consumed), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
-    /* _PyObject_LookupSpecialMethod: 1 found, 0 missing (the uop raises), \
-     * negative on error; writes the two output homes.  "escapes" in \
-     * IR_HELPER_EFFECTS (a descriptor's __get__ may run Python).  The \
-     * failure values are zero and negative, which no STATUS names */ \
-    MACRO(IR_LOOKUP_SPECIAL, ARGS(object, out), SCALAR, \
-          EFFECTS(reads, writes, allocates, raises, runs_python), EXITS()) \
     /* _PyFrame_WriteHome / _PyFrame_TakeHome: IR_HELPER_EFFECTS has an empty \
      * set for both.  A value written moves into the home; a value taken \
      * moves out of it.  IR_WRITE_OUTPUT stores into a home of the uop's \

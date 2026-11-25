@@ -4057,10 +4057,13 @@ class TestCallMarkers(unittest.TestCase):
 
     def test_real_callout_and_transfer_properties(self):
         source = BYTECODES.read_text()
-        for name in self.live_among(
-                source, "_MAYBE_EXPAND_METHOD_KW", "_MONITOR_CALL_KW",
-                "_MAKE_CALLARGS_A_TUPLE", "_DO_CALL_KW", "_PY_FRAME_KW",
-                "_PY_FRAME_KW_GUARDED", "_DO_CALL_FUNCTION_EX"):
+        callouts = live_names(
+            source, ("_MAYBE_EXPAND_METHOD_KW", "_MONITOR_CALL_KW",
+                     "_MAKE_CALLARGS_A_TUPLE", "_DO_CALL_KW", "_PY_FRAME_KW",
+                     "_PY_FRAME_KW_GUARDED", "_DO_CALL_FUNCTION_EX"))
+        if not callouts:
+            self.skipTest("no live handler left; the old generator goes at D")
+        for name in callouts:
             with self.subTest(name=name):
                 uop = self.analysis.uops[name]
                 self.assertTrue(uop.properties.escapes)

@@ -878,7 +878,6 @@ OBJECT_READERS = {
     # The value-form container calls (they read the container object and
     # the key as a value)
     "_PyDict_ContainsValue", "PySet_ContainsValue",
-    "PyFunction_New",
     "PyUnicode_Concat",
 
     "_PyDict_SetValue_Take2", "_PyDict_SetValue", "value_exception_group_match",
@@ -1296,7 +1295,8 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "INSTRUMENTED_JUMP_IF_FALSE_OR_POP", "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
               "LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
               "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP",
-              "POP_TOP")
+              "POP_TOP", "MAKE_FUNCTION", "SET_FUNCTION_ATTRIBUTE",
+              "CALL_INTRINSIC_1", "CALL_INTRINSIC_2")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are

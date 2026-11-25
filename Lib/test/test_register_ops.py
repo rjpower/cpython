@@ -722,14 +722,14 @@ class DefinitionTests(unittest.TestCase):
         GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement
         UpdateContainer MergeKeywords Unpack Cell NamespaceRead NamespaceWrite
         GlobalRead SetupAnnotations Import BuildText Convert Format Length Pattern
-        Function Intrinsic
+        Function FunctionSet Intrinsic IntrinsicPair
         Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
         AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
         CleanupThrow EndAsyncFor WithExit Resume Poll
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 68)
+        self.assertEqual(len(self.APPENDIX_A), 70)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

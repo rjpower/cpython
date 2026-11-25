@@ -264,6 +264,12 @@ class Select(enum.Enum):
     interruptible = "interruptible"        # Jump: a backedge polls
     jit_off = "jit_off"                    # the baseline JIT is off
     jit_on = "jit_on"                      # the baseline JIT is on, so a backedge warms the code
+    unary = "unary"                        # Intrinsic: one object in, one out
+    import_star = "import_star"            # Intrinsic: writes the locals namespace
+    stopiteration = "stopiteration"        # Intrinsic: a generator's StopIteration conversion
+    binary = "binary"                      # Intrinsic: type parameters, exception groups, isinstance
+    compare = "compare"                    # Intrinsic: a comparison or containment at a site with no entry
+    attr = "attr"                          # Intrinsic: an attribute by a name the instruction cannot hold
     present = "present"                    # the family's optional operands hold values
     absent = "absent"                      # its optional operands are vacant
 
@@ -277,6 +283,8 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "write": (Select.store, Select.restore),
     "interrupt": (Select.uninterrupted, Select.interruptible),
     "jit": (Select.jit_off, Select.jit_on),
+    "intrinsic1": (Select.unary, Select.import_star, Select.stopiteration),
+    "intrinsic2": (Select.binary, Select.compare, Select.attr),
     "operand": (Select.present, Select.absent),
 }
 

@@ -22,6 +22,8 @@
 #include "Python.h"
 
 #include "pycore_initconfig.h"        // _Py_GetEnv()
+#include "pycore_intrinsics.h"        // MAX_INTRINSIC_1
+#include "pycore_bitutils.h"          // _Py_bit_length()
 #include "pycore_ir.h"                // _PyIR_FormatOf()
 #include "pycore_opcode_metadata.h"   // _PyOpcode_num_popped()
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
@@ -1804,6 +1806,96 @@ rule_call(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* MAKE_FUNCTION is Function.Make: the code in, the function out.  Its
+ * attributes are installed by the SET_FUNCTION_ATTRIBUTEs after it
+ * (rule_set_function_attribute). */
+static int
+rule_make_function(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Function_Make,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* SET_FUNCTION_ATTRIBUTE is FunctionSet.SetField: the attribute, then the
+ * function below it, which keeps its home and its identity.  The oparg is
+ * the compiler's flag, 1 << k for member k of FunctionField. */
+static int
+rule_set_function_attribute(_PyRegTr *t, const _PyRegOp *src)
+{
+    int flag = src->oparg;
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    if (flag <= 0 || flag > MAKE_FUNCTION_ANNOTATE || (flag & (flag - 1))) {
+        PyErr_SetString(PyExc_SystemError, "bad SET_FUNCTION_ATTRIBUTE flag");
+        return ERROR;
+    }
+    int uses[2] = {t->stack[t->sp - 1], t->stack[t->sp - 2]};
+    int func = uses[0];
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_FunctionSet_SetField,
+                                  uses, 2, NULL, 0, &op));
+    op->oparg = _Py_bit_length((unsigned)flag) - 1;
+    // The function is read and left: only the attribute is taken
+    op->npop = 1;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
+    return _PyRegTr_Push(t, func);
+}
+
+/* CALL_INTRINSIC_1 is the Intrinsic family and CALL_INTRINSIC_2 IntrinsicPair
+ * (functions.rop).  The compiler's number is the member of IntrinsicId: n - 1
+ * for the unary table, n + 11 for the binary one, whose escapes (comparisons,
+ * GETATTR, SETATTR) follow its seven functions.  The number also picks the
+ * arm. */
+static int
+rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
+{
+    int unary = src->opcode == CALL_INTRINSIC_1;
+    int n = src->oparg;
+    int nuses = unary ? 1 : 2;
+    int id, handler;
+    if (unary) {
+        if (n < 1 || n > MAX_INTRINSIC_1) {
+            PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
+            return ERROR;
+        }
+        id = n - 1;
+        handler = _PyRop_SelectIntrinsic(
+            n == INTRINSIC_IMPORT_STAR ? ROP_SELECT_IMPORT_STAR
+            : n == INTRINSIC_STOPITERATION_ERROR ? ROP_SELECT_STOPITERATION
+            : ROP_SELECT_UNARY);
+    }
+    else {
+        if (n < 1 || n > MAX_INTRINSIC_2) {
+            PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
+            return ERROR;
+        }
+        id = n + 11;
+        handler = _PyRop_SelectIntrinsicPair(
+            n < INTRINSIC_COMPARE_OP ? ROP_SELECT_BINARY
+            : n < INTRINSIC_GETATTR ? ROP_SELECT_COMPARE
+            : ROP_SELECT_ATTR);
+    }
+    if (t->sp < nuses) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - nuses],
+                                  nuses, &dst, 1, &op));
+    op->oparg = id;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, nuses, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
 /* RETURN_VALUE is the Return family: value in.  The frame it leaves and
  * whether a scratch slot may still own a value select the arm: a return
  * that finds only its value on the stack leaves none, since each op
@@ -1857,6 +1949,10 @@ static const _PyRegRule rules[256] = {
     [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,
     [SWAP] = rule_swap,
     [LOAD_ATTR] = rule_load_attr,
+    [MAKE_FUNCTION] = rule_make_function,
+    [SET_FUNCTION_ATTRIBUTE] = rule_set_function_attribute,
+    [CALL_INTRINSIC_1] = rule_call_intrinsic,
+    [CALL_INTRINSIC_2] = rule_call_intrinsic,
 };
 
 /* An edge binds the parameters of the positions below depth: one that

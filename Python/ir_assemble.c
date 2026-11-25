@@ -688,17 +688,18 @@ unfuse(_PyRegCfg *cfg, _PyRegOp *op)
     op->fuse = 0;
 }
 
-/* The CALL_INTRINSIC_2 intrinsic that does what a COMPARE_OP or
- * CONTAINS_OP of oparg does, for a site that gets no entry. */
+/* The member of IntrinsicId (Intrinsic.Compare's id) that does what a
+ * COMPARE_OP or CONTAINS_OP of oparg does, for a site that gets no entry:
+ * the compiler's number + 11 (functions.rop). */
 static int
 fallback_intrinsic(int opcode, int oparg)
 {
     if (opcode == CONTAINS_OP) {
-        return INTRINSIC_CONTAINS_OP + (oparg & 1);
+        return INTRINSIC_CONTAINS_OP + (oparg & 1) + 11;
     }
     assert(opcode == COMPARE_OP);
     assert((oparg >> 5) <= Py_GE);
-    return INTRINSIC_COMPARE_OP + (oparg >> 5) * 2 + ((oparg >> 4) & 1);
+    return INTRINSIC_COMPARE_OP + (oparg >> 5) * 2 + ((oparg >> 4) & 1) + 11;
 }
 
 /* The sites inside a loop: the ops of the blocks of the natural loop of each
@@ -1145,8 +1146,8 @@ place_entries(struct assembler *a, _PyRegCfg *cfg, int code_flags,
                 }
             }
             op->oparg = fallback_intrinsic(op->opcode, op->oparg);
-            op->opcode = CALL_INTRINSIC_2;
-            op->handler = CALL_INTRINSIC_2;
+            op->opcode = ROP_HANDLER_IntrinsicPair_Compare;
+            op->handler = ROP_HANDLER_IntrinsicPair_Compare;
         }
     }
     // Entry 0 exists only with others

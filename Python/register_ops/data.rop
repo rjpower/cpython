@@ -10,18 +10,6 @@ enum ImportMode(Name, From, LazyName, LazyFrom);
 enum TextKind(JOIN, INTERPOLATION, TEMPLATE);
 enum ConvertKind(STR, REPR, ASCII);
 enum PatternKind(Mapping, Sequence, Keys, Class);
-enum FunctionMode(Make, SetField);
-enum FunctionField(DEFAULTS, KWDEFAULTS, ANNOTATIONS, CLOSURE, ANNOTATE);
-// Include/internal/pycore_intrinsics.h: one typed signature per ID
-enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
-                 INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
-                 INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
-                 INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
-                 INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
-                 INTRINSIC_PREP_RERAISE_STAR, INTRINSIC_TYPEVAR_WITH_BOUND,
-                 INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
-                 INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
-                 INTRINSIC_MATCH_CLASS_ISINSTANCE);
 
 // 1C: items and slices
 
@@ -103,12 +91,3 @@ family Length(dst:Dst, value:Src)
 family Pattern(dst:Maybe<Dst>, subject:Src, kind:Enum<PatternKind>, cls:Maybe<Src>,
                names:Maybe<Src>, count:Maybe<U8>, mismatch:NearHead)
   exits(next, branch, raise) ops(MATCH_CLASS, MATCH_KEYS, MATCH_MAPPING, MATCH_SEQUENCE);
-
-// 1I: functions and intrinsics
-
-family Function(mode:Enum<FunctionMode>, dst:Maybe<Dst>, target:Src, value:Maybe<Src>,
-                field:Maybe<Enum<FunctionField>>)
-  exits(next, raise) ops(MAKE_FUNCTION, SET_FUNCTION_ATTRIBUTE);
-
-family Intrinsic(dst:Dst, id:Enum<IntrinsicId>, args:Span<Src>)
-  exits(next, raise) ops(CALL_INTRINSIC_1, CALL_INTRINSIC_2);

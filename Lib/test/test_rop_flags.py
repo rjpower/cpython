@@ -284,8 +284,10 @@ class ReleaseDeclarationTests(unittest.TestCase):
         # finalizer, and says so (rop_verify's per-class release rule)
         with tempfile.TemporaryDirectory() as d:
             for path in rop_check.ROP_DIR.glob("*.rop"):
-                text = path.read_text().replace(
-                    "releases on (local), runs_python)", "releases on (local))", 1)
+                text = path.read_text()
+                if path.name == "values.rop":
+                    text = text.replace("releases on (local), runs_python)",
+                                        "releases on (local))", 1)
                 (Path(d) / path.name).write_text(text)
             checked = rop_verify.load(sorted(Path(d).glob("*.rop")))
         self.assertEqual(len(checked.diagnostics), 1)

@@ -2208,107 +2208,71 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(MAKE_CELL, (--))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(MAKE_CELL, (--))
+            exits(abort)
         {
-            // "initial" is probably NULL but not if it's an arg (or set
-            // via the f_locals proxy before MAKE_CELL has run).
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
-            if (cell == NULL) {
-                ERROR_NO_POP();
-            }
-            PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
+            PyValue tmp = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
             PyValue_XCLOSE(tmp);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(DELETE_DEREF, (--))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(DELETE_DEREF, (--))
+            exits(abort)
         {
             PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
             PyObject *cell = PyValue_AsKnownObjectBorrow(cell_v);
-            // Can't use ERROR_IF here.
-            // Fortunately we don't need its superpower.
             PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
-            if (PyValue_IsNull(old)) {
-                _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                ERROR_NO_POP();
-            }
-            PyValue_CLOSE(old);
+            PyValue_XCLOSE(old);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // The operand is the class namespace, as for LOAD_FROM_DICT_OR_GLOBALS
-        outlined inst(LOAD_FROM_DICT_OR_DEREF,
+        tier1 inst(LOAD_FROM_DICT_OR_DEREF,
                 (class_dict_st: consumed assumed(object) by compiler -- value: owned))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
-            PyObject *name;
-            // Also declared above; the generator's object analysis reads the assert
-            assert(PyValue_IsObject(class_dict_st));
-            PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
-            // Taken before the lookup, which can run code
-            PyValue held_class_dict = TAKE(class_dict_st);
-
-            assert(class_dict);
-            assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
-            name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
-            _PyStatusValue found = value_load_from_dict(tstate, class_dict, name);
-            if (found.status < 0) {
-                PyValue_CLOSE(held_class_dict);
-                ERROR_NO_POP();
-            }
-            PyValue selected;
-            if (found.status == 0) {
-                PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
-                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
-                selected = _PyCell_GetValue(cell);
-                if (PyValue_IsNull(selected)) {
-                    _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                    PyValue_CLOSE(held_class_dict);
-                    ERROR_NO_POP();
-                }
-            }
-            else {
-                selected = found.value;
-            }
-            PyValue_CLOSE(held_class_dict);
-            value = selected;
+            PyValue_CLOSE(class_dict_st);
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
+            value = _PyCell_GetValue(cell);
+            PyValue_XCLOSE(value);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inst(LOAD_DEREF, ( -- value: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(LOAD_DEREF, ( -- value: owned))
+            exits(abort)
         {
             PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
             PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             value = _PyCell_GetValue(cell);
-            if (PyValue_IsNull(value)) {
-                _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                ERROR_IF(true);
-            }
+            PyValue_XCLOSE(value);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inst(STORE_DEREF, (v: consumed --))
-            effects(writes, releases) exits(next)
+        tier1 inst(STORE_DEREF, (v: consumed --))
+            exits(abort)
         {
             PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
             PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             PyValue owned = v;
             DEAD(v);
             _PyCell_SetValue(cell, owned);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(COPY_FREE_VARS, (--))
-            effects(reads, writes) exits(next)
+        tier1 inst(COPY_FREE_VARS, (--))
+            exits(abort)
         {
-            /* Copy closure variables to free variables */
-            PyCodeObject *co = _PyFrame_GetCode(frame);
-            PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyObject *closure = func->func_closure;
-            assert(oparg == co->co_nfreevars);
-            int offset = co->co_nlocalsplus - oparg;
-            for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         outlined inst(BUILD_STRING, (pieces[oparg]: consumed -- str: owned))

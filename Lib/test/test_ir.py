@@ -3420,7 +3420,7 @@ class UnpackToLocalsTest(unittest.TestCase):
             return inner, b
         for func, store in ((attribute, "STORE_ATTR"),
                             (subscript, "STORE_SUBSCR"),
-                            (cell, "STORE_DEREF")):
+                            (cell, "CellStore.Set")):
             with self.subTest(func=func.__name__):
                 self.assertIn(store, self.names(func))
                 self.assert_stores_stay(func)

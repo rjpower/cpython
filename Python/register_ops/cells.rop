@@ -1,0 +1,209 @@
+// 1F2: cells and free variables (Appendix A's Cell, split by operand shape).
+//
+// A `Cell` operand is a home that holds a cell object: the slot of a cell
+// variable once MAKE_CELL has run, or of a free variable, which frame entry
+// fills with the closure's cell (_PyFrame_CopyFreeVars).  An instruction
+// reads the cell through the home and reads or changes the cell's contents;
+// it never writes the home, so a Cell is a source.  MAKE_CELL is the one
+// word that writes a home, and its operand is a `Local`: it holds the
+// binding before and the cell after.
+
+// MAKE_CELL: the binding in a local (an argument, or vacant) moves into a
+// new cell, and the cell takes the local's place
+family CellMake(local:Local)
+  exits(next, raise) ops(MAKE_CELL);
+
+point CellMake.Failed(current, site, pending) keep() spent(local) defs();
+point CellMake.Done(current, next_head, clear) keep() spent(local) defs(local);
+
+// The binding taken out of x moves into a new cell, which comes out as an
+// owner; x is left vacant.  An allocation failure closes the binding, so
+// the home is vacant on both cases.
+extern helper make_cell(fr:Frame, x:Local)
+  cases(ok(c:O), err(e:Err))
+  effects(reads, writes, allocates, raises, releases)
+  spends(x)
+  c _PyRop_MakeCell as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_MakeCell: MAKE_CELL: PyCell_NewValue of the binding, the home left vacant, the binding closed.",
+    contract: "The cell owns its own count of the binding, so closing the binding never finalizes it. NULL with MemoryError set after the binding is closed. No Python runs.");
+
+arm CellMake.Wrap shared
+  effects(reads, writes, allocates, raises, releases on (local), runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call make_cell(frame, local) {
+      ok -> Made();
+      err -> Failed();
+    }
+  Made(c:O):
+    publish [local = c] retire [old(local)] at CellMake.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(CellMake.Failed, e);
+}
+
+// The contents of the cell in a home: a new owner, absent when it is empty
+extern helper cell_contents(c:Cell)
+  cases(hit(v:O), absent())
+  effects(reads)
+  c _PyRop_CellContents as bool_out_hit
+  evidence(
+    review: "pycore_rop_rows.h _PyRop_CellContents: _PyCell_GetValue of the cell in the home.",
+    contract: "One load and a count: no memory, no Python, no failure. The home holds a cell (MAKE_CELL or frame entry put it there).");
+
+// NameError for an empty free variable, UnboundLocalError for an empty cell
+// variable (below the first free slot)
+extern helper unbound_cell(fr:Frame, c:Cell)
+  cases(err(e:Err))
+  effects(allocates, raises)
+  c _PyRop_UnboundCell as raised
+  evidence(
+    review: "ceval.c _PyRop_UnboundCell: _PyEval_FormatExcUnbound with the home's index.",
+    contract: "Always sets the exception, unless one is already set. It allocates the message; no Python.");
+
+// LOAD_DEREF
+family CellRead(dst:Dst, cell:Cell)
+  exits(next, raise) ops(LOAD_DEREF);
+
+point CellRead.Unbound(current, site, pending) keep(cell) spent() defs();
+point CellRead.Done(current, next_head, clear) keep(cell) spent() defs(dst);
+
+arm CellRead.Get inline
+  effects(reads, writes, allocates, raises, releases on (dst), runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call cell_contents(cell) {
+      hit -> Full();
+      absent -> Empty();
+    }
+  Full(v:O):
+    publish [dst = v] retire [old(dst)] at CellRead.Done;
+    exit next();
+  Empty():
+    call unbound_cell(frame, cell) {
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(CellRead.Unbound, e);
+}
+
+// LOAD_FROM_DICT_OR_DEREF: the class namespace first, then the cell.  The
+// lookup is NS's load_from_dict with the cell's name, which is in
+// co_localsplusnames at the home's index, not in co_names.
+family CellMapRead(dst:Dst, mapping:Src, cell:Cell)
+  exits(next, raise) ops(LOAD_FROM_DICT_OR_DEREF);
+
+point CellMapRead.Failed(current, site, pending) keep(cell) spent(mapping) defs();
+point CellMapRead.Done(current, next_head, clear) keep(cell) spent(mapping) defs(dst);
+
+extern helper load_from_dict_cell(t:Thread, fr:Frame, d:B, c:Cell)
+  cases(found(z:O), missing(), err(e:Err))
+  effects(reads, allocates, raises, runs_python)
+  c _PyRop_LoadFromDictCell as status_optional
+  evidence(
+    review: "ceval.c _PyRop_LoadFromDictCell: value_load_from_dict under the name of the cell's slot.",
+    contract: "The mapping is borrowed. Found: the result owned; missing: nothing; error: the exception set. Callbacks: arbitrary Python (the mapping's __getitem__, the import system).");
+
+arm CellMapRead.Lookup shared
+  effects(reads, writes, allocates, raises, runs_python, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let a:Anchors = anchor_for_call([mapping]);
+    call load_from_dict_cell(thread, frame, arg(a, 0), cell) {
+      found -> Done();
+      missing -> Own();
+      err -> Failed();
+    }
+  Own():
+    call cell_contents(cell) {
+      hit -> Done();
+      absent -> Empty();
+    }
+  Empty():
+    call unbound_cell(frame, cell) {
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [roots(a), spent(mapping), old(dst)] at CellMapRead.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [mapping], e);
+    exit raise(CellMapRead.Failed, saved);
+}
+
+// STORE_DEREF: the new value is in the cell before the old one is closed
+family CellStore(cell:Cell, value:Src)
+  exits(next) ops(STORE_DEREF);
+
+point CellStore.Done(current, next_head, clear) keep(cell) spent(value) defs();
+
+// v moves into the cell; its previous contents, if any, come out
+extern helper cell_exchange(c:Cell, v:O)
+  cases(hit(old:O), absent())
+  effects(reads, writes)
+  c _PyRop_CellExchange as bool_out_hit
+  evidence(
+    review: "pycore_rop_rows.h _PyRop_CellExchange: _PyCell_SwapValue, the previous contents returned.",
+    contract: "v is consumed. The previous owner is the caller's to close; nothing runs here: no Python, no failure.");
+
+arm CellStore.Set inline
+  effects(reads, writes, releases, runs_python)
+  feedback()
+  exits(next)
+{
+  entry():
+    let v:O = acquire(value);
+    call cell_exchange(cell, v) {
+      hit -> Replaced();
+      absent -> Filled();
+    }
+  Replaced(old:O):
+    publish [] retire [spent(value), owned(old)] at CellStore.Done;
+    exit next();
+  Filled():
+    publish [] retire [spent(value)] at CellStore.Done;
+    exit next();
+}
+
+// DELETE_DEREF: the cell is emptied, then the old contents are closed
+family CellDelete(cell:Cell)
+  exits(next, raise) ops(DELETE_DEREF);
+
+point CellDelete.Unbound(current, site, pending) keep(cell) spent() defs();
+point CellDelete.Done(current, next_head, clear) keep(cell) spent() defs();
+
+extern helper cell_take(c:Cell)
+  cases(hit(old:O), absent())
+  effects(reads, writes)
+  c _PyRop_CellTake as bool_out_hit
+  evidence(
+    review: "pycore_rop_rows.h _PyRop_CellTake: _PyCell_SwapValue of NULL, the previous contents returned.",
+    contract: "The previous owner is the caller's to close; nothing runs here: no Python, no failure.");
+
+arm CellDelete.Unbind shared
+  effects(reads, writes, allocates, raises, releases, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call cell_take(cell) {
+      hit -> Taken();
+      absent -> Empty();
+    }
+  Taken(old:O):
+    publish [] retire [owned(old)] at CellDelete.Done;
+    exit next();
+  Empty():
+    call unbound_cell(frame, cell) {
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(CellDelete.Unbound, e);
+}

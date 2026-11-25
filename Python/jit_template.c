@@ -6,12 +6,14 @@
    are what they share.  See pycore_jit_lower.h. */
 
 #include "Python.h"
+#include "pycore_attr_recipe.h"     // _PyAttrRecipe, for the layout checks
 #include "pycore_bitutils.h"        // _Py_bit_length()
 #include "pycore_ceval.h"           // _Py_HandlePending()
 #include "pycore_code.h"            // COMPARISON_EQUALS
 #include "pycore_dict.h"            // PyDictUnicodeEntry
 #include "pycore_feedback.h"        // _PyFb_*
 #include "pycore_frame.h"           // _PyInterpreterFrame
+#include "pycore_global_recipe.h"   // _PyGlobalRecipe, for the layout checks
 #include "pycore_ir.h"
 #include "pycore_jit_lower.h"
 #include "pycore_long.h"            // _PyLong_ExactDealloc()
@@ -44,6 +46,22 @@ _PyJitTemplate_Raise(_PyJitWordCx *cx, _PyJitLabel label)
     _PyJitArg args[2] = {_PyJitArg_GPR(_PyJit_TSTATE), _PyJitArg_GPR(_PyJit_FRAME)};
     _PyJitLower_Call(cx, _PyEval_JitRaiseExit, 1, 2, args, _PyJitArg_NONE);
     _PyJitAsm_Jmp(A, cx->leave);
+}
+
+/* A template that reads the word's feedback entry: unless the compiler has
+   tested it, the word's handler must still be the compiled one, else the
+   word goes to its slow path (for a planned word, the miss).  rcx is free
+   on entry to a template. */
+void
+_PyJitTemplate_CheckHandler(_PyJitWordCx *cx)
+{
+    if (!cx->check_handler) {
+        return;
+    }
+    _PyJitAsm_MovzxRM16(A, _PyJitReg_RCX,
+                        _PyJitMem_At(_PyJit_WORDS, (int32_t)(cx->index * sizeof(_PyIRWord))));
+    _PyJitAsm_AluRI(A, _PyJitAlu_CMP, _PyJitReg_RCX, (int32_t)(cx->word & 0xFFFF));
+    _PyJitAsm_Jcc(A, _PyJitCond_NE, cx->slow);
 }
 
 /* dst := base + index * size, dst distinct from base and index */

@@ -1287,6 +1287,7 @@ jit_template_STORE_ATTR_SHAPE(_PyJitWordCx *cx)
     _PyJitLabel L3 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L8 = _PyJitAsm_NewLabel(a);
+    _PyJitTemplate_CheckHandler(cx);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))));
     _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
@@ -1354,6 +1355,7 @@ jit_template_STORE_ATTR_SHAPE_ADD(_PyJitWordCx *cx)
     _PyJitLabel L3 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L8 = _PyJitAsm_NewLabel(a);
+    _PyJitTemplate_CheckHandler(cx);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))));
     _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
@@ -1413,6 +1415,7 @@ jit_template_STORE_ATTR_SLOT(_PyJitWordCx *cx)
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L3 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
+    _PyJitTemplate_CheckHandler(cx);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))));
     _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
@@ -1589,11 +1592,35 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [191] = jit_template_IS_OP_JUMP,
     [192] = jit_template_RESUME_CHECK,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
+    [ROP_HANDLER_GetAttr_Instance] = jit_template_GetAttr_Instance,
+    [ROP_HANDLER_GetAttr_Shape] = jit_template_GetAttr_Shape,
+    [ROP_HANDLER_GetAttr_Module] = jit_template_GetAttr_Module,
+    [ROP_HANDLER_GetAttr_ValueSlot] = jit_template_GetAttr_ValueSlot,
+    [ROP_HANDLER_GetAttr_Class] = jit_template_GetAttr_Class,
+    [ROP_HANDLER_GetAttr_NonDescriptorValues] = jit_template_GetAttr_NonDescriptorValues,
+    [ROP_HANDLER_GetAttr_NonDescriptorNoDict] = jit_template_GetAttr_NonDescriptorNoDict,
+    [ROP_HANDLER_GetMethod_MethodValues] = jit_template_GetMethod_MethodValues,
+    [ROP_HANDLER_GetMethod_NoDict] = jit_template_GetMethod_NoDict,
+    [ROP_HANDLER_GetMethod_LazyDict] = jit_template_GetMethod_LazyDict,
+    [ROP_HANDLER_GlobalRead_Module] = jit_template_GlobalRead_Module,
+    [ROP_HANDLER_GlobalRead_Builtin] = jit_template_GlobalRead_Builtin,
+    [ROP_HANDLER_Truth_Bool] = jit_template_Truth_Bool,
+    [ROP_HANDLER_Truth_Int] = jit_template_Truth_Int,
+    [ROP_HANDLER_Truth_List] = jit_template_Truth_List,
+    [ROP_HANDLER_Truth_None] = jit_template_Truth_None,
+    [ROP_HANDLER_Truth_Str] = jit_template_Truth_Str,
+    [ROP_HANDLER_Truth_Plain] = jit_template_Truth_Plain,
     [ROP_HANDLER_BranchTruth_Bool] = jit_template_BranchTruth_Bool,
+    [ROP_HANDLER_BranchTruth_Int] = jit_template_BranchTruth_Int,
+    [ROP_HANDLER_BranchTruth_List] = jit_template_BranchTruth_List,
     [ROP_HANDLER_BranchTruth_None] = jit_template_BranchTruth_None,
+    [ROP_HANDLER_BranchTruth_Str] = jit_template_BranchTruth_Str,
+    [ROP_HANDLER_BranchTruth_Plain] = jit_template_BranchTruth_Plain,
     [ROP_HANDLER_BranchNone_Test] = jit_template_BranchNone_Test,
     [ROP_HANDLER_Jump_Direct] = jit_template_Jump_Direct,
     [ROP_HANDLER_Jump_Poll] = jit_template_Jump_Poll,
+    [ROP_HANDLER_Const_Pool] = jit_template_Const_Pool,
+    [ROP_HANDLER_Const_Small] = jit_template_Const_Small,
     [ROP_HANDLER_LocalRead_Bound] = jit_template_LocalRead_Bound,
     [ROP_HANDLER_LocalWrite_Store] = jit_template_LocalWrite_Store,
 };

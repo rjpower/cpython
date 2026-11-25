@@ -878,7 +878,6 @@ OBJECT_READERS = {
     # The value-form container calls (they read the container object and
     # the key as a value)
     "_PyDict_ContainsValue", "PySet_ContainsValue",
-    "PyFunction_New",
     "PyUnicode_Concat",
 
     "_PyDict_SetValue_Take2", "_PyDict_SetValue", "value_exception_group_match",
@@ -1282,7 +1281,7 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
 STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
-              "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "INTERPRETER_EXIT",
+              "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
               "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
               "LOAD_FAST_LOAD_FAST",
               "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
@@ -1296,7 +1295,14 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "INSTRUMENTED_JUMP_IF_FALSE_OR_POP", "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
               "LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
               "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP",
-              "POP_TOP")
+              "POP_TOP", "MAKE_FUNCTION", "SET_FUNCTION_ATTRIBUTE",
+              "CALL_INTRINSIC_1", "CALL_INTRINSIC_2",
+              "LOAD_NAME", "LOAD_LOCALS", "LOAD_BUILD_CLASS",
+              "LOAD_FROM_DICT_OR_GLOBALS", "STORE_NAME", "STORE_GLOBAL",
+              "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM",
+              "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
+              "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
+              "DICT_UPDATE", "DICT_MERGE")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are

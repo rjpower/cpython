@@ -72,8 +72,7 @@ class HandlerRecordTests(unittest.TestCase):
                 # A close whose deallocator cannot run Python only frees
                 ("_POP_TOP_INT", {WRITES_HEAP}),
                 ("_POP_TOP_ANY", {MAY_RELEASE}),
-                ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
-                ("_LIST_APPEND", set(EFFECTS))):
+                ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE})):
             with self.subTest(uop=name):
                 self.assertEqual(ir_records.uop_record_effects(uops[name]), effects)
 

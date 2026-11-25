@@ -168,6 +168,57 @@ arm Leak.Owner split effects(reads, writes) feedback() exits(next) {
 """
 
 
+INLINE = SHARED.replace(
+    "extern primitive is_int(v:B) -> Bool\n  effects()\n  test(inline_int(v))\n"
+    "  c PyValue_IsInlineInt as bool\n",
+    "extern helper is_int(v:B) -> Bool\n  effects()\n  test(inline_int(v))\n"
+    "  c PyValue_IsInlineInt as bool inline\n")
+
+
+class InlineRowTests(unittest.TestCase):
+    """`c SYMBOL as CONVENTION inline`: the interpreter calls the row's own
+    symbol, the forms and stubs one out-of-line copy"""
+
+    def generated(self, text=INLINE):
+        import io
+        program = rop_check.check([rop_syntax.parse(text, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        out = {}
+        for name in ("cases", "forms", "stubs"):
+            out[name] = io.StringIO()
+            getattr(rop_generator, f"write_{name}")(out[name], p, [])
+        return {k: v.getvalue() for k, v in out.items()}
+
+    def test_the_products_call_the_symbol_they_link(self):
+        text = self.generated()
+        self.assertIn("PyValue_IsInlineInt(", text["cases"])
+        self.assertNotIn("PyValue_IsInlineInt_Outlined", text["cases"])
+        # the one plain call in the forms is the outlined copy's own
+        forms = text["forms"].partition("{ return PyValue_IsInlineInt(p0); }")[2]
+        for body in (forms, text["stubs"]):
+            self.assertIn("PyValue_IsInlineInt_Outlined(", body)
+            self.assertNotRegex(body, r"PyValue_IsInlineInt\(")
+
+    def test_the_forms_define_one_outlined_copy_of_the_row(self):
+        forms = self.generated()["forms"]
+        self.assertEqual(forms.count("static Py_NO_INLINE bool "
+                                     "PyValue_IsInlineInt_Outlined(PyValueBorrow p0)"), 1)
+        self.assertIn("static Py_ALWAYS_INLINE bool "
+                      "PyValue_IsInlineInt(PyValueBorrow);", forms)
+
+    def test_a_program_without_inline_rows_is_unchanged(self):
+        text = self.generated(SHARED)
+        self.assertNotIn("_Outlined", "".join(text.values()))
+
+    def test_a_primitive_row_cannot_be_inline(self):
+        bad = SHARED.replace("c PyValue_IsInlineInt as bool\n",
+                             "c PyValue_IsInlineInt as bool inline\n")
+        program = rop_check.check([rop_syntax.parse(bad, "t.rop")])
+        self.assertTrue(any("cannot be inline" in d.message
+                            for d in program.diagnostics), program.diagnostics)
+
+
 class FailClosedTests(unittest.TestCase):
     def test_the_generator_writes_nothing_for_an_arm_the_checker_refuses(self):
         import contextlib

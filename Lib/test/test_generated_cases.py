@@ -3259,7 +3259,7 @@ class TestIRCases(unittest.TestCase):
             self.assertNotIn(helper, analyzer.IR_MARKER_EFFECTS)
             self.assertIn(helper, {escape.call.text
                                   for escape in part.properties.escaping_calls.values()})
-        for name in ("_LOAD_GLOBAL", "_INSERT_NULL"):
+        for name in ("_INSERT_NULL",):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
         for name, marker in (("BUILD_TUPLE", "IR_BUILD_TUPLE"),
                              ("BUILD_LIST", "IR_BUILD_LIST")):
@@ -4089,7 +4089,7 @@ class TestCallMarkers(unittest.TestCase):
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
         # A floor, not a count: ported families delete old handlers
-        self.assertGreater(len(handlers), 200)
+        self.assertGreater(len(handlers), 150)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))

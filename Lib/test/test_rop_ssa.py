@@ -304,6 +304,15 @@ class Scenario:
     # Each arm runs on its own first word, which the translator chose by
     # handler (Move's arms have no select)
     per_arm: bool = False
+    # Inputs for a source whose word wants other values than `inputs`
+    # (an arm whose operand is of one kind: a namespace, an exception)
+    inputs_by_source: dict[str, list] = field(default_factory=dict)
+    # The result holds an input (a function holds its code), which the
+    # count check cannot see
+    holds: bool = False
+
+    def inputs_of(self, source):
+        return self.inputs_by_source.get(source, self.inputs)
 
 
 def truth_inputs(operand):
@@ -321,6 +330,26 @@ def two(x, y):
 class Holder:
     def __init__(self, x):
         self.x = x
+
+
+def function_of(source):
+    namespace = {}
+    exec(source, namespace)
+    return namespace["f"]
+
+
+FUNCTION = function_of("def f(x=1):\n    pass\n")
+
+# A function whose code is the module's, so that its words are the module's
+MODULE_SOURCE = ("import types\n"
+                 "f = types.FunctionType(compile(%r, 'm', 'exec'), globals())\n")
+
+# The code of a generic function's scope, which makes its type parameters
+PAIR_SOURCE = (
+    "import types\n"
+    "m = compile('def g[T: int](): pass', 'm', 'exec')\n"
+    "scope = next(c for c in m.co_consts if hasattr(c, 'co_code'))\n"
+    "f = types.FunctionType(scope, globals())\n")
 
 
 SCENARIOS = {
@@ -372,6 +401,12 @@ SCENARIOS = {
         "or": "def f(a, b):\n    return (a and b) or a\n"},
         [{"srcs": [v]} for v in (1, "s", Plain(), 2**70)], warm=("__x__", 1),
         per_arm=True),
+    "Import": Scenario("Import", {
+        "eager": "def f(a):\n    import os\n    return a\n"},
+        [{"level": 0, "fromlist": None}], warm=(1,)),
+    "ImportFrom": Scenario("ImportFrom", {
+        "from": "def f(a):\n    from os import path, sep\n    return a\n"},
+        [{"module": __import__("os")}], warm=(1,)),
     "Jump": Scenario("Jump", {
         "loop": "def f(n):\n    while n:\n        n -= 1\n    return n\n",
         "forward": "def f(a):\n    x = 1 if a else 2\n    y = (x, x)\n    return y\n",
@@ -410,6 +445,12 @@ SCENARIOS = {
                         "classmethod": (ClassAttr,), "poly": (Point(), Swapped()),
                         "lazy": (LazyNorm(),)},
         warmups=200, coherent=True),
+    "GlobalRead": Scenario("GlobalRead", {
+        "module": "G = 3\ndef f():\n    return G\n",
+        "builtin": "def f():\n    return len\n",
+        "missing": "def f():\n    return no_such_global\n"},
+        [{}], warm_by_source={"module": ((),), "builtin": ((),), "missing": ((),)},
+        warmups=200, coherent=True),
     "Return": Scenario("Return", {
         "empty": "def f(a):\n    return a\n",
         "monitored": "def f(a):\n    return a\n"},
@@ -425,6 +466,34 @@ SCENARIOS = {
         + [{"fn": fn, "args": [v]} for fn in (identity, Point().norm, Holder, two)
            for v in (1, "s")], warm=([],),
         monitored=("monitored",)),
+    "Function": Scenario("Function", {
+        "def": "def f():\n    def g():\n        pass\n    return g\n"},
+        [{"code": code} for code in (identity.__code__, Holder.__init__.__code__)],
+        warm=(), holds=True),
+    "FunctionSet": Scenario("FunctionSet", {
+        "defaults": "def f(a):\n    def g(x=a):\n        pass\n    return g\n"},
+        # The function keeps the value, which the count check cannot see: only
+        # an immortal value is exact
+        [{"fn": FUNCTION, "value": ()}], warm=(1,)),
+    "Intrinsic": Scenario("Intrinsic", {
+        "unary": "def f(a):\n    return +a\n",
+        "stopiteration": "def f(a):\n    yield a\n",
+        "import_star": MODULE_SOURCE % "from sys import *"},
+        [{"x": v} for v in (1, 1.5, 2**70, "s", Plain(), [1])], warm=(1,),
+        inputs_by_source={
+            # (A StopIteration becomes a new error that holds it, which the
+            # count check cannot see; test_rop_functions runs that case)
+            "stopiteration": [{"x": v} for v in (ValueError(1), KeyError("k"))],
+            "import_star": [{"x": v} for v in (sys, capi, {"a": 1})]},
+        requires={}),
+    "IntrinsicPair": Scenario("IntrinsicPair", {
+        "binary": PAIR_SOURCE,
+        "compare": "def f(a, b):\n" + "    a < b\n" * 1100},
+        [{"x": x, "y": y} for x, y in PAIRS], warm=(1, 2), per_arm=True,
+        inputs_by_source={
+            # TYPEVAR_WITH_BOUND (a name, the bound's evaluator): the new
+            # typevar holds the evaluator, so it is immortal
+            "binary": [{"x": x, "y": None} for x in ("T", "U", 1)]}),
 }
 
 
@@ -630,11 +699,12 @@ def check(cx, arm_name, scenario, source, inputs):
     mode = (STUB if arm.region is Region.shared
             else TRANSFER if transfers(arm) else FORM)
     return [one_run(cx, arm, ssa, f, index, length, site, slots, homes, before,
-                    constants, mode, inputs) for _ in range(REPEATS)]
+                    constants, mode, inputs, scenario.holds)
+            for _ in range(REPEATS)]
 
 
 def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constants,
-            mode, inputs):
+            mode, inputs, holds=False):
     arm_name = arm.name
     handler = capi.arm_handlers()[arm_name]
     run = CRun(f, index, slots, mode, handler)
@@ -690,7 +760,7 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
         held = (sum(1 for s in after if s is o)
                 + sum(1 for s in after if type(s) is o and not any(s is x for x in run.objects)))
         # (In the entered __init__ frame, the new instance is not yet a home)
-        if (is_mortal(o) and run.exc_type is None and not run.feedback_written
+        if (not holds and is_mortal(o) and run.exc_type is None and not run.feedback_written
                 and not (run.kind == "enter" and isinstance(o, type))
                 and delta != held):
             return Result(False, obs.exit, f"C changed the count of {o!r} by {delta:+d}, "
@@ -704,12 +774,40 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
+    # The display families have no scenarios: their rows take spans of homes
+    # and run Python (test_rop_displays runs them)
+    "Build.Tuple": "no scenario; test_rop_displays runs it",
+    "Build.List": "no scenario; test_rop_displays runs it",
+    "AddElement.Append": "no scenario; test_rop_displays runs it",
+    "AddElement.Add": "no scenario; test_rop_displays runs it",
+    "AddEntry.Put": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Extend": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Overlay": "no scenario; test_rop_displays runs it",
+    "MergeKeywords.Merge": "no scenario; test_rop_displays runs it",
+    "Build.Set": "no scenario; test_rop_displays runs it",
+    "Build.Map": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Union": "no scenario; test_rop_displays runs it",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
                         "synthetic caller cannot hold",
+    "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "
+                          "cannot call as a function",
+    "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",
+    "NamespaceRead.BuildClass": "LOAD_BUILD_CLASS occurs in class definitions' callers: "
+                                "a class body is not a function the probe warms",
+    "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
+    "NamespaceWrite.Global": "the value moves into the globals dict, an owner the probe's "
+                             "home count does not see; a delete shares the arm",
+    "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
+    "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
+    "Import.Policy": "a function's imports are eager; the policy applies to module code",
+    "Import.Lazy": "`lazy import` is a module-level statement",
     # select(jit_on) and select(jit_off): the word is the one the JIT's
     # state chose when the function was lowered
+    "IntrinsicPair.Attr": "GETATTR and SETATTR are escapes for a name too wide for "
+                          "LOAD_ATTR and STORE_ATTR; no function's source compiles "
+                          "to one on a word",
     "Jump.Poll" if sys._jit.is_enabled() else "Jump.Warm": "the JIT's state selects the "
                                                            "other loop jump",
 }
@@ -733,7 +831,7 @@ class AgainstCTests(unittest.TestCase):
         scenario = SCENARIOS[PROGRAM.arms[name].family]
         seen = self.exits.setdefault(name, set())
         for source in scenario.sources:
-            for inputs in scenario.inputs:
+            for inputs in scenario.inputs_of(source):
                 with self.subTest(arm=name, source=source, inputs=inputs):
                     for result in check(self.cx, name, scenario, source, inputs) or ():
                         seen.add(result.exit)
@@ -800,7 +898,7 @@ class TemplateTests(unittest.TestCase):
                 continue
             fast = 0
             for source in scenario.sources:
-                for inputs in scenario.inputs:
+                for inputs in scenario.inputs_of(source):
                     with self.subTest(arm=name, source=source, inputs=inputs):
                         fast += bool(self.run_both(name, scenario, source, inputs))
             with self.subTest(arm=name):

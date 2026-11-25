@@ -22,6 +22,8 @@
 #include "Python.h"
 
 #include "pycore_initconfig.h"        // _Py_GetEnv()
+#include "pycore_intrinsics.h"        // MAX_INTRINSIC_1
+#include "pycore_bitutils.h"          // _Py_bit_length()
 #include "pycore_ir.h"                // _PyIR_FormatOf()
 #include "pycore_opcode_metadata.h"   // _PyOpcode_num_popped()
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
@@ -1469,6 +1471,48 @@ retire_also(_PyRegTr *t, _PyRegOp *op, int v)
     return SUCCESS;
 }
 
+/* The module that the last IMPORT_FROM of a statement reads is popped
+ * after it (`from m import a, b` and `import p.q as r`).  If the last op of
+ * this block that reads v is an ImportFrom.From of v, the read spends the
+ * module and no retirement follows.  No op between may need v at its
+ * handler (v at or above its base), and the read may not carry v in its own
+ * recipe, so that v is dead when the read has run. */
+static int
+spend_import_module(_PyRegTr *t, int v)
+{
+    _PyRegCfg *cfg = t->cfg;
+    int pos = t->sp - 1;
+    for (int i = t->nops - 1; i >= t->block_op; i--) {
+        _PyRegOp *op = &t->ops[i];
+        if (op->opcode == _PyReg_DEAD) {
+            continue;
+        }
+        const int *in = _PyReg_IN(cfg, op);
+        int reads = 0;
+        for (int k = 0; k < op->nread + op->nimplicit; k++) {
+            reads |= in[k] == v;
+        }
+        if (!reads) {
+            if (op->except >= 0 && handler_base(cfg, op->except) > pos) {
+                return 0;
+            }
+            continue;
+        }
+        if (op->opcode != ROP_HANDLER_ImportFrom_From || op->nread != 1 ||
+            in[0] != v || op->nimplicit != 0)
+        {
+            return 0;
+        }
+        if (op->except >= 0 && handler_base(cfg, op->except) > pos) {
+            return 0;
+        }
+        op->opcode = ROP_HANDLER_ImportFrom_FromLast;
+        op->npop = 1;
+        return 1;
+    }
+    return 0;
+}
+
 static int
 rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
 {
@@ -1490,6 +1534,9 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
               & _PyIR_DISCARDS))
     {
         prod->flags |= _PyReg_DISCARD;
+    }
+    else if (prod == NULL && spend_import_module(t, v)) {
+        // The read of the module spent it: only the origin remains
     }
     else if ((retire = joinable_retire(t, src)) != NULL) {
         RETURN_IF_ERROR(retire_also(t, retire, v));
@@ -1542,6 +1589,29 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
     RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
     return _PyRegTr_Push(t, defs[1]);
+}
+
+/* LOAD_GLOBAL is the GlobalRead family (Python/register_ops/names.rop).  The
+ * name is oparg >> 1.  The low bit asks for the NULL that a call takes as its
+ * absent self; it is not a value of the family, so the rule pushes a PUSH_NULL
+ * after the result, as the stack held them.  ElideNull gives it no word. */
+static int
+rule_load_global(_PyRegTr *t, const _PyRegOp *src)
+{
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GlobalRead_Generic,
+                                  NULL, 0, &dst, 1, &op));
+    op->oparg = src->oparg >> 1;
+    RETURN_IF_ERROR(_PyRegTr_Push(t, dst));
+    if (!(src->oparg & 1)) {
+        return SUCCESS;
+    }
+    _PyRegOp null = *src;
+    null.opcode = PUSH_NULL;
+    null.oparg = 0;
+    return _PyRegTr_Legacy(t, &null);
 }
 
 /* BINARY_OP.  Addition is the Add family (Python/register_ops/add.rop): its
@@ -1804,6 +1874,96 @@ rule_call(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* MAKE_FUNCTION is Function.Make: the code in, the function out.  Its
+ * attributes are installed by the SET_FUNCTION_ATTRIBUTEs after it
+ * (rule_set_function_attribute). */
+static int
+rule_make_function(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Function_Make,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* SET_FUNCTION_ATTRIBUTE is FunctionSet.SetField: the attribute, then the
+ * function below it, which keeps its home and its identity.  The oparg is
+ * the compiler's flag, 1 << k for member k of FunctionField. */
+static int
+rule_set_function_attribute(_PyRegTr *t, const _PyRegOp *src)
+{
+    int flag = src->oparg;
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    if (flag <= 0 || flag > MAKE_FUNCTION_ANNOTATE || (flag & (flag - 1))) {
+        PyErr_SetString(PyExc_SystemError, "bad SET_FUNCTION_ATTRIBUTE flag");
+        return ERROR;
+    }
+    int uses[2] = {t->stack[t->sp - 1], t->stack[t->sp - 2]};
+    int func = uses[0];
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_FunctionSet_SetField,
+                                  uses, 2, NULL, 0, &op));
+    op->oparg = _Py_bit_length((unsigned)flag) - 1;
+    // The function is read and left: only the attribute is taken
+    op->npop = 1;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
+    return _PyRegTr_Push(t, func);
+}
+
+/* CALL_INTRINSIC_1 is the Intrinsic family and CALL_INTRINSIC_2 IntrinsicPair
+ * (functions.rop).  The compiler's number is the member of IntrinsicId: n - 1
+ * for the unary table, n + 11 for the binary one, whose escapes (comparisons,
+ * GETATTR, SETATTR) follow its seven functions.  The number also picks the
+ * arm. */
+static int
+rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
+{
+    int unary = src->opcode == CALL_INTRINSIC_1;
+    int n = src->oparg;
+    int nuses = unary ? 1 : 2;
+    int id, handler;
+    if (unary) {
+        if (n < 1 || n > MAX_INTRINSIC_1) {
+            PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
+            return ERROR;
+        }
+        id = n - 1;
+        handler = _PyRop_SelectIntrinsic(
+            n == INTRINSIC_IMPORT_STAR ? ROP_SELECT_IMPORT_STAR
+            : n == INTRINSIC_STOPITERATION_ERROR ? ROP_SELECT_STOPITERATION
+            : ROP_SELECT_UNARY);
+    }
+    else {
+        if (n < 1 || n > MAX_INTRINSIC_2) {
+            PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
+            return ERROR;
+        }
+        id = n + 11;
+        handler = _PyRop_SelectIntrinsicPair(
+            n < INTRINSIC_COMPARE_OP ? ROP_SELECT_BINARY
+            : n < INTRINSIC_GETATTR ? ROP_SELECT_COMPARE
+            : ROP_SELECT_ATTR);
+    }
+    if (t->sp < nuses) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - nuses],
+                                  nuses, &dst, 1, &op));
+    op->oparg = id;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, nuses, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
 /* RETURN_VALUE is the Return family: value in.  The frame it leaves and
  * whether a scratch slot may still own a value select the arm: a return
  * that finds only its value on the stack leaves none, since each op
@@ -1823,6 +1983,199 @@ rule_return_value(_PyRegTr *t, const _PyRegOp *src)
                                   NULL, 0, NULL));
     t->sp--;
     return SUCCESS;
+}
+
+/* The namespace and import stack ops (Python/register_ops/namespaces.rop).
+ * Each names its namespace statically, so the rule picks the arm. */
+
+static int
+read_namespace(_PyRegTr *t, const _PyRegOp *src, int handler, int name)
+{
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, NULL, 0, &dst, 1, &op));
+    op->oparg = name;
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_load_name(_PyRegTr *t, const _PyRegOp *src)
+{
+    return read_namespace(t, src, ROP_SELECT_NamespaceRead_named, src->oparg);
+}
+
+static int
+rule_load_locals(_PyRegTr *t, const _PyRegOp *src)
+{
+    return read_namespace(t, src, ROP_SELECT_NamespaceRead_locals_scope, 0);
+}
+
+static int
+rule_load_build_class(_PyRegTr *t, const _PyRegOp *src)
+{
+    return read_namespace(t, src, ROP_SELECT_NamespaceRead_build_class_scope, 0);
+}
+
+/* LOAD_FROM_DICT_OR_GLOBALS: the mapping is the one use */
+static int
+rule_load_from_dict_or_globals(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_NamespaceReadFrom_Mapping,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = src->oparg;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* STORE_NAME and STORE_GLOBAL.  The compiler writes `del name` as PUSH_NULL
+ * and the store: the elided PUSH_NULL's register holds NULL, which the
+ * word's optional value reads as absent, so the arm deletes. */
+static int
+store_namespace(_PyRegTr *t, const _PyRegOp *src, int handler)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 1], 1,
+                                  NULL, 0, &op));
+    op->oparg = src->oparg;
+    return _PyRegTr_Pop(t, 1, NULL);
+}
+
+static int
+rule_store_name(_PyRegTr *t, const _PyRegOp *src)
+{
+    return store_namespace(t, src, ROP_SELECT_NamespaceWrite_name_scope);
+}
+
+static int
+rule_store_global(_PyRegTr *t, const _PyRegOp *src)
+{
+    return store_namespace(t, src, ROP_SELECT_NamespaceWrite_global_scope);
+}
+
+static int
+rule_setup_annotations(_PyRegTr *t, const _PyRegOp *src)
+{
+    return _PyRegTr_Emit(t, src, ROP_HANDLER_SetupAnnotations_Setup,
+                         NULL, 0, NULL, 0, NULL);
+}
+
+/* IMPORT_NAME: level and fromlist are the two uses; the oparg's low bits
+ * say how the import may be lazy, and the rest is the name. */
+static int
+rule_import_name(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int handler = (src->oparg & 0x02) ? ROP_SELECT_Import_eager_import
+                : (src->oparg & 0x01) ? ROP_SELECT_Import_lazy_import
+                                      : ROP_SELECT_Import_policy_import;
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 2], 2,
+                                  &dst, 1, &op));
+    op->oparg = src->oparg >> 2;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* IMPORT_FROM reads the module and leaves it on the stack; the POP_TOP
+ * after the last read turns the word into ImportFrom.FromLast */
+static int
+rule_import_from(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_ImportFrom_module_kept,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->npop = 0;
+    op->oparg = src->oparg;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* The display families (Python/register_ops/displays.rop).  A span is the
+ * homes of the identities it names, wherever allocation puts them, so no
+ * rule here stages a value to make its inputs adjacent. */
+
+/* BUILD_TUPLE, BUILD_LIST, BUILD_SET and BUILD_MAP: the items are the top
+ * identities (a map's are its keys and values in order), the container the
+ * one output.  The kind is the arm. */
+static int
+rule_build(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->opcode == BUILD_MAP ? 2 * src->oparg : src->oparg;
+    if (n > t->sp) {
+        return stack_underflow(src);
+    }
+    int handler;
+    switch (src->opcode) {
+        case BUILD_TUPLE: handler = ROP_SELECT_Build_tuple; break;
+        case BUILD_LIST: handler = ROP_SELECT_Build_list; break;
+        case BUILD_SET: handler = ROP_SELECT_Build_set; break;
+        default: handler = ROP_SELECT_Build_map; break;
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - n], n,
+                                  &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* LIST_APPEND, SET_ADD, MAP_ADD, LIST_EXTEND, SET_UPDATE, DICT_UPDATE and
+ * DICT_MERGE: the container lies oparg positions below the top operand (the
+ * callable of DICT_MERGE three below the container) and stays; the top
+ * operands go.  The instruction names the container's home, so no stack
+ * depth is an operand.  The reads are in stack order, the popped ones last. */
+static int
+rule_insert(_PyRegTr *t, const _PyRegOp *src)
+{
+    int handler, popped, extra = 0;
+    switch (src->opcode) {
+        case LIST_APPEND: handler = ROP_SELECT_AddElement_append; popped = 1; break;
+        case SET_ADD: handler = ROP_SELECT_AddElement_add; popped = 1; break;
+        case MAP_ADD: handler = ROP_HANDLER_AddEntry_Put; popped = 2; break;
+        case LIST_EXTEND: handler = ROP_SELECT_UpdateContainer_extend; popped = 1; break;
+        case SET_UPDATE: handler = ROP_SELECT_UpdateContainer_union; popped = 1; break;
+        case DICT_UPDATE: handler = ROP_SELECT_UpdateContainer_overlay; popped = 1; break;
+        default:
+            handler = ROP_HANDLER_MergeKeywords_Merge;
+            popped = 1;
+            extra = 3;
+            break;
+    }
+    int oparg = src->oparg;
+    int container = t->sp - popped - oparg;
+    if (oparg < 1 || container - extra < 0) {
+        return stack_underflow(src);
+    }
+    int uses[3], n = 0;
+    if (extra) {
+        uses[n++] = t->stack[container - extra];
+    }
+    uses[n++] = t->stack[container];
+    for (int k = 0; k < popped; k++) {
+        uses[n++] = t->stack[t->sp - popped + k];
+    }
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, uses, n, NULL, 0, &op));
+    op->npop = (int16_t)popped;
+    return _PyRegTr_Pop(t, popped, NULL);
 }
 
 /* The rules, by opcode.  NULL is the legacy rule. */
@@ -1857,6 +2210,31 @@ static const _PyRegRule rules[256] = {
     [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,
     [SWAP] = rule_swap,
     [LOAD_ATTR] = rule_load_attr,
+    [MAKE_FUNCTION] = rule_make_function,
+    [SET_FUNCTION_ATTRIBUTE] = rule_set_function_attribute,
+    [CALL_INTRINSIC_1] = rule_call_intrinsic,
+    [CALL_INTRINSIC_2] = rule_call_intrinsic,
+    [LOAD_NAME] = rule_load_name,
+    [LOAD_LOCALS] = rule_load_locals,
+    [LOAD_BUILD_CLASS] = rule_load_build_class,
+    [LOAD_FROM_DICT_OR_GLOBALS] = rule_load_from_dict_or_globals,
+    [STORE_NAME] = rule_store_name,
+    [STORE_GLOBAL] = rule_store_global,
+    [SETUP_ANNOTATIONS] = rule_setup_annotations,
+    [IMPORT_NAME] = rule_import_name,
+    [IMPORT_FROM] = rule_import_from,
+    [BUILD_TUPLE] = rule_build,
+    [BUILD_LIST] = rule_build,
+    [BUILD_SET] = rule_build,
+    [BUILD_MAP] = rule_build,
+    [LIST_APPEND] = rule_insert,
+    [SET_ADD] = rule_insert,
+    [MAP_ADD] = rule_insert,
+    [LIST_EXTEND] = rule_insert,
+    [SET_UPDATE] = rule_insert,
+    [DICT_UPDATE] = rule_insert,
+    [DICT_MERGE] = rule_insert,
+    [LOAD_GLOBAL] = rule_load_global,
 };
 
 /* An edge binds the parameters of the positions below depth: one that
@@ -2307,6 +2685,14 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     for (int k = 0; k < fmt->ninputs && k < 4; k++) {
         slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
     }
+    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+        // The outputs of a span word are new: its first is the destination
+        // that the format names, if any
+        slots->out[0] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
+                      : op->dst >= 0 ? op->dst
+                      : op->nout > 0 ? _PyRegCfg_Slot(cfg, out[0]) : 0;
+        return;
+    }
     if (op->flags & _PyReg_DISCARD) {
         slots->out[0] = IR_NO_DST;
     }
@@ -2317,7 +2703,7 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         slots->out[0] = 0;
     }
     else {
-        int j = op->npop + fmt->dst;
+        int j = Py_MAX(op->npop + fmt->dst, 0);
         slots->out[0] = j < op->nout ? _PyRegCfg_Slot(cfg, out[j]) : top + fmt->dst;
     }
 }
@@ -2704,8 +3090,7 @@ static int
 evict(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo, int hi)
 {
     int nl = cfg->nlocalsplus;
-    int move = _PyRegCfg_FormatOf(op->opcode, op->oparg)->operands
-               == _PyIR_OPERANDS_SPANS;
+    int move = _PyIR_IsMoveFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg));
     for (int s = lo; s < hi; s++) {
         int w = occ_at(o, s - nl);
         if (w < 0 || (!move && op_reads(cfg, op, w))) {
@@ -2809,8 +3194,7 @@ place_evicted(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo,
               int hi)
 {
     int nl = cfg->nlocalsplus;
-    int move = _PyRegCfg_FormatOf(op->opcode, op->oparg)->operands
-               == _PyIR_OPERANDS_SPANS;
+    int move = _PyIR_IsMoveFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg));
     for (int q = 0; q < op->nstage; q++) {
         int x = cfg->operands[op->stage + 2 * q + 1];
         if (!move && op_reads(cfg, op, x)) {

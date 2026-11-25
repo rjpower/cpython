@@ -13,6 +13,7 @@
 #include "pycore_dict.h"            // PyDictUnicodeEntry
 #include "pycore_feedback.h"        // _PyFb_*
 #include "pycore_frame.h"           // _PyInterpreterFrame
+#include "pycore_global_recipe.h"   // _PyGlobalRecipe, for the layout checks
 #include "pycore_ir.h"
 #include "pycore_jit_lower.h"
 #include "pycore_long.h"            // _PyLong_ExactDealloc()

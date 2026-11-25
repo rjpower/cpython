@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
+from rop_catalog import (CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
                          EVIDENCE_REQUIRED, FEEDBACK_ROOTS, INDEX_BITS, LINEAR_HANDLES,
                          TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
@@ -677,6 +677,10 @@ def check_extern(c: Checker, x: Extern) -> None:
             elif outcome.raised and case.params[-1].type != T(Handle.Err):
                 c.report(case.span, x.name, f"case {case.name} is the raised outcome "
                          f"of {conv.name}: its payload is Err")
+    if x.c.inline and conv is not None:
+        why = inline_refusal(x, conv)
+        if why:
+            c.report(x.c.span, x.name, f"c {x.c.symbol} cannot be inline: {why}")
     keys = [e.key for e in x.c.evidence]
     for e in x.c.evidence:
         if e.key not in EVIDENCE_KEYS:
@@ -690,6 +694,19 @@ def check_extern(c: Checker, x: Extern) -> None:
     if missing:
         c.report(x.c.span, x.name, f"c {x.c.symbol} needs evidence: "
                  f"{', '.join(missing)}")
+
+
+def inline_refusal(x: Extern, conv: Convention) -> str | None:
+    """Why a row cannot be declared inline: the generator writes its
+    out-of-line copy from the declared signature, so the call must be a
+    plain C call whose arguments are the declared parameters"""
+    if x.kind == RowKind.primitive:
+        return "a primitive row lowers to a leaf operation"
+    if conv.transfer or conv.indexed:
+        return f"convention {conv.name} leaves the word or indexes its result"
+    if any(CSource.out in o.payload for o in conv.outcomes):
+        return f"convention {conv.name} passes a C out parameter"
+    return None
 
 
 def check_no_dst(c: Checker, params: tuple[Param, ...], definition: str) -> None:

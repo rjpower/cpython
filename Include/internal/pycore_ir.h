@@ -208,6 +208,7 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
 #define IR_D(W)         ((uint32_t)((W) >> 52))
 #define IR_CD(W)        ((uint32_t)((W) >> 40))
+#define IR_AB(W)        ((uint32_t)((W) >> 16) & IR_CD_MAX)
 #define IR_BC(W)        ((uint32_t)((W) >> 28) & IR_CD_MAX)
 /* D as a signed distance */
 #define IR_DS(W)        ((int)(IR_D(W) ^ 0x800) - 0x800)
@@ -1075,6 +1076,52 @@ _PyIR_SpanWordLength(int handler, _PyIRWord word)
     int rest = total > nhead ? total - nhead : 0;
     return 1 + fmt->fixed_words
            + (rest + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD;
+}
+
+/* The spans of a span format: the number of COUNT fields, which are the
+ * spans in declaration order, and the direction of each.  A Move has two,
+ * its destinations and its sources.  A family with one span reads it when it
+ * also has a destination of its own (Build's items) and writes it when it
+ * has none (Unpack's destinations). */
+static inline int
+_PyIR_SpanCountFields(const _PyIRFormat *fmt)
+{
+    int n = 0;
+    for (int f = 0; f < 4; f++) {
+        n += fmt->roles[f] == _PyIR_ROLE_COUNT;
+    }
+    return n;
+}
+
+static inline int
+_PyIR_IsMoveFormat(const _PyIRFormat *fmt)
+{
+    return fmt->operands == _PyIR_OPERANDS_SPANS && _PyIR_SpanCountFields(fmt) == 2;
+}
+
+/* Span k of the word at head, which runs as handler: its element count and
+ * the index of its first element, and whether the word reads its elements */
+static inline int
+_PyIR_SpanBounds(const _PyIRWord *head, int handler, int k, int *first,
+                 int *is_source)
+{
+    const _PyIRFormat *fmt = &_PyIR_Formats[handler];
+    int seen = 0, before = 0, count = 0, has_dst = 0;
+    for (int f = 0; f < 4; f++) {
+        has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
+        if (fmt->roles[f] == _PyIR_ROLE_COUNT) {
+            int c = (int)((head[0] >> (16 + 12 * f)) & IR_FIELD_MAX);
+            if (seen++ < k) {
+                before += c;
+            }
+            else if (seen == k + 1) {
+                count = c;
+            }
+        }
+    }
+    *first = before;
+    *is_source = seen == 2 ? k == 1 : has_dst;
+    return count;
 }
 
 static inline int

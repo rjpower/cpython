@@ -1,0 +1,292 @@
+// 1I: function construction and the finite intrinsic catalog.
+//
+// A function is made by Function.Make, and the compiler installs its fields
+// (defaults, keyword defaults, annotations, closure, annotate) one by one with
+// FunctionSet.SetField.  The fields could be operands of Make (a span), once
+// span words other than Move are supported by the assembler and the outcome
+// readers.
+
+enum FunctionField(DEFAULTS, KWDEFAULTS, ANNOTATIONS, CLOSURE, ANNOTATE);
+
+// Include/internal/pycore_intrinsics.h.  The unary members come first, then
+// the binary ones, then the escapes that Python/assemble.c and the compiler
+// make out of the binary table (a comparison at a site with no feedback
+// entry, a name too wide for LOAD_ATTR/STORE_ATTR).  The index is not the
+// compiler's number: _PyRop_IntrinsicNumber() maps it, and
+// test_rop_functions checks the map against the header.
+enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
+                 INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
+                 INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
+                 INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
+                 INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
+                 INTRINSIC_PREP_RERAISE_STAR, INTRINSIC_TYPEVAR_WITH_BOUND,
+                 INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
+                 INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
+                 INTRINSIC_MATCH_CLASS_ISINSTANCE,
+                 INTRINSIC_COMPARE_LT, INTRINSIC_COMPARE_LT_BOOL, INTRINSIC_COMPARE_LE,
+                 INTRINSIC_COMPARE_LE_BOOL, INTRINSIC_COMPARE_EQ, INTRINSIC_COMPARE_EQ_BOOL,
+                 INTRINSIC_COMPARE_NE, INTRINSIC_COMPARE_NE_BOOL, INTRINSIC_COMPARE_GT,
+                 INTRINSIC_COMPARE_GT_BOOL, INTRINSIC_COMPARE_GE, INTRINSIC_COMPARE_GE_BOOL,
+                 INTRINSIC_CONTAINS_IN, INTRINSIC_CONTAINS_NOT_IN,
+                 INTRINSIC_GETATTR, INTRINSIC_SETATTR);
+
+family Function(dst:Dst, code:Src)
+  exits(next, raise) ops(MAKE_FUNCTION);
+
+family FunctionSet(fn:Src, value:Src, field:Enum<FunctionField>)
+  exits(next) ops(SET_FUNCTION_ATTRIBUTE);
+
+point Function.Done(current, next_head, clear) keep() spent(code) defs(dst);
+point Function.Failed(current, site, pending) keep() spent(code) defs();
+point FunctionSet.Done(current, next_head, clear) keep(fn) spent(value) defs();
+
+// A new function over the code, with the frame's globals.  The row closes the
+// code owner on both outcomes; on failure the pending exception is set aside
+// around the close.  Watchers can run Python.
+extern helper function_new(f:Frame, code:O)
+  cases(ok(fn:O), err(e:Err))
+  effects(allocates, releases, runs_python, raises)
+  c _PyRop_FunctionNew as value_or_null
+  evidence(
+    review: "Reviewed 1I. bytecodes.c _MAKE_FUNCTION: PyFunction_New of the code and"
+            "the frame's globals, then _PyFunction_SetVersion.",
+    contract: "The code is a code object (the compiler's: the word's source is a"
+              "constant). The result is a new owner; a function watcher may run"
+              "Python and raise.");
+
+arm Function.Make split
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let held:O = acquire(code);
+    call function_new(frame, held) {
+      ok -> Made();
+      err -> NewFailed();
+    }
+  Made(fn:O):
+    publish [dst = fn] retire [old(dst)] at Function.Done;
+    exit next();
+  NewFailed(e:Err):
+    exit raise(Function.Failed, e);
+}
+
+// The attribute goes into the slot of its flag; the function stays in its home
+extern helper store_field(fn:B, field:Enum<FunctionField>, attr:O) -> Unit
+  effects(writes)
+  c _PyRop_StoreField as unit
+  evidence(
+    review: "Reviewed 1I. bytecodes.c SET_FUNCTION_ATTRIBUTE: _PyFunction_StoreAttribute.",
+    contract: "No call, no failure, no callback: one store into an empty slot; the"
+              "slot takes the attribute's owner.");
+
+arm FunctionSet.SetField inline
+  effects(reads, writes)
+  feedback()
+  exits(next)
+{
+  entry():
+    let attr:O = acquire(value);
+    let _:Unit = store_field(use(fn), field, attr);
+    publish [] retire [] at FunctionSet.Done;
+    exit next();
+}
+
+// Intrinsic: one typed signature per class of intrinsic ids.  The translator
+// picks the arm from the compiler's number (Select dimensions "intrinsic1"
+// and "intrinsic2"); the id operand says which one of the class runs.  The
+// unary intrinsics are the family Intrinsic, the binary ones IntrinsicPair.
+family Intrinsic(dst:Dst, id:Enum<IntrinsicId>, x:Src)
+  exits(next, raise) ops(CALL_INTRINSIC_1);
+
+family IntrinsicPair(dst:Dst, id:Enum<IntrinsicId>, x:Src, y:Src)
+  exits(next, raise) ops(CALL_INTRINSIC_2);
+
+point Intrinsic.Done(current, next_head, clear) keep() spent(x) defs(dst);
+point Intrinsic.Failed(current, site, pending) keep() spent(x) defs();
+point IntrinsicPair.Done(current, next_head, clear) keep() spent(x, y) defs(dst);
+point IntrinsicPair.Failed(current, site, pending) keep() spent(x, y) defs();
+
+// The intrinsic functions take objects: a number is boxed for the call.
+// Every row consumes its operands, closing them on both outcomes; the
+// result is a new owner.
+
+// PRINT (sys.displayhook), ASYNC_GEN_WRAP, UNARY_POSITIVE (__pos__),
+// LIST_TO_TUPLE and BUILD_FROZENSET (the compiler's uniquely referenced
+// temporary), TYPEVAR, PARAMSPEC, TYPEVARTUPLE, SUBSCRIPT_GENERIC (imports
+// typing), TYPEALIAS
+extern helper intrinsic_unary(t:Thread, id:Enum<IntrinsicId>, x:O)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  c _PyRop_IntrinsicUnary as value_or_null
+  evidence(
+    review: "Reviewed 1I. bytecodes.c _CALL_INTRINSIC_1 through _PyEval_CallIntrinsic1.",
+    contract: "PRINT, UNARY_POSITIVE and SUBSCRIPT_GENERIC run Python; the others"
+              "allocate. No namespace is written.");
+
+// IMPORT_STAR: the frame's locals mapping gains the names of the module (or of
+// its __all__); the only intrinsic that writes a namespace
+extern helper intrinsic_import_star(t:Thread, x:O)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  c _PyRop_IntrinsicImportStar as value_or_null
+  evidence(
+    review: "Reviewed 1I. intrinsics.c import_star: _PyFrame_GetLocals of the current"
+            "frame and import_all_from.",
+    contract: "Runs Python (__all__, getattr, a mapping's __setitem__) and writes the"
+              "locals namespace. The result is None.");
+
+// STOPITERATION_ERROR: in a generator's cleanup, a StopIteration becomes a
+// RuntimeError that has it as cause and context
+extern helper intrinsic_stopiteration(t:Thread, x:O)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  c _PyRop_IntrinsicStopIteration as value_or_null
+  evidence(
+    review: "Reviewed 1I. intrinsics.c stopiteration_error. The current frame is a"
+            "generator's (the compiler emits it only in the generator wrapper).",
+    contract: "Allocates the error; no user code.");
+
+// PREP_RERAISE_STAR and MATCH_CLASS_ISINSTANCE run Python;
+// SET_FUNCTION_TYPE_PARAMS, SET_TYPEPARAM_DEFAULT and
+// ADD_CONDITIONAL_ANNOTATION write their first object
+extern helper intrinsic_binary(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  c _PyRop_IntrinsicBinary as value_or_null
+  evidence(
+    review: "Reviewed 1I. bytecodes.c CALL_INTRINSIC_2 through _PyEval_CallIntrinsic2.",
+    contract: "x is the first operand, the function's first argument.");
+
+// A comparison or a containment test at a site with no feedback entry
+extern helper intrinsic_compare(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  c _PyRop_IntrinsicCompare as value_or_null
+  evidence(
+    review: "Reviewed 1I. intrinsics.c compare_* and contains_*: rich comparison or"
+            "__contains__ of the two operands.",
+    contract: "Runs Python.");
+
+// GETATTR (owner, name) and SETATTR (value or the vacancy, (owner, name) tuple)
+extern helper intrinsic_attr(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  c _PyRop_IntrinsicAttr as value_or_null
+  evidence(
+    review: "Reviewed 1I. bytecodes.c CALL_INTRINSIC_2 GETATTR and SETATTR branches.",
+    contract: "Runs Python (descriptors, __getattr__, __setattr__); SETATTR writes the"
+              "owner's attribute and gives None.");
+
+arm Intrinsic.Unary split select(unary)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(x);
+    call intrinsic_unary(thread, id, xo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at Intrinsic.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(Intrinsic.Failed, e);
+}
+
+arm Intrinsic.ImportStar split select(import_star)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(x);
+    call intrinsic_import_star(thread, xo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at Intrinsic.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(Intrinsic.Failed, e);
+}
+
+arm Intrinsic.StopIteration split select(stopiteration)
+  effects(allocates, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(x);
+    call intrinsic_stopiteration(thread, xo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at Intrinsic.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(Intrinsic.Failed, e);
+}
+
+arm IntrinsicPair.Binary split select(binary)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(x);
+    let yo:O = acquire(y);
+    call intrinsic_binary(thread, id, xo, yo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at IntrinsicPair.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(IntrinsicPair.Failed, e);
+}
+
+arm IntrinsicPair.Compare split select(compare)
+  effects(allocates, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(x);
+    let yo:O = acquire(y);
+    call intrinsic_compare(thread, id, xo, yo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at IntrinsicPair.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(IntrinsicPair.Failed, e);
+}
+
+arm IntrinsicPair.Attr split select(attr)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(x);
+    let yo:O = acquire(y);
+    call intrinsic_attr(thread, id, xo, yo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at IntrinsicPair.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(IntrinsicPair.Failed, e);
+}
+

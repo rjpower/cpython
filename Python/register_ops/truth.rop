@@ -3,24 +3,24 @@
 // arm is a row; BranchTruth's arms differ from Truth's in the terminal only.
 
 // Truth: the result is a bool, the operand is spent
-point Truth.Done(current, next_head, clear) keep() spent(value) defs(dst) held();
-point Truth.Failed(current, site, pending) keep() spent(value) defs() held();
+point Truth.Done(current, next_head, clear) keep() spent(value) defs(dst);
+point Truth.Failed(current, site, pending) keep() spent(value) defs();
 
 // BranchTruth: each edge retires the operand, except the jump edge of a
 // keep mode, which leaves the owner in its home
-point BranchTruth.Jumped(current, target, clear) keep() spent(value) defs() held();
-point BranchTruth.Fell(current, next_head, clear) keep() spent(value) defs() held();
-point BranchTruth.Kept(current, target, clear) keep(value) spent() defs() held();
-point BranchTruth.Failed(current, site, pending) keep() spent(value) defs() held();
+point BranchTruth.Jumped(current, target, clear) keep() spent(value) defs();
+point BranchTruth.Fell(current, next_head, clear) keep() spent(value) defs();
+point BranchTruth.Kept(current, target, clear) keep(value) spent() defs();
+point BranchTruth.Failed(current, site, pending) keep() spent(value) defs();
 
 // A branch event's callback failed: the operand was retired before the event,
 // except where a keep mode jumps
-point BranchTruth.Event(current, site, pending) keep() spent(value) defs() held();
-point BranchTruth.KeptEvent(current, site, pending) keep(value) spent() defs() held();
-point BranchNone.Event(current, site, pending) keep() spent(value) defs() held();
+point BranchTruth.Event(current, site, pending) keep() spent(value) defs();
+point BranchTruth.KeptEvent(current, site, pending) keep(value) spent() defs();
+point BranchNone.Event(current, site, pending) keep() spent(value) defs();
 
-point BranchNone.Jumped(current, target, clear) keep() spent(value) defs() held();
-point BranchNone.Fell(current, next_head, clear) keep() spent(value) defs() held();
+point BranchNone.Jumped(current, target, clear) keep() spent(value) defs();
+point BranchNone.Fell(current, next_head, clear) keep() spent(value) defs();
 
 // Tests of the admitted kinds
 
@@ -219,6 +219,7 @@ extern primitive same_bool(a:Bool, b:Bool) -> Bool
 extern helper branch_event(t:Thread, f:Frame, at:Site, taken:Bool)
   cases(ok(), moved(r:Route), err(e:Err))
   effects(runs_python, raises)
+  requires(instrumented(at))
   c _PyRop_BranchEvent as int_redirect
   evidence(
     review: "Reviewed P5. bytecodes.c _INSTRUMENTED_POP_JUMP_IF_x:"
@@ -522,7 +523,7 @@ macro adapt_before_use_branch_truth(f:Fb<Truth>, v:Src, mode:Enum<BranchMode>)
 }
 
 arm Truth.Bool inline
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -537,7 +538,7 @@ arm Truth.Bool inline
 }
 
 arm Truth.Int inline
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -552,7 +553,7 @@ arm Truth.Int inline
 }
 
 arm Truth.List inline
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -567,7 +568,7 @@ arm Truth.List inline
 }
 
 arm Truth.None inline
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -582,7 +583,7 @@ arm Truth.None inline
 }
 
 arm Truth.Str inline
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -597,7 +598,7 @@ arm Truth.Str inline
 }
 
 arm Truth.Plain inline
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry.type_version))
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -612,7 +613,7 @@ arm Truth.Plain inline
 }
 
 arm Truth.Slot shared
-  effects(reads, runs_python, writes, releases, raises)
+  effects(reads, runs_python, writes, releases on (dst), raises)
   feedback(read(entry.type_version))
   exits(next, miss, raise, redirect)
   ensures(next.exact<bool>(dst))
@@ -644,7 +645,7 @@ arm Truth.Slot shared
 }
 
 arm Truth.Generic shared
-  effects(reads, runs_python, writes, releases, raises)
+  effects(reads, runs_python, writes, releases on (dst), raises)
   feedback(read(entry), write(entry), write(handler))
   exits(next, again, raise, redirect)
 {
@@ -905,7 +906,7 @@ arm BranchNone.Test inline
 // family when the word's op is instrumented): the generic test, the
 // retirement of the operand, then the branch event, which may move the frame
 
-arm BranchTruth.Observed split
+arm BranchTruth.Observed split observes
   effects(reads, runs_python, writes, releases, raises)
   feedback()
   exits(next, branch, raise, redirect)
@@ -969,7 +970,7 @@ arm BranchTruth.Observed split
     exit redirect(current_route);
 }
 
-arm BranchNone.Observed split
+arm BranchNone.Observed split observes
   effects(reads, writes, releases, raises, runs_python)
   feedback()
   exits(next, branch, raise, redirect)
@@ -1009,8 +1010,8 @@ arm BranchNone.Observed split
 // (_PyRop_SelectJump): a jump that never polls, a backedge, and a backedge
 // that is also the baseline JIT's warm-up event.
 
-point Jump.PollFailed(current, site, pending) keep() spent() defs() held();
-point Jump.EventFailed(current, site, pending) keep() spent() defs() held();
+point Jump.PollFailed(current, site, pending) keep() spent() defs();
+point Jump.EventFailed(current, site, pending) keep() spent() defs();
 
 // _CHECK_PERIODIC: signals, the GC and other pending events
 extern helper poll(t:Thread)
@@ -1022,12 +1023,14 @@ extern helper poll(t:Thread)
     contract: "A signal handler or a finalizer may run Python and raise.");
 
 // IR_JIT_EVENT(): the code's warm-up event.  With a unit it runs the frame
-// natively and the frame goes on where the unit stopped; otherwise the
-// jump goes on at its target.  The forms and stubs run no event.
-extern routine jit_warm(target:Head) -> Unit
+// natively and the frame goes on where the unit stopped (redirect);
+// otherwise the jump goes on at its target.  The forms and stubs run no
+// event.  A transfer row: the callee performs the exit.
+extern helper jit_warm(target:Head)
+  cases(jump(h:Head), redirect(r:Route))
   effects(runs_python)
-  exits(jump, raise, redirect, exit)
-  c ROP_JIT_WARM as tail
+  requires(jit_on(thread))
+  c ROP_JIT_WARM as transfer
   evidence(
     review: "Reviewed P5. bytecodes.c _JIT_EVENT after JUMP_BACKWARD_NO_INTERRUPT:"
             "IR_JIT_EVENT with the target as next_instr, ceval_macros.h.",
@@ -1037,6 +1040,7 @@ extern routine jit_warm(target:Head) -> Unit
 extern helper jump_event(t:Thread, f:Frame, at:Site)
   cases(ok(), moved(r:Route), err(e:Err))
   effects(runs_python, raises)
+  requires(instrumented(at))
   c _PyRop_JumpEvent as int_redirect
   evidence(
     review: "Reviewed P5. bytecodes.c _MONITOR_JUMP_BACKWARD:"
@@ -1082,7 +1086,7 @@ arm Jump.Poll inline select(interruptible, jit_off)
 arm Jump.Warm split select(interruptible, jit_on)
   effects(runs_python, polls, raises)
   feedback()
-  exits(jump, raise, redirect, exit)
+  exits(jump, raise, redirect)
 {
   entry():
     call poll(thread) {
@@ -1090,12 +1094,19 @@ arm Jump.Warm split select(interruptible, jit_on)
       err -> Failed();
     }
   Go():
-    tail jit_warm(target);
+    call jit_warm(target) {
+      jump -> Warmed();
+      redirect -> Ran();
+    }
+  Warmed(h:Head):
+    exit jump(h);
+  Ran(r:Route):
+    exit redirect(r);
   Failed(e:Err):
     exit raise(Jump.PollFailed, e);
 }
 
-arm Jump.Observed split
+arm Jump.Observed split observes
   effects(runs_python, polls, raises)
   feedback()
   exits(jump, raise, redirect)

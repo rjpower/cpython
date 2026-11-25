@@ -229,14 +229,19 @@ enum {
 #define ROP_POINT_InitResult_Wrong 23
 #define ROP_POINT_Jump_EventFailed 24
 #define ROP_POINT_Jump_PollFailed 25
-#define ROP_POINT_LocalDelete_Unbound 26
-#define ROP_POINT_LocalRead_Done 27
-#define ROP_POINT_LocalRead_Unbound 28
-#define ROP_POINT_LocalWrite_Done 29
-#define ROP_POINT_Return_Delivered 30
-#define ROP_POINT_Return_EventFailed 31
-#define ROP_POINT_Truth_Done 32
-#define ROP_POINT_Truth_Failed 33
+#define ROP_POINT_LocalDelete_Done 26
+#define ROP_POINT_LocalDelete_Unbound 27
+#define ROP_POINT_LocalRead_Done 28
+#define ROP_POINT_LocalRead_Unbound 29
+#define ROP_POINT_LocalWrite_Done 30
+#define ROP_POINT_Move_Copied 31
+#define ROP_POINT_Move_Done 32
+#define ROP_POINT_Return_ConsumerFailed 33
+#define ROP_POINT_Return_Delivered 34
+#define ROP_POINT_Return_EventFailed 35
+#define ROP_POINT_SaveLocal_Done 36
+#define ROP_POINT_Truth_Done 37
+#define ROP_POINT_Truth_Failed 38
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -278,7 +283,7 @@ typedef struct {
     uint8_t checkpoint;
     uint8_t frame, pc, exc;      /* the roles, as indexes of the catalogs */
     /* Operands of the family, by position in its parameter list */
-    uint16_t keep, spent, defs, held;
+    uint16_t keep, spent, defs;
 } _PyRopPoint;
 
 static const _PyRopOperand _PyRop_Operands_Add[] = {
@@ -541,7 +546,7 @@ static const _PyRopOperand _PyRop_Operands_Length[] = {
 };
 static const uint16_t _PyRop_Ops_Length[] = {GET_LEN};
 static const _PyRopOperand _PyRop_Operands_LocalDelete[] = {
-    {"local", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
+    {"local", ROP_FIELD_HOME, ROP_ROLE_LOCAL, 0, 12, 16, IR_F_LOCAL_A},  /* Local */
 };
 static const uint16_t _PyRop_Ops_LocalDelete[] = {DELETE_FAST};
 static const _PyRopOperand _PyRop_Operands_LocalRead[] = {
@@ -550,7 +555,7 @@ static const _PyRopOperand _PyRop_Operands_LocalRead[] = {
 };
 static const uint16_t _PyRop_Ops_LocalRead[] = {LOAD_FAST, LOAD_FAST_CHECK, LOAD_FAST_BORROW};
 static const _PyRopOperand _PyRop_Operands_LocalWrite[] = {
-    {"local", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
+    {"local", ROP_FIELD_HOME, ROP_ROLE_LOCAL, 0, 12, 16, IR_F_LOCAL_A},  /* Local */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
 };
 static const uint16_t _PyRop_Ops_LocalWrite[] = {STORE_FAST};
@@ -871,40 +876,45 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Move.Copy", ROP_HANDLER_Move_Copy, ROP_FAMILY_Move, 1},
 };
 
-static const _PyRopPoint _PyRop_Points[33] = {
-    {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0, 0},
-    {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0), 0},
-    {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0, 0},
-    {"BranchNone.Event", ROP_FAMILY_BranchNone, 4, 0, 0, 1, 0, (1 << 0), 0, 0},
-    {"BranchNone.Fell", ROP_FAMILY_BranchNone, 5, 0, 1, 0, 0, (1 << 0), 0, 0},
-    {"BranchNone.Jumped", ROP_FAMILY_BranchNone, 6, 0, 2, 0, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Event", ROP_FAMILY_BranchTruth, 7, 0, 0, 1, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Failed", ROP_FAMILY_BranchTruth, 8, 0, 0, 1, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Fell", ROP_FAMILY_BranchTruth, 9, 0, 1, 0, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Jumped", ROP_FAMILY_BranchTruth, 10, 0, 2, 0, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Kept", ROP_FAMILY_BranchTruth, 11, 0, 2, 0, (1 << 0), 0, 0, 0},
-    {"BranchTruth.KeptEvent", ROP_FAMILY_BranchTruth, 12, 0, 0, 1, (1 << 0), 0, 0, 0},
-    {"Call.Done", ROP_FAMILY_Call, 13, 0, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
-    {"Call.Failed", ROP_FAMILY_Call, 14, 0, 0, 1, 0, (1 << 1) | (1 << 2), 0, 0},
-    {"Call.PollFailed", ROP_FAMILY_Call, 15, 0, 0, 1, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
-    {"Call.Returned", ROP_FAMILY_Call, 16, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
-    {"Const.Done", ROP_FAMILY_Const, 17, 0, 1, 0, 0, 0, (1 << 0), 0},
-    {"GetAttr.Done", ROP_FAMILY_GetAttr, 18, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 19, 0, 0, 1, 0, (1 << 1), 0, 0},
-    {"GetMethod.Done", ROP_FAMILY_GetMethod, 20, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
-    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 21, 0, 0, 1, 0, (1 << 2), 0, 0},
-    {"InitResult.Done", ROP_FAMILY_InitResult, 22, 0, 1, 0, 0, (1 << 0), 0, 0},
-    {"InitResult.Wrong", ROP_FAMILY_InitResult, 23, 0, 0, 1, (1 << 0), 0, 0, 0},
-    {"Jump.EventFailed", ROP_FAMILY_Jump, 24, 0, 0, 1, 0, 0, 0, 0},
-    {"Jump.PollFailed", ROP_FAMILY_Jump, 25, 0, 0, 1, 0, 0, 0, 0},
-    {"LocalDelete.Unbound", ROP_FAMILY_LocalDelete, 26, 0, 0, 1, 0, 0, 0, 0},
-    {"LocalRead.Done", ROP_FAMILY_LocalRead, 27, 0, 1, 0, (1 << 1), 0, (1 << 0), 0},
-    {"LocalRead.Unbound", ROP_FAMILY_LocalRead, 28, 0, 0, 1, (1 << 1), 0, 0, 0},
-    {"LocalWrite.Done", ROP_FAMILY_LocalWrite, 29, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"Return.Delivered", ROP_FAMILY_Return, 30, 1, 3, 0, 0, (1 << 0), 0, 0},
-    {"Return.EventFailed", ROP_FAMILY_Return, 31, 0, 0, 1, 0, (1 << 0), 0, 0},
-    {"Truth.Done", ROP_FAMILY_Truth, 32, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"Truth.Failed", ROP_FAMILY_Truth, 33, 0, 0, 1, 0, (1 << 1), 0, 0},
+static const _PyRopPoint _PyRop_Points[38] = {
+    {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0},
+    {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0)},
+    {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0},
+    {"BranchNone.Event", ROP_FAMILY_BranchNone, 4, 0, 0, 1, 0, (1 << 0), 0},
+    {"BranchNone.Fell", ROP_FAMILY_BranchNone, 5, 0, 1, 0, 0, (1 << 0), 0},
+    {"BranchNone.Jumped", ROP_FAMILY_BranchNone, 6, 0, 2, 0, 0, (1 << 0), 0},
+    {"BranchTruth.Event", ROP_FAMILY_BranchTruth, 7, 0, 0, 1, 0, (1 << 0), 0},
+    {"BranchTruth.Failed", ROP_FAMILY_BranchTruth, 8, 0, 0, 1, 0, (1 << 0), 0},
+    {"BranchTruth.Fell", ROP_FAMILY_BranchTruth, 9, 0, 1, 0, 0, (1 << 0), 0},
+    {"BranchTruth.Jumped", ROP_FAMILY_BranchTruth, 10, 0, 2, 0, 0, (1 << 0), 0},
+    {"BranchTruth.Kept", ROP_FAMILY_BranchTruth, 11, 0, 2, 0, (1 << 0), 0, 0},
+    {"BranchTruth.KeptEvent", ROP_FAMILY_BranchTruth, 12, 0, 0, 1, (1 << 0), 0, 0},
+    {"Call.Done", ROP_FAMILY_Call, 13, 0, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0)},
+    {"Call.Failed", ROP_FAMILY_Call, 14, 0, 0, 1, 0, (1 << 1) | (1 << 2), 0},
+    {"Call.PollFailed", ROP_FAMILY_Call, 15, 0, 0, 1, 0, (1 << 1) | (1 << 2), (1 << 0)},
+    {"Call.Returned", ROP_FAMILY_Call, 16, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0)},
+    {"Const.Done", ROP_FAMILY_Const, 17, 0, 1, 0, 0, 0, (1 << 0)},
+    {"GetAttr.Done", ROP_FAMILY_GetAttr, 18, 0, 1, 0, 0, (1 << 1), (1 << 0)},
+    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 19, 0, 0, 1, 0, (1 << 1), 0},
+    {"GetMethod.Done", ROP_FAMILY_GetMethod, 20, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1)},
+    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 21, 0, 0, 1, 0, (1 << 2), 0},
+    {"InitResult.Done", ROP_FAMILY_InitResult, 22, 0, 1, 0, 0, (1 << 0), 0},
+    {"InitResult.Wrong", ROP_FAMILY_InitResult, 23, 0, 0, 1, (1 << 0), 0, 0},
+    {"Jump.EventFailed", ROP_FAMILY_Jump, 24, 0, 0, 1, 0, 0, 0},
+    {"Jump.PollFailed", ROP_FAMILY_Jump, 25, 0, 0, 1, 0, 0, 0},
+    {"LocalDelete.Done", ROP_FAMILY_LocalDelete, 26, 0, 1, 0, 0, (1 << 0), (1 << 0)},
+    {"LocalDelete.Unbound", ROP_FAMILY_LocalDelete, 27, 0, 0, 1, 0, (1 << 0), 0},
+    {"LocalRead.Done", ROP_FAMILY_LocalRead, 28, 0, 1, 0, (1 << 1), 0, (1 << 0)},
+    {"LocalRead.Unbound", ROP_FAMILY_LocalRead, 29, 0, 0, 1, (1 << 1), 0, 0},
+    {"LocalWrite.Done", ROP_FAMILY_LocalWrite, 30, 0, 1, 0, 0, (1 << 1) | (1 << 0), (1 << 0)},
+    {"Move.Copied", ROP_FAMILY_Move, 31, 0, 1, 0, (1 << 1), 0, (1 << 0)},
+    {"Move.Done", ROP_FAMILY_Move, 32, 0, 1, 0, 0, (1 << 1), (1 << 0)},
+    {"Return.ConsumerFailed", ROP_FAMILY_Return, 33, 3, 4, 1, 0, (1 << 0), 0},
+    {"Return.Delivered", ROP_FAMILY_Return, 34, 1, 3, 0, 0, (1 << 0), 0},
+    {"Return.EventFailed", ROP_FAMILY_Return, 35, 0, 0, 1, 0, (1 << 0), 0},
+    {"SaveLocal.Done", ROP_FAMILY_SaveLocal, 36, 0, 1, 0, 0, (1 << 1), (1 << 0)},
+    {"Truth.Done", ROP_FAMILY_Truth, 37, 0, 1, 0, 0, (1 << 1), (1 << 0)},
+    {"Truth.Failed", ROP_FAMILY_Truth, 38, 0, 0, 1, 0, (1 << 1), 0},
 };
 
 /* Static selection (rop_catalog.Select): the members of each dimension */
@@ -916,6 +926,7 @@ enum { ROP_SELECT_BOUND, ROP_SELECT_CHECKED };  /* read */
 enum { ROP_SELECT_STORE, ROP_SELECT_RESTORE };  /* write */
 enum { ROP_SELECT_UNINTERRUPTED, ROP_SELECT_INTERRUPTIBLE };  /* interrupt */
 enum { ROP_SELECT_JIT_OFF, ROP_SELECT_JIT_ON };  /* jit */
+enum { ROP_SELECT_PRESENT, ROP_SELECT_ABSENT };  /* operand */
 
 /* The arm of Const that holds for (const) */
 #define _PyRop_SelectConst(const) ( \

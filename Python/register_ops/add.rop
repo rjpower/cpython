@@ -1,11 +1,11 @@
 // Add: ordinary addition (Appendix A, batch P2).
 
 family Add(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
-  exits(next, miss, again, raise, redirect) ops(BINARY_OP);
+  exits(next, miss, again, raise, redirect) generic(Generic) ops(BINARY_OP);
 
-point Add.BoxFailed(current, site, pending) keep(x, y) spent() defs() held();
-point Add.OpFailed(current, site, pending) keep() spent(y, x) defs() held();
-point Add.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
+point Add.BoxFailed(current, site, pending) keep(x, y) spent() defs();
+point Add.OpFailed(current, site, pending) keep() spent(y, x) defs();
+point Add.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
 
 // Integer rows
 
@@ -280,7 +280,7 @@ macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
 }
 
 arm Add.Int inline
-  effects(writes, allocates, raises, releases)
+  effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)
   ensures(next.exact<int>(dst))
@@ -311,7 +311,7 @@ arm Add.Int inline
 
 // Two admitted float or inline numbers: the sum is a float
 arm Add.Float shared
-  effects(writes, allocates, raises, releases)
+  effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)
   ensures(next.exact<float>(dst))
@@ -333,7 +333,7 @@ arm Add.Float shared
 
 // Two exact strings
 arm Add.Text shared
-  effects(writes, allocates, raises, releases)
+  effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)
   ensures(next.exact<str>(dst))
@@ -355,7 +355,7 @@ arm Add.Text shared
 
 // The operand types of the entry's registered descriptor
 arm Add.Extended shared
-  effects(runs_python, writes, allocates, raises, releases)
+  effects(runs_python, writes, allocates, raises, releases on (dst))
   feedback(read(entry.descr))
   exits(next, miss, raise, redirect)
 {
@@ -381,7 +381,7 @@ arm Add.Extended shared
 }
 
 arm Add.Generic shared
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback(read(entry), write(entry), write(handler))
   exits(next, again, raise, redirect)
 {

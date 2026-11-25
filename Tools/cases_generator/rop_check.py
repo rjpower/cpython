@@ -23,19 +23,19 @@ from typing import Any
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
                          EVIDENCE_REQUIRED, FEEDBACK_ROOTS, INDEX_BITS, LINEAR_HANDLES,
-                         TARGET_BITS,
+                         TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
-                         SELECT_DIMENSIONS, SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind,
-                         Effect, ExitKind, FieldKind, FrameRole, Handle, PcRole,
+                         OPTIONAL, SELECT_DIMENSIONS, SELECT_FACTS, SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind,
+                         Effect, ExitKind, Fact, FieldKind, FrameRole, Handle, PcRole,
                          Region, RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
-from rop_model import (RESULT_CASE, Advance, Arm, Block, BoolLit, Branch, Call,
-                       CallTerm, Cases, Contract, Decl, Diagnostic, Each, Encoding,
+from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
+                       CallTerm, Cases, Contract, Decl, Diagnostic, Each, Edge, Encoding,
                        EnumDecl, Placement,
                        EnumType, Exit, Expr, Extern, FactUse, Family, Goto, Graph,
-                       Guard, HandleType, Let, Macro, Name, Nat, PairType, Param,
+                       Guard, HandleType, Let, Macro, Name, Nat, Null, PairType, Param,
                        Point, Publish, Result, Returns, RopError, ScalarType,
                        SchemaRef, SchemaType, SchemaVar, SourceFile, SpanLit, SrcSpan,
-                       Tail, Target, Term, Type, WrapType, DISCARD, ENTRY, NOWHERE)
+                       Target, Term, Type, WrapType, DISCARD, ENTRY, NOWHERE)
 from rop_print import expr_text, type_text
 import rop_header
 import rop_syntax
@@ -163,6 +163,24 @@ def is_source(t: Type) -> bool:
     if isinstance(t, WrapType) and t.wrap in (Wrap.Maybe, Wrap.Span):
         return is_source(t.arg)
     return isinstance(t, HandleType) and t.handle in SOURCE_HANDLES
+
+
+def optional_sources(fam: Family) -> list[str]:
+    """The family's optional source operands (Maybe<Src>)"""
+    return [p.name for p in fam.params
+            if isinstance(p.type, WrapType) and p.type.wrap is Wrap.Maybe
+            and is_source(p.type)]
+
+
+def select_facts(fam: Family, a: Arm) -> list[tuple[Fact, str]]:
+    """The facts an arm's select items state at its entry (SELECT_FACTS),
+    with OPTIONAL expanded to each of the family's optional operands"""
+    out = []
+    for m in a.select:
+        for fact, subject in SELECT_FACTS.get(m, ()):
+            subjects = optional_sources(fam) if subject == OPTIONAL else [subject]
+            out.extend((fact, s) for s in subjects)
+    return out
 
 
 def substitute(t: Type, binding: Mapping[str, Schema]) -> Type:
@@ -455,6 +473,7 @@ def check_family(c: Checker, fam: Family) -> None:
         c.report(fam.span, fam.name, "a stack op is listed twice")
     if len(set(fam.events)) != len(fam.events):
         c.report(fam.span, fam.name, "an event is listed twice")
+    check_generic(c, fam)
     schemas = feedback_schemas(fam.params)
     if len(schemas) > 1:
         c.report(fam.span, fam.name, "a family has at most one feedback operand")
@@ -466,6 +485,27 @@ def check_family(c: Checker, fam: Family) -> None:
         c.report(p.span, fam.name, message)
     if not problems:
         c.encodings[fam.name] = encoding
+
+
+def check_generic(c: Checker, fam: Family) -> None:
+    """`generic(Arm)`: the shared arm a miss restarts in, which itself does
+    not miss.  A family whose arms miss declares one."""
+    if fam.generic is None:
+        return
+    name = f"{fam.name}.{fam.generic}"
+    arm = c.arms.get(name)
+    if arm is None:
+        c.report(fam.span, fam.name, f"generic({fam.generic}): no arm {name}")
+        return
+    if arm.region is Region.inline:
+        c.report(fam.span, fam.name, f"generic({fam.generic}): {name} is inline; "
+                 "the generic arm is shared, or split when it leaves the frame")
+    if "miss" in arm.contract.exits:
+        c.report(fam.span, fam.name, f"generic({fam.generic}): {name} misses; the "
+                 "generic arm is where a miss restarts")
+    if arm.observes or arm.select:
+        c.report(fam.span, fam.name, f"generic({fam.generic}): {name} is selected "
+                 "or observes; the generic arm is reached by a miss")
 
 
 def check_point(c: Checker, p: Point) -> None:
@@ -491,7 +531,6 @@ def check_point(c: Checker, p: Point) -> None:
     role(p.keep, "keep", SOURCE_HANDLES)
     role(p.spent, "spent", SOURCE_HANDLES)
     role(p.defs, "defs", DEST_HANDLES)
-    role(p.held, "held", frozenset())
 
 
 def check_contract(c: Checker, contract: Contract, definition: str,
@@ -500,12 +539,18 @@ def check_contract(c: Checker, contract: Contract, definition: str,
     effects = [e.effect for e in contract.effects]
     if len(set(effects)) != len(effects):
         c.report(contract.span, definition, "an effect is listed twice")
-    # A release of a named operand's old binding (a local's) may run its
-    # finalizer: the arm says so.  A plain `releases` closes temporaries.
-    if (any(e.effect is Effect.releases and e.on for e in contract.effects)
-            and Effect.runs_python not in effects):
-        c.report(contract.span, definition, "releases on (...) closes an operand's "
-                 "old binding, which may run Python: declare runs_python")
+    # `releases on (d)` of a destination is the release of d's displaced
+    # owner when d names a local's home, which may run Python; when d is a
+    # temporary its old owner is vacant by construction.  So the arm's own
+    # effect list states the temporary class, and the `on` the local one.
+    # A release on any other operand closes a binding on every word.
+    types = {p.name: p.type for p in params}
+    on_other = [n for e in contract.effects if e.effect is Effect.releases
+                for n in e.on if n in types and not is_dst(types[n])]
+    if on_other and Effect.runs_python not in effects:
+        c.report(contract.span, definition, f"releases on ({', '.join(on_other)}) "
+                 "closes an operand's binding, which may run Python: declare "
+                 "runs_python")
     names = {p.name for p in params}
     for e in contract.effects:
         for n in e.on:
@@ -526,7 +571,6 @@ def check_contract(c: Checker, contract: Contract, definition: str,
                             for f in SCHEMA_FIELDS[s]})
             c.report(a.span, definition, f"{a.mode.value}({a.field}): the schema has no "
                      f"field {rest} (fields: {', '.join(known)})")
-    types = {p.name: p.type for p in params}
     for n in contract.borrows:
         if n not in types or not is_linear(types[n]):
             c.report(contract.span, definition, f"borrows({n}): {n} is not a linear "
@@ -535,16 +579,22 @@ def check_contract(c: Checker, contract: Contract, definition: str,
         if n not in types or not is_source(types[n]):
             c.report(contract.span, definition, f"spends({n}): {n} is not a source "
                      "parameter")
-    if contract.spends and Effect.releases not in contract.effect_set:
+    if contract.spends and Effect.writes not in contract.effect_set:
         c.report(contract.span, definition, f"spends({', '.join(contract.spends)}): "
-                 "spending a source releases its owner; declare releases")
+                 "spending a source takes it out of its home; declare writes")
+    if (any(a.mode is AccessMode.write for a in contract.feedback)
+            and not contract.effect_set & {Effect.writes, Effect.runs_python,
+                                            Effect.polls, Effect.switches_frame}):
+        c.report(contract.span, definition, "a feedback write writes memory: "
+                 "declare writes")
     if contract.exits and not exits_allowed:
-        c.report(contract.span, definition, "only an arm or a routine declares exits")
+        c.report(contract.span, definition, "only an arm declares exits")
     for n in contract.exits:
         if n not in EXIT_NAMES:
             c.report(contract.span, definition, f"exit {n} is not an arm exit")
+    # A row runs in the word's environment, so its requires may name it
     for f in contract.requires:
-        check_fact(c, f, definition, names)
+        check_fact(c, f, definition, names | set(ENVIRONMENT))
     for ef in contract.ensures:
         if ef.edge not in edges:
             c.report(ef.span, definition, f"ensures {ef.edge}.{ef.fact.fact.value}: "
@@ -584,8 +634,8 @@ def check_result(c: Checker, result: Result, definition: str,
 def check_extern(c: Checker, x: Extern) -> None:
     check_params(c, x.params, x.name)
     check_result(c, x.result, x.name, x.params)
-    check_contract(c, x.contract, x.name, x.params, result_cases(x.result),
-                   x.kind == RowKind.routine)
+    check_contract(c, x.contract, x.name, x.params, result_cases(x.result), False)
+    check_no_dst(c, x.params, x.name)
     if isinstance(x.result, Returns) and Effect.raises in x.contract.effect_set:
         c.report(x.span, x.name, "a row with one outcome cannot raise: declare its "
                  "error as a case")
@@ -603,6 +653,8 @@ def check_extern(c: Checker, x: Extern) -> None:
     elif conv.single != isinstance(x.result, Returns):
         shape = "-> T" if conv.single else "cases(...)"
         c.report(x.c.span, x.name, f"convention {conv.name} maps onto a {shape} row")
+    elif isinstance(x.result, Cases) and conv.transfer:
+        check_transfer_row(c, x)
     elif isinstance(x.result, Cases) and conv.indexed:
         for case in x.result.cases:
             if len(case.params) > 1:
@@ -636,8 +688,38 @@ def check_extern(c: Checker, x: Extern) -> None:
                  f"{', '.join(missing)}")
 
 
+def check_no_dst(c: Checker, params: tuple[Param, ...], definition: str) -> None:
+    """Only `publish` writes homes: no row or macro takes a destination."""
+    for p in params:
+        t = p.type
+        while isinstance(t, WrapType):
+            t = t.arg
+        if t == DST:
+            c.report(p.span, definition, f"parameter {p.name}:{type_text(p.type)}: a "
+                     "row cannot write a home; return the value and publish it")
+
+
+def check_transfer_row(c: Checker, x: Extern) -> None:
+    """A transfer row's cases are the exits its callee performs, each with
+    that exit's payload; a raise's point is the arm's."""
+    assert isinstance(x.result, Cases)
+    for case in x.result.cases:
+        kind = TRANSFER_EXITS.get(case.name)
+        if kind is None:
+            c.report(case.span, x.name, f"case {case.name} of a transfer row names "
+                     f"the exit its callee performs (one of: "
+                     f"{', '.join(TRANSFER_EXITS)})")
+            continue
+        want = tuple(w for w in EXIT_PAYLOAD[EXIT_NAMES[kind]] if w != T(Handle.Point))
+        have = tuple(p.type for p in case.params)
+        if have != want:
+            c.report(case.span, x.name, f"case {case.name}: exit {kind} carries "
+                     f"({', '.join(type_text(w) for w in want if w is not None)})")
+
+
 def check_macro(c: Checker, m: Macro) -> None:
     check_params(c, m.params, m.name)
+    check_no_dst(c, m.params, m.name)
     check_result(c, m.result, m.name, m.params)
     check_contract(c, m.contract, m.name, m.params, result_cases(m.result), False)
     if m.graph is not None:
@@ -666,23 +748,29 @@ def check_arm(c: Checker, a: Arm) -> None:
     for d in sorted({d for d in dimensions if dimensions.count(d) > 1}):
         c.report(a.span, a.name, f"select names two members of dimension {d}; one "
                  "holds")
-    if parts[1] == OBSERVED:
+    if {Select.present, Select.absent} & set(a.select) and not optional_sources(fam):
+        c.report(a.span, a.name, f"select names an optional operand's presence, but "
+                 f"{fam.name} has no Maybe<Src> operand")
+    if a.observes:
         check_observer(c, a, fam)
     check_graph(c, a.name, a.graph, fam.params, fam, None)
 
 
-# The arm `<Family>.Observed` is the family's observed wrapper: the twin of
-# each of its other arms runs it when the word's stack op is instrumented
-OBSERVED = "Observed"
-
-
-def is_observer(name: str) -> bool:
-    return name.split(".")[-1] == OBSERVED
+def observer_of(arms: Iterable[Arm], family: str) -> Arm | None:
+    """The family's observed wrapper (`observes`): the twin of each of its
+    other arms runs it when the word is instrumented"""
+    return next((a for a in arms if a.family == family and a.observes), None)
 
 
 def check_observer(c: Checker, a: Arm, fam: Family) -> None:
     """An observed wrapper runs for the twins of a family that has events;
-    nothing selects or installs it, and it adapts nothing."""
+    nothing selects or installs it, and it adapts nothing.  A family has
+    one."""
+    others = [b.name for b in c.arms.values()
+              if b.family == fam.name and b.observes and b.name != a.name]
+    if others and others[0] < a.name:
+        c.report(a.span, a.name, f"{fam.name} has two observed wrappers "
+                 f"({others[0]}, {a.name})")
     if not fam.events:
         c.report(a.span, a.name, f"an observed wrapper needs its family's events: "
                  f"{fam.name} declares no events(...)")
@@ -707,7 +795,7 @@ def check_selection(c: Checker, fam: Family) -> None:
     """Arms chosen by static evidence: every combination of the dimensions
     the family's arms name is admitted by exactly one arm."""
     arms = [a for a in c.arms.values()
-            if a.name.split(".")[0] == fam.name and not is_observer(a.name)]
+            if a.name.split(".")[0] == fam.name and not a.observes]
     if not any(a.select for a in arms):
         return
     if "miss" in fam.exits:
@@ -923,6 +1011,11 @@ def define(c: Checker, scope: Scope, name: str, t: Type, block: str, index: int,
 def define_block(c: Checker, scope: Scope, b: Block) -> None:
     for p in b.params:
         check_type(c, p.type, p.span, scope.definition)
+        if field_kind(p.type) in (FieldKind.home, FieldKind.vector):
+            # A home has one name, the operand's: facts about it and the
+            # reentry that kills them follow that name only
+            c.report(p.span, scope.definition, f"block parameter {p.name}: "
+                     f"{type_text(p.type)} is a home; a block takes values")
         define(c, scope, p.name, p.type, b.label, OPERAND, p.span)
     for i, s in enumerate(b.stmts):
         if isinstance(s, Let):
@@ -958,40 +1051,78 @@ def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> N
                  "case and its arm publishes")
         return
     seen: set[str] = set()
+    vectors: set[str] = set()
     for bind in s.bindings:
         t = operand_type(scope, bind.target)
         if bind.target in seen:
             c.report(bind.span, scope.definition, f"publish binds {bind.target} twice")
         seen.add(bind.target)
+        if bind.vector:
+            vectors.add(bind.target)
+            check_vector_binding(c, scope, bind, t)
+            continue
         if t is None or not is_dst(t):
             c.report(bind.span, scope.definition, f"publish [{bind.target} = ...]: "
                      f"{bind.target} is not a destination operand")
-        # An optional destination takes an owner, or an optional owner whose
-        # absence leaves the home empty
+        if isinstance(bind.value, Null):
+            continue
+        # The publish reads every input before it writes a home, so an input
+        # is a value already made: a let name, never an expression
+        if not isinstance(bind.value, Name) or operand_type(scope, bind.value.name):
+            c.report(bind.value.span, scope.definition,
+                     f"publish [{bind.target} = {expr_text(bind.value)}]: a binding's "
+                     "value is a let name or null")
+            continue
+        # A destination takes an owner, or an optional owner whose absence
+        # leaves the home vacant
         have = type_of(c, scope, bind.value, O, block, i, False)
-        optional = WrapType(Wrap.Maybe, O)
-        if have is not None and have != O and not (t == WrapType(Wrap.Maybe, DST)
-                                                    and have == optional):
+        if have is not None and have not in (O, WrapType(Wrap.Maybe, O)):
             c.report(bind.value.span, scope.definition,
                      f"{expr_text(bind.value)} is {type_text(have)}, "
                      f"expected {type_text(O)}")
     for d in s.debts:
-        want = {DebtKind.spent: SRC, DebtKind.old: DST,
-                DebtKind.roots: T(Handle.Anchors), DebtKind.owned: O}[d.kind]
-        if d.kind in (DebtKind.spent, DebtKind.old):
+        if d.kind == DebtKind.old and d.subject in vectors:
+            c.report(d.span, scope.definition, f"old({d.subject}): a vector binding "
+                     "writes vacant destinations; it displaces no owner")
+        elif d.kind == DebtKind.spent:
             t = operand_type(scope, d.subject)
-            ok = t is not None and (t == want or t == WrapType(Wrap.Maybe, want)
-                                    or (d.kind == DebtKind.spent and is_args(t)))
-            if not ok:
-                c.report(d.span, scope.definition, f"{d.kind.value}({d.subject}): "
-                         f"{d.subject} is not a {type_text(want)} operand")
+            if not (t is not None and (is_source(t) or is_args(t) or is_span_of(t, SRC))):
+                c.report(d.span, scope.definition, f"spent({d.subject}): {d.subject} "
+                         "is not a source operand")
+        elif d.kind == DebtKind.old:
+            t = operand_type(scope, d.subject)
+            if t is None or not is_dst(t):
+                c.report(d.span, scope.definition, f"old({d.subject}): {d.subject} is "
+                         "not a destination operand")
         else:
+            want = T(Handle.Anchors) if d.kind == DebtKind.roots else O
             expect(c, scope, Name(d.subject, d.span), want, block, i, outer=False)
     check_point_ref(c, scope, s.point, s.span, block, i)
 
 
 def is_dst(t: Type) -> bool:
-    return t == DST or t == WrapType(Wrap.Maybe, DST)
+    """A scalar destination home: Dst or Local, or their Maybe"""
+    if isinstance(t, WrapType) and t.wrap == Wrap.Maybe:
+        t = t.arg
+    return t in (DST, T(Handle.Local))
+
+
+def is_span_of(t: Type | None, element: Type) -> bool:
+    return t == WrapType(Wrap.Span, element)
+
+
+def check_vector_binding(c: Checker, scope: Scope, bind: Binding, t: Type | None) -> None:
+    """`d[] = s[]` or `d[] = dup(s[])`: span operands, element by element"""
+    if not is_span_of(t, DST):
+        c.report(bind.span, scope.definition, f"publish [{bind.target}[] = ...]: "
+                 f"{bind.target} is not a Span<Dst> operand")
+    value = bind.value
+    if isinstance(value, Call):
+        value = value.args[0]
+    assert isinstance(value, Name)
+    if not is_span_of(operand_type(scope, value.name), SRC):
+        c.report(value.span, scope.definition, f"publish [{bind.target}[] = "
+                 f"{value.name}[]]: {value.name} is not a Span<Src> operand")
 
 
 def operand_type(scope: Scope, name: str) -> Type | None:
@@ -1050,31 +1181,8 @@ def check_term(c: Checker, scope: Scope, b: Block, i: int) -> None:
         if t.body in scope.blocks and not dominates(scope.idom, t.body, b.label):
             c.report(t.span, scope.definition, f"advance {t.body} from block {b.label}, "
                      f"which is outside the body of {t.body}")
-    elif isinstance(t, Tail):
-        check_tail(c, scope, t, b.label, i)
     else:
         check_exit(c, scope, t, b.label, i)
-
-
-def check_tail(c: Checker, scope: Scope, t: Tail, block: str, i: int) -> None:
-    """`tail r(args)`: a routine finishes the word and leaves by its own
-    exits, which must be the arm's."""
-    where = f"tail {t.callee}"
-    if scope.family is None:
-        c.report(t.span, scope.definition, f"{where}: only an arm ends in a tail")
-        return
-    x = c.externs.get(t.callee)
-    if x is None or x.kind != RowKind.routine:
-        c.report(t.span, scope.definition, f"{where}: {t.callee} is not a routine")
-        return
-    if not (isinstance(x.result, Returns) and x.result.type == UNIT):
-        c.report(t.span, scope.definition, f"{where}: a tail routine returns Unit")
-    for n in x.contract.exits:
-        if n not in scope.exits:
-            c.report(t.span, scope.definition, f"{where} leaves by exit {n}, which "
-                     f"{scope.definition} does not declare")
-        scope.used_exits.add(n)
-    check_args(c, scope, t.callee, x.params, t.args, t.span, block, i)
 
 
 def check_status_call(c: Checker, scope: Scope, t: CallTerm, block: str, i: int) -> None:
@@ -1106,9 +1214,41 @@ def check_status_call(c: Checker, scope: Scope, t: CallTerm, block: str, i: int)
         seen.add(e.case)
         payload = tuple(substitute(p.type, binding) for p in case.params)
         check_target(c, scope, e.target, payload, block, i, f"edge {e.case} ->")
+        if isinstance(callee, Extern) and callee.c is not None and \
+                CONVENTIONS.get(callee.c.convention, None) is not None and \
+                CONVENTIONS[callee.c.convention].transfer:
+            check_transfer_edge(c, scope, t, e, block)
     for name in cases:
         if name not in seen:
             c.report(t.span, scope.definition, f"{where} has no edge for {name}")
+
+
+def check_transfer_edge(c: Checker, scope: Scope, t: CallTerm, e: Edge,
+                        block: str) -> None:
+    """The callee of a transfer row performs the exit its case names, so the
+    edge's block is entered by that edge only and is exactly that exit, of
+    the case's payload in order."""
+    where = f"call {t.callee} at {t.span}: edge {e.case}"
+    kind = TRANSFER_EXITS.get(e.case)
+    target = scope.blocks.get(e.target.label)
+    if kind is None or target is None:
+        return
+    if scope.family is None:
+        c.report(e.span, scope.definition, f"{where}: only an arm calls a transfer row")
+        return
+    entering = [b.label for b in scope.blocks.values()
+                for label, _ in successors(b) if label == target.label]
+    names = [p.name for p in target.params]
+    term = target.term
+    args = list(term.args) if isinstance(term, Exit) else []
+    if kind == ExitKind.raise_.value and args:
+        args = args[1:]
+    if (e.target.args or target.stmts or not isinstance(term, Exit)
+            or term.kind != kind or len(entering) != 1
+            or [a.name if isinstance(a, Name) else None for a in args] != names):
+        c.report(e.span, scope.definition, f"{where}: the callee performs exit {kind}, "
+                 f"so {target.label} is entered by this edge only and is exactly "
+                 f"`exit {kind}(...)` of the case's payload")
 
 
 def element_type(t: Type) -> Type | None:
@@ -1125,6 +1265,21 @@ def check_each(c: Checker, scope: Scope, t: Each, block: str, i: int) -> None:
     if over is not None and element is None:
         c.report(t.span, scope.definition, f"each over {expr_text(t.over)}: "
                  f"{type_text(over)} is not a Span or Rows")
+    if element is not None and field_kind(element) is FieldKind.home:
+        if is_source(element):
+            # The body gets each source's value, borrowed: a block takes
+            # values, never homes
+            element = B
+        else:
+            c.report(t.span, scope.definition, f"each over {expr_text(t.over)}: "
+                     f"its items are {type_text(element)} homes; only publish "
+                     "writes homes")
+            element = None
+    if element is not None and is_linear(element):
+        # The body would take each item's obligation while the span keeps
+        # them all; no declaration says which discharges it
+        c.report(t.span, scope.definition, f"each over {expr_text(t.over)}: its items "
+                 f"({type_text(element)}) carry obligations; each walks values only")
     if t.limit is not None and t.limit < 1:
         c.report(t.span, scope.definition, "each limit is at least 1")
     body = scope.blocks.get(t.body)
@@ -1195,9 +1350,18 @@ def check_resume(c: Checker, scope: Scope, t: Exit) -> None:
 
 # Expressions
 
+def is_optional_source(scope: Scope, e: Expr, want: Type, have: Type | None) -> bool:
+    """An optional source operand (Maybe<Src>) stands for its source where
+    the fact present(x) holds, which rop_verify checks"""
+    return (want == SRC and have == WrapType(Wrap.Maybe, SRC) and isinstance(e, Name)
+            and operand_type(scope, e.name) is not None)
+
+
 def expect(c: Checker, scope: Scope, e: Expr, want: Type, block: str, i: int,
            outer: bool) -> None:
     have = type_of(c, scope, e, want, block, i, outer)
+    if is_optional_source(scope, e, want, have):
+        return
     if have is not None and have != want:
         c.report(e.span, scope.definition, f"{expr_text(e)} is {type_text(have)}, "
                  f"expected {type_text(want)}")
@@ -1236,6 +1400,10 @@ def type_of(c: Checker, scope: Scope, e: Expr, want: Type | None, block: str, i:
         return resolve_name(c, scope, e, block, i)
     if isinstance(e, BoolLit):
         return BOOL
+    if isinstance(e, Null):
+        c.report(e.span, scope.definition, "null is the vacancy a publish binding "
+                 "writes; it is not a value")
+        return None
     if isinstance(e, Nat):
         if not isinstance(want, ScalarType) or want.scalar in (Scalar.Unit, Scalar.Bool):
             c.report(e.span, scope.definition, f"number {e.value} needs a numeric "
@@ -1322,6 +1490,8 @@ def check_args(c: Checker, scope: Scope, callee: str, params: tuple[Param, ...],
         want = substitute(p.type, binding)
         have = type_of(c, scope, arg, want, block, i, outer=False)
         if have is None:
+            continue
+        if is_optional_source(scope, arg, want, have):
             continue
         if not unify(want, have, binding):
             c.report(arg.span, scope.definition, f"{callee}: argument {p.name} is "

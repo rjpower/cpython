@@ -753,6 +753,14 @@ def _class_current(b, o, r):
     return (b.and_then(is_type, version_current),)
 
 
+def _lazy_dict_absent(b, o, r):
+    "_PyAttr_LazyDictAbsent: no dictionary yet in the slot at the recipe's offset"
+    off = b.emit1("add", "i64", (b.emit1("jconst", "i64", (), "MANAGED_DICT_OFFSET"),
+                                 b.zext("i64", r["offset"])))
+    slot = b.emit1("ptradd", "PyObject**", (b.leaf(o), off), 1)
+    return (b.cmp("eq", b.load("PyObject*", slot), b.const("PyObject*", 0)),)
+
+
 def _admitted_instance_slot(b, fb, name):
     "_PyAttr_AdmittedInstanceSlot: a live type version"
     tv = b.cache(fb, "type_version")
@@ -908,6 +916,7 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     "_PyAttr_BorrowMethod": _borrow_method,
     "_PyAttr_IsModule": _is_module,
     "_PyAttr_ClassCurrent": _class_current,
+    "_PyAttr_LazyDictAbsent": _lazy_dict_absent,
     "_PyAttr_ModuleEntry": _module_entry,
     "_PyAttr_InstanceVersion": _instance_version,
     "_PyAttr_ValidInlineValues": _valid_inline_values,

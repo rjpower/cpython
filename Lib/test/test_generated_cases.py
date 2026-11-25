@@ -3063,9 +3063,6 @@ class TestIRCases(unittest.TestCase):
              "_PyValue_CommonConstant(tstate->interp->common_consts[oparg]); "
              "value = PyValue_DUP(constant);",
              "FRESH", "PyValue_DUP", "PyValue_XDUP"),
-            ("POP_TOP", "value: consumed --", "effects(releases) exits(next)",
-             "PyValue_XCLOSE(value);",
-             "RETIRE", "PyValue_XCLOSE", "PyValue_DUP"),
         )
         for name, effect, clauses, body, kind, old, new in cases:
             with self.subTest(handler=name):
@@ -3736,10 +3733,10 @@ class TestIRCases(unittest.TestCase):
         formats = ir_generator.compute_formats(analysis)
         insts = ir_generator.handler_instructions(analysis)
         # The local, constant and shuffle stack ops other than STORE_FAST
-        # and POP_TOP are stack-only: their families cover them
+        # are stack-only: their families cover them
         expected = {
             "LOAD_COMMON_CONSTANT": "FRESH",
-            "STORE_FAST": "LOCAL_STORE", "POP_TOP": "RETIRE",
+            "STORE_FAST": "LOCAL_STORE",
             "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE",
             "CALL_KW": "UNKNOWN", "SEND": "UNKNOWN",
         }

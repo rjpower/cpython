@@ -2789,15 +2789,14 @@ _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home)
         _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, index));
 }
 
-int
+PyValue
 _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home)
 {
     if (PyValue_IsNull(*home)) {
         _PyRop_UnboundLocal(frame, home);
-        return -1;
+        return PyValue_NULL;
     }
-    PyValue_CLOSE(_PyFrame_TakeHome(frame, home));
-    return 0;
+    return _PyFrame_TakeHome(frame, home);
 }
 
 /* The rows of the namespace families (Python/register_ops/namespaces.rop).

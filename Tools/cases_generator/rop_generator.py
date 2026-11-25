@@ -28,6 +28,7 @@ import ir_arms
 import jit_template_generator
 import rop_check
 import rop_leaf
+import rop_verify
 from generators_common import root_relative_path, write_header
 from rop_cgen import ESCAPING, Lowering, Unsupported, lower_arm, pending_blockers
 from rop_catalog import SELECT_DIMENSIONS, Effect, FieldKind, Handle, Slot, Wrap
@@ -77,17 +78,22 @@ def point_numbers(program: Program) -> dict[str, int]:
     return {name: i + 1 for i, name in enumerate(sorted(program.points))}
 
 
+def is_generic(program: Program, arm: Arm) -> bool:
+    generic = program.families[arm.family].generic
+    return generic is not None and arm.name == f"{arm.family}.{generic}"
+
+
 def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
     points = point_numbers(program)
     if len(points) > 255:
         raise GenerateError("more than 255 checkpoints: the entry has 8 bits")
     lowered: dict[str, Lowering] = {}
     left_out: dict[str, str] = {}
-    # The family's miss adapter is its Generic arm, when that arm is emitted;
-    # a Generic arm that does not lower leaves its family without one
+    # The family's miss adapter is its generic arm (`generic(Arm)`), when
+    # that arm is emitted; one that does not lower leaves its family without
     generic: dict[str, str | None] = {f: None for f in program.families}
     generic_arms: dict[str, str | None] = {f: None for f in program.families}
-    ordered = sorted(program.arms.values(), key=lambda a: a.name != f"{a.family}.Generic")
+    ordered = sorted(program.arms.values(), key=lambda a: not is_generic(program, a))
     for arm in ordered:
         try:
             lowered[arm.name] = lower_arm(program, arm, numbers, points, generic)
@@ -96,7 +102,7 @@ def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
             left_out[arm.name] = (f"pending: {', '.join(pending)}" if pending
                                   else str(e))
             continue
-        if arm.name.endswith(".Generic"):
+        if is_generic(program, arm):
             generic[arm.family] = c_name(arm.name)
             generic_arms[arm.family] = arm.name
     return Products(program, numbers, points, lowered, left_out,
@@ -285,6 +291,10 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     fam = program.families[arm.family]
     enc = program.encodings[arm.family]
     params = {x.name: x for x in fam.params}
+    # A Local operand that one of the family's points defines is the word's
+    # written home, as a Dst is (DELETE_FAST publishes null into its local)
+    defined = {d for pt in program.points.values() if pt.family == arm.family
+               for d in pt.defs}
     roles = ["_PyIR_ROLE_NONE"] * 4
     imm = fb = "_PyIR_LOC_NONE"
     fb_schema = None
@@ -305,7 +315,6 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                 if imm == "_PyIR_LOC_NONE":
                     imm = LOC_NAMES[pl.slots[0]]
             continue
-            continue
         in_head = bool(pl.slots) and pl.slots[0] in HEAD_FIELDS
         role = "_PyIR_ROLE_IMM"
         if pl.kind is FieldKind.vector:
@@ -316,7 +325,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
             if kind == "SRC":
                 role = f"_PyIR_ROLE_IN0 + {ninputs}"
                 ninputs += 1
-            elif kind == "DST":
+            elif kind == "DST" or (kind == "LOCAL" and pl.operand in defined):
                 role = "_PyIR_ROLE_DST"
                 writes += 1
             elif kind in ("CELL", "FREE"):
@@ -357,8 +366,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         effects.add("_PyIR_DEOPTS")
     if "enter" in exits:
         effects.add("_PyIR_PUSHES_FRAME")
-    is_generic = arm.name == f"{arm.family}.Generic"
-    if is_generic and "again" in fam.exits:
+    if is_generic(program, arm) and "again" in fam.exits:
         effects.add("_PyIR_SPECIALIZES")
     flags = ["_PyIR_VALID"]
     if writes:
@@ -399,10 +407,10 @@ def arm_transfer(exits: set[str], ninputs: int, family: str) -> str:
 
 
 def observer(program: Program, family: str) -> str | None:
-    """The family's observed wrapper, the arm `<Family>.Observed`, if it has
+    """The family's observed wrapper (the arm that `observes`), if it has
     one: every twin of the family's other arms runs it."""
-    name = f"{family}.{rop_check.OBSERVED}"
-    return name if name in program.arms else None
+    arm = rop_check.observer_of(program.arms.values(), family)
+    return None if arm is None else arm.name
 
 
 def wrapped_arms(program: Program) -> list[str]:
@@ -418,7 +426,7 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
     observed wrapper (twin) of each arm of a family that declares events.
     The old generator's forms, targets and stub plans list the emitted ones
     after the old handlers (ir_generator.py).  A twin runs its family's
-    `<Family>.Observed` arm, whose case and form it names; without one it
+    observed wrapper (`observes`), whose case and form it names; without one it
     has neither."""
     shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
     entries = []
@@ -436,7 +444,7 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
             stub_name(name) if name in shared else None,
             stub_name(generic) if generic and generic in shared else None,
             name, fam.ops[0], tuple(e.value for e in fam.events),
-            "again" in fam.exits, name == f"{arm.family}.Generic",
+            "again" in fam.exits, is_generic(p.program, arm),
             arm_format(p.program, arm), twin_index.get(name), None, emitted))
     for name in wrapped:
         base = entries[p.numbers[name]]
@@ -457,7 +465,7 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
 
 
 def load_arm_entries(paths: list[Path] | None = None) -> list[ir_arms.ArmEntry]:
-    program = rop_check.load(paths or sorted(ROP_DIR.glob("*.rop")))
+    program = rop_verify.load(paths or sorted(ROP_DIR.glob("*.rop")))
     if program.diagnostics:
         raise GenerateError("\n".join(str(d) for d in program.diagnostics))
     return arm_entries(lower_all(program, number_arms(program)))
@@ -485,7 +493,7 @@ def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
 def template_arm_names(paths: list[Path] | None = None) -> list[str]:
     """The C names of the arms that have a template, for the one table of
     templates that jit_template_generator.py writes"""
-    program = rop_check.load(paths or sorted(ROP_DIR.glob("*.rop")))
+    program = rop_verify.load(paths or sorted(ROP_DIR.glob("*.rop")))
     if program.diagnostics:
         raise GenerateError("\n".join(str(d) for d in program.diagnostics))
     made, _ = template_texts(lower_all(program, number_arms(program)))
@@ -630,7 +638,7 @@ typedef struct {
     uint8_t checkpoint;
     uint8_t frame, pc, exc;      /* the roles, as indexes of the catalogs */
     /* Operands of the family, by position in its parameter list */
-    uint16_t keep, spent, defs, held;
+    uint16_t keep, spent, defs;
 } _PyRopPoint;
 
 """)
@@ -649,7 +657,7 @@ typedef struct {
             f'    {{"{name}", ROP_FAMILY_{pt.family}, {k}, {list(type(pt.frame)).index(pt.frame)}, '
             f'{list(type(pt.pc)).index(pt.pc)}, {list(type(pt.exc)).index(pt.exc)}, '
             f'{operand_mask(pt.keep, operands)}, {operand_mask(pt.spent, operands)}, '
-            f'{operand_mask(pt.defs, operands)}, {operand_mask(pt.held, operands)}}},\n')
+            f'{operand_mask(pt.defs, operands)}}},\n')
     out.write("};\n\n")
     write_selectors(out, prog)
     out.write("#endif\n")
@@ -692,7 +700,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("sources", nargs="*", type=Path)
     args = parser.parse_args(argv)
     paths = args.sources or sorted(ROP_DIR.glob("*.rop"))
-    program = rop_check.load(paths)
+    # The products of a definition the checker refuses are never written
+    program = rop_verify.load(paths)
     if program.diagnostics:
         for d in program.diagnostics:
             print(d, file=sys.stderr)

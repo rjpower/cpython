@@ -12,8 +12,8 @@
 family NamespaceRead(dst:Dst, name:U16)
   exits(next, raise) ops(LOAD_NAME, LOAD_LOCALS, LOAD_BUILD_CLASS);
 
-point NamespaceRead.Failed(current, site, pending) keep() spent() defs() held();
-point NamespaceRead.Done(current, next_head, clear) keep() spent() defs(dst) held();
+point NamespaceRead.Failed(current, site, pending) keep() spent() defs();
+point NamespaceRead.Done(current, next_head, clear) keep() spent() defs(dst);
 
 extern helper load_name(t:Thread, fr:Frame, n:U16)
   cases(ok(z:O), err(e:Err))
@@ -40,7 +40,7 @@ extern helper load_build_class(t:Thread, fr:Frame)
     contract: "The result owned, or NULL with NameError. Callbacks: a builtins mapping's __getitem__.");
 
 arm NamespaceRead.Name shared select(named)
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -57,7 +57,7 @@ arm NamespaceRead.Name shared select(named)
 }
 
 arm NamespaceRead.Locals shared select(locals_scope)
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -74,7 +74,7 @@ arm NamespaceRead.Locals shared select(locals_scope)
 }
 
 arm NamespaceRead.BuildClass shared select(build_class_scope)
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -95,8 +95,8 @@ arm NamespaceRead.BuildClass shared select(build_class_scope)
 family NamespaceReadFrom(dst:Dst, mapping:Src, name:U16)
   exits(next, raise) ops(LOAD_FROM_DICT_OR_GLOBALS);
 
-point NamespaceReadFrom.Failed(current, site, pending) keep() spent(mapping) defs() held();
-point NamespaceReadFrom.Done(current, next_head, clear) keep() spent(mapping) defs(dst) held();
+point NamespaceReadFrom.Failed(current, site, pending) keep() spent(mapping) defs();
+point NamespaceReadFrom.Done(current, next_head, clear) keep() spent(mapping) defs(dst);
 
 // name in a mapping, with a lazy import in the result reified
 // (ceval.c value_load_from_dict): found, missing, or raised.  Unit CE
@@ -119,7 +119,7 @@ extern helper global_or_builtin_value(fr:Frame, n:U16)
     contract: "The result owned, or NULL with an exception set. Callbacks: a lazy import reified.");
 
 arm NamespaceReadFrom.Mapping shared
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -148,8 +148,8 @@ arm NamespaceReadFrom.Mapping shared
 family NamespaceWrite(name:U16, value:Src)
   exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
 
-point NamespaceWrite.Failed(current, site, pending) keep() spent(value) defs() held();
-point NamespaceWrite.Done(current, next_head, clear) keep() spent(value) defs() held();
+point NamespaceWrite.Failed(current, site, pending) keep() spent(value) defs();
+point NamespaceWrite.Done(current, next_head, clear) keep() spent(value) defs();
 
 extern helper store_name(t:Thread, fr:Frame, n:U16, v:O)
   cases(ok(), err(e:Err))
@@ -208,8 +208,8 @@ arm NamespaceWrite.Global shared select(global_scope)
 family NamespaceDelete(name:U16)
   exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
 
-point NamespaceDelete.Failed(current, site, pending) keep() spent() defs() held();
-point NamespaceDelete.Done(current, next_head, clear) keep() spent() defs() held();
+point NamespaceDelete.Failed(current, site, pending) keep() spent() defs();
+point NamespaceDelete.Done(current, next_head, clear) keep() spent() defs();
 
 extern helper delete_name(t:Thread, fr:Frame, n:U16)
   cases(ok(), err(e:Err))
@@ -263,8 +263,8 @@ arm NamespaceDelete.Global shared select(global_scope)
 family SetupAnnotations()
   exits(next, raise) ops(SETUP_ANNOTATIONS);
 
-point SetupAnnotations.Failed(current, site, pending) keep() spent() defs() held();
-point SetupAnnotations.Done(current, next_head, clear) keep() spent() defs() held();
+point SetupAnnotations.Failed(current, site, pending) keep() spent() defs();
+point SetupAnnotations.Done(current, next_head, clear) keep() spent() defs();
 
 extern helper setup_annotations(t:Thread, fr:Frame)
   cases(ok(), err(e:Err))
@@ -299,8 +299,8 @@ arm SetupAnnotations.Setup shared
 family Import(dst:Dst, level:Src, fromlist:Src, name:Name)
   exits(next, raise) ops(IMPORT_NAME);
 
-point Import.Failed(current, site, pending) keep() spent(level, fromlist) defs() held();
-point Import.Done(current, next_head, clear) keep() spent(level, fromlist) defs(dst) held();
+point Import.Failed(current, site, pending) keep() spent(level, fromlist) defs();
+point Import.Done(current, next_head, clear) keep() spent(level, fromlist) defs(dst);
 
 enum ImportKind(IMPORT_EAGER, IMPORT_POLICY, IMPORT_LAZY);
 
@@ -313,7 +313,7 @@ extern helper import_name(t:Thread, fr:Frame, n:Name, level:O, fromlist:O, kind:
     contract: "Consumes level and fromlist on every path. The result owned, or NULL with an exception set. Callbacks: arbitrary Python (the import system).");
 
 arm Import.Eager shared select(eager_import)
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -332,7 +332,7 @@ arm Import.Eager shared select(eager_import)
 }
 
 arm Import.Policy shared select(policy_import)
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -351,7 +351,7 @@ arm Import.Policy shared select(policy_import)
 }
 
 arm Import.Lazy shared select(lazy_import)
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -375,10 +375,10 @@ arm Import.Lazy shared select(lazy_import)
 family ImportFrom(dst:Dst, module:Src, name:U16)
   exits(next, raise) ops(IMPORT_FROM);
 
-point ImportFrom.Failed(current, site, pending) keep(module) spent() defs() held();
-point ImportFrom.Done(current, next_head, clear) keep(module) spent() defs(dst) held();
-point ImportFrom.LastFailed(current, site, pending) keep() spent(module) defs() held();
-point ImportFrom.LastDone(current, next_head, clear) keep() spent(module) defs(dst) held();
+point ImportFrom.Failed(current, site, pending) keep(module) spent() defs();
+point ImportFrom.Done(current, next_head, clear) keep(module) spent() defs(dst);
+point ImportFrom.LastFailed(current, site, pending) keep() spent(module) defs();
+point ImportFrom.LastDone(current, next_head, clear) keep() spent(module) defs(dst);
 
 extern helper import_from(t:Thread, fr:Frame, m:O, n:U16)
   cases(ok(z:O), err(e:Err))
@@ -389,7 +389,7 @@ extern helper import_from(t:Thread, fr:Frame, m:O, n:U16)
     contract: "Consumes the module on every path. The result owned, or NULL with an exception set. Callbacks: arbitrary Python (attribute lookup, the import system).");
 
 arm ImportFrom.From shared select(module_kept)
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -407,7 +407,7 @@ arm ImportFrom.From shared select(module_kept)
 }
 
 arm ImportFrom.FromLast shared select(module_spent)
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {

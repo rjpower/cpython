@@ -15,6 +15,7 @@ path of the expansion must agree with C:
 The path must also balance its own owners.  For C, each input object's count
 must change by exactly the number of homes that hold it afterwards."""
 
+import functools
 import sys
 import unittest
 from dataclasses import dataclass, field
@@ -203,6 +204,36 @@ class Many:
         self.x = 9
 
 
+class Swapped:
+    "Point's attributes in the other order: another class and shape"
+
+    def __init__(self):
+        self.y = 0
+        self.x = 3
+
+    def norm(self):
+        return 2
+
+
+class SlotsClassAttr:
+    __slots__ = ()
+    x = 5
+
+
+class LazyNorm(Exception):
+    "An instance of a type with a dict offset, whose dict is not yet made"
+
+    def norm(self):
+        return 1
+
+
+def materialised():
+    "A Point whose dict has been made, so it no longer has inline values"
+    o = Point()
+    o.__dict__["z"] = 1
+    return o
+
+
 TRUTHS = [True, False, 0, 1, -1, 2**50, 2**60, 0.0, 1.5, None, "", "a", [], [1], (), {1: 2},
           Plain(), Slotted(0), Slotted(3), Sized(0), Sized(2), RaisesBool()]
 PAIRS = [(3, 4), (2**50, 2**50), (2**60, 5), (-2**50, -2**50), (1.5, 2), (2, 0.25),
@@ -222,13 +253,19 @@ class Scenario:
     warmups: int = 0
     # The operands an arm's static evidence (`select`) requires present
     requires: dict[str, str] = field(default_factory=dict)
-    warm_by_source: dict[str, object] = field(default_factory=dict)
+    # Objects that warm a source's word in turn, `warmups` calls each (two
+    # receiver types in turn make a polymorphic word)
+    warm_by_source: dict[str, tuple] = field(default_factory=dict)
     # A specialised arm runs only on a word whose entry was installed for
     # it: its admission rows trust the entry's kind (the report's finding)
     coherent: bool = False
     # An arm whose static evidence is weaker than another's runs on that
     # arm's words: `live_scratch` admits the vacant scratch of `Return.Empty`
     words_of: dict[str, str] = field(default_factory=dict)
+    # An observed twin runs only on code with local CALL events: it reads
+    # the code's monitoring state, which no fact declares (the report's
+    # finding).  The arm runs only on its source, whose code is monitored.
+    monitored: dict[str, str] = field(default_factory=dict)
     # Arms the probe cannot run on these words, and why (the report lists them)
     skip: dict[str, str] = field(default_factory=dict)
 
@@ -293,20 +330,32 @@ SCENARIOS = {
         "nondescriptor": "def f(a):\n    return a.x\n",
         "module": "def f(a):\n    return a.maxsize\n",
         "hint": "def f(a):\n    return a.x\n",
-        "getset": "def f(a):\n    return a.__name__\n"},
+        "getset": "def f(a):\n    return a.x\n",
+        "poly": "def f(a):\n    return a.x\n",
+        "instance": "def f(a):\n    return a.x\n",
+        "nodict": "def f(a):\n    return a.x\n",
+        "pointer": "def f(a):\n    return a.func\n"},
         [{"obj": v} for v in (Point(), WithSlots(), ClassAttr, ClassAttr(), sys, Many(),
-                              Plain(), 1, len)],
-        warm_by_source={"shape": Point(), "slot": WithSlots(), "class": ClassAttr,
-                        "nondescriptor": ClassAttr(), "module": sys, "hint": Many(),
-                        "getset": len},
-        warmups=100, coherent=True),
+                              Plain(), 1, len, Swapped(), materialised(), SlotsClassAttr(),
+                              capi.VGetSet(), functools.partial(identity))],
+        warm_by_source={"shape": (Point(),), "slot": (WithSlots(),), "class": (ClassAttr,),
+                        "nondescriptor": (ClassAttr(),), "module": (sys,), "hint": (Many(),),
+                        "getset": (capi.VGetSet(),), "poly": (Point(), Swapped()),
+                        "instance": (materialised(),), "nodict": (SlotsClassAttr(),),
+                        "pointer": (functools.partial(identity),)},
+        warmups=200, coherent=True),
     "GetMethod": Scenario("GetMethod", {
         "values": "def f(a):\n    return a.norm()\n",
         "nodict": "def f(a):\n    return a.norm()\n",
-        "classmethod": "def f(a):\n    return a.make()\n"},
-        [{"obj": v} for v in (Point(), WithSlots(), ClassAttr(), ClassAttr, Plain(), 1)],
-        warm_by_source={"values": Point(), "nodict": WithSlots(), "classmethod": ClassAttr},
-        warmups=100, coherent=True),
+        "classmethod": "def f(a):\n    return a.make()\n",
+        "poly": "def f(a):\n    return a.norm()\n",
+        "lazy": "def f(a):\n    return a.norm()\n"},
+        [{"obj": v} for v in (Point(), WithSlots(), ClassAttr(), ClassAttr, Plain(), 1,
+                              Swapped(), LazyNorm())],
+        warm_by_source={"values": (Point(),), "nodict": (WithSlots(),),
+                        "classmethod": (ClassAttr,), "poly": (Point(), Swapped()),
+                        "lazy": (LazyNorm(),)},
+        warmups=200, coherent=True),
     "Return": Scenario("Return", {
         "empty": "def f(a):\n    return a\n"},
         [{"value": v} for v in (1, "s", Plain(), [1])], warm=([1],),
@@ -314,14 +363,30 @@ SCENARIOS = {
         skip={"Return.External": "chosen only for the evaluator's entry frame, which "
                                  "no function's word runs in"}),
     "Call": Scenario("Call", {
-        "native": "def f(a):\n    return len(a)\n"},
+        "native": "def f(a):\n    return len(a)\n",
+        "monitored": "def f(a):\n    return len(a)\n"},
         [{"fn": len, "args": [v]} for v in ([1, 2], "abc", 5)]
         + [{"fn": abs, "args": [v]} for v in (-3, "x")]
         + [{"fn": fn, "args": [v]} for fn in (identity, Point().norm, Holder, two)
            for v in (1, "s")], warm=([],),
-        skip={"Call.Observed": "an observed twin runs only on instrumented code, "
-                               "and the probe does not instrument"}),
+        monitored={"Call.Observed": "monitored"}),
 }
+
+
+MONITOR = sys.monitoring.OPTIMIZER_ID
+
+
+def monitor(code):
+    mon = sys.monitoring
+    if mon.get_tool(MONITOR) is None:
+        mon.use_tool_id(MONITOR, "test_rop_ssa")
+        mon.register_callback(MONITOR, mon.events.CALL, lambda *args: None)
+    mon.set_local_events(MONITOR, code, mon.events.CALL)
+
+
+def tearDownModule():
+    if sys.monitoring.get_tool(MONITOR) is not None:
+        sys.monitoring.free_tool_id(MONITOR)
 
 
 def compiled(scenario, source, arm=None):
@@ -331,13 +396,16 @@ def compiled(scenario, source, arm=None):
     namespace = {}
     exec(scenario.sources[source], namespace)
     f = namespace["f"]
-    warm = ((scenario.warm_by_source[source],) if source in scenario.warm_by_source
-            else scenario.warm)
-    for _ in range(max(1, scenario.warmups)):
-        try:
-            f(*warm[:f.__code__.co_argcount])
-        except Exception:
-            pass
+    if source in scenario.monitored.values():
+        monitor(f.__code__)
+    phases = ([(o,) for o in scenario.warm_by_source[source]]
+              if source in scenario.warm_by_source else [scenario.warm])
+    for warm in phases:
+        for _ in range(max(1, scenario.warmups)):
+            try:
+                f(*warm[:f.__code__.co_argcount])
+            except Exception:
+                pass
     words = capi.get_ir(f.__code__, True)
     index = next((i for i, w in enumerate(words)
                   if w[0].split("+")[0] == arm
@@ -436,6 +504,8 @@ def check(cx, arm_name, scenario, source, inputs):
     arm = PROGRAM.arms[arm_name]
     if arm_name in scenario.skip:
         return None
+    if scenario.monitored.get(arm_name, source) != source:
+        return None
     if arm_name in scenario.requires and scenario.requires[arm_name] not in inputs:
         return None
     # An arm chosen by static evidence runs only on the words it was chosen for
@@ -523,8 +593,11 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
     # may hold the receiver's type)
     for i, o in enumerate(run.objects):
         delta = run.counts[i]
-        held = sum(1 for s in run.slots + tuple(flatten(run.extra)) if s is o)
-        # (A class's new instance, in the entered __init__ frame, holds the class)
+        after = run.slots + tuple(flatten(run.extra))
+        # A new instance of a heap class holds its class
+        held = (sum(1 for s in after if s is o)
+                + sum(1 for s in after if type(s) is o and not any(s is x for x in run.objects)))
+        # (In the entered __init__ frame, the new instance is not yet a home)
         if (is_mortal(o) and run.exc_type is None and not run.feedback_written
                 and not (run.kind == "enter" and isinstance(o, type))
                 and delta != held):

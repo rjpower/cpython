@@ -853,27 +853,20 @@ OBJECT_READERS = {
     # Statements
     "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
-    "Py_TYPE", "PyAnyDict_CheckExact", "PyAnySet_CheckExact",
+    "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
-    "PyList_CheckExact",
-    "PyTuple_CheckExact", "PyUnicode_CheckExact",
+    "PyUnicode_CheckExact",
     "_PyObject_GetManagedDict", "_PyObject_InlineValues",
     "_PyObject_Shape", "_PyObject_ValueSlot",
     # Operations that read their operands and count what they keep
     "PyErr_GivenExceptionMatches",
-    # The value-form container calls (they read the container object and
-    # the key as a value)
-    "_PyDict_ContainsValue",
     "PyUnicode_Concat",
 
     "value_exception_group_match",
-    "_PySet_Contains", "_PyTemplate_Build",
-    "_PyUnicode_Equal",
+    "_PyTemplate_Build",
     # The indirect calls of BINARY_OP_EXTEND, through a table of functions
     # that read their operands
     "action",
-    # CONTAINS_OP_JUMP_SEQUENCE: the contains function of the container's type
-    "contains_slot",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set

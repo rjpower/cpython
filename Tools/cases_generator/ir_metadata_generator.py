@@ -26,7 +26,7 @@ row, without _PyIR_VALID.
 import argparse
 from collections.abc import Sequence
 
-import ir_numbers
+import ir_arms
 from analyzer import Analysis, Uop, analyze_files
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
@@ -209,11 +209,11 @@ def format_initializer(fmt: IRFormat, shadow: str,
     )
 
 
-def arm_id(analysis: Analysis, arm: ir_numbers.ArmEntry) -> int:
+def arm_id(analysis: Analysis, arm: ir_arms.ArmEntry) -> int:
     return num_old_handlers(analysis) + arm.index
 
 
-def arm_base_ids(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry],
+def arm_base_ids(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry],
                  fact_ids: dict[str, int], bases: dict[str, str]) -> dict[str, int]:
     """The canonical old handler of each stack op that a family names"""
     result = {}
@@ -228,7 +228,7 @@ def arm_base_ids(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry],
     return result
 
 
-def arm_flags(arm: ir_numbers.ArmEntry) -> str:
+def arm_flags(arm: ir_arms.ArmEntry) -> str:
     parts = ["_PyIR_H_METADATA"]
     if arm.emitted:
         parts += ["_PyIR_H_DISPATCH", "_PyIR_H_SAVES_IP"]
@@ -240,7 +240,7 @@ def arm_flags(arm: ir_numbers.ArmEntry) -> str:
     return " | ".join(parts)
 
 
-def arm_owner_program(fmt: ir_numbers.ArmFormat) -> tuple[OwnershipEvent, ...]:
+def arm_owner_program(fmt: ir_arms.ArmFormat) -> tuple[OwnershipEvent, ...]:
     """An arm's owner program: the leaf of its derived transfer, as an old
     handler with a checked leaf contract has (none for UNKNOWN)"""
     if fmt.transfer == "_PyIR_TRANSFER_UNKNOWN":
@@ -248,7 +248,7 @@ def arm_owner_program(fmt: ir_numbers.ArmFormat) -> tuple[OwnershipEvent, ...]:
     return (OwnershipEvent("_PyIR_OWNER_LEAF", src=fmt.transfer),)
 
 
-def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry,
+def arm_row(analysis: Analysis, arm: ir_arms.ArmEntry,
             program: tuple[int, int] = (0, 0)) -> str:
     """The _PyIRFormat row of an arm, or of its observed wrapper; program
     is its owner program's (start, length) in the owner table"""
@@ -292,7 +292,7 @@ def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry,
 
 def generate_ir_metadata(
     filenames: list[str], analysis: Analysis, outfile: TextIO,
-    arms: Sequence[ir_numbers.ArmEntry] = ()
+    arms: Sequence[ir_arms.ArmEntry] = ()
 ) -> None:
     formats = compute_formats(analysis)
     contracts = handler_contracts(analysis, formats)
@@ -405,13 +405,6 @@ def generate_ir_metadata(
             i = arm_id(analysis, arm)
             out.emit(f"[{i}] = {{ {i}, {i}, 0, 0, 0, 0 }},  /* {arm.dotted} */\n")
         out.emit("};\n#endif\n\n")
-        ranges = analysis.numbers.ranges
-        if ranges:
-            out.emit("/* Numbers reserved by ir_numbers.txt for the steps that "
-                     "add handlers, inclusive; they stay holes until used */\n")
-            for step, (low, high) in ranges.items():
-                out.emit(f"/* {step}: {low} to {high - 1} */\n")
-            out.emit("\n")
         ops = binary_op_handlers(analysis)
         if ops:
             out.emit("/* The handler of BINARY_OP operation OP is "

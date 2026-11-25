@@ -76,7 +76,7 @@ import io
 from collections.abc import Sequence
 import ir_contract
 import ir_leaf
-import ir_numbers
+import ir_arms
 from ir_records import (
     ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, NEXT,
     IMMEDIATE, LOCAL, MAY_RAISE, OPERANDS, POLY_TABLE_READERS, RELEASE_LIKE,
@@ -175,7 +175,7 @@ LABEL_END_MARKER = "/* END LABELS */"
 def first_ir_only_handler(analysis: Analysis) -> int:
     """The first handler of the IR only.  They follow the pseudo-instructions,
     so that a number names one opcode, pseudo-instruction or handler."""
-    return analysis.numbers.first_ir_only
+    return analysis.first_ir_only
 
 # The fields of the word, and the C expressions that read them in a handler
 # (Include/internal/pycore_ir.h), from ir_word, which every handler receives.
@@ -1307,19 +1307,23 @@ IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
 
 
+def ir_only_handler_names(analysis: Analysis) -> list[str]:
+    "The IR-only handlers, in the order that numbers them"
+    return (sorted(analysis.ir_only) + binary_op_handlers(analysis)
+            + list(execution_variants(analysis))
+            + sorted(generator_boundaries(analysis)))
+
+
 def handler_ids(analysis: Analysis) -> dict[str, int]:
-    """Handler index of each handler, by name, from the pinned table.
-    BINARY_OP itself has none: its operations do, and a STACK_ONLY opcode
-    has none."""
+    """Handler index of each handler, by name.  The real opcodes keep their
+    opcode; the IR-only handlers follow the pseudo-instructions in a fixed
+    order, with no holes.  BINARY_OP itself has none: its operations do, and
+    a STACK_ONLY opcode has none."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
-    names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-             + list(execution_variants(analysis))
-             + sorted(generator_boundaries(analysis)))
-    table = analysis.numbers
-    for name in names:
-        ids[name] = table.number(
-            name, table.first_ir_only, ir_numbers.IR_LIMIT, "IR-only handler")
+    names = ir_only_handler_names(analysis)
+    for number, name in enumerate(names, analysis.first_ir_only):
+        ids[name] = number
     return ids
 
 
@@ -7759,7 +7763,7 @@ _PyIR_StubWindowDropsLast(const PyValue *window, int n)
 
 def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
                       stubs: dict[str, str], outfile: TextIO,
-                      arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
+                      arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
     """The stubs of the planned shared arms (their texts in stubs, by
     function), the family stubs that a miss calls, and the plan table that
     Python/jit.c reads"""
@@ -7787,7 +7791,7 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
         for stub in sorted({s for s in (arm.stub, arm.generic) if s}):
             outfile.write(f"static int {stub}(PyThreadState *, "
                           "_PyInterpreterFrame *, _PyIRWord *);\n")
-    outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_numbers.IR_LIMIT}] = {{\n")
+    outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_arms.IR_LIMIT}] = {{\n")
     for i, arm in sorted(by_arm.items()):
         stub = f"(const void *){arm.stub}" if arm.stub else "NULL"
         generic = f"(const void *){arm.generic}" if arm.generic else "NULL"
@@ -7968,7 +7972,7 @@ def label_forms(analysis: Analysis, formats: dict[str, IRFormat],
 
 
 def arm_ids(analysis: Analysis,
-            arms: Sequence[ir_numbers.ArmEntry]) -> dict[int, ir_numbers.ArmEntry]:
+            arms: Sequence[ir_arms.ArmEntry]) -> dict[int, ir_arms.ArmEntry]:
     """The register instruction arms by handler id: they follow the old
     handlers, in definition order (Python/register_ops)"""
     num_handlers(analysis, arms)
@@ -7976,14 +7980,14 @@ def arm_ids(analysis: Analysis,
     return {first + arm.index: arm for arm in arms if arm.emitted}
 
 
-def form_table(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> str:
+def form_table(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ()) -> str:
     """The function form of every handler number, as opcode_targets has its
     label: ir_handler_forms[IR_HANDLER(word)] runs the word"""
     ids = handler_ids(analysis)
     by_index = {i: name for name, i in ids.items()}
     by_arm = arm_ids(analysis, arms)
-    lines = [f"static const _PyIRForm ir_handler_forms[{ir_numbers.IR_LIMIT}] = {{\n"]
-    for i in range(ir_numbers.IR_LIMIT):
+    lines = [f"static const _PyIRForm ir_handler_forms[{ir_arms.IR_LIMIT}] = {{\n"]
+    for i in range(ir_arms.IR_LIMIT):
         if i in by_arm:
             lines.append(f"    [{i}] = ir_run_{by_arm[i].name},\n")
             continue
@@ -7993,7 +7997,7 @@ def form_table(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> 
     return "".join(lines)
 
 
-def form_declarations(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> str:
+def form_declarations(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ()) -> str:
     "Every form, declared before the forms, which call one another"
     ids = handler_ids(analysis)
     names = sorted({generator_word_entry(name, analysis) for name in ids}
@@ -8004,7 +8008,7 @@ def form_declarations(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = 
                  f"int {BINARY_OP_OPERAND});\n")
     lines += [f"static _PyIRTransfer ir_{name}({FORM_PARAMETERS});\n"
               for name in entry_labels(analysis)]
-    lines.append(f"static const _PyIRForm ir_handler_forms[{ir_numbers.IR_LIMIT}];\n")
+    lines.append(f"static const _PyIRForm ir_handler_forms[{ir_arms.IR_LIMIT}];\n")
     return "".join(lines)
 
 
@@ -9230,7 +9234,7 @@ def check_no_addressable_locals(analysis: Analysis) -> None:
 
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
                 lines: bool, stubs_outfile: TextIO | None = None,
-                arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
+                arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
     formats = compute_formats(analysis)
     check_no_addressable_locals(analysis)
     checkpoints = {}
@@ -9267,26 +9271,26 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 
 
 def num_old_handlers(analysis: Analysis) -> int:
-    "One past the highest pinned number, with the reserved ranges"
-    return analysis.numbers.num_old_handlers
+    "One past the last IR-only handler; the stack opcodes number below them"
+    return analysis.first_ir_only + len(ir_only_handler_names(analysis))
 
 
-def num_handlers(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry]) -> int:
+def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:
     """Every handler id: the old handlers, the register instruction arms and
     the observed wrappers of the arms, which follow them.  The ids must fit
     the handler field, IR_LIMIT of them."""
     total = num_old_handlers(analysis) + len(arms)
-    if total > ir_numbers.IR_LIMIT:
-        raise ir_numbers.NumberError(
+    if total > ir_arms.IR_LIMIT:
+        raise ir_arms.HandlerLimitError(
             f"{num_old_handlers(analysis)} old handlers and {len(arms)} arms and "
-            f"wrappers need {total} handler ids, past the {ir_numbers.IR_LIMIT} "
+            f"wrappers need {total} handler ids, past the {ir_arms.IR_LIMIT} "
             "that a handler field holds")
     return total
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO,
-                        arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
+                        arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
     """The tables of the evaluator.  Python/ceval_generator.h includes this
     file at file scope with IR_GEN_TABLES defined, for the generator transfer
     tables, which give the kind of transfer that a word's handler makes (the
@@ -9329,9 +9333,9 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every
     # id the mask yields; ids past n are UNKNOWN_OPCODE.
     by_index = {i: name for name, i in ids.items()}
-    out.emit(f"static void *const opcode_targets[{ir_numbers.IR_LIMIT}] = {{\n")
+    out.emit(f"static void *const opcode_targets[{ir_arms.IR_LIMIT}] = {{\n")
     by_arm = arm_ids(analysis, arms)
-    for i in range(ir_numbers.IR_LIMIT):
+    for i in range(ir_arms.IR_LIMIT):
         if i in by_arm:
             out.emit(f"[{i}] = &&TARGET_{by_arm[i].name},\n")
             continue

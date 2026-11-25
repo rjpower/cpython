@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
-import ir_numbers
+import ir_arms
 import jit_template_generator
 import rop_check
 import rop_leaf
@@ -273,7 +273,7 @@ LOC_NAMES = {Slot.A: "_PyIR_LOC_A", Slot.B: "_PyIR_LOC_B", Slot.C: "_PyIR_LOC_C"
              Slot.D: "_PyIR_LOC_D"}
 
 
-def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
+def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     """The fields of the arm's _PyIRFormat row.  Which homes a word reads and
     defines come from the family's derived encoding: a Src operand is an
     input and a Dst operand the destination.  Fields that describe stack
@@ -353,7 +353,7 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         flags.append("_PyIR_JUMPS")
         if not exits & {"next", "branch"}:
             flags.append("_PyIR_JUMP_ALWAYS")
-    return ir_numbers.ArmFormat(
+    return ir_arms.ArmFormat(
         tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
         imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
         fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
@@ -391,7 +391,7 @@ def wrapped_arms(program: Program) -> list[str]:
             and name != observer(program, arm.family)]
 
 
-def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
+def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
     """Every arm, in handler order, for the per-handler tables, then the
     observed wrapper (twin) of each arm of a family that declares events.
     The old generator's forms, targets and stub plans list the emitted ones
@@ -409,7 +409,7 @@ def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
         region = "none" if arm.region.name == "split" else arm.region.name
         emitted = name in p.lowered
         generic = p.generic.get(arm.family)
-        entries.append(ir_numbers.ArmEntry(
+        entries.append(ir_arms.ArmEntry(
             c_name(name), p.numbers[name], region, declares_escape(arm),
             stub_name(name) if name in shared else None,
             stub_name(generic) if generic and generic in shared else None,
@@ -434,7 +434,7 @@ def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
     return entries
 
 
-def load_arm_entries(paths: list[Path] | None = None) -> list[ir_numbers.ArmEntry]:
+def load_arm_entries(paths: list[Path] | None = None) -> list[ir_arms.ArmEntry]:
     program = rop_check.load(paths or sorted(ROP_DIR.glob("*.rop")))
     if program.diagnostics:
         raise GenerateError("\n".join(str(d) for d in program.diagnostics))

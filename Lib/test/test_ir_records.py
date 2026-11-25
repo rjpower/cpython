@@ -220,7 +220,7 @@ class GeneratorTests(unittest.TestCase):
                                cases.parser.END_MARKER)
         with cases.handle_stderr():
             analysis = cases.analyzer.analyze_files(
-                [str(self.source)], cases.SequentialNumbers())
+                [str(self.source)])
         output = io.StringIO()
         ir_generator.generate_ir([str(self.source)], analysis, output, False)
         return output.getvalue()

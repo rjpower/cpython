@@ -1204,11 +1204,11 @@ static int read_local(_PyRegTr *t, const _PyRegOp *src, int local,
  * or run code that may rebind it through frame.f_locals (the rule of
  * CopyProp and of check_folded_load()) */
 static int
-may_change_local(const _PyRegOp *op, int x)
+may_change_local(const _PyRegCfg *cfg, const _PyRegOp *op, int x)
 {
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
     int role = _PyIR_OpargRole(fmt);
-    return _PyRegOp_WritesLocal(op, x)
+    return _PyRegOp_WritesLocal(cfg, op, x)
         || (op->oparg == x
             && (op->opcode == ROP_HANDLER_SaveLocal_Take
                 || role == _PyIR_ROLE_LOCAL_OUT
@@ -1246,7 +1246,7 @@ stable_local(const _PyRegTr *t, int v, const _PyRegOp *src)
     for (int i = p + 1; i < t->nops; i++) {
         const _PyRegOp *op = &t->ops[i];
         if (op->opcode != _PyReg_DEAD &&
-            (op->loc.lineno != read->loc.lineno || may_change_local(op, x)))
+            (op->loc.lineno != read->loc.lineno || may_change_local(t->cfg, op, x)))
         {
             return -1;
         }
@@ -2381,6 +2381,44 @@ rule_build(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* UNPACK_SEQUENCE and UNPACK_EX: the Unpack and UnpackStar families
+ * (Python/register_ops/displays.rop).  The one input is the source.  The
+ * outputs are the registers the op pushes, bottom first, as the allocator
+ * places them: the first target is on top, so it is the last output.  The
+ * row makes its owners in that order. */
+static int
+rule_unpack(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int star = src->opcode == UNPACK_EX;
+    int n = star ? (src->oparg & 0xFF) + 1 + (src->oparg >> 8) : src->oparg;
+    int *outs = n ? PyMem_Malloc(n * sizeof(int)) : NULL;
+    if (n && outs == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    int res = SUCCESS;
+    for (int k = 0; k < n && res == SUCCESS; k++) {
+        res = _PyRegTr_Fresh(t, &outs[k]);
+    }
+    if (res == SUCCESS) {
+        res = _PyRegTr_Emit(t, src,
+                            star ? ROP_HANDLER_UnpackStar_Iterable
+                                 : ROP_HANDLER_Unpack_Generic,
+                            &t->stack[t->sp - 1], 1, outs, n, NULL);
+    }
+    if (res == SUCCESS) {
+        res = _PyRegTr_Pop(t, 1, NULL);
+    }
+    for (int k = 0; k < n && res == SUCCESS; k++) {
+        res = _PyRegTr_Push(t, outs[k]);
+    }
+    PyMem_Free(outs);
+    return res;
+}
+
 /* LIST_APPEND, SET_ADD, MAP_ADD, LIST_EXTEND, SET_UPDATE, DICT_UPDATE and
  * DICT_MERGE: the container lies oparg positions below the top operand (the
  * callable of DICT_MERGE three below the container) and stays; the top
@@ -2485,6 +2523,8 @@ static const _PyRegRule rules[256] = {
     [BUILD_LIST] = rule_build,
     [BUILD_SET] = rule_build,
     [BUILD_MAP] = rule_build,
+    [UNPACK_SEQUENCE] = rule_unpack,
+    [UNPACK_EX] = rule_unpack,
     [LIST_APPEND] = rule_insert,
     [SET_ADD] = rule_insert,
     [MAP_ADD] = rule_insert,
@@ -2987,10 +3027,6 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         int first = op->nread - fmt->ninputs;
         for (int k = 0; k < fmt->ninputs && k < 4; k++) {
             slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
-        }
-        if (fmt->flags & _PyIR_UNPACKS) {
-            slots->out[0] = op->dst >= 0 ? op->dst : IR_NO_DST;
-            return;
         }
         slots->out[0] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
                    : op->dst >= 0 ? op->dst : slots->base + fmt->dst;
@@ -3743,6 +3779,24 @@ reuse_slot(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
     return -1;
 }
 
+/* Whether an output of op from first on is a temporary.  Most ops give the
+ * output at `first` itself; an unpack's targets that stores sent to locals
+ * leave the others (or none) */
+static int
+any_temp_output(const _PyRegCfg *cfg, const _PyRegOp *op, int first)
+{
+    const int *out = _PyReg_OUT(cfg, op);
+    for (int j = first; j < op->nout; j++) {
+        if (out[j] >= cfg->nlocalsplus) {
+            return 1;
+        }
+        if (!_PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg))) {
+            return 0;
+        }
+    }
+    return 0;
+}
+
 static int
 compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
 {
@@ -3833,11 +3887,17 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
                 RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
             }
         }
-        else if (through < op->nout && out[through] >= nl) {
+        else if (through < op->nout && any_temp_output(cfg, op, through)) {
             int dst;
-            int v0 = out[through];
-            if (_PyReg_IS_CANON(cfg, v0)) {
-                dst = _PyRegCfg_Slot(cfg, v0) - through;
+            // An output that is a parameter has a fixed home, whichever of
+            // the outputs it is: the others follow it
+            int canon = through;
+            while (canon < op->nout - 1 && !(out[canon] >= nl
+                                             && _PyReg_IS_CANON(cfg, out[canon]))) {
+                canon++;
+            }
+            if (out[canon] >= nl && _PyReg_IS_CANON(cfg, out[canon])) {
+                dst = _PyRegCfg_Slot(cfg, out[canon]) - canon;
                 RETURN_IF_ERROR(evict(cfg, o, op, i, dst + through,
                                       dst + op->nout));
                 in = _PyReg_IN(cfg, op);
@@ -3898,7 +3958,10 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
                 }
             }
             for (int j = through; j < op->nout; j++) {
-                RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
+                // An unpack's output that a store sent to a local has no slot
+                if (out[j] >= nl) {
+                    RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
+                }
             }
         }
     }
@@ -3925,8 +3988,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
         cfg->ntemps = Py_MAX(cfg->ntemps, s - nl + 1);
         // A jump whose result a store elimination sent to a local leaves
         // the result's slot NULL where it falls through
-        if ((op->flags & _PyReg_UNPACK_LOCALS)
-            || (op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)
+        if ((op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)
             || ((op->flags & _PyReg_DISCARD) && j == stored)) {
             continue;
         }
@@ -4225,7 +4287,7 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
         }
         const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
         int role = _PyIR_OpargRole(fmt);
-        if (_PyRegOp_WritesLocal(op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
+        if (_PyRegOp_WritesLocal(cfg, op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
                                                 || role == _PyIR_ROLE_LOCAL_CLEAR
                                                 || role == _PyIR_ROLE_LOCAL_MOVE)))
         {
@@ -4494,7 +4556,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                 }
             }
             if (op->dst >= 0
-                && !(fmt->flags & (_PyIR_STORE_DST | _PyIR_UNPACKS))) {
+                && !(fmt->flags & _PyIR_STORE_DST)) {
                 err = verify_error(after, op, "a local dst");
             }
             // A jump gives a temporary where it goes by leaving it in
@@ -4774,7 +4836,6 @@ static const struct {
 } passes[] = {
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},
-    {"unpack to locals", _PyRegPass_UnpackLocals},
     {"truth folding", _PyRegPass_TruthFold},
     {"call keyword names", _PyRegPass_KwNames},
     {"null elision", _PyRegPass_ElideNull},

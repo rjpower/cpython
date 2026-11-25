@@ -3,7 +3,7 @@
 //   Python/register_ops/add.rop, Python/register_ops/calls.rop, Python/register_ops/cells.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/displays.rop, Python/register_ops/functions.rop, Python/register_ops/getattr.rop, Python/register_ops/items.rop, Python/register_ops/names.rop, Python/register_ops/namespaces.rop, Python/register_ops/tests.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 //
-// 65 stubs.
+// 69 stubs.
 
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
@@ -198,6 +198,90 @@ _PyIR_Rop_Stub_Add_Generic(
     IR_STUB_ESCAPE();
     _PyRop_RetireAbandoned(&a);
     IR_REDIRECT();
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Unpack_Generic(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Unpack.Generic (shared)
+    int opcode = ROP_HANDLER_Unpack_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_Unpack_Generic);
+    size_t adapt_before_use_unpack1_n;
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    _PyRopOwners out1;
+    int ret2;
+    PyValue own_source = PyValue_NULL;
+    int ret3;
+    int adapt_before_use_unpack1_ct;
+    int ret4;
+    int adapt_before_use_unpack1_cl;
+    int ret5;
+    _PyRopOwners vals;
+    adapt_before_use_unpack1_n = (Py_ssize_t)IR_A(ir_word);
+    if (!_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h)) {
+        goto rop_Unpack_Generic_adapt_before_use_unpack1_Sample;
+    }
+    rop_Unpack_Generic_adapt_before_use_unpack1_Run:
+    rop_Unpack_Generic_Run:
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_UnpackIterable(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
+    if (ret2 < 0) {
+        goto rop_Unpack_Generic_Failed;
+    }
+    vals = out1;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_source = _PyFrame_TakeHome(frame, home_source);
+    }
+    _PyRop_StoreOwners(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &vals);
+    PyValue_XCLOSE(own_source);
+    IR_STUB_ESCAPE();
+    _PyRop_CloseOwners(&vals);
+    DISPATCH();
+    rop_Unpack_Generic_adapt_before_use_unpack1_Sample:
+    ret3 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), adapt_before_use_unpack1_n);
+    if (ret3 == 1) {
+        goto rop_Unpack_Generic_adapt_before_use_unpack1_ChosenList;
+    }
+    if (ret3 == 2) {
+        goto rop_Unpack_Generic_adapt_before_use_unpack1_NoArm;
+    }
+    adapt_before_use_unpack1_ct = ROP_HANDLER_Unpack_Tuple;
+    ret4 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_ct);
+    if (ret4 == 0) {
+        goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
+    }
+    if (ret4 < 0) {
+        goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
+    }
+    rop_Unpack_Generic_adapt_before_use_unpack1_Changed:
+    next_instr = this_instr;
+    DISPATCH_SAME_OPARG();
+    rop_Unpack_Generic_adapt_before_use_unpack1_NoArm:
+    _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h);
+    goto rop_Unpack_Generic_Run;
+    rop_Unpack_Generic_adapt_before_use_unpack1_ChosenList:
+    adapt_before_use_unpack1_cl = ROP_HANDLER_Unpack_List;
+    ret5 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_cl);
+    if (ret5 > 0) {
+        goto rop_Unpack_Generic_adapt_before_use_unpack1_Changed;
+    }
+    if (ret5 == 0) {
+        goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
+    }
+    goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
+    rop_Unpack_Generic_Failed:
+    PROCESS_ERROR_AT(RAISE, 102, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -2626,7 +2710,7 @@ _PyIR_Rop_Stub_UpdateContainer_Extend(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Extend_Failed:
-    PROCESS_ERROR_AT(RAISE, 102, this_instr);
+    PROCESS_ERROR_AT(RAISE, 106, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -2661,7 +2745,7 @@ _PyIR_Rop_Stub_UpdateContainer_Union(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Union_Failed:
-    PROCESS_ERROR_AT(RAISE, 102, this_instr);
+    PROCESS_ERROR_AT(RAISE, 106, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -2696,7 +2780,7 @@ _PyIR_Rop_Stub_UpdateContainer_Overlay(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Overlay_Failed:
-    PROCESS_ERROR_AT(RAISE, 102, this_instr);
+    PROCESS_ERROR_AT(RAISE, 106, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -2733,6 +2817,136 @@ _PyIR_Rop_Stub_MergeKeywords_Merge(
     DISPATCH();
     rop_MergeKeywords_Merge_Failed:
     PROCESS_ERROR_AT(RAISE, 72, this_instr);
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Unpack_Tuple(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Unpack.Tuple (shared)
+    int opcode = ROP_HANDLER_Unpack_Tuple;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_Unpack_Tuple);
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow v;
+    _PyRopOwners out1;
+    int ret2;
+    PyValue own_source = PyValue_NULL;
+    _PyRopOwners vals;
+    v = PyValue_Borrow(*home_source);
+    if (!_PyRop_TupleHasLength(v, (Py_ssize_t)IR_A(ir_word))) {
+        JUMP_TO_PREDICTED(Unpack_Generic);
+    }
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_UnpackTuple(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
+    if (ret2 < 0) {
+        goto rop_Unpack_Tuple_Failed;
+    }
+    vals = out1;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_source = _PyFrame_TakeHome(frame, home_source);
+    }
+    _PyRop_StoreOwners(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &vals);
+    PyValue_XCLOSE(own_source);
+    IR_STUB_ESCAPE();
+    _PyRop_CloseOwners(&vals);
+    DISPATCH();
+    rop_Unpack_Tuple_Failed:
+    PROCESS_ERROR_AT(RAISE, 102, this_instr);
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Unpack_List(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Unpack.List (shared)
+    int opcode = ROP_HANDLER_Unpack_List;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_Unpack_List);
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow v;
+    _PyRopOwners out1;
+    int ret2;
+    PyValue own_source = PyValue_NULL;
+    _PyRopOwners vals;
+    v = PyValue_Borrow(*home_source);
+    if (!_PyRop_ListHasLength(v, (Py_ssize_t)IR_A(ir_word))) {
+        JUMP_TO_PREDICTED(Unpack_Generic);
+    }
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_UnpackList(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
+    if (ret2 < 0) {
+        goto rop_Unpack_List_Failed;
+    }
+    vals = out1;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_source = _PyFrame_TakeHome(frame, home_source);
+    }
+    _PyRop_StoreOwners(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &vals);
+    PyValue_XCLOSE(own_source);
+    IR_STUB_ESCAPE();
+    _PyRop_CloseOwners(&vals);
+    DISPATCH();
+    rop_Unpack_List_Failed:
+    PROCESS_ERROR_AT(RAISE, 102, this_instr);
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_UnpackStar_Iterable(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // UnpackStar.Iterable (shared)
+    int opcode = ROP_HANDLER_UnpackStar_Iterable;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_UnpackStar_Iterable);
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    _PyRopOwners out1;
+    int ret2;
+    PyValue own_source = PyValue_NULL;
+    _PyRopOwners vals;
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_UnpackStar(home_source, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)), &out1);
+    if (ret2 < 0) {
+        goto rop_UnpackStar_Iterable_Failed;
+    }
+    vals = out1;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_source = _PyFrame_TakeHome(frame, home_source);
+    }
+    _PyRop_StoreOwners(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &vals);
+    PyValue_XCLOSE(own_source);
+    IR_STUB_ESCAPE();
+    _PyRop_CloseOwners(&vals);
+    DISPATCH();
+    rop_UnpackStar_Iterable_Failed:
+    PROCESS_ERROR_AT(RAISE, 104, this_instr);
 }
 
 static Py_NO_INLINE int

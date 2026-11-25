@@ -3306,23 +3306,35 @@ class MoveResolutionTest(unittest.TestCase):
 
 
 class UnpackToLocalsTest(unittest.TestCase):
-    """Unpacks that write their targets, a run of locals, themselves
-    (Python/regcfg_passes.c, _PyRegPass_UnpackLocals)"""
+    """Unpacks whose targets are locals publish into them themselves: the
+    store of an output names it the local (Python/regcfg_passes.c,
+    _PyRegPass_StoreElim).  The word's destinations are in stack order, so
+    the last target is first."""
 
     def run_specialized(self, check):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
             check()
 
-    def unpack_word(self, func):
-        found = [w for w in words(func)
-                 if w[0] in ("UNPACK_SEQUENCE", "UNPACK_EX")]
+    def unpack_homes(self, func):
+        "The destination homes of func's one unpack word"
+        func.__code__  # a function lowers at its first call
+        ir = get_ir(func.__code__)
+        found = [i for i, w in enumerate(ir)
+                 if w[0] in ("Unpack.Generic", "UnpackStar.Iterable")]
         self.assertEqual(len(found), 1)
-        return found[0]
+        [(is_source, homes)] = _testinternalcapi.ir_span_probe(
+            func.__code__, found[0])[0]
+        self.assertFalse(is_source)
+        return homes
 
     def names(self, func):
         return [w[0] for w in words(func)]
 
-    def test_consecutive_locals(self):
+    def locals_of(self, func, targets):
+        varnames = func.__code__.co_varnames
+        return [varnames.index(c) for c in reversed(targets)]
+
+    def test_locals_are_the_destinations(self):
         def two(p):
             a, b = p
             return a + b
@@ -3337,63 +3349,44 @@ class UnpackToLocalsTest(unittest.TestCase):
                 (many, "abcd", (1, 2, 3, 4)),
                 (star, "abc", (1, 2, 3, 4))):
             with self.subTest(func=func.__name__):
-                varnames = func.__code__.co_varnames
+                func(source)
                 self.assertNotIn("LocalWrite.Store", self.names(func))
-                # The word writes the run from the first target
-                _, dst, _ = self.unpack_word(func)
-                self.assertEqual(dst, varnames.index(targets[0]))
-                self.assertEqual(
-                    [varnames.index(c) for c in targets],
-                    list(range(dst, dst + len(targets))))
+                self.assertEqual(self.unpack_homes(func),
+                                 self.locals_of(func, targets))
         self.run_specialized(lambda: self.assertEqual(two((1, 2)), 3))
         self.run_specialized(lambda: self.assertEqual(two([3, 4]), 7))
         self.run_specialized(lambda: self.assertEqual(many(range(4)), 6))
         self.run_specialized(
             lambda: self.assertEqual(star((1, 2, 3, 4)), (1, [2, 3], 4)))
 
-    def test_dis_shows_the_run(self):
-        def f(p):
-            a, b = p
-            return a + b
-        lines = [line for line in self.disassembly(f).splitlines()
-                 if "UNPACK_SEQUENCE" in line]
-        self.assertEqual(len(lines), 1)
-        dst = f.__code__.co_varnames.index("a")
-        self.assertRegex(lines[0], rf"UNPACK_SEQUENCE\s+2\s+r{dst} <- r")
-
-    def disassembly(self, func):
-        import io
-        out = io.StringIO()
-        dis.dis(func, file=out)
-        return out.getvalue()
-
-    def assert_stores_stay(self, func):
-        self.assertIn("LocalWrite.Store", self.names(func))
-        _, dst, _ = self.unpack_word(func)
-        # The elements stay in the window: no run of locals
-        self.assertIsNone(dst)
-
-    def test_non_consecutive_locals_stay(self):
-        # b is numbered before a, so the targets are not ascending
+    def test_any_locals(self):
+        # Neither ascending nor adjacent locals matter: a span names homes
         def f(p):
             b = 0
             a, b = p
             return a, b
-        varnames = f.__code__.co_varnames
-        self.assertGreater(varnames.index("a"), varnames.index("b"))
-        self.assert_stores_stay(f)
-        self.run_specialized(lambda: self.assertEqual(f((1, 2)), (1, 2)))
-
-    def test_skipped_local_stays(self):
-        # x is numbered between the targets, so a and b are not adjacent
-        def f(p):
+        def g(p):
             a = x = 0
             a, b = p
             return a, b, x
-        varnames = f.__code__.co_varnames
-        self.assertNotEqual(varnames.index("b") - varnames.index("a"), 1)
-        self.assert_stores_stay(f)
-        self.run_specialized(lambda: self.assertEqual(f((1, 2)), (1, 2, 0)))
+        for func, targets, source in ((f, "ab", (1, 2)), (g, "ab", (1, 2))):
+            with self.subTest(func=func.__name__):
+                func(source)
+                names = self.names(func)
+                # Only the stores before the unpack remain
+                self.assertNotIn("LocalWrite.Store",
+                                 names[names.index("Unpack.Generic"):])
+                self.assertEqual(self.unpack_homes(func),
+                                 self.locals_of(func, targets))
+        self.assertEqual(f((1, 2)), (1, 2))
+        self.assertEqual(g((1, 2)), (1, 2, 0))
+
+    def test_the_last_of_a_repeated_target_wins(self):
+        def f(p):
+            a, a = p
+            return a
+        self.assertEqual(f((1, 2)), 2)
+        self.assertEqual(f([3, 4]), 4)
 
     def test_store_on_another_line_stays(self):
         # A store on a line of its own keeps its line event
@@ -3401,6 +3394,7 @@ class UnpackToLocalsTest(unittest.TestCase):
             (a,
              b) = p
             return a + b
+        f((1, 2))
         self.assertIn("LocalWrite.Store", self.names(f))
         self.run_specialized(lambda: self.assertEqual(f((1, 2)), 3))
 
@@ -3418,13 +3412,15 @@ class UnpackToLocalsTest(unittest.TestCase):
                 return a
             a, b = p
             return inner, b
+        box = Box()
+        attribute((1, 2), box)
+        subscript((1, 2), [0])
+        cell((1, 2))
         for func, store in ((attribute, "STORE_ATTR"),
                             (subscript, "SetItem.Generic"),
                             (cell, "CellStore.Set")):
             with self.subTest(func=func.__name__):
                 self.assertIn(store, self.names(func))
-                self.assert_stores_stay(func)
-        box = Box()
         self.run_specialized(
             lambda: self.assertEqual(attribute((1, 2), box), (1, 2)))
         self.run_specialized(
@@ -3432,14 +3428,12 @@ class UnpackToLocalsTest(unittest.TestCase):
         inner, b = cell((1, 2))
         self.assertEqual((inner(), b), (1, 2))
 
-    def test_nested_unpack_stays(self):
-        # The outer unpack's second element is unpacked again, not stored
+    def test_nested_unpack(self):
         def f(p):
             a, (b, c) = p
             return a, b, c
-        outer, inner = [w for w in words(f) if w[0] == "UNPACK_SEQUENCE"]
-        self.assertIsNone(outer[1])
-        self.assertEqual(inner[1], f.__code__.co_varnames.index("b"))
+        self.assertEqual(f((1, (2, 3))), (1, 2, 3))
+        outer, inner = [w for w in words(f) if w[0] == "Unpack.Generic"]
         self.run_specialized(
             lambda: self.assertEqual(f((1, (2, 3))), (1, 2, 3)))
 

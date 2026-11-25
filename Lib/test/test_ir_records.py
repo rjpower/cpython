@@ -151,7 +151,7 @@ class HandlerRecordTests(unittest.TestCase):
         def transfers(handler):
             return {(t.kind, t.target) for u in records[handler].uops for t in u.transfers}
         # A specializer that rewrote the word runs it again
-        self.assertIn((ir_records.JUMP, "self"), transfers("UNPACK_SEQUENCE"))
+        self.assertIn((ir_records.JUMP, "self"), transfers("FOR_ITER"))
         # The monitor runs the word with the handler that it chose
         self.assertIn((ir_records.JUMP, "self:handler"), transfers("INSTRUMENTED_INSTRUCTION"))
 

@@ -29,13 +29,15 @@ class AdmissionTests(unittest.TestCase):
             return [1000]
         code = f.__code__
         words = _testinternalcapi.get_ir(code)
-        self.assertIn("LOAD_CONST_INLINE_INT", [word[0] for word in words])
+        # Const.Pool reads the code's constant when it runs: no word holds
+        # the value, so a replaced constant needs no rewrite
+        self.assertIn("Const.Pool", [word[0] for word in words])
         constants = tuple("x" * 1000 if item == 1000 else item
                           for item in code.co_consts)
         for route in (construct, lambda co, **changes: co.replace(**changes)):
             with self.subTest(route=route):
                 changed = route(code, co_consts=constants)
-                self.assertNotIn("LOAD_CONST_INLINE_INT",
+                self.assertIn("Const.Pool",
                     [word[0] for word in _testinternalcapi.get_ir(changed)])
                 self.assertEqual(types.FunctionType(changed, {})(), ["x" * 1000])
                 restored = marshal.loads(marshal.dumps(changed))

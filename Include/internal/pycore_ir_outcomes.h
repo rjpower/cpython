@@ -678,6 +678,14 @@ _PyIR_BindingRead(const _PyIRWord *wp, int arg, int home)
                 return _PyIR_BINDING_REQUIRES_VALUE;
         }
     }
+    // The checked arms of the local families test the local first
+    if ((IR_HANDLER(word) == ROP_HANDLER_LocalRead_Checked &&
+         (int)IR_B(word) == home) ||
+        (IR_HANDLER(word) == ROP_HANDLER_LocalDelete_Checked &&
+         (int)IR_A(word) == home))
+    {
+        return _PyIR_BINDING_CHECKED_NULL;
+    }
     if (_PyIR_ReadsHome(wp, arg, home)) {
         return _PyIR_BINDING_REQUIRES_VALUE;
     }
@@ -802,6 +810,8 @@ enum {
     _PyIR_PHYS_OPERANDS,
     /* Only the home of A is cleared */
     _PyIR_PHYS_CLEAR_A,
+    /* Only the home of B is cleared: a store takes its value's owner */
+    _PyIR_PHYS_CLEAR_B,
     _PyIR_PHYS_COPY,
     _PyIR_PHYS_SWAP,
     _PyIR_PHYS_MOVE,
@@ -859,6 +869,15 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
     p->fields[1] = IR_B(word);
     p->fields[2] = IR_C(word);
     p->fields[3] = IR_D(word);
+    if (handler == ROP_HANDLER_LocalWrite_Store ||
+        handler == ROP_HANDLER_LocalWrite_Restore)
+    {
+        // The local (A) is no scratch home; the value's (B) is left vacant
+        p->nl = nl;
+        p->limit = limit;
+        p->mode = _PyIR_PHYS_CLEAR_B;
+        return;
+    }
     const uint32_t *fields = p->fields;
     int base = -1;
     int dst = -1;
@@ -1107,6 +1126,8 @@ _PyIR_PhysicalAt(const _PyIRPhysicalWord *p, int home)
         }
         case _PyIR_PHYS_CLEAR_A:
             return home == (int)p->fields[0] ? set_null : preserve;
+        case _PyIR_PHYS_CLEAR_B:
+            return home == (int)p->fields[1] ? set_null : preserve;
         case _PyIR_PHYS_COPY:
             if (home == p->base + p->arg) {
                 return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, p->base};

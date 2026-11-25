@@ -625,10 +625,25 @@ class ArmLowerer:
             return self.call_expr(e)
         raise Unsupported(f"{self.arm.name}: expression {e}")
 
-    def operand_value(self, operand: str) -> str:
-        """A name or feedback operand read as a value: the interned name, or
-        the site's entry (the entry is declared by its own field)"""
+    def immediate(self, operand: str) -> str:
+        """An immediate operand's value: its head fields, low field first"""
         p = self.placements[operand]
+        if not p.slots or any(s.word != 0 for s in p.slots):
+            raise Unsupported(f"{self.arm.name}: immediate {operand} is not in the head")
+        parts = [f"((uint32_t)IR_{s.name}(ir_word) << {12 * i})" if i else
+                 f"(uint32_t)IR_{s.name}(ir_word)" for i, s in enumerate(p.slots)]
+        return "(" + " | ".join(parts) + ")" if len(parts) > 1 else parts[0]
+
+    def operand_value(self, operand: str) -> str:
+        """A name, feedback, home or immediate operand read as a value: the
+        interned name, the site's entry (the entry is declared by its own
+        field), the address of the home, which a row reads or writes
+        itself, or the immediate"""
+        p = self.placements[operand]
+        if p.kind is FieldKind.home:
+            return self.home(operand)
+        if p.kind is FieldKind.imm:
+            return self.immediate(operand)
         if p.kind is FieldKind.name:
             return f"GETITEM(FRAME_CO_NAMES, {self.field(operand)})"
         if p.kind is FieldKind.feedback:

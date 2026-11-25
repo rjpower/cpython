@@ -121,6 +121,10 @@ borrow_field(const _PyRegCfg *cfg, const _PyRegOp *op, int k)
 static int
 written_local(const _PyRegOp *op)
 {
+    // SaveLocal names the local it vacates as its source
+    if (op->opcode == ROP_HANDLER_SaveLocal_Take) {
+        return op->oparg;
+    }
     int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode, op->oparg));
     if (role == _PyIR_ROLE_LOCAL_OUT || role == _PyIR_ROLE_LOCAL_CLEAR
         || role == _PyIR_ROLE_LOCAL_MOVE)
@@ -141,6 +145,11 @@ reads_count(const _PyRegCfg *cfg, const _PyRegOp *op, int v)
     }
     for (int j = 0; j < op->nout; j++) {
         n += out[j] == v;
+    }
+    // A staging move that allocation put before op reads its source
+    const int *stage = &cfg->operands[op->stage];
+    for (int q = 0; q < op->nstage; q++) {
+        n += stage[2 * q] == v;
     }
     return n;
 }
@@ -213,7 +222,7 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
                 }
             }
             npend = n;
-            if (op->opcode == LOAD_FAST_BORROW
+            if (op->opcode == ROP_HANDLER_LocalRead_Bound
                 && is_fresh(cfg, _PyReg_OUT(cfg, op)[0]))
             {
                 pend[npend].load = op;
@@ -300,11 +309,11 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
         }
         for (int i = blk->start; i < blk->end; i++) {
             _PyRegOp *op = &cfg->ops[i];
-            if (op->opcode != STORE_FAST) {
+            if (op->opcode != ROP_HANDLER_LocalWrite_Store) {
                 continue;
             }
             _PyRegOp *p = store_producer(cfg, region_start, i);
-            if (p == NULL || p->opcode == LOAD_FAST_BORROW
+            if (p == NULL
                 || p->opcode == PUSH_NULL || p->dst >= 0
                 || p->loc.lineno != op->loc.lineno)
             {
@@ -360,7 +369,7 @@ unpack_locals_site(_PyRegCfg *cfg, int start, int end, _PyRegOp *op,
     int first = -1;
     for (int k = 0; k < n; k++) {
         _PyRegOp *s = live_neighbour(cfg, start, end, (int)(prev - cfg->ops), 1);
-        if (s == NULL || s->opcode != STORE_FAST) {
+        if (s == NULL || s->opcode != ROP_HANDLER_LocalWrite_Store) {
             return UNPACK_NOT_STORE_FAST;
         }
         if (s->loc.lineno != op->loc.lineno) {
@@ -613,6 +622,10 @@ _PyRegPass_Discard(_PyRegCfg *cfg)
  *
  *     COPY 1; POP_JUMP_IF_FALSE L; POP_TOP; <b>; L:
  *
+ * which translates to
+ *
+ *     <a.x> (v); Move.Copy c <- v; POP_JUMP_IF_FALSE <- c; POP_TOP v
+ *
  * JUMP_IF_FALSE_OR_POP does all three: it keeps the value where it jumps
  * and releases it where it falls through.  The POP_TOP must be the next op
  * on the fall-through path, which only the jump reaches, and all three on
@@ -622,7 +635,8 @@ _PyRegPass_Discard(_PyRegCfg *cfg)
  *
  *     LOAD_FAST x; POP_JUMP_IF_FALSE L <- x; POP_TOP; <b>; L:
  *
- * and the jump becomes JUMP_IF_FALSE_OR_POP of the first load's value. */
+ * and the jump becomes JUMP_IF_FALSE_OR_POP of the first load's value.
+ * Either way the producer of v gives the jump a fresh register to take. */
 
 /* The POP_TOP that pops v where jump falls through, on jump's line */
 static _PyRegOp *
@@ -646,6 +660,31 @@ truth_jump(int opcode)
          : opcode == POP_JUMP_IF_TRUE ? JUMP_IF_TRUE_OR_POP : 0;
 }
 
+/* The jump takes the value of prod's output v, which pop releases where
+ * the jump falls through: prod gets a fresh register for the jump to take,
+ * and the jump gives the value v where it goes */
+static int
+make_truth_jump(_PyRegCfg *cfg, _PyRegOp *prod, _PyRegOp *jump,
+                _PyRegOp *pop)
+{
+    int in, out;
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, 1, &in));
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, 1, &out));
+    int t = cfg->nvregs++;
+    cfg->operands[out] = _PyReg_OUT(cfg, prod)[0];
+    _PyReg_OUT(cfg, prod)[0] = t;
+    cfg->operands[in] = t;
+    jump->opcode = truth_jump(jump->opcode);
+    jump->in = in;
+    jump->out = out;
+    jump->nread = jump->npop = 1;
+    jump->nout = 1;
+    jump->depth = pop->depth;
+    jump->flags |= _PyReg_JUMP_OUTPUT;
+    pop->opcode = _PyReg_DEAD;
+    return SUCCESS;
+}
+
 /* LOAD_FAST x (v); POP_JUMP_IF_* <- x; POP_TOP v */
 static int
 fold_local_truth(_PyRegCfg *cfg, int start, int end, _PyRegOp *load)
@@ -664,24 +703,7 @@ fold_local_truth(_PyRegCfg *cfg, int start, int end, _PyRegOp *load)
     if (pop == NULL) {
         return SUCCESS;
     }
-    // The load gets a fresh register for the jump to take, and the jump
-    // gives the value its stack position's register where it goes
-    int in, out;
-    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, 1, &in));
-    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, 1, &out));
-    int t = cfg->nvregs++;
-    _PyReg_OUT(cfg, load)[0] = t;
-    cfg->operands[in] = t;
-    cfg->operands[out] = v;
-    jump->opcode = truth_jump(jump->opcode);
-    jump->in = in;
-    jump->out = out;
-    jump->nread = jump->npop = 1;
-    jump->nout = 1;
-    jump->depth = pop->depth;
-    jump->flags |= _PyReg_JUMP_OUTPUT;
-    pop->opcode = _PyReg_DEAD;
-    return SUCCESS;
+    return make_truth_jump(cfg, load, jump, pop);
 }
 
 static int
@@ -689,39 +711,36 @@ truth_fold_region(_PyRegCfg *cfg, int start, int end)
 {
     for (int i = start; i < end; i++) {
         _PyRegOp *copy = &cfg->ops[i];
-        if (copy->opcode == LOAD_FAST && copy->nout == 1 && copy->dst < 0) {
+        if (copy->opcode == ROP_HANDLER_LocalRead_Bound && copy->nout == 1
+            && copy->dst < 0)
+        {
             RETURN_IF_ERROR(fold_local_truth(cfg, start, end, copy));
             continue;
         }
-        if (copy->opcode != COPY || copy->oparg != 1 || copy->nout != 2) {
-            continue;
-        }
-        const int *cin = _PyReg_IN(cfg, copy);
-        int *cout = _PyReg_OUT(cfg, copy);
-        _PyRegOp *jump = live_neighbour(cfg, start, end, i, 1);
-        if (jump == NULL || jump->loc.lineno != copy->loc.lineno
-            || (jump->opcode != POP_JUMP_IF_FALSE
-                && jump->opcode != POP_JUMP_IF_TRUE)
-            || _PyReg_IN(cfg, jump)[0] != cout[1]
-            || !is_fresh(cfg, cin[0]) || !_PyReg_IS_CANON(cfg, cout[0]))
+        if (copy->opcode != ROP_HANDLER_Move_Copy || copy->nread != 1
+            || copy->nout != 1)
         {
             continue;
         }
-        _PyRegOp *next = fall_through_pop(cfg, start, end, jump, cout[0]);
-        if (next == NULL) {
+        int v = _PyReg_IN(cfg, copy)[0];
+        _PyRegOp *prod = live_neighbour(cfg, start, end, i, -1);
+        _PyRegOp *jump = live_neighbour(cfg, start, end, i, 1);
+        if (prod == NULL || jump == NULL
+            || jump->loc.lineno != copy->loc.lineno
+            || !truth_jump(jump->opcode) || jump->nread != 1
+            || _PyReg_IN(cfg, jump)[0] != _PyReg_OUT(cfg, copy)[0]
+            || !_PyReg_IS_CANON(cfg, v) || prod->nout != 1
+            || _PyReg_OUT(cfg, prod)[0] != v || prod->dst >= 0
+            || reads_count(cfg, prod, v) != 1)
+        {
             continue;
         }
-        copy->opcode = truth_jump(jump->opcode);
-        copy->oparg = jump->oparg;
-        copy->target = jump->target;
-        copy->except = jump->except;
-        copy->loc = jump->loc;
-        copy->srcoff = jump->srcoff;
-        copy->npop = 1;
-        copy->nout = 1;
-        copy->flags |= _PyReg_JUMP_OUTPUT;
-        jump->opcode = _PyReg_DEAD;
-        next->opcode = _PyReg_DEAD;
+        _PyRegOp *pop = fall_through_pop(cfg, start, end, jump, v);
+        if (pop == NULL) {
+            continue;
+        }
+        copy->opcode = _PyReg_DEAD;
+        RETURN_IF_ERROR(make_truth_jump(cfg, prod, jump, pop));
     }
     return SUCCESS;
 }
@@ -778,7 +797,7 @@ static int
 const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
               uintptr_t *bits)
 {
-    if (load->opcode == LOAD_CONST) {
+    if (load->opcode == ROP_HANDLER_Const_Pool) {
         if (load->oparg >= PyTuple_GET_SIZE(consts)) {
             return 0;
         }
@@ -789,10 +808,10 @@ const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
         *bits = _PyValue_Identity(*value);
         return 1;
     }
-    if (load->opcode == LOAD_SMALL_INT) {
+    if (load->opcode == ROP_HANDLER_Const_Small) {
         *value = PyValue_Borrow(PyValue_FromInlineInt(load->oparg));
     }
-    else if (load->opcode == LOAD_COMMON_CONSTANT
+    else if (load->opcode == ROP_HANDLER_Const_Common
              && (load->oparg == CONSTANT_NONE || load->oparg == CONSTANT_TRUE
                  || load->oparg == CONSTANT_FALSE
                  || load->oparg == CONSTANT_MINUS_ONE
@@ -865,8 +884,9 @@ find_const_folds(_PyRegCfg *cfg, PyObject *consts, const_fold **folds,
             npend = n;
             PyValueBorrow value;
             uintptr_t bits;
-            if ((op->opcode == LOAD_CONST || op->opcode == LOAD_SMALL_INT
-                 || op->opcode == LOAD_COMMON_CONSTANT)
+            if ((op->opcode == ROP_HANDLER_Const_Pool
+                 || op->opcode == ROP_HANDLER_Const_Small
+                 || op->opcode == ROP_HANDLER_Const_Common)
                 && is_fresh(cfg, _PyReg_OUT(cfg, op)[0])
                 && const_of_load(op, consts, &value, &bits))
             {
@@ -1105,7 +1125,7 @@ kw_names_region(_PyRegCfg *cfg, int start, int end)
         }
         int v = _PyReg_IN(cfg, call)[call->nread - 1];
         _PyRegOp *load = live_neighbour(cfg, start, end, i, -1);
-        if (load == NULL || load->opcode != LOAD_CONST || load->dst >= 0
+        if (load == NULL || load->opcode != ROP_HANDLER_Const_Pool || load->dst >= 0
             || load->nout != 1 || _PyReg_OUT(cfg, load)[0] != v
             || load->except != call->except)
         {
@@ -1229,7 +1249,7 @@ call_null_step(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *state, uint8_t *outputs)
         {
             value = 1;
         }
-        else if (op->opcode == COPY) {
+        else if (op->opcode == COPY || op->opcode == ROP_HANDLER_Move_Copy) {
             int k = j < op->nread ? j : 0;
             value = call_null_get(cfg, state, in[k]);
         }

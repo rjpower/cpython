@@ -710,8 +710,6 @@ TEMPLATE_CASES = [
      "POP_JUMP_IF_NOT_NONE", "A", [(x,) for x in ANY]),
     ("def f(a, b):\n    if a is not None:\n        return 1\n    return 0", (None, 0),
      "POP_JUMP_IF_NONE", "A", [(x,) for x in ANY]),
-    ("def f(a, b):\n    a = 5\n    return a", (1, 2), "LOAD_SMALL_INT_INLINE", "A",
-     [(Plain(),), (None,), (big(5),), (3,)]),
     *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
        handler, "ABC", [(Plain(), seq, i) for seq in seqs for i in INDICES])
       for seq_type, handler, seqs in (
@@ -721,17 +719,9 @@ TEMPLATE_CASES = [
     # same value in turn, which releases only inline values
     ("def f(a, b):\n    a[b] = 5\n    return a", ([1, 2, 3], 1), "STORE_SUBSCR_LIST_INT", "ABC",
      [(seq, i, v) for seq in ([1, 2, 3], [], (1, 2)) for i in INDICES for v in (7, 2.5)]),
-    ("def f(a, b):\n    x = 1\n    x = a\n    return x", (1, 2), ("LOAD_FAST", 0),
-     "AB", [(old, v) for old in (Plain(), None, 3) for v in ANY]),
-    ("def f(a, b):\n    return [a, b]", (1, 2), ("LOAD_FAST_BORROW", 0), "B",
-     [(v,) for v in ANY]),
-    ("def f(a, b):\n    a, b = b, a\n    return a", (1, 2), "STORE_FAST", "AB",
-     [(v, old) for v in ANY for old in (Plain(), None, 3)]),
-    ("def f(a, b):\n    return [x for x in a]", ([1], 2), "LOAD_FAST_AND_CLEAR", "B",
-     [(), *[(v,) for v in ANY]]),
-    *[("def f(a, b):\n    x = 'abc'\n    y = 2.5\n    z = 10**9\n    return x, y, z", (1, 2),
-       handler, "A", [(Plain(),), (None,), (3,), ()])
-      for handler in ("LOAD_CONST", "LOAD_CONST_INLINE_FLOAT", "LOAD_CONST_INLINE_INT")],
+    # The local and constant arms (LocalRead, LocalWrite, SaveLocal, Const)
+    # have no templates until the template generator lowers dup and acquire;
+    # their forms run, and the interpreter's tests cover them
     # Inline values only, as for the list store
     *[("def f(a, b):\n    a.p = b\n    return a", (cls(), 1), handler, "AB",
        [(o, v) for o in OWNERS for v in (7, 2.5)])
@@ -1227,20 +1217,6 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(self.cse_home_loads([lambda g, v: TOp("detach", [], [], 3)]), 2)
         self.assertEqual(self.cse_home_loads(
             [lambda g, v: TOp("prim", [], [v], "PyValue_CLOSE")]), 2)
-
-    def test_swap_stores_both_homes(self):
-        # SWAP's outputs are exchanged, not passed through: its template
-        # loads both homes and stores each value into the other
-        graph = graph_of("SWAP")
-        ops = [op for block in graph.blocks.values() for op in block.ops]
-        loads = [op for op in ops if op.kind == "view"]
-        stores = [op for op in ops if op.kind == "slot_store"]
-        self.assertEqual(len(stores), 2)
-        self.assertNotEqual(stores[0].attr, stores[1].attr)
-        self.assertEqual({op.attr for op in stores}, {op.attr for op in loads})
-        for store in stores:
-            load = next(op for op in loads if op.results[0] is store.args[0])
-            self.assertNotEqual(load.attr, store.attr)
 
     def test_range_iterator_reads_its_length_once(self):
         graph = graph_of("FOR_ITER_RANGE")

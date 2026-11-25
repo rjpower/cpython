@@ -192,11 +192,13 @@ int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
 
 /* The number of leading outputs of a register-style op that pass an input
  * through, those below the output that dst names.  A call reads its inputs
- * from operand words and has none: its one output is new. */
+ * from operand words and has none: its one output is new.  A Move's
+ * destinations are new too. */
 static inline int
 _PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
 {
-    if (_PyIR_CALL_SHAPED(fmt->operands)) {
+    if (_PyIR_CALL_SHAPED(fmt->operands) ||
+        fmt->operands == _PyIR_OPERANDS_SPANS) {
         return 0;
     }
     return fmt->dst == _PyIR_NO_DST ? op->nout : op->npop + fmt->dst;
@@ -240,13 +242,15 @@ int _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
 int _PyRegCfg_Build(_PyRegCfg *cfg);
 
 /* The translator's rules (Python/regcfg.c).  A rule translates one stack
- * op: it pops the identities that the op consumes, emits register ops that
- * name them, and pushes the identities it produces.  An emitted op keeps
+ * op: it emits register ops that name the identities the op consumes, then
+ * pops them, and pushes the identities it produces.  An op is emitted
+ * before its inputs are popped (see _PyRegTr_Emit()).  An emitted op keeps
  * src's origin (srcoff, loc, except). */
 typedef struct _PyRegTr _PyRegTr;
 typedef int (*_PyRegRule)(_PyRegTr *t, const _PyRegOp *src);
 
-/* The top n identities, bottom first, removed from the stack */
+/* The top n identities, bottom first (ids may be NULL), removed from the
+ * stack once the ops that read them are emitted */
 int _PyRegTr_Pop(_PyRegTr *t, int n, int *ids);
 int _PyRegTr_Push(_PyRegTr *t, int id);
 /* A new identity, defined by the next op emitted */

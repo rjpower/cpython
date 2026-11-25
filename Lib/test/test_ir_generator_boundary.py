@@ -140,11 +140,14 @@ class GeneratorBoundaryTests(unittest.TestCase):
                                  else pc + 1 + ((word[4] ^ 2048) - 2048))
                     target = words[target_pc]
                     self.assertGreaterEqual(word[1], function.__code__.co_nlocals)
-                    self.assertEqual(target[0], "STORE_FAST" if consumer ==
-                                     _opcode.GEN_CONSUMER_STORE_FAST else "POP_TOP")
-                    self.assertEqual(target[1], word[1])
                     if consumer == _opcode.GEN_CONSUMER_STORE_FAST:
-                        self.assertLess(target[2], function.__code__.co_nlocals)
+                        # LocalWrite.Store(local, value)
+                        self.assertEqual(target[0], "LocalWrite.Store")
+                        self.assertEqual(target[2], word[1])
+                        self.assertLess(target[1], function.__code__.co_nlocals)
+                    else:
+                        self.assertEqual(target[0], "POP_TOP")
+                        self.assertEqual(target[1], word[1])
                 iterator = function(value)
                 self.assertIs(next(iterator), value)
                 self.assertIs(finish(iterator, reply), expected)

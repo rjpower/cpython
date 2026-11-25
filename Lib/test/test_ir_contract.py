@@ -107,20 +107,7 @@ class ContractTests(unittest.TestCase):
             return testapi.ir_normal_physical_transfer(
                 named[name], *fields, arg, edge, home, nl, limit)
 
-        copy = (4, 2, 0, 0)
-        self.assertEqual(transfer("COPY", copy, 2, 0, 6), (3, 4))
-        self.assertEqual(transfer("COPY", copy, 2, 0, 4), preserve)
-        self.assertEqual(transfer("COPY", copy, 2, 0, 7), preserve)
-        self.assertEqual(transfer("COPY", copy, 2, 1, 6), unknown)
-        self.assertEqual(transfer("COPY", (8, 2, 0, 0), 2, 0, 9), unknown)
-        self.assertEqual(transfer("COPY", copy, 2**31 - 1, 0, 6), unknown)
-
-        swap = (4, 3, 0, 0)
-        self.assertEqual(transfer("SWAP", swap, 3, 0, 4), (3, 6))
-        self.assertEqual(transfer("SWAP", swap, 3, 0, 6), (3, 4))
-        self.assertEqual(transfer("SWAP", swap, 3, 0, 5), preserve)
-        self.assertEqual(transfer("SWAP", (9, 3, 0, 0), 3, 0, 9), unknown)
-
+        # COPY and SWAP are stack ops that regcfg.c lowers by their own rules
         store_fast = (4, 0, 0, 0)
         self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 4), set_null)
         self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 5), preserve)
@@ -258,10 +245,8 @@ class ContractTests(unittest.TestCase):
         # The deepest inputs that keep their slot and their value: not an
         # input that the body assigns or whose address it passes on
         # (null_or_index of FOR_ITER and SEND), nor one that it replaces
-        # with its result, nor any of SWAP
-        # (the middle keeps its place but lies above bottom)
+        # with its result
         expected = {
-            "SWAP": 0,
             "FOR_ITER": 1, "FOR_ITER_LIST": 1, "FOR_ITER_TUPLE": 1,
             "FOR_ITER_VIRTUAL": 1, "INSTRUMENTED_FOR_ITER": 1, "SEND": 1,
             "SEND_VIRTUAL": 1, "FOR_ITER_RANGE": 2, "FOR_ITER_GEN": 2,
@@ -272,8 +257,6 @@ class ContractTests(unittest.TestCase):
                 with self.subTest(name=name, oparg=oparg):
                     self.assertEqual(extent(BY_NAME[name].through, oparg),
                                      count)
-        for oparg in (1, 2, 7):
-            self.assertEqual(extent(BY_NAME["COPY"].through, oparg), oparg)
 
     def test_window_and_fields(self):
         for h, row in ROWS.items():
@@ -305,13 +288,8 @@ class ContractTests(unittest.TestCase):
 
     def test_slot_roles(self):
         expected = {
-            "LOAD_FAST": _opcode.IR_ROLE_LOCAL_IN,
-            "LOAD_FAST_BORROW": _opcode.IR_ROLE_LOCAL_IN,
-            "LOAD_FAST_CHECK": _opcode.IR_ROLE_LOCAL_IN,
             "STORE_FAST": _opcode.IR_ROLE_LOCAL_OUT,
             "MAKE_CELL": _opcode.IR_ROLE_LOCAL_OUT,
-            "DELETE_FAST": _opcode.IR_ROLE_LOCAL_CLEAR,
-            "LOAD_FAST_AND_CLEAR": _opcode.IR_ROLE_LOCAL_MOVE,
             "LOAD_DEREF": _opcode.IR_ROLE_CELL,
             "STORE_DEREF": _opcode.IR_ROLE_CELL,
             "DELETE_DEREF": _opcode.IR_ROLE_CELL,
@@ -320,9 +298,11 @@ class ContractTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(oparg_role(BY_NAME[name]), role)
         # Exactly the opcodes whose oparg names a local or a cell have slot
-        # roles
+        # roles, except the stack ops that regcfg.c lowers by their own rules
+        stack_only = {"LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK",
+                      "LOAD_FAST_AND_CLEAR", "DELETE_FAST"}
         named = {opcode.opname[op] for op in (*opcode.haslocal, *opcode.hasfree)
-                 if op < opcode.MIN_INSTRUMENTED_OPCODE}
+                 if op < opcode.MIN_INSTRUMENTED_OPCODE} - stack_only
         slots = {name for name, row in BY_NAME.items()
                  if row.base < opcode.MIN_INSTRUMENTED_OPCODE
                  and oparg_role(row) in SLOT_ROLES}
@@ -539,10 +519,9 @@ class ContractTests(unittest.TestCase):
         for name in ("CALL_KW_PY", "SEND", "SEND_GEN", "FOR_ITER_GEN"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
                             name)
-        for name in ("LOAD_FAST", "LOAD_CONST", "LOAD_SMALL_INT"):
+        for name in ("LOAD_COMMON_CONSTANT",):
             self.assertFalse(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        for name in ("CALL_KW", "STORE_FAST", "DELETE_FAST", "LOAD_GLOBAL",
-                     "BINARY_OP"):
+        for name in ("CALL_KW", "STORE_FAST", "LOAD_GLOBAL", "BINARY_OP"):
             self.assertTrue(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
         self.assertTrue(BY_NAME["JUMP_BACKWARD"].effects & _opcode.IR_POLLS)
         self.assertTrue(BY_NAME["RESUME"].effects & _opcode.IR_POLLS)
@@ -614,7 +593,7 @@ class AnalyzerTests(unittest.TestCase):
             effects = BY_NAME[name].effects
             self.assertTrue(effects & _opcode.IR_RAISES, name)
             self.assertTrue(effects & _opcode.IR_ESCAPES, name)
-        self.assertFalse(BY_NAME["LOAD_FAST"].effects
+        self.assertFalse(BY_NAME["LOAD_COMMON_CONSTANT"].effects
                          & (_opcode.IR_RAISES | _opcode.IR_ESCAPES))
 
     def test_runs_code(self):
@@ -838,7 +817,7 @@ class SourceScanTests(unittest.TestCase):
             if name in ops or name in macros:
                 result[h] = _scan_stack(ops, macros, name)
         names = {opcode.opname[h] for h in result}
-        self.assertLessEqual({"SWAP", "FOR_ITER", "FOR_ITER_RANGE", "SEND"}, names)
+        self.assertLessEqual({"FOR_ITER", "FOR_ITER_RANGE", "SEND"}, names)
         self.assertGreater(len(result), 200)
         return result
 

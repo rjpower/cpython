@@ -533,22 +533,6 @@ leaf_probe__COMPARE_OP_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, i
 }
 
 static int
-leaf_probe__COPY(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue bottom, top;
-    bottom = stack_pointer[-1 - (oparg-1)];
-    top = PyValue_DUP(bottom);
-    stack_pointer[0] = top;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__END_FOR(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1229,102 +1213,6 @@ leaf_probe__JUMP_IF_COND(_PyInterpreterFrame *frame, PyValue *stack_pointer, int
 }
 
 static int
-leaf_probe__LOAD_CONST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
-    value = PyValue_DUP(constant);
-    stack_pointer[0] = value;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_CONST_INLINE_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
-    value = PyValue_DUP(constant);
-    stack_pointer[0] = value;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_CONST_INLINE_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
-    value = PyValue_DUP(constant);
-    stack_pointer[0] = value;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
-    value = PyValue_DUP(local);
-    stack_pointer[0] = value;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_FAST_AND_CLEAR(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    value = GETLOCAL(oparg);
-    GETLOCAL(oparg) = PyValue_NULL;
-    stack_pointer[0] = value;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_FAST_BORROW(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
-    value = PyValue_DUP(local);
-    stack_pointer[0] = value;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__LOAD_GLOBAL_BUILTINS(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1383,36 +1271,6 @@ leaf_probe__LOAD_GLOBAL_MODULE(_PyInterpreterFrame *frame, PyValue *stack_pointe
     res = PyValue_XDUP(found);
     STAT_INC(LOAD_GLOBAL, hit);
     stack_pointer[0] = res;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_SMALL_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    value = PyValue_FromInlineInt(oparg);
-    stack_pointer[0] = value;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_SMALL_INT_INLINE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    value = PyValue_FromInlineInt(oparg);
-    stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
     result->stack_pointer = stack_pointer;
@@ -1773,24 +1631,6 @@ leaf_probe__STORE_SUBSCR_LIST_INT(_PyInterpreterFrame *frame, PyValue *stack_poi
 }
 
 static int
-leaf_probe__SWAP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue bottom, top;
-    top = stack_pointer[-1];
-    bottom = stack_pointer[-2 - (oparg-2)];
-    PyValue temp = bottom;
-    bottom = top;
-    top = temp;
-    stack_pointer[-2 - (oparg-2)] = bottom;
-    stack_pointer[-1] = top;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__SWAP_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1909,7 +1749,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_CHECK_PERIODIC", leaf_probe__CHECK_PERIODIC, 0},
     {"_COMPARE_OP_FLOAT", leaf_probe__COMPARE_OP_FLOAT, 2},
     {"_COMPARE_OP_INT", leaf_probe__COMPARE_OP_INT, 2},
-    {"_COPY", leaf_probe__COPY, 1},
     {"_END_FOR", leaf_probe__END_FOR, 1},
     {"_END_SEND", leaf_probe__END_SEND, 3},
     {"_GUARD_ELEMENT_INT", leaf_probe__GUARD_ELEMENT_INT, 1},
@@ -1949,16 +1788,8 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_JUMP_BACKWARD_NO_INTERRUPT", leaf_probe__JUMP_BACKWARD_NO_INTERRUPT, 0},
     {"_JUMP_FORWARD", leaf_probe__JUMP_FORWARD, 0},
     {"_JUMP_IF_COND", leaf_probe__JUMP_IF_COND, 1},
-    {"_LOAD_CONST", leaf_probe__LOAD_CONST, 0},
-    {"_LOAD_CONST_INLINE_FLOAT", leaf_probe__LOAD_CONST_INLINE_FLOAT, 0},
-    {"_LOAD_CONST_INLINE_INT", leaf_probe__LOAD_CONST_INLINE_INT, 0},
-    {"_LOAD_FAST", leaf_probe__LOAD_FAST, 0},
-    {"_LOAD_FAST_AND_CLEAR", leaf_probe__LOAD_FAST_AND_CLEAR, 0},
-    {"_LOAD_FAST_BORROW", leaf_probe__LOAD_FAST_BORROW, 0},
     {"_LOAD_GLOBAL_BUILTINS", leaf_probe__LOAD_GLOBAL_BUILTINS, 0},
     {"_LOAD_GLOBAL_MODULE", leaf_probe__LOAD_GLOBAL_MODULE, 0},
-    {"_LOAD_SMALL_INT", leaf_probe__LOAD_SMALL_INT, 0},
-    {"_LOAD_SMALL_INT_INLINE", leaf_probe__LOAD_SMALL_INT_INLINE, 0},
     {"_LOCK_OBJECT", leaf_probe__LOCK_OBJECT, 1},
     {"_MAKE_HEAP_SAFE", leaf_probe__MAKE_HEAP_SAFE, 1},
     {"_NOP", leaf_probe__NOP, 0},
@@ -1979,7 +1810,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_STORE_ATTR_SHAPE_ADD", leaf_probe__STORE_ATTR_SHAPE_ADD, 2},
     {"_STORE_ATTR_SLOT", leaf_probe__STORE_ATTR_SLOT, 2},
     {"_STORE_SUBSCR_LIST_INT", leaf_probe__STORE_SUBSCR_LIST_INT, 3},
-    {"_SWAP", leaf_probe__SWAP, 2},
     {"_SWAP_FAST", leaf_probe__SWAP_FAST, 1},
     {"_TO_BOOL_INT", leaf_probe__TO_BOOL_INT, 1},
     {"_TO_BOOL_LIST", leaf_probe__TO_BOOL_LIST, 1},

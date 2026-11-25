@@ -101,8 +101,9 @@ IR_HOT_ROUTINE(gen_resume, PyValue gen_value)
             GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
         }
         if (kind == GEN_RESUME_STORE) {
+            // LocalWrite.Store names the local in A (ir.c)
             _PyIRWord store = *next_instr;
-            int destination = IR_B(store);
+            int destination = IR_A(store);
             PyValue old = frame->base[destination];
             if (_PyFrame_ObjectMayReenter(PyValue_IsObject(old)
                     ? PyValue_AsKnownObjectBorrow(old) : NULL)) {
@@ -273,7 +274,7 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value)
     case GEN_COMPLETE_STORE:
     case GEN_COMPLETE_STORE_FAST: {
         bool explicit_store = (kind & ~GEN_THROWING) == GEN_COMPLETE_STORE_FAST;
-        int destination = explicit_store ? IR_B(*exit) : IR_A(source_word);
+        int destination = IR_A(explicit_store ? *exit : source_word);
         PyValue old = frame->base[destination];
         if (_PyFrame_ObjectMayReenter(PyValue_IsObject(old)
                 ? PyValue_AsKnownObjectBorrow(old) : NULL)) {

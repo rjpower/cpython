@@ -320,6 +320,18 @@ def truth_inputs(operand):
     return [{operand: v} for v in TRUTHS]
 
 
+class Getter:
+    "A container of Python's own: every item protocol call runs its methods"
+    def __getitem__(self, key):
+        return key
+
+    def __setitem__(self, key, value):
+        pass
+
+    def __delitem__(self, key):
+        pass
+
+
 def identity(x):
     return x
 
@@ -418,6 +430,13 @@ SCENARIOS = {
         "or": "def f(a, b):\n    return (a and b) or a\n"},
         [{"srcs": [v]} for v in (1, "s", Plain(), 2**70)], warm=("__x__", 1),
         per_arm=True),
+    "NamespaceRead": Scenario("NamespaceRead", {
+        "build_class": "def f(a):\n    class C:\n        pass\n    return a\n"},
+        [{}], warm=(1,)),
+    "NamespaceWrite": Scenario("NamespaceWrite", {
+        "global": "def f(a):\n    global g\n    g = a\n    return a\n"},
+        [{"value": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,),
+        holds=True),
     "Import": Scenario("Import", {
         "eager": "def f(a):\n    import os\n    return a\n"},
         [{"level": 0, "fromlist": None}], warm=(1,)),
@@ -450,6 +469,48 @@ SCENARIOS = {
                         "instance": (materialised(),), "nodict": (SlotsClassAttr(),),
                         "pointer": (functools.partial(identity),)},
         warmups=200, coherent=True),
+    "GetItem": Scenario("GetItem", {
+        "list": "def f(a, k=1):\n    return a[k]\n",
+        "tuple": "def f(a, k=1):\n    return a[k]\n",
+        "ascii": "def f(a, k=1):\n    return a[k]\n",
+        "unicode": "def f(a, k=1):\n    return a[k]\n",
+        "dict": "def f(a, k=1):\n    return a[k]\n",
+        "slice": "def f(a, k=slice(0, 2)):\n    return a[k]\n",
+        "generic": "def f(a, k=1):\n    return a[k]\n"},
+        [{"obj": o, "key": k} for o in ([10, 20, 30], (10, 20, 30), "abc", "a\u00e9c",
+                                        {1: 2, 2**70: 3}, Getter(), Plain())
+         for k in (0, 1, -1, 7, -9, 1, 2**70, "x", slice(0, 2), 1.5)],
+        warm_by_source={"list": ([1, 2],), "tuple": ((1, 2),), "ascii": ("ab",),
+                        "unicode": ("a\u00e9",), "dict": ({1: 2},),
+                        "slice": ([1, 2, 3],), "generic": (Getter(),)},
+        warmups=200, coherent=True),
+    "SetItem": Scenario("SetItem", {
+        "list": "def f(a, k=1, v=5):\n    a[k] = v\n",
+        "dict": "def f(a, k=1, v=5):\n    a[k] = v\n",
+        "generic": "def f(a, k=1, v=5):\n    a[k] = v\n"},
+        [{"obj": o, "key": k, "value": v}
+         for o in ([10, 20, 30], {1: 2}, Getter(), (1, 2))
+         for k in (0, 1, -1, 7, "x") for v in (5, None)],
+        warm_by_source={"list": ([1, 2],), "dict": ({1: 2},), "generic": (Getter(),)},
+        warmups=200, coherent=True),
+    "DelItem": Scenario("DelItem", {
+        "generic": "def f(a, k=0):\n    del a[k]\n"},
+        [{"obj": o, "key": k} for o in ([10, 20, 30], {1: 2, 0: 1}, Getter(), (1, 2))
+         for k in (0, 1, -1, 7, "x")], warm=([1, 2],)),
+    "SliceRead": Scenario("SliceRead", {
+        "generic": "def f(a, i=0, j=1):\n    return a[i:j]\n"},
+        [{"obj": o, "start": i, "stop": j}
+         for o in ([1, 2, 3], (1, 2, 3), "abc", Getter(), 5)
+         for i, j in ((0, 1), (None, None), (-2, 5), ("x", 1))], warm=([1, 2],)),
+    "SliceWrite": Scenario("SliceWrite", {
+        "generic": "def f(a, i=0, j=1, v=()):\n    a[i:j] = v\n"},
+        [{"obj": o, "start": i, "stop": j, "value": v}
+         for o in ([1, 2, 3], Getter(), 5) for i, j in ((0, 1), (None, None), ("x", 1))
+         for v in ([9], 7)], warm=([1, 2],)),
+    "BuildSlice": Scenario("BuildSlice", {
+        "generic": "def f(a, i=0, j=1, k=2):\n    return a[i:j:k]\n"},
+        [{"parts": parts} for parts in ([0, 1], [0, 1, 2], [None, None, None],
+                                        [Plain(), 1], [1, 2, 0])], warm=([1, 2],)),
     "GetMethod": Scenario("GetMethod", {
         "values": "def f(a):\n    return a.norm()\n",
         "nodict": "def f(a):\n    return a.norm()\n",
@@ -727,6 +788,12 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
     run = CRun(f, index, slots, mode, handler)
     jump_kind = "jump" if arm.family == "Jump" else "branch"
     exit = classify(run, mode, index, length, jump_kind)
+    if arm.family == "NamespaceWrite" and "value" in inputs and exit == "next":
+        # The value's new owner is the globals dict, which the count of the
+        # homes does not see: the global holds the value itself
+        stored = f.__globals__.get("g")
+        if stored is not inputs["value"]:
+            return Result(False, exit, f"C stored {stored!r} in the global")
     obs = ev.Observation(exit, run.next if mode != STUB else None, run.slots,
                          run.feedback_written, run.handler != handler,
                          (run.extra,) if exit == "return" else None)
@@ -811,12 +878,8 @@ NOT_RUN = {
     "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "
                           "cannot call as a function",
     "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",
-    "NamespaceRead.BuildClass": "LOAD_BUILD_CLASS occurs in class definitions' callers: "
-                                "a class body is not a function the probe warms",
     "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
     "CellMapRead.Lookup": "LOAD_FROM_DICT_OR_DEREF occurs in class code",
-    "NamespaceWrite.Global": "the value moves into the globals dict, an owner the probe's "
-                             "home count does not see; a delete shares the arm",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",

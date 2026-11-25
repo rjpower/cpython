@@ -392,6 +392,7 @@ extern primitive borrow_shape_slot(o:Obj, r:Recipe<Attr>) -> B
 extern helper poly_shape(fr:Frame, f:Fb<Attr>, o:Obj)
   cases(hit(r:Recipe<Attr>), absent())
   effects(reads)
+  feedback(read(entry.rows))
   ensures(hit.type_version(o, r), hit.has_values(o))
   c _PyAttr_PolyShape as bool_out_hit
   evidence(
@@ -450,7 +451,7 @@ extern helper admitted_recipe(f:Fb<Attr>, n:Name)
   cases(hit(r:Recipe<Attr>), absent())
   effects(reads)
   feedback(read(entry.kind), read(entry.type_version), read(entry.keys_version),
-           read(entry.index), read(entry.descr))
+           read(entry.offset), read(entry.class_value))
   c _PyAttr_AdmittedRecipe as bool_out_hit
   evidence(
     review: "pycore_attr_recipe.h: the entry is the recipe when it holds a type, class or keys version.",
@@ -724,7 +725,7 @@ point GetMethod.Done(current, next_head, clear) keep() spent(obj) defs(callable,
 extern helper admitted_method(f:Fb<Attr>, n:Name)
   cases(hit(r:Recipe<Attr>), absent())
   effects(reads)
-  feedback(read(entry.kind), read(entry.type_version), read(entry.descr))
+  feedback(read(entry.type_version), read(entry.class_value))
   c _PyAttr_AdmittedMethod as bool_out_hit
   evidence(
     review: "pycore_attr_recipe.h: the entry is the recipe when it holds a live type version and a method.",
@@ -743,6 +744,7 @@ extern primitive receiver_valid(o:Obj, r:Recipe<Attr>) -> Bool
 extern helper poly_method(fr:Frame, f:Fb<Attr>, o:Obj)
   cases(hit(r:Recipe<Attr>), absent())
   effects(reads)
+  feedback(read(entry.rows))
   ensures(hit.type_version(o, r))
   c _PyAttr_PolyMethod as bool_out_hit
   evidence(
@@ -889,7 +891,7 @@ macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
 
 arm GetMethod.MethodValues inline entry(method_values)
   effects(reads, writes, releases on (callable, self_dst))
-  feedback(read(entry.kind), read(entry.type_version), read(entry.descr))
+  feedback(read(entry.type_version), read(entry.class_value))
   exits(next, miss)
 {
   entry():

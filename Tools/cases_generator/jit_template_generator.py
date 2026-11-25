@@ -1886,12 +1886,16 @@ class Emitter:
             out_header.append(f"    {ftype} *fb = ({ftype} *)_PyIR_FbEntry(cx->words, "
                               f"{self.fb.field});")
             out_header.append("    (void)fb;")
+        reads_entry = any(op.kind == "cache" for b in g.blocks.values() for op in b.ops)
         labels = [i for i in self.order]
         for i in labels:
             out_header.append(f"    _PyJitLabel L{i} = _PyJitAsm_NewLabel(a);")
         uses_raise = any(b.term[0] == "raise" for b in g.blocks.values())
         if uses_raise:
             out_header.append("    _PyJitLabel raise = _PyJitAsm_NewLabel(a);")
+        if reads_entry:
+            # An entry is evidence only for the arm whose install wrote it
+            out_header.append("    _PyJitTemplate_CheckHandler(cx);")
         in_cold = False
         for n, i in enumerate(self.order):
             if i in self.cold and not in_cold:

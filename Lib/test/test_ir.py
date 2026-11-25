@@ -1592,7 +1592,7 @@ class DictFirstProbeTest(unittest.TestCase):
                 for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
                     self.assertIs(lookup(d, key), value)
         if SPECIALIZES:
-            self.assertIn("BINARY_OP_SUBSCR_DICT", handlers(lookup))
+            self.assertIn("GetItem.Dict", handlers(lookup))
 
         d = {0: "zero", 8: "collision", -1: "negative"}
         del d[0]
@@ -1689,12 +1689,12 @@ class DictFirstProbeTest(unittest.TestCase):
                              "    result = factory()[7]\n"
                              "    return result\n")
         subscript = next(word for word in get_ir(read.__code__)
-                         if word[0] == "BINARY_OP_SUBSCR")
+                         if word[0] == "GetItem.Generic")
         self.assertLess(subscript[1], nlocalsplus(read))
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             read(factory, Old)
         if SPECIALIZES:
-            self.assertIn("BINARY_OP_SUBSCR_DICT", handlers(read))
+            self.assertIn("GetItem.Dict", handlers(read))
         observing = True
         try:
             result = read(factory, Old)
@@ -3419,7 +3419,7 @@ class UnpackToLocalsTest(unittest.TestCase):
             a, b = p
             return inner, b
         for func, store in ((attribute, "STORE_ATTR"),
-                            (subscript, "STORE_SUBSCR"),
+                            (subscript, "SetItem.Generic"),
                             (cell, "CellStore.Set")):
             with self.subTest(func=func.__name__):
                 self.assertIn(store, self.names(func))

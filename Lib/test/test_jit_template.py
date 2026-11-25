@@ -719,15 +719,8 @@ TEMPLATE_CASES = [
     *([] if os.environ.get("PYTHON_JIT") else [
         ("def f(a, b):\n    while a is not None:\n        a = None\n    return b",
          (None, 0), "Jump.Poll", "", [()])]),
-    *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
-       handler, "ABC", [(Plain(), seq, i) for seq in seqs for i in INDICES])
-      for seq_type, handler, seqs in (
-          (list, "BINARY_OP_SUBSCR_LIST_INT", SEQUENCES + [(1, 2), "ab"]),
-          (tuple, "BINARY_OP_SUBSCR_TUPLE_INT", [tuple(s) for s in SEQUENCES] + [[1, 2]]))],
-    # The list holds inline numbers: the template and the form store the
-    # same value in turn, which releases only inline values
-    ("def f(a, b):\n    a[b] = 5\n    return a", ([1, 2, 3], 1), "STORE_SUBSCR_LIST_INT", "ABC",
-     [(seq, i, v) for seq in ([1, 2, 3], [], (1, 2)) for i in INDICES for v in (7, 2.5)]),
+    # The item arms (GetItem, SetItem) have no templates: their index and
+    # bounds rows have no lowering yet, so their forms run
     # The local and constant arms (LocalRead, LocalWrite, SaveLocal, Const)
     # have no templates until the template generator lowers dup and acquire;
     # their forms run, and the interpreter's tests cover them
@@ -1141,8 +1134,7 @@ class TemplateGraphTests(unittest.TestCase):
 
     def test_guards_leave_by_their_exit_without_a_bool(self):
         "A predicate that only guards leaves by the exit: no result, no branch on one"
-        for handler, name in (("BINARY_OP_ADD_FLOAT", "PyValue_FloatOperandValues"),
-                              ("BINARY_OP_SUBSCR_LIST_INT", "PyValue_IsObject")):
+        for handler, name in (("BINARY_OP_ADD_FLOAT", "PyValue_FloatOperandValues"),):
             with self.subTest(handler=handler):
                 graph = graph_of(handler)
                 ops = [op for block in graph.blocks.values() for op in block.ops

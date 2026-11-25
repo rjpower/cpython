@@ -873,9 +873,13 @@ emit_template_word(_PyJitCompiler *c, uint32_t i, int arm, _PyJitTemplate templa
     int may_run_python = (fmt->effects & (MAY_RUN_PYTHON & ~_PyIR_DEOPTS)) != 0;
     uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
     int target = static_target(c->words, i);
+    int may_change = _PyJit_HandlerMayChange(c->code, (int)i);
     _PyJitWordCx cx = {
         .a = a, .words = c->words, .word = w, .index = i,
         .target = -1, .slow = _PyJitAsm_NewLabel(a), .leave = c->leave,
+        /* A planned word has no handler check of its own; a template that
+         * reads the feedback entry makes it */
+        .check_handler = planned && may_change,
     };
     _PyJitLabel target_stub = -1;
     if (target >= 0) {
@@ -887,10 +891,11 @@ emit_template_word(_PyJitCompiler *c, uint32_t i, int arm, _PyJitTemplate templa
             target_stub = _PyJitAsm_NewLabel(a);
         }
     }
-    /* A planned arm reads no feedback that another member writes (its
-     * guards test the operands), so it is sound whatever the word's handler
-     * is now: no handler check */
-    if (!planned && _PyJit_HandlerMayChange(c->code, (int)i)) {
+    /* A planned arm whose template reads no feedback entry is sound
+     * whatever the word's handler is now (its guards test the operands): no
+     * handler check here.  One that reads the entry tests the handler
+     * itself (cx.check_handler). */
+    if (!planned && may_change) {
         _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
         _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
         _PyJitAsm_Jcc(a, _PyJitCond_NE, cx.slow);

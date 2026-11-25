@@ -291,7 +291,8 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
     """The packing rule.  Operands take the fixed fields A, B, C, D, then
     the operand words' P0..P7, in declaration order; an immediate wider
     than the next field takes it and the one after, if both are in the same
-    word.  A span and an argument descriptor (Args) take one field for
+    word.  An immediate that fits in the unused high bits of the field the
+    immediate before it took shares that field, low bits first.  A span and an argument descriptor (Args) take one field for
     their count.  A span's elements, the spans in declaration order, fill
     the head's fields that no operand takes, then follow in operand words
     of four fields each; Args's homes follow in the payload.  Returns the
@@ -299,6 +300,7 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
     placements: list[Placement] = []
     problems: list[tuple[Param, str]] = []
     i = 0
+    used = 0        # bits taken by immediates in field i - 1
     spans = False
     for p in params:
         kind = field_kind(p.type)
@@ -315,9 +317,21 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
         if i >= len(SLOT_ORDER):
             problems.append((p, f"operand {p.name}: every field is taken"))
             continue
+        if (kind == FieldKind.imm and used and placements
+                and placements[-1].kind == FieldKind.imm
+                and len(placements[-1].slots) == 1
+                and used + bits <= placements[-1].slots[0].width):
+            before = placements[-1]
+            placements[-1] = replace(before, shared=True)
+            placements.append(Placement(p.name, kind, bits, before.slots,
+                                        shift=used, shared=True))
+            used += bits
+            continue
         first = SLOT_ORDER[i]
+        used = 0
         if bits <= first.width:
             placements.append(Placement(p.name, kind, bits, (first,)))
+            used = bits if kind == FieldKind.imm else 0
             i += 1
             continue
         second = SLOT_ORDER[i + 1] if i + 1 < len(SLOT_ORDER) else None

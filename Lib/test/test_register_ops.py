@@ -659,7 +659,23 @@ class CheckTests(unittest.TestCase):
         # An argument descriptor's count takes a field; its homes follow
         ("family F(d:Dst, fn:Src, a:Args, f:Fb<Call>) exits(next);", 0,
          [("d", "A"), ("fn", "B"), ("a", "C"), ("f", "D")]),
+        # Consecutive small immediates share one field
+        ("enum R(A, B, C, D, E); family F(d:Dst, r:Enum<R>, k:Bool, f:Fb<Binary>) "
+         "exits(next);", 0, [("d", "A"), ("r", "B"), ("k", "B"), ("f", "C")]),
+        # ... unless the second does not fit in what is left, or a home
+        # comes between them
+        ("family F(d:Dst, a:U8, b:U8, c:Bool, s:Src, k:Bool) exits(next);", 1,
+         [("d", "A"), ("a", "B"), ("b", "C"), ("c", "C"), ("s", "D"), ("k", "P0")]),
     ]
+
+    def test_shared_immediates(self):
+        src = ("enum R(A, B, C, D, E); family F(d:Dst, r:Enum<R>, k:Bool, "
+               "f:Fb<Binary>) exits(next);")
+        program = rop_check.check([rop_syntax.parse(src, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        r, k = program.encodings["F"].placements[1:3]
+        self.assertEqual((r.shift, r.bits, r.shared), (0, 3, True))
+        self.assertEqual((k.shift, k.bits, k.shared), (3, 1, True))
 
     def test_derived_encoding(self):
         for src, words, expected in self.ENCODINGS:

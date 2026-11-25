@@ -1,0 +1,902 @@
+// Batch 1C: item lookup, store and deletion, slices (Appendix A).  Every
+// family is entered on its Generic arm, which runs the protocol through the
+// call-boundary macros.
+
+family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
+  exits(next, raise, redirect, miss, again) generic(Generic) ops(BINARY_OP);
+
+family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
+  exits(next, raise, redirect, miss, again) generic(Generic) ops(STORE_SUBSCR);
+
+family DelItem(obj:Src, key:Src)
+  exits(next, raise, redirect) ops(DELETE_SUBSCR);
+
+family SliceRead(dst:Dst, obj:Src, start:Src, stop:Src)
+  exits(next, raise, redirect) ops(BINARY_SLICE);
+
+family SliceWrite(obj:Src, start:Src, stop:Src, value:Src)
+  exits(next, raise, redirect) ops(STORE_SLICE);
+
+family BuildSlice(dst:Dst, parts:Span<Src>)
+  exits(next, raise) ops(BUILD_SLICE);
+
+// The sources close later operand first, as the old handlers' DECREF_INPUTS
+point GetItem.Failed(current, site, pending) keep() spent(key, obj) defs();
+point GetItem.Done(current, next_head, clear) keep() spent(key, obj) defs(dst);
+point SetItem.Failed(current, site, pending) keep() spent(key, obj, value) defs();
+point SetItem.Done(current, next_head, clear) keep() spent(key, obj, value) defs();
+point DelItem.Failed(current, site, pending) keep() spent(key, obj) defs();
+point DelItem.Done(current, next_head, clear) keep() spent(key, obj) defs();
+point SliceRead.Failed(current, site, pending) keep() spent(stop, start, obj) defs();
+point SliceRead.Done(current, next_head, clear) keep() spent(stop, start, obj) defs(dst);
+point SliceWrite.Failed(current, site, pending) keep() spent(stop, start, obj, value) defs();
+point SliceWrite.Done(current, next_head, clear) keep() spent(stop, start, obj, value) defs();
+point BuildSlice.Failed(current, site, pending) keep() spent(parts) defs();
+point BuildSlice.Done(current, next_head, clear) keep() spent(parts) defs(dst);
+
+// The protocol rows.  Every operand is borrowed on every path.
+
+extern helper value_subscript(c:B, k:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_Subscript as value_or_null
+  evidence(
+    review: "Reviewed IT. ceval.c value_subscript: an exact dict, an exact list or"
+            "tuple with an inline index, else _PyValue_GetItem.",
+    contract: "Both operands borrowed; the result owned, or NULL with an exception"
+              "set. Callbacks: __getitem__, __hash__, __eq__, __index__.");
+
+extern helper value_set_item(c:B, k:B, v:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_SetItem as int_zero_ok
+  evidence(
+    review: "Reviewed IT. abstract.c _PyValue_SetItem: mp_ass_subscript or sq_ass_item.",
+    contract: "The operands are borrowed; the container takes its own count of the"
+              "value. Callbacks: __setitem__, __hash__, __eq__, __index__.");
+
+extern helper value_del_item(c:B, k:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_DelItem as int_zero_ok
+  evidence(
+    review: "Reviewed IT. abstract.c _PyValue_DelItem.",
+    contract: "The operands are borrowed. Callbacks: __delitem__, __hash__, __eq__.");
+
+extern helper value_binary_slice(c:B, a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_BinarySlice as value_or_null
+  evidence(
+    review: "Reviewed IT. ceval.c _PyEval_BinarySlice: inline bounds slice a list,"
+            "tuple or str without a slice object; others go through _PyValue_GetItem.",
+    contract: "The operands are borrowed; the result owned, or NULL with an exception"
+              "set. Callbacks: __getitem__, __index__.");
+
+extern helper value_store_slice(c:B, a:B, b:B, v:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_StoreSlice as int_zero_ok
+  evidence(
+    review: "Reviewed IT. ceval.c _PyEval_StoreSlice.",
+    contract: "The operands are borrowed. Callbacks: __setitem__, __index__.");
+
+// The slice of two or three parts; each temporary part is taken out of its
+// home and closed on every path, a local is left as it is.
+extern helper slice_from_parts(parts:Span<Src>)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  spends(parts)
+  c _PyRop_SliceFromParts as value_or_null
+  evidence(
+    review: "Reviewed IT. sliceobject.c _PySlice_FromValues, then the closes of"
+            "the old BUILD_SLICE's DECREF_INPUTS, before the error is raised.",
+    contract: "Two or three parts. The slice takes counts of its own; a finalizer may"
+              "run when a temporary closes. The pending error is set aside while it does.");
+
+// Each macro runs its row once on the anchored operands.  A redirect that
+// won while Python ran discharges the result that was not committed.
+macro getitem_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_subscript(arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro binary_slice_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_binary_slice(arg(a, 0), arg(a, 1), arg(a, 2)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro setitem_at_origin(a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_set_item(arg(a, 0), arg(a, 1), arg(a, 2)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro delitem_at_origin(a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_del_item(arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro store_slice_at_origin(a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_store_slice(arg(a, 0), arg(a, 1), arg(a, 2), arg(a, 3)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm GetItem.Generic shared
+  effects(runs_python, raises, releases on (dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_getitem(fb, obj, key) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Item>):
+    exit again(t);
+  Run():
+    let a:Anchors = anchor_for_call([obj, key]);
+    call getitem_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj], e);
+    exit raise(GetItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm SetItem.Generic shared
+  effects(runs_python, raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_setitem(fb, obj, key) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Item>):
+    exit again(t);
+  Run():
+    let a:Anchors = anchor_for_call([obj, key, value]);
+    call setitem_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result():
+    publish [] retire [roots(a), spent(key), spent(obj), spent(value)] at SetItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj, value], e);
+    exit raise(SetItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm DelItem.Generic shared
+  effects(runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj, key]);
+    call delitem_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result():
+    publish [] retire [roots(a), spent(key), spent(obj)] at DelItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj], e);
+    exit raise(DelItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm SliceRead.Generic shared
+  effects(runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj, start, stop]);
+    call binary_slice_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(stop), spent(start), spent(obj), old(dst)] at SliceRead.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [stop, start, obj], e);
+    exit raise(SliceRead.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm SliceWrite.Generic shared
+  effects(runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj, start, stop, value]);
+    call store_slice_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result():
+    publish [] retire [roots(a), spent(stop), spent(start), spent(obj), spent(value)] at SliceWrite.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [stop, start, obj, value], e);
+    exit raise(SliceWrite.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm BuildSlice.Generic shared
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call slice_from_parts(parts) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at BuildSlice.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(BuildSlice.Failed, e);
+}
+
+// Tests and reads of the admitted kinds
+
+extern primitive inline_int_key(k:B) -> Bool
+  effects()
+  test(inline_int(k))
+  c PyValue_IsInlineInt as bool
+  evidence(
+    review: "Reviewed IT. pycore_value.h: the word is an inline int.",
+    contract: "A comparison of the word: no memory, no failure, no callback.",
+    lowering: "jit_lower.c LOWERING(PyValue_IsInlineInt)",
+    test: "test_ir_leaf CASES");
+
+extern primitive exact_tuple(v:B) -> Bool
+  effects()
+  test(exact<tuple>(v))
+  c _PyRop_ExactTuple as bool
+  evidence(
+    review: "Reviewed IT. The old _GUARD_ELEMENT_TUPLE: PyTuple_CheckExact.",
+    contract: "Reads the word and the type: no memory, no failure.",
+    lowering: "none yet: PyValue_IsObject and a type test",
+    test: "test_rop_items");
+
+extern primitive exact_slice(v:B) -> Bool
+  effects()
+  test(exact<slice>(v))
+  c _PyRop_ExactSlice as bool
+  evidence(
+    review: "Reviewed IT. The old _GUARD_TOS_SLICE: a slice object.",
+    contract: "Reads the word and the type: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+// An exact str that is compact ASCII (claims the type; the row that reads it
+// relies on the layout)
+extern primitive compact_ascii_str(v:B) -> Bool
+  effects(reads)
+  test(exact<str>(v))
+  c _PyRop_CompactAsciiStr as bool
+  evidence(
+    review: "Reviewed IT. The old _GUARD_NOS_COMPACT_ASCII.",
+    contract: "Reads the type and the string's state: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+// Index tests: the fact is in_bounds(k, v).  A list index folds from the
+// end; a tuple's and a str's must be nonnegative.
+extern primitive list_in_bounds(v:B, k:B) -> Bool
+  effects(reads)
+  requires(exact<list>(v), inline_int(k))
+  test(in_bounds(k, v))
+  c _PyRop_ListInBounds as bool
+  evidence(
+    review: "Reviewed IT. The old IR_GUARD_ELEMENT_INDEX(FROM_END).",
+    contract: "Reads the list's size: no memory, no failure, no callback.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+extern primitive tuple_in_bounds(v:B, k:B) -> Bool
+  effects(reads)
+  requires(exact<tuple>(v), inline_int(k))
+  test(in_bounds(k, v))
+  c _PyRop_TupleInBounds as bool
+  evidence(
+    review: "Reviewed IT. The old IR_GUARD_ELEMENT_INDEX(NONNEGATIVE).",
+    contract: "Reads the tuple's size: no memory, no failure, no callback.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+extern primitive str_in_bounds(v:B, k:B) -> Bool
+  effects(reads)
+  requires(exact<str>(v), inline_int(k))
+  test(in_bounds(k, v))
+  c _PyRop_StrInBounds as bool
+  evidence(
+    review: "Reviewed IT. The old _BINARY_OP_SUBSCR_STR_INT bounds test.",
+    contract: "Reads the string's length: no memory, no failure, no callback.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+extern primitive list_item(v:B, k:B) -> B
+  effects(reads)
+  requires(exact<list>(v), in_bounds(k, v))
+  c _PyRop_ListItem as borrow
+  evidence(
+    review: "Reviewed IT. The old IR_DUP_CANONICAL_ELEMENT, without the count.",
+    contract: "The element as a borrow: the list is held by the word's operand.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+extern primitive tuple_item(v:B, k:B) -> B
+  effects(reads)
+  requires(exact<tuple>(v), in_bounds(k, v))
+  c _PyRop_TupleItem as borrow
+  evidence(
+    review: "Reviewed IT. The old IR_DUP_CANONICAL_ELEMENT, without the count.",
+    contract: "The element as a borrow: the tuple is held by the word's operand.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+// The cached one-character string of an ASCII character
+extern primitive ascii_char(v:B, k:B) -> B
+  effects(reads)
+  requires(exact<str>(v), in_bounds(k, v))
+  c _PyRop_AsciiChar as borrow
+  evidence(
+    review: "Reviewed IT. The old _BINARY_OP_SUBSCR_STR_INT: the singleton for"
+            "the byte, which the compact ASCII guard proved below 128.",
+    contract: "An immortal singleton, a borrow with no count.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+extern primitive unicode_ascii_char(v:B, k:B) -> Maybe<B>
+  effects(reads)
+  requires(exact<str>(v), in_bounds(k, v))
+  c _PyRop_UnicodeAsciiChar as borrow
+  evidence(
+    review: "Reviewed IT. The old _BINARY_OP_SUBSCR_USTR_INT: absent for a"
+            "character that is not ASCII.",
+    contract: "An immortal singleton or NULL: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+extern primitive dict_subscript_slot(v:B) -> Bool
+  effects(reads)
+  c _PyRop_DictSubscriptSlot as bool
+  evidence(
+    review: "Reviewed IT. The old _GUARD_NOS_DICT_SUBSCRIPT: mp_subscript is dict's.",
+    contract: "Reads the type's slots: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+extern primitive dict_assign_slot(v:B) -> Bool
+  effects(reads)
+  c _PyRop_DictAssignSlot as bool
+  evidence(
+    review: "Reviewed IT. The old _GUARD_NOS_DICT_STORE_SUBSCRIPT.",
+    contract: "Reads the type's slots: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_items");
+
+// The first probe of an exact dict by an inline int, which runs no Python
+extern helper dict_first_probe(v:B, k:B)
+  cases(hit(z:O), absent())
+  effects(reads, writes)
+  c _PyRop_DictFirstProbe as bool_out_hit
+  evidence(
+    review: "Reviewed IT. dictobject.c _PyDict_TryGetFirstProbeValue.",
+    contract: "A hit gives a new owner of the value; declining leaves everything"
+              "as it was. No hash or equality callback.");
+
+// Stores a value into a list slot under the list's lock and returns the
+// displaced owner, which the arm closes once the lock is released.
+extern helper list_exchange(v:B, k:B, x:O) -> O
+  effects(reads, writes)
+  requires(exact<list>(v), in_bounds(k, v))
+  c _PyRop_ListExchange as value
+  evidence(
+    review: "Reviewed IT. The old _STORE_SUBSCR_LIST_INT: LOCK_OBJECT, the"
+            "swap of the slot, UNLOCK_OBJECT before the close.",
+    contract: "Takes x. Returns the old item, which is never NULL. No callback.");
+
+extern helper list_slice(v:B, s:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_ListSlice as value_or_null
+  evidence(
+    review: "Reviewed IT. listobject.c _PyList_SliceSubscript: the bounds may be"
+            "objects with __index__.",
+    contract: "Both operands borrowed, a list and a slice, which the arm's guards"
+              "prove before it anchors them. The result is owned, or NULL with an"
+              "exception set.");
+
+extern helper dict_store(v:B, k:B, x:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_DictStore as int_zero_ok
+  evidence(
+    review: "Reviewed IT. The old _STORE_SUBSCR_DICT: _PyDict_SetValue.",
+    contract: "The operands are borrowed; the dict takes a count of the value."
+              "Callbacks: __hash__, __eq__ of keys.");
+
+macro list_slice_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call list_slice(arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro dict_store_at_origin(a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call dict_store(arg(a, 0), arg(a, 1), arg(a, 2)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+// Adaptation (specialize.c): the evidence is the old nomination, collected
+extern helper classify_getitem(f:Fb<Item>, v:B, k:B)
+  cases(list_index(), tuple_index(), ascii(), unicode_char(), dict(), list_slice(),
+        none())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyRop_ClassifyGetItem as case_index
+  evidence(
+    review: "Reviewed IT. specialize.c: the NB_SUBSCR case of the old"
+            "specialize_binary_op, its nomination collected as classify_call does.",
+    contract: "Writes the site's entry (the operand type versions) and sets no handler."
+              "No Python runs.");
+
+extern helper classify_setitem(f:Fb<Item>, v:B, k:B)
+  cases(list_index(), dict(), none())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyRop_ClassifySetItem as case_index
+  evidence(
+    review: "Reviewed IT. specialize.c: the old _Py_Specialize_StoreSubscr,"
+            "collected.",
+    contract: "Writes the site's entry and sets no handler. No Python runs.");
+
+macro adapt_before_use_getitem(f:Fb<Item>, o:Src, k:Src)
+  cases(run(), changed(t:Ticket<Item>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_getitem(f, use(o), use(k)) {
+      list_index -> ListIndex();
+      tuple_index -> TupleIndex();
+      ascii -> Ascii();
+      unicode_char -> UnicodeChar();
+      dict -> Dict();
+      list_slice -> ListSlice();
+      none -> Other();
+    }
+  ListIndex():
+    let c1:Candidate<Item> = candidate(GetItem.ListIndex);
+    call install(site, f, c1) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TupleIndex():
+    let c2:Candidate<Item> = candidate(GetItem.TupleIndex);
+    call install(site, f, c2) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Ascii():
+    let c3:Candidate<Item> = candidate(GetItem.Ascii);
+    call install(site, f, c3) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  UnicodeChar():
+    let c4:Candidate<Item> = candidate(GetItem.UnicodeAsciiChar);
+    call install(site, f, c4) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Dict():
+    let c5:Candidate<Item> = candidate(GetItem.Dict);
+    call install(site, f, c5) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  ListSlice():
+    let c6:Candidate<Item> = candidate(GetItem.ListSlice);
+    call install(site, f, c6) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Item>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+macro adapt_before_use_setitem(f:Fb<Item>, o:Src, k:Src)
+  cases(run(), changed(t:Ticket<Item>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_setitem(f, use(o), use(k)) {
+      list_index -> ListIndex();
+      dict -> Dict();
+      none -> Other();
+    }
+  ListIndex():
+    let c1:Candidate<Item> = candidate(SetItem.ListIndex);
+    call install(site, f, c1) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Dict():
+    let c2:Candidate<Item> = candidate(SetItem.Dict);
+    call install(site, f, c2) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Item>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+// Arms
+
+arm GetItem.ListIndex inline entry(list_index)
+  effects(reads, writes, releases on (dst))
+  feedback()
+  exits(next, miss)
+{
+  entry():
+    let l:B = use(obj);
+    let i:B = use(key);
+    guard exact_list(l) else miss;
+    guard inline_int_key(i) else miss;
+    guard list_in_bounds(l, i) else miss;
+    let item:B = list_item(l, i);
+    let result:O = dup(item);
+    publish [dst = result] retire [spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+}
+
+arm GetItem.TupleIndex inline entry(tuple_index)
+  effects(reads, writes, releases on (dst))
+  feedback()
+  exits(next, miss)
+{
+  entry():
+    let l:B = use(obj);
+    let i:B = use(key);
+    guard exact_tuple(l) else miss;
+    guard inline_int_key(i) else miss;
+    guard tuple_in_bounds(l, i) else miss;
+    let item:B = tuple_item(l, i);
+    let result:O = dup(item);
+    publish [dst = result] retire [spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+}
+
+arm GetItem.Ascii inline entry(ascii)
+  effects(reads, writes, releases on (dst))
+  feedback()
+  exits(next, miss)
+{
+  entry():
+    let l:B = use(obj);
+    let i:B = use(key);
+    guard compact_ascii_str(l) else miss;
+    guard inline_int_key(i) else miss;
+    guard str_in_bounds(l, i) else miss;
+    let item:B = ascii_char(l, i);
+    let result:O = dup(item);
+    publish [dst = result] retire [spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+}
+
+arm GetItem.UnicodeAsciiChar inline entry(unicode_char)
+  effects(reads, writes, releases on (dst))
+  feedback()
+  exits(next, miss)
+{
+  entry():
+    let l:B = use(obj);
+    let i:B = use(key);
+    guard exact_str(l) else miss;
+    guard inline_int_key(i) else miss;
+    guard str_in_bounds(l, i) else miss;
+    let item:Maybe<B> = unicode_ascii_char(l, i);
+    guard present(item) else miss;
+    let result:O = dup(unwrap(item));
+    publish [dst = result] retire [spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+}
+
+arm GetItem.ListSlice shared entry(list_slice)
+  effects(runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    let l:B = use(obj);
+    let s:B = use(key);
+    guard exact_list(l) else miss;
+    guard exact_slice(s) else miss;
+    let a:Anchors = anchor_for_call([obj, key]);
+    call list_slice_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj], e);
+    exit raise(GetItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm GetItem.Dict inline entry(dict)
+  effects(runs_python, raises, writes, releases on (dst))
+  feedback()
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    let l:B = use(obj);
+    let i:B = use(key);
+    guard dict_subscript_slot(l) else miss;
+    call dict_first_probe(l, i) {
+      hit -> Hit();
+      absent -> Slow();
+    }
+  Hit(first:O):
+    publish [dst = first] retire [spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+  Slow():
+    let a:Anchors = anchor_for_call([obj, key]);
+    call getitem_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj], e);
+    exit raise(GetItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm SetItem.ListIndex inline entry(list_index)
+  effects(reads, writes, releases, runs_python)
+  feedback()
+  exits(next, miss)
+{
+  entry():
+    let l:B = use(obj);
+    let i:B = use(key);
+    guard exact_list(l) else miss;
+    guard inline_int_key(i) else miss;
+    guard list_in_bounds(l, i) else miss;
+    let x:O = acquire(value);
+    let old:O = list_exchange(l, i, x);
+    publish [] retire [owned(old), spent(key), spent(obj), spent(value)] at SetItem.Done;
+    exit next();
+}
+
+arm SetItem.Dict inline entry(dict)
+  effects(runs_python, raises)
+  feedback()
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    let l:B = use(obj);
+    guard dict_assign_slot(l) else miss;
+    let a:Anchors = anchor_for_call([obj, key, value]);
+    call dict_store_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result():
+    publish [] retire [roots(a), spent(key), spent(obj), spent(value)] at SetItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj, value], e);
+    exit raise(SetItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}

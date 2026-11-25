@@ -860,7 +860,7 @@ value_import_level(PyValue level)
     return ilevel;
 }
 
-/* container[key] for BINARY_OP's NB_SUBSCR: an exact dict, and an exact list
+/* container[key] for GetItem.Generic: an exact dict, and an exact list
  * or tuple indexed by an inline int in range, as list_subscript() and
  * tuple_subscript() do, read the item as a value; anything else is
  * _PyValue_GetItem(). A dict miss raises KeyError with the key as it is.
@@ -904,9 +904,6 @@ value_subscript(PyValueBorrow container, PyValueBorrow key)
 static PyValue
 value_binary_op(int oparg, PyValueBorrow lhs, PyValueBorrow rhs)
 {
-    if (oparg == NB_SUBSCR) {
-        return value_subscript(lhs, rhs);
-    }
     return _PyValue_BinaryOps[oparg](lhs, rhs);
 }
 
@@ -3863,6 +3860,223 @@ static inline Py_ALWAYS_INLINE PyValue
 static inline Py_ALWAYS_INLINE PyValue
 (_PyEval_CallIntrinsic1)(PyThreadState *tstate, int oparg, PyValueBorrow value);
 #define _PyEval_CallIntrinsic1(T, O, V) (_PyEval_CallIntrinsic1)(T, O, PyValue_Borrow(V))
+
+/* The rows of the item families (Python/register_ops/items.rop) */
+static inline PyValue
+_PyRop_Subscript(PyValueBorrow container, PyValueBorrow key)
+{
+    return value_subscript(container, key);
+}
+
+static inline int
+_PyRop_SetItem(PyValueBorrow container, PyValueBorrow key, PyValueBorrow value)
+{
+    return _PyValue_SetItem(container, key, value);
+}
+
+static inline int
+_PyRop_DelItem(PyValueBorrow container, PyValueBorrow key)
+{
+    return _PyValue_DelItem(container, key);
+}
+
+static inline PyValue
+_PyRop_BinarySlice(PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop)
+{
+    return (_PyEval_BinarySlice)(container, start, stop);
+}
+
+static inline int
+_PyRop_StoreSlice(PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop,
+                  PyValueBorrow value)
+{
+    return (_PyEval_StoreSlice)(value, container, start, stop);
+}
+
+static inline bool
+_PyRop_ExactTuple(PyValueBorrow v)
+{
+    return PyValue_IsObject(v) && PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(v));
+}
+
+static inline bool
+_PyRop_ExactSlice(PyValueBorrow v)
+{
+    return PyValue_IsObject(v) && PySlice_Check(PyValue_AsKnownObjectBorrow(v));
+}
+
+static inline bool
+_PyRop_CompactAsciiStr(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)) {
+        return false;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    return PyUnicode_CheckExact(o) && PyUnicode_IS_COMPACT_ASCII(o);
+}
+
+/* The index of a list folds from the end, as the old FROM_END guard did */
+static inline Py_ssize_t
+_PyRop_ListIndex(PyObject *list, PyValueBorrow k)
+{
+    Py_ssize_t index = PyValue_InlineInt64(k);
+    return index < 0 ? index + PyList_GET_SIZE(list) : index;
+}
+
+static inline bool
+_PyRop_ListInBounds(PyValueBorrow v, PyValueBorrow k)
+{
+    PyObject *list = PyValue_AsKnownObjectBorrow(v);
+    Py_ssize_t index = _PyRop_ListIndex(list, k);
+    return 0 <= index && index < PyList_GET_SIZE(list);
+}
+
+static inline PyValueBorrow
+_PyRop_ListItem(PyValueBorrow v, PyValueBorrow k)
+{
+    PyObject *list = PyValue_AsKnownObjectBorrow(v);
+    return PyValue_Borrow(_PyList_ITEMS(list)[_PyRop_ListIndex(list, k)]);
+}
+
+static inline bool
+_PyRop_TupleInBounds(PyValueBorrow v, PyValueBorrow k)
+{
+    Py_ssize_t index = PyValue_InlineInt64(k);
+    return 0 <= index && index < PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(v));
+}
+
+static inline PyValueBorrow
+_PyRop_TupleItem(PyValueBorrow v, PyValueBorrow k)
+{
+    return PyTuple_GET_VALUE(PyValue_AsKnownObjectBorrow(v), PyValue_InlineInt64(k));
+}
+
+static inline bool
+_PyRop_StrInBounds(PyValueBorrow v, PyValueBorrow k)
+{
+    Py_ssize_t index = PyValue_InlineInt64(k);
+    return 0 <= index && index < PyUnicode_GET_LENGTH(PyValue_AsKnownObjectBorrow(v));
+}
+
+static inline PyValueBorrow
+_PyRop_AsciiChar(PyValueBorrow v, PyValueBorrow k)
+{
+    PyObject *str = PyValue_AsKnownObjectBorrow(v);
+    uint8_t c = PyUnicode_1BYTE_DATA(str)[PyValue_InlineInt64(k)];
+    assert(c < 128);
+    return PyValue_FromObjectBorrow((PyObject *)&_Py_SINGLETON(strings).ascii[c]);
+}
+
+static inline PyValueBorrow
+_PyRop_UnicodeAsciiChar(PyValueBorrow v, PyValueBorrow k)
+{
+    PyObject *str = PyValue_AsKnownObjectBorrow(v);
+    Py_UCS4 c = PyUnicode_READ_CHAR(str, PyValue_InlineInt64(k));
+    if (Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    return PyValue_FromObjectBorrow((PyObject *)&_Py_SINGLETON(strings).ascii[c]);
+}
+
+static inline bool
+_PyRop_DictSubscriptSlot(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)) {
+        return false;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
+    return tp->tp_as_mapping != NULL
+        && tp->tp_as_mapping->mp_subscript == _PyDict_Subscript;
+}
+
+static inline bool
+_PyRop_DictAssignSlot(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)) {
+        return false;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
+    return tp->tp_as_mapping != NULL
+        && tp->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript;
+}
+
+static inline bool
+_PyRop_DictFirstProbe(PyValueBorrow v, PyValueBorrow k, PyValue *out)
+{
+    PyValue hit = _PyDict_TryGetFirstProbeValue(v, k);
+    if (PyValue_IsNull(hit)) {
+        return false;
+    }
+    *out = hit;
+    return true;
+}
+
+/* The lock is held for the exchange only.  The guard proved the index, and
+ * this build has the GIL. */
+static inline PyValue
+_PyRop_ListExchange(PyValueBorrow v, PyValueBorrow k, PyValue x)
+{
+    PyObject *list = PyValue_AsKnownObjectBorrow(v);
+    int locked = LOCK_OBJECT(list);
+    assert(locked);
+    (void)locked;
+    Py_ssize_t index = _PyRop_ListIndex(list, k);
+    assert(0 <= index && index < PyList_GET_SIZE(list));
+    PyValue old = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, x);
+    UNLOCK_OBJECT(list);
+    return old;
+}
+
+static inline PyValue
+_PyRop_ListSlice(PyValueBorrow v, PyValueBorrow s)
+{
+    PyObject *res = _PyList_SliceSubscript(PyValue_AsKnownObjectBorrow(v),
+                                           PyValue_AsKnownObjectBorrow(s));
+    return res == NULL ? PyValue_NULL : PyValue_FromNonNumberSteal(res);
+}
+
+static inline int
+_PyRop_DictStore(PyValueBorrow v, PyValueBorrow k, PyValueBorrow x)
+{
+    return _PyDict_SetValue((PyDictObject *)PyValue_AsKnownObjectBorrow(v), k, x);
+}
+
+/* The slice of two or three parts.  Each temporary part leaves its home and
+ * is closed on both paths, a local stays; the error is set aside while a
+ * finalizer may run. */
+static PyValue
+_PyRop_SliceFromParts(const _PyRopSpan *parts)
+{
+    _PyInterpreterFrame *frame = parts->frame;
+    int n = parts->count;
+    assert(n == 2 || n == 3);
+    PyValue *home[3];
+    for (int i = 0; i < n; i++) {
+        int slot = _PyIR_SpanElement(parts->head, parts->handler, parts->first + i);
+        home[i] = &frame->base[slot];
+    }
+    // The bounds are stored as the values they are: no box of an inline one
+    PyValueBorrow step = PyValue_Borrow(PyValue_NULL);
+    if (n == 3) {
+        step = PyValue_Borrow(*home[2]);
+    }
+    PyObject *slice = _PySlice_FromValues(
+        PyValue_Borrow(*home[0]), PyValue_Borrow(*home[1]), step);
+    PyObject *exc = slice == NULL ? PyErr_GetRaisedException() : NULL;
+    PyValue taken[3];
+    for (int i = 0; i < n; i++) {
+        taken[i] = IR_IS_LOCAL(home[i] - frame->base)
+            ? PyValue_NULL : _PyFrame_TakeHome(frame, home[i]);
+    }
+    for (int i = 0; i < n; i++) {
+        PyValue_XCLOSE(taken[i]);
+    }
+    if (slice == NULL) {
+        PyErr_SetRaisedException(exc);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(slice);
+}
 
 #include "ceval_generator.h"
 
@@ -8841,7 +9055,7 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name,
         // a move: replaced below
         PyValue old = *writeto;
         *writeto = l_v == NULL ? PyValue_NULL : PyValue_FromObjectSteal(l_v);
-        PyValue_CLOSE(old);
+        PyValue_XCLOSE(old);
     }
 }
 

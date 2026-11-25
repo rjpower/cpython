@@ -372,9 +372,6 @@ _PyIR_NullableInputs(_PyIRWord word)
             return (1u << 1) | (1u << 2);
         case WITH_EXCEPT_START:
             return 1u << 1;  /* Optional bound exit-method receiver. */
-        case STORE_GLOBAL:
-        case STORE_NAME:
-            return 1u << 0;  /* NULL value requests deletion, never a receiver. */
         default:
             return 0;
     }

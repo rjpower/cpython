@@ -1301,7 +1301,9 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "INSTRUMENTED_JUMP_IF_FALSE_OR_POP", "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
               "LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
               "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP",
-              "POP_TOP")
+              "POP_TOP", "LOAD_NAME", "LOAD_LOCALS", "LOAD_BUILD_CLASS",
+              "LOAD_FROM_DICT_OR_GLOBALS", "STORE_NAME", "STORE_GLOBAL",
+              "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are

@@ -265,6 +265,16 @@ class Select(enum.Enum):
     interruptible = "interruptible"        # Jump: a backedge polls
     jit_off = "jit_off"                    # the baseline JIT is off
     jit_on = "jit_on"                      # the baseline JIT is on, so a backedge warms the code
+    named = "named"                        # NamespaceRead: a name in the locals, globals and builtins
+    locals_scope = "locals_scope"          # NamespaceRead: the locals themselves
+    build_class_scope = "build_class_scope"  # NamespaceRead: the builtins' __build_class__
+    name_scope = "name_scope"              # NamespaceWrite, NamespaceDelete: the locals
+    global_scope = "global_scope"          # NamespaceWrite, NamespaceDelete: the globals
+    eager_import = "eager_import"          # Import: forced eager
+    policy_import = "policy_import"        # Import: lazy when the policy says so
+    lazy_import = "lazy_import"            # Import: `lazy import`
+    module_kept = "module_kept"            # ImportFrom: the module stays for the next read
+    module_spent = "module_spent"          # ImportFrom: the last read spends the module
 
 
 SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
@@ -276,6 +286,10 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "write": (Select.store, Select.restore),
     "interrupt": (Select.uninterrupted, Select.interruptible),
     "jit": (Select.jit_off, Select.jit_on),
+    "name_read": (Select.named, Select.locals_scope, Select.build_class_scope),
+    "namespace": (Select.name_scope, Select.global_scope),
+    "import_kind": (Select.eager_import, Select.policy_import, Select.lazy_import),
+    "module_use": (Select.module_kept, Select.module_spent),
 }
 
 

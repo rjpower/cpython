@@ -240,6 +240,26 @@ void _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home);
 int _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 
 
+/* The members of ImportKind in declaration order */
+enum { IMPORT_EAGER, IMPORT_POLICY, IMPORT_LAZY };
+
+/* Python/ceval.c: the namespace rows (Python/register_ops/namespaces.rop) */
+PyAPI_FUNC(PyValue) _PyRop_LoadLocals(PyThreadState *, _PyInterpreterFrame *);
+PyAPI_FUNC(PyValue) _PyRop_LoadBuildClass(PyThreadState *, _PyInterpreterFrame *);
+PyAPI_FUNC(PyValue) _PyRop_LoadFromMapping(PyThreadState *, _PyInterpreterFrame *,
+                                           PyValue, PyObject *);
+PyAPI_FUNC(int) _PyRop_StoreName(PyThreadState *, _PyInterpreterFrame *,
+                                 PyObject *, PyValue);
+PyAPI_FUNC(int) _PyRop_DeleteName(PyThreadState *, _PyInterpreterFrame *, PyObject *);
+PyAPI_FUNC(int) _PyRop_StoreGlobal(PyThreadState *, _PyInterpreterFrame *,
+                                   PyObject *, PyValue);
+PyAPI_FUNC(int) _PyRop_DeleteGlobal(PyThreadState *, _PyInterpreterFrame *, PyObject *);
+PyAPI_FUNC(int) _PyRop_SetupAnnotations(PyThreadState *, _PyInterpreterFrame *);
+PyAPI_FUNC(PyValue) _PyRop_ImportName(PyThreadState *, _PyInterpreterFrame *,
+                                      PyObject *, PyValue, PyValue, uint32_t);
+PyAPI_FUNC(PyValue) _PyRop_ImportFrom(PyThreadState *, _PyInterpreterFrame *,
+                                      PyValue, PyObject *);
+
 /* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The
  * members of BranchMode in declaration order, the numbers the generated
  * handlers use for the enum's names: the jump is taken when the test is

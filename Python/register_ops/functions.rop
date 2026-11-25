@@ -36,9 +36,9 @@ family Function(dst:Dst, code:Src)
 family FunctionSet(fn:Src, value:Src, field:Enum<FunctionField>)
   exits(next) ops(SET_FUNCTION_ATTRIBUTE);
 
-point Function.Done(current, next_head, clear) keep() spent(code) defs(dst) held();
-point Function.Failed(current, site, pending) keep() spent(code) defs() held();
-point FunctionSet.Done(current, next_head, clear) keep(fn) spent(value) defs() held();
+point Function.Done(current, next_head, clear) keep() spent(code) defs(dst);
+point Function.Failed(current, site, pending) keep() spent(code) defs();
+point FunctionSet.Done(current, next_head, clear) keep(fn) spent(value) defs();
 
 // A new function over the code, with the frame's globals.  The code stays
 // with its owner (the function takes a count).  Watchers can run Python.
@@ -55,7 +55,7 @@ extern helper function_new(f:Frame, code:Src)
 
 // A failed make closes the code operand with the exception set aside
 extern helper retire_failed_function(f:Frame, code:Src, e:Err) -> Err
-  effects(releases, runs_python)
+  effects(writes, releases, runs_python)
   spends(code)
   c _PyRop_RetireFailedFunction as handle
   evidence(
@@ -65,7 +65,7 @@ extern helper retire_failed_function(f:Frame, code:Src, e:Err) -> Err
               "close) and closes it with the pending exception set aside.");
 
 arm Function.Make split
-  effects(allocates, writes, releases, runs_python, raises)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -113,10 +113,10 @@ family Intrinsic(dst:Dst, id:Enum<IntrinsicId>, x:Src)
 family IntrinsicPair(dst:Dst, id:Enum<IntrinsicId>, x:Src, y:Src)
   exits(next, raise) ops(CALL_INTRINSIC_2);
 
-point Intrinsic.Done(current, next_head, clear) keep() spent(x) defs(dst) held();
-point Intrinsic.Failed(current, site, pending) keep() spent(x) defs() held();
-point IntrinsicPair.Done(current, next_head, clear) keep() spent(x, y) defs(dst) held();
-point IntrinsicPair.Failed(current, site, pending) keep() spent(x, y) defs() held();
+point Intrinsic.Done(current, next_head, clear) keep() spent(x) defs(dst);
+point Intrinsic.Failed(current, site, pending) keep() spent(x) defs();
+point IntrinsicPair.Done(current, next_head, clear) keep() spent(x, y) defs(dst);
+point IntrinsicPair.Failed(current, site, pending) keep() spent(x, y) defs();
 
 // The intrinsic functions take objects: a number is boxed for the call.
 // Every row takes its operands out of their homes (a local's value gets a
@@ -153,7 +153,7 @@ extern helper intrinsic_import_star(t:Thread, f:Frame, x:Src)
 // RuntimeError that has it as cause and context
 extern helper intrinsic_stopiteration(t:Thread, f:Frame, x:Src)
   cases(ok(z:O), err(e:Err))
-  effects(allocates, releases, runs_python, raises)
+  effects(allocates, writes, releases, runs_python, raises)
   spends(x)
   c _PyRop_IntrinsicStopIteration as value_or_null
   evidence(
@@ -176,7 +176,7 @@ extern helper intrinsic_binary(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src, y
 // A comparison or a containment test at a site with no feedback entry
 extern helper intrinsic_compare(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src, y:Src)
   cases(ok(z:O), err(e:Err))
-  effects(allocates, releases, runs_python, raises)
+  effects(allocates, writes, releases, runs_python, raises)
   spends(x, y)
   c _PyRop_IntrinsicCompare as value_or_null
   evidence(
@@ -196,7 +196,7 @@ extern helper intrinsic_attr(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src, y:S
               "owner's attribute and gives None.");
 
 arm Intrinsic.Unary split select(unary)
-  effects(allocates, writes, releases, runs_python, raises)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -213,7 +213,7 @@ arm Intrinsic.Unary split select(unary)
 }
 
 arm Intrinsic.ImportStar split select(import_star)
-  effects(allocates, writes, releases, runs_python, raises)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -230,7 +230,7 @@ arm Intrinsic.ImportStar split select(import_star)
 }
 
 arm Intrinsic.StopIteration split select(stopiteration)
-  effects(allocates, releases, runs_python, raises)
+  effects(allocates, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -247,7 +247,7 @@ arm Intrinsic.StopIteration split select(stopiteration)
 }
 
 arm IntrinsicPair.Binary split select(binary)
-  effects(allocates, writes, releases, runs_python, raises)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -264,7 +264,7 @@ arm IntrinsicPair.Binary split select(binary)
 }
 
 arm IntrinsicPair.Compare split select(compare)
-  effects(allocates, releases, runs_python, raises)
+  effects(allocates, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -281,7 +281,7 @@ arm IntrinsicPair.Compare split select(compare)
 }
 
 arm IntrinsicPair.Attr split select(attr)
-  effects(allocates, writes, releases, runs_python, raises)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {

@@ -14,7 +14,7 @@ enum PollKind(BACKEDGE, CALL_END, RESUME_POLL, JIT_EVENT);
 // P4: positional calls, init cleanup, return
 
 family Call(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
-  exits(next, enter, raise, redirect, miss, again) ops(CALL)
+  exits(next, enter, raise, redirect, miss, again) generic(Generic) ops(CALL)
   events(CALL, C_RETURN, C_RAISE);
 
 family InitResult(value:Src)
@@ -25,19 +25,22 @@ family Return(value:Src)
   events(PY_RETURN);
 
 // The caller goes on here when the child returns: the child's value is dst
-point Call.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst) held();
+point Call.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst);
 // A native call's result, or the end poll's failure after it was published
-point Call.Done(current, next_head, clear) keep() spent(fn, args) defs(dst) held();
-point Call.PollFailed(current, site, pending) keep() spent(fn, args) defs(dst) held();
+point Call.Done(current, next_head, clear) keep() spent(fn, args) defs(dst);
+point Call.PollFailed(current, site, pending) keep() spent(fn, args) defs(dst);
 // The call failed before it entered a frame or returned
-point Call.Failed(current, site, pending) keep() spent(fn, args) defs() held();
+point Call.Failed(current, site, pending) keep() spent(fn, args) defs();
 // The PY_RETURN callback raised: the value was taken and is closed
-point Return.EventFailed(current, site, pending) keep() spent(value) defs() held();
+point Return.EventFailed(current, site, pending) keep() spent(value) defs();
 // The value has gone to the caller's return slot
-point Return.Delivered(caller, resume_head, clear) keep() spent(value) defs() held();
+point Return.Delivered(caller, resume_head, clear) keep() spent(value) defs();
+// The generator's consumer raised as it completed: the error is the
+// consumer's, at its origin
+point Return.ConsumerFailed(consumer, saved_origin, pending) keep() spent(value) defs();
 // __init__ returned None, or something else
-point InitResult.Done(current, next_head, clear) keep() spent(value) defs() held();
-point InitResult.Wrong(current, site, pending) keep(value) spent() defs() held();
+point InitResult.Done(current, next_head, clear) keep() spent(value) defs();
+point InitResult.Wrong(current, site, pending) keep(value) spent() defs();
 
 // Admission of a call that enters its callee's frame
 
@@ -236,7 +239,7 @@ extern helper call_native(t:Thread, f:Frame, fn:Src, a:Args)
     contract: "Borrows every operand for the call; the result is a new owner.");
 
 extern helper retire_failed_args(f:Frame, fn:Src, a:Args, e:Err) -> Err
-  effects(releases)
+  effects(writes, releases)
   spends(fn, a)
   c _PyRop_RetireFailedArgs as handle
   evidence(
@@ -261,6 +264,7 @@ extern helper end_poll(t:Thread, f:Frame)
 extern helper call_event(t:Thread, f:Frame, at:Site, fn:Src, a:Args)
   cases(ok(), err(e:Err))
   effects(runs_python, raises)
+  requires(instrumented(at))
   c _PyRop_CallEvent as int_zero_ok
   evidence(
     review: "P4. ceval.c: call_monitor with call_first_argument, as call_run does"
@@ -285,6 +289,7 @@ extern helper call_native_observed(t:Thread, f:Frame, at:Site, fn:Src, a:Args)
 extern helper return_event(t:Thread, f:Frame, at:Site, v:O)
   cases(ok(z:O), err(e:Err))
   effects(runs_python, raises, releases)
+  requires(instrumented(at))
   c _PyRop_ReturnEvent as value_or_null
   evidence(
     review: "P4. bytecodes.c: _RETURN_VALUE_EVENT.",
@@ -433,12 +438,14 @@ extern helper deliver(c:Frame, v:O) -> Head
     contract: "The slot's old value is released after the write, as STORE_FAST"
               "does; a redirect completes first (_PyFrame_SetReturnValueRare).");
 
-// A generator frame's return: the generator's consumer completes, which
-// may raise (StopIteration) or leave the activation
-extern routine generator_return(c:Frame, v:O, d:DeadFrame) -> Unit
-  effects(writes, releases, switches_frame)
-  exits(return, exit, raise, redirect)
-  c ROP_GEN_RETURN as tail
+// A generator frame's return: the generator's consumer completes and goes
+// on at its head, or a redirect moved it, or the completion raised in the
+// consumer.  An interpreter-owned consumer goes on at its trampoline word.
+// A transfer row: the callee performs the exit.
+extern helper generator_return(c:Frame, v:O, d:DeadFrame)
+  cases(return(f:Frame, h:Head), redirect(r:Route), raise(e:Err))
+  effects(writes, releases, raises, switches_frame)
+  c ROP_GEN_RETURN as transfer
   evidence(
     review: "P4. ceval.c and ceval_routines.h: IR_GEN_RETURN(v, d, 0) with frame the"
             "resumer, as RETURN_VALUE does.",
@@ -447,6 +454,7 @@ extern routine generator_return(c:Frame, v:O, d:DeadFrame) -> Unit
 // The evaluator's entry frame: the value leaves the activation
 extern helper leave_activation(t:Thread, f:Frame) -> Unit
   effects(writes)
+  requires(entry_frame(f))
   c _PyRop_LeaveActivation as unit
   evidence(
     review: "P4. ceval.c: INTERPRETER_EXIT's current_frame = frame->previous.",
@@ -508,7 +516,7 @@ arm Call.Init split
 }
 
 arm Call.Generic split
-  effects(runs_python, raises, polls, switches_frame)
+  effects(runs_python, raises, polls, switches_frame, releases on (dst))
   feedback(read(entry), write(entry), write(handler))
   exits(next, enter, raise, again)
 {
@@ -571,8 +579,8 @@ arm InitResult.Check split
 // The observed wrapper of every Call arm: the CALL event, then the call as
 // Call.Generic makes it, without adaptation, with the C events of a native
 // callee.  A Python callee's PY_START fires in its own RESUME.
-arm Call.Observed split
-  effects(runs_python, raises, polls, switches_frame)
+arm Call.Observed split observes
+  effects(runs_python, raises, polls, switches_frame, releases on (dst))
   feedback()
   exits(next, enter, raise)
 {
@@ -648,25 +656,35 @@ arm Return.Empty split select(thread_frame, vacant_scratch)
 }
 
 arm Return.Generator split select(generator_frame)
-  effects(reads, writes, releases, switches_frame)
+  effects(reads, writes, releases, raises, switches_frame)
   feedback()
-  exits(return, exit, raise, redirect)
+  exits(return, raise, redirect)
 {
   entry():
     let _:Unit = pin_departing();
     let r:O = acquire(value);
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);
-    tail generator_return(caller, r, dying);
+    call generator_return(caller, r, dying) {
+      return -> Completed();
+      redirect -> Moved();
+      raise -> Failed();
+    }
+  Completed(f:Frame, h:Head):
+    exit return(f, h);
+  Moved(rt:Route):
+    exit redirect(rt);
+  Failed(e:Err):
+    exit raise(Return.ConsumerFailed, e);
 }
 
 // The observed wrapper of every Return arm: the PY_RETURN event, then the
 // return of the frame the word runs in.  Return.External stands for
 // INTERPRETER_EXIT, which has no event and is never instrumented.
-arm Return.Observed split
+arm Return.Observed split observes
   effects(reads, writes, releases, raises, runs_python, switches_frame)
   feedback()
-  exits(return, exit, raise, redirect)
+  exits(return, raise, redirect)
 {
   entry():
     let r:O = acquire(value);
@@ -682,7 +700,17 @@ arm Return.Observed split
   Generator():
     let gcaller:Frame = previous_frame(frame);
     let gdying:DeadFrame = depart(thread, frame);
-    tail generator_return(gcaller, v, gdying);
+    call generator_return(gcaller, v, gdying) {
+      return -> Completed();
+      redirect -> Moved();
+      raise -> ConsumerFailed();
+    }
+  Completed(gf:Frame, gh:Head):
+    exit return(gf, gh);
+  Moved(gr:Route):
+    exit redirect(gr);
+  ConsumerFailed(ge:Err):
+    exit raise(Return.ConsumerFailed, ge);
   Thread():
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);

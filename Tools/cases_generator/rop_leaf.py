@@ -458,10 +458,17 @@ class TemplateBuilder:
         deferred = []
         for name in spent:
             home = self.homes[name]
-            merge.ops.append(jt.TOp("detach", [], [], home.field, jt.temp_test(home)))
-            if name not in self.leaf.inline and name in views:
-                deferred.append(jt.TOp("prim", [], [views[name]], "PyValue_XCLOSE",
+            if name not in self.leaf.inline:
+                # A temporary's owner closes after the stores; one the body
+                # never read is loaded before its home is detached
+                v = views.get(name)
+                if v is None:
+                    v = g.value(ir_leaf.VALUE)
+                    merge.ops.append(jt.TOp("slot_load", [v], [], home.field,
+                                            jt.temp_test(home)))
+                deferred.append(jt.TOp("prim", [], [v], "PyValue_XCLOSE",
                                        jt.temp_test(home)))
+            merge.ops.append(jt.TOp("detach", [], [], home.field, jt.temp_test(home)))
         olds = []
         for binding, v in zip(publish.bindings, merge.params):
             dst = self.homes[binding.target]

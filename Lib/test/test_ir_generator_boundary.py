@@ -146,8 +146,8 @@ class GeneratorBoundaryTests(unittest.TestCase):
                         self.assertEqual(target[2], word[1])
                         self.assertLess(target[1], function.__code__.co_nlocals)
                     else:
-                        self.assertEqual(target[0], "POP_TOP")
-                        self.assertEqual(target[1], word[1])
+                        # Move.Retire([], [value])
+                        self.assertEqual(target[:4], ("Move.Retire", 0, 1, word[1]))
                 iterator = function(value)
                 self.assertIs(next(iterator), value)
                 self.assertIs(finish(iterator, reply), expected)

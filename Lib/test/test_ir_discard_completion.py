@@ -60,7 +60,7 @@ class DiscardCompletionTests(unittest.TestCase):
                 # frame exits, so its finalizer runs once, after the call
                 # and the child's locals
                 self.assertEqual(events, ["local", "result"])
-                self.assertNotIn("POP_TOP", [i.opname for i in dis.get_instructions(caller)])
+                self.assertNotIn("Move.Retire", [i.opname for i in dis.get_instructions(caller)])
 
     def test_warmed_inline_results_on_both_routes(self):
         for general, variant in enumerate(VARIANTS):

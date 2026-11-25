@@ -169,7 +169,7 @@ class SemanticCompletionTests(unittest.TestCase):
         self.assertEqual(generator.send(object()), "second")
         with self.assertRaises(StopIteration):
             generator.send(object())
-        self.assertNotIn("POP_TOP", opnames(ignore))
+        self.assertNotIn("Move.Retire", opnames(ignore))
 
     def test_init_cleanup_real_continuation(self):
         class Normal:

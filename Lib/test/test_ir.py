@@ -2672,7 +2672,7 @@ class RegCfgTest(unittest.TestCase):
             x
             1
             return x
-        self.assertNotIn("POP_TOP", self.names(f))
+        self.assertNotIn("Move.Retire", self.names(f))
         # Each line keeps its event
         first = f.__code__.co_firstlineno
         _, events = trace(f, 0)
@@ -2697,7 +2697,6 @@ class RegCfgTest(unittest.TestCase):
         exec("def f():\n import m.m.m.m as x\n return x.depth", ns)
         f = ns["f"]
         self.assertIn("Move.Retire", self.names(f))
-        self.assertNotIn("POP_TOP", self.names(f))
         for _ in range(3):
             deaths.clear()
             self.assertEqual(f(), 3)
@@ -2733,19 +2732,19 @@ class RegCfgTest(unittest.TestCase):
                 self.assertLessEqual(ir.nslots - ir.nfixed, 2)
 
     def test_pop_top_of_a_call_is_folded(self):
-        # The call releases its result: no dst, no POP_TOP, as the return
+        # The call releases its result: no dst, no retirement, as the return
         # that follows is on its line
         def f(g):
             g()
-        self.assertNotIn("POP_TOP", self.names(f))
+        self.assertNotIn("Move.Retire", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
 
     def test_call_discard_across_source_lines(self):
-        # Source boundaries do not require a temporary result or a POP word.
+        # Source boundaries do not require a temporary result or a retirement.
         def f(g):
             g()
             return 1
-        self.assertNotIn("POP_TOP", self.names(f))
+        self.assertNotIn("Move.Retire", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
         call = next(word for word in get_ir(f.__code__) if word[0] == "Call.Generic+NO_SELF")
         self.assertEqual(call[1], IR_FIELD_MAX)
@@ -2766,7 +2765,7 @@ class RegCfgTest(unittest.TestCase):
         self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
         for f in conj, disj:
             self.assertNotIn("Move.Copy", self.names(f))
-            self.assertNotIn("POP_TOP", self.names(f))
+            self.assertNotIn("Move.Retire", self.names(f))
         empty, full = [], [1]
         for x, b in ((empty, "b"), (full, "b"), (0, None), (2.5, 0)):
             o = types.SimpleNamespace(x=x)
@@ -2789,7 +2788,7 @@ class RegCfgTest(unittest.TestCase):
         def window(a, b):
             return list((a or b(), 1))
         self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
-        self.assertNotIn("POP_TOP", self.names(disj))
+        self.assertNotIn("Move.Retire", self.names(disj))
         empty, full = [], [1]
         for a in empty, full, 0, 2.5:
             self.assertIs(disj(a, full), a or full)

@@ -176,6 +176,8 @@ class MakeCellTests(unittest.TestCase):
         self.assertEqual(f(), ([0, 1, 2], "before"))
 
     @support.cpython_only
+    @unittest.skipIf(sys._jit.is_enabled(),
+                     "the JIT's assembler asserts when an allocation fails")
     def test_allocation_failure_closes_the_argument(self):
         _testcapi = import_helper.import_module("_testcapi")
         log = []

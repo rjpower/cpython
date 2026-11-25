@@ -29,6 +29,7 @@
 #include "pycore_regcfg.h"
 #include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic, ROP_HANDLER_Call_Generic
 #include "pycore_rop_rows.h"          // BRANCH_IF_FALSE
+#include "pycore_jit.h"             // _PyJIT_OFF
 
 #undef SUCCESS
 #undef ERROR
@@ -1088,6 +1089,25 @@ rule_branch(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* The jumps: the Jump family (Python/register_ops/truth.rop).  A backedge
+ * that polls is the arm that the baseline JIT's setting selects: the one
+ * that is also its warm-up event while the JIT is on. */
+static int
+rule_jump(_PyRegTr *t, const _PyRegOp *src)
+{
+    int interrupt = src->opcode == JUMP_BACKWARD ? ROP_SELECT_INTERRUPTIBLE
+                                                 : ROP_SELECT_UNINTERRUPTED;
+    int jit = _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF
+                  ? ROP_SELECT_JIT_ON : ROP_SELECT_JIT_OFF;
+    int handler = _PyRop_SelectJump(interrupt, jit);
+    assert(handler >= 0);
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == src->opcode);
+    op->opcode = handler;
+    return SUCCESS;
+}
+
 /* The rules below emit an op before it takes its operands off the stack:
  * if the op raises, its handler finds the stack as it was when the op
  * began, operands included, and the op's depth is that stack's. */
@@ -1148,6 +1168,9 @@ static const _PyRegRule rules[256] = {
     [POP_JUMP_IF_TRUE] = rule_branch,
     [POP_JUMP_IF_NONE] = rule_branch,
     [POP_JUMP_IF_NOT_NONE] = rule_branch,
+    [JUMP_FORWARD] = rule_jump,
+    [JUMP_BACKWARD] = rule_jump,
+    [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,
     [CALL] = rule_call,
     [RETURN_VALUE] = rule_return_value,
     [SWAP] = rule_swap,

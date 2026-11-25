@@ -16,6 +16,8 @@
 //   GetAttr.Shape: GetAttr.Shape: fb is not a leaf value
 //   GetMethod.MethodValues: GetMethod.MethodValues: fb is not a leaf value
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
+//   Jump.Direct: Jump.Direct: exit jump has no leaf lowering
+//   Jump.Poll: Jump.Poll: thread is not a leaf value
 //   Truth.Bool: Truth.Bool: truth_object has no leaf lowering
 //   Truth.Int: Truth.Int: exact_int has no leaf lowering
 //   Truth.List: Truth.List: exact_list has no leaf lowering

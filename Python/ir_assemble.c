@@ -558,12 +558,12 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
     }
-    /* With the baseline JIT on, frame entries, resumes and backward jumps
-     * are its warm-up events and hand-offs (Python/jit.c): a choice made
-     * here, so that with the JIT off the words are what they were. */
-    if ((opcode == RESUME || opcode == JUMP_BACKWARD) &&
-        _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
-        return opcode == RESUME ? RESUME_JIT : JUMP_BACKWARD_JIT;
+    /* With the baseline JIT on, frame entries and resumes are its warm-up
+     * events and hand-offs (Python/jit.c): a choice made here, so that with
+     * the JIT off the words are what they were.  A backedge's is the Jump
+     * family's (the translator's rule). */
+    if (opcode == RESUME && _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
+        return RESUME_JIT;
     }
     if (opcode == BINARY_OP) {
         if (oparg > NB_OPARG_LAST) {

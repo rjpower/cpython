@@ -12,11 +12,11 @@
 /* The arms' handler ids follow the old handlers, in definition order; the
  * observed wrappers of the arms of families that declare events follow them */
 #define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
-#define ROP_NUM_HANDLERS 62
+#define ROP_NUM_HANDLERS 69
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 45
+#define ROP_NUM_ARMS 49
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
               "the handler count is the old handlers, the arms and their wrappers");
 
@@ -135,26 +135,33 @@ enum {
 #define ROP_HANDLER_BranchNone_Test (ROP_FIRST_HANDLER + 39)
 #define ROP_HANDLER_BranchTruth_Observed (ROP_FIRST_HANDLER + 40)
 #define ROP_HANDLER_BranchNone_Observed (ROP_FIRST_HANDLER + 41)
-#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 42)
-#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 43)
-#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 44)
-#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 45)
-#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 46)
-#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 47)
-#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 48)
-#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 49)
-#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 50)
-#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 51)
-#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 52)
-#define ROP_HANDLER_BranchTruth_Bool_Observed (ROP_FIRST_HANDLER + 53)
-#define ROP_HANDLER_BranchTruth_Int_Observed (ROP_FIRST_HANDLER + 54)
-#define ROP_HANDLER_BranchTruth_List_Observed (ROP_FIRST_HANDLER + 55)
-#define ROP_HANDLER_BranchTruth_None_Observed (ROP_FIRST_HANDLER + 56)
-#define ROP_HANDLER_BranchTruth_Str_Observed (ROP_FIRST_HANDLER + 57)
-#define ROP_HANDLER_BranchTruth_Plain_Observed (ROP_FIRST_HANDLER + 58)
-#define ROP_HANDLER_BranchTruth_Slot_Observed (ROP_FIRST_HANDLER + 59)
-#define ROP_HANDLER_BranchTruth_Generic_Observed (ROP_FIRST_HANDLER + 60)
-#define ROP_HANDLER_BranchNone_Test_Observed (ROP_FIRST_HANDLER + 61)
+#define ROP_HANDLER_Jump_Direct (ROP_FIRST_HANDLER + 42)
+#define ROP_HANDLER_Jump_Poll (ROP_FIRST_HANDLER + 43)
+#define ROP_HANDLER_Jump_Warm (ROP_FIRST_HANDLER + 44)
+#define ROP_HANDLER_Jump_Observed (ROP_FIRST_HANDLER + 45)
+#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 46)
+#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 47)
+#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 48)
+#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 49)
+#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 50)
+#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 51)
+#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 52)
+#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 53)
+#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 54)
+#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 55)
+#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 56)
+#define ROP_HANDLER_BranchTruth_Bool_Observed (ROP_FIRST_HANDLER + 57)
+#define ROP_HANDLER_BranchTruth_Int_Observed (ROP_FIRST_HANDLER + 58)
+#define ROP_HANDLER_BranchTruth_List_Observed (ROP_FIRST_HANDLER + 59)
+#define ROP_HANDLER_BranchTruth_None_Observed (ROP_FIRST_HANDLER + 60)
+#define ROP_HANDLER_BranchTruth_Str_Observed (ROP_FIRST_HANDLER + 61)
+#define ROP_HANDLER_BranchTruth_Plain_Observed (ROP_FIRST_HANDLER + 62)
+#define ROP_HANDLER_BranchTruth_Slot_Observed (ROP_FIRST_HANDLER + 63)
+#define ROP_HANDLER_BranchTruth_Generic_Observed (ROP_FIRST_HANDLER + 64)
+#define ROP_HANDLER_BranchNone_Test_Observed (ROP_FIRST_HANDLER + 65)
+#define ROP_HANDLER_Jump_Direct_Observed (ROP_FIRST_HANDLER + 66)
+#define ROP_HANDLER_Jump_Poll_Observed (ROP_FIRST_HANDLER + 67)
+#define ROP_HANDLER_Jump_Warm_Observed (ROP_FIRST_HANDLER + 68)
 
 /* The arm of a statically selected family that each selection admits
  * (its `select`): ROP_SELECT_<Family>_<member>... */
@@ -162,6 +169,9 @@ enum {
 #define ROP_SELECT_Return_thread_frame_vacant_scratch ROP_HANDLER_Return_Empty
 #define ROP_SELECT_Return_generator_frame ROP_HANDLER_Return_Generator
 #define ROP_SELECT_Return_entry_frame ROP_HANDLER_Return_External
+#define ROP_SELECT_Jump_uninterrupted ROP_HANDLER_Jump_Direct
+#define ROP_SELECT_Jump_interruptible_jit_off ROP_HANDLER_Jump_Poll
+#define ROP_SELECT_Jump_interruptible_jit_on ROP_HANDLER_Jump_Warm
 #define ROP_SELECT_Move_transfer ROP_HANDLER_Move_Transfer
 #define ROP_SELECT_Move_retire ROP_HANDLER_Move_Retire
 #define ROP_SELECT_Move_copy ROP_HANDLER_Move_Copy
@@ -189,10 +199,12 @@ enum {
 #define ROP_POINT_GetMethod_Failed 20
 #define ROP_POINT_InitResult_Done 21
 #define ROP_POINT_InitResult_Wrong 22
-#define ROP_POINT_Return_Delivered 23
-#define ROP_POINT_Return_EventFailed 24
-#define ROP_POINT_Truth_Done 25
-#define ROP_POINT_Truth_Failed 26
+#define ROP_POINT_Jump_EventFailed 23
+#define ROP_POINT_Jump_PollFailed 24
+#define ROP_POINT_Return_Delivered 25
+#define ROP_POINT_Return_EventFailed 26
+#define ROP_POINT_Truth_Done 27
+#define ROP_POINT_Truth_Failed 28
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -799,12 +811,16 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"BranchNone.Test", ROP_HANDLER_BranchNone_Test, ROP_FAMILY_BranchNone, 1},
     {"BranchTruth.Observed", ROP_HANDLER_BranchTruth_Observed, ROP_FAMILY_BranchTruth, 1},
     {"BranchNone.Observed", ROP_HANDLER_BranchNone_Observed, ROP_FAMILY_BranchNone, 1},
+    {"Jump.Direct", ROP_HANDLER_Jump_Direct, ROP_FAMILY_Jump, 1},
+    {"Jump.Poll", ROP_HANDLER_Jump_Poll, ROP_FAMILY_Jump, 1},
+    {"Jump.Warm", ROP_HANDLER_Jump_Warm, ROP_FAMILY_Jump, 1},
+    {"Jump.Observed", ROP_HANDLER_Jump_Observed, ROP_FAMILY_Jump, 1},
     {"Move.Transfer", ROP_HANDLER_Move_Transfer, ROP_FAMILY_Move, 1},
     {"Move.Retire", ROP_HANDLER_Move_Retire, ROP_FAMILY_Move, 1},
     {"Move.Copy", ROP_HANDLER_Move_Copy, ROP_FAMILY_Move, 1},
 };
 
-static const _PyRopPoint _PyRop_Points[26] = {
+static const _PyRopPoint _PyRop_Points[28] = {
     {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0, 0},
     {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0), 0},
     {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0, 0},
@@ -827,16 +843,27 @@ static const _PyRopPoint _PyRop_Points[26] = {
     {"GetMethod.Failed", ROP_FAMILY_GetMethod, 20, 0, 0, 1, 0, (1 << 2), 0, 0},
     {"InitResult.Done", ROP_FAMILY_InitResult, 21, 0, 1, 0, 0, (1 << 0), 0, 0},
     {"InitResult.Wrong", ROP_FAMILY_InitResult, 22, 0, 0, 1, (1 << 0), 0, 0, 0},
-    {"Return.Delivered", ROP_FAMILY_Return, 23, 1, 3, 0, 0, (1 << 0), 0, 0},
-    {"Return.EventFailed", ROP_FAMILY_Return, 24, 0, 0, 1, 0, (1 << 0), 0, 0},
-    {"Truth.Done", ROP_FAMILY_Truth, 25, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"Truth.Failed", ROP_FAMILY_Truth, 26, 0, 0, 1, 0, (1 << 1), 0, 0},
+    {"Jump.EventFailed", ROP_FAMILY_Jump, 23, 0, 0, 1, 0, 0, 0, 0},
+    {"Jump.PollFailed", ROP_FAMILY_Jump, 24, 0, 0, 1, 0, 0, 0, 0},
+    {"Return.Delivered", ROP_FAMILY_Return, 25, 1, 3, 0, 0, (1 << 0), 0, 0},
+    {"Return.EventFailed", ROP_FAMILY_Return, 26, 0, 0, 1, 0, (1 << 0), 0, 0},
+    {"Truth.Done", ROP_FAMILY_Truth, 27, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"Truth.Failed", ROP_FAMILY_Truth, 28, 0, 0, 1, 0, (1 << 1), 0, 0},
 };
 
 /* Static selection (rop_catalog.Select): the members of each dimension */
 enum { ROP_SELECT_THREAD_FRAME, ROP_SELECT_GENERATOR_FRAME, ROP_SELECT_ENTRY_FRAME };  /* frame */
 enum { ROP_SELECT_VACANT_SCRATCH, ROP_SELECT_LIVE_SCRATCH };  /* scratch */
 enum { ROP_SELECT_TRANSFER, ROP_SELECT_RETIRE, ROP_SELECT_COPY };  /* move */
+enum { ROP_SELECT_UNINTERRUPTED, ROP_SELECT_INTERRUPTIBLE };  /* interrupt */
+enum { ROP_SELECT_JIT_OFF, ROP_SELECT_JIT_ON };  /* jit */
+
+/* The arm of Jump that holds for (interrupt, jit) */
+#define _PyRop_SelectJump(interrupt, jit) ( \
+    ((interrupt) == ROP_SELECT_UNINTERRUPTED) ? ROP_HANDLER_Jump_Direct : \
+    ((interrupt) == ROP_SELECT_INTERRUPTIBLE && (jit) == ROP_SELECT_JIT_OFF) ? ROP_HANDLER_Jump_Poll : \
+    ((interrupt) == ROP_SELECT_INTERRUPTIBLE && (jit) == ROP_SELECT_JIT_ON) ? ROP_HANDLER_Jump_Warm : \
+    -1)
 
 /* The arm of Move that holds for (move) */
 #define _PyRop_SelectMove(move) ( \

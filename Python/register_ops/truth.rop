@@ -902,7 +902,7 @@ arm BranchNone.Test inline
 
 
 // The observed wrappers (Observed.<Family>, the twin of every arm of the
-// family when the word's stack op is instrumented): the generic test, the
+// family when the word's op is instrumented): the generic test, the
 // retirement of the operand, then the branch event, which may move the frame
 
 arm BranchTruth.Observed split
@@ -1001,4 +1001,124 @@ arm BranchNone.Observed split
     exit redirect(r);
   EventFailed(ee:Err):
     exit raise(BranchNone.Event, ee);
+}
+
+
+// Jump (JUMP_FORWARD, JUMP_BACKWARD, JUMP_BACKWARD_NO_INTERRUPT).  Three
+// arms, chosen by the translator and the assembler's jit choice
+// (_PyRop_SelectJump): a jump that never polls, a backedge, and a backedge
+// that is also the baseline JIT's warm-up event.
+
+point Jump.PollFailed(current, site, pending) keep() spent() defs() held();
+point Jump.EventFailed(current, site, pending) keep() spent() defs() held();
+
+// _CHECK_PERIODIC: signals, the GC and other pending events
+extern helper poll(t:Thread)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises, polls)
+  c _PyRop_Poll as int_zero_ok
+  evidence(
+    review: "Reviewed P5. bytecodes.c _CHECK_PERIODIC: check_periodics.",
+    contract: "A signal handler or a finalizer may run Python and raise.");
+
+// IR_JIT_EVENT(): the code's warm-up event.  With a unit it runs the frame
+// natively and the frame goes on where the unit stopped; otherwise the
+// jump goes on at its target.  The forms and stubs run no event.
+extern routine jit_warm(target:Head) -> Unit
+  effects(runs_python, switches_frame)
+  exits(jump, raise, redirect, exit)
+  c ROP_JIT_WARM as tail
+  evidence(
+    review: "Reviewed P5. bytecodes.c _JIT_EVENT after JUMP_BACKWARD_NO_INTERRUPT:"
+            "IR_JIT_EVENT with the target as next_instr, ceval_macros.h.",
+    contract: "jit_run drives the unit and returns the frame and word to run.");
+
+// The word's JUMP event, which a callback may raise from or move the frame
+extern helper jump_event(t:Thread, f:Frame, at:Site)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_JumpEvent as int_redirect
+  evidence(
+    review: "Reviewed P5. bytecodes.c _MONITOR_JUMP_BACKWARD:"
+            "IR_OBSERVE_COMMITTED_BRANCH with PY_MONITORING_EVENT_JUMP.",
+    contract: "A callback may raise, or move the frame, whose return_pc then"
+              "names the word to run.");
+
+// Whether the jump goes back: only a backedge polls before its event
+extern primitive goes_back(at:Site, to:Head) -> Bool
+  effects(reads)
+  c _PyRop_GoesBack as bool
+  evidence(
+    review: "Reviewed P5. The target word precedes the jump's.",
+    contract: "A comparison of two addresses.",
+    lowering: "none: the arm that tests it is observed, so it has no template",
+    test: "test_rop_truth");
+
+arm Jump.Direct inline select(uninterrupted)
+  effects()
+  feedback()
+  exits(jump)
+{
+  entry():
+    exit jump(target);
+}
+
+arm Jump.Poll inline select(interruptible, jit_off)
+  effects(runs_python, polls, raises)
+  feedback()
+  exits(jump, raise)
+{
+  entry():
+    call poll(thread) {
+      ok -> Go();
+      err -> Failed();
+    }
+  Go():
+    exit jump(target);
+  Failed(e:Err):
+    exit raise(Jump.PollFailed, e);
+}
+
+arm Jump.Warm split select(interruptible, jit_on)
+  effects(runs_python, polls, raises, switches_frame)
+  feedback()
+  exits(jump, raise, redirect, exit)
+{
+  entry():
+    call poll(thread) {
+      ok -> Go();
+      err -> Failed();
+    }
+  Go():
+    tail jit_warm(target);
+  Failed(e:Err):
+    exit raise(Jump.PollFailed, e);
+}
+
+arm Jump.Observed split
+  effects(runs_python, polls, raises)
+  feedback()
+  exits(jump, raise, redirect)
+{
+  entry():
+    branch goes_back(site, target) -> Back(), Event();
+  Back():
+    call poll(thread) {
+      ok -> Event();
+      err -> PollFailed();
+    }
+  PollFailed(pe:Err):
+    exit raise(Jump.PollFailed, pe);
+  Event():
+    call jump_event(thread, frame, site) {
+      ok -> Go();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Go():
+    exit jump(target);
+  Moved(r:Route):
+    exit redirect(r);
+  EventFailed(ee:Err):
+    exit raise(Jump.EventFailed, ee);
 }

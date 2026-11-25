@@ -1243,7 +1243,8 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
  * frame goes back to its unit if it ran in one.  The function forms, which
  * compiled code calls, bind both to nothing. */
 #ifdef _PY_JIT_SUPPORTED
-#define IR_JIT_EVENT() \
+#define IR_JIT_EVENT() IR_JIT_EVENT_AT(next_instr)
+#define IR_JIT_EVENT_AT(NEXT) \
     do { \
         _PyCodeExec *ir_exec = _PyFrame_Exec(frame); \
         /* Most events count a code that has no unit and is not yet warm, \
@@ -1255,7 +1256,7 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
         else { \
             _PyJitUnit *ir_unit = _PyJit_Event(tstate, frame); \
             if (ir_unit != NULL) { \
-                IR_STEP_DONE(jit_run(tstate, ir_unit, frame, next_instr)); \
+                IR_STEP_DONE(jit_run(tstate, ir_unit, frame, (NEXT))); \
             } \
         } \
     } while (0)
@@ -1267,8 +1268,19 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
     } while (0)
 #else
 #define IR_JIT_EVENT() ((void)0)
+#define IR_JIT_EVENT_AT(NEXT) ((void)(NEXT))
 #define IR_JIT_RESUME() ((void)0)
 #endif
+
+/* A backward jump's warm-up event (Jump.Warm): go on at TARGET in the
+ * code's unit if it has one, otherwise in the evaluator.  The forms and
+ * stubs do nothing for the event. */
+#define ROP_JIT_WARM(TARGET) \
+    do { \
+        _PyInstr *rop_target = (TARGET); \
+        IR_JIT_EVENT_AT(rop_target); \
+        IR_BRANCH(rop_target); \
+    } while (0)
 
 /* The execution pin (g3/design.md section 2) that a departing arm takes
  * after its last guard.  The evaluator runs in no unit: nothing to keep

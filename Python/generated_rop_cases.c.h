@@ -453,7 +453,7 @@
             rop_Truth_Generic_truth_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-            PROCESS_ERROR_AT(RAISE, 26, this_instr);
+            PROCESS_ERROR_AT(RAISE, 28, this_instr);
             rop_Truth_Generic_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 truth_at_origin1_hit = false;
@@ -1225,7 +1225,7 @@
             gdying = _PyRop_Depart(tstate, frame);
             ROP_GEN_RETURN(gcaller, v, gdying);
             rop_Return_Observed_Failed:
-            PROCESS_ERROR_AT(RAISE, 24, this_instr);
+            PROCESS_ERROR_AT(RAISE, 26, this_instr);
             rop_Return_Observed_Thread:
             caller = _PyRop_PreviousFrame(frame);
             dying = _PyRop_Depart(tstate, frame);
@@ -1747,7 +1747,7 @@
             rop_Truth_Slot_slot_truth_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-            PROCESS_ERROR_AT(RAISE, 26, this_instr);
+            PROCESS_ERROR_AT(RAISE, 28, this_instr);
             rop_Truth_Slot_slot_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 slot_truth_at_origin1_hit = false;
@@ -2289,6 +2289,101 @@
             rop_BranchNone_Observed_EventFailed:
             PROCESS_ERROR_AT(RAISE, 4, this_instr);
             rop_BranchNone_Observed_Moved:
+            IR_REDIRECT();
+        }
+
+        TARGET(Jump_Direct) {
+            // Jump.Direct (inline)
+            int opcode = ROP_HANDLER_Jump_Direct;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Jump_Direct);
+            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+        }
+
+        TARGET(Jump_Poll) {
+            // Jump.Poll (inline)
+            int opcode = ROP_HANDLER_Jump_Poll;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Jump_Poll);
+            int ret1;
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_Poll(tstate);
+            if (ret1 < 0) {
+                goto rop_Jump_Poll_Failed;
+            }
+            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+            rop_Jump_Poll_Failed:
+            PROCESS_ERROR_AT(RAISE, 24, this_instr);
+        }
+
+        TARGET(Jump_Warm) {
+            // Jump.Warm (split)
+            int opcode = ROP_HANDLER_Jump_Warm;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Jump_Warm);
+            int ret1;
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_Poll(tstate);
+            if (ret1 < 0) {
+                goto rop_Jump_Warm_Failed;
+            }
+            ROP_JIT_WARM((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+            rop_Jump_Warm_Failed:
+            PROCESS_ERROR_AT(RAISE, 24, this_instr);
+        }
+
+        TARGET(Jump_Observed) {
+            // Jump.Observed (split)
+            int opcode = ROP_HANDLER_Jump_Observed;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Jump_Observed);
+            int ret1;
+            int ret2;
+            if (_PyRop_GoesBack(this_instr, (this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)))) {
+                goto rop_Jump_Observed_Back;
+            }
+            goto rop_Jump_Observed_Event;
+            rop_Jump_Observed_Back:
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_Poll(tstate);
+            if (ret1 < 0) {
+                goto rop_Jump_Observed_PollFailed;
+            }
+            rop_Jump_Observed_Event:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_JumpEvent(tstate, frame, this_instr);
+            if (ret2 > 0) {
+                goto rop_Jump_Observed_Moved;
+            }
+            if (ret2 < 0) {
+                goto rop_Jump_Observed_EventFailed;
+            }
+            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+            rop_Jump_Observed_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 24, this_instr);
+            rop_Jump_Observed_EventFailed:
+            PROCESS_ERROR_AT(RAISE, 23, this_instr);
+            rop_Jump_Observed_Moved:
             IR_REDIRECT();
         }
 

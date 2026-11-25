@@ -2287,21 +2287,58 @@ static PyValue _PyRop_CallNativeObserved(PyThreadState *tstate,
                                          _PyInstr *site, PyValue *fn,
                                          const _PyIRWord *head);
 
+static int _PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                            _PyInstr *site, bool taken, int event);
+
 /* The row of BranchTruth.Observed and BranchNone.Observed: the event of the
- * edge the word took, as ir_event_edge() fires it.  A callback that moves
- * the frame leaves the word to run in frame->return_pc, where the
- * redirect exit goes on. */
+ * edge the word took, as ir_event_edge() fires it. */
 static Py_NO_INLINE int
 _PyRop_BranchEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                    _PyInstr *site, bool taken)
 {
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
+    return _PyRop_EdgeEvent(tstate, frame, site, taken,
+                            taken ? PY_MONITORING_EVENT_BRANCH_RIGHT
+                                  : PY_MONITORING_EVENT_BRANCH_LEFT);
+}
+
+/* The row of Jump.Observed: the JUMP event of the word's one edge */
+static Py_NO_INLINE int
+_PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *site)
+{
+    return _PyRop_EdgeEvent(tstate, frame, site, true, PY_MONITORING_EVENT_JUMP);
+}
+
+/* The backedge's poll (Jump.Poll, Jump.Observed): signals, the GC and other
+ * pending events, as _CHECK_PERIODIC */
+static inline int
+_PyRop_Poll(PyThreadState *tstate)
+{
+    return check_periodics(tstate);
+}
+
+/* Whether the jump word at site goes back */
+static inline bool
+_PyRop_GoesBack(_PyInstr *site, _PyInstr *target)
+{
+    return target <= site;
+}
+
+/* The event of the edge of the branch or jump word at site that the word
+ * has committed to.  A callback that moves the frame leaves the word to run
+ * in frame->return_pc, where the redirect exit goes on. */
+static int
+_PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *site, bool taken, int event)
+{
+    // An instruction event may have made the word transparent: its target is
+    // in the format of the handler it wraps
+    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
     _PyInstr *dest = taken ? site + 1 + _PyIR_FormatDistance(fmt, *site)
                            : site + _PyIR_WordLength(*site);
     frame->return_pc = dest;
     _PyIRObserverResult result = _PyIR_ObserveCommittedBranch(
-        tstate, frame, site, site, dest,
-        taken ? PY_MONITORING_EVENT_BRANCH_RIGHT : PY_MONITORING_EVENT_BRANCH_LEFT,
+        tstate, frame, site, site, dest, event,
         taken ? _PyIR_EDGE_TAKEN : _PyIR_EDGE_FALLTHROUGH);
     PyObject *exception = result.status < 0 ? PyErr_GetRaisedException() : NULL;
     frame->instr_ptr = result.next;
@@ -3118,6 +3155,8 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef GEN_STEP_EFFECT
 #pragma push_macro("IR_JIT_EVENT")
 #undef IR_JIT_EVENT
+#pragma push_macro("IR_JIT_EVENT_AT")
+#undef IR_JIT_EVENT_AT
 #pragma push_macro("IR_JIT_RESUME")
 #undef IR_JIT_RESUME
 #pragma push_macro("IR_STORE_RETURN")
@@ -3207,6 +3246,7 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * itself.  So a return store tests only a pending redirect, not the
  * frame's _PyFrame_JIT_RESUME flag. */
 #define IR_JIT_EVENT() ((void)0)
+#define IR_JIT_EVENT_AT(NEXT) ((void)(NEXT))
 #define IR_JIT_RESUME() ((void)0)
 /* The pin's release status is not needed: every pinned arm runs Python, so
  * the form's continuation tests RETIRED when the word stays in its frame */
@@ -3504,6 +3544,7 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("GEN_DISPATCH")
 #pragma pop_macro("GEN_STEP_JUMP")
 #pragma pop_macro("GEN_STEP_EFFECT")
+#pragma pop_macro("IR_JIT_EVENT_AT")
 #pragma pop_macro("IR_JIT_EVENT")
 #pragma pop_macro("IR_JIT_RESUME")
 #pragma pop_macro("IR_STORE_RETURN")

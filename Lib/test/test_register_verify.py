@@ -713,12 +713,14 @@ def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
 
-def at(filename: str, text: str, column: int | None = None, last: bool = False) -> str:
+def at(filename: str, text: str, column: int | None = None, last: bool = False,
+       index: int | None = None) -> str:
     """filename:line, and :column if given, of the first line (the last, if
-    last) of the checked-in definition file that contains text"""
+    last; the index'th, if index) of the checked-in definition file that
+    contains text"""
     lines = (ROP_DIR / filename).read_text().splitlines()
     found = [i for i, source in enumerate(lines, 1) if text in source]
-    line = found[-1] if last else found[0]
+    line = found[index] if index is not None else found[-1] if last else found[0]
     return f"{filename}:{line}" if column is None else f"{filename}:{line}:{column}"
 
 
@@ -748,7 +750,10 @@ class PilotTests(unittest.TestCase):
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
         branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
-        branch_generic = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5, last=True)
+        # The last is the observed wrapper's, which has no arm of its own to
+        # adapt: the generic arm's is the one before it
+        branch_generic = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5, index=-2)
+        branch_observed = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5, last=True)
         mutations = [
             ("add.rop", "  effects(writes, allocates, raises, releases)\n",
              "  effects(writes, raises, releases)\n",
@@ -791,6 +796,8 @@ class PilotTests(unittest.TestCase):
               f"{branch_slot}: BranchTruth.Slot: points: raise at BranchTruth.Failed: "
               "BranchTruth.Failed lists value in spent, but value is intact",
               f"{branch_generic}: BranchTruth.Generic: points: raise at BranchTruth.Failed: "
+              "BranchTruth.Failed lists value in spent, but value is intact",
+              f"{branch_observed}: BranchTruth.Observed: points: raise at BranchTruth.Failed: "
               "BranchTruth.Failed lists value in spent, but value is intact"]),
         ]
         for filename, old, new, expected in mutations:

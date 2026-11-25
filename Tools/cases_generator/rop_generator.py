@@ -346,7 +346,7 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         elif role == "_PyIR_ROLE_IMM" and imm == "_PyIR_LOC_NONE":
             both = [s.name for s in pl.slots]
             imm = "_PyIR_LOC_CD" if both == ["C", "D"] else LOC_NAMES.get(first, imm)
-    branch_events = bool({"BRANCH_LEFT", "BRANCH_RIGHT"} & {e.value for e in fam.events})
+    branch_events = bool({"BRANCH_LEFT", "BRANCH_RIGHT", "JUMP"} & {e.value for e in fam.events})
     exits = set(arm.contract.exits)
     effects = {"_PyIR_RAISES"} if "raise" in exits else set()
     for e in arm.contract.effect_set:

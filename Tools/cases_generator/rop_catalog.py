@@ -254,12 +254,18 @@ class Select(enum.Enum):
     transfer = "transfer"                  # Move: each source's owner goes to its destination
     retire = "retire"                      # Move: transfer, then close the sources left over
     copy = "copy"                          # Move: each destination takes a second owner
+    uninterrupted = "uninterrupted"        # Jump: no poll (a forward jump, a yield-from loop's)
+    interruptible = "interruptible"        # Jump: a backedge polls
+    jit_off = "jit_off"                    # the baseline JIT is off
+    jit_on = "jit_on"                      # the baseline JIT is on, so a backedge warms the code
 
 
 SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "frame": (Select.thread_frame, Select.generator_frame, Select.entry_frame),
     "scratch": (Select.vacant_scratch, Select.live_scratch),
     "move": (Select.transfer, Select.retire, Select.copy),
+    "interrupt": (Select.uninterrupted, Select.interruptible),
+    "jit": (Select.jit_off, Select.jit_on),
 }
 
 

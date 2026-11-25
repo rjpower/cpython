@@ -123,7 +123,8 @@ family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>)
 // JUMP_BACKWARD, Warm is JUMP_BACKWARD with the JIT's warm-up event
 family Jump(target:FarHead)
   exits(jump, raise, redirect, exit)
-  ops(JUMP_FORWARD, JUMP_BACKWARD, JUMP_BACKWARD_NO_INTERRUPT);
+  ops(JUMP_FORWARD, JUMP_BACKWARD, JUMP_BACKWARD_NO_INTERRUPT)
+  events(JUMP);
 
 // The operands are in the order of the old conditional jump words: the
 // value in A, the entry in B, the mode in C and the target in D

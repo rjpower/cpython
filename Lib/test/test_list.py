@@ -421,7 +421,7 @@ class ListTest(list_tests.CommonTest):
 
     def test_deopt_from_append_list(self):
         # gh-132011: it used to crash, because
-        # of `CALL_LIST_APPEND` specialization failure.
+        # of a failed list.append call specialization.
         code = textwrap.dedent("""
             import _testinternalcapi
 

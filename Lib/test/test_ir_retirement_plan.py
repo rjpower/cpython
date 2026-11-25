@@ -13,8 +13,7 @@ UNCOVERED, EXACT, MISMATCH = range(3)
 
 def return_sites(code):
     return [i for i, row in enumerate(_testinternalcapi.get_ir(code))
-            if row[0] in {"RETURN_VALUE", "RETURN_VALUE_EMPTY",
-                          "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"}]
+            if row[0].startswith("Return.")]
 
 
 class RetirementPlanTests(unittest.TestCase):
@@ -61,7 +60,7 @@ class RetirementPlanTests(unittest.TestCase):
             return value
 
         rows = _testinternalcapi.get_ir(f.__code__)
-        self.assertIn("CALL+NO_SELF", [row[0] for row in rows])
+        self.assertIn("Call.Generic+NO_SELF", [row[0] for row in rows])
         for code in self.routes(f.__code__):
             sites = return_sites(code)
             self.assertEqual(len(sites), 1)

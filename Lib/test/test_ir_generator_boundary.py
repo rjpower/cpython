@@ -164,7 +164,6 @@ class GeneratorBoundaryTests(unittest.TestCase):
         exits = [words[pc + 1 + ((word[4] ^ 2048) - 2048)][0]
                  for pc, word in sends]
         self.assertNotIn("RETURN_VALUE", exits)
-        self.assertNotIn("RETURN_VALUE_EMPTY", exits)
         for _ in range(ROUNDS):
             self.assertEqual(finish(add(17, 29), None), 46)
 

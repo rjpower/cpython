@@ -813,11 +813,6 @@ gen_claim(PyThreadState *tstate, PyGenObject *gen)
     (IR_IS_LOCAL_FIELD(W, X) ? PyValue_NULL \
         : _PyFrame_TakeKnownHome(frame, &IR_SLOT(IR_FIELD(W, X)), PyValue_Borrow(V)))
 
-/* Selected only by the checked interpreter-exit native-home contract. */
-#define IR_DETACH_NATIVE(W, X, V) \
-    (assert(frame->owner == FRAME_OWNED_BY_INTERPRETER), \
-     IR_SLOT(IR_FIELD(W, X)) = PyValue_NULL, _PyIR_AdoptTemp(V))
-
 /* The DSL's TAKE(V) of view V whose field's owner is OWN, detached before:
  * a value with a count of its own, for a home that the handler stores
  * elsewhere.  A dying input's count moves, and OWN is empty after, so the

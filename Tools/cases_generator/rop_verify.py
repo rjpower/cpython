@@ -28,17 +28,17 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, Fact, FrameRole,
-                         Handle, Region, SchemaCtor, Wrap)
-from rop_check import (CANDIDATE, ROP_DIR, UNWRAP, Program, feedback_schemas,
+from rop_catalog import (SELECT_FACTS, AccessMode, BuiltinType, DebtKind, Effect, Fact,
+                         FrameRole, Handle, Region, SchemaCtor, Wrap)
+from rop_check import (CONVENTIONS, CANDIDATE, ROP_DIR, UNWRAP, Program, feedback_schemas,
                        is_linear, is_source, result_cases)
 import rop_check
-from rop_model import (RESULT_CASE, Advance, Arm, Block, BoolLit, Branch, Call,
+from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, Contract, Diagnostic, Each, Exit, Expr, Extern,
                        FactUse, Family, Goto, Guard, HandleType, Let, Macro, Name, Nat,
-                       Param, Point, Publish, Returns, SchemaType, SpanLit, SrcSpan,
-                       Tail, Target, Type, WrapType, DISCARD, ENTRY)
-from rop_print import expr_text
+                       Null, Param, Point, Publish, Returns, SchemaType, SpanLit, SrcSpan,
+                       Target, Type, WrapType, DISCARD, ENTRY)
+from rop_print import effect_text, expr_text
 
 
 class Rule(enum.Enum):
@@ -55,6 +55,7 @@ class Rule(enum.Enum):
     effects = "effects"           # effect coverage
     feedback = "feedback"         # feedback coverage
     family = "family"             # family conformance
+    entry = "entry"               # the entry kind a candidate's arm reads
 
 
 # The effect lattice of ir_contract.py: what a declared effect covers, the
@@ -233,6 +234,10 @@ class Walk:
     effects: list[tuple[Effect, SrcSpan, str]] = field(default_factory=list)
     feedback: list[tuple[AccessMode, str, SrcSpan, str]] = field(default_factory=list)
     fresh: int = 0
+    # The case of the status call that made each payload value
+    origin: dict[str, str] = field(default_factory=dict)
+    # The exit blocks of transfer rows' edges: the callee performs the exit
+    transfers: frozenset[str] = frozenset()
 
     def report(self, span: SrcSpan, rule: Rule, message: str) -> None:
         key = (span, f"{span.line}:{span.column}:{rule.value}: {message}")
@@ -273,6 +278,8 @@ def ref_kind(t: Type) -> RefKind | None:
 
 
 def is_dest(t: Type) -> bool:
+    if isinstance(t, WrapType) and t.wrap == Wrap.Span:
+        t = t.arg
     return handle_of(t) in rop_check.DEST_HANDLES
 
 
@@ -324,15 +331,10 @@ def load(paths: Iterable[Path]) -> Program:
 
 
 def generic_arms(program: Program, family: str) -> list[Arm]:
-    """The arms a miss reaches: shared arms, and the family's Generic arm
-    when it is split (it leaves the frame, which a stub cannot), that do not
-    themselves miss.  An arm that the translator selects (`select(...)`) is
-    reached only so."""
-    return [a for a in program.arms_of(family)
-            if (a.region == Region.shared
-                or (a.region == Region.split and a.name == f"{family}.Generic"))
-            and "miss" not in a.contract.exits
-            and not a.select]
+    """The arm a miss reaches: the family's `generic(Arm)`, if it declares
+    one."""
+    generic = program.families[family].generic
+    return [] if generic is None else [program.arms[f"{family}.{generic}"]]
 
 
 def missing_generic(program: Program) -> tuple[str, ...]:
@@ -391,6 +393,9 @@ def check_graph(program: Program, name: str, arm: Arm | None, macro: Macro | Non
                 defblock[s.name] = b.label
     w = Walk(program, name, blocks, info.order, info.idom, family, macro, contract,
              {p.name: p.type for p in params}, defblock)
+    w.transfers = frozenset(e.target.label for b in graph.blocks
+                            if isinstance(b.term, CallTerm) and is_transfer(program, b.term.callee)
+                            for e in b.term.edges)
     walk(w, entry_state(w, params))
     if arm is not None:
         for f in contract.requires:
@@ -401,6 +406,12 @@ def check_graph(program: Program, name: str, arm: Arm | None, macro: Macro | Non
     return list(w.diags.values())
 
 
+def is_transfer(program: Program, callee: str) -> bool:
+    x = program.externs.get(callee)
+    return (x is not None and x.c is not None and x.c.convention in CONVENTIONS
+            and CONVENTIONS[x.c.convention].transfer)
+
+
 def entry_state(w: Walk, params: tuple[Param, ...]) -> State:
     st = State()
     for p in params:
@@ -409,15 +420,27 @@ def entry_state(w: Walk, params: tuple[Param, ...]) -> State:
             st.homes[p.name] = HomeState(Home.full)
         elif is_linear(t):
             st.live[p.name] = Token(p.span, "the caller", None, p.name in w.contract.borrows)
-        elif w.family is not None and is_source(t):
-            st.homes[p.name] = HomeState(Home.intact)
-        elif w.family is not None and is_dest(t):
-            st.homes[p.name + "/dst"] = HomeState(Home.untouched)
+        elif w.family is not None and (is_source(t) or is_dest(t)):
+            # A Local is read and written: a source home and a destination
+            if is_source(t):
+                st.homes[p.name] = HomeState(Home.intact)
+            if is_dest(t):
+                st.homes[p.name + "/dst"] = HomeState(Home.untouched)
         elif w.family is None and is_source(t):
             st.homes[p.name] = HomeState(Home.intact)
     if w.family is None:
         for f in w.contract.requires:
             st.add_fact(FactT(f.fact, f.type_arg, f.subjects))
+        return st
+    # The static evidence that selected the arm, and the instrumentation
+    # that runs an observed wrapper, hold at its entry
+    arm = w.program.arms[w.definition]
+    for m in arm.select:
+        if m in SELECT_FACTS:
+            fact, subject = SELECT_FACTS[m]
+            st.add_fact(FactT(fact, None, (subject,)))
+    if arm.observes:
+        st.add_fact(FactT(Fact.instrumented, None, ("site",)))
     return st
 
 
@@ -480,10 +503,8 @@ def run_block(w: Walk, b: Block, st: State,
     elif isinstance(t, Advance):
         check_loop_tokens(w, st, t)
         new_back.setdefault(t.body, []).append((b.label, st.copy()))
-    elif isinstance(t, Tail):
-        do_tail(w, st, t)
     else:
-        do_exit(w, st, t)
+        do_exit(w, st, t, b.label in w.transfers)
 
 
 def flow(w: Walk, st: State, target: Target, prefix: list[tuple[str, Type]],
@@ -515,6 +536,8 @@ def bind_param(w: Walk, st: State, name: str, vid: str | None, t: Type, span: Sr
         token = take(w, st, vid, span, f"edge to {name}")
         if token is not None:
             st.live[name] = replace(token, borrowed=False)
+    if vid in w.origin:
+        w.origin[name] = w.origin[vid]
     canon = st.canonical(vid)
     for f in list(st.facts):
         if canon in f.subjects:
@@ -621,6 +644,9 @@ def take(w: Walk, st: State, vid: str, span: SrcSpan, by: str) -> Token | None:
         if how is not None:
             w.report(span, Rule.ownership, f"{by}: {display(vid)} was already consumed "
                      f"by {where(how)}")
+        else:
+            w.report(span, Rule.ownership, f"{by}: {display(vid)} is linear but no "
+                     "owner of it is held here")
         return None
     if token.borrowed:
         w.report(span, Rule.ownership, f"{by}: {vid} is borrowed from the caller "
@@ -667,7 +693,7 @@ def value(w: Walk, st: State, e: Expr, want: Type | None = None,
         vid = name or w.temp(e.span, "span")
         for item in e.items:
             iv = value(w, st, item)
-            if iv is not None and iv in st.live:
+            if iv is not None and (iv in st.live or iv in st.gone):
                 take(w, st, iv, item.span, f"[...] at {e.span}")
                 st.live.setdefault(vid, Token(e.span, "a [...] of owners"))
         return vid
@@ -694,6 +720,8 @@ def call_value(w: Walk, st: State, e: Call, name: str | None) -> str | None:
         (arg,) = e.args
         src = value(w, st, arg)
         set_action(st, e.span, f"acquire({expr_text(arg)})", adaptation=False)
+        # A temporary's owner leaves its home
+        use_effect(w, st, Effect.writes, e.span, f"acquire({expr_text(arg)})")
         if src is not None and src in st.homes:
             h = st.homes[src]
             if h.state == Home.acquired:
@@ -724,11 +752,16 @@ def call_value(w: Walk, st: State, e: Call, name: str | None) -> str | None:
                 st.refs[vid] = st.refs[src]
             if src in st.dead:
                 st.dead[vid] = st.dead[src]
+            if src in st.live or src in st.gone:
+                # The owner in a Maybe moves to its projection
+                tok = take(w, st, src, e.span, f"unwrap({expr_text(arg)})")
+                if tok is not None:
+                    st.live[vid] = tok
         st.add_fact(FactT(Fact.nonnull, None, (vid,)))
         return vid
     if e.callee == CANDIDATE:
-        for arg in e.args[1:]:
-            value(w, st, arg)
+        recipes = [value(w, st, arg) for arg in e.args[1:]]
+        check_entry(w, st, e, recipes)
         return vid
     callee = w.program.externs.get(e.callee) or w.program.macros.get(e.callee)
     assert callee is not None and isinstance(callee.result, Returns)
@@ -809,9 +842,14 @@ def apply_call(w: Walk, st: State, callee: Callee, exprs: tuple[Expr, ...],
             w.report(span, Rule.facts, f"{what} requires {text}({shown}), which no "
                      "dominating fact proves")
     effects = c.effect_set
-    for p, a in zip(callee.params, args):
+    crossing = []
+    for p, a, e in zip(callee.params, args, exprs):
         if a is None or is_linear(p.type):
             continue
+        crossing.append(a)
+        if isinstance(e, SpanLit):
+            crossing += [item.name for item in e.items if isinstance(item, Name)]
+    for a in crossing:
         ref = st.refs.get(a)
         if ref is None or a in st.dead:
             continue
@@ -845,8 +883,10 @@ def apply_call(w: Walk, st: State, callee: Callee, exprs: tuple[Expr, ...],
     if effects - {Effect.reads}:
         adapt = is_feedback_write(c) and effects <= ADAPTATION
         set_action(st, span, what, adaptation=adapt)
-    fbs = w.fb
-    if any(a in fbs for a in args if a is not None):
+    # A feedback argument is the definition's own entry however it was
+    # passed (an alias, a block parameter): the type says so, not the name
+    if any(isinstance(p.type, SchemaType) and p.type.ctor == SchemaCtor.Fb
+           for p in callee.params):
         for acc in c.feedback:
             w.feedback.append((acc.mode, acc.field, span, what))
     kill(st, effects, span, what)
@@ -971,7 +1011,15 @@ def do_publish(w: Walk, st: State, s: Publish) -> None:
     what = f"publish at {s.point}"
     bound: dict[str, str] = {}
     owners: dict[str, str] = {}
+    vectors: list[Binding] = []
+    vacated: list[str] = []
     for b in s.bindings:
+        if b.vector:
+            vectors.append(b)
+            continue
+        if isinstance(b.value, Null):
+            vacated.append(b.target)
+            continue
         vid = value(w, st, b.value)
         if vid is None:
             continue
@@ -985,7 +1033,7 @@ def do_publish(w: Walk, st: State, s: Publish) -> None:
     spents = [d.subject for d in s.debts if d.kind == DebtKind.spent]
     debts = []
     for d in s.debts:
-        if d.kind == DebtKind.old and d.subject not in bound:
+        if d.kind == DebtKind.old and d.subject not in bound and d.subject not in vacated:
             w.report(d.span, Rule.publish, f"old({d.subject}): {d.subject} is not bound "
                      "by this publish")
         if (d.kind, d.subject) in debts and d.kind in (DebtKind.old, DebtKind.spent):
@@ -995,7 +1043,7 @@ def do_publish(w: Walk, st: State, s: Publish) -> None:
                      f"twice: {why}")
             continue
         debts.append((d.kind, d.subject))
-    for target in bound:
+    for target in list(bound) + vacated:
         if target not in olds:
             w.report(s.span, Rule.publish, f"{target} is bound but its displaced owner "
                      f"is not retired: add old({target})")
@@ -1003,45 +1051,110 @@ def do_publish(w: Walk, st: State, s: Publish) -> None:
     taken: set[str] = set()
     for target, vid in bound.items():
         published[target] = vid
-        dst = st.homes.get(target + "/dst")
-        if dst is not None and dst.state == Home.defined:
-            w.report(s.span, Rule.publish, f"{target} is published twice; first by "
-                     f"{dst.what} at {dst.span}")
         if vid not in st.live and vid not in st.gone:
             w.report(s.span, Rule.publish, f"{target} = {display(vid)}: not an owner")
         if vid not in taken:
             taken.add(vid)
             take(w, st, vid, s.span, what)
+    vector_sources: set[str] = set()
+    for b in vectors:
+        source = b.value.args[0] if isinstance(b.value, Call) else b.value
+        assert isinstance(source, Name)
+        check_alive(w, st, source.name, source.span)
+        if not isinstance(b.value, Call):
+            # The paired owners move: the sources leave their homes
+            vector_sources.add(source.name)
+            spend(w, st, source.name, b.span, what)
+    releases: list[str] = []
     for kind, subject in debts:
         span = next(d.span for d in s.debts if (d.kind, d.subject) == (kind, subject))
         if kind == DebtKind.spent:
-            spend(w, st, subject, span, what)
+            h = st.homes.get(subject)
+            acquired = h is not None and h.state == Home.acquired
+            if subject in vector_sources:
+                # The sources past the pairs are closed
+                releases.append(f"spent({subject})")
+            else:
+                spend(w, st, subject, span, what)
+                if not acquired:
+                    releases.append(f"spent({subject})")
+        elif kind == DebtKind.old:
+            check_old(w, subject, span, what, releases)
+            h = st.homes.get(subject)
+            if h is not None and h.state == Home.intact:
+                # A Local's binding, read as a source, is the displaced owner
+                # old() releases: its source half is spent
+                spend(w, st, subject, span, what)
         elif kind in (DebtKind.roots, DebtKind.owned):
             check_alive(w, st, subject, span)
             take(w, st, subject, span, f"{kind.value}({subject}) in {what}")
+            releases.append(f"{kind.value}({subject})")
     set_action(st, s.span, what, adaptation=False)
     effects: frozenset[Effect] = frozenset()
-    if bound or spents:
+    if s.bindings or spents:
         effects |= {Effect.writes}
         use_effect(w, st, Effect.writes, s.span, what)
-    if s.debts:
+    if releases:
         effects |= {Effect.releases}
-        use_effect(w, st, Effect.releases, s.span, what)
+        use_effect(w, st, Effect.releases, s.span, f"{what} ({', '.join(releases)})")
     values = {}
     for target, vid in published.items():
         tmp = State(facts=set(st.facts), alias=st.alias)
         copy_facts(tmp, vid, target, heap=False)
         values[target] = {f for f in tmp.facts if f.subjects == (target,)}
     kill(st, effects, s.span, what)
-    for target in published:
+    for target in list(published) + vacated + [b.target for b in vectors]:
+        dst = st.homes.get(target + "/dst")
+        if dst is not None and dst.state == Home.defined:
+            w.report(s.span, Rule.publish, f"{target} is published twice; first by "
+                     f"{dst.what} at {dst.span}")
         st.facts = {f for f in st.facts if target not in f.subjects}
-        st.facts |= values[target]
+        st.facts |= values.get(target, set())
         st.homes[target + "/dst"] = HomeState(Home.defined, s.span, what)
     st.points = frozenset({s.point})
     st.published = frozenset(st.homes.items())
     point = w.program.points.get(s.point)
     if point is not None and w.family is not None:
-        check_point(w, st, point, s.span, what, held_tokens=False)
+        check_point(w, st, point, s.span, what)
+
+
+def check_old(w: Walk, subject: str, span: SrcSpan, what: str,
+              releases: list[str]) -> None:
+    """old(d) releases d's displaced owner, per home class.  A temporary's
+    is vacant by construction.  A destination that may name a local's home
+    (a Dst, which a folded store can make a local's) releases a binding
+    there, which may run Python: the arm declares `releases on (d)`.  A
+    Local operand always releases a binding."""
+    t = w.operands.get(subject)
+    if t is not None and handle_of(t) == Handle.Local:
+        releases.append(f"old({subject})")
+        use_effect(w, State(), Effect.runs_python, span,
+                   f"{what} (old({subject}) closes a local's binding)")
+        return
+    declared = any(subject in e.on for e in w.contract.effects
+                   if e.effect is Effect.releases)
+    if not declared:
+        w.report(span, Rule.effects, f"{what}: old({subject}) releases the binding "
+                 f"{subject} displaces when it names a local's home, which may run "
+                 f"Python: declare releases on ({subject})")
+
+
+def check_entry(w: Walk, st: State, e: Call, recipes: list[str | None]) -> None:
+    """candidate(A, r): A reads the entry its installer writes from r, so
+    r is the payload of the classifier case A declares (`entry(k)`)."""
+    name = e.args[0].name if isinstance(e.args[0], Name) else ""
+    arm = w.program.arms.get(name)
+    if arm is None or not recipes or recipes[0] is None:
+        return
+    case = w.origin.get(recipes[0])
+    if arm.entry is None:
+        w.report(e.span, Rule.entry, f"candidate({name}, {expr_text(e.args[1])}): "
+                 f"{name} is installed with a recipe but declares no entry(...)")
+    elif case != arm.entry:
+        w.report(e.span, Rule.entry, f"candidate({name}, {expr_text(e.args[1])}): "
+                 f"{name} reads entry({arm.entry}), but the recipe is "
+                 + (f"the payload of case {case}" if case else "not a classifier "
+                    "case's payload"))
 
 
 def do_status_call(w: Walk, st: State, t: CallTerm, label: str,
@@ -1062,6 +1175,7 @@ def do_status_call(w: Walk, st: State, t: CallTerm, label: str,
             kind = ref_kind(p.type)
             if kind is not None:
                 out.refs[vid] = Ref(kind, edge.span, f"case {edge.case} of {t.callee}")
+            w.origin[vid] = edge.case
             payload.append((vid, p.type))
         ensure(w, out, callee, edge.case, args, [v for v, _ in payload])
         flow(w, out, edge.target, payload, incoming, label)
@@ -1092,7 +1206,9 @@ def do_each(w: Walk, st: State, t: Each, label: str,
 
 # Exits
 
-def do_exit(w: Walk, st: State, t: Exit) -> None:
+def do_exit(w: Walk, st: State, t: Exit, transfer: bool = False) -> None:
+    """An exit; `transfer`: a transfer row's callee performs it, leaving the
+    frame for return, redirect and exit, whose homes then die with it."""
     args = [value(w, st, a) for a in t.args]
     if w.macro is not None:
         macro_exit(w, st, t, args)
@@ -1125,8 +1241,7 @@ def do_exit(w: Walk, st: State, t: Exit) -> None:
         point_name = t.args[0].name if isinstance(t.args[0], Name) else ""
         point = w.program.points.get(point_name)
         if point is not None:
-            accounted = check_point(w, st, point, t.span, f"raise at {point_name}",
-                                    held_tokens=True)
+            check_point(w, st, point, t.span, f"raise at {point_name}")
     elif kind == "enter":
         use_effect(w, st, Effect.switches_frame, t.span, what)
         if args[0] is not None:
@@ -1134,14 +1249,19 @@ def do_exit(w: Walk, st: State, t: Exit) -> None:
         check_enter(w, st, t)
     elif kind == "return":
         use_effect(w, st, Effect.switches_frame, t.span, what)
-        check_transfer(w, st, t, kind)
+        if not transfer:
+            check_transfer(w, st, t, kind)
     elif kind in ("yield", "redirect", "exit"):
         if kind == "yield":
             use_effect(w, st, Effect.switches_frame, t.span, what)
         if args[0] is not None:
-            take(w, st, args[0], t.span, what)
-    if kind in ("next", "branch", "jump"):
-        check_completion(w, st, t, what)
+            tok = take(w, st, args[0], t.span, what)
+            if kind == "exit" and tok is not None and tok.source is not None:
+                # The owner acquired from the home leaves with the activation
+                accounted.add(tok.source)
+    leaves = transfer and kind in ("redirect", "exit")
+    if kind in ("next", "branch", "jump", "yield", "redirect", "exit") and not leaves:
+        check_completion(w, st, t, what, accounted)
     if kind in DEPARTING_EXITS:
         check_pinned(w, st, t.span, what)
     for n, tok in sorted(st.live.items()):
@@ -1162,36 +1282,31 @@ def check_restart_homes(w: Walk, st: State, span: SrcSpan, what: str) -> None:
             return
 
 
-def check_completion(w: Walk, st: State, t: Exit, what: str) -> None:
-    """At next, branch and jump the homes are those of the point last
-    published, or untouched if none was."""
+def check_completion(w: Walk, st: State, t: Exit, what: str,
+                     leaving: set[str] = frozenset()) -> None:
+    """At next, branch, jump, yield, redirect and exit the homes are those
+    of the point last published, or untouched if none was.  A next, branch
+    or jump takes its pc from that point, so paths that published different
+    points must not join before it."""
+    if len(st.points) > 1 and t.kind in ("next", "branch", "jump"):
+        w.report(t.span, Rule.points, f"{what}: the paths into it published "
+                 f"different points ({', '.join(sorted(st.points))}); a joined exit "
+                 "needs a fresh checkpoint on each path")
+        return
     if st.points:
         if st.published == frozenset(st.homes.items()):
             return
         for name in sorted(st.points):
             point = w.program.points.get(name)
             if point is not None:
-                check_point(w, st, point, t.span, f"{what} after publish at {name}",
-                            held_tokens=False)
+                check_point(w, st, point, t.span, f"{what} after publish at {name}")
         return
     for h, hs in st.homes.items():
+        if h in leaving:
+            continue
         if hs.state not in (Home.intact, Home.untouched, Home.full):
             w.report(t.span, Rule.points, f"{what}: {h.removesuffix('/dst')} is "
                      f"{hs.text()}, but no publish names a point for it")
-
-
-def do_tail(w: Walk, st: State, t: Tail) -> None:
-    """`tail r(args)`: the routine is taken at its declaration and finishes
-    the word by its own exits; nothing may be left outstanding."""
-    x = w.program.externs[t.callee]
-    what = f"tail {t.callee}"
-    args = [value(w, st, a) for a in t.args]
-    apply_call(w, st, x, t.args, args, t.span)
-    if DEPARTING_EXITS & set(x.contract.exits):
-        check_pinned(w, st, t.span, what)
-    for n, tok in sorted(st.live.items()):
-        w.report(t.span, Rule.ownership, f"{what} leaves {display(n)} (made by "
-                 f"{tok.what} at {tok.span}) unaccounted")
 
 
 def check_pinned(w: Walk, st: State, span: SrcSpan, what: str) -> None:
@@ -1207,8 +1322,7 @@ def check_enter(w: Walk, st: State, t: Exit) -> None:
     p = w.program.points.get(t.resume or "")
     if p is None:
         return
-    check_point(w, st, p, t.span, f"exit enter resume {p.name}", held_tokens=False,
-                resume=True)
+    check_point(w, st, p, t.span, f"exit enter resume {p.name}", resume=True)
 
 
 def check_transfer(w: Walk, st: State, t: Exit, kind: str) -> None:
@@ -1222,22 +1336,20 @@ def check_transfer(w: Walk, st: State, t: Exit, kind: str) -> None:
         return
     for p in points:
         assert p is not None
-        check_point(w, st, p, t.span, f"exit {kind} after publish at {p.name}",
-                    held_tokens=False)
+        check_point(w, st, p, t.span, f"exit {kind} after publish at {p.name}")
 
 
 def check_point(w: Walk, st: State, p: Point, span: SrcSpan, what: str,
-                held_tokens: bool, resume: bool = False) -> set[str]:
-    """The point's keep, spent, defs and held lists against the homes and
-    owners: a source is kept if intact, spent if spent, held if an owner
-    acquired from it is outstanding; a destination is a def if published
-    (at a resume point, defined later by the child's return, so not yet).
-    Returns the tokens the point accounts for (those held)."""
+                resume: bool = False) -> None:
+    """The point's keep, spent and defs lists against the homes: a source
+    is kept if intact and spent otherwise; a destination is a def if
+    published (at a resume point, defined later by the child's return, so
+    not yet).  A point carries no owner: one acquired from a home and still
+    outstanding is refused."""
     roles: dict[str, str] = {}
-    for role, names in (("keep", p.keep), ("spent", p.spent), ("held", p.held)):
+    for role, names in (("keep", p.keep), ("spent", p.spent)):
         for n in names:
             roles[n] = role
-    accounted: set[str] = set()
     for h, hs in sorted(st.homes.items()):
         if h.endswith("/dst"):
             name = h.removesuffix("/dst")
@@ -1254,22 +1366,17 @@ def check_point(w: Walk, st: State, p: Point, span: SrcSpan, what: str,
                          f"but {name} is {hs.text()}")
             continue
         holder = [n for n, tok in st.live.items() if tok.source == h]
-        if hs.state == Home.intact:
-            actual = "keep"
-        elif hs.state == Home.spent:
-            actual = "spent"
-        elif hs.state == Home.acquired and holder:
-            actual = "held"
-        else:
-            actual = "spent"
+        if hs.state == Home.acquired and holder:
+            w.report(span, Rule.points, f"{what}: {h} is {hs.text()} with "
+                     f"{display(holder[0])} outstanding; a point carries no owner, so "
+                     "discharge it first")
+            continue
+        actual = "keep" if hs.state == Home.intact else "spent"
         declared = roles.get(h, "")
         if declared != actual:
             listed = f"lists {h} in {declared}" if declared else f"does not list {h}"
             w.report(span, Rule.points, f"{what}: {p.name} {listed}, but {h} is "
-                     f"{hs.text()}" + (f" with {holder[0]} outstanding" if holder else ""))
-        if actual == "held" and declared == "held" and held_tokens:
-            accounted.update(holder)
-    return accounted
+                     f"{hs.text()}")
 
 
 def check_fact(w: Walk, st: State, f: FactUse, names: Mapping[str, str | None],
@@ -1320,7 +1427,7 @@ def macro_exit(w: Walk, st: State, t: Exit, args: list[str | None]) -> None:
 
 def check_coverage(w: Walk) -> None:
     declared = w.contract.effect_set
-    shown = ", ".join(e.effect.value for e in w.contract.effects)
+    shown = ", ".join(effect_text(e) for e in w.contract.effects)
     for e, span, what in w.effects:
         if not covered(declared, e):
             w.report(span, Rule.effects, f"{what} may {e.value}, which effects({shown}) "

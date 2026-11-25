@@ -21,8 +21,8 @@ from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, CReturn, CSource, CTest, De
 from rop_check import GraphInfo, Program, is_args
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
-                       HandleType, Let, Name, Nat, Param, Placement, Publish,
-                       ScalarType, SchemaType, SchemaVar, SpanLit, Tail, Target, Type,
+                       HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
+                       ScalarType, SchemaType, SchemaVar, SpanLit, Target, Type,
                        WrapType)
 
 
@@ -352,6 +352,12 @@ def edges_of(program: Program, blocks, block):
             yield edge.target, extra
 
 
+def is_transfer(program: Program, callee: str) -> bool:
+    x = program.externs.get(callee)
+    return (x is not None and x.c is not None
+            and CONVENTIONS[x.c.convention].transfer)
+
+
 def pending_blockers(program: Program, arm: Arm) -> list[str]:
     """Every row without a C body and every macro without a graph that the
     arm reaches, directly or through the macros it calls, in name order"""
@@ -590,9 +596,9 @@ class ArmLowerer:
                 out.append(self.span(a.name))
             elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
                 out.append("&" + self.expr_text(a))
-            elif (t == HandleType(Handle.Src) and isinstance(a, Name)
-                    and a.name in self.placements):
-                # A row that spends a source takes its home
+            elif (t in (HandleType(Handle.Src), HandleType(Handle.Local))
+                    and isinstance(a, Name) and a.name in self.placements):
+                # A row that reads or spends a home takes its address
                 out.append(self.home(a.name))
             elif (isinstance(t, SchemaType) and t.ctor is SchemaCtor.Fb
                   and isinstance(t.schema, SchemaVar)):
@@ -716,7 +722,12 @@ class ArmLowerer:
     def lower(self) -> Lowering:
         self.facts_in = arm_facts(self.program, self.info)
         self.views = home_views(self.info)
-        order = self.layout()
+        # A transfer row's callee performs the exits of its edges' blocks
+        self.transfer_blocks = {
+            e.target.label for b in self.blocks.values()
+            if isinstance(b.term, CallTerm) and is_transfer(self.program, b.term.callee)
+            for e in b.term.edges}
+        order = [label for label in self.layout() if label not in self.transfer_blocks]
         for i, label in enumerate(order):
             self.next_label = order[i + 1] if i + 1 < len(order) else None
             self.lower_block(self.blocks[label], label)
@@ -832,11 +843,21 @@ class ArmLowerer:
         spent = sorted((d for d in s.debts if d.kind is DebtKind.spent),
                        key=lambda d: order.index(d.subject))
         olds = [d for d in s.debts if d.kind is DebtKind.old]
-        for d in s.debts:
-            if d.kind not in (DebtKind.spent, DebtKind.old, DebtKind.roots):
-                raise Unsupported(f"{self.arm.name}: debt {d.kind.name} is not lowered yet")
+        vectors = [b for b in s.bindings if b.vector]
+        moved = {b.value.name for b in vectors if isinstance(b.value, Name)}
         owners: dict[str, str | None] = {}
+        for b in vectors:
+            # A vector binding's runtime takes every source before it writes
+            # a destination, which are vacant (_PyFrame_ParallelMove)
+            if isinstance(b.value, Call):
+                (source,) = b.value.args
+                self.emit(f"_PyRop_CopyHomes({self.span(b.target)}, {self.span(source.name)});")
+            else:
+                self.emit(f"_PyRop_ParallelMove({self.span(b.target)}, "
+                          f"{self.span(b.value.name)});")
         for d in spent:
+            if d.subject in moved:
+                continue
             if self.is_vector(d.subject):
                 # An argument vector's temporaries close after the bindings
                 # (_PyRop_SpendArgs), all but a home that a binding now holds
@@ -865,12 +886,26 @@ class ArmLowerer:
             self.declare("old_" + d.subject, "PyValue")
             self.emit(f"old_{d.subject} = *{self.home(d.subject)};")
         for b in s.bindings:
+            if b.vector:
+                continue
             home = self.home(b.target)
+            if isinstance(b.value, Null):
+                self.emit(f"_PyFrame_WriteHome(frame, {home}, PyValue_NULL);")
+                continue
             self.emit(f"_PyFrame_WriteHome(frame, {home}, {self.expr(b.value)});")
             self.emit(f"_PyValue_CheckHome(*{home});")
-        kept = self.home(s.bindings[0].target) if len(s.bindings) == 1 else "NULL"
+        scalar = [b for b in s.bindings if not b.vector]
+        kept = self.home(scalar[0].target) if len(s.bindings) == 1 and scalar else "NULL"
         for d in s.debts:
-            if d.kind is DebtKind.spent and self.is_vector(d.subject):
+            if d.kind is DebtKind.spent and d.subject in moved:
+                # The sources past the pairs, closed after every home is written
+                target = next(b.target for b in vectors if b.value.name == d.subject)
+                # The closes may run finalizers, which a stub reports
+                self.emit("IR_STUB_ESCAPE();")
+                self.emit(f"_PyRop_CloseRest({self.span(target)}, {self.span(d.subject)});")
+            elif d.kind is DebtKind.owned:
+                self.emit(f"PyValue_XCLOSE({self.expr_text(Name(d.subject))});")
+            elif d.kind is DebtKind.spent and self.is_vector(d.subject):
                 self.emit(f"_PyRop_SpendArgs(frame, this_instr, {kept});")
             elif d.kind is DebtKind.spent and owners[d.subject] is not None:
                 self.emit(f"PyValue_XCLOSE({owners[d.subject]});")
@@ -895,11 +930,6 @@ class ArmLowerer:
             self.lower_call(t)
         elif isinstance(t, Exit):
             self.lower_exit(t)
-        elif isinstance(t, Tail):
-            x = self.program.externs[t.callee]
-            if x.c is None:
-                raise Unsupported(f"{self.arm.name}: {t.callee} has no C body (pending)")
-            self.emit(f"{x.c.symbol}({', '.join(self.c_args(t.args, x.params))});")
         elif isinstance(t, (Each, Advance)):
             raise Unsupported(f"{self.arm.name}: each/advance is not lowered yet")
 
@@ -929,6 +959,10 @@ class ArmLowerer:
         args = self.c_args(t.args, x.params)
         cases = x.result.cases
         edges = {e.case: e for e in t.edges}
+        if conv.transfer:
+            # The callee leaves the word by the exit of the case it takes
+            self.emit(f"{x.c.symbol}({', '.join(args)});")
+            return
         if conv.indexed:
             self.lower_indexed_call(t, x, args)
             return

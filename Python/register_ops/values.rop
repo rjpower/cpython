@@ -28,7 +28,7 @@ family Nop()
 family Const(dst:Dst, index:U16)
   exits(next) ops(LOAD_CONST, LOAD_SMALL_INT, LOAD_COMMON_CONSTANT);
 
-point Const.Done(current, next_head, clear) keep() spent() defs(dst) held();
+point Const.Done(current, next_head, clear) keep() spent() defs(dst);
 
 extern helper code_constant(fr:Frame, i:U16) -> O
   effects(reads)
@@ -56,7 +56,7 @@ extern helper common_constant(i:U16) -> O
               "Python, no failure.");
 
 arm Const.Pool inline select(pool)
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next)
 {
@@ -67,7 +67,7 @@ arm Const.Pool inline select(pool)
 }
 
 arm Const.Small inline select(small)
-  effects(writes, releases)
+  effects(writes, releases on (dst))
   feedback()
   exits(next)
   ensures(next.inline_int(dst))
@@ -79,7 +79,7 @@ arm Const.Small inline select(small)
 }
 
 arm Const.Common inline select(common)
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next)
 {
@@ -96,8 +96,8 @@ arm Const.Common inline select(common)
 family LocalRead(dst:Dst, local:Src)
   exits(next, raise) ops(LOAD_FAST, LOAD_FAST_CHECK, LOAD_FAST_BORROW);
 
-point LocalRead.Unbound(current, site, pending) keep(local) spent() defs() held();
-point LocalRead.Done(current, next_head, clear) keep(local) spent() defs(dst) held();
+point LocalRead.Unbound(current, site, pending) keep(local) spent() defs();
+point LocalRead.Done(current, next_head, clear) keep(local) spent() defs(dst);
 
 // The local's binding, absent when it is unbound
 extern helper local_view(x:Src) -> Maybe<B>
@@ -117,7 +117,7 @@ extern helper unbound_local(fr:Frame, x:Src)
     contract: "Always sets the exception. It allocates the message; no Python.");
 
 arm LocalRead.Bound inline select(bound)
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next)
 {
@@ -128,7 +128,7 @@ arm LocalRead.Bound inline select(bound)
 }
 
 arm LocalRead.Checked shared select(checked)
-  effects(reads, writes, allocates, raises, releases)
+  effects(reads, writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -149,21 +149,22 @@ arm LocalRead.Checked shared select(checked)
 
 // A store.  Store: the value is present.  Restore: the value is a binding
 // that SaveLocal took, which may be absent.
-family LocalWrite(local:Dst, value:Src)
+family LocalWrite(local:Local, value:Src)
   exits(next) ops(STORE_FAST);
 
-point LocalWrite.Done(current, next_head, clear) keep() spent(value) defs(local) held();
+point LocalWrite.Done(current, next_head, clear) keep() spent(value, local) defs(local);
 
-// The local takes the saved binding in the value's home, which is left
-// vacant, absent or not; the old binding is closed after
-extern helper restore_local(x:Dst, v:Src) -> Unit
-  effects(reads, writes, releases)
-  c _PyRop_RestoreLocal as unit
+// The saved binding in the value's home, absent or not, taken out of it:
+// the home is left vacant
+extern helper restore_local(v:Src) -> Maybe<O>
+  effects(reads, writes)
+  spends(v)
+  c _PyRop_RestoreLocal as value
   evidence(
-    review: "pycore_rop_rows.h: the swap of LOAD_FAST_AND_CLEAR's restore.",
-    contract: "The value's home is a temporary. Its owner or absence goes to the"
-              "local; the old binding is closed after the home is written, which"
-              "may run a finalizer. No failure.");
+    review: "pycore_rop_rows.h: LOAD_FAST_AND_CLEAR's restore takes the saved"
+            "binding out of its temporary.",
+    contract: "The value's home is a temporary. Its owner or absence moves out and"
+              "the home is left vacant. No count, no Python, no failure.");
 
 arm LocalWrite.Store inline select(store)
   effects(reads, writes, releases on (local), runs_python)
@@ -182,7 +183,8 @@ arm LocalWrite.Restore shared select(restore)
   exits(next)
 {
   entry():
-    let _:Unit = restore_local(local, value);
+    let v:Maybe<O> = restore_local(value);
+    publish [local = v] retire [old(local)] at LocalWrite.Done;
     exit next();
 }
 
@@ -191,41 +193,52 @@ arm LocalWrite.Restore shared select(restore)
 family SaveLocal(dst:Dst, local:Src)
   exits(next) ops(LOAD_FAST_AND_CLEAR);
 
-extern helper save_local(d:Dst, x:Src) -> Unit
-  effects(reads, writes, releases)
-  c _PyRop_SaveLocal as unit
+point SaveLocal.Done(current, next_head, clear) keep() spent(local) defs(dst);
+
+// The local's binding, absent or not, taken out of its home: the local is
+// left vacant
+extern helper save_local(x:Src) -> Maybe<O>
+  effects(reads, writes)
+  spends(x)
+  c _PyRop_SaveLocal as value
   evidence(
     review: "pycore_rop_rows.h: LOAD_FAST_AND_CLEAR's take.",
-    contract: "The local's word moves to dst, which is written first; dst's old"
-              "value is closed after, which may run a finalizer. No failure.");
+    contract: "The local's owner or absence moves out and the local is left vacant."
+              "No count, no Python, no failure.");
 
 arm SaveLocal.Take shared
-  effects(reads, writes on (dst, local), releases on (dst), runs_python)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next)
 {
   entry():
-    let _:Unit = save_local(dst, local);
+    let v:Maybe<O> = save_local(local);
+    publish [dst = v] retire [old(dst)] at SaveLocal.Done;
     exit next();
 }
 
-family LocalDelete(local:Dst)
+// The local is read for its binding and written vacant
+family LocalDelete(local:Local)
   exits(next, raise) ops(DELETE_FAST);
 
-point LocalDelete.Unbound(current, site, pending) keep() spent() defs() held();
+point LocalDelete.Unbound(current, site, pending) keep() spent(local) defs();
+point LocalDelete.Done(current, next_head, clear) keep() spent(local) defs(local);
 
-extern helper delete_local(fr:Frame, x:Dst)
-  cases(ok(), err(e:Err))
-  effects(writes, allocates, raises, releases)
-  c _PyRop_DeleteLocal as int_zero_ok
+// The local's binding taken out of its home, or UnboundLocalError when it
+// is unbound (the home was vacant and stays so)
+extern helper delete_local(fr:Frame, x:Local)
+  cases(ok(old:O), err(e:Err))
+  effects(reads, writes, allocates, raises)
+  spends(x)
+  c _PyRop_DeleteLocal as value_or_null
   evidence(
-    review: "pycore_rop_rows.h: DELETE_FAST: the home is left vacant, then its old"
-            "binding is closed; an unbound local raises UnboundLocalError.",
-    contract: "0 after the close, which may run a finalizer; -1 with the"
-              "exception set when the local is unbound, and nothing changed.");
+    review: "pycore_rop_rows.h: DELETE_FAST: the binding is taken out of the home;"
+            "an unbound local raises UnboundLocalError.",
+    contract: "The owner, or NULL with the exception set when the local is unbound."
+              "It allocates the message; no Python.");
 
 arm LocalDelete.Checked shared
-  effects(writes, allocates, raises, releases on (local), runs_python)
+  effects(reads, writes, allocates, raises, releases on (local), runs_python)
   feedback()
   exits(next, raise)
 {
@@ -234,7 +247,8 @@ arm LocalDelete.Checked shared
       ok -> Done();
       err -> Failed();
     }
-  Done():
+  Done(old:O):
+    publish [local = null] retire [old(local), owned(old)] at LocalDelete.Done;
     exit next();
   Failed(e:Err):
     exit raise(LocalDelete.Unbound, e);
@@ -248,75 +262,49 @@ arm LocalDelete.Checked shared
 family Move(dsts:Span<Dst>, srcs:Span<Src>)
   exits(next) ops(SWAP, COPY, POP_TOP);
 
+point Move.Done(current, next_head, clear) keep() spent(srcs) defs(dsts);
+point Move.Copied(current, next_head, clear) keep(srcs) spent() defs(dsts);
+
 // Every source's owner goes to its destination as if all moved at once: a
-// destination is vacant or another pair's source.  The sources that no
-// pair writes are left vacant.  A cycle turns through one rooted local.
-extern helper parallel_move(d:Span<Dst>, s:Span<Src>) -> Unit
-  effects(reads, writes)
-  c _PyRop_ParallelMove as unit
-  evidence(
-    review: "ceval.c _PyFrame_ParallelMove: the unwinder's recipe routine, which"
-            "swaps each pair whose home no pending pair reads and turns each"
-            "cycle through one C local.",
-    contract: "Moves owners between homes of the frame. Destinations are vacant or"
-              "sources of the set (the verifier's rule), so nothing is closed: no"
-              "Python, no failure.");
-
-// Closes the sources after the first len(d), which a parallel move left
-// in place, after every home of the set is written
-extern helper close_rest(d:Span<Dst>, s:Span<Src>) -> Unit
-  effects(writes, releases, runs_python)
-  c _PyRop_CloseRest as unit
-  evidence(
-    review: "pycore_rop_rows.h: takes each source past the pairs out of its home,"
-            "then closes it.",
-    contract: "The homes are vacant before any close, so a finalizer finds the frame"
-              "as the instruction leaves it. A close may run Python; it cannot fail.");
-
-// Each destination takes a second owner of its source, which keeps its own
-extern helper copy_homes(d:Span<Dst>, s:Span<Src>) -> Unit
-  effects(reads, writes)
-  c _PyRop_CopyHomes as unit
-  evidence(
-    review: "pycore_rop_rows.h: PyValue_DUP of each source into its vacant destination.",
-    contract: "Counts only; destinations are vacant, so nothing is closed: no Python,"
-              "no failure.");
-
+// destination is vacant or another pair's source.  A cycle turns through
+// one rooted local (_PyRop_ParallelMove).
 arm Move.Transfer shared select(transfer)
   effects(reads, writes)
   feedback()
   exits(next)
 {
   entry():
-    let _:Unit = parallel_move(dsts, srcs);
+    publish [dsts[] = srcs[]] retire [] at Move.Done;
     exit next();
 }
 
+// The same, then the sources past the pairs, left vacant, are closed after
+// every home is written
 arm Move.Retire shared select(retire)
   effects(reads, writes, releases, runs_python)
   feedback()
   exits(next)
 {
   entry():
-    let _:Unit = parallel_move(dsts, srcs);
-    let _:Unit = close_rest(dsts, srcs);
+    publish [dsts[] = srcs[]] retire [spent(srcs)] at Move.Done;
     exit next();
 }
 
+// Each destination takes a second owner of its source, which keeps its own
 arm Move.Copy shared select(copy)
   effects(reads, writes)
   feedback()
   exits(next)
 {
   entry():
-    let _:Unit = copy_homes(dsts, srcs);
+    publish [dsts[] = dup(srcs[])] retire [] at Move.Copied;
     exit next();
 }
 
 // P5: truth, jumps, conditional retention, None branches
 
 family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>)
-  exits(next, raise, miss, again, redirect) ops(TO_BOOL, UNARY_NOT);
+  exits(next, raise, miss, again, redirect) generic(Generic) ops(TO_BOOL, UNARY_NOT);
 
 // Covers backward jumps, so its target is far.  The arm says whether it
 // polls: Direct is JUMP_FORWARD and the jumps that must not poll, Poll is
@@ -329,7 +317,7 @@ family Jump(target:FarHead)
 // The operands are in the order of the old conditional jump words: the
 // value in A, the entry in B, the mode in C and the target in D
 family BranchTruth(value:Src, fb:Fb<Truth>, mode:Enum<BranchMode>, target:NearHead)
-  exits(next, branch, raise, miss, again, redirect)
+  exits(next, branch, raise, miss, again, redirect) generic(Generic)
   ops(POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE, JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP)
   events(BRANCH_LEFT, BRANCH_RIGHT);
 

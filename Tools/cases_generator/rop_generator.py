@@ -35,6 +35,7 @@ from rop_catalog import SELECT_DIMENSIONS, Effect, FieldKind, Handle, Slot, Wrap
 from rop_check import Program, select_dimension
 from rop_model import Arm, HandleType, Param, WrapType
 from rop_print import type_text
+from rop_ssa import SsaError
 
 ROOT = Path(__file__).resolve().parents[2]
 ROP_DIR = ROOT / "Python" / "register_ops"
@@ -481,7 +482,7 @@ def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
         try:
             leaf = rop_leaf.leaf_of_arm(p.program, arm)
             lines = rop_leaf.template_of_arm(p.program, arm, c_name(name), leaf)
-        except (Unsupported, jit_template_generator.Refused) as e:
+        except (Unsupported, SsaError, jit_template_generator.Refused) as e:
             refused[name] = str(e)
             continue
         made[name] = ["// The leaf graph of " + name + ":"] + [

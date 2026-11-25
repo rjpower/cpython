@@ -1685,4 +1685,6 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [ROP_HANDLER_BranchNone_Test] = jit_template_BranchNone_Test,
     [ROP_HANDLER_Jump_Direct] = jit_template_Jump_Direct,
     [ROP_HANDLER_Jump_Poll] = jit_template_Jump_Poll,
+    [ROP_HANDLER_LocalRead_Bound] = jit_template_LocalRead_Bound,
+    [ROP_HANDLER_LocalWrite_Store] = jit_template_LocalWrite_Store,
 };

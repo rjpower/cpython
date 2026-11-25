@@ -1788,16 +1788,29 @@ def immediates(g: Graph, defs) -> set[int]:
     return candidates
 
 
+@dataclass(frozen=True)
+class FbEntry:
+    """The feedback entry a template reads: its C type and the C expression
+    of the word's field that locates it"""
+    type: str
+    field: str
+
+
+def fb_entry(record) -> FbEntry:
+    "The entry of a stack handler's record"
+    fmt = record.format
+    return FbEntry(ir_generator.feedback_type(fmt), ir_generator.field_expr(fmt.fb))
+
+
 class Emitter:
-    def __init__(self, name: str, record, g: Graph, uses_fb: bool) -> None:
+    def __init__(self, name: str, g: Graph, fb: FbEntry | None) -> None:
         self.name = name
-        self.record = record
+        self.fb = fb
         self.g = g
         sink(g)
         self.flags = flag_values(g)
         self.alloc = Allocation(g, self.flags)
         self.lines: list[str] = []
-        self.uses_fb = uses_fb
         self.defs = definitions(g)
         self.imms = immediates(g, self.defs)
         self.order: list[int] = []
@@ -1868,11 +1881,10 @@ class Emitter:
                       "    _PyJitAsm *a = cx->a;",
                       "    _PyIRWord ir_word = cx->word;",
                       "    (void)ir_word;"]
-        fmt = self.record.format
-        if self.uses_fb:
-            ftype = ir_generator.feedback_type(fmt)
+        if self.fb is not None:
+            ftype = self.fb.type
             out_header.append(f"    {ftype} *fb = ({ftype} *)_PyIR_FbEntry(cx->words, "
-                              f"{ir_generator.field_expr(fmt.fb)});")
+                              f"{self.fb.field});")
             out_header.append("    (void)fb;")
         labels = [i for i in self.order]
         for i in labels:
@@ -2313,7 +2325,7 @@ def template_of(name: str, record) -> list[str]:
     b = Builder(record)
     g = b.build()
     simplify(g)
-    return Emitter(name, record, g, b.uses_fb).emit()
+    return Emitter(name, g, fb_entry(record) if b.uses_fb else None).emit()
 
 
 def write_templates(out, analysis, records) -> None:

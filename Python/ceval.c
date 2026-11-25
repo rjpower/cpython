@@ -929,6 +929,54 @@ _PyRop_FormatValue(PyValueBorrow v, PyValueBorrow spec)
     return res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
 }
 
+/* The rows of Length and the patterns (Python/register_ops/patterns.rop):
+ * the operands are borrowed, the result a new owner or NULL with an
+ * exception set. */
+static PyValue
+_PyRop_ValueLength(PyValueBorrow v)
+{
+    Py_ssize_t len = _PyValue_Size(v);
+    if (len < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromInt64(len);
+}
+
+static int
+_PyRop_TypeHasFlag(int kind, PyValueBorrow v)
+{
+    unsigned long flag = kind == 0 ? Py_TPFLAGS_MAPPING : Py_TPFLAGS_SEQUENCE;
+    return (PyValue_TYPE(v)->tp_flags & flag) != 0;
+}
+
+static PyValue
+_PyRop_MatchClass(int count, PyValueBorrow subject, PyValueBorrow type,
+                  PyValueBorrow names)
+{
+    assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *attrs_o = _PyEval_MatchClass(tstate, subject, type, count,
+                                           PyValue_AsKnownObjectBorrow(names));
+    if (attrs_o != NULL) {
+        assert(PyTuple_CheckExact(attrs_o));
+        return PyValue_FromObjectSteal(attrs_o);
+    }
+    if (_PyErr_Occurred(tstate)) {
+        return PyValue_NULL;
+    }
+    return PyValue_None;
+}
+
+static PyValue
+_PyRop_MatchKeys(PyValueBorrow subject, PyValueBorrow keys)
+{
+    assert(PyValue_IsObject(subject));
+    assert(PyValue_IsObject(keys));
+    PyObject *values_o = _PyEval_MatchKeys(_PyThreadState_GET(),
+        PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
+    return values_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(values_o);
+}
+
 /* lhs op rhs for BINARY_OP's operation oparg; both operands are borrowed. */
 static PyValue
 value_binary_op(int oparg, PyValueBorrow lhs, PyValueBorrow rhs)
@@ -3100,6 +3148,21 @@ rop_take_items(const _PyRopSpan *span, PyValue *vals)
         vals[i] = slot < nlocals ? PyValue_DUP(PyValue_Borrow(*home))
                                  : _PyFrame_TakeHome(frame, home);
     }
+}
+
+_PyRopSrcs
+_PyRop_SrcsOfSpan(const _PyRopSpan *span)
+{
+    _PyInterpreterFrame *frame = span->frame;
+    int nlocals = _PyCode_IRFixed(_PyFrame_GetCode(frame));
+    assert(span->count <= _PY_ROP_MAX_SRCS);
+    _PyRopSrcs s = {.frame = frame, .n = (uint8_t)span->count};
+    for (int i = 0; i < span->count; i++) {
+        int slot = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+        s.home[i] = &frame->base[slot];
+        s.local[i] = slot < nlocals;
+    }
+    return s;
 }
 
 static void

@@ -2497,6 +2497,57 @@ rule_format(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* GET_LEN, MATCH_MAPPING, MATCH_SEQUENCE, MATCH_KEYS and MATCH_CLASS: the
+ * word reads the top nuses stack positions and leaves them, except that
+ * MATCH_CLASS spends them, and defines the value that the stack op pushed.
+ * imm is the word's immediate. */
+static int
+peek_rule(_PyRegTr *t, const _PyRegOp *src, int handler, int nuses, int npop,
+          int imm)
+{
+    if (t->sp < nuses) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - nuses],
+                                  nuses, &dst, 1, &op));
+    // What the word leaves on the stack it only reads
+    op->npop = (int16_t)npop;
+    op->oparg = imm;
+    if (npop > 0) {
+        RETURN_IF_ERROR(_PyRegTr_Pop(t, npop, NULL));
+    }
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_get_len(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_HANDLER_Length_Size, 1, 0, 0);
+}
+
+static int
+rule_match_flag(_PyRegTr *t, const _PyRegOp *src)
+{
+    // The family's kind: Mapping is 0, Sequence 1
+    int kind = src->opcode == MATCH_MAPPING ? 0 : 1;
+    return peek_rule(t, src, ROP_HANDLER_Pattern_Flag, 1, 0, kind);
+}
+
+static int
+rule_match_keys(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_HANDLER_PatternKeys_Match, 2, 0, 0);
+}
+
+static int
+rule_match_class(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_HANDLER_PatternClass_Match, 3, 3, src->oparg);
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
@@ -2574,6 +2625,11 @@ static const _PyRegRule rules[256] = {
     [CONVERT_VALUE] = rule_convert_value,
     [FORMAT_SIMPLE] = rule_format,
     [FORMAT_WITH_SPEC] = rule_format,
+    [GET_LEN] = rule_get_len,
+    [MATCH_MAPPING] = rule_match_flag,
+    [MATCH_SEQUENCE] = rule_match_flag,
+    [MATCH_KEYS] = rule_match_keys,
+    [MATCH_CLASS] = rule_match_class,
 };
 
 /* An edge binds the parameters of the positions below depth: one that

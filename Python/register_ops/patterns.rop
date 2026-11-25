@@ -1,0 +1,232 @@
+// Length and pattern matching (batch 1H).  GET_LEN and MATCH_KEYS leave
+// their sources where they are; MATCH_CLASS spends its three.  A match op
+// puts its result in a register as before: a bool for the two type tests,
+// the tuple of values or None for a class and for keys.  The branch on that
+// result is its own word.
+
+// Length: len(value), which stays
+
+family Length(dst:Dst, value:Src)
+  exits(next, raise, redirect) ops(GET_LEN);
+
+point Length.Failed(current, site, pending) keep(value) spent() defs();
+point Length.Done(current, next_head, clear) keep(value) spent() defs(dst);
+
+extern helper value_length(v:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, allocates, raises)
+  ensures(ok.exact<int>(z))
+  c _PyRop_ValueLength as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_ValueLength: _PyValue_Size, then PyValue_FromInt64, as GET_LEN did.",
+    contract: "v is borrowed on every path; the result is a new owner (a box above the inline range), or NULL with an exception set. A __len__ may run Python.");
+
+macro length_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_length(arg(a, 0)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm Length.Size shared
+  effects(runs_python, writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([value]);
+    call length_at_origin(a) {
+      ok -> Finish();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), old(dst)] at Length.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Length.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// Pattern: whether the subject's type is a mapping or a sequence.  The
+// subject stays.
+
+family Pattern(dst:Dst, subject:Src, kind:Enum<PatternKind>)
+  exits(next) ops(MATCH_MAPPING, MATCH_SEQUENCE);
+
+point Pattern.Done(current, next_head, clear) keep(subject) spent() defs(dst);
+
+extern primitive type_has_flag(kind:Enum<PatternKind>, v:B) -> Bool
+  effects(reads)
+  c _PyRop_TypeHasFlag as bool
+  evidence(
+    review: "ceval.c _PyRop_TypeHasFlag: the type's Py_TPFLAGS_MAPPING or Py_TPFLAGS_SEQUENCE, as MATCH_MAPPING and MATCH_SEQUENCE tested.",
+    contract: "A read of the type of the word: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_patterns");
+
+arm Pattern.Flag inline
+  effects(reads, writes, releases on (dst))
+  feedback()
+  exits(next)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let v:B = use(subject);
+    goto Finish(truth_object(type_has_flag(kind, v), false));
+  Finish(z:O):
+    publish [dst = z] retire [old(dst)] at Pattern.Done;
+    exit next();
+}
+
+// PatternClass: the attributes of a class pattern as a tuple, or None.  The
+// subject, the class and the names are spent.
+
+// The sources are a span of three: the subject, the class and the names
+family PatternClass(dst:Dst, parts:Span<Src>, count:U16)
+  exits(next, raise, redirect) ops(MATCH_CLASS);
+
+point PatternClass.Failed(current, site, pending) keep() spent(parts) defs();
+point PatternClass.Done(current, next_head, clear) keep() spent(parts) defs(dst);
+
+extern helper match_class(count:U16, s:B, c:B, n:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, allocates, raises)
+  c _PyRop_MatchClass as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_MatchClass: _PyEval_MatchClass; the tuple of attributes, or None when it is NULL without an exception, as MATCH_CLASS did.",
+    contract: "All three are borrowed on every path; the result is a new owner, or NULL with an exception set. A type check or a property may run Python.");
+
+macro match_class_at_origin(count:U16, a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call match_class(count, arg(a, 0), arg(a, 1), arg(a, 2)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm PatternClass.Match shared
+  effects(runs_python, writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call(parts);
+    call match_class_at_origin(count, a) {
+      ok -> Finish();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(parts), old(dst)] at PatternClass.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, parts, e);
+    exit raise(PatternClass.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// PatternKeys: the values of a mapping pattern's keys as a tuple, or None.
+// The subject and the keys stay.
+
+family PatternKeys(dst:Dst, subject:Src, keys:Src)
+  exits(next, raise, redirect) ops(MATCH_KEYS);
+
+point PatternKeys.Failed(current, site, pending) keep(subject, keys) spent() defs();
+point PatternKeys.Done(current, next_head, clear) keep(subject, keys) spent() defs(dst);
+
+extern helper match_keys(s:B, k:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, allocates, raises)
+  c _PyRop_MatchKeys as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_MatchKeys: _PyEval_MatchKeys on the two objects, as MATCH_KEYS did.",
+    contract: "Both are borrowed on every path and are objects (MATCH_MAPPING accepted the subject; the compiler built the keys); the result is a new owner, or NULL with an exception set. A mapping's get may run Python.");
+
+macro match_keys_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call match_keys(arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm PatternKeys.Match shared
+  effects(runs_python, writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([subject, keys]);
+    call match_keys_at_origin(a) {
+      ok -> Finish();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), old(dst)] at PatternKeys.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(PatternKeys.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}

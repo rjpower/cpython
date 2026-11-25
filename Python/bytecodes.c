@@ -2731,74 +2731,50 @@ dummy_func(
             }
         }
 
-        outlined inst(GET_LEN, (obj -- obj, len: owned exact(PyLong_Type)))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: GET_LEN is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(GET_LEN,
+                (obj -- obj, len: owned))
+            exits(abort)
         {
-            // PUSH(len(TOS))
-            Py_ssize_t len_i = _PyValue_Size(obj);
-            ERROR_IF(len_i < 0);
-            len = PyValue_FromInt64(len_i);
-            ERROR_IF(PyValue_IsNull(len));
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        op(_MATCH_CLASS,
-                (subject: taken, type: taken, names: taken assumed(object) by codegen_pattern_class
-                 -- attrs: owned, s: moved(subject), tp: moved(type), n: moved(names)))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: MATCH_CLASS is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(MATCH_CLASS,
+                (subject: consumed, type: consumed, names: consumed -- attrs: owned))
+            exits(abort)
         {
-            // Pop TOS and TOS1. Set TOS to a tuple of attributes on success, or
-            // None on failure.
-            assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
-            // The class pattern may name a number: MatchClass rejects it
-            PyObject *attrs_o = _PyEval_MatchClass(tstate,
-                subject,
-                type, oparg,
-                PyValue_AsKnownObjectBorrow(names));
-            if (attrs_o) {
-                assert(PyTuple_CheckExact(attrs_o));  // Success!
-                attrs = PyValue_FromObjectSteal(attrs_o);
-            }
-            else {
-                if (_PyErr_Occurred(tstate)) { // Error!
-                    ERROR_NO_POP();
-                }
-                attrs = PyValue_None;  // Failure!
-            }
-            s = subject;
-            tp = type;
-            n = names;
-            INPUTS_DEAD();
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(MATCH_CLASS) = _MATCH_CLASS + _POP_TOP_ANY + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        outlined inst(MATCH_MAPPING, (subject -- subject, res: owned exact(PyBool_Type)))
-            effects(reads) exits(next)
+        /* A stack op only: MATCH_MAPPING is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(MATCH_MAPPING,
+                (subject -- subject, res: owned))
+            exits(abort)
         {
-            int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_MAPPING;
-            res = match ? PyValue_True : PyValue_False;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(MATCH_SEQUENCE, (subject -- subject, res: owned exact(PyBool_Type)))
-            effects(reads) exits(next)
+        /* A stack op only: MATCH_SEQUENCE is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(MATCH_SEQUENCE,
+                (subject -- subject, res: owned))
+            exits(abort)
         {
-            int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_SEQUENCE;
-            res = match ? PyValue_True : PyValue_False;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(MATCH_KEYS,
-                (subject: assumed(object) by MATCH_MAPPING, keys: assumed(object) by codegen_pattern_mapping
-                 -- subject, keys, values_or_none: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: MATCH_KEYS is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(MATCH_KEYS,
+                (subject, keys -- subject, keys, values_or_none: owned))
+            exits(abort)
         {
-            // On successful match, PUSH(values). Otherwise, PUSH(None).
-            // MATCH_MAPPING has accepted the subject: a mapping, not a number
-            assert(PyValue_IsObject(subject));
-            assert(PyValue_IsObject(keys));
-            PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
-                PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
-            ERROR_IF(values_or_none_o == NULL);
-            values_or_none = PyValue_FromObjectSteal(values_or_none_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         family(GET_ITER, INLINE_CACHE_ENTRIES_GET_ITER) = {

@@ -340,7 +340,7 @@ class ErrorEffectTests(unittest.TestCase):
                 self.assertTrue(contracts[name].abrupt_operands)
         self.assertIn("_PyIR_ERROR_COMPLETE", contracts["UNARY_INVERT"].error_routes)
         self.assertIn("_PyIR_ERROR_DIRECT", contracts["UNARY_INVERT"].error_routes)
-        for name in ("GET_LEN", "UNARY_NEGATIVE", "BINARY_OP_ADD"):
+        for name in ("UNARY_NEGATIVE", "BINARY_OP_ADD"):
             with self.subTest(uncovered=name):
                 self.assertFalse(contracts[name].error_routes)
         with mock.patch.object(ir_generator.IREmitter, "operand_error_flush", lambda *args: None):

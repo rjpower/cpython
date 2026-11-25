@@ -1,9 +1,6 @@
 // Family interfaces of Appendix A, "Data, bindings, constructors, and
 // matching".  Arms come with their batches.
 
-enum BuildKind(TUPLE, LIST, SET, MAP);
-enum ElementKind(LIST_APPEND, SET_ADD, MAP_PUT);
-enum UpdateKind(LIST_EXTEND, SET_UPDATE, DICT_UPDATE);
 enum CellMode(MAKE, GET, MAPPING_GET, CELL_SET, CELL_DELETE, COPY_FREE);
 enum NamespaceScope(LOCALS, NAME, MAPPING, BUILD_CLASS, GLOBAL);
 enum ImportMode(IMPORT_NAME, IMPORT_FROM, LAZY_NAME, LAZY_FROM);
@@ -44,18 +41,6 @@ family BuildSlice(dst:Dst, parts:Span<Src>)
   exits(next, raise) ops(BUILD_SLICE);
 
 // 1E: displays, updates, comprehension insertion, keyword merge, unpack
-
-family Build(dst:Dst, kind:Enum<BuildKind>, items:Span<Src>)
-  exits(next, raise) ops(BUILD_TUPLE, BUILD_LIST, BUILD_SET, BUILD_MAP);
-
-family AddElement(container:Src, kind:Enum<ElementKind>, item:Src, value:Maybe<Src>)
-  exits(next, raise) ops(LIST_APPEND, SET_ADD, MAP_ADD);
-
-family UpdateContainer(container:Src, kind:Enum<UpdateKind>, source:Src)
-  exits(next, raise) ops(LIST_EXTEND, SET_UPDATE, DICT_UPDATE);
-
-family MergeKeywords(dict:Src, source:Src, fn:Src)
-  exits(next, raise) ops(DICT_MERGE);
 
 family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpack>)
   exits(next, raise, miss, again) ops(UNPACK_SEQUENCE, UNPACK_EX);

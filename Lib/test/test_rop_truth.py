@@ -4,6 +4,7 @@ completion stub of each arm, forced onto the same slots, against what the
 language says the truth of the operand is, and the adaptation that picks
 each arm."""
 
+import signal
 import sys
 import unittest
 
@@ -323,6 +324,108 @@ class FunctionTests(unittest.TestCase):
         for _ in range(3):
             self.assertEqual(f(0), 7)
             self.assertEqual(f(1), 7)
+
+
+
+
+def jump_words(f):
+    """The (arm, index) of each Jump word of f"""
+    return [(word[0].partition("+")[0], index)
+            for index, word in enumerate(capi.get_ir(f.__code__, True))
+            if word[0].startswith("Jump.")]
+
+
+def distance(fields):
+    """The signed 24-bit target of a Jump word, in A and B"""
+    value = fields[0] | fields[1] << 12
+    return value - (1 << 24) if value >= 1 << 23 else value
+
+
+class JumpTests(unittest.TestCase):
+    """The Jump family: a backedge polls, a forward jump does not, and the
+    translator picks the arm"""
+
+    def test_arms_follow_the_stack_op(self):
+        def f(n):
+            while n:
+                n -= 1
+                if n == 3:
+                    continue
+            return n
+
+        f(5)
+        arms = {arm for arm, _ in jump_words(f)}
+        # With the JIT on the backedge is also its warm-up event
+        self.assertTrue(arms & {"Jump.Poll", "Jump.Warm"}, arms)
+        self.assertLessEqual(arms, {"Jump.Direct", "Jump.Poll", "Jump.Warm"})
+
+    def test_forms_go_to_their_targets(self):
+        def f(n):
+            while n:
+                n -= 1
+            return n
+
+        f(3)
+        words = capi.get_ir(f.__code__, True)
+        found = 0
+        for arm, index in jump_words(f):
+            fields = [int(x) for x in words[index][1:3]]
+            target = index + 1 + distance(fields)
+            for mode, handler in ((FORM, arms()[arm]),):
+                with self.subTest(arm=arm, index=index):
+                    result = capi.jit_template_run(f, index, {}, mode, handler)
+                    self.assertEqual(result[0], target)
+                    self.assertIsNone(result[2])
+            found += 1
+        self.assertGreater(found, 0)
+
+    def test_a_backedge_polls(self):
+        class Interrupted(Exception):
+            pass
+
+        def handler(signum, frame):
+            raise Interrupted
+
+        def spin():
+            while True:
+                pass
+
+        old = signal.signal(signal.SIGALRM, handler)
+        try:
+            for _ in range(3):
+                signal.setitimer(signal.ITIMER_REAL, 0.02)
+                with self.assertRaises(Interrupted):
+                    spin()
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, old)
+
+    def test_loops(self):
+        def f(n):
+            total = 0
+            for i in range(n):
+                if i % 3 == 0:
+                    continue
+                total += i
+            while total > 10:
+                total -= 7
+            return total
+
+        for _ in range(3):
+            self.assertEqual(f(30), 6)
+
+    def test_yield_from_loop(self):
+        def inner():
+            yield 1
+            yield 2
+            return 5
+
+        def outer():
+            x = yield from inner()
+            yield x
+
+        for _ in range(3):
+            self.assertEqual(list(outer()), [1, 2, 5])
 
 
 if __name__ == "__main__":

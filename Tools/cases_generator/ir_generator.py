@@ -864,11 +864,8 @@ OBJECT_READERS = {
     # Type tests and accessors
     "Py_TYPE", "PyAnyDict_CheckExact", "PyAnySet_CheckExact",
     "PyCoro_CheckExact", "PyGen_Check",
-    "PyList_CheckExact", "PyModule_CheckExact", "PySlice_Check",
+    "PyList_CheckExact", "PyModule_CheckExact",
     "PyTuple_CheckExact", "PyType_Check", "PyUnicode_CheckExact",
-    "PyList_GET_SIZE", "PyList_GET_VALUE", "PyTuple_GET_SIZE",
-    "PyTuple_GET_VALUE", "PyUnicode_1BYTE_DATA", "PyUnicode_GET_LENGTH",
-    "PyUnicode_IS_COMPACT_ASCII", "PyUnicode_READ_CHAR", "_PyList_ITEMS",
     "_PyObject_GetManagedDict", "_PyObject_InlineValues",
     "_PyObject_Shape", "_PyObject_ValueSlot",
     # They take the index of a value slot, an address inside the object
@@ -883,7 +880,6 @@ OBJECT_READERS = {
     "PyUnicode_Concat",
 
     "_PyDict_SetValue_Take2", "_PyDict_SetValue", "value_exception_group_match",
-    "_PyList_SliceSubscript",
     "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal",
     # The indirect calls of BINARY_OP_EXTEND, through a table of functions

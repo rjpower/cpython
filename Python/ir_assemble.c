@@ -569,6 +569,9 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
         else if (role >= _PyIR_ROLE_IN0) {
             fields[f] = (uint32_t)_PyRegCfg_Slot(cfg, _PyReg_IN(cfg, op)[fixed_in++]);
         }
+        else if (role == _PyIR_ROLE_FB) {
+            fields[f] = (uint32_t)(op->fb > 0 ? op->fb : IR_FB_SHARED);
+        }
         else if (role == _PyIR_ROLE_IMM) {
             // A scalar next to the spans (Function's `present`): the op's oparg
             fields[f] = (uint32_t)op->oparg;

@@ -207,6 +207,7 @@ FB_LAYOUT: dict[Schema, CLayout] = {
         "index": CField("index", _U32)}),
     Schema.Truth: CLayout("_PyFbUnary", {
         "kind": _NONE, "type_version": CField("type_version", _U32)}),
+    Schema.Unpack: CLayout("_PyFbUnary", {"kind": _NONE, "length": _NONE}),
     # The item sites share the binary entry; their evidence is the type
     # versions that it records
     Schema.Item: CLayout("_PyFbBinary", {

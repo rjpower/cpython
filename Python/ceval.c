@@ -3351,6 +3351,85 @@ _PyRop_UnpackStar(PyValue *source_home, Py_ssize_t shape, _PyRopOwners *out)
     return rop_unpack(source_home, before, after, before + 1 + after, out);
 }
 
+/* The specialized arms: the items of an exact tuple or list of n items,
+ * duplicated, in stack order.  The guard has checked the type and length; the
+ * list's length is checked again under its lock, and a list that changed goes
+ * the generic way. */
+int
+_PyRop_UnpackTuple(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyTuple_CheckExact(seq_o) && PyTuple_GET_SIZE(seq_o) == n);
+    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
+    if (n && items == NULL) {
+        _PyErr_NoMemory(_PyThreadState_GET());
+        return -1;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyTuple_ITEMS(seq_o)[i]));
+    }
+    out->items = items;
+    out->count = n;
+    return 0;
+}
+
+int
+_PyRop_UnpackList(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyList_CheckExact(seq_o));
+    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
+    if (n && items == NULL) {
+        _PyErr_NoMemory(_PyThreadState_GET());
+        return -1;
+    }
+    int same = 1;
+    Py_BEGIN_CRITICAL_SECTION(seq_o);
+    if (PyList_GET_SIZE(seq_o) != n) {
+        same = 0;
+    }
+    else {
+        for (Py_ssize_t i = 0; i < n; i++) {
+            items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyList_ITEMS(seq_o)[i]));
+        }
+    }
+    Py_END_CRITICAL_SECTION();
+    if (!same) {
+        PyMem_Free(items);
+        return _PyRop_UnpackIterable(source_home, n, out);
+    }
+    out->items = items;
+    out->count = n;
+    return 0;
+}
+
+bool
+_PyRop_TupleHasLength(PyValueBorrow v, Py_ssize_t n)
+{
+    return (PyValue_IsObject)(v)
+           && PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(v))
+           && PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) == n;
+}
+
+bool
+_PyRop_ListHasLength(PyValueBorrow v, Py_ssize_t n)
+{
+    return (PyValue_IsObject)(v)
+           && PyList_CheckExact(PyValue_AsKnownObjectBorrow(v))
+           && PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) == n;
+}
+
+/* The case of classify_unpack: 0 an exact tuple of n items, 1 an exact list
+ * of n items, 2 any other */
+int
+_PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n)
+{
+    if (_PyRop_TupleHasLength(v, n)) {
+        return 0;
+    }
+    return _PyRop_ListHasLength(v, n) ? 1 : 2;
+}
+
 void
 _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v)
 {

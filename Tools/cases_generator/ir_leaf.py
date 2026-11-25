@@ -166,6 +166,7 @@ FIELDS = {f"{f.struct}.{f.name}": f for f in (
     Field("_PyRangeIterObject", "step", "i64"),
     Field("_PyRangeIterObject", "len", "i64"),
     Field("PyLongObject", "long_value.lv_tag", "u64"),
+    Field("PyASCIIObject", "length", "i64"),
     Field("_PyInterpreterFrame", "f_globals", "PyObject*"),
     Field("_PyInterpreterFrame", "f_builtins", "PyObject*"),
     Field("_PyInterpreterFrame", "f_executable", "PyCodeObject*"),

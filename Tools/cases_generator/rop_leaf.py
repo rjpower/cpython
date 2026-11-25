@@ -32,8 +32,8 @@ from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLay
                          Schema, SchemaCtor, Wrap)
 from rop_cgen import Unsupported, arm_facts, flatten, home_views
 from rop_check import Program
-from rop_model import (Arm, EnumType, HandleType, Publish, ScalarType, SchemaType, Type,
-                       WrapType)
+from rop_model import (Arm, EnumType, Extern, HandleType, Publish, ScalarType, SchemaType,
+                       Type, WrapType)
 from rop_ssa import (INTACT, BranchTerm, ExitTerm, Jump, Op, OpKind, SsaArm, Switch,
                      expand)
 
@@ -163,6 +163,30 @@ class ArmLeaf:
     entry: str | None = None
 
 
+def successors(t) -> list[str]:
+    if isinstance(t, Jump):
+        return [t.block]
+    if isinstance(t, BranchTerm):
+        return [t.if_true.block, t.if_false.block]
+    if isinstance(t, Switch):
+        return [e.target.block for e in t.edges]
+    return []
+
+
+def blocks_after_acquire(ssa: SsaArm) -> set[str]:
+    "The blocks that a path reaches after it acquires an owner"
+    work = [s for b in ssa.blocks.values()
+            if any(op.kind is OpKind.acquire for op in b.ops)
+            for s in successors(b.term)]
+    after: set[str] = set()
+    while work:
+        label = work.pop()
+        if label not in after:
+            after.add(label)
+            work.extend(successors(ssa.blocks[label].term))
+    return after
+
+
 def layout_of(arm: Arm, entry: Entry) -> CLayout:
     layout = FB_LAYOUT.get(entry.schema)
     if layout is None:
@@ -185,7 +209,13 @@ class LeafBuilder:
         self.effects: set[str] = set()
         self.helpers: list[str] = []
         self.entry: str | None = None
+        # The row being lowered, whose feedback clause bounds its entry
+        # reads, and the entry fields read so far
+        self.lowering: Extern | None = None
+        self.fields_read: set[str] = set()
         self.acquired: list[str] = []
+        # Whether the path to the current op has acquired an owner
+        self.holding = False
         self.cur: ir_leaf.Block
         # The publish ops of the current block so far, and the home whose
         # owner each take or old gives
@@ -270,10 +300,19 @@ class LeafBuilder:
         the entry can be rewritten while the word keeps its handler"""
         if not isinstance(entry, Entry):
             self.refuse(f"{entry} is not a feedback entry")
-        declared = {a.field for a in self.arm.contract.feedback if a.mode is AccessMode.read}
-        if f"entry.{field}" not in declared and "entry" not in declared:
-            self.refuse(f"reads entry.{field}, which it does not declare")
+        contracts = [("it", self.arm.contract)]
+        if self.lowering is not None:
+            contracts.append((self.lowering.name, self.lowering.contract))
+        for who, contract in contracts:
+            declared = {a.field for a in contract.feedback if a.mode is AccessMode.read}
+            if f"entry.{field}" not in declared and "entry" not in declared:
+                self.refuse(f"reads entry.{field}, which {who} does not declare")
         layout = layout_of(self.arm, entry)
+        union = layout.union_of(field)
+        if union is not None and any(f in self.fields_read for f in union.fields
+                                     if f != field):
+            self.refuse(f"reads entry.{field} and another field of its union")
+        self.fields_read.add(field)
         f = layout.fields.get(field)
         if f is None or f.member is None:
             self.refuse(f"entry.{field} of {entry.schema.value} has no C member")
@@ -320,10 +359,12 @@ class LeafBuilder:
             self.cur = self.block_list[self.ids[label]]
             for p in self.ssa.blocks[label].params:
                 self.env[p] = self.param(self.ssa.types[p])
+        after = blocks_after_acquire(self.ssa)
         for label in order:
             b = self.ssa.blocks[label]
             self.cur = self.block_list[self.ids[label]]
             self.steps = []
+            self.holding = label in after
             for op in b.ops:
                 self.op(op)
             self.term(b.term)
@@ -379,11 +420,12 @@ class LeafBuilder:
             if op.attr not in self.inputs:
                 self.inputs.append(op.attr)
             self.acquired.append(op.attr)
+            self.holding = True
             self.env[op.result] = self.emit1("arg", ir_leaf.VALUE, (), op.attr)
         elif k is OpKind.unwrap:
             self.env[op.result] = args[0]
         elif k is OpKind.guard:
-            if self.acquired:
+            if self.holding:
                 self.refuse("a guard after an acquire")
             bad = self.emit1("lnot", "bool", (self.leaf(args[0]),))
             self.emit("exit_if", (), (bad,), EXIT)
@@ -427,7 +469,11 @@ class LeafBuilder:
             self.refuse(f"{name} has no C body")
         symbol = x.c.symbol
         if symbol in ROW_LOWERINGS:
-            return ROW_LOWERINGS[symbol](self, *args)
+            self.lowering = x
+            try:
+                return ROW_LOWERINGS[symbol](self, *args)
+            finally:
+                self.lowering = None
         if symbol in ir_leaf.PRIMITIVES:
             return self.prim(symbol, *(self.leaf(a) for a in args))
         if symbol in ir_leaf.HELPERS:
@@ -486,7 +532,7 @@ class LeafBuilder:
             self.cur.term = ("next", None) if t.kind == "next" else ("branch",)
         elif self.steps:
             self.refuse(f"exit {t.kind} after a publish")
-        elif self.acquired:
+        elif self.holding:
             self.refuse(f"exit {t.kind} after an acquire")
         elif t.kind == "raise":
             if any(h != INTACT for _, h in t.state.homes):
@@ -631,6 +677,57 @@ def _attr_recipe(b, **values) -> Record:
     return Record(Schema.Attr, tuple(fields))
 
 
+def _null(b) -> int:
+    return b.const(ir_leaf.VALUE, "PyValue_NULL")
+
+
+def _admitted_recipe(b, fb, name):
+    """_PyAttr_AdmittedRecipe: an entry that holds a type version or a class
+    or keys version (keys_version's storage, which C reads as class_version)"""
+    tv = b.cache(fb, "type_version")
+    kv = b.cache(fb, "keys_version")
+    hit = b.cmp("ne", b.emit1("or", "u32", (tv, kv)), b.const("u32", 0))
+    return hit, _attr_recipe(
+        b, type_version=tv, aux=kv, offset=b.cache(fb, "offset"),
+        read_kind=b.cache(fb, "kind"), class_value=b.cache(fb, "class_value"))
+
+
+def _admitted_method(b, fb, name):
+    "_PyAttr_AdmittedMethod: a live type version and the method it caches"
+    tv = b.cache(fb, "type_version")
+    hit = b.cmp("ne", tv, b.const("u32", 0))
+    return hit, _attr_recipe(b, type_version=tv, values_layout=b.const("bool", 1),
+                             class_value=b.cache(fb, "class_value"))
+
+
+def _borrow_method(b, r):
+    "_PyAttr_BorrowMethod"
+    return (b.prim1("_PyValueGuarded_Load", r["class_value"]),)
+
+
+def _is_module(b, o):
+    "_PyAttr_IsModule"
+    return (b.prim1("PyModule_CheckExact", b.leaf(o)),)
+
+
+def _module_entry(b, o, r):
+    """_PyAttr_ModuleEntry: the module's entry at the recipe's index while
+    its keys have the recipe's version, else NULL"""
+    keys = b.load("PyDictObject.ma_keys", b.load("PyModuleObject.md_dict", b.leaf(o)))
+
+    def at_index():
+        index = b.zext("i64", r["offset"])
+
+        def entry():
+            entries = b.prim1("DK_UNICODE_ENTRIES", keys)
+            e = b.emit1("ptradd", "PyDictUnicodeEntry*", (entries, index), "PyDictUnicodeEntry")
+            return b.load("PyDictUnicodeEntry.me_value", e)
+        in_range = b.cmp("ult", index, b.load("PyDictKeysObject.dk_nentries", keys))
+        return b.choose(in_range, ir_leaf.VALUE, entry, lambda: _null(b))
+    current = b.cmp("eq", b.load("PyDictKeysObject.dk_version", keys), r["aux"])
+    return (b.choose(current, ir_leaf.VALUE, at_index, lambda: _null(b)),)
+
+
 def _admitted_instance_slot(b, fb, name):
     "_PyAttr_AdmittedInstanceSlot: a live type version"
     tv = b.cache(fb, "type_version")
@@ -706,6 +803,19 @@ def _exact_list(b, v):
         "PyList_CheckExact", b.prim1("PyValue_AsKnownObjectBorrow", w))),)
 
 
+def _exact_str(b, v):
+    "_PyRop_ExactStr"
+    w = b.leaf(v)
+    return (b.and_then(b.prim1("PyValue_IsObject", w), lambda: b.prim1(
+        "PyUnicode_CheckExact", b.prim1("PyValue_AsKnownObjectBorrow", w))),)
+
+
+def _str_nonempty(b, v):
+    "_PyRop_StrNonempty"
+    o = b.prim1("PyValue_AsKnownObjectBorrow", b.leaf(v))
+    return (b.cmp("ne", b.load("PyASCIIObject.length", o), b.const("i64", 0)),)
+
+
 def _list_nonempty(b, v):
     "_PyRop_ListNonempty"
     size = b.prim1("PyList_GET_SIZE", b.prim1("PyValue_AsKnownObjectBorrow", b.leaf(v)))
@@ -734,6 +844,8 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     "_PyRop_IntNonzero": _int_nonzero,
     "_PyRop_ExactList": _exact_list,
     "_PyRop_ListNonempty": _list_nonempty,
+    "_PyRop_ExactStr": _exact_str,
+    "_PyRop_StrNonempty": _str_nonempty,
     "_PyRop_TruthObject": _truth_object,
     # Constants
     "_PyRop_SmallInt": _small_int,
@@ -741,6 +853,11 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     # Attribute recipes
     "_PyAttr_AdmittedInstanceSlot": _admitted_instance_slot,
     "_PyAttr_AdmittedShape": _admitted_shape,
+    "_PyAttr_AdmittedRecipe": _admitted_recipe,
+    "_PyAttr_AdmittedMethod": _admitted_method,
+    "_PyAttr_BorrowMethod": _borrow_method,
+    "_PyAttr_IsModule": _is_module,
+    "_PyAttr_ModuleEntry": _module_entry,
     "_PyAttr_InstanceVersion": _instance_version,
     "_PyAttr_ValidInlineValues": _valid_inline_values,
     "_PyAttr_ShapeCurrent": _shape_current,
@@ -965,9 +1082,16 @@ def entry_decl(program: Program, arm: Arm, leaf: ArmLeaf) -> "jt.FbEntry | None"
     if leaf.entry is None:
         return None
     for p in program.encodings[arm.family].placements:
-        if p.kind is FieldKind.feedback and len(p.slots) == 1 and p.slots[0].word == 0:
-            return jt.FbEntry(leaf.entry, f"IR_{p.slots[0].name}(ir_word)")
-    raise Unsupported(f"{arm.name}: the feedback operand is not one field of the head")
+        if p.kind is not FieldKind.feedback or len(p.slots) != 1:
+            continue
+        slot = p.slots[0]
+        if slot.word == 0:
+            return jt.FbEntry(leaf.entry, f"IR_{slot.name}(ir_word)")
+        # A field of an operand word, read when the template is emitted
+        return jt.FbEntry(leaf.entry,
+                          f"((uint32_t)(cx->words[cx->index + {slot.word}] >> "
+                          f"{slot.offset - 64 * slot.word}) & {(1 << slot.width) - 1:#x})")
+    raise Unsupported(f"{arm.name}: the feedback operand is not one field")
 
 
 def template_graph(program: Program, arm: Arm, leaf: ArmLeaf) -> jt.Graph:

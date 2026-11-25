@@ -185,6 +185,13 @@ def write_layout_checks(out: TextIO) -> None:
                           f"{f.ctype}: 1, default: 0),\n"
                           f"              \"{what} {schema.value}.{name}: "
                           f"{layout.struct}.{f.member} is not {f.ctype}\");\n")
+            for u in layout.unions:
+                first = u.members[0]
+                for m in u.members[1:]:
+                    out.write(f"static_assert(offsetof({layout.struct}, {m}) == "
+                              f"offsetof({layout.struct}, {first}),\n"
+                              f"              \"{what} {schema.value}: {layout.struct}.{m} "
+                              f"does not share {first}'s storage\");\n")
 
 
 def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:

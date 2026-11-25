@@ -376,7 +376,7 @@ leaf_layout(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
     OFF(_PyInterpreterFrame, f_globals); OFF(_PyInterpreterFrame, f_builtins);
     OFF(_PyInterpreterFrame, f_executable); OFF(_PyInterpreterFrame, base);
     OFF(PyCodeObject, co_consts); OFF(PyThreadState, eval_breaker);
-    OFF(PyCodeObject, _co_instrumentation_version);
+    OFF(PyCodeObject, _co_instrumentation_version); OFF(PyASCIIObject, length);
 #define SIZE(T) if (add_int(size, #T, (long long)sizeof(T)) < 0) goto error
     SIZE(PyValue); SIZE(PyDictUnicodeEntry);
 #define SYM(NAME) if (add_word(sym, #NAME, (uint64_t)(uintptr_t)&NAME) < 0) goto error

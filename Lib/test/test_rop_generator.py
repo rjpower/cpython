@@ -20,6 +20,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import rop_check
     import rop_generator
     import rop_leaf
+    import rop_model
     import rop_syntax
 
 ROOT = Path(test_tools.basepath)
@@ -489,6 +490,18 @@ class GeneratedAddIntTests(unittest.TestCase):
             self.assertEqual((ROOT / name).read_text(), out.getvalue(), name)
 
 
+def c_function(text: str, symbol: str) -> tuple[str, str] | None:
+    "The parameters and body of a C function definition in text"
+    m = re.search(rf"^{re.escape(symbol)}\(([^)]*)\)\s*\{{", text, re.M)
+    if m is None:
+        return None
+    i, depth = m.end(), 1
+    while depth:
+        depth += {"{": 1, "}": -1}.get(text[i], 0)
+        i += 1
+    return m.group(1), text[m.end():i]
+
+
 class TemplateLayoutTests(unittest.TestCase):
     """Templates read feedback entries through rop_catalog.FB_LAYOUT, the
     one statement of each field's C member and type"""
@@ -515,6 +528,52 @@ class TemplateLayoutTests(unittest.TestCase):
                     if f.member is not None:
                         self.assertIn(f"(({layout.struct} *)0)->{f.member}, "
                                       f"{f.ctype}: 1", text)
+
+    def test_union_members_share_their_storage(self):
+        out = io.StringIO()
+        rop_generator.write_layout_checks(out)
+        text = out.getvalue()
+        for layout in rop_catalog.FB_LAYOUT.values():
+            for u in layout.unions:
+                for m in u.members[1:]:
+                    self.assertIn(f"offsetof({layout.struct}, {m}) == "
+                                  f"offsetof({layout.struct}, {u.members[0]})", text)
+
+    def test_rows_declare_the_entry_fields_their_c_reads(self):
+        # Scans each row's C body for reads through its entry pointer: the
+        # body only, not the functions it calls
+        headers = sorted((ROOT / "Include" / "internal").glob("*.h"))
+        sources = sorted((ROOT / "Python").glob("*.c"))
+        text = "\n".join(p.read_text() for p in headers + sources)
+        program = self.products.program
+        checked = 0
+        for name, x in program.externs.items():
+            fbs = [p for p in x.params if isinstance(p.type, rop_model.SchemaType)
+                   and p.type.ctor is rop_catalog.SchemaCtor.Fb]
+            if not fbs or x.c is None:
+                continue
+            found = c_function(text, x.c.symbol)
+            if found is None:
+                continue
+            params, body = found
+            pointer = re.search(r"\b_PyFb\w+\s*\*\s*(\w+)", params)
+            if pointer is None:
+                continue
+            layout = rop_catalog.FB_LAYOUT.get(fbs[0].type.schema)
+            declared = {a.field for a in x.contract.feedback
+                        if a.mode is rop_catalog.AccessMode.read}
+            if layout is None or "entry" in declared:
+                continue
+            # A plain store is a write, not a read
+            reads = re.findall(rf"\b{pointer.group(1)}->([\w.]+)\b(?!\s*=[^=])", body)
+            for member in reads:
+                field = layout.field_of_member(member) or next(
+                    (f for f, c in layout.fields.items()
+                     if c.member and c.member.startswith(member + ".")), None)
+                with self.subTest(row=name, member=member):
+                    self.assertIn(f"entry.{field}", declared, f"{x.c.symbol} reads {member}")
+            checked += 1
+        self.assertGreater(checked, 5)
 
     def test_a_template_that_reads_its_entry_checks_its_handler(self):
         for name in ("GetAttr.Shape", "GetAttr.Instance"):

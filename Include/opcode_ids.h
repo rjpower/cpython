@@ -176,22 +176,22 @@ extern "C" {
 #define STORE_ATTR_WITH_HINT                   171
 #define UNPACK_SEQUENCE_LIST                   172
 #define UNPACK_SEQUENCE_TUPLE                  173
-#define INSTRUMENTED_END_FOR                   234
-#define INSTRUMENTED_POP_ITER                  235
-#define INSTRUMENTED_END_SEND                  236
-#define INSTRUMENTED_RETURN_VALUE              237
-#define INSTRUMENTED_JUMP_IF_FALSE_OR_POP      238
-#define INSTRUMENTED_JUMP_IF_TRUE_OR_POP       239
-#define INSTRUMENTED_FOR_ITER                  240
-#define INSTRUMENTED_CALL                      241
-#define INSTRUMENTED_INSTRUCTION               242
-#define INSTRUMENTED_JUMP_FORWARD              243
-#define INSTRUMENTED_JUMP_BACKWARD             244
-#define INSTRUMENTED_POP_JUMP_IF_TRUE          245
-#define INSTRUMENTED_POP_JUMP_IF_FALSE         246
-#define INSTRUMENTED_POP_JUMP_IF_NONE          247
-#define INSTRUMENTED_POP_JUMP_IF_NOT_NONE      248
-#define INSTRUMENTED_RESUME                    249
+#define INSTRUMENTED_RESUME                    234
+#define INSTRUMENTED_END_FOR                   235
+#define INSTRUMENTED_POP_ITER                  236
+#define INSTRUMENTED_END_SEND                  237
+#define INSTRUMENTED_RETURN_VALUE              238
+#define INSTRUMENTED_JUMP_IF_FALSE_OR_POP      239
+#define INSTRUMENTED_JUMP_IF_TRUE_OR_POP       240
+#define INSTRUMENTED_FOR_ITER                  241
+#define INSTRUMENTED_CALL                      242
+#define INSTRUMENTED_INSTRUCTION               243
+#define INSTRUMENTED_JUMP_FORWARD              244
+#define INSTRUMENTED_JUMP_BACKWARD             245
+#define INSTRUMENTED_POP_JUMP_IF_TRUE          246
+#define INSTRUMENTED_POP_JUMP_IF_FALSE         247
+#define INSTRUMENTED_POP_JUMP_IF_NONE          248
+#define INSTRUMENTED_POP_JUMP_IF_NOT_NONE      249
 #define INSTRUMENTED_YIELD_VALUE               250
 #define INSTRUMENTED_END_ASYNC_FOR             251
 #define INSTRUMENTED_LOAD_SUPER_ATTR           252
@@ -213,8 +213,8 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
-#define IR_NUM_OLD_HANDLERS                    272
-#define IR_NUM_HANDLERS                        413
+#define IR_NUM_OLD_HANDLERS                    270
+#define IR_NUM_HANDLERS                        416
 
 #ifdef __cplusplus
 }

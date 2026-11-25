@@ -2329,12 +2329,81 @@ _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return _PyRop_EdgeEvent(tstate, frame, site, true, PY_MONITORING_EVENT_JUMP);
 }
 
-/* The backedge's poll (Jump.Poll, Jump.Observed): signals, the GC and other
- * pending events, as _CHECK_PERIODIC */
+/* The poll of a word that is interruptible (the backedge Jump arms, Resume):
+ * signals, the GC and other pending events */
 static inline int
-_PyRop_Poll(PyThreadState *tstate)
+_PyRop_Poll(PyThreadState *tstate, _PyInstr *site)
 {
+    (void)site;
     return check_periodics(tstate);
+}
+
+/* The rows of Resume (Python/register_ops/resume.rop) */
+
+/* The code's instrumentation is current and no event is pending */
+static inline bool
+_PyRop_InstrumentationCurrent(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    return _Py_EvalBreaker(tstate) == FRAME_CODE_INSTRUMENTATION_VERSION();
+}
+
+/* Whether a resume point of this kind polls (the delegation loops and a
+ * generator expression's start do not) */
+static inline bool
+_PyRop_ResumePolls(uint32_t kind)
+{
+    return kind < RESUME_AFTER_YIELD_FROM;
+}
+
+/* Instrument the code if its version is out of date, as _MAYBE_INSTRUMENT.
+ * A positive result means the word runs again: return_pc names it, and it
+ * now has the handler that instrumentation installed. */
+static Py_NO_INLINE int
+_PyRop_InstrumentIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *site)
+{
+#ifdef Py_GIL_DISABLED
+    // For thread-safety, the instrumentation version is checked even when
+    // tracing: another thread may rewrite the bytecode while this one runs.
+    int check_instrumentation = 1;
+#else
+    int check_instrumentation = (tstate->tracing == 0);
+#endif
+    if (!check_instrumentation) {
+        return 0;
+    }
+    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
+                               & ~_PY_EVAL_EVENTS_MASK;
+    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+        _PyFrame_GetCode(frame)->_co_instrumentation_version);
+    if (code_version == global_version) {
+        return 0;
+    }
+    if (_Py_Instrument(_PyFrame_GetCode(frame), tstate->interp)) {
+        return -1;
+    }
+    frame->return_pc = site;
+    return 1;
+}
+
+/* PY_START at a frame's start, PY_RESUME at any other resume point.  A
+ * callback that moves the frame leaves the word to run in return_pc. */
+static Py_NO_INLINE int
+_PyRop_ResumeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *site, uint32_t kind)
+{
+    int err = _Py_call_instrumentation(
+        tstate, kind == RESUME_AT_FUNC_START ? PY_MONITORING_EVENT_PY_START
+                                             : PY_MONITORING_EVENT_PY_RESUME,
+        frame, site);
+    if (err) {
+        return -1;
+    }
+    if (frame->instr_ptr != site) {
+        frame->return_pc = frame->instr_ptr;
+        return 1;
+    }
+    return 0;
 }
 
 /* Whether the jump word at site goes back */

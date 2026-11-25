@@ -92,11 +92,11 @@ IR_HOT_ROUTINE(gen_resume, PyValue gen_value)
         }
         next_instr = resume;
         /* A frame that the chain passes through runs none of its words, so
-         * under the JIT its RESUME_JIT is skipped too: its warm-up event is
+         * under the JIT its Resume.Warm is skipped too: its warm-up event is
          * not due, and it has nothing to hand off. */
-        IR_SKIP_RESUME_IF(IR_HANDLER(*next_instr) == RESUME ||
+        ROP_ENTER_GATE_IF(IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Poll ||
                           (kind == GEN_RESUME_SEND &&
-                           IR_HANDLER(*next_instr) == RESUME_JIT));
+                           IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Warm));
         if (next_instr == resume) {
             GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
         }
@@ -150,7 +150,7 @@ IR_HOT_ROUTINE(gen_resume, PyValue gen_value)
      * goes to the slot that the frame that entered it named. */
     _PyFrame_SetResumeValue(frame, value);
     LOAD_IP(0);
-    IR_SKIP_RESUME();
+    ROP_ENTER_GATE();
     DTRACE_FUNCTION_ENTRY();
     LLTRACE_RESUME_FRAME();
     GEN_DISPATCH();

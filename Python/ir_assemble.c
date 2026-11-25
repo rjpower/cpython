@@ -619,13 +619,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
     }
-    /* With the baseline JIT on, frame entries and resumes are its warm-up
-     * events and hand-offs (Python/jit.c): a choice made here, so that with
-     * the JIT off the words are what they were.  A backedge's is the Jump
-     * family's (the translator's rule). */
-    if (opcode == RESUME && _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
-        return RESUME_JIT;
-    }
     if (opcode == BINARY_OP) {
         // NB_SUBSCR is the GetItem family's, never a BINARY_OP handler
         if (oparg >= NB_SUBSCR) {
@@ -859,13 +852,20 @@ done:
     return res;
 }
 
+/* The translator's Resume words (the rule of RESUME in Python/regcfg.c) */
+static inline int
+is_resume_word(int opcode)
+{
+    return opcode == ROP_HANDLER_Resume_Poll || opcode == ROP_HANDLER_Resume_Warm;
+}
+
 static int
 next_frontend_op(_PyRegCfg *cfg, int first, int skip_resume)
 {
     while (first < cfg->nops) {
         int opcode = cfg->ops[first].opcode;
         if (opcode != _PyReg_DEAD && opcode != NOP &&
-            !(skip_resume && opcode == RESUME))
+            !(skip_resume && is_resume_word(opcode)))
         {
             return first;
         }
@@ -1611,7 +1611,7 @@ make_ir(struct assembler *a, _PyRegCfg *cfg, int nfixed, int nslots,
     ir->first_traceable = ir->nwords;
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
-        if (op->nwords && op->opcode == RESUME &&
+        if (op->nwords && is_resume_word(op->opcode) &&
             (op->oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_GEN_EXPR_START)
         {
             ir->first_traceable = (uint32_t)op->word;

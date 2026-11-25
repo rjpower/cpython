@@ -743,11 +743,11 @@ class DefinitionTests(unittest.TestCase):
         Function Intrinsic IntrinsicPair
         Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
         AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
-        CleanupThrow EndAsyncFor WithExit Resume Poll
+        CleanupThrow EndAsyncFor WithExit Resume
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 76)
+        self.assertEqual(len(self.APPENDIX_A), 75)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

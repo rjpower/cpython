@@ -192,8 +192,8 @@ static int
 generator_resume_shape(const _PyIRWord *words, int nwords, int nl, int pc,
                        int *consumer)
 {
-    if (pc + 2 >= nwords || (!generator_is(words[pc + 1], RESUME) &&
-                             !generator_is(words[pc + 1], RESUME_JIT))) {
+    if (pc + 2 >= nwords ||
+        _PyIR_BaseOpcode(IR_HANDLER(words[pc + 1])) != RESUME) {
         return _PyIR_GEN_CONSUMER_NONE;
     }
     int home = (int)IR_A(words[pc]);

@@ -509,7 +509,7 @@ class LoweringTests(unittest.TestCase):
 
 # Under a JIT mode the lowering picks these forms of RESUME and
 # JUMP_BACKWARD; a unit compiles them as their base handler (Python/jit.c)
-JIT_FORMS = {"RESUME_JIT": "RESUME", "JUMP_BACKWARD_JIT": "JUMP_BACKWARD"}
+JIT_FORMS = {"JUMP_BACKWARD_JIT": "JUMP_BACKWARD"}
 
 
 def word_of(func, handler, nth=-1):
@@ -655,12 +655,6 @@ TRUTHS = ANY + [[1], -5, big(0), Plain(), "", Shape()]
 BINARY = "def f(a, b):\n    x = 1\n    x = a {op} b\n    return x"
 TEMPS = "def f(a, b):\n    return (a {op} b) {op} (b {op} a)"
 TEMPLATE_CASES = [
-    # RESUME's words compile to RESUME_CHECK's template, whose miss runs
-    # the RESUME form; a frame with cells reaches its RESUME after the
-    # words that make them
-    ("def f(a, b):\n    return a", (1, 2), "RESUME", "", [()]),
-    ("def f(a, b):\n    def g():\n        return a\n    return g", (1, 2), "RESUME", "",
-     [()]),
     *[(BINARY.format(op=op), (6, 3), handler, "ABC",
        [(Plain(), a, b) for a, b in INT_PAIRS])
       for op, handler in (("+", "Add.Int"), ("-", "BINARY_OP_SUBTRACT_INT"),
@@ -906,23 +900,6 @@ class TemplateTests(unittest.TestCase):
                 self.assertEqual(capi.jit_unit(f.__code__)["plans"][index],
                                  (handler, "shared", "stub", handler))
                 self.assertEqual(f(*args), result)
-
-    def test_resume_check_misses_when_instrumentation_changes(self):
-        "RESUME_CHECK's template stays on its code until monitoring changes the version"
-        f = self.compile("def f(a, b):\n    return a", (1, 2))
-        index = word_of(f, "RESUME")[0]
-        self.assertFalse(capi.jit_template_run(f, index, {}, True)[1])
-        sys.monitoring.use_tool_id(4, "test_jit_template")
-        try:
-            sys.monitoring.set_events(4, sys.monitoring.events.PY_START)
-            # The code's version is behind the interpreter's: the miss runs
-            # the RESUME form, which instruments the code
-            next_, slow, exc, _ = capi.jit_template_run(f, index, {}, True)
-            self.assertTrue(slow)
-            self.assertIsNone(exc)
-        finally:
-            sys.monitoring.set_events(4, 0)
-            sys.monitoring.free_tool_id(4)
 
     def test_temporaries(self):
         "TEMPS puts the inputs of its last word in temporaries"

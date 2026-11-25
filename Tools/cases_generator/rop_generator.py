@@ -449,7 +449,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
         fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
-        0 if has_args else enc.words, writes, arm_transfer(exits, ninputs, arm.family), target,
+        0 if has_args else enc.words, writes, arm_transfer(exits, ninputs, arm.family, writes or bool(
+            {e.name for e in arm.contract.effect_set} & HOME_EFFECTS)), target,
         "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE")
 
 
@@ -458,7 +459,11 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
 ABNORMAL_EXITS = frozenset({"raise", "redirect"})
 
 
-def arm_transfer(exits: set[str], ninputs: int, family: str) -> str:
+# Effects of an arm that may change what its homes hold
+HOME_EFFECTS = frozenset({"writes", "releases", "allocates"})
+
+
+def arm_transfer(exits: set[str], ninputs: int, family: str, touches_homes: bool) -> str:
     """The normal-edge ownership contract (_PyIR_TRANSFER_*) that an arm's
     declared exits give.  An arm whose every normal exit leaves the frame
     (return, exit) takes its one input with it: EXIT.  The other contracts
@@ -466,6 +471,9 @@ def arm_transfer(exits: set[str], ninputs: int, family: str) -> str:
     normal = exits - ABNORMAL_EXITS
     if normal and normal <= {"return", "exit"} and ninputs == 1:
         return "_PyIR_TRANSFER_EXIT"
+    # A word with no operand that touches no home leaves every owner as it was
+    if not ninputs and not touches_homes and normal <= {"next", "jump"}:
+        return "_PyIR_TRANSFER_PRESERVE"
     # BranchNone tests its value and retires it on both edges
     if family == "BranchNone":
         return "_PyIR_TRANSFER_RETIRE"

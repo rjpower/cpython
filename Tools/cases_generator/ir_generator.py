@@ -524,13 +524,6 @@ FIELD_LOCS = {"A": LOC_A, "B": LOC_B, "C": LOC_C, "D": LOC_D}
 # an absolute target: the loops, whose bodies jump relative to the next word.
 FORWARD_JUMPS = ("FOR_ITER", "SEND")
 
-# The IR-only families that fuse a compare with the conditional jump after
-# it: the distance is in D, as for the loops, and the entry's arg holds the
-# operation and the sense of the jump.  The handlers stand for the compare.
-FUSED_JUMPS = ("COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP")
-FUSED_SHADOWS = {"COMPARE_OP_JUMP": "COMPARE_OP",
-                 "CONTAINS_OP_JUMP": "CONTAINS_OP", "IS_OP_JUMP": "IS_OP"}
-
 # The unpacks: their dst field names the first of a run of locals that
 # receive the elements in order (the STORE_FASTs folded in), or is IR_NO_DST.
 # The count of elements as a function of the oparg.
@@ -563,7 +556,6 @@ class IRFormat:
     fb: str                         # where the feedback index lives
     jumps: bool                     # the oparg is an absolute target
     forward: bool = False           # the oparg is a forward distance
-    fused: bool = False             # see FUSED_JUMPS
     no_fold: bool = False
     transparent: bool = False       # see is_transparent()
     store_dst: bool = False         # dst may name a local, see
@@ -831,23 +823,16 @@ OBJECT_READERS = {
     # Statements
     "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
-    "Py_TYPE", "PyAnyDict_CheckExact", "PyAnySet_CheckExact",
+    "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
-    "PyList_CheckExact",
-    "PyTuple_CheckExact", "PyUnicode_CheckExact",
+    "PyUnicode_CheckExact",
     "_PyObject_GetManagedDict", "_PyObject_InlineValues",
     "_PyObject_Shape", "_PyObject_ValueSlot",
     # Operations that read their operands and count what they keep
     "PyErr_GivenExceptionMatches",
-    # The value-form container calls (they read the container object and
-    # the key as a value)
-    "_PyDict_ContainsValue",
 
     "value_exception_group_match",
-    "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
-    "_PyUnicode_Equal",
-    # CONTAINS_OP_JUMP_SEQUENCE: the contains function of the container's type
-    "contains_slot",
+    "_PyTemplate_Build",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -1261,6 +1246,7 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM",
               "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
               "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
+              "COMPARE_OP", "IS_OP", "CONTAINS_OP",
               "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
               "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE")
 
@@ -1583,10 +1569,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     array_inputs = completes_step or any(m.properties.window for m in members) or any(
         item.is_array() for m in members for item in io[m.name][0])
     jumps = completes_step or any(m.properties.jumps for m in members)
-    fused = group in FUSED_JUMPS
-    forward = jumps and (group in FORWARD_JUMPS or fused)
-    # A fused word's entry holds its operation and the sense of its jump
-    has_fb = fused or any(uses_feedback(m) for m in members)
+    forward = jumps and group in FORWARD_JUMPS
+    has_fb = any(uses_feedback(m) for m in members)
     # CLEANUP_THROW has no operand in co_code, but its word names the exit
     has_imm = any(m.properties.oparg for m in members) or group == "CLEANUP_THROW"
     if not has_imm:
@@ -1707,7 +1691,6 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
-        fused=fused,
         no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
         discards=(store_dst and store_mode(head, io[head.name][1]) in
@@ -1744,10 +1727,6 @@ FEEDBACK_LAYOUTS = {
     "CALL": "_PyFbCall",
     "CALL_KW": "_PyFbCall",
     "CALL_FUNCTION_EX": "_PyFbCall",
-    "COMPARE_OP_JUMP": "_PyFbBinary",
-    "CONTAINS_OP_JUMP": "_PyFbBinary",
-    # No specialisation; the entry is as large as that of a branch
-    "IS_OP_JUMP": "_PyFbUnary",
 }
 LAYOUT_KINDS = {
     FB_HEADER: "FB_COUNTER",
@@ -1803,10 +1782,8 @@ def observer_terminal_arguments(tokens: list[Token]) -> tuple[list[str], int]:
     if len(args[3]) != 1 or args[3][0] not in edges:
         raise analysis_error("terminal observer requires a literal owner edge", tokens[0])
     edge = edges[args[3][0]]
-    targets = (["JUMP_TARGET", "(", "oparg", ")"],
-               ["next_instr", "+", "IR_FUSED_DISTANCE", "(", ")"])
     if (edge == 0 and args[1] != ["next_instr"] or
-            edge == 1 and args[1] not in targets):
+            edge == 1 and args[1] != ["JUMP_TARGET", "(", "oparg", ")"]):
         raise analysis_error("terminal observer owner edge disagrees with destination", tokens[0])
     return [" ".join(arg) for arg in args], edge
 
@@ -5459,11 +5436,6 @@ class IREmitter(Emitter):
         deopt = self.record.deopt if self.record is not None else ""
         kind, _, head = deopt.partition("(")
         head = head.rstrip(")")
-        if kind == "FUSED_HEAD":
-            # The head has no opcode: the miss counts for the compare
-            self.emit(f"UPDATE_MISS_STATS({FUSED_SHADOWS[head]});\n")
-            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{head});\n")
-            return
         if kind == "GENERATOR_SHAPE":
             if not head:
                 raise analysis_error("generator deopt has no complete source shape", inst.where)
@@ -5831,8 +5803,6 @@ def deopt_target(inst: Instruction, boundary: GeneratorBoundary | None,
     if inst.family is None:
         return ""
     family = inst.family.name
-    if family in FUSED_JUMPS:
-        return f"FUSED_HEAD({family})"
     if boundary is not None:
         head = f"{family}_XFER_{boundary.completed}"
         if head not in generator_boundaries(analysis):
@@ -5851,8 +5821,6 @@ def oparg_source(inst: Instruction, fmt: IRFormat, operation: str | None) -> str
         return ""
     if operation is not None:
         return "OPERATION"
-    if fmt.fused:
-        return "FUSED_OP"           # the entry's arg holds the operation
     if fmt.imm == LOC_FBARG and is_specialization(inst):
         return "FBARG_ENTRY"
     if fmt.imm == LOC_FBARG:
@@ -6068,7 +6036,7 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
         operands=operands, values=tuple(walk.values), uops=tuple(uops),
         results=tuple(results), store_mode=mode, layout=layout, feedback=schema,
         uses_feedback=fmt.fb != LOC_NONE and (
-            uses_feedback(inst) or reads_fb_arg(inst, fmt, operation) or fmt.fused),
+            uses_feedback(inst) or reads_fb_arg(inst, fmt, operation)),
         operation=operation, oparg=oparg, call=call,
         generator_boundary=boundary, deopt=deopt,
         inputs=tuple(walk.inputs), outputs=tuple(walk.outputs),
@@ -7079,9 +7047,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     if record.oparg:
         if record.oparg == "OPERATION":
             out.emit(f"int oparg = {operation};\n")
-        elif record.oparg == "FUSED_OP":
-            # D is the distance; the arg of the entry holds the operation
-            out.emit("int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);\n")
         elif record.oparg == "FBARG_ENTRY":
             out.emit("int oparg = (int)((_PyFbHeader *)fb)->arg;\n")
         elif record.oparg == "FBARG":
@@ -7314,8 +7279,6 @@ def check_body(name: str, text: str, where: object, routine_operand: str = "") -
 # that reports its edge (a loop step has an event only for its next item, and
 # its edge is the word that the base returns).
 EDGE_TWINS = {
-    "INSTRUMENTED_COMPARE_OP_JUMP": ("COMPARE_OP_JUMP", True),
-    "INSTRUMENTED_CONTAINS_OP_JUMP": ("CONTAINS_OP_JUMP", True),
     "INSTRUMENTED_FOR_ITER": ("FOR_ITER", False),
 }
 
@@ -8360,28 +8323,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                        for part, body in zip(parts, (instrument, periodic, event)))):
             return unknown
         return "_PyIR_TRANSFER_PRESERVE"
-
-    if inst.name == "MAKE_CELL" and scalar_shape(0, 0):
-        body = """{
-            PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
-            if (cell == NULL) { ERROR_NO_POP(); }
-            PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
-            PyValue_XCLOSE(tmp);
-        }"""
-        return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
-    if inst.name == "COPY_FREE_VARS" and scalar_shape(0, 0):
-        body = """{
-            PyCodeObject *co = _PyFrame_GetCode(frame);
-            PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyObject *closure = func->func_closure;
-            assert(oparg == co->co_nfreevars);
-            int offset = co->co_nlocalsplus - oparg;
-            for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
-            }
-        }"""
-        return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
 
     scalar = {
         "LOAD_COMMON_CONSTANT": ("{ assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "

@@ -83,15 +83,15 @@ class C:
 class AssemblerTest(unittest.TestCase):
 
     def check_offsets(self, func):
-        # An instruction per head word, at the word's index, and line ranges
-        # that cover the words
+        # An instruction per head word, at the word's index, followed by
+        # the instruction's operand words, and line ranges that cover the
+        # words
         ir = IRCode(func.__code__)
         nwords = len(ir.co_code) // 8
         self.assertEqual(len(get_ir(func.__code__)), nwords)
-        # The operand word of a two-word instruction has no instruction
-        self.assertEqual([instr.offset for instr in dis.get_instructions(func)],
-                         [i for i, word in enumerate(get_ir(func.__code__))
-                          if word[0] != "OPERAND"])
+        covered = [offset for instr in dis.get_instructions(func)
+                   for offset in range(instr.offset, instr.offset + instr.length)]
+        self.assertEqual(covered, list(range(nwords)))
         ranges = [(start, end) for start, end, _ in ir.co_lines()]
         self.assertEqual(ranges[0][0], 0)
         self.assertEqual(ranges[-1][1], nwords)
@@ -537,9 +537,9 @@ class AssemblerTest(unittest.TestCase):
                   "        if x != y:\n"
                   "            n += 10\n"
                   "    return n\n")
-        cases = (([1, 2, 3], 2, "COMPARE_OP_JUMP_INT"),
-                 ([1.5, 2.5], 2.5, "COMPARE_OP_JUMP_FLOAT"),
-                 (["a", "b"], "b", "COMPARE_OP_JUMP_STR"))
+        cases = (([1, 2, 3], 2, "TestBranch.Int"),
+                 ([1.5, 2.5], 2.5, "TestBranch.Float"),
+                 (["a", "b"], "b", "TestBranch.Str"))
         for xs, y, handler in cases:
             with self.subTest(handler=handler):
                 f = make_function(source)
@@ -565,11 +565,11 @@ class AssemblerTest(unittest.TestCase):
 
         xs = [1, 2, 3] * _testinternalcapi.SPECIALIZATION_THRESHOLD
         self.assertEqual(f(xs), len(xs) // 3)
-        self.assertIn("COMPARE_OP_JUMP_INT", handlers(f))
+        self.assertIn("TestBranch.Int", handlers(f))
         jump = [instr for instr in dis.get_instructions(f)
-                if instr.opname.startswith("COMPARE_OP_JUMP")][0]
-        if_true = "if true" in jump.argrepr
-        # The event is at the stack bytecode's jump, which the word fuses
+                if instr.opname.startswith("POP_JUMP_IF")][0]
+        if_true = jump.opname == "POP_JUMP_IF_TRUE"
+        # The event is at the stack bytecode's jump, which the word has
         # with the compare
         source = [instr.offset for instr in stack_dis.get_instructions(f)
                   if instr.opname.startswith("POP_JUMP_IF")][0]
@@ -594,7 +594,7 @@ class AssemblerTest(unittest.TestCase):
             sys.monitoring.set_local_events(tool, f.__code__, 0)
             sys.monitoring.free_tool_id(tool)
         self.assertEqual(events, expected)
-        self.assertIn("INSTRUMENTED_COMPARE_OP_JUMP", ir)
+        self.assertIn("TestBranch.Generic.Observed", ir)
         self.assertEqual(f(xs), len(xs) // 3)
 
     def test_f_lasti(self):
@@ -686,13 +686,14 @@ class AssemblerTest(unittest.TestCase):
     def test_shared_feedback_entry(self):
         # The sites that get no entry (fb 0) share entry 0, a header: they
         # never specialise and keep running their generic handler, which
-        # reads its operand from the word.  The compare and contains sites
-        # have their entries before all the others.
+        # reads its operand from the word.  The entries go in source order,
+        # in loops first, so the compare and contains sites at the end of
+        # this function have none left.
         class O:
             def __init__(self):
                 self.attr = 5
                 self.other = 7
-        nsites = 1000     # attribute entries are 48 bytes: 681 fit after the compares
+        nsites = 1000     # attribute entries are 48 bytes: 682 fit
         source = ("def f(o, n):\n"
                   + "".join(f"    x = o.attr\n" for i in range(nsites))
                   + "    return (o.attr - o.other, o.other // n,\n"
@@ -702,17 +703,15 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 4):
             self.assertEqual(f(O(), 2), expected)
         instrs = list(dis.get_instructions(f))
-        # The fused pairs, as far as their compares keep an entry, and the
-        # compares alone
         compares = [i for i in instrs
                     if i.opname.startswith(("COMPARE_OP", "CONTAINS_OP"))]
-        self.assertEqual([fb_position(f.__code__, i.fb) for i in compares], [2, 6])
+        self.assertEqual([i.fb for i in compares], [0, 0])
         load_attrs = [i for i in instrs if i.opname == "LOAD_ATTR"]
-        self.assertEqual(fb_position(f.__code__, load_attrs[0].fb), 10)
-        self.assertEqual(fb_position(f.__code__, load_attrs[1].fb), 16)
+        self.assertEqual(fb_position(f.__code__, load_attrs[0].fb), 2)
+        self.assertEqual(fb_position(f.__code__, load_attrs[1].fb), 8)
         shared = [i for i in load_attrs if i.fb == 0]
         owned = [i for i in load_attrs if i.fb != 0]
-        self.assertEqual(len(owned), 681)
+        self.assertEqual(len(owned), 682)
         self.assertEqual(len(shared), nsites + 6 - len(owned))
         self.assertEqual({i.argval for i in shared}, {"attr", "other"})
         ir = handlers(f)
@@ -885,24 +884,24 @@ class FeedbackLayoutTest(unittest.TestCase):
         total = int.from_bytes(IRCode(code).co_fbinit[:4], sys.byteorder) & 0xFFFF
         position = 2
         sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (48,),
-                 "GLOBAL": (32,), "CALL": (40,), "BRANCH": (16, 24)}
+                 "GLOBAL": (32,), "CALL": (40,), "BRANCH": (16, 24),
+                 "COMPARE": (24,), "CONTAINS": (24,)}
         for kind, unit, arg, units in entries[1:]:
             self.assertEqual(unit + total, position)
             self.assertIn(units * 8, sizes[kinds[kind]])
             position += units
         self.assertEqual(position, total)
-        # The compare and contains entries come first, then the sites in the
-        # loop, then the others
+        # The sites in the loop come first, in source order, then the others
         by_name = {}
         for instr in dis.get_instructions(f):
             by_name.setdefault(instr.opname, []).append(instr.fb)
-        self.assertEqual([fb_position(code, fb) for fb in by_name["COMPARE_OP_JUMP"]], [2])
-        self.assertEqual([fb_position(code, fb) for fb in by_name["CONTAINS_OP_JUMP"]], [6])
+        c1, c2 = by_name["POP_JUMP_IF_TRUE"]
         pre, a1, b, a2 = by_name["LOAD_ATTR"][:4]
         after = by_name["LOAD_ATTR"][4]
-        self.assertEqual(sorted([a1, b, a2, by_name["STORE_ATTR"][0]]),
-                         [a1, b, a2, by_name["STORE_ATTR"][0]])
-        self.assertLess(by_name["STORE_ATTR"][0], pre)
+        store = by_name["STORE_ATTR"][0]
+        self.assertEqual(sorted([a1, c1, b, c2, a2, store]),
+                         [a1, c1, b, c2, a2, store])
+        self.assertLess(store, pre)
         self.assertLess(pre, after)
         o = types.SimpleNamespace(a=1, b=2, c=0, pre=0)
         self.assertEqual(f(o, 4), 1)
@@ -955,26 +954,25 @@ class FeedbackLayoutTest(unittest.TestCase):
         return "\n".join(lines) + "\n"
 
     def test_compare_sites_past_the_entry_limit(self):
-        # 1023 compare entries fit; the other sites become intrinsic calls
-        # of the same result, whatever the operation and the use of the result
+        # The sites past the entries that fit share entry 0 and run the
+        # generic arm, with the same result, whatever the operation and the
+        # use of the result
         ncopies = 70
         f = make_function(self.compare_source(ncopies))
         nsites = ncopies * len(COMPARE_OPS) * 2
         instrs = list(dis.get_instructions(f))
-        # The fused pairs, as far as their compares keep an entry, and the
-        # compares alone
-        compares = [i for i in instrs
-                    if i.opname.startswith(("COMPARE_OP", "CONTAINS_OP"))]
-        intrinsics = [i for i in instrs if i.opname == "CALL_INTRINSIC_2"]
-        self.assertEqual(len(compares), 1023)
-        self.assertEqual(len(intrinsics), nsites - 1023)
-        self.assertEqual([fb_position(f.__code__, i.fb) for i in compares],
-                         [2 + 4 * k for k in range(1023)])
-        names = {i.argrepr for i in intrinsics}
-        self.assertTrue(all(n.startswith(("INTRINSIC_COMPARE_", "INTRINSIC_CONTAINS_"))
-                            for n in names), names)
+        # The tests alone and the tests that a jump consumes
+        tests = [i for i in instrs
+                 if i.opname in ("COMPARE_OP", "CONTAINS_OP")
+                 or (i.opname.startswith("POP_JUMP") and i.length > 1)]
+        self.assertEqual(len(tests), nsites)
+        self.assertFalse([i for i in instrs if i.opname == "CALL_INTRINSIC_2"])
+        owned = [i for i in tests if i.fb]
+        self.assertTrue(0 < len(owned) < nsites)
+        # Entries go in source order; the sites after them share entry 0
+        self.assertEqual(owned, tests[:len(owned)])
         total = int.from_bytes(IRCode(f.__code__).co_fbinit[:4], sys.byteorder) & 0xFFFF
-        self.assertEqual(total, 2 + 4 * 1023)
+        self.assertLessEqual(total, 4096)
 
         import operator
         ops = {"<": operator.lt, "<=": operator.le, "==": operator.eq,
@@ -3397,7 +3395,7 @@ class UnpackToLocalsTest(unittest.TestCase):
             return inner, b
         for func, store in ((attribute, "STORE_ATTR"),
                             (subscript, "SetItem.Generic"),
-                            (cell, "STORE_DEREF")):
+                            (cell, "CellStore.Set")):
             with self.subTest(func=func.__name__):
                 self.assertIn(store, self.names(func))
                 self.assert_stores_stay(func)
@@ -3533,15 +3531,10 @@ class AppendSourcesTest(unittest.TestCase):
                     self.assertEqual(self.refcounts(items), before)
 
 
-FUSED = {"COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP"}
-
-
 def fused_names(func):
-    """The fused handlers of the executing copy of func's code, with the
-    specialisations folded to their family"""
-    return [h for h in handlers(func)
-            if h.startswith(("COMPARE_OP_JUMP", "CONTAINS_OP_JUMP",
-                             "IS_OP_JUMP"))]
+    """The TestBranch arms of the executing copy of func's code: a test and
+    the jump on its answer"""
+    return [h for h in handlers(func) if h.startswith("TestBranch")]
 
 
 class FusedJumpTest(AssemblerTestCase):
@@ -3549,12 +3542,12 @@ class FusedJumpTest(AssemblerTestCase):
     bool are one word (register-ir-v2 section 4.3, step B6)."""
 
     def test_pairs_fuse(self):
-        sources = {
-            "COMPARE_OP_JUMP": "a < b",
-            "CONTAINS_OP_JUMP": "a in b",
-            "IS_OP_JUMP": "a is b",
-        }
-        for name, test in sources.items():
+        sources = (
+            ("TestBranch.Generic", "a < b"),
+            ("TestBranch.Generic", "a in b"),
+            ("TestBranch.Identity", "a is b"),
+        )
+        for name, test in sources:
             for negated in ("", "not "):
                 with self.subTest(test=test, negated=negated):
                     f = make_function(
@@ -3564,15 +3557,16 @@ class FusedJumpTest(AssemblerTestCase):
                     self.assertEqual(ir.count(name), 1)
                     self.assertFalse([h for h in ir
                                       if h.startswith("POP_JUMP")])
-                    # The family's instruction is a compare then a jump
-                    self.assertEqual(
+                    # The word is the jump in the disassembly: no word is
+                    # a test of its own
+                    self.assertFalse(
                         [i.opname for i in dis.get_instructions(f)
-                         if i.opname.startswith("POP_JUMP")], [])
+                         if i.opname in ("COMPARE_OP", "IS_OP", "CONTAINS_OP")])
 
     def test_instrumentation_sees_a_jump(self):
         f = make_function("def f(a, b):\n    if a < b:\n        return 1\n"
                           "    return 2\n")
-        self.assertEqual(fused_names(f), ["COMPARE_OP_JUMP"])
+        self.assertEqual(fused_names(f), ["TestBranch.Generic"])
         E = sys.monitoring.events
         tool = sys.monitoring.DEBUGGER_ID
         events = []
@@ -3588,7 +3582,7 @@ class FusedJumpTest(AssemblerTestCase):
             self.assertEqual(f(1, 2), 1)
             self.assertEqual(f(2, 1), 2)
             self.assertEqual(f(1, 2), 1)
-            self.assertIn("INSTRUMENTED_COMPARE_OP_JUMP", handlers(f))
+            self.assertIn("TestBranch.Generic.Observed", handlers(f))
         finally:
             sys.monitoring.set_local_events(tool, f.__code__, 0)
             sys.monitoring.free_tool_id(tool)
@@ -3617,7 +3611,7 @@ class FusedJumpTest(AssemblerTestCase):
                 metadata = {"argcount": 2, "varnames": {"a": 0, "b": 1}}
                 co = self.insts_to_code_object(insts, metadata)
                 ir = [w[0] for w in get_ir(co, True)]
-                self.assertEqual("COMPARE_OP_JUMP" in ir, fused)
+                self.assertEqual("TestBranch.Generic" in ir, fused)
                 self.assertEqual("BranchTruth.Generic" in ir, not fused)
                 f = types.FunctionType(co, {})
                 self.assertEqual(f(1, 2), 1)
@@ -3642,14 +3636,15 @@ class FusedJumpTest(AssemblerTestCase):
         return self.get_code_object(metadata["filename"], seq, metadata)
 
     def test_far_target_stays_unfused(self):
-        # The distance of a fused word has 11 bits and a sign; a jump that
-        # does not fit is a compare and a jump of its own
+        # The distance of a TestBranch word has 12 bits and a sign; a jump
+        # that does not fit is relaxed: the word skips over a jump to the
+        # target, and still tests and branches in one word
         source = ("def f(a, b):\n    if a < b:\n        a = a + b\n"
                   "        b = b + a\n    return a, b\n")
         far = make_function_with_reach(source, 0)
         near = make_function(source)
-        self.assertEqual(fused_names(far), [])
-        self.assertEqual(fused_names(near), ["COMPARE_OP_JUMP"])
+        self.assertEqual(fused_names(far), ["TestBranch.Generic"])
+        self.assertEqual(fused_names(near), ["TestBranch.Generic"])
         for a, b in ((1, 2), (2, 1), (2, 2)):
             self.assertEqual(far(a, b), near(a, b))
 
@@ -3668,15 +3663,15 @@ class FusedJumpTest(AssemblerTestCase):
     def test_comparisons(self):
         nan = float("nan")
         families = {
-            "COMPARE_OP_JUMP_INT": [(1, 2), (2, 2), (3, 2)],
-            "COMPARE_OP_JUMP_FLOAT": [(1.5, 2.5), (2.5, 2.5), (nan, 1.0),
+            "TestBranch.Int": [(1, 2), (2, 2), (3, 2)],
+            "TestBranch.Float": [(1.5, 2.5), (2.5, 2.5), (nan, 1.0),
                                       (1.0, nan), (nan, nan)],
-            "COMPARE_OP_JUMP_STR": [("a", "b"), ("b", "b"), ("c", "b")],
+            "TestBranch.Str": [("a", "b"), ("b", "b"), ("c", "b")],
         }
         for op in ("<", "<=", ">", ">=", "==", "!="):
             for negated in ("", "not "):
                 for family, cases in families.items():
-                    if family.endswith("STR") and op not in ("==", "!="):
+                    if family.endswith("Str") and op not in ("==", "!="):
                         continue
                     test = f"{negated}(a {op} b)"
                     with self.subTest(test=test, family=family):
@@ -3802,7 +3797,7 @@ class FusedJumpTest(AssemblerTestCase):
                 co = self.insts_to_code_object(
                     insts, {"argcount": 2, "varnames": {"a": 0, "b": 1}})
                 ir = [w[0] for w in get_ir(co, True)]
-                self.assertEqual("COMPARE_OP_JUMP" in ir, fused)
+                self.assertEqual("TestBranch.Generic" in ir, fused)
                 if not fused:
                     f = types.FunctionType(co, {})
                     # [] is false: the jump is taken
@@ -3832,12 +3827,12 @@ class FusedJumpTest(AssemblerTestCase):
                   "    return n\n")
         far = make_function_with_reach(source, 0)
         near = make_function(source)
-        self.assertEqual(fused_names(far), [])
+        self.assertEqual(len(fused_names(far)), 4)
         self.assertEqual(len(fused_names(near)), 4)
         xs = [0, 1, 2, 3] * 3
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
             self.assertEqual(far(xs, 2), near(xs, 2))
-        # Some reach: the jumps that fit fuse, the others do not
+        # Some reach: the jumps that do not fit are relaxed
         for reach in (1, 2, 3, 5):
             with self.subTest(reach=reach):
                 some = make_function_with_reach(source, reach)
@@ -3896,15 +3891,15 @@ class FusedJumpTest(AssemblerTestCase):
         source = ("def f(a, b):\n    if a in b:\n        return 1\n"
                   "    return 0\n")
         threshold = _testinternalcapi.SPECIALIZATION_THRESHOLD + 3
-        for container, name in (({1, 2}, "SET"), (frozenset({1, 2}), "SET"),
-                                ({1: 0, 2: 0}, "DICT")):
+        for container, name in (({1, 2}, "Set"), (frozenset({1, 2}), "Set"),
+                                ({1: 0, 2: 0}, "Dict")):
             with self.subTest(container=type(container)):
                 f = make_function(source)
                 for _ in range(threshold):
                     self.assertEqual(f(1, container), 1)
                     self.assertEqual(f(3, container), 0)
                 if SPECIALIZES:
-                    self.assertEqual(handlers(f).count(f"CONTAINS_OP_JUMP_{name}"), 1)
+                    self.assertEqual(handlers(f).count(f"TestBranch.{name}"), 1)
                 # Another type deoptimises the site; it still answers right
                 for other in ([1], (1,), range(2), {3: 0}, {3}):
                     self.assertEqual(f(1, other), int(1 in other))
@@ -3946,7 +3941,7 @@ class FusedJumpTest(AssemblerTestCase):
                     sys.monitoring.restart_events()
                     self.assertEqual(f(1, 2), 1)
                     if warm:
-                        self.assertIn("INSTRUMENTED_COMPARE_OP_JUMP",
+                        self.assertIn("TestBranch.Generic.Observed",
                                       handlers(f))
                 finally:
                     sys.monitoring.set_local_events(tool, f.__code__, 0)

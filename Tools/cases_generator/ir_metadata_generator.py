@@ -32,7 +32,6 @@ from cwriter import CWriter
 from ir_generator import (
     EXECUTION_VARIANTS,
     canonical_handler,
-    FUSED_SHADOWS,
     Extent,
     HandlerContract,
     IRFormat,
@@ -65,11 +64,6 @@ def shadow_of(name: str, analysis: Analysis) -> str:
         return "YIELD_VALUE"
     if name == "INSTRUMENTED_YIELD_DELEGATED":
         return "INSTRUMENTED_YIELD_VALUE"
-    # The fused handlers, their specialisations and twins stand for the
-    # compare, whose operation they run
-    for fused, compare in FUSED_SHADOWS.items():
-        if name.startswith(fused) or name.startswith("INSTRUMENTED_" + fused):
-            return compare
     # An IR-only member of a real family (LOAD_ATTR_GETSET) stands for the
     # family head, as the specialisations that have an opcode stand for
     # themselves
@@ -164,7 +158,6 @@ def format_initializer(fmt: IRFormat, shadow: str,
             (fmt.runs_code, "_PyIR_RUNS_CODE"),
             (fmt.jump_always, "_PyIR_JUMP_ALWAYS"),
             (fmt.names_target, "_PyIR_NAMES_TARGET"),
-            (fmt.fused, "_PyIR_FUSED"),
             (fmt.discards, "_PyIR_DISCARDS"),
             (fmt.unpacks, "_PyIR_UNPACKS"),
             (contract.abrupt_prefix, "_PyIR_ABRUPT_PREFIX"),

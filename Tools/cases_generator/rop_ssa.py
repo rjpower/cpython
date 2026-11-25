@@ -191,11 +191,11 @@ class SsaArm:
 
 def is_dest_param(t: Type) -> bool:
     """A row parameter that names a home the row may write: the checker
-    refuses Dst parameters on rows; a Local one a row may only spend"""
+    refuses Dst parameters on rows; a Local one a row may only spend, and
+    a Cell is a read-only home"""
     if isinstance(t, WrapType) and t.wrap in (Wrap.Maybe, Wrap.Span):
         return is_dest_param(t.arg)
-    return isinstance(t, HandleType) and t.handle in (Handle.Dst, Handle.Cell,
-                                                      Handle.IterPair)
+    return isinstance(t, HandleType) and t.handle in (Handle.Dst, Handle.IterPair)
 
 
 O_TYPE = HandleType(Handle.O)
@@ -463,7 +463,7 @@ class Expander:
                 self.fail(t.span, f"exit {kind} after the homes changed, with no point")
             return FrameState(FrameRole.current.value, pc, ExcRole.clear.value,
                               self.current_homes())
-        if kind == "raise":
+        if kind in ("raise", "unwind"):
             return _with(self.point_state(t.args[0].name, t.span), args)
         if kind == "again":
             if changed:
@@ -522,7 +522,7 @@ class Expander:
             self.switch(t)
         elif isinstance(t, Exit):
             args = tuple(self.expr(a) for a in t.args
-                         if not (t.kind == "raise" and a is t.args[0]))
+                         if not (t.kind in ("raise", "unwind") and a is t.args[0]))
             self.cur.term = ExitTerm(t.kind, args, self.exit_state(t, args))
         elif isinstance(t, Each):
             self.fail(t.span, "each: no pilot arm loops")

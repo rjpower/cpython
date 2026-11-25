@@ -1253,14 +1253,14 @@ def do_exit(w: Walk, st: State, t: Exit, transfer: bool = False) -> None:
                      "ticket is not fresh")
         else:
             check_restart_homes(w, st, t.span, "exit again")
-    elif kind == "raise":
+    elif kind in ("raise", "unwind"):
         use_effect(w, st, Effect.raises, t.span, what)
         if args[1] is not None:
             take(w, st, args[1], t.span, what)
         point_name = t.args[0].name if isinstance(t.args[0], Name) else ""
         point = w.program.points.get(point_name)
         if point is not None:
-            check_point(w, st, point, t.span, f"raise at {point_name}")
+            check_point(w, st, point, t.span, f"{kind} at {point_name}")
     elif kind == "enter":
         use_effect(w, st, Effect.switches_frame, t.span, what)
         if args[0] is not None:

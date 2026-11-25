@@ -27,7 +27,7 @@ from rop_catalog import (CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
                          OPTIONAL, SELECT_DIMENSIONS, SELECT_FACTS, SLOT_ORDER,
                          WIDEST_IMMEDIATE, DebtKind,
-                         Effect, ExitKind, Fact, FieldKind, FrameRole, Handle, PcRole,
+                         Effect, ExcRole, ExitKind, Fact, FieldKind, FrameRole, Handle, PcRole,
                          Region, RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
 from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, Contract, Decl, Diagnostic, Each, Edge, Encoding,
@@ -66,6 +66,7 @@ EXIT_PAYLOAD: dict[ExitKind, tuple[Type | None, ...]] = {
     ExitKind.miss: (),
     ExitKind.again: (None,),
     ExitKind.raise_: (T(Handle.Point), T(Handle.Err)),
+    ExitKind.unwind: (T(Handle.Point), T(Handle.Err)),
     # The new frame; `resume P` names the caller's point at the return
     ExitKind.enter: (T(Handle.NewFrame),),
     ExitKind.return_: (T(Handle.Frame), T(Handle.Head)),
@@ -79,7 +80,7 @@ EXIT_NAMES = {e.value: e for e in ExitKind}
 # as definitions
 SOURCE_HANDLES = frozenset({Handle.Src, Handle.Local, Handle.Cell, Handle.Free,
                             Handle.IterPair, Handle.Args})
-DEST_HANDLES = frozenset({Handle.Dst, Handle.Local, Handle.Cell, Handle.IterPair})
+DEST_HANDLES = frozenset({Handle.Dst, Handle.Local, Handle.IterPair})
 
 
 # Language primitives (operation dictionary, P).  Actions may stand only as
@@ -1380,6 +1381,12 @@ def check_exit(c: Checker, scope: Scope, t: Exit, block: str, i: int) -> None:
         if need == T(Handle.Point) and scope.family is not None:
             if isinstance(arg, Name):
                 check_point_ref(c, scope, arg.name, arg.span, block, i)
+                p = c.points.get(arg.name)
+                if (t.kind == ExitKind.unwind.value and p is not None
+                        and p.exc is not ExcRole.pending):
+                    c.report(t.span, scope.definition, f"exit unwind({arg.name}, ...): "
+                             f"the exception is pending as the frame unwinds, but "
+                             f"{arg.name}'s exception role is {p.exc.value}")
             else:
                 c.report(t.span, scope.definition, f"exit {t.kind}: argument {k} names "
                          "a point")

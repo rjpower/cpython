@@ -425,7 +425,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                    "_PyIR_LOC_AB" if both == ["A", "B"] else LOC_NAMES.get(first, imm))
     branch_events = bool({"BRANCH_LEFT", "BRANCH_RIGHT", "JUMP"} & {e.value for e in fam.events})
     exits = set(arm.contract.exits)
-    effects = {"_PyIR_RAISES"} if "raise" in exits else set()
+    effects = {"_PyIR_RAISES"} if exits & {"raise", "unwind"} else set()
     for e in arm.contract.effect_set:
         effects.update(EFFECT_FLAGS.get(e, ()))
     if "miss" in exits:
@@ -455,7 +455,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
 
 
 # The exits that end the word abnormally: they carry no normal-edge contract
-ABNORMAL_EXITS = frozenset({"raise", "redirect"})
+ABNORMAL_EXITS = frozenset({"raise", "unwind", "redirect"})
 
 
 def arm_transfer(exits: set[str], ninputs: int, family: str) -> str:

@@ -1162,6 +1162,66 @@ class VerifyTests(unittest.TestCase):
         ])
 
 
+
+# W2's transfers (WR): an exit that unwinds an exception the word already
+# reported
+UNWIND = """\
+family U(exc:Src) exits(unwind, raise) ops(NOP);
+point U.Raised(current, site, pending) keep(exc) spent() defs();
+extern helper restore(t:Thread, e:Src) cases(err(x:Err)) effects(runs_python, raises)
+  c RESTORE as raised evidence(review: "r", contract: "c");
+arm U.Restore split
+  effects(runs_python, raises)
+  feedback()
+  exits(unwind)
+{
+  entry():
+    call restore(thread, exc) {
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit unwind(U.Raised, e);
+}
+"""
+
+UNWIND_CASES = [
+    ('unwind to a point that is not pending',
+     'point U.Raised(current, site, pending)', 'point U.Raised(current, site, clear)', [
+         (15, 5, 'U.Restore', "exit unwind(U.Raised, ...): the exception is pending as the frame unwinds, but U.Raised's exception role is clear"),
+     ]),
+    ('unwind not declared',
+     '  exits(unwind)\n', '  exits(raise)\n', [
+         (6, 3, 'U.Restore', 'declared exit raise is not reached'),
+         (15, 5, 'U.Restore', 'exit unwind: unwind is not a declared exit of U.Restore (raise)'),
+     ]),
+    ('unwind without raises',
+     '  effects(runs_python, raises)\n  feedback()', '  effects(writes)\n  feedback()', [
+         (11, 5, 'U.Restore', 'effects: call restore may raises, which effects(writes) does not declare'),
+         (11, 5, 'U.Restore', 'effects: call restore may runs_python, which effects(writes) does not declare'),
+         (15, 5, 'U.Restore', 'effects: exit unwind may raises, which effects(writes) does not declare'),
+     ]),
+    ('unwind in a transfer row',
+     'cases(err(x:Err)) effects(runs_python, raises)\n  c RESTORE as raised',
+     'cases(unwind(x:Err)) effects(runs_python, raises)\n  c RESTORE as transfer', [
+         (3, 46, 'restore', 'case unwind of a transfer row names the exit its callee performs (one of: jump, branch, return, redirect, exit, raise)'),
+         (11, 5, 'U.Restore', 'call restore at t.rop:11 has no edge for unwind'),
+         (12, 7, 'U.Restore', 'call restore at t.rop:11: restore has no case err (cases: unwind)'),
+     ]),
+]
+
+
+class UnwindTests(unittest.TestCase):
+    def test_unwind_is_clean(self):
+        self.assertEqual(transfer_diagnostics(UNWIND), [])
+
+    def test_unwind_fixtures(self):
+        for name, old, new, expected in UNWIND_CASES:
+            with self.subTest(name):
+                self.assertIn(old, UNWIND)
+                found = transfer_diagnostics(UNWIND.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
+
 def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
@@ -1196,6 +1256,7 @@ class PilotTests(unittest.TestCase):
         raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5, last=True)
         retire = at("add.rop", "let saved:Err = retire_failed_call(", last=True)
         raise_ext = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
+        cell_map = at("cells.rop", "exit raise(CellMapRead.Failed, saved);", 5)
         dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
         guard = at("getattr.rop", "guard present(item) else miss;")
         # The GetSet arm raises first; Generic's is the second
@@ -1221,6 +1282,23 @@ class PilotTests(unittest.TestCase):
                     for name in item_spent[family])
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
         binary_raise = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5)
+        # The arms of tests.rop that raise, in order of line: the family, the
+        # arm and the operands that its point lists in spent
+        tests_raises = [
+            f"{at('tests.rop', f'exit raise({family}.Failed, saved);', 5, nth=nth)}: "
+            f"{arm}: points: raise at {family}.Failed: {family}.Failed lists "
+            f"{operand} in spent, but {operand} is intact"
+            for family, nth, arm, operands in [
+                ("Compare", 0, "Compare.Generic", ("x", "y")),
+                ("Contains", 0, "Contains.Set", ("container", "item")),
+                ("Contains", 1, "Contains.Dict", ("container", "item")),
+                ("Contains", 2, "Contains.Generic", ("container", "item")),
+                ("TestBranch", 0, "TestBranch.Set", ("x", "y")),
+                ("TestBranch", 1, "TestBranch.Dict", ("x", "y")),
+                ("TestBranch", 2, "TestBranch.Sequence", ("x", "y")),
+                ("TestBranch", 3, "TestBranch.Generic", ("x", "y")),
+                ("TestBranch", 4, "TestBranch.Observed", ("x", "y"))]
+            for operand in operands]
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
         branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
@@ -1259,6 +1337,8 @@ class PilotTests(unittest.TestCase):
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact",
+              f"{cell_map}: CellMapRead.Lookup: points: raise at CellMapRead.Failed: "
+              "CellMapRead.Failed lists mapping in spent, but mapping is intact",
               f"{raise_getset}: GetAttr.GetSet: points: raise at GetAttr.Failed: "
               "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_attr}: GetAttr.Generic: points: raise at GetAttr.Failed: "
@@ -1273,6 +1353,7 @@ class PilotTests(unittest.TestCase):
               "Binary.OpFailed lists x in spent, but x is intact",
               f"{binary_raise}: Binary.Generic: points: raise at Binary.OpFailed: "
               "Binary.OpFailed lists y in spent, but y is intact",
+              *tests_raises,
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "

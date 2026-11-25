@@ -666,22 +666,6 @@ TEMPLATE_CASES = [
       for op in ("+",)],
     *[(TEMPS.format(op=op), (6, 3), "Add.Int", "BC", INT_PAIRS)
       for op in ("+",)],
-    *[(f"def f(a, b):\n    x = 1\n    x = a {op} b\n    return x", warm, handler, "ABC",
-       [(Plain(), a, b) for a, b in pairs])
-      for op in COMPARE_OPS
-      for warm, handler, pairs in (((1, 2), "COMPARE_OP_INT", INT_PAIRS),
-                                   ((1.0, 2.0), "COMPARE_OP_FLOAT", FLOAT_PAIRS))],
-    *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", warm, handler,
-       "AB", pairs)
-      for op in COMPARE_OPS
-      for warm, handler, pairs in (((1, 2), "COMPARE_OP_JUMP_INT", INT_PAIRS),
-                                   ((1.0, 2.0), "COMPARE_OP_JUMP_FLOAT", FLOAT_PAIRS))],
-    *[(f"def f(a, b):\n    x = 1\n    x = a {op} b\n    return x", (None, None), "IS_OP",
-       "ABC", [(Plain(), a, b) for a in ANY for b in ANY[::2]])
-      for op in ("is", "is not")],
-    *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", (None, None),
-       "IS_OP_JUMP", "AB", [(a, b) for a in ANY for b in ANY[::2]])
-      for op in ("is", "is not")],
     ("def f(a, b):\n    if a:\n        return 1\n    return 0", (True, 0),
      "BranchTruth.Bool", "A", [(x,) for x in ANY]),
     ("def f(a, b):\n    if not a:\n        return 1\n    return 0", (True, 0),

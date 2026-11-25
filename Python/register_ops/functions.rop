@@ -20,11 +20,6 @@ enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION
                  INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
                  INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
                  INTRINSIC_MATCH_CLASS_ISINSTANCE,
-                 INTRINSIC_COMPARE_LT, INTRINSIC_COMPARE_LT_BOOL, INTRINSIC_COMPARE_LE,
-                 INTRINSIC_COMPARE_LE_BOOL, INTRINSIC_COMPARE_EQ, INTRINSIC_COMPARE_EQ_BOOL,
-                 INTRINSIC_COMPARE_NE, INTRINSIC_COMPARE_NE_BOOL, INTRINSIC_COMPARE_GT,
-                 INTRINSIC_COMPARE_GT_BOOL, INTRINSIC_COMPARE_GE, INTRINSIC_COMPARE_GE_BOOL,
-                 INTRINSIC_CONTAINS_IN, INTRINSIC_CONTAINS_NOT_IN,
                  INTRINSIC_GETATTR, INTRINSIC_SETATTR);
 
 family Function(dst:Dst, code:Src, fields:Span<Src>, present:U8)
@@ -134,16 +129,6 @@ extern helper intrinsic_binary(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
     review: "Reviewed 1I. bytecodes.c CALL_INTRINSIC_2 through _PyEval_CallIntrinsic2.",
     contract: "x is the first operand, the function's first argument.");
 
-// A comparison or a containment test at a site with no feedback entry
-extern helper intrinsic_compare(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
-  cases(ok(z:O), err(e:Err))
-  effects(allocates, writes, releases, runs_python, raises)
-  c _PyRop_IntrinsicCompare as value_or_null
-  evidence(
-    review: "Reviewed 1I. intrinsics.c compare_* and contains_*: rich comparison or"
-            "__contains__ of the two operands.",
-    contract: "Runs Python.");
-
 // GETATTR (owner, name) and SETATTR (value or the vacancy, (owner, name) tuple)
 extern helper intrinsic_attr(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
   cases(ok(z:O), err(e:Err))
@@ -217,25 +202,6 @@ arm IntrinsicPair.Binary split select(binary)
     let xo:O = acquire(x);
     let yo:O = acquire(y);
     call intrinsic_binary(thread, id, xo, yo) {
-      ok -> Done();
-      err -> Failed();
-    }
-  Done(z:O):
-    publish [dst = z] retire [old(dst)] at IntrinsicPair.Done;
-    exit next();
-  Failed(e:Err):
-    exit raise(IntrinsicPair.Failed, e);
-}
-
-arm IntrinsicPair.Compare split select(compare)
-  effects(allocates, runs_python, raises, releases on (dst))
-  feedback()
-  exits(next, raise)
-{
-  entry():
-    let xo:O = acquire(x);
-    let yo:O = acquire(y);
-    call intrinsic_compare(thread, id, xo, yo) {
       ok -> Done();
       err -> Failed();
     }

@@ -66,7 +66,6 @@ class HandlerRecordTests(unittest.TestCase):
 
     def test_effects(self):
         for name, effects in (
-                ("_COMPARE_OP_INT", set()),
                 ("_GUARD_TYPE_VERSION", {READS_HEAP}),
                 # A close whose deallocator cannot run Python only frees
                 ("_POP_TOP_INT", {WRITES_HEAP}),
@@ -74,20 +73,6 @@ class HandlerRecordTests(unittest.TestCase):
                 ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE})):
             with self.subTest(uop=name):
                 self.assertEqual(ir_records.uop_record_effects(uops[name]), effects)
-
-    def test_result_facts(self):
-        def results(handler, uop):
-            record = records[handler]
-            [found] = [u for u in record.uops if u.name == uop]
-            return {(f.kind, f.arg) for f in found.results}
-
-        integer = ("EXACT_TYPE", "PyLong_Type")
-        for handler, uop, facts in (
-                ("COMPARE_OP_INT", "_COMPARE_OP_INT", {("EXACT_TYPE", "PyBool_Type")}),
-                # A rich comparison may return any object
-                ("COMPARE_OP", "_COMPARE_OP", set())):
-            with self.subTest(uop=uop):
-                self.assertEqual(results(handler, uop), facts)
 
     def test_type_version_facts(self):
         def facts(handler, uop):

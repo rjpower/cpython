@@ -1826,14 +1826,6 @@
      * the callee. */ \
     HELPER(_Py_Specialize_CallKw, void, (PyValue, PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as the block above. Reads the operands' types and \
-     * inline-number tags; no lookup. */ \
-    HELPER(_Py_Specialize_CompareOp, void, (PyValueBorrow, PyValueBorrow, _PyInstr *, int), \
-        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as the block above. Reads the container's type and \
-     * its tp_value.contains slot. */ \
-    HELPER(_Py_Specialize_ContainsOp, void, (PyValueBorrow, PyValueBorrow, _PyInstr *), \
-        ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as the block above. Reads the iterator's type and \
      * iteration slots, and classifies the failure \
      * (_PySpecialization_ClassifyIterator). 
@@ -2850,15 +2842,6 @@
     /* Evidence (G0c8): ceval_macros.h:681: `F < IR_NFIXED()`, a load of the executing copy's \
      * nfixed (the word before frame->ir_words). */ \
     MACRO(IR_IS_LOCAL, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* Evidence (G0c8): ceval_macros.h:502: IR_DS(ir_word), the signed D field of the word the \
-     * handler holds in a local: bits only. */ \
-    MACRO(IR_FUSED_DISTANCE, ARGS(), SCALAR, EFFECTS(), EXITS()) \
-    /* Evidence (G0c8): ceval_macros.h:500: bit 8 of the entry header's `arg` field, read \
-     * through the handler's `fb` local.  Corrected (G0d1): `arg` is written only when the \
-     * entries are made (Python/ir.c:912, _PyIR_FBINIT_ARG), so the bit is as fixed as the \
-     * word's D field (IR_FUSED_DISTANCE): no heap state, and compiled code has it as an \
-     * immediate (ir_leaf.py, `imm fused_if_false`).  The row said reads. */ \
-    MACRO(IR_FUSED_IF_FALSE, ARGS(), SCALAR, EFFECTS(), EXITS()) \
     /* IR_REPORT_EDGE (ceval_macros.h): ((void)(TAKEN)) in the interpreter. \
      * Reviewed (G0c batch 1): in the function form (ceval.c) it stores the \
      * flag in the activation record, `IR_ACTIVATION()->edge = (TAKEN)`, a \

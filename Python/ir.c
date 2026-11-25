@@ -40,9 +40,10 @@ static_assert(sizeof(_PyFbHeader) == IR_FB_FIRST_UNIT << IR_FB_UNIT_SHIFT,
               "entry 0 is the header");
 static_assert(sizeof(_PyFbUnary) % 8 == 0 && sizeof(_PyFbBinary) % 8 == 0
               && sizeof(_PyFbAttr) % 8 == 0 && sizeof(_PyFbGlobal) % 8 == 0
-              && sizeof(_PyFbCall) % 8 == 0,
+              && sizeof(_PyFbCall) % 8 == 0
+              && sizeof(_PyFbCompare) % 8 == 0 && sizeof(_PyFbContains) % 8 == 0,
               "entries are whole units");
-static_assert(FB_COUNTER < 16 && FB_CALL < 16, "a kind has 4 bits in co_fbinit");
+static_assert(FB_COUNTER < 16 && FB_CONTAINS < 16, "a kind has 4 bits in co_fbinit");
 
 
 /* _Py_InitCleanup (Python/specialize.c) runs with self in slot 0 and the
@@ -379,11 +380,6 @@ _PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords, int nl,
 int
 _PyIR_EventOpcode(int handler)
 {
-    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    if (fmt->flags & _PyIR_FUSED) {
-        return fmt->twin == handler ? INSTRUMENTED_POP_JUMP_IF_FALSE
-                                    : POP_JUMP_IF_FALSE;
-    }
     return _PyIR_BaseOpcode(handler);
 }
 
@@ -747,18 +743,6 @@ static int
 ordinary_handler_for(int handler, int opcode)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    if (fmt->flags & _PyIR_FUSED) {
-        // Instrumentation sees a fused word as a conditional jump
-        // (_PyIR_EventOpcode()): it goes back to the word's own handler
-        // and goes on to the twin.
-        if (opcode == POP_JUMP_IF_FALSE) {
-            return handler;
-        }
-        if (opcode == INSTRUMENTED_POP_JUMP_IF_FALSE) {
-            return fmt->twin;
-        }
-        return opcode;
-    }
     if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
         opcode >= MIN_INSTRUMENTED_OPCODE && !_PyIR_IsOnlyHandler(opcode) &&
         _PyIR_HandlerBase[opcode] == _PyIR_HandlerBase[handler])

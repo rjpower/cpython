@@ -58,6 +58,7 @@ SEND = opmap['SEND']
 LOAD_ATTR = opmap['LOAD_ATTR']
 CALL = opmap['CALL']
 CALL_KW = opmap['CALL_KW']
+CALL_FUNCTION_EX = opmap['CALL_FUNCTION_EX']
 LOAD_SUPER_ATTR = opmap['LOAD_SUPER_ATTR']
 CALL_INTRINSIC_1 = opmap['CALL_INTRINSIC_1']
 CALL_INTRINSIC_2 = opmap['CALL_INTRINSIC_2']
@@ -121,7 +122,8 @@ _IR_JUMPS = _opcode.IR_JUMPS
 _IR_FORWARD = _opcode.IR_FORWARD
 _BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
 _BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
-_FEEDBACK_KINDS = ("COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
+_FEEDBACK_KINDS = ("COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL",
+                   "COMPARE", "CONTAINS")
 _FEEDBACK_STATES = ("COLD", "MONO", "POLY", "MEGA", "OFF")
 
 
@@ -578,6 +580,10 @@ def _call_operand_count(code, offset):
                           sys.byteorder)
     return _word_fields(word)[2]
 
+# The families whose feedback entry is named by an operand word
+_FB_OPERAND_FAMILIES = frozenset(("Compare", "Contains", "TestBranch"))
+
+
 def _unpack_opargs(code, fbinit=None):
     """Generate (offset, handler, arg, dst, srcs, fb) for the instructions of
     code.  A call head that has operand words comes once, with the slots
@@ -596,6 +602,12 @@ def _unpack_opargs(code, fbinit=None):
         length = _opcode.get_ir_word_length(word)
         if length > 1:
             skip = length - 1
+        if length > 1 and _all_opname[handler].partition(".")[0] in _FB_OPERAND_FAMILIES:
+            # The operand word holds the entry's unit in its low field
+            fb = _fb_unit(int.from_bytes(
+                code[(offset + 1) * _WORD_SIZE:(offset + 2) * _WORD_SIZE],
+                sys.byteorder) & _FIELD_MAX)
+        elif length > 1 and _deoptop(handler) in (CALL, CALL_KW, CALL_FUNCTION_EX):
             count = fields[2]
             operands = [_call_operand(code, offset, k) for k in range(count)]
             # The oparg is that of the stack instruction: the arguments
@@ -891,10 +903,11 @@ class ArgResolver:
                 _, argrepr = _nb_ops[arg]
             elif deop == CALL_INTRINSIC_1:
                 # The word holds the IntrinsicId index; the compiler's number
-                # is one more (unary) or 11 less (binary)
+                # is one more (unary) or 11 less (binary), and 3 more for
+                # GETATTR and SETATTR (ids 8 to 21 are unused)
                 argrepr = _intrinsic_1_descs[arg + 1]
             elif deop == CALL_INTRINSIC_2:
-                argrepr = _intrinsic_2_descs[arg - 11]
+                argrepr = _intrinsic_2_descs[arg - 11 if arg < 19 else arg + 3]
             elif deop == LOAD_COMMON_CONSTANT:
                 obj = _common_constants[arg]
                 argval = obj

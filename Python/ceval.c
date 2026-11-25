@@ -2352,8 +2352,10 @@ _PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     // An instruction event may have made the word transparent: its target is
     // in the format of the handler it wraps
     const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    // The wrapper's own length is one word; the fall-through continues past
+    // the fixed operand words of the word it wraps
     _PyInstr *dest = taken ? site + 1 + _PyIR_FormatDistance(fmt, *site)
-                           : site + _PyIR_WordLength(*site);
+                           : site + 1 + fmt->fixed_words;
     frame->return_pc = dest;
     _PyIRObserverResult result = _PyIR_ObserveCommittedBranch(
         tstate, frame, site, site, dest, event,

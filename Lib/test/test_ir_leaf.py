@@ -676,9 +676,6 @@ HANDLERS = {
     **{name: (float_domain, None, [0]) for name in (
         "BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
         "BINARY_OP_TRUEDIV_FLOAT")},
-    "COMPARE_OP_JUMP_INT": (mixed_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
-    "COMPARE_OP_JUMP_FLOAT": (float_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
-    "IS_OP_JUMP": (mixed_domain, None, [0, 1]),
     "FOR_ITER_LIST": (lambda: iterator_domain(lambda: [(l, len(l)) for l in LISTS]), None, [0]),
     "FOR_ITER_TUPLE": (lambda: iterator_domain(lambda: [(t, len(t)) for t in TUPLES]), None, [0]),
     "FOR_ITER_RANGE": (lambda: [(word(it), 0) for it in

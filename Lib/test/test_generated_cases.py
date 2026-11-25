@@ -3608,9 +3608,7 @@ class TestIRCases(unittest.TestCase):
         real = analyzer.analyze_files([str(actual)])
         formats = ir_generator.compute_formats(real)
         contracts = ir_generator.handler_contracts(real, formats)
-        for name in ("IS_OP_JUMP", "INSTRUMENTED_IS_OP_JUMP",
-                     "COMPARE_OP_JUMP", "COMPARE_OP_JUMP_INT",
-                     "CONTAINS_OP_JUMP", "DICT_MERGE", "LIST_APPEND",
+        for name in ("DICT_MERGE", "LIST_APPEND",
                      "POP_ITER", "INSTRUMENTED_POP_ITER"):
             with self.subTest(handler=name):
                 self.assertEqual(contracts[name].ownership_events, (

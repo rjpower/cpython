@@ -143,7 +143,7 @@ _PyIR_Rop_Stub_Add_Generic(
     next_instr = this_instr;
     DISPATCH_SAME_OPARG();
     rop_Add_Generic_adapt_before_use_add2_Other:
-    if (_PyRop_FloatOperands(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+    if (_PyRop_FloatOperands_Outlined(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
         goto rop_Add_Generic_adapt_before_use_add2_ChosenFloat;
     }
     goto rop_Add_Generic_adapt_before_use_add2_TryText;
@@ -1121,10 +1121,10 @@ _PyIR_Rop_Stub_Add_Float(
     PyValue z;
     l = PyValue_Borrow(*home_x);
     r = PyValue_Borrow(*home_y);
-    if (!_PyRop_FloatOperands(l, r)) {
+    if (!_PyRop_FloatOperands_Outlined(l, r)) {
         JUMP_TO_PREDICTED(Add_Generic);
     }
-    ret1 = _PyRop_AddFloats(l, r);
+    ret1 = _PyRop_AddFloats_Outlined(l, r);
     if (PyValue_IsNull(ret1)) {
         goto rop_Add_Float_Failed;
     }

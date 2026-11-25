@@ -2284,9 +2284,9 @@ static inline bool _PyRop_PythonTarget(PyThreadState *tstate,
 static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
-static PyValue _PyRop_CallNative(PyThreadState *tstate,
-                                 _PyInterpreterFrame *frame, PyValue *fn,
-                                 const _PyIRWord *head);
+static inline PyValue _PyRop_CallNative(PyThreadState *tstate,
+                                        _PyInterpreterFrame *frame, PyValue *fn,
+                                        const _PyIRWord *head);
 static int _PyRop_CallEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                             _PyInstr *site, PyValue *fn,
                             const _PyIRWord *head);
@@ -2398,7 +2398,8 @@ _PyRop_Depart(PyThreadState *tstate, _PyInterpreterFrame *frame)
     return frame;
 }
 
-static void _PyRop_RetireFrame(PyThreadState *tstate, _PyInterpreterFrame *dying);
+static inline void _PyRop_RetireFrame(PyThreadState *tstate,
+                                      _PyInterpreterFrame *dying);
 static inline void _PyRop_RetireFrameEmpty(PyThreadState *tstate,
                                            _PyInterpreterFrame *dying);
 
@@ -4683,7 +4684,7 @@ frame_clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* Retire the unlinked frame of a return; the caller holds the result
  * (_PyEval_FrameClearAndPopGeneralWithResult) */
-static Py_NO_INLINE void
+static inline void
 _PyRop_RetireFrame(PyThreadState *tstate, _PyInterpreterFrame *dying)
 {
     if (dying->owner != FRAME_OWNED_BY_THREAD) {
@@ -5979,7 +5980,7 @@ _PyRop_PushPython(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return pushed.child;
 }
 
-static Py_NO_INLINE PyValue
+static inline PyValue
 _PyRop_CallNative(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   PyValue *fn, const _PyIRWord *head)
 {

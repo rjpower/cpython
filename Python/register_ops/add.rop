@@ -116,7 +116,7 @@ macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
 
 extern helper float_operands(a:B, b:B) -> Bool
   effects()
-  c _PyRop_FloatOperands as bool
+  c _PyRop_FloatOperands as bool inline
   evidence(
     review: "Reviewed P2. pycore_value.h PyValue_FloatOperandsCheck.",
     contract: "A comparison of the two words: no memory, no failure, no callback.");
@@ -126,7 +126,7 @@ extern helper add_floats(a:B, b:B)
   cases(ok(z:O), err(e:Err))
   effects(allocates, raises)
   ensures(ok.exact<float>(z))
-  c _PyRop_AddFloats as value_or_null
+  c _PyRop_AddFloats as value_or_null inline
   evidence(
     review: "Reviewed P2. pycore_rop_rows.h: PyValue_FloatOperandValues, then"
             "PyValue_FromDouble, which allocates only for NaN.",

@@ -497,6 +497,9 @@ class CBinding:
     convention: str
     evidence: tuple[EvidenceItem, ...]
     span: SrcSpan = _span()
+    # The interpreter product always inlines the body; the function forms and
+    # stubs call one out-of-line copy
+    inline: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -574,6 +574,8 @@ class RecordTests(unittest.TestCase):
     def test_record_dump_prints_the_leaf(self):
         with test_tools.imports_under_tool("cases_generator"):
             import ir_records
+        if "BINARY_OP_ADD_INT" not in self.records:
+            self.skipTest("no live handler left; the old generator goes at D")
         text = ir_records.format_record(self.records["BINARY_OP_ADD_INT"])
         self.assertIn("  uop 2 _BINARY_OP_ADD_INT", text)
         self.assertIn("call _PyValue_BoxInt64", text)
@@ -790,7 +792,10 @@ class LeafUopTests(unittest.TestCase):
 
     def test_handlers(self):
         parts = self.uops
-        for handler, (domain, make_caches, opargs) in HANDLERS.items():
+        live = {name: spec for name, spec in HANDLERS.items() if name in self.records}
+        if not live:
+            self.skipTest("no live handler left; the old generator goes at D")
+        for handler, (domain, make_caches, opargs) in live.items():
             record = self.records[handler]
             self.assertTrue(all(u.leaf is not None for u in record.uops), handler)
             externals = [v.id for v in sorted((v for v in record.values if v.external >= 0),

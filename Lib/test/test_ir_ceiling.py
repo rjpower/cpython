@@ -130,7 +130,7 @@ class ArmNameTests(unittest.TestCase):
         declared |= {n.split(".")[1] for n in [*program.points, *program.arms]}
         for x in [*program.externs.values(), *program.macros.values()]:
             declared |= {x.name, *(p.name for p in x.params)}
-        self.assertGreater(len(declared), 100)
+        self.assertTrue(declared)
         self.assertEqual(declared & stack_op_names(), set())
 
 

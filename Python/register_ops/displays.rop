@@ -9,8 +9,8 @@
 family Build(dst:Dst, items:Span<Src>)
   exits(next, raise) ops(BUILD_TUPLE, BUILD_LIST, BUILD_SET, BUILD_MAP);
 
-point Build.Failed(current, site, pending) keep() spent(items) defs() held();
-point Build.Done(current, next_head, clear) keep() spent(items) defs(dst) held();
+point Build.Failed(current, site, pending) keep() spent(items) defs();
+point Build.Done(current, next_head, clear) keep() spent(items) defs(dst);
 
 extern helper build_tuple(items:Span<Src>)
   cases(ok(z:O), err(e:Err))
@@ -23,7 +23,7 @@ extern helper build_tuple(items:Span<Src>)
     contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed (which may run a finalizer). NULL with an exception set on failure.");
 
 arm Build.Tuple shared select(tuple)
-  effects(writes, allocates, raises, releases, runs_python)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
   feedback()
   exits(next, raise)
   ensures(next.exact<tuple>(dst))
@@ -51,7 +51,7 @@ extern helper build_list(items:Span<Src>)
     contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed (which may run a finalizer). NULL with an exception set on failure.");
 
 arm Build.List shared select(list)
-  effects(writes, allocates, raises, releases, runs_python)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
   feedback()
   exits(next, raise)
   ensures(next.exact<list>(dst))
@@ -79,7 +79,7 @@ extern helper build_set(items:Span<Src>)
     contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed. A hash or equality of an item can run Python. The result is NULL with an exception set on failure.");
 
 arm Build.Set shared select(set)
-  effects(writes, allocates, raises, releases, runs_python)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
   feedback()
   exits(next, raise)
   ensures(next.exact<set>(dst))
@@ -107,7 +107,7 @@ extern helper build_map(items:Span<Src>)
     contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed. A hash or equality of an item can run Python. The result is NULL with an exception set on failure.");
 
 arm Build.Map shared select(map)
-  effects(writes, allocates, raises, releases, runs_python)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
   feedback()
   exits(next, raise)
   ensures(next.exact<dict>(dst))
@@ -127,8 +127,8 @@ arm Build.Map shared select(map)
 family AddElement(container:Src, item:Src)
   exits(next, raise) ops(LIST_APPEND, SET_ADD);
 
-point AddElement.Failed(current, site, pending) keep(container) spent(item) defs() held();
-point AddElement.Done(current, next_head, clear) keep(container) spent(item) defs() held();
+point AddElement.Failed(current, site, pending) keep(container) spent(item) defs();
+point AddElement.Done(current, next_head, clear) keep(container) spent(item) defs();
 
 extern helper list_append(list:Src, item:O)
   cases(ok(), err(e:Err))
@@ -185,8 +185,8 @@ arm AddElement.Add shared select(add)
 family AddEntry(container:Src, key:Src, value:Src)
   exits(next, raise) ops(MAP_ADD);
 
-point AddEntry.Failed(current, site, pending) keep(container) spent(key, value) defs() held();
-point AddEntry.Done(current, next_head, clear) keep(container) spent(key, value) defs() held();
+point AddEntry.Failed(current, site, pending) keep(container) spent(key, value) defs();
+point AddEntry.Done(current, next_head, clear) keep(container) spent(key, value) defs();
 
 extern helper dict_put(dict:Src, key:O, value:O)
   cases(ok(), err(e:Err))
@@ -218,8 +218,8 @@ arm AddEntry.Put shared
 family UpdateContainer(container:Src, source:Src)
   exits(next, raise) ops(LIST_EXTEND, SET_UPDATE, DICT_UPDATE);
 
-point UpdateContainer.Failed(current, site, pending) keep(container, source) spent() defs() held();
-point UpdateContainer.Done(current, next_head, clear) keep(container) spent(source) defs() held();
+point UpdateContainer.Failed(current, site, pending) keep(container, source) spent() defs();
+point UpdateContainer.Done(current, next_head, clear) keep(container) spent(source) defs();
 
 extern helper list_extend(list:Src, source:Src)
   cases(ok(), err(e:Err))
@@ -300,8 +300,8 @@ arm UpdateContainer.Overlay shared select(overlay)
 family MergeKeywords(fn:Src, dict:Src, source:Src)
   exits(next, raise) ops(DICT_MERGE);
 
-point MergeKeywords.Failed(current, site, pending) keep(fn, dict, source) spent() defs() held();
-point MergeKeywords.Done(current, next_head, clear) keep(fn, dict) spent(source) defs() held();
+point MergeKeywords.Failed(current, site, pending) keep(fn, dict, source) spent() defs();
+point MergeKeywords.Done(current, next_head, clear) keep(fn, dict) spent(source) defs();
 
 extern helper merge_unique(fn:Src, dict:Src, source:Src)
   cases(ok(), err(e:Err))

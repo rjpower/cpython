@@ -198,11 +198,8 @@ extern "C" {
 #define FOR_ITER_VIRTUAL                       186
 #define GET_ITER_SELF                          187
 #define GET_ITER_VIRTUAL                       188
-#define LOAD_CONST_INLINE_FLOAT                203
-#define LOAD_CONST_INLINE_INT                  204
 #define LOAD_GLOBAL_BUILTIN                    205
 #define LOAD_GLOBAL_MODULE                     206
-#define LOAD_SMALL_INT_INLINE                  207
 #define LOAD_SUPER_ATTR_ATTR                   208
 #define LOAD_SUPER_ATTR_METHOD                 209
 #define POP_JUMP_IF_FALSE_ALWAYS_TRUE          210

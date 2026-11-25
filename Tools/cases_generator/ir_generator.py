@@ -1293,7 +1293,9 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # opcode number and their format, which the CFG reads, but have no handler.
 STACK_ONLY = ("LOAD_ATTR", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN", "LOAD_FAST_LOAD_FAST",
               "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
-              "STORE_FAST_STORE_FAST")
+              "STORE_FAST_STORE_FAST", "LOAD_FAST", "LOAD_FAST_BORROW",
+              "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR", "DELETE_FAST",
+              "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -8612,43 +8614,14 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
         return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
 
     scalar = {
-        "LOAD_CONST": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); }",
-        "LOAD_CONST_INLINE_INT": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); assert(PyValue_IsInlineInt(value)); }",
-        "LOAD_CONST_INLINE_FLOAT": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); assert(PyValue_IsInlineFloat(value)); }",
         "LOAD_COMMON_CONSTANT": ("{ assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "
                                  "_PyValue_CommonConstant(tstate->interp->common_consts[oparg]); "
                                  "value = PyValue_DUP(constant); }"),
-        "LOAD_SMALL_INT": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
-        "LOAD_SMALL_INT_INLINE": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
     }
     if inst.name in scalar:
         if (scalar_shape(0, 1) and fmt.field_of(ROLE_DST) is not None
                 and bodies_match(scalar[inst.name])):
             return "_PyIR_TRANSFER_FRESH"
-        return unknown
-    unbound = """
-        if (PyValue_IsNull(value_s)) {
-            _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
-                UNBOUNDLOCAL_ERROR_MSG,
-                _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg));
-            ERROR_IF(true);
-        }
-    """
-    if inst.name in ("LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK"):
-        body = {
-            "LOAD_FAST_CHECK": ("{ PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg)); "
-                                + unbound + " value = PyValue_DUP(value_s); }"),
-            "LOAD_FAST": ("{ PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg)); "
-                          "value = PyValue_DUP(local); }"),
-            "LOAD_FAST_BORROW": ("{ PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg)); "
-                                 "value = PyValue_DUP(local); }"),
-        }[inst.name]
-        if bodies_match(body) and scalar_shape(0, 1):
-            return "_PyIR_TRANSFER_LOCAL_DUP"
-        return unknown
-    if inst.name == "LOAD_FAST_AND_CLEAR":
-        if scalar_shape(0, 1) and bodies_match("{ value = GETLOCAL(oparg); GETLOCAL(oparg) = PyValue_NULL; }"):
-            return "_PyIR_TRANSFER_LOCAL_MOVE"
         return unknown
     close = "{ PyValue_XCLOSE(value); }"
     if inst.name == "POP_TOP":
@@ -8662,18 +8635,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             trash = tmp;
         }"""
         return "_PyIR_TRANSFER_LOCAL_STORE" if scalar_shape(1, 0) and bodies_match(store, close) else unknown
-    if inst.name == "DELETE_FAST":
-        body = ("{ PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg)); "
-                + unbound + " PyValue tmp = GETLOCAL(oparg); "
-                "GETLOCAL(oparg) = PyValue_NULL; PyValue_XCLOSE(tmp); }")
-        # DELETE_FAST names its checked view v rather than value_s.
-        return "_PyIR_TRANSFER_LOCAL_CLEAR" if scalar_shape(0, 0) and bodies_match(
-            body.replace("value_s", "v")) else unknown
-    if inst.name == "COPY":
-        return "_PyIR_TRANSFER_COPY" if (fmt.window
-            and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")
-            and extent([entry.item for entry in outputs], inst) == (1, "_PyIR_EXT_OPARG")
-            and bodies_match("{ top = PyValue_DUP(bottom); }")) else unknown
     contracts = [ir_contract.declared_contract(part) for part in parts]
     exchanged = {o.name for c in contracts for o in c.outputs if o.exchange}
     if exchanged:

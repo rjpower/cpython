@@ -5,13 +5,6 @@
 _specializations = frozendict(
     RESUME=(
     ),
-    LOAD_CONST=(
-            "LOAD_CONST_INLINE_INT",
-            "LOAD_CONST_INLINE_FLOAT",
-    ),
-    LOAD_SMALL_INT=(
-            "LOAD_SMALL_INT_INLINE",
-    ),
     TO_BOOL=(
             "TO_BOOL_ALWAYS_TRUE",
             "TO_BOOL_BOOL",
@@ -207,11 +200,8 @@ _specialized_opmap = frozendict(
     FOR_ITER_VIRTUAL=186,
     GET_ITER_SELF=187,
     GET_ITER_VIRTUAL=188,
-    LOAD_CONST_INLINE_FLOAT=203,
-    LOAD_CONST_INLINE_INT=204,
     LOAD_GLOBAL_BUILTIN=205,
     LOAD_GLOBAL_MODULE=206,
-    LOAD_SMALL_INT_INLINE=207,
     LOAD_SUPER_ATTR_ATTR=208,
     LOAD_SUPER_ATTR_METHOD=209,
     POP_JUMP_IF_FALSE_ALWAYS_TRUE=210,

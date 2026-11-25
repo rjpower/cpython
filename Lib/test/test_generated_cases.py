@@ -3919,14 +3919,11 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
         insts = ir_generator.handler_instructions(analysis)
+        # The local, constant and shuffle stack ops other than STORE_FAST
+        # and POP_TOP are stack-only: their families cover them
         expected = {
-            "LOAD_CONST": "FRESH", "LOAD_CONST_INLINE_INT": "FRESH",
-            "LOAD_CONST_INLINE_FLOAT": "FRESH", "LOAD_COMMON_CONSTANT": "FRESH",
-            "LOAD_SMALL_INT": "FRESH", "LOAD_SMALL_INT_INLINE": "FRESH",
-            "LOAD_FAST": "LOCAL_DUP", "LOAD_FAST_BORROW": "LOCAL_DUP",
-            "LOAD_FAST_CHECK": "LOCAL_DUP", "LOAD_FAST_AND_CLEAR": "LOCAL_MOVE",
-            "STORE_FAST": "LOCAL_STORE", "DELETE_FAST": "LOCAL_CLEAR",
-            "POP_TOP": "RETIRE", "COPY": "COPY", "SWAP": "SWAP",
+            "LOAD_COMMON_CONSTANT": "FRESH",
+            "STORE_FAST": "LOCAL_STORE", "POP_TOP": "RETIRE",
             "POP_JUMP_IF_NONE": "RETIRE", "POP_JUMP_IF_NOT_NONE": "RETIRE",
             "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE", "RETURN_VALUE": "EXIT",
             "CALL": "UNKNOWN", "SEND": "UNKNOWN",

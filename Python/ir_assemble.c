@@ -543,8 +543,8 @@ call_role_flags(const _PyRegOp *op)
     return 0;
 }
 
-/* The generic handler of op: its opcode, a form that pushes its constant
- * inline, or for BINARY_OP the handler of its operation. */
+/* The generic handler of op: its opcode, or for BINARY_OP the handler of
+ * its operation. */
 static int
 choose_handler(_PyRegOp *op, PyObject *consts)
 {
@@ -571,20 +571,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
             return ERROR;
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
-    }
-    // Canonical scalar constants have the same representation in every
-    // supported interpreter.
-    if (opcode == LOAD_SMALL_INT) {
-        return LOAD_SMALL_INT_INLINE;
-    }
-    if (opcode == LOAD_CONST) {
-        PyValueBorrow value = PyTuple_GET_VALUE(consts, oparg);
-        if (PyValue_IsInlineInt(value)) {
-            return LOAD_CONST_INLINE_INT;
-        }
-        if (PyValue_IsInlineFloat(value)) {
-            return LOAD_CONST_INLINE_FLOAT;
-        }
     }
     return opcode;
 }

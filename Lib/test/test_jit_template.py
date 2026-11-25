@@ -1218,20 +1218,6 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(self.cse_home_loads(
             [lambda g, v: TOp("prim", [], [v], "PyValue_CLOSE")]), 2)
 
-    def test_swap_stores_both_homes(self):
-        # SWAP's outputs are exchanged, not passed through: its template
-        # loads both homes and stores each value into the other
-        graph = graph_of("SWAP")
-        ops = [op for block in graph.blocks.values() for op in block.ops]
-        loads = [op for op in ops if op.kind == "view"]
-        stores = [op for op in ops if op.kind == "slot_store"]
-        self.assertEqual(len(stores), 2)
-        self.assertNotEqual(stores[0].attr, stores[1].attr)
-        self.assertEqual({op.attr for op in stores}, {op.attr for op in loads})
-        for store in stores:
-            load = next(op for op in loads if op.results[0] is store.args[0])
-            self.assertNotEqual(load.attr, store.attr)
-
     def test_range_iterator_reads_its_length_once(self):
         graph = graph_of("FOR_ITER_RANGE")
         loads = [op.attr for b in graph.blocks.values() for op in b.ops if op.kind == "load"]

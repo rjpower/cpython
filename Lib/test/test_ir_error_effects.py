@@ -237,7 +237,7 @@ class ErrorEffectTests(unittest.TestCase):
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
         analysis = analyzer.analyze_files([str(source)])
-        for name in ("NOP", "IR_JUMP", "LOAD_CONST", "LOAD_CONST_INLINE_INT", "GET_ANEXT"):
+        for name in ("NOP", "IR_JUMP", "LOAD_COMMON_CONSTANT", "GET_ANEXT"):
             with self.subTest(handler=name):
                 instruction = {**analysis.instructions, **analysis.ir_only}[name]
                 summary = ir_error_effects.analyze_error_effects(instruction)
@@ -314,21 +314,20 @@ class ErrorEffectTests(unittest.TestCase):
             changed.write_text(text.replace(
                 before, "if (oparg) { ERROR_NO_POP(); } " + before +
                 " next_instr = this_instr;", 1).replace(
-                "leaf pure inst(LOAD_CONST,", "pure inst(LOAD_CONST,", 1).replace(
-                "inst(LOAD_CONST, (-- value: owned))\n            effects(reads) exits(next)",
-                "inst(LOAD_CONST, (-- value: owned))\n"
+                "inst(LOAD_COMMON_CONSTANT, ( -- value: owned))\n            effects(reads) exits(next)",
+                "inst(LOAD_COMMON_CONSTANT, ( -- value: owned))\n"
                 # The moved next_instr is where the word continues (V12)
                 "            effects(reads, raises) exits(jump, raise)", 1))
             altered = analyzer.analyze_files([str(changed)])
-            instruction = altered.instructions["LOAD_CONST"]
+            instruction = altered.instructions["LOAD_COMMON_CONSTANT"]
             self.assertIsNotNone(ir_generator.operand_error_sources(instruction))
             altered_formats = ir_generator.compute_formats(altered)
-            self.assertTrue(altered_formats["LOAD_CONST"].store_dst)
+            self.assertTrue(altered_formats["LOAD_COMMON_CONSTANT"].store_dst)
             # The final local publication/refresh can fail after PC adoption,
             # even without a scalar box or a later explicit ERROR statement.
             contracts = ir_generator.handler_contracts(altered, altered_formats)
-            self.assertFalse(contracts["LOAD_CONST"].error_routes)
-            self.assertFalse(contracts["LOAD_CONST"].abrupt_operands)
+            self.assertFalse(contracts["LOAD_COMMON_CONSTANT"].error_routes)
+            self.assertFalse(contracts["LOAD_COMMON_CONSTANT"].abrupt_operands)
 
     def test_complete_routes_require_actual_error_and_publication_receipts(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
@@ -338,7 +337,7 @@ class ErrorEffectTests(unittest.TestCase):
         formats = ir_generator.compute_formats(analysis)
         contracts = ir_generator.handler_contracts(analysis, formats)
         self.assertEqual(contracts["IR_JUMP"].error_routes, ("_PyIR_ERROR_COMPLETE",))
-        self.assertIn("_PyIR_ERROR_LOCAL_DST", contracts["LOAD_CONST"].error_routes)
+        self.assertIn("_PyIR_ERROR_LOCAL_DST", contracts["LOAD_COMMON_CONSTANT"].error_routes)
         self.assertIn("_PyIR_ERROR_DIRECT", contracts["GET_ANEXT"].error_routes)
         for name in ("RESUME", "INSTRUMENTED_RESUME", "CLEANUP_THROW"):
             with self.subTest(handler=name):
@@ -361,7 +360,7 @@ class ErrorEffectTests(unittest.TestCase):
 
         with mock.patch.object(ir_generator.IREmitter, "finish_stores", missing_publication_receipt):
             incomplete = ir_generator.handler_contracts(analysis, formats)
-        self.assertFalse(incomplete["LOAD_CONST"].error_routes)
+        self.assertFalse(incomplete["LOAD_COMMON_CONSTANT"].error_routes)
 
     def test_send_routes_require_each_reached_adapter_receipt(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

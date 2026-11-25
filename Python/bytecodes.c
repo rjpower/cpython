@@ -289,98 +289,6 @@ dummy_func(
             LOAD_FAST,
         };
 
-        inst(LOAD_FAST_CHECK, (-- value: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg));
-            if (PyValue_IsNull(value_s)) {
-                _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
-                    UNBOUNDLOCAL_ERROR_MSG,
-                    _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
-                );
-                ERROR_IF(true);
-            }
-            value = PyValue_DUP(value_s);
-        }
-
-        leaf pure inst(LOAD_FAST, (-- value: owned))
-            effects() exits(next)
-        {
-            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
-            value = PyValue_DUP(local);
-        }
-
-        // A temporary owns its value (pyjit/design/pyvalue.md D4): the load
-        // takes a count of a mortal object. A load that a fold absorbs
-        // reads the local in place instead (Python/regcfg_passes.c).
-        // The compiler emits it, as LOAD_FAST, only for a bound local
-        leaf pure inst(LOAD_FAST_BORROW, (-- value: owned))
-            effects() exits(next)
-        {
-            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
-            value = PyValue_DUP(local);
-        }
-
-        leaf inst(LOAD_FAST_AND_CLEAR, (-- value: moved(home)))
-            effects() exits(next)
-        {
-            value = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_NULL;
-        }
-
-        // The assembler (Python/assemble.c) emits constant loads as the
-        // inline forms.
-        family(LOAD_CONST, 0) = {
-            LOAD_CONST_INLINE_INT,
-            LOAD_CONST_INLINE_FLOAT,
-        };
-
-        leaf pure inst(LOAD_CONST, (-- value: owned))
-            effects(reads) exits(next)
-        {
-            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
-            value = PyValue_DUP(constant);
-        }
-
-        // The constant is an inline int.
-        inst(LOAD_CONST_INLINE_INT, (-- value: owned))
-            effects(reads) exits(next)
-        {
-            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
-            value = PyValue_DUP(constant);
-            assert(PyValue_IsInlineInt(value));
-        }
-
-        // The constant is an exact float other than NaN. Only builds with
-        // inline values quicken to this.
-        inst(LOAD_CONST_INLINE_FLOAT, (-- value: owned))
-            effects(reads) exits(next)
-        {
-            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
-            value = PyValue_DUP(constant);
-            assert(PyValue_IsInlineFloat(value));
-        }
-
-        family(LOAD_SMALL_INT, 0) = {
-            LOAD_SMALL_INT_INLINE,
-        };
-
-        pure inst(LOAD_SMALL_INT, (-- value: owned exact(PyLong_Type) inline_int))
-            effects() exits(next)
-        {
-            assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInlineInt(oparg);
-        }
-
-        // An inline int holds no memory: PyValue_FromInlineInt encodes the
-        // word and cannot fail, so there is no raise exit (G0c9)
-        leaf inst(LOAD_SMALL_INT_INLINE, (-- value: owned exact(PyLong_Type) inline_int))
-            effects() exits(next)
-        {
-            assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInlineInt(oparg);
-        }
-
         macro(STORE_FAST) = _SWAP_FAST + POP_TOP;
 
         leaf op(_SWAP_FAST, (value: consumed -- trash: moved(home)))
@@ -2639,22 +2547,6 @@ dummy_func(
             _GUARD_GLOBALS_VERSION +
             _LOAD_GLOBAL_BUILTINS +
             _NULL_SLOT_CONDITIONAL;
-
-        outlined inst(DELETE_FAST, (--))
-            effects(runs_python) exits(next, raise)
-        {
-            PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));
-            if (PyValue_IsNull(v)) {
-                _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
-                    UNBOUNDLOCAL_ERROR_MSG,
-                    _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg)
-                );
-                ERROR_IF(true);
-            }
-            PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
-            GETLOCAL(oparg) = PyValue_NULL;
-            PyValue_XCLOSE(tmp);
-        }
 
         outlined inst(MAKE_CELL, (--))
             effects(runs_python) exits(next, raise)
@@ -6228,13 +6120,6 @@ dummy_func(
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        leaf pure inst(COPY,
-                (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top: owned))
-            effects() exits(next)
-        {
-            top = PyValue_DUP(bottom);
-        }
-
         specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs))
             effects(runs_python) exits(next, jump)
             feedback(read(entry), write(entry), write(handler))
@@ -6262,15 +6147,6 @@ dummy_func(
         }
 
         macro(BINARY_OP) region(shared) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;
-
-        pure inst(SWAP, (bottom, unused[oparg-2], top --
-                    bottom: moved(top), unused[oparg-2], top: moved(bottom)))
-            effects() exits(next)
-        {
-            PyValue temp = bottom;
-            bottom = top;
-            top = temp;
-        }
 
         inst(INSTRUMENTED_LINE, ( -- ))
             effects(runs_python) exits(next, jump, raise) feedback(write(counter))
@@ -6506,6 +6382,92 @@ dummy_func(
             effects() exits(abort)
         {
             assert(oparg);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        /* The local, constant and shuffle stack ops: their rules in
+         * Python/regcfg.c lower them to the Local*, Const and Move families
+         * (Python/register_ops/values.rop), to renames, or to nothing.  The
+         * statements before the abort keep the formats' operand roles and
+         * transfers, which the CFG reads. */
+        tier1 inst(LOAD_FAST, (-- value: owned))
+            effects() exits(abort)
+        {
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            (void)local;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(LOAD_FAST_BORROW, (-- value: owned))
+            effects() exits(abort)
+        {
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            (void)local;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(LOAD_FAST_CHECK, (-- value: owned))
+            effects() exits(abort)
+        {
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            (void)local;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(LOAD_FAST_AND_CLEAR, (-- value: owned))
+            effects() exits(abort)
+        {
+            PyValueBorrow local = PyValue_Borrow(GETLOCAL(oparg));
+            (void)local;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(DELETE_FAST, (--))
+            effects(runs_python) exits(abort)
+        {
+            PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
+            GETLOCAL(oparg) = PyValue_NULL;
+            PyValue_XCLOSE(tmp);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(LOAD_CONST, (-- value: owned))
+            effects(reads) exits(abort)
+        {
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            (void)constant;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(LOAD_SMALL_INT, (-- value: owned exact(PyLong_Type) inline_int))
+            effects() exits(abort)
+        {
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(COPY,
+                (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top: owned))
+            effects() exits(abort)
+        {
+            (void)bottom;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(SWAP, (bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top))
+            effects() exits(abort)
+        {
+            (void)bottom;
+            (void)top;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }

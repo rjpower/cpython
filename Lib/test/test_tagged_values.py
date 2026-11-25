@@ -506,7 +506,7 @@ class InlineIntTest(unittest.TestCase):
         names = opnames(f)
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
-        for name in ("LOAD_SMALL_INT_INLINE",
+        for name in ("Const.Small",
                      "Add.Int", "BINARY_OP_SUBTRACT_INT",
                      "BINARY_OP_MULTIPLY_INT", "FOR_ITER_RANGE"):
             self.assertIn(name, names)
@@ -781,7 +781,7 @@ class InlineFloatTest(unittest.TestCase):
             return total, total < 1e300
         warm(f, 3)
         names = opnames(f)
-        for name in ("LOAD_CONST_INLINE_FLOAT", "Add.Float",
+        for name in ("Const.Pool", "Add.Float",
                      "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
                      "BINARY_OP_TRUEDIV_FLOAT", "COMPARE_OP_FLOAT"):
             self.assertIn(name, names)

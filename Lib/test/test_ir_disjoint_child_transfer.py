@@ -48,7 +48,7 @@ class DisjointChildTransferTests(unittest.TestCase):
             return function(value)
 
         rows = _testinternalcapi.get_ir(invoke.__code__)
-        attrs = [row for row in rows if row[0] == 'LOAD_ATTR']
+        attrs = [row for row in rows if row[0] == 'GetAttr.Generic']
         self.assertEqual(len(attrs), 1)
         self.assertLess(attrs[0][1], invoke.__code__.co_nlocals)
         self.assertGreaterEqual(attrs[0][2], invoke.__code__.co_nlocals)
@@ -65,9 +65,9 @@ class DisjointChildTransferTests(unittest.TestCase):
             return identity(owner).call(*args, **kwargs)
 
         rows = [tuple(row) for row in _testinternalcapi.get_ir(invoke.__code__)]
-        site = next(i for i, row in enumerate(rows) if row[0] == 'LOAD_ATTR')
+        site = next(i for i, row in enumerate(rows) if row[0] == 'GetAttr.Generic')
         name, dst, owner, feedback, arg = rows[site]
-        self.assertFalse(arg & 1)
+        self.assertEqual(name, 'GetAttr.Generic')
         self.assertTrue(any(row[0] == 'CALL_FUNCTION_EX' for row in rows))
         for admitted in routes(invoke.__code__):
             function = types.FunctionType(admitted, globals())

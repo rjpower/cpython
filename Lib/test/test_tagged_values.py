@@ -443,7 +443,7 @@ class FrameSlotTest(unittest.TestCase):
         for _ in range(THRESHOLD * 2):
             self.assertEqual(call_function(object()), [])
             self.assertEqual(call_method(Box(), object()), [])
-        self.assertIn("LOAD_ATTR_METHOD_WITH_VALUES", opnames(call_method))
+        self.assertIn("GetMethod.MethodValues", opnames(call_method))
 
 
 def warm(func, *args, **kwargs):
@@ -454,7 +454,9 @@ def warm(func, *args, **kwargs):
 
 
 def opnames(func):
-    return {i.opname for i in dis.get_instructions(func, adaptive=True)}
+    # The stack ops, and the register instruction arms that the words run
+    names = {i.opname for i in dis.get_instructions(func, adaptive=True)}
+    return names | {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
 
 
 def handler_names(func):
@@ -508,11 +510,11 @@ class InlineIntTest(unittest.TestCase):
         names = opnames(f)
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
-        for name in ("LOAD_SMALL_INT_INLINE", "BINARY_OP_SUBTRACT_INT",
+        for name in ("LOAD_SMALL_INT_INLINE",
+                     "Add.Int", "BINARY_OP_SUBTRACT_INT",
                      "BINARY_OP_MULTIPLY_INT", "FOR_ITER_RANGE"):
             self.assertIn(name, names)
-        self.assertIn("Add.Int", handler_names(f))
-        self.assertIn("Add.Int", handler_names(add3))
+        self.assertIn("Add.Int", opnames(add3))
 
     def test_boxing_leaves_the_local_inline(self):
         # x + k reads x through its field (Python/regcfg_passes.c folds the load)
@@ -783,7 +785,7 @@ class InlineFloatTest(unittest.TestCase):
             return total, total < 1e300
         warm(f, 3)
         names = opnames(f)
-        for name in ("LOAD_CONST_INLINE_FLOAT",
+        for name in ("LOAD_CONST_INLINE_FLOAT", "Add.Float",
                      "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
                      "BINARY_OP_TRUEDIV_FLOAT", "COMPARE_OP_FLOAT"):
             self.assertIn(name, names)

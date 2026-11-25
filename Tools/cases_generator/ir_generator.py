@@ -200,13 +200,7 @@ class ExecutionVariant:
 
 
 # Execution-only refinements: canonical words keep their ordinary handlers.
-EXECUTION_VARIANTS = {
-    "LOAD_ATTR_SHAPE_LOCAL_TEMP": ExecutionVariant(
-        "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",)),
-    "LOAD_ATTR_SHAPE_POLY": ExecutionVariant("LOAD_ATTR_SHAPE", shape_cases=True),
-    "LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP": ExecutionVariant(
-        "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",), shape_cases=True),
-}
+EXECUTION_VARIANTS: dict[str, ExecutionVariant] = {}
 
 
 @dataclass(frozen=True)
@@ -851,7 +845,7 @@ INPLACE_READERS = {
     "_PyEval_FormatKwargsError",
     # Python/specialize.c: they read types and values
     "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
-    "_Py_Specialize_ContainsOp", "_Py_Specialize_LoadAttr",
+    "_Py_Specialize_ContainsOp",
     "_Py_Specialize_PopJumpIf", "_Py_Specialize_StoreAttr",
     "_Py_Specialize_StoreSubscr",
 }
@@ -873,7 +867,7 @@ OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
 # (OBJECT_READERS_SEEN); that a name only reads is checked by review.
 # Uses inside assert() vanish from release builds and are not checked.
 OBJECT_READERS = {
-    "IR_GUARD_SHAPE_READ", "IR_METHOD_POLY_LOOKUP",
+    "IR_GUARD_SHAPE_READ",
     # Statements
     "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
@@ -1298,8 +1292,9 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
 STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
-              "INSTRUMENTED_RETURN_VALUE", "INTERPRETER_EXIT", "EXIT_INIT_CHECK",
-              "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN", "LOAD_FAST_LOAD_FAST",
+              "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "INTERPRETER_EXIT",
+              "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
+              "LOAD_FAST_LOAD_FAST",
               "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
               "STORE_FAST_STORE_FAST")
 

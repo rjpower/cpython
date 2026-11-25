@@ -312,7 +312,7 @@ class FrameCallTests(unittest.TestCase):
             reader.method()
 
         rows = _testinternalcapi.get_ir(read.__code__)
-        attributes = [row for row in rows if row[0] == "LOAD_ATTR"]
+        attributes = [row for row in rows if row[0] in ("GetAttr.Generic", "GetMethod.Generic")]
         self.assertEqual(len(attributes), 2)
         self.assertEqual(attributes[0][1], 4095)
         self.assertNotEqual(attributes[1][1], 4095)
@@ -324,7 +324,7 @@ class FrameCallTests(unittest.TestCase):
         # The executing copy names a discard slot, a scratch register past
         # the locals
         nlocals = len(_testinternalcapi.get_co_localskinds(read.__code__))
-        self.assertTrue(any(row[0] == "LOAD_ATTR_SLOT" and
+        self.assertTrue(any(row[0] == "GetAttr.ValueSlot" and
                             nlocals <= row[1] != 4095
                             for row in _testinternalcapi.get_ir(read.__code__, True)))
 
@@ -345,7 +345,7 @@ class FrameCallTests(unittest.TestCase):
             reader[3]
 
         rows = _testinternalcapi.get_ir(read.__code__)
-        for opcode in ("LOAD_ATTR", "BINARY_OP_SUBSCR"):
+        for opcode in ("GetAttr.Generic", "BINARY_OP_SUBSCR"):
             self.assertTrue(any(row[0] == opcode and row[1] == 4095
                                 for row in rows), rows)
         reader = Reader()

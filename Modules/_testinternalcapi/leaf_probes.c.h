@@ -465,22 +465,6 @@ leaf_probe__CHECK_FUNCTION_VERSION_KW(_PyInterpreterFrame *frame, PyValue *stack
 }
 
 static int
-leaf_probe__CHECK_MANAGED_OBJECT_HAS_VALUES(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue owner;
-    owner = stack_pointer[-1];
-    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-    if (!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__CHECK_PERIODIC(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -600,30 +584,6 @@ leaf_probe__END_SEND(_PyInterpreterFrame *frame, PyValue *stack_pointer, int opa
 }
 
 static int
-leaf_probe__GUARD_BUILTIN_METACLASS(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue owner;
-    owner = stack_pointer[-1];
-    #ifdef Py_GIL_DISABLED
-    const bool gil_disabled = true;
-    #else
-    const bool gil_disabled = false;
-    #endif
-    if (gil_disabled) {
-        return LEAF_PROBE_EXIT;
-    }
-    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-    if (Py_TYPE(owner_o) != &PyType_Type) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__GUARD_ELEMENT_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -673,21 +633,6 @@ leaf_probe__GUARD_GLOBALS_VERSION(_PyInterpreterFrame *frame, PyValue *stack_poi
     PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
     if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
         return LEAF_PROBE_DEOPT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_MODULE_EXACT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue owner;
-    owner = stack_pointer[-1];
-    if (!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner))) {
-        return LEAF_PROBE_EXIT;
     }
     result->stack_pointer = stack_pointer;
     return LEAF_PROBE_NEXT;
@@ -801,24 +746,6 @@ leaf_probe__GUARD_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int 
     if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
         return LEAF_PROBE_EXIT;
     }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_SHAPE_READ(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t type_version = (uint32_t)caches[0];
-    uint32_t shape = (uint32_t)caches[1];
-    PyValue owner;
-    owner = stack_pointer[-1];
-    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
-    assert(type_version != 0);
-    if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) { return LEAF_PROBE_EXIT; }
-    if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) { return LEAF_PROBE_EXIT; }
     result->stack_pointer = stack_pointer;
     return LEAF_PROBE_NEXT;
 }
@@ -958,21 +885,6 @@ leaf_probe__GUARD_TOS_UNICODE(_PyInterpreterFrame *frame, PyValue *stack_pointer
     value = stack_pointer[-1];
     PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
     if (!PyUnicode_CheckExact(value_o)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_TYPE_HAS_VERSION(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue owner;
-    owner = stack_pointer[-1];
-    if (Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag == 0) {
         return LEAF_PROBE_EXIT;
     }
     result->stack_pointer = stack_pointer;
@@ -1312,232 +1224,6 @@ leaf_probe__JUMP_IF_COND(_PyInterpreterFrame *frame, PyValue *stack_pointer, int
     }
     stack_pointer += -1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_CLASS(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    _PyValueGuarded class_value = {caches[0]};
-    PyValue owner, attr;
-    owner = stack_pointer[-1];
-    STAT_INC(LOAD_ATTR, hit);
-    PyValueBorrow found = _PyValueGuarded_Load(class_value);
-    attr = PyValue_DUP(found);
-    PyValue tmp = owner;
-    owner = attr;
-    stack_pointer[-1] = owner;
-    PyValue_CLOSE(tmp);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_INSTANCE_VALUE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t offset = (uint32_t)caches[0];
-    PyValue owner, attr;
-    owner = stack_pointer[-1];
-    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-    PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-    PyValueBorrow found = PyValue_Borrow(*value_ptr);
-    if (PyValue_IsNull(found)) {
-        return LEAF_PROBE_DEOPT;
-    }
-    attr = PyValue_XDUP(found);
-    STAT_INC(LOAD_ATTR, hit);
-    PyValue tmp = owner;
-    owner = attr;
-    stack_pointer[-1] = owner;
-    PyValue_CLOSE(tmp);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_METHOD_LAZY_DICT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    _PyValueGuarded class_value = {caches[0]};
-    PyValue owner, attr, self;
-    owner = stack_pointer[-1];
-    STAT_INC(LOAD_ATTR, hit);
-    PyValueBorrow method = _PyValueGuarded_Load(class_value);
-    attr = PyValue_DUP(method);
-    self =      owner ;
-    stack_pointer[-1] = attr;
-    stack_pointer[0] = self;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_METHOD_NO_DICT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    _PyValueGuarded class_value = {caches[0]};
-    PyValue owner, attr, self;
-    owner = stack_pointer[-1];
-    STAT_INC(LOAD_ATTR, hit);
-    PyValueBorrow method = _PyValueGuarded_Load(class_value);
-    attr = PyValue_DUP(method);
-    self =      owner ;
-    stack_pointer[-1] = attr;
-    stack_pointer[0] = self;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_METHOD_WITH_VALUES(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    _PyValueGuarded class_value = {caches[0]};
-    PyValue owner, attr, self;
-    owner = stack_pointer[-1];
-    STAT_INC(LOAD_ATTR, hit);
-    PyValueBorrow method = _PyValueGuarded_Load(class_value);
-    attr = PyValue_DUP(method);
-    self =      owner ;
-    stack_pointer[-1] = attr;
-    stack_pointer[0] = self;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_MODULE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t dict_version = (uint32_t)caches[0];
-    uint32_t index = (uint32_t)caches[1];
-    PyValue owner, attr;
-    owner = stack_pointer[-1];
-    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-    PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
-    PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-    if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != dict_version) {
-        return LEAF_PROBE_EXIT;
-    }
-    if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-        return LEAF_PROBE_EXIT;
-    }
-    PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
-    PyValueBorrow found = PyValue_Borrow(ep->me_value);
-    if (PyValue_IsNull(found)) {
-        return LEAF_PROBE_EXIT;
-    }
-    attr = PyValue_XDUP(found);
-    STAT_INC(LOAD_ATTR, hit);
-    PyValue tmp = owner;
-    owner = attr;
-    stack_pointer[-1] = owner;
-    PyValue_CLOSE(tmp);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_NONDESCRIPTOR_NO_DICT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    _PyValueGuarded class_value = {caches[0]};
-    PyValue owner, attr;
-    owner = stack_pointer[-1];
-    STAT_INC(LOAD_ATTR, hit);
-    PyValueBorrow found = _PyValueGuarded_Load(class_value);
-    attr = PyValue_DUP(found);
-    PyValue tmp = owner;
-    owner = attr;
-    stack_pointer[-1] = owner;
-    PyValue_CLOSE(tmp);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    _PyValueGuarded class_value = {caches[0]};
-    PyValue owner, attr;
-    owner = stack_pointer[-1];
-    STAT_INC(LOAD_ATTR, hit);
-    PyValueBorrow found = _PyValueGuarded_Load(class_value);
-    attr = PyValue_DUP(found);
-    PyValue tmp = owner;
-    owner = attr;
-    stack_pointer[-1] = owner;
-    PyValue_CLOSE(tmp);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t offset = (uint32_t)caches[0];
-    PyValue owner, attr;
-    owner = stack_pointer[-1];
-    attr =_PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
-    STAT_INC(LOAD_ATTR, hit);
-    PyValue tmp = owner;
-    owner = attr;
-    stack_pointer[-1] = owner;
-    PyValue_CLOSE(tmp);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_ATTR_SLOT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t index = (uint32_t)caches[0];
-    PyValue owner, attr;
-    owner = stack_pointer[-1];
-    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-    PyValueBorrow value = PyValue_Borrow(*_PyObject_ValueSlot(owner_o, index));
-    if (PyValue_IsNull(value)) {
-        return LEAF_PROBE_EXIT;
-    }
-    _PyValue_RecheckHome(value);
-    attr = PyValue_DUP(value);
-    STAT_INC(LOAD_ATTR, hit);
-    PyValue tmp = owner;
-    owner = attr;
-    stack_pointer[-1] = owner;
-    PyValue_CLOSE(tmp);
     result->stack_pointer = stack_pointer;
     return LEAF_PROBE_NEXT;
 }
@@ -2220,19 +1906,16 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_BINARY_OP_TRUEDIV_FLOAT", leaf_probe__BINARY_OP_TRUEDIV_FLOAT, 2},
     {"_BINARY_OP_XOR_INT", leaf_probe__BINARY_OP_XOR_INT, 2},
     {"_CHECK_FUNCTION_VERSION_KW", leaf_probe__CHECK_FUNCTION_VERSION_KW, 3},
-    {"_CHECK_MANAGED_OBJECT_HAS_VALUES", leaf_probe__CHECK_MANAGED_OBJECT_HAS_VALUES, 1},
     {"_CHECK_PERIODIC", leaf_probe__CHECK_PERIODIC, 0},
     {"_COMPARE_OP_FLOAT", leaf_probe__COMPARE_OP_FLOAT, 2},
     {"_COMPARE_OP_INT", leaf_probe__COMPARE_OP_INT, 2},
     {"_COPY", leaf_probe__COPY, 1},
     {"_END_FOR", leaf_probe__END_FOR, 1},
     {"_END_SEND", leaf_probe__END_SEND, 3},
-    {"_GUARD_BUILTIN_METACLASS", leaf_probe__GUARD_BUILTIN_METACLASS, 1},
     {"_GUARD_ELEMENT_INT", leaf_probe__GUARD_ELEMENT_INT, 1},
     {"_GUARD_ELEMENT_LIST", leaf_probe__GUARD_ELEMENT_LIST, 2},
     {"_GUARD_ELEMENT_TUPLE", leaf_probe__GUARD_ELEMENT_TUPLE, 2},
     {"_GUARD_GLOBALS_VERSION", leaf_probe__GUARD_GLOBALS_VERSION, 0},
-    {"_GUARD_MODULE_EXACT", leaf_probe__GUARD_MODULE_EXACT, 1},
     {"_GUARD_NONE_OR_TYPE_VERSION", leaf_probe__GUARD_NONE_OR_TYPE_VERSION, 1},
     {"_GUARD_NOS_FLOAT", leaf_probe__GUARD_NOS_FLOAT, 2},
     {"_GUARD_NOS_INT", leaf_probe__GUARD_NOS_INT, 2},
@@ -2240,7 +1923,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_GUARD_NOS_NOT_NULL", leaf_probe__GUARD_NOS_NOT_NULL, 2},
     {"_GUARD_NOS_UNICODE", leaf_probe__GUARD_NOS_UNICODE, 2},
     {"_GUARD_SHAPE", leaf_probe__GUARD_SHAPE, 1},
-    {"_GUARD_SHAPE_READ", leaf_probe__GUARD_SHAPE_READ, 1},
     {"_GUARD_TOS_BOOL", leaf_probe__GUARD_TOS_BOOL, 1},
     {"_GUARD_TOS_EXACT_INT", leaf_probe__GUARD_TOS_EXACT_INT, 1},
     {"_GUARD_TOS_FLOAT", leaf_probe__GUARD_TOS_FLOAT, 1},
@@ -2250,7 +1932,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_GUARD_TOS_STR_TUPLE_LIST", leaf_probe__GUARD_TOS_STR_TUPLE_LIST, 1},
     {"_GUARD_TOS_TUPLE", leaf_probe__GUARD_TOS_TUPLE, 1},
     {"_GUARD_TOS_UNICODE", leaf_probe__GUARD_TOS_UNICODE, 1},
-    {"_GUARD_TYPE_HAS_VERSION", leaf_probe__GUARD_TYPE_HAS_VERSION, 1},
     {"_GUARD_TYPE_VERSION", leaf_probe__GUARD_TYPE_VERSION, 1},
     {"_GUARD_TYPE_VERSION_LOCKED", leaf_probe__GUARD_TYPE_VERSION_LOCKED, 1},
     {"_IR_JUMP", leaf_probe__IR_JUMP, 0},
@@ -2268,16 +1949,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_JUMP_BACKWARD_NO_INTERRUPT", leaf_probe__JUMP_BACKWARD_NO_INTERRUPT, 0},
     {"_JUMP_FORWARD", leaf_probe__JUMP_FORWARD, 0},
     {"_JUMP_IF_COND", leaf_probe__JUMP_IF_COND, 1},
-    {"_LOAD_ATTR_CLASS", leaf_probe__LOAD_ATTR_CLASS, 1},
-    {"_LOAD_ATTR_INSTANCE_VALUE", leaf_probe__LOAD_ATTR_INSTANCE_VALUE, 1},
-    {"_LOAD_ATTR_METHOD_LAZY_DICT", leaf_probe__LOAD_ATTR_METHOD_LAZY_DICT, 1},
-    {"_LOAD_ATTR_METHOD_NO_DICT", leaf_probe__LOAD_ATTR_METHOD_NO_DICT, 1},
-    {"_LOAD_ATTR_METHOD_WITH_VALUES", leaf_probe__LOAD_ATTR_METHOD_WITH_VALUES, 1},
-    {"_LOAD_ATTR_MODULE", leaf_probe__LOAD_ATTR_MODULE, 1},
-    {"_LOAD_ATTR_NONDESCRIPTOR_NO_DICT", leaf_probe__LOAD_ATTR_NONDESCRIPTOR_NO_DICT, 1},
-    {"_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES", leaf_probe__LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, 1},
-    {"_LOAD_ATTR_SHAPE", leaf_probe__LOAD_ATTR_SHAPE, 1},
-    {"_LOAD_ATTR_SLOT", leaf_probe__LOAD_ATTR_SLOT, 1},
     {"_LOAD_CONST", leaf_probe__LOAD_CONST, 0},
     {"_LOAD_CONST_INLINE_FLOAT", leaf_probe__LOAD_CONST_INLINE_FLOAT, 0},
     {"_LOAD_CONST_INLINE_INT", leaf_probe__LOAD_CONST_INLINE_INT, 0},

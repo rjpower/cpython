@@ -807,6 +807,15 @@ sanity_check_instrumentation(PyCodeObject *code)
 
 #endif
 
+/* Whether the word at index i, which now runs opcode, has a feedback entry
+ * that specialises.  A stack-only opcode such as LOAD_ATTR has none itself:
+ * its word runs the generic arm of its family. */
+static inline int
+specializes_as(PyCodeObject *code, int i, int opcode)
+{
+    return _PyFb_HasEntry(opcode) || _PyFb_HasEntry(_PyCode_InstrHandler(code, i));
+}
+
 /* Restart the specialisation warmup of the instruction at index i, whose
  * handler changes between its instrumented and uninstrumented forms.  The
  * shared entry never warms up. */
@@ -876,7 +885,7 @@ de_instrument(PyCodeObject *code, _PyIRWord *words, _PyCoMonitoringData *monitor
     }
     CHECK(_PyOpcode_Deopt[deinstrumented] == deinstrumented);
     store_opcode(code, words, opcode_ptr, i, deinstrumented);
-    if (_PyFb_HasEntry(deinstrumented)) {
+    if (specializes_as(code, i, deinstrumented)) {
         warm_up(code, i);
     }
 }
@@ -894,7 +903,7 @@ de_instrument_line(PyCodeObject *code, _PyIRWord *words, _PyCoMonitoringData *mo
     CHECK(original_opcode != 0);
     CHECK(original_opcode == _PyOpcode_Deopt[original_opcode]);
     set_word_opcode(code, words, i, original_opcode);
-    if (_PyFb_HasEntry(original_opcode)) {
+    if (specializes_as(code, i, original_opcode)) {
         warm_up(code, i);
     }
     assert(word_opcode(words, i) != INSTRUMENTED_LINE);
@@ -917,7 +926,7 @@ de_instrument_per_instruction(PyCodeObject *code, _PyIRWord *words,
     CHECK(original_opcode != 0);
     CHECK(original_opcode == _PyOpcode_Deopt[original_opcode]);
     store_opcode(code, words, opcode_ptr, i, original_opcode);
-    if (_PyFb_HasEntry(original_opcode)) {
+    if (specializes_as(code, i, original_opcode)) {
         warm_up(code, i);
     }
     assert(word_opcode(words, i) != INSTRUMENTED_INSTRUCTION);
@@ -935,7 +944,7 @@ instrument(PyCodeObject *code, _PyIRWord *words, _PyCoMonitoringData *monitoring
         int instrumented = INSTRUMENTED_OPCODES[deopt];
         assert(instrumented);
         store_opcode(code, words, opcode_ptr, i, instrumented);
-        if (_PyFb_HasEntry(deopt)) {
+        if (specializes_as(code, i, deopt)) {
             warm_up(code, i);
         }
     }
@@ -2499,9 +2508,17 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
             // we know what the original opcode was.
             _PyIRWord *words = exec_words(code);
             /* Every entry, the operand words' too: de-instrumentation may
-             * read any index that a source edge names. */
-            for (int i = 0; i < code_len; i++) {
-                code->_co_monitoring->per_instruction_opcodes[i] = word_opcode(words, i);
+             * read any index that a source edge names.  An operand word is
+             * payload with no handler, so it takes its head's opcode; the
+             * length comes from the code object's word, which is never
+             * wrapped. */
+            for (int i = 0; i < code_len; ) {
+                int opcode = word_opcode(words, i);
+                int length = _PyCode_InstrLength(code, i);
+                for (int k = 0; k < length; k++) {
+                    code->_co_monitoring->per_instruction_opcodes[i + k] = opcode;
+                }
+                i += length;
             }
         }
         if (multitools && code->_co_monitoring->per_instruction_tools == NULL) {

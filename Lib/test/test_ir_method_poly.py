@@ -7,7 +7,7 @@ from test import support
 from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-POLY = "LOAD_ATTR_METHOD_POLY"
+POLY = "GetMethod.PolyMethod"
 ROUNDS = _testinternalcapi.SPECIALIZATION_COOLDOWN * 4
 
 

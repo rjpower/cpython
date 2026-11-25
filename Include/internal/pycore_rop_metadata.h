@@ -12,11 +12,11 @@
 /* The arms' handler ids follow the old handlers, in definition order; the
  * observed wrappers of the arms of families that declare events follow them */
 #define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
-#define ROP_NUM_HANDLERS 34
+#define ROP_NUM_HANDLERS 45
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 26
+#define ROP_NUM_ARMS 37
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
               "the handler count is the old handlers, the arms and their wrappers");
 
@@ -110,23 +110,34 @@ enum {
 #define ROP_HANDLER_Return_Observed (ROP_FIRST_HANDLER + 14)
 #define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 15)
 #define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 16)
-#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 17)
-#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 18)
-#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 19)
-#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 20)
-#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 21)
-#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 22)
-#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 23)
-#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 24)
-#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 25)
-#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 26)
-#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 27)
-#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 28)
-#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 29)
-#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 30)
-#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 31)
-#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 32)
-#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 33)
+#define ROP_HANDLER_GetAttr_GetSet (ROP_FIRST_HANDLER + 17)
+#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 18)
+#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 19)
+#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 20)
+#define ROP_HANDLER_GetAttr_Module (ROP_FIRST_HANDLER + 21)
+#define ROP_HANDLER_GetAttr_Hint (ROP_FIRST_HANDLER + 22)
+#define ROP_HANDLER_GetAttr_ValueSlot (ROP_FIRST_HANDLER + 23)
+#define ROP_HANDLER_GetAttr_PointerSlot (ROP_FIRST_HANDLER + 24)
+#define ROP_HANDLER_GetAttr_Class (ROP_FIRST_HANDLER + 25)
+#define ROP_HANDLER_GetAttr_NonDescriptorValues (ROP_FIRST_HANDLER + 26)
+#define ROP_HANDLER_GetAttr_NonDescriptorNoDict (ROP_FIRST_HANDLER + 27)
+#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 28)
+#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 29)
+#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 30)
+#define ROP_HANDLER_GetMethod_NoDict (ROP_FIRST_HANDLER + 31)
+#define ROP_HANDLER_GetMethod_LazyDict (ROP_FIRST_HANDLER + 32)
+#define ROP_HANDLER_GetMethod_ClassMethod (ROP_FIRST_HANDLER + 33)
+#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 34)
+#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 35)
+#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 36)
+#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 37)
+#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 38)
+#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 39)
+#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 40)
+#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 41)
+#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 42)
+#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 43)
+#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 44)
 
 /* The arm of a statically selected family that each selection admits
  * (its `select`): ROP_SELECT_<Family>_<member>... */
@@ -737,12 +748,23 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Return.Observed", ROP_HANDLER_Return_Observed, ROP_FAMILY_Return, 1},
     {"Return.External", ROP_HANDLER_Return_External, ROP_FAMILY_Return, 1},
     {"GetAttr.Instance", ROP_HANDLER_GetAttr_Instance, ROP_FAMILY_GetAttr, 1},
-    {"GetAttr.Generic", ROP_HANDLER_GetAttr_Generic, ROP_FAMILY_GetAttr, 0},
+    {"GetAttr.GetSet", ROP_HANDLER_GetAttr_GetSet, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.Generic", ROP_HANDLER_GetAttr_Generic, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.Shape", ROP_HANDLER_GetAttr_Shape, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.PolyShape", ROP_HANDLER_GetAttr_PolyShape, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.Module", ROP_HANDLER_GetAttr_Module, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.Hint", ROP_HANDLER_GetAttr_Hint, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.ValueSlot", ROP_HANDLER_GetAttr_ValueSlot, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.PointerSlot", ROP_HANDLER_GetAttr_PointerSlot, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.Class", ROP_HANDLER_GetAttr_Class, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.NonDescriptorValues", ROP_HANDLER_GetAttr_NonDescriptorValues, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.NonDescriptorNoDict", ROP_HANDLER_GetAttr_NonDescriptorNoDict, ROP_FAMILY_GetAttr, 1},
     {"GetMethod.MethodValues", ROP_HANDLER_GetMethod_MethodValues, ROP_FAMILY_GetMethod, 1},
-    {"GetMethod.Generic", ROP_HANDLER_GetMethod_Generic, ROP_FAMILY_GetMethod, 0},
+    {"GetMethod.Generic", ROP_HANDLER_GetMethod_Generic, ROP_FAMILY_GetMethod, 1},
     {"GetMethod.PolyMethod", ROP_HANDLER_GetMethod_PolyMethod, ROP_FAMILY_GetMethod, 1},
+    {"GetMethod.NoDict", ROP_HANDLER_GetMethod_NoDict, ROP_FAMILY_GetMethod, 1},
+    {"GetMethod.LazyDict", ROP_HANDLER_GetMethod_LazyDict, ROP_FAMILY_GetMethod, 1},
+    {"GetMethod.ClassMethod", ROP_HANDLER_GetMethod_ClassMethod, ROP_FAMILY_GetMethod, 1},
     {"Move.Transfer", ROP_HANDLER_Move_Transfer, ROP_FAMILY_Move, 1},
     {"Move.Retire", ROP_HANDLER_Move_Retire, ROP_FAMILY_Move, 1},
     {"Move.Copy", ROP_HANDLER_Move_Copy, ROP_FAMILY_Move, 1},

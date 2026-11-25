@@ -895,8 +895,12 @@ class ArmLowerer:
             self.lower_indexed_call(t, x, args)
             return
         out = None
-        if any(CSource.out in o.payload for o in conv.outcomes):
-            out = self.new_temp(c_type(cases[0].params[0].type), "out")
+        for i, o in enumerate(conv.outcomes):
+            if CSource.out in o.payload:
+                out_type = cases[i].params[o.payload.index(CSource.out)].type
+                out = self.new_temp(c_type(out_type), "out")
+                break
+        if out is not None:
             args.append(f"&{out}")
         # A bool result is tested in place; any other is kept for the tests
         # and the payloads that read it

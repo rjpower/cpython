@@ -28,7 +28,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from rop_catalog import (SELECT_FACTS, AccessMode, BuiltinType, DebtKind, Effect, Fact,
+from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, Fact,
                          FrameRole, Handle, Region, SchemaCtor, Wrap)
 from rop_check import (CONVENTIONS, CANDIDATE, ROP_DIR, UNWRAP, Program, feedback_schemas,
                        is_linear, is_source, result_cases)
@@ -435,10 +435,8 @@ def entry_state(w: Walk, params: tuple[Param, ...]) -> State:
     # The static evidence that selected the arm, and the instrumentation
     # that runs an observed wrapper, hold at its entry
     arm = w.program.arms[w.definition]
-    for m in arm.select:
-        if m in SELECT_FACTS:
-            fact, subject = SELECT_FACTS[m]
-            st.add_fact(FactT(fact, None, (subject,)))
+    for fact, subject in rop_check.select_facts(w.family, arm):
+        st.add_fact(FactT(fact, None, (subject,)))
     if arm.observes:
         st.add_fact(FactT(Fact.instrumented, None, ("site",)))
     return st
@@ -700,8 +698,23 @@ def value(w: Walk, st: State, e: Expr, want: Type | None = None,
     return call_value(w, st, e, name)
 
 
+def require_present(w: Walk, st: State, e: Expr, span: SrcSpan, what: str) -> None:
+    """An optional source operand (Maybe<Src>) is read, acquired or spent
+    only where present(x) holds: a select item or a test grants it"""
+    if not isinstance(e, Name):
+        return
+    t = w.operands.get(e.name)
+    if not (isinstance(t, WrapType) and t.wrap == Wrap.Maybe and is_source(t)):
+        return
+    if not st.has(FactT(Fact.present, None, (st.canonical(e.name),))):
+        w.report(span, Rule.facts, f"{what} reads the optional operand {e.name}: it "
+                 f"requires present({e.name}), which no dominating fact proves")
+
+
 def call_value(w: Walk, st: State, e: Call, name: str | None) -> str | None:
     vid = name or w.temp(e.span, e.callee)
+    if e.callee in ("use", "acquire"):
+        require_present(w, st, e.args[0], e.span, f"{e.callee}({expr_text(e.args[0])})")
     if e.callee == "use":
         (arg,) = e.args
         src = value(w, st, arg)
@@ -832,6 +845,9 @@ def apply_call(w: Walk, st: State, callee: Callee, exprs: tuple[Expr, ...],
     c = callee.contract
     what = f"call {callee.name}"
     params = {p.name: (p, a) for p, a in zip(callee.params, args)}
+    for p, e in zip(callee.params, exprs):
+        if p.type == HandleType(Handle.Src):
+            require_present(w, st, e, span, what)
     for f in c.requires:
         subjects = tuple(st.canonical(params[s][1] or "?") if s in params else s
                          for s in f.subjects)

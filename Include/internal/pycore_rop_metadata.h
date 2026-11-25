@@ -926,6 +926,7 @@ enum { ROP_SELECT_BOUND, ROP_SELECT_CHECKED };  /* read */
 enum { ROP_SELECT_STORE, ROP_SELECT_RESTORE };  /* write */
 enum { ROP_SELECT_UNINTERRUPTED, ROP_SELECT_INTERRUPTIBLE };  /* interrupt */
 enum { ROP_SELECT_JIT_OFF, ROP_SELECT_JIT_ON };  /* jit */
+enum { ROP_SELECT_PRESENT, ROP_SELECT_ABSENT };  /* operand */
 
 /* The arm of Const that holds for (const) */
 #define _PyRop_SelectConst(const) ( \

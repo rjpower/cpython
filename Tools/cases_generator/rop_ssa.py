@@ -26,12 +26,12 @@ the primitive rows that have them.
 import enum
 from dataclasses import dataclass, field
 
-from rop_catalog import (ENVIRONMENT, SELECT_FACTS, DebtKind, Fact, Scalar, ExcRole,
+from rop_catalog import (ENVIRONMENT, DebtKind, Fact, Scalar, ExcRole,
                          FieldKind, FrameRole, Handle, PcRole, Wrap)
 from rop_cgen import Unsupported, flatten, is_transfer
-from rop_check import (CANDIDATE, PRIMITIVES, UNWRAP, Program, field_kind)
+from rop_check import (CANDIDATE, PRIMITIVES, UNWRAP, Program, field_kind, select_facts)
 from rop_model import (Arm, BoolLit, Branch, Call, CallTerm, Cases, Diagnostic,
-                       Each, EnumType, Exit, Expr, Goto, Guard, HandleType, Let, Name, Nat,
+                       Each, EnumType, Exit, Expr, Family, Goto, Guard, HandleType, Let, Name, Nat,
                        Null, Publish, ScalarType, SpanLit, SrcSpan, Type,
                        WrapType, DISCARD)
 
@@ -569,7 +569,7 @@ class Expander:
         self.fix_switch_payloads()
         return SsaArm(self.arm.name, self.arm.family, self.arm.region.value,
                       dict(self.operands), self.blocks, self.types, self.names,
-                      entry_facts(self.arm))
+                      entry_facts(self.family, self.arm))
 
     def fix_switch_payloads(self) -> None:
         """A status edge's payload binds the target block's first
@@ -585,12 +585,8 @@ class Expander:
             b.term = Switch(b.term.row, b.term.args, tuple(edges), b.term.transfer)
 
 
-def entry_facts(arm: Arm) -> tuple[str, ...]:
-    facts = []
-    for m in arm.select:
-        if m in SELECT_FACTS:
-            fact, subject = SELECT_FACTS[m]
-            facts.append(f"{fact.value}({subject})")
+def entry_facts(fam: Family, arm: Arm) -> tuple[str, ...]:
+    facts = [f"{fact.value}({subject})" for fact, subject in select_facts(fam, arm)]
     if arm.observes:
         facts.append(f"{Fact.instrumented.value}(site)")
     return tuple(facts)

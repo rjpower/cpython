@@ -107,6 +107,16 @@ extern helper local_view(x:Src) -> Maybe<B>
     review: "pycore_rop_rows.h: the word in the local's home.",
     contract: "One load: no memory, no count, no failure.");
 
+// Whether an optional source operand holds a value: its true edge grants
+// present(x), which use, acquire and spends of x require
+extern helper present_src(x:Maybe<Src>) -> Bool
+  effects(reads)
+  test(present(x))
+  c _PyRop_SrcPresent as bool
+  evidence(
+    review: "pycore_rop_rows.h: the word in the operand's home is not NULL.",
+    contract: "One load and a comparison: no count, no failure.");
+
 extern helper unbound_local(fr:Frame, x:Src)
   cases(err(e:Err))
   effects(allocates, raises)

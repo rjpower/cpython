@@ -217,6 +217,13 @@ _PyRop_LocalView(PyValue *home)
     return PyValue_Borrow(*home);
 }
 
+/* Whether an optional source operand's home holds a value */
+static inline bool
+_PyRop_SrcPresent(PyValue *home)
+{
+    return !PyValue_IsNull(*home);
+}
+
 /* The saved binding in a temporary, absent or not, taken out of its home;
  * the arm publishes it into the local */
 static inline PyValue

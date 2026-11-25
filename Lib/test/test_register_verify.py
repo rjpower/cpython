@@ -755,6 +755,38 @@ arm F.Read inline effects() feedback() exits(next) {
 """, [
         (7, 15, 'F.Read', 'facts: call peek requires nonnull(v), which no dominating fact proves'),
     ]),
+    ('optional operand', """\
+extern helper eat(s:Src) -> Unit effects(writes, releases) spends(s) pending;
+extern helper present_src(x:Maybe<Src>) -> Bool effects(reads) test(present(x)) pending;
+family F(x:Maybe<Src>) exits(next) ops(NOP);
+point F.Done(current, next_head, clear) keep() spent(x) defs();
+arm F.Bad shared effects(writes, releases) feedback() exits(next) {
+  entry():
+    let v:B = use(x);
+    let o:O = acquire(x);
+    let _:Unit = eat(x);
+    publish [] retire [owned(o)] at F.Done;
+    exit next();
+}
+""", [
+        (7, 15, 'F.Bad', 'facts: use(x) reads the optional operand x: it requires present(x), which no dominating fact proves'),
+        (8, 15, 'F.Bad', 'facts: acquire(x) reads the optional operand x: it requires present(x), which no dominating fact proves'),
+        (9, 18, 'F.Bad', 'facts: call eat reads the optional operand x: it requires present(x), which no dominating fact proves'),
+    ]),
+    ('presence of no optional operand', """\
+family G(x:Src) exits(next) ops(NOP);
+arm G.Bad inline select(present) effects() feedback() exits(next) {
+  entry():
+    exit next();
+}
+arm G.Vacant inline select(absent) effects() feedback() exits(next) {
+  entry():
+    exit next();
+}
+""", [
+        (2, 1, 'G.Bad', "select names an optional operand's presence, but G has no Maybe<Src> operand"),
+        (6, 1, 'G.Vacant', "select names an optional operand's presence, but G has no Maybe<Src> operand"),
+    ]),
 
 ]
 
@@ -789,6 +821,18 @@ class LanguageTests(unittest.TestCase):
         src += ("arm F.Checked inline select(checked) effects() feedback() exits(next) {\n"
                 "  entry():\n    exit next();\n}\n")
         self.assertEqual(language_diagnostics(src), [])
+
+    def test_present_grants_an_optional_operand(self):
+        src = dict((n, s) for n, s, _ in LANGUAGE_CASES)["optional operand"]
+        selected = src.replace("arm F.Bad shared effects", "arm F.Bad shared select(present) effects")
+        selected += ("arm F.Absent inline select(absent) effects() feedback() exits(next) {\n"
+                     "  entry():\n    exit next();\n}\n")
+        self.assertEqual(language_diagnostics(selected), [])
+        tested = src.replace("  entry():\n    let v:B",
+                             "  entry():\n    branch present_src(x) -> Yes(), No();\n"
+                             "  No():\n    exit next();\n  Yes():\n    let v:B", 1)
+        tested = tested.replace("shared effects(writes", "shared effects(reads, writes", 1)
+        self.assertEqual(language_diagnostics(tested), [])
 
 
 # A source acquired from an operand, then a raise: a checkpoint carries no

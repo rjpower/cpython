@@ -25,8 +25,8 @@ from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMI
                          EVIDENCE_REQUIRED, FEEDBACK_ROOTS, INDEX_BITS, LINEAR_HANDLES,
                          TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
-                         SELECT_DIMENSIONS, SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind,
-                         Effect, ExitKind, FieldKind, FrameRole, Handle, PcRole,
+                         OPTIONAL, SELECT_DIMENSIONS, SELECT_FACTS, SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind,
+                         Effect, ExitKind, Fact, FieldKind, FrameRole, Handle, PcRole,
                          Region, RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
 from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, Contract, Decl, Diagnostic, Each, Edge, Encoding,
@@ -163,6 +163,24 @@ def is_source(t: Type) -> bool:
     if isinstance(t, WrapType) and t.wrap in (Wrap.Maybe, Wrap.Span):
         return is_source(t.arg)
     return isinstance(t, HandleType) and t.handle in SOURCE_HANDLES
+
+
+def optional_sources(fam: Family) -> list[str]:
+    """The family's optional source operands (Maybe<Src>)"""
+    return [p.name for p in fam.params
+            if isinstance(p.type, WrapType) and p.type.wrap is Wrap.Maybe
+            and is_source(p.type)]
+
+
+def select_facts(fam: Family, a: Arm) -> list[tuple[Fact, str]]:
+    """The facts an arm's select items state at its entry (SELECT_FACTS),
+    with OPTIONAL expanded to each of the family's optional operands"""
+    out = []
+    for m in a.select:
+        for fact, subject in SELECT_FACTS.get(m, ()):
+            subjects = optional_sources(fam) if subject == OPTIONAL else [subject]
+            out.extend((fact, s) for s in subjects)
+    return out
 
 
 def substitute(t: Type, binding: Mapping[str, Schema]) -> Type:
@@ -730,6 +748,9 @@ def check_arm(c: Checker, a: Arm) -> None:
     for d in sorted({d for d in dimensions if dimensions.count(d) > 1}):
         c.report(a.span, a.name, f"select names two members of dimension {d}; one "
                  "holds")
+    if {Select.present, Select.absent} & set(a.select) and not optional_sources(fam):
+        c.report(a.span, a.name, f"select names an optional operand's presence, but "
+                 f"{fam.name} has no Maybe<Src> operand")
     if a.observes:
         check_observer(c, a, fam)
     check_graph(c, a.name, a.graph, fam.params, fam, None)
@@ -1329,9 +1350,18 @@ def check_resume(c: Checker, scope: Scope, t: Exit) -> None:
 
 # Expressions
 
+def is_optional_source(scope: Scope, e: Expr, want: Type, have: Type | None) -> bool:
+    """An optional source operand (Maybe<Src>) stands for its source where
+    the fact present(x) holds, which rop_verify checks"""
+    return (want == SRC and have == WrapType(Wrap.Maybe, SRC) and isinstance(e, Name)
+            and operand_type(scope, e.name) is not None)
+
+
 def expect(c: Checker, scope: Scope, e: Expr, want: Type, block: str, i: int,
            outer: bool) -> None:
     have = type_of(c, scope, e, want, block, i, outer)
+    if is_optional_source(scope, e, want, have):
+        return
     if have is not None and have != want:
         c.report(e.span, scope.definition, f"{expr_text(e)} is {type_text(have)}, "
                  f"expected {type_text(want)}")
@@ -1460,6 +1490,8 @@ def check_args(c: Checker, scope: Scope, callee: str, params: tuple[Param, ...],
         want = substitute(p.type, binding)
         have = type_of(c, scope, arg, want, block, i, outer=False)
         if have is None:
+            continue
+        if is_optional_source(scope, arg, want, have):
             continue
         if not unify(want, have, binding):
             c.report(arg.span, scope.definition, f"{callee}: argument {p.name} is "

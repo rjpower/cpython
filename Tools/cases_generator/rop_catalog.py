@@ -264,6 +264,8 @@ class Select(enum.Enum):
     interruptible = "interruptible"        # Jump: a backedge polls
     jit_off = "jit_off"                    # the baseline JIT is off
     jit_on = "jit_on"                      # the baseline JIT is on, so a backedge warms the code
+    present = "present"                    # the family's optional operands hold values
+    absent = "absent"                      # its optional operands are vacant
 
 
 SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
@@ -275,6 +277,7 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "write": (Select.store, Select.restore),
     "interrupt": (Select.uninterrupted, Select.interruptible),
     "jit": (Select.jit_off, Select.jit_on),
+    "operand": (Select.present, Select.absent),
 }
 
 
@@ -348,17 +351,20 @@ FACT_ARITY = {Fact.in_bounds: 2, Fact.type_version: 2}
 FACT_TYPED = frozenset({Fact.exact})
 
 
-# The fact each select item states at the arm's entry, and its subject: an
-# environment name or the family operand of that name.  The other items
+# The facts each select item states at the arm's entry, and their subjects:
+# an environment name, the family operand of that name, or OPTIONAL, which
+# stands for each of the family's Maybe<Src> operands.  The other items
 # choose a body and state no fact.
-SELECT_FACTS: dict[Select, tuple[Fact, str]] = {
-    Select.thread_frame: (Fact.thread_frame, "frame"),
-    Select.generator_frame: (Fact.generator_frame, "frame"),
-    Select.entry_frame: (Fact.entry_frame, "frame"),
-    Select.vacant_scratch: (Fact.vacant_scratch, "frame"),
-    Select.interruptible: (Fact.interruptible, "site"),
-    Select.jit_on: (Fact.jit_on, "thread"),
-    Select.bound: (Fact.nonnull, "local"),
+OPTIONAL = "*optional"
+SELECT_FACTS: dict[Select, tuple[tuple[Fact, str], ...]] = {
+    Select.thread_frame: ((Fact.thread_frame, "frame"),),
+    Select.generator_frame: ((Fact.generator_frame, "frame"),),
+    Select.entry_frame: ((Fact.entry_frame, "frame"),),
+    Select.vacant_scratch: ((Fact.vacant_scratch, "frame"),),
+    Select.interruptible: ((Fact.interruptible, "site"),),
+    Select.jit_on: ((Fact.jit_on, "thread"),),
+    Select.bound: ((Fact.nonnull, "local"),),
+    Select.present: ((Fact.present, OPTIONAL),),
 }
 
 

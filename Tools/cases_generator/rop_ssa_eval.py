@@ -300,6 +300,7 @@ MODELS = {
     "_PyRop_RetireFailedCall": lambda ev, a, s, e: e,
     "_PyRop_RetireAbandoned": lambda ev, a, r: r,
     "_PyRop_LocalView": _local_view,
+    "_PyRop_SrcPresent": lambda ev, home: ev.slot_of(home.operand) != EMPTY,
     "_PyRop_RestoreLocal": _home_value,
     "_PyRop_SaveLocal": _vacate,
     "_PyRop_DeleteLocal": _delete_local,

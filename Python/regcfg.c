@@ -1914,6 +1914,88 @@ rule_delete_fast(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* Cells and free variables (Python/register_ops/cells.rop).  The home of a
+ * cell is a slot, named by the oparg; the word reads the cell through it
+ * and never writes it, except MAKE_CELL, which wraps the local's binding. */
+
+/* MAKE_CELL: the local's binding into a new cell in the same home */
+static int
+rule_make_cell(_PyRegTr *t, const _PyRegOp *src)
+{
+    int local = src->oparg;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellMake_Wrap,
+                                  NULL, 0, &local, 1, &op));
+    op->oparg = local;
+    op->dst = local;
+    return SUCCESS;
+}
+
+/* LOAD_DEREF: the cell's contents into a fresh temporary */
+static int
+rule_load_deref(_PyRegTr *t, const _PyRegOp *src)
+{
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellRead_Get,
+                                  NULL, 0, &dst, 1, &op));
+    op->oparg = src->oparg;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* LOAD_FROM_DICT_OR_DEREF: the mapping is the one use */
+static int
+rule_load_from_dict_or_deref(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellMapRead_Lookup,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = src->oparg;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* STORE_DEREF: the value into the cell, whose old contents are closed */
+static int
+rule_store_deref(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellStore_Set,
+                                  &t->stack[t->sp - 1], 1, NULL, 0, &op));
+    op->oparg = src->oparg;
+    return _PyRegTr_Pop(t, 1, NULL);
+}
+
+static int
+rule_delete_deref(_PyRegTr *t, const _PyRegOp *src)
+{
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellDelete_Unbind,
+                                  NULL, 0, NULL, 0, &op));
+    op->oparg = src->oparg;
+    return SUCCESS;
+}
+
+/* COPY_FREE_VARS: frame entry copies the closure's cells
+ * (_PyFrame_CopyFreeVars), so the stack op has no word and no origin: it is
+ * the code's first op and has no location */
+static int
+rule_copy_free_vars(_PyRegTr *t, const _PyRegOp *src)
+{
+    (void)t;
+    (void)src;
+    return SUCCESS;
+}
+
 /* LOAD_CONST, LOAD_SMALL_INT and LOAD_COMMON_CONSTANT: the Const arm of
  * the kind, its index in the oparg.  ConstSlots later gives most constants
  * hidden homes. */
@@ -2318,6 +2400,12 @@ static const _PyRegRule rules[256] = {
     [CALL] = rule_call,
     [COPY] = rule_copy,
     [DELETE_FAST] = rule_delete_fast,
+    [MAKE_CELL] = rule_make_cell,
+    [LOAD_DEREF] = rule_load_deref,
+    [LOAD_FROM_DICT_OR_DEREF] = rule_load_from_dict_or_deref,
+    [STORE_DEREF] = rule_store_deref,
+    [DELETE_DEREF] = rule_delete_deref,
+    [COPY_FREE_VARS] = rule_copy_free_vars,
     [LOAD_COMMON_CONSTANT] = rule_load_common_constant,
     [LOAD_CONST] = rule_load_const,
     [LOAD_FAST] = rule_load_fast,

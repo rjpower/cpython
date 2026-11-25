@@ -16,6 +16,7 @@ must change by exactly the number of homes that hold it afterwards."""
 
 import functools
 import sys
+import types
 import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -415,6 +416,22 @@ SCENARIOS = {
     "LocalDelete": Scenario("LocalDelete", {
         "delete": "def f(a):\n    b = a\n    del b\n    return a\n"},
         [{"local": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,)),
+    "CellRead": Scenario("CellRead", {
+        "get": "def f(a):\n    def g():\n        return a\n    return (g, a)\n"},
+        [{"cell": types.CellType(v)} for v in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType()}], warm=(1,)),
+    "CellStore": Scenario("CellStore", {
+        "set": "def f(a, b):\n    def g():\n        return a\n    a = b\n    return g\n"},
+        [{"cell": types.CellType(v), "value": w}
+         for v in (None, 1, Plain()) for w in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType(), "value": 1}], warm=(1, 2), holds=True),
+    "CellDelete": Scenario("CellDelete", {
+        "delete": "def f(a):\n    def g():\n        return a\n    del a\n    return g\n"},
+        [{"cell": types.CellType(v)} for v in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType()}], warm=(1,)),
+    "CellMake": Scenario("CellMake", {
+        "wrap": "def f(a):\n    return lambda: a\n"},
+        [{"local": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,), holds=True),
     "Move": Scenario("Move", {
         "join": "def f(a):\n    return (len(a) > 4 and\n            a[:2] == a[-2:] == '__'"
                 " and\n            a[2] != '_')\n",
@@ -906,6 +923,7 @@ NOT_RUN = {
                           "cannot call as a function",
     "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",
     "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
+    "CellMapRead.Lookup": "LOAD_FROM_DICT_OR_DEREF occurs in class code",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",

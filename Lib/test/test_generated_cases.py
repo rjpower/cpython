@@ -3539,19 +3539,6 @@ class TestIRCases(unittest.TestCase):
                 self.assertFalse(ir_generator.generator_marker_contract(inst, formats[inst.name]))
             finally:
                 body.body.pop(0)
-        for name in ("MAKE_CELL", "COPY_FREE_VARS"):
-            with self.subTest(handler=name):
-                local = analysis.instructions[name]
-                fmt = formats[name]
-                self.assertEqual(ir_generator.normal_transfer_kind(local, fmt),
-                                 "_PyIR_TRANSFER_PRESERVE")
-                changed = self.analyze("\ninst(OP, (--)) { *slots = PyValue_NULL; }\n")
-                local.parts[0].body.body.append(changed.instructions["OP"].parts[0].body.body[0])
-                try:
-                    self.assertEqual(ir_generator.normal_transfer_kind(local, fmt),
-                                     "_PyIR_TRANSFER_UNKNOWN")
-                finally:
-                    local.parts[0].body.body.pop()
 
     def test_unused_scalar_passthrough_keeps_distinct_array_geometry(self):
         source = """

@@ -971,13 +971,6 @@ def compute_properties(op: parser.CodeDef) -> Properties:
                    for w in clauses.get("effects", ()))
     # Another frame's code runs after a frame switch
     escapes = escapes or switches
-    # A stack-only op's body only aborts: the register instructions that
-    # lower it run.  Whether it may run Python is declared, and the
-    # compiler's escape flag reads it (copy_local_as_load() in
-    # Python/flowgraph.c).
-    if tuple(clauses.get("exits", ())) == ("abort",):
-        escapes = escapes or any(w.split("(")[0] == "runs_python"
-                                 for w in clauses.get("effects", ()))
     returns = "return" in clauses.get("exits", ())
     outlined = False if isinstance(op, parser.LabelDef) else "outlined" in op.annotations
     return Properties(
@@ -990,7 +983,12 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         oparg=oparg_used(op),
         jumps=(variable_used(op, "JUMPBY") or variable_used(op, "JUMPTO") or
                (variable_used(op, "IR_COMPLETE_STEP") and oparg_used(op))),
-        eval_breaker="CHECK_PERIODIC" in op.name,
+        # A stack op that reaches an eval-breaker check in every lowering
+        # declares it (`eval_break`): a transport fact, which serves the
+        # compiler's line-number propagation only (flowgraph.c)
+        eval_breaker=("CHECK_PERIODIC" in op.name
+                      or (not isinstance(op, parser.LabelDef)
+                          and "eval_break" in op.annotations)),
         needs_this=(variable_used(op, "this_instr")
                     or variable_used(op, "FB_COUNTER")
                     or "pc" in call_properties),

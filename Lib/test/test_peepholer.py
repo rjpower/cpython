@@ -842,6 +842,20 @@ class TestBuglets(unittest.TestCase):
     def test_bpo_45773_pop_jump_if_false(self):
         compile("while True or not spam: pass", "<test>", "exec")
 
+    def test_subscript_augassign_keeps_the_read_across_a_call(self):
+        # `x[f()] += 1` reads x before the call; f rebinds x through
+        # f_locals, and the copy of x that the subscript consumes must
+        # still be that first read, not a second load after the call
+        def s2():
+            x = [10]; a = x
+            def f():
+                sys._getframe(1).f_locals["x"] = [20]
+                return 0
+            x[f()] += 1
+            return a
+        self.assertEqual(s2(), [11])
+        self.assertIn("COPY", [i.opname for i in dis.get_instructions(s2)])
+
 
 class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
 

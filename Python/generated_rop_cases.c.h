@@ -1717,31 +1717,24 @@
             next_instr += 1;
             INSTRUCTION_STATS(ROP_HANDLER_Function_Make);
             PyValue *const home_code = &IR_SLOT(IR_B(ir_word));
+            PyValue held;
             PyValue ret1;
-            PyValue own_code = PyValue_NULL;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-            PyValue held;
             PyValue fn;
+            held = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_code) : _PyFrame_TakeHome(frame, home_code));
             IR_STUB_ESCAPE();
-            ret1 = _PyRop_FunctionNew(frame, home_code);
+            ret1 = _PyRop_FunctionNew(frame, held);
             if (PyValue_IsNull(ret1)) {
                 goto rop_Function_Make_NewFailed;
             }
             fn = ret1;
-            if (!(ir_word & IR_F_LOCAL_B)) {
-                own_code = _PyFrame_TakeHome(frame, home_code);
-            }
             old_dst = *home_dst;
             _PyFrame_WriteHome(frame, home_dst, fn);
             _PyValue_CheckHome(*home_dst);
-            PyValue_XCLOSE(own_code);
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_Function_Make_NewFailed:
-            held = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_code) : _PyFrame_TakeHome(frame, home_code));
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedFunction(held);
             PROCESS_ERROR_AT(RAISE, 19, this_instr);
         }
 

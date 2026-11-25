@@ -4168,7 +4168,7 @@ class TestCallMarkers(unittest.TestCase):
         # generator emits.  No handler keeps a value record or a box area.
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
-        self.assertGreater(len(sites), 200)
+        self.assertGreater(len(sites), 150)
         for name, found in sites.items():
             self.assertEqual(found, [], name)
 

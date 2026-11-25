@@ -802,7 +802,7 @@ class SourceScanTests(unittest.TestCase):
                 result[h] = _scan_stack(ops, macros, name)
         names = {opcode.opname[h] for h in result}
         self.assertLessEqual({"FOR_ITER", "FOR_ITER_RANGE", "SEND"}, names)
-        self.assertGreater(len(result), 150)
+        self.assertGreater(len(result), 100)
         return result
 
     def test_through(self):

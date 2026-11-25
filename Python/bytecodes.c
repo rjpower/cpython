@@ -1,3 +1,9 @@
+// The definitions in this file are inherited register instructions.
+// They remain until their families port to Python/register_ops/*.rop, and
+// they only shrink.  Write new instructions in Python/register_ops/, never
+// here: Lib/test/test_ir_ceiling.py fails on a new name outside that ceiling
+// (Lib/test/ir_handler_ceiling.txt), and a port deletes its lines.
+
 // This file contains instruction definitions.
 // It is read by generators stored in Tools/cases_generator/
 // to generate Python/generated_ir_cases.c.h and others.

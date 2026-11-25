@@ -3027,6 +3027,9 @@ class MoveResolutionTest(unittest.TestCase):
             mon.set_local_events(tool, code, mon.events.INSTRUCTION)
             func(*args())
             mon.set_local_events(tool, code, 0)
+            # The first call to counts() after the traced run holds one extra
+            # reference to an argument; the counts that follow are the baseline
+            self.counts(*args())
             before = self.counts(*args())
             for target in sorted(set(offsets)):
                 def event(code, offset):

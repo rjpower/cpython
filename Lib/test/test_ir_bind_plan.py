@@ -14,7 +14,7 @@ _testinternalcapi = import_module("_testinternalcapi")
 
 
 def handlers(fn):
-    # The call handlers carry a role suffix, as CALL_PY_GENERAL+NO_SELF.
+    # The call handlers carry a role suffix, as Call.Generic+NO_SELF.
     return [name.split("+")[0] for name in ir_handlers(fn)]
 
 
@@ -46,7 +46,7 @@ class TestDefaultsAndKeywords(PlanTestCase):
             return f(x)
         call = reset_code(call)
         self.assertEqual(warm(call, 0), (0, 1, 2))
-        self.assertIn("CALL_PY_GENERAL", handlers(call))
+        self.assertIn("Call.Generic", handlers(call))
 
     def test_keywords_use_the_plan(self):
         def f(x, a=1, b=2):
@@ -456,7 +456,7 @@ class TestGeneratorCallees(PlanTestCase):
         call = reset_code(call)
         g = warm(call, 1)
         self.assertEqual(list(g), [1, 5])
-        self.assertIn("CALL_PY_GENERAL", handlers(call))
+        self.assertIn("Call.Generic", handlers(call))
         self.assertEqual(list(call(2)), [2, 5])
 
     def test_generator_keywords_and_kwargs(self):

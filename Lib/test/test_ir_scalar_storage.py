@@ -15,20 +15,8 @@ with test_tools.imports_under_tool("cases_generator"):
     import analyzer
     import cwriter
     import ir_generator
-    import ir_numbers
     import ir_read_effects
     import lexer
-
-
-class SourceNumbers(ir_numbers.NumberTable):
-    def __init__(self):
-        table = ir_numbers.load_table()
-        super().__init__(numbers=table.numbers, constants=table.constants)
-
-    def number(self, name, low, high, what):
-        if name == "SAMPLE":
-            return low
-        return super().number(name, low, high, what)
 
 
 class ScalarStorageTests(unittest.TestCase):
@@ -43,7 +31,7 @@ class ScalarStorageTests(unittest.TestCase):
             source.write_text("// BEGIN BYTECODES //\n"
                 f"{program}\n"
                 "// END BYTECODES //\n")
-            analysis = analyzer.analyze_files([str(source)], numbers=SourceNumbers())
+            analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
         if scratch_result:
             formats[name] = replace(formats[name], store_dst=False)

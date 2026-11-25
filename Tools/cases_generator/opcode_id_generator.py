@@ -6,7 +6,7 @@ Writes the IDs to opcode_ids.h by default.
 import argparse
 from collections.abc import Sequence
 
-import ir_numbers
+import ir_arms
 
 from analyzer import (
     Analysis,
@@ -28,7 +28,7 @@ DEFAULT_OUTPUT = ROOT / "Include/opcode_ids.h"
 
 def generate_opcode_header(
     filenames: list[str], analysis: Analysis, outfile: TextIO,
-    arms: Sequence[ir_numbers.ArmEntry] = ()
+    arms: Sequence[ir_arms.ArmEntry] = ()
 ) -> None:
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)

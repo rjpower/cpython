@@ -459,6 +459,10 @@ def opnames(func):
     return names | {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
 
 
+def handler_names(func):
+    return [row[0] for row in _testinternalcapi.get_ir(func.__code__, True)]
+
+
 def add3(a, b, c):
     return a + b + c
 
@@ -785,6 +789,7 @@ class InlineFloatTest(unittest.TestCase):
                      "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
                      "BINARY_OP_TRUEDIV_FLOAT", "COMPARE_OP_FLOAT"):
             self.assertIn(name, names)
+        self.assertIn("Add.Float", handler_names(f))
         self.assertNotIn("BINARY_OP_EXTEND", names)
         self.assertEqual(f(3), (1.125, True))
 
@@ -1365,7 +1370,7 @@ class InlineCallTest(unittest.TestCase):
         def f(x, cls):
             return isinstance(x, cls)
         warm(f, 1, int)
-        self.assertIn("CALL_ISINSTANCE", opnames(f))
+        self.assertIn("Call.Generic+NO_SELF", handler_names(f))
         for value in (make_inline(70000), make_inline_float(1.5)):
             for cls in (int, float, object, bool, str, (int, float), (str, bytes),
                         (str, numbers.Number), numbers.Number, numbers.Integral,

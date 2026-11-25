@@ -13,18 +13,6 @@ test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import analyzer
     import ir_error_effects
-    import ir_numbers
-
-
-class SourceNumbers(ir_numbers.NumberTable):
-    def __init__(self):
-        table = ir_numbers.load_table()
-        super().__init__(numbers=table.numbers, constants=table.constants)
-
-    def number(self, name, low, high, what):
-        if name == "SAMPLE":
-            return low
-        return super().number(name, low, high, what)
 
 
 class NativeOwnerEffectTests(unittest.TestCase):
@@ -33,7 +21,7 @@ class NativeOwnerEffectTests(unittest.TestCase):
             source = Path(directory) / "source.c"
             source.write_text(f"// BEGIN BYTECODES //\n{program}\n// END BYTECODES //\n")
             instruction = analyzer.analyze_files(
-                [str(source)], numbers=SourceNumbers()).instructions["SAMPLE"]
+                [str(source)]).instructions["SAMPLE"]
         summary = ir_error_effects.analyze_error_effects(instruction)
         if supported:
             self.assertIsNotNone(summary)

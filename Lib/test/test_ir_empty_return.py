@@ -2,7 +2,6 @@
 
 import marshal
 import sys
-from pathlib import Path
 import types
 import unittest
 
@@ -69,31 +68,6 @@ class EmptyReturnTests(unittest.TestCase):
         finally:
             monitor.register_callback(tool, event, None)
             monitor.free_tool_id(tool)
-
-    def test_checked_source_contract_covers_general_empty_and_instrumented_forms(self):
-        from test import test_tools
-        test_tools.skip_if_missing("cases_generator")
-        with test_tools.imports_under_tool("cases_generator"):
-            import analyzer
-            import ir_generator
-            import ir_metadata_generator
-
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        if not source.is_file():
-            self.skipTest("requires bytecodes.c")
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-        contracts = ir_generator.handler_contracts(analysis, formats)
-        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
-                     "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
-            with self.subTest(handler=name):
-                self.assertEqual(contracts[name].transfer_kind, "_PyIR_TRANSFER_EXIT")
-                self.assertTrue(ir_generator.canonical_frame_transfer_input(
-                    ir_generator.handler_instructions(analysis)[name]))
-        self.assertEqual(ir_metadata_generator.shadow_of("RETURN_VALUE_EMPTY", analysis),
-                         "RETURN_VALUE")
-        self.assertEqual(ir_metadata_generator.shadow_of("INSTRUMENTED_RETURN_VALUE_EMPTY", analysis),
-                         "INSTRUMENTED_RETURN_VALUE")
 
 
 if __name__ == "__main__":

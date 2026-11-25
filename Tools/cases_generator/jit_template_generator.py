@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 import ir_generator
 import ir_leaf
 import ir_contract
-import ir_numbers
+import ir_arms
 from analyzer import analyze_files
 from generators_common import DEFAULT_INPUT, ROOT
 
@@ -2347,7 +2347,7 @@ def write_templates(out, analysis, records) -> None:
     # take the ids that follow the old handlers
     import rop_generator
     arm_templates = rop_generator.template_arm_names()
-    out.write(f"const _PyJitTemplate _PyJit_Templates[{ir_numbers.IR_LIMIT}] = {{\n")
+    out.write(f"const _PyJitTemplate _PyJit_Templates[{ir_arms.IR_LIMIT}] = {{\n")
     for name, i in sorted(made.items(), key=lambda x: x[1]):
         out.write(f"    [{i}] = jit_template_{name},\n")
     for name in arm_templates:

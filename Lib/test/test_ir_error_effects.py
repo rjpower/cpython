@@ -15,18 +15,6 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_contract
     import ir_error_effects
     import ir_generator
-    import ir_numbers
-
-
-class SourceNumbers(ir_numbers.NumberTable):
-    def __init__(self):
-        table = ir_numbers.load_table()
-        super().__init__(numbers=table.numbers, constants=table.constants)
-
-    def number(self, name, low, high, what):
-        if name == "SAMPLE":
-            return low
-        return super().number(name, low, high, what)
 
 
 class ErrorEffectTests(unittest.TestCase):
@@ -82,6 +70,12 @@ class ErrorEffectTests(unittest.TestCase):
             ("original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);",
              "original_opcode = 42;"),
             ("int original_opcode = 0;", "int _Py_call_instrumentation_line = 0; int original_opcode = 0;"),
+            # Feedback is the running handler's: a plain scalar or the
+            # observed opcode does not name it
+            ("_PyFb_HasEntry(opcode)", "_PyFb_HasEntry(oparg)"),
+            ("FB_HEADER_OF(next_instr, opcode)", "FB_HEADER_OF(next_instr, oparg)"),
+            ("_PyFb_HasEntry(opcode)", "_PyFb_HasEntry(original_opcode)"),
+            ("FB_HEADER_OF(next_instr, opcode)", "FB_HEADER_OF(next_instr, original_opcode)"),
         )
         with tempfile.TemporaryDirectory() as directory:
             changed = Path(directory) / "bytecodes.c"
@@ -100,7 +94,7 @@ class ErrorEffectTests(unittest.TestCase):
             filename.write_text("// BEGIN BYTECODES //\n"
                                 f"inst(SAMPLE, ({effect})) {{ {body} }}\n"
                                 "// END BYTECODES //\n")
-            instruction = analyzer.analyze_files([str(filename)], numbers=SourceNumbers()).instructions["SAMPLE"]
+            instruction = analyzer.analyze_files([str(filename)]).instructions["SAMPLE"]
         return instruction, ir_error_effects.analyze_error_effects(instruction)
 
     def test_inert_source_is_not_unknown(self):

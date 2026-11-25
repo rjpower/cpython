@@ -231,7 +231,7 @@ class VerifierTests(unittest.TestCase):
             f.write(textwrap.dedent(source))
             f.write(cases.parser.END_MARKER)
         with cases.handle_stderr():
-            result = cases.analyzer.analyze_files([self.filename], cases.SequentialNumbers())
+            result = cases.analyzer.analyze_files([self.filename])
         for uop in result.uops.values():
             ir_contract.verify_uop(uop, 0, self.table)
         # The handler rules for macros; an inst's inputs come from outside
@@ -272,7 +272,7 @@ class VerifierTests(unittest.TestCase):
             f.write(textwrap.dedent(source))
             f.write("\n" + cases.parser.END_MARKER)
         with cases.handle_stderr():
-            analysis = cases.analyzer.analyze_files([self.filename], cases.SequentialNumbers())
+            analysis = cases.analyzer.analyze_files([self.filename])
         out = io.StringIO()
         ir_generator.generate_ir([self.filename], analysis, out, False)
         return out.getvalue()
@@ -2154,7 +2154,7 @@ class VerifierTests(unittest.TestCase):
                      r"this statement follows IR_INVOKE_CALL, which never returns")
 
     def test_facts_of_an_inputs_field(self):
-        # _CHECK_METHOD_VERSION: facts of callable.im_func, a path from an
+        # A bound-method guard: facts of callable.im_func, a path from an
         # input through declared FIELD rows
         source = """
             op(_OP, (func_version/2, callable: object, null, unused[oparg]
@@ -2196,7 +2196,7 @@ class VerifierTests(unittest.TestCase):
         """)
 
     def test_calling_conventions(self):
-        # _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST: a guard tests a local
+        # A method-descriptor guard tests a local
         # bound to the reader against _PyCallConvention's members, and the
         # members it tests are a fact of the path callable.d_method
         members = "_Py_CALL_FASTCALL|_Py_CALL_VALUE|_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE_O"
@@ -3031,7 +3031,7 @@ class VerifierTests(unittest.TestCase):
         self.assertIn("int call_state = IR_CALL_SELF_STATE(ir_word);", source)
 
     def test_guards_state_facts_of_call_state(self):
-        # _GUARD_NOS_NULL and _GUARD_CALL_SELF_PRESENT
+        # Guards that the call's self operand is NULL or present
         source = """
             op(_OP, (null, unused -- null, unused)) effects() exits(next, miss)
                 %s
@@ -3506,10 +3506,10 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % ("enter", "frame = tstate->current_frame;"),
                      r"OP: _SWITCH switches frames, and _AFTER follows it, but it declares "
                      r"no completing exit")
-        # CALL: _CHECK_PERIODIC_AT_END runs on the native callable's completion
-        call = analysis.instructions["CALL"]
+        # CALL_FUNCTION_EX: _CHECK_PERIODIC_AT_END runs on the native callable's completion
+        call = analysis.instructions["CALL_FUNCTION_EX"]
         parts = [p.name for p in call.parts if isinstance(p, cases.analyzer.Uop)]
-        self.assertEqual(parts[-2:], ["_DO_CALL", "_CHECK_PERIODIC_AT_END"])
+        self.assertEqual(parts[-2:], ["_DO_CALL_FUNCTION_EX", "_CHECK_PERIODIC_AT_END"])
         ir_contract.verify_handler(call)
 
     def test_a_completing_uop_switches_through_a_row(self):
@@ -3541,10 +3541,10 @@ class VerifierTests(unittest.TestCase):
     # F4: inputs the skeleton closes
 
     def test_closed_inputs_are_closed_by_the_skeleton(self):
-        # _CALL_LEN: the inputs stay in their homes; the skeleton closes
+        # A len() call: the inputs stay in their homes; the skeleton closes
         # them after the uop, on next and on raise
         source = """
-            op(_CALL_LEN, (callable: closed, null: closed, arg: closed -- res: owned))
+            op(_OP, (callable: closed, null: closed, arg: closed -- res: owned))
                 effects(runs_python) exits(next, raise)
             {
                 Py_ssize_t len_i = _PyValue_Size(arg);
@@ -3571,7 +3571,7 @@ class VerifierTests(unittest.TestCase):
                 DEAD(x);
             }
         """, r"DEAD\(`x`\) drops an owned value")
-        # and still marks an input already discharged (_CREATE_INIT_FRAME)
+        # and still marks an input already discharged
         self.verify("""
             op(_OP, (x: consumed -- r: moved(x))) effects() exits(next) {
                 r = x;
@@ -3652,7 +3652,7 @@ class VerifierTests(unittest.TestCase):
     # F3: constants, locals and conditionals
 
     def test_constants_and_conditionals(self):
-        # _CALL_ISINSTANCE: a conditional between two constants
+        # An isinstance() result: a conditional between two constants
         source = """
             op(_OP, (-- b: inline exact(PyBool_Type))) effects() exits(next) {
                 b = oparg ? PyValue_True : %s;
@@ -3703,7 +3703,7 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "err > 0", r"on raise, the new owner `res` is still held")
 
     def test_values_through_locals(self):
-        # _CALL_BUILTIN_O: a row's result reaches the output through a local
+        # A builtin call: a row's result reaches the output through a local
         source = """
             op(_OP, (-- res: owned%s)) effects(allocates, raises, reads) exits(next, raise) {
                 PyValue result = %s;
@@ -4548,9 +4548,9 @@ class PinTests(unittest.TestCase):
                 with self.subTest(stub=name):
                     self.assertEqual(text.count("IR_PIN_DEPARTING();"),
                                      1 if self.departs(name) else 0)
-        for name in ("RETURN_VALUE", "YIELD_VALUE", "SEND_VIRTUAL_XFER_DISCARD"):
+        for name in ("YIELD_VALUE", "SEND_VIRTUAL_XFER_DISCARD"):
             self.assertTrue(self.departs(name), name)
-        for name in ("CALL_PY_EXACT_ARGS", "SEND_GEN_XFER_DISCARD", "LOAD_FAST"):
+        for name in ("CALL_KW_PY", "SEND_GEN_XFER_DISCARD", "LOAD_FAST"):
             self.assertFalse(self.departs(name), name)
 
     def test_the_pin_follows_the_last_guard(self):
@@ -4582,13 +4582,13 @@ class PinTests(unittest.TestCase):
                 self.assertEqual(ir_generator.pin_point(entry, self.handlers[entry],
                                                         analysis), len(guards))
 
-    def test_an_unguarded_return_pins_first(self):
-        # RETURN_VALUE has no guard: the pin is before its first uop's body
-        text = self.form("RETURN_VALUE")
+    def test_an_unguarded_yield_pins_first(self):
+        # YIELD_VALUE has no guard: the pin is before its first uop's body
+        text = self.form("YIELD_VALUE")
         self.assertLess(text.index("// _MAKE_HEAP_SAFE\n"), text.index("IR_PIN_DEPARTING();"))
-        self.assertLess(text.index("IR_PIN_DEPARTING();"), text.index("IR_DETACH("))
-        self.assertEqual(ir_generator.pin_point("RETURN_VALUE",
-                                                self.handlers["RETURN_VALUE"], analysis), 0)
+        self.assertLess(text.index("IR_PIN_DEPARTING();"), text.index("// _YIELD_VALUE\n"))
+        self.assertEqual(ir_generator.pin_point("YIELD_VALUE",
+                                                self.handlers["YIELD_VALUE"], analysis), 0)
 
 
 if __name__ == "__main__":

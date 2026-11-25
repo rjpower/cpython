@@ -1824,11 +1824,6 @@
      * heap state (nothing rewrites it), so the row reads nothing: `reads` is removed. */ \
     HELPER(_PyFb_HasEntry, int, (int), \
         ARGS(scalar), SCALAR, EFFECTS()) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_class_call looks up \
-     * __init__ (_PyType_LookupValueAndVersion) and releases it, and lowers it \
-     * (prepare_function_for_inline); specialize_py_call lowers the callee's code. */ \
-    HELPER(_Py_Specialize_Call, void, (PyValue, PyValue, _PyInstr *, int), \
-        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the callee and its \
      * argument tuple and builds the binding plan (_PyBindPlan_Init); no lowering. */ \
     HELPER(_Py_Specialize_CallFunctionEx, void, (PyValue, PyValue, _PyInstr *), \

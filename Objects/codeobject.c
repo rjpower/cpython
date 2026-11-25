@@ -25,6 +25,7 @@
 #include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
+#include "pycore_rop_metadata.h"  // ROP_HANDLER_Return_Empty
 
 #include "clinic/codeobject.c.h"
 #include <stdbool.h>
@@ -1295,8 +1296,7 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
 static int
 semantic_empty_return(int handler)
 {
-    return handler == RETURN_VALUE_EMPTY ||
-           handler == INSTRUMENTED_RETURN_VALUE_EMPTY;
+    return handler == ROP_HANDLER_Return_Empty;
 }
 
 /* This is logical vacancy, independent of physical NULL/readable maps.
@@ -2243,11 +2243,13 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                 break;
             }
             int handler = IR_HANDLER(words[i]);
-            if (semantic_empty_return(handler) || handler == RETURN_VALUE ||
-                handler == INSTRUMENTED_RETURN_VALUE)
-            {
+            if (_PyIR_BaseOpcode(handler) == RETURN_VALUE) {
+                /* The translator selects Return.Empty from its stack depth.
+                 * Facts that every word on the way proves must agree; a word
+                 * without a transfer contract (an arm whose exits give none)
+                 * leaves the path incomplete, and nothing to check against. */
                 int empty = semantic_scratch_absent(image, &work, state);
-                if (semantic_empty_return(handler) && !empty) {
+                if (semantic_empty_return(handler) && !empty && complete) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has an unproved empty return", i);
                     result = -1;

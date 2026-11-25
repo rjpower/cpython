@@ -944,7 +944,7 @@ dis_loop_test_quickened_code = """\
 
 %3d           LOAD_GLOBAL_MODULE       1 (load_test + NULL)
               LOAD_FAST_BORROW         0 (i)
-              CALL_PY_GENERAL          1
+              CALL                     1
               POP_TOP
               JUMP_BACKWARD_{: <6}    16 (to L1)
 
@@ -1359,7 +1359,7 @@ class DisTests(DisTestBase):
   1           LOAD_NAME                0 (str)
               PUSH_NULL
               LOAD_SMALL_INT           1
-              CALL_STR_1               1
+              CALL                     1
               RETURN_VALUE
 """
         co = compile("str(1)", "", "eval")

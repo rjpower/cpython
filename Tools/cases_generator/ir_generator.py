@@ -76,7 +76,7 @@ import io
 from collections.abc import Sequence
 import ir_contract
 import ir_leaf
-import ir_numbers
+import ir_arms
 from ir_records import (
     ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, NEXT,
     IMMEDIATE, LOCAL, MAY_RAISE, OPERANDS, POLY_TABLE_READERS, RELEASE_LIKE,
@@ -175,7 +175,7 @@ LABEL_END_MARKER = "/* END LABELS */"
 def first_ir_only_handler(analysis: Analysis) -> int:
     """The first handler of the IR only.  They follow the pseudo-instructions,
     so that a number names one opcode, pseudo-instruction or handler."""
-    return analysis.numbers.first_ir_only
+    return analysis.first_ir_only
 
 # The fields of the word, and the C expressions that read them in a handler
 # (Include/internal/pycore_ir.h), from ir_word, which every handler receives.
@@ -1291,7 +1291,10 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("LOAD_ATTR", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN", "LOAD_FAST_LOAD_FAST",
+STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
+              "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "INTERPRETER_EXIT",
+              "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
+              "LOAD_FAST_LOAD_FAST",
               "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
               "STORE_FAST_STORE_FAST", "LOAD_FAST", "LOAD_FAST_BORROW",
               "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR", "DELETE_FAST",
@@ -1306,19 +1309,23 @@ IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
 
 
+def ir_only_handler_names(analysis: Analysis) -> list[str]:
+    "The IR-only handlers, in the order that numbers them"
+    return (sorted(analysis.ir_only) + binary_op_handlers(analysis)
+            + list(execution_variants(analysis))
+            + sorted(generator_boundaries(analysis)))
+
+
 def handler_ids(analysis: Analysis) -> dict[str, int]:
-    """Handler index of each handler, by name, from the pinned table.
-    BINARY_OP itself has none: its operations do, and a STACK_ONLY opcode
-    has none."""
+    """Handler index of each handler, by name.  The real opcodes keep their
+    opcode; the IR-only handlers follow the pseudo-instructions in a fixed
+    order, with no holes.  BINARY_OP itself has none: its operations do, and
+    a STACK_ONLY opcode has none."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
-    names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-             + list(execution_variants(analysis))
-             + sorted(generator_boundaries(analysis)))
-    table = analysis.numbers
-    for name in names:
-        ids[name] = table.number(
-            name, table.first_ir_only, ir_numbers.IR_LIMIT, "IR-only handler")
+    names = ir_only_handler_names(analysis)
+    for number, name in enumerate(names, analysis.first_ir_only):
+        ids[name] = number
     return ids
 
 
@@ -1368,7 +1375,7 @@ def result_offset(inst: Instruction, outputs: list[Entry]) -> int | None:
     """window_dst(), or for a window-style instruction that leaves its result
     in the slot of an input, the offset of that slot: the output passes the
     input through, and a uop reassigns it other than from an input (as
-    _CALL_BUILTIN_FAST puts its result where the callable was)."""
+    _CALL_KW_NON_PY puts its result where the callable was)."""
     j = window_dst(outputs)
     if j is not None:
         return j
@@ -2475,7 +2482,6 @@ class SlotLayout:
     temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
-    native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
     call_results: frozenset[str] = frozenset()  # names of a call's outputs
     # Window: the slot, above the inputs', whose result goes to a dst that
@@ -3068,10 +3074,7 @@ class IRStack(Stack):
             role = self.call_input_role(PointerOffset(p, (), ()))
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
-            if self.layout.native_entry:
-                out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
-            else:
-                out.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
+            out.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
             if role is not None:
                 out.emit("}\n")
             self.take_field(self.layout.in_fields[p])
@@ -3081,9 +3084,8 @@ class IRStack(Stack):
             raise StackError(f"no variable holds the view of the input "
                              f"in {f} when the handler takes it")
         field = self.layout.in_fields[p]
-        macro = "IR_DETACH_NATIVE" if self.layout.native_entry else "IR_DETACH"
         consume = ("PyValue_NULL" if field in self.layout.local_fields else
-                   f"{macro}({FIELD_ARGS[field]}, {names[-1]})")
+                   f"IR_DETACH({FIELD_ARGS[field]}, {names[-1]})")
         out.emit(f"{owner_name(field)} = {consume};\n")
         self.take_field(field)
 
@@ -5023,7 +5025,7 @@ class IREmitter(Emitter):
                                  for t in stmt.contents)
         if inst is not None and uses_generic_call(inst):
             transaction_marker |= any(t.text in {
-                "_Py_Specialize_Call", "_Py_Specialize_CallKw",
+                "_Py_Specialize_CallKw",
                 "_Py_Specialize_CallFunctionEx"} for t in stmt.contents)
         previous = self.cannot_escape
         self.statement = stmt
@@ -5917,22 +5919,19 @@ def oparg_source(inst: Instruction, fmt: IRFormat, operation: str | None) -> str
 def call_shape(name: str, inst: Instruction, fmt: IRFormat) -> CallShape | None:
     "How the window of a call handler is a call, or None"
     call_family = inst.family.name if inst.family is not None else inst.name
-    call_family = {"INSTRUMENTED_CALL": "CALL",
-                   "INSTRUMENTED_CALL_KW": "CALL_KW"}.get(call_family, call_family)
+    call_family = {"INSTRUMENTED_CALL_KW": "CALL_KW"}.get(call_family, call_family)
     if not fmt.window or call_family not in (
-            "CALL", "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX"):
+            "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX"):
         return None
     inputs, _ = external_io(inst)
     count = " + ".join(f"({item.size or '1'})" for item in inputs)
     kind = ("CALL_EX" if call_family in
             ("CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX") else
-            "CALL_KEYWORDS" if call_family == "CALL_KW" else
-            "CALL_VECTOR")
+            "CALL_KEYWORDS")
     # call_run_*() derives the operand count from its kind
     fixed = sum(1 for item in inputs if not item.size)
     arrays = [item.size for item in inputs if item.size]
-    expected = {"CALL_VECTOR": (2, ["oparg"]),
-                "CALL_KEYWORDS": (3, ["oparg"]),
+    expected = {"CALL_KEYWORDS": (3, ["oparg"]),
                 "CALL_EX": (4, [])}[kind]
     if uses_generic_call(inst) and (fixed, arrays) != expected:
         raise analysis_error(
@@ -5943,8 +5942,7 @@ def call_shape(name: str, inst: Instruction, fmt: IRFormat) -> CallShape | None:
     if polls_at_end(name, inst):
         flags.append("CALL_PERIODIC")
     return CallShape(kind,
-                     {"CALL_VECTOR": "call_run_vector",
-                      "CALL_KEYWORDS": "call_run_keywords",
+                     {"CALL_KEYWORDS": "call_run_keywords",
                       "CALL_EX": "call_run_ex"}[kind],
                      "(" + (" | ".join(flags) or "0") + ")",
                      "oparg" if inst.properties.oparg else "0")
@@ -6072,7 +6070,6 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
     call = call_shape(name, inst, fmt)
     variant = EXECUTION_VARIANTS.get(name)
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
-                     native_entry=native_entry_input_contract(inst),
                      call_kind=call.kind if call is not None else None,
                      call_results=(frozenset(o.item.name for o in outputs)
                                    if call is not None else frozenset()))
@@ -6237,11 +6234,8 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
                if t.text == "IR_INVOKE_GUARDED_PYTHON_CALL"]
     if not markers:
         return
-    keyword = inst.name == "CALL_KW_PY"
-    expected = ["_CHECK_PEP_523",
-                "_CHECK_FUNCTION_VERSION_KW" if keyword else "_CHECK_FUNCTION_VERSION",
-                "_CHECK_RECURSION_REMAINING",
-                "_PY_FRAME_KW_GUARDED" if keyword else "_PY_FRAME_GENERAL_GUARDED",
+    expected = ["_CHECK_PEP_523", "_CHECK_FUNCTION_VERSION_KW",
+                "_CHECK_RECURSION_REMAINING", "_PY_FRAME_KW_GUARDED",
                 "_SAVE_RETURN_SLOT", "_PUSH_FRAME"]
     if len(markers) != 1 or [p.name for p in parts] != expected:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
@@ -6252,16 +6246,13 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         return [(item.name, item.peek, item.size) for item in items]
     guard_shapes = [([], []),
                     ([("callable", True, ""), ("unused", True, ""),
-                      ("unused", True, "oparg")],
+                      ("unused", True, "oparg"), ("unused", True, "")],
                      [("callable", True, ""), ("unused", True, ""),
-                      ("unused", True, "oparg")]),
+                      ("unused", True, "oparg"), ("unused", True, "")]),
                     ([], [])]
     invoke_shape = ([("callable", False, ""), ("self_or_null", False, ""),
-                     ("args", False, "oparg")], [("new_frame", False, "")])
-    if keyword:
-        guard_shapes[1][0].append(("unused", True, ""))
-        guard_shapes[1][1].append(("unused", True, ""))
-        invoke_shape[0].append(("kwnames", False, ""))
+                     ("args", False, "oparg"), ("kwnames", False, "")],
+                    [("new_frame", False, "")])
     contracts = [ir_contract.declared_contract(p) for p in prefix]
     facts: set = set()
     reasons = set()
@@ -6270,13 +6261,12 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         for site in site_tokens(part):
             if site.text in GUARD_TOKENS:
                 reasons.add(ir_contract.record_guard_facts(part, site, ())[1])
-    if (inst.name not in ("CALL_PY_GENERAL", "CALL_KW_PY") or
+    if (inst.name != "CALL_KW_PY" or
             not fmt.window or not fmt.store_dst
             or fmt.field_of(ROLE_BASE) is None or fmt.field_of(ROLE_DST) is None
-            or fmt.group != ("CALL_KW" if keyword else "CALL")
+            or fmt.group != "CALL_KW"
             or not inst.properties.oparg
-            or [(i.size) for i in inputs] !=
-                (["", "", "oparg", ""] if keyword else ["", "", "oparg"])
+            or [(i.size) for i in inputs] != ["", "", "oparg", ""]
             or len(outputs) != 1 or outputs[0].item.size
             or [(shape(p.stack.inputs), shape(p.stack.outputs))
                 for p in prefix] != guard_shapes
@@ -6962,32 +6952,9 @@ def canonical_body_tokens(part: Uop) -> list[str]:
             if token.kind != "COMMENT"]
 
 
-def native_entry_input_contract(inst: Instruction) -> bool:
-    if inst.name != "INTERPRETER_EXIT":
-        return False
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    expected = """{
-        assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
-        assert(_PyFrame_IsIncomplete(frame));
-        tstate->current_frame = frame->previous;
-        assert(!_PyErr_Occurred(tstate));
-        PyValue result = TAKE(retval);
-        INPUTS_DEAD();
-        assert(frame == &IR_ACTIVATION()->entry.frame);
-        LLTRACE_RESUME_FRAME();
-        return result;
-    }"""
-    if (len(parts) != 1 or len(inst.parts) != 1 or
-            [(item.name, item.peek, item.size) for item in parts[0].stack.inputs] !=
-                [("retval", False, "")] or parts[0].stack.outputs or
-            statement_shape(parts[0].body) != statement_shape(
-                Parser(expected, "<native entry ownership>").block())):
-        raise analysis_error("native interpreter exit needs its checked contract", inst.where)
-    return True
-
 
 def canonical_frame_transfer_input(inst: Instruction) -> bool:
-    """A return or yield transfers a canonical home owner unchanged.
+    """A yield transfers a canonical home owner unchanged.
 
     Fail closed to ordinary publication if the checked uop chain changes.
     Native/SEND results do not acquire this fact from their handler name.
@@ -7045,51 +7012,7 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
                     and canonical_body_tokens(transfer)
                     == [token.text for token in tokenize(expected_yield)]):
                 return True
-    if (len(parts) != 2 or parts[0].name not in {
-            "_MAKE_HEAP_SAFE", "_RETURN_VALUE_EVENT"} or
-            parts[1].name not in {"_RETURN_VALUE", "_RETURN_VALUE_EMPTY"}):
-        return False
-    prefix = [t.text for t in parts[0].body.tokens() if t.kind != "COMMENT"]
-    body = [t.text for t in parts[1].body.tokens() if t.kind != "COMMENT"]
-    expected_body = """{
-        assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-        PyValue temp = retval;
-        DEAD(retval);
-        SAVE_STACK();
-        DTRACE_FUNCTION_RETURN();
-        _Py_LeaveRecursiveCallPy(tstate);
-        _PyInterpreterFrame *dying = frame;
-        int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
-        frame = tstate->current_frame = dying->previous;
-        if (generator_return) {
-            IR_FINISH_GENERATOR_RETURN(temp, dying);
-        }
-        temp = RETIRE_HELPER(tstate, dying, temp);
-        RELOAD_STACK();
-        IR_RETURN_TO_CALLER(temp, generator_return);
-    }"""
-    if parts[1].name == "_RETURN_VALUE_EMPTY":
-        expected_body = expected_body.replace(
-            "IR_FINISH_GENERATOR_RETURN(", "IR_FINISH_GENERATOR_RETURN_EMPTY(")
-    expected_body = expected_body.replace("RETIRE_HELPER", (
-        "_PyEval_FrameClearAndPopGeneralWithResult"
-        if parts[1].name == "_RETURN_VALUE"
-        else "_PyEval_RetireThreadFrameWithResult"))
-    if body != [t.text for t in tokenize(expected_body)]:
-        return False
-    if parts[0].name == "_MAKE_HEAP_SAFE":
-        return prefix == ["{", "taken", "=", "TAKE", "(", "value", ")", ";", "}"]
-    expected_event = """{
-        PyValue held = TAKE(val);
-        int err = _Py_call_instrumentation_arg(
-            tstate, PY_MONITORING_EVENT_PY_RETURN, frame, this_instr, held);
-        if (err) {
-            PyValue_CLOSE(held);
-            ERROR_IF(true);
-        }
-        taken = held;
-    }"""
-    return prefix == [t.text for t in tokenize(expected_event)]
+    return False
 
 
 def current_operation_preserves_scratch(inst: Instruction, fmt: IRFormat, source) -> bool:
@@ -7179,7 +7102,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
                                    "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
@@ -7474,8 +7397,6 @@ EDGE_TWINS = {
 # Python/ceval.c, and the twin goes on to the base's handler with the same
 # word.  The event is the twin's first part in the DSL.
 EVENT_TWINS = {
-    "INSTRUMENTED_RETURN_VALUE": ("ir_event_return", "RETURN_VALUE"),
-    "INSTRUMENTED_RETURN_VALUE_EMPTY": ("ir_event_return", "RETURN_VALUE_EMPTY"),
     "INSTRUMENTED_YIELD_VALUE": ("ir_event_yield", "YIELD_VALUE"),
     "INSTRUMENTED_YIELD_DELEGATED": ("ir_event_yield", "YIELD_DELEGATED"),
     "INSTRUMENTED_END_FOR": ("ir_event_end_for", "END_FOR"),
@@ -7844,7 +7765,7 @@ _PyIR_StubWindowDropsLast(const PyValue *window, int n)
 
 def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
                       stubs: dict[str, str], outfile: TextIO,
-                      arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
+                      arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
     """The stubs of the planned shared arms (their texts in stubs, by
     function), the family stubs that a miss calls, and the plan table that
     Python/jit.c reads"""
@@ -7872,7 +7793,7 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
         for stub in sorted({s for s in (arm.stub, arm.generic) if s}):
             outfile.write(f"static int {stub}(PyThreadState *, "
                           "_PyInterpreterFrame *, _PyIRWord *);\n")
-    outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_numbers.IR_LIMIT}] = {{\n")
+    outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_arms.IR_LIMIT}] = {{\n")
     for i, arm in sorted(by_arm.items()):
         stub = f"(const void *){arm.stub}" if arm.stub else "NULL"
         generic = f"(const void *){arm.generic}" if arm.generic else "NULL"
@@ -8053,7 +7974,7 @@ def label_forms(analysis: Analysis, formats: dict[str, IRFormat],
 
 
 def arm_ids(analysis: Analysis,
-            arms: Sequence[ir_numbers.ArmEntry]) -> dict[int, ir_numbers.ArmEntry]:
+            arms: Sequence[ir_arms.ArmEntry]) -> dict[int, ir_arms.ArmEntry]:
     """The register instruction arms by handler id: they follow the old
     handlers, in definition order (Python/register_ops)"""
     num_handlers(analysis, arms)
@@ -8061,14 +7982,14 @@ def arm_ids(analysis: Analysis,
     return {first + arm.index: arm for arm in arms if arm.emitted}
 
 
-def form_table(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> str:
+def form_table(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ()) -> str:
     """The function form of every handler number, as opcode_targets has its
     label: ir_handler_forms[IR_HANDLER(word)] runs the word"""
     ids = handler_ids(analysis)
     by_index = {i: name for name, i in ids.items()}
     by_arm = arm_ids(analysis, arms)
-    lines = [f"static const _PyIRForm ir_handler_forms[{ir_numbers.IR_LIMIT}] = {{\n"]
-    for i in range(ir_numbers.IR_LIMIT):
+    lines = [f"static const _PyIRForm ir_handler_forms[{ir_arms.IR_LIMIT}] = {{\n"]
+    for i in range(ir_arms.IR_LIMIT):
         if i in by_arm:
             lines.append(f"    [{i}] = ir_run_{by_arm[i].name},\n")
             continue
@@ -8078,7 +7999,7 @@ def form_table(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> 
     return "".join(lines)
 
 
-def form_declarations(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> str:
+def form_declarations(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ()) -> str:
     "Every form, declared before the forms, which call one another"
     ids = handler_ids(analysis)
     names = sorted({generator_word_entry(name, analysis) for name in ids}
@@ -8089,7 +8010,7 @@ def form_declarations(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = 
                  f"int {BINARY_OP_OPERAND});\n")
     lines += [f"static _PyIRTransfer ir_{name}({FORM_PARAMETERS});\n"
               for name in entry_labels(analysis)]
-    lines.append(f"static const _PyIRForm ir_handler_forms[{ir_numbers.IR_LIMIT}];\n")
+    lines.append(f"static const _PyIRForm ir_handler_forms[{ir_arms.IR_LIMIT}];\n")
     return "".join(lines)
 
 
@@ -8663,10 +8584,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             if (flag) {{ JUMPTO(oparg); }}
         }}"""
         return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(is_none, jump) else unknown
-    if (inst.name in {"RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
-                      "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"} and
-            canonical_frame_transfer_input(inst)):
-        return "_PyIR_TRANSFER_EXIT"
     return unknown
 
 
@@ -8999,7 +8916,6 @@ def handler_effects(record: OperationRecord) -> list[str]:
             ("_PyIR_POLLS", record.polls),
             ("_PyIR_PURE", bool(record.uops) and all(uop.pure for uop in record.uops)),
             ("_PyIR_SPECIALIZES", record.specializes),
-            ("_PyIR_NATIVE_ONLY", record.layout.native_entry),
             ("_PyIR_LEARNED_ONLY", record.reads_poly_table)):
         if present:
             bits.append(bit)
@@ -9068,7 +8984,8 @@ def handler_contracts(analysis: Analysis,
             observer_outcome=observer_outcomes(inst, fmt),
             transfer_kind=normal_transfer_kind(inst, fmt),
             ownership_events=programs.get(name, ()),
-            word_flags=call_role_flags(name, inst),
+            # A stack-only op has no handler, so no word admits flags
+            word_flags=() if name in STACK_ONLY else call_role_flags(name, inst),
             abrupt_prefix=abrupt.get(name, False),
             abrupt_operands=operand_abrupt.get(name, False),
             error_routes=error_routes.get(name, ()),
@@ -9278,7 +9195,7 @@ def check_no_addressable_locals(analysis: Analysis) -> None:
 
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
                 lines: bool, stubs_outfile: TextIO | None = None,
-                arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
+                arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
     formats = compute_formats(analysis)
     check_no_addressable_locals(analysis)
     checkpoints = {}
@@ -9315,26 +9232,26 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 
 
 def num_old_handlers(analysis: Analysis) -> int:
-    "One past the highest pinned number, with the reserved ranges"
-    return analysis.numbers.num_old_handlers
+    "One past the last IR-only handler; the stack opcodes number below them"
+    return analysis.first_ir_only + len(ir_only_handler_names(analysis))
 
 
-def num_handlers(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry]) -> int:
+def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:
     """Every handler id: the old handlers, the register instruction arms and
     the observed wrappers of the arms, which follow them.  The ids must fit
     the handler field, IR_LIMIT of them."""
     total = num_old_handlers(analysis) + len(arms)
-    if total > ir_numbers.IR_LIMIT:
-        raise ir_numbers.NumberError(
+    if total > ir_arms.IR_LIMIT:
+        raise ir_arms.HandlerLimitError(
             f"{num_old_handlers(analysis)} old handlers and {len(arms)} arms and "
-            f"wrappers need {total} handler ids, past the {ir_numbers.IR_LIMIT} "
+            f"wrappers need {total} handler ids, past the {ir_arms.IR_LIMIT} "
             "that a handler field holds")
     return total
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO,
-                        arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
+                        arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
     """The tables of the evaluator.  Python/ceval_generator.h includes this
     file at file scope with IR_GEN_TABLES defined, for the generator transfer
     tables, which give the kind of transfer that a word's handler makes (the
@@ -9377,9 +9294,9 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every
     # id the mask yields; ids past n are UNKNOWN_OPCODE.
     by_index = {i: name for name, i in ids.items()}
-    out.emit(f"static void *const opcode_targets[{ir_numbers.IR_LIMIT}] = {{\n")
+    out.emit(f"static void *const opcode_targets[{ir_arms.IR_LIMIT}] = {{\n")
     by_arm = arm_ids(analysis, arms)
-    for i in range(ir_numbers.IR_LIMIT):
+    for i in range(ir_arms.IR_LIMIT):
         if i in by_arm:
             out.emit(f"[{i}] = &&TARGET_{by_arm[i].name},\n")
             continue

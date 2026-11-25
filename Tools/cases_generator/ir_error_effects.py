@@ -30,6 +30,9 @@ class Kind(Enum):
     LINE_INFO = auto()
     FEEDBACK = auto()
     OBSERVED_OPCODE = auto()
+    # The handler that a word of an observed opcode runs (ORIGINAL_HANDLER):
+    # its format, and so its feedback layout, is the handler's
+    HANDLER = auto()
     SITE_INDEX = auto()
     VOID = auto()
     NULL = auto()
@@ -139,10 +142,10 @@ SIGNATURES = {
     "_PyCode_GetOriginalOpcode": _signature((Kind.LINE_INFO, Kind.SITE_INDEX),
                                             Kind.OBSERVED_OPCODE),
     "INSTR_OFFSET_OF": _signature((Kind.INSTR,), Kind.SITE_INDEX),
-    "_PyFb_HasEntry": _signature((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
-    "FB_HEADER_OF": _signature((Kind.INSTR, Kind.OBSERVED_OPCODE), Kind.FEEDBACK),
+    "_PyFb_HasEntry": _signature((Kind.HANDLER,), Kind.SCALAR),
+    "FB_HEADER_OF": _signature((Kind.INSTR, Kind.HANDLER), Kind.FEEDBACK),
     "PAUSE_ADAPTIVE_COUNTER": _signature((Kind.FEEDBACK,), Kind.VOID),
-    "ORIGINAL_HANDLER": _signature((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
+    "ORIGINAL_HANDLER": _signature((Kind.OBSERVED_OPCODE,), Kind.HANDLER),
     "PRE_DISPATCH_GOTO": _signature((), Kind.VOID),
     # The baseline JIT's warm-up event (RESUME_JIT, JUMP_BACKWARD_JIT), after
     # the word's effect: the frame may go on in its code's unit at the next
@@ -202,7 +205,7 @@ HELPERS.update({
 SCALAR_CONSTANTS = {"_PY_EVAL_EVENTS_MASK", "RESUME_OPARG_LOCATION_MASK",
                     "RESUME_AFTER_YIELD_FROM", "PY_MONITORING_EVENT_PY_START",
                     "PY_MONITORING_EVENT_PY_RESUME", "NUM_COMMON_CONSTANTS"}
-SCALAR_KINDS = {Kind.SCALAR, Kind.OBSERVED_OPCODE, Kind.SITE_INDEX}
+SCALAR_KINDS = {Kind.SCALAR, Kind.OBSERVED_OPCODE, Kind.HANDLER, Kind.SITE_INDEX}
 VALUE_CONSTANTS = {"PyValue_None", "PyValue_True", "PyValue_False"}
 
 

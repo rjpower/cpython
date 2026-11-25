@@ -79,10 +79,6 @@ class HandlerRecordTests(unittest.TestCase):
                 # A close whose deallocator cannot run Python only frees
                 ("_POP_TOP_INT", {WRITES_HEAP}),
                 ("_POP_TOP", {MAY_RELEASE}),
-                ("_INIT_CALL_PY_EXACT_ARGS", {ALLOCATES, READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
-                # The expansion only sets CALL_EXPANDED: the push reads the
-                # method's function and receiver after the last guard
-                ("_INIT_CALL_BOUND_METHOD_EXACT_ARGS", set()),
                 ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
                 ("_LIST_APPEND", set(EFFECTS))):
             with self.subTest(uop=name):
@@ -101,8 +97,6 @@ class HandlerRecordTests(unittest.TestCase):
                 ("BINARY_OP_ADD_FLOAT", "_BINARY_OP_ADD_FLOAT",
                  {("EXACT_TYPE", "PyFloat_Type")}),
                 ("COMPARE_OP_INT", "_COMPARE_OP_INT", {("EXACT_TYPE", "PyBool_Type")}),
-                ("CALL_LEN", "_CALL_LEN", {integer}),
-                ("CALL_ISINSTANCE", "_CALL_ISINSTANCE", {("EXACT_TYPE", "PyBool_Type")}),
                 ("TO_BOOL_STR", "_TO_BOOL_STR", {("EXACT_TYPE", "PyBool_Type")}),
                 # A rich comparison may return any object
                 ("COMPARE_OP", "_COMPARE_OP", set())):
@@ -145,9 +139,8 @@ class HandlerRecordTests(unittest.TestCase):
         # so the generator's guards precede it (contract87 TR)
         self.assertNotHasAttr(ir_records, "GUARD_ORDER_EXCEPTIONS")
         instructions = ir_generator.handler_instructions(analysis)
-        for name in ("FOR_ITER_GEN", "SEND_GEN", "CALL_BOUND_METHOD_EXACT_ARGS",
-                     "CALL_BOUND_METHOD_GENERAL", "CALL_EX_PY", "CALL_BUILTIN_FAST",
-                     "CALL_METHOD_DESCRIPTOR_FAST"):
+        for name in ("FOR_ITER_GEN", "SEND_GEN", "CALL_KW_BOUND_METHOD",
+                     "CALL_KW_PY", "CALL_EX_PY"):
             with self.subTest(handler=name):
                 parts = [p for p in instructions[name].parts
                          if isinstance(p, cases.analyzer.Uop)]
@@ -227,7 +220,7 @@ class GeneratorTests(unittest.TestCase):
                                cases.parser.END_MARKER)
         with cases.handle_stderr():
             analysis = cases.analyzer.analyze_files(
-                [str(self.source)], cases.SequentialNumbers())
+                [str(self.source)])
         output = io.StringIO()
         ir_generator.generate_ir([str(self.source)], analysis, output, False)
         return output.getvalue()

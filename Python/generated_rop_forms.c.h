@@ -2728,24 +2728,44 @@ ir_run_NamespaceReadFrom_Mapping(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceReadFrom_Mapping);
     PyValue *const home_mapping = &IR_SLOT(IR_B(ir_word));
-    PyValue d;
-    PyValue ret1;
+    _PyRopAnchors a;
+    _PyStatusValue ret1;
+    PyValue own_mapping = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
     PyValue z;
-    d = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_mapping) : _PyFrame_TakeHome(frame, home_mapping));
+    a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}});
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_LoadFromMapping(tstate, frame, d, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
-    if (PyValue_IsNull(ret1)) {
+    ret1 = _PyRop_LoadFromDict(tstate, _PyRop_AnchorArg(&a, 0), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    if (ret1.status == 0) {
+        goto rop_NamespaceReadFrom_Mapping_Fallback;
+    }
+    if (ret1.status < 0) {
         goto rop_NamespaceReadFrom_Mapping_Failed;
     }
-    z = ret1;
+    z = ret1.value;
+    rop_NamespaceReadFrom_Mapping_Done:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_mapping = _PyFrame_TakeHome(frame, home_mapping);
+    }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
+    _PyRop_CloseAnchors(&a);
+    PyValue_XCLOSE(own_mapping);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
+    rop_NamespaceReadFrom_Mapping_Fallback:
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_LoadGlobalOrBuiltin(frame, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_NamespaceReadFrom_Mapping_Done;
+    }
     rop_NamespaceReadFrom_Mapping_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}});
     PROCESS_ERROR_AT(RAISE, 41, this_instr);
 }
 

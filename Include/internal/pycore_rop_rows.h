@@ -246,8 +246,9 @@ enum { IMPORT_EAGER, IMPORT_POLICY, IMPORT_LAZY };
 /* Python/ceval.c: the namespace rows (Python/register_ops/namespaces.rop) */
 PyAPI_FUNC(PyValue) _PyRop_LoadLocals(PyThreadState *, _PyInterpreterFrame *);
 PyAPI_FUNC(PyValue) _PyRop_LoadBuildClass(PyThreadState *, _PyInterpreterFrame *);
-PyAPI_FUNC(PyValue) _PyRop_LoadFromMapping(PyThreadState *, _PyInterpreterFrame *,
-                                           PyValue, PyObject *);
+PyAPI_FUNC(_PyStatusValue) _PyRop_LoadFromDict(PyThreadState *, PyValueBorrow,
+                                               PyObject *);
+PyAPI_FUNC(PyValue) _PyRop_LoadGlobalOrBuiltin(_PyInterpreterFrame *, PyObject *);
 PyAPI_FUNC(int) _PyRop_StoreName(PyThreadState *, _PyInterpreterFrame *,
                                  PyObject *, PyValue);
 PyAPI_FUNC(int) _PyRop_DeleteName(PyThreadState *, _PyInterpreterFrame *, PyObject *);

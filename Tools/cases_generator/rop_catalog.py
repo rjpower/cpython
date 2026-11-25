@@ -606,6 +606,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("bool_out", CReturn.bool,
           COutcome(CTest.false, _RES, (CSource.out,), False, "fits"),
           COutcome(CTest.true, _RES, (CSource.out,), False, "overflow")),
+    # _PyStatusValue of an optional lookup: found(value) for a positive
+    # status, missing() for zero, raised for a negative one
+    _conv("status_optional", CReturn.status_value,
+          COutcome(CTest.positive, _RES, (_VAL,), False),
+          COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,
           COutcome(CTest.zero, _RES, (_VAL,), False),

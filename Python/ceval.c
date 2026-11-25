@@ -2832,22 +2832,19 @@ _PyRop_LoadBuildClass(PyThreadState *tstate, _PyInterpreterFrame *frame)
     return found.value;
 }
 
-PyValue
-_PyRop_LoadFromMapping(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       PyValue mapping, PyObject *name)
+_PyStatusValue
+_PyRop_LoadFromDict(PyThreadState *tstate, PyValueBorrow mapping,
+                    PyObject *name)
 {
     assert(PyValue_IsObject(mapping));
-    PyObject *namespace = PyValue_AsKnownObjectBorrow(mapping);
-    // The mapping is closed after the lookup, which can run code
-    _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
-    PyValue_CLOSE(mapping);
-    if (found.status < 0) {
-        return PyValue_NULL;
-    }
-    if (found.status == 0) {
-        return value_load_global(frame->f_globals, frame->f_builtins, name);
-    }
-    return found.value;
+    return value_load_from_dict(tstate, PyValue_AsKnownObjectBorrow(mapping),
+                                name);
+}
+
+PyValue
+_PyRop_LoadGlobalOrBuiltin(_PyInterpreterFrame *frame, PyObject *name)
+{
+    return value_load_global(frame->f_globals, frame->f_builtins, name);
 }
 
 /* A NULL value deletes: _PyEval_StoreName's convention */

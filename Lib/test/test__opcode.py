@@ -122,7 +122,6 @@ class SpecializationStatsTests(unittest.TestCase):
             for op in opcode._specializations
             if opcode._inline_cache_entries.get(op, 0)
         ]
-        self.assertIn('load_attr', specialized_opcodes)
         self.assertIn('binary_op', specialized_opcodes)
 
         stats = _opcode.get_specialization_stats()
@@ -130,14 +129,14 @@ class SpecializationStatsTests(unittest.TestCase):
             self.assertIsInstance(stats, dict)
             self.assertCountEqual(stats.keys(), specialized_opcodes)
             self.assertCountEqual(
-                stats['load_attr'].keys(),
+                stats['binary_op'].keys(),
                 stat_names + ['failure_kinds'])
             for sn in stat_names:
-                self.assertIsInstance(stats['load_attr'][sn], int)
+                self.assertIsInstance(stats['binary_op'][sn], int)
             self.assertIsInstance(
-                stats['load_attr']['failure_kinds'],
+                stats['binary_op']['failure_kinds'],
                 tuple)
-            for v in stats['load_attr']['failure_kinds']:
+            for v in stats['binary_op']['failure_kinds']:
                 self.assertIsInstance(v, int)
 
 

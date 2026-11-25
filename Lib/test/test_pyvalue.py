@@ -201,7 +201,7 @@ class PyValueTests(unittest.TestCase):
             left - right
 
         cases = (
-            ("BINARY_OP_ADD_INT", (add_local, add_temporary, add_discard), (
+            ("Add.Int", (add_local, add_temporary, add_discard), (
                 (low, 0, low), (high, 0, high), (low, -1, low - 1),
                 (high, 1, high + 1), (low, low, 2 * low),
                 (high, high, 2 * high), (low, high, -1), (1, -1, 0),
@@ -259,7 +259,7 @@ class PyValueTests(unittest.TestCase):
         for _ in range(100):
             self.assertEqual(add(3, 2), 5)
             self.assertEqual(subtract(3, 2), 1)
-        for function, handler in ((add, "BINARY_OP_ADD_INT"),
+        for function, handler in ((add, "Add.Int"),
                                   (subtract, "BINARY_OP_SUBTRACT_INT")):
             self.assertIn(handler, [word[0] for word in
                           capi.get_ir(function.__code__, True)])
@@ -283,7 +283,7 @@ class PyValueTests(unittest.TestCase):
             return low - one
 
         for function, expected, handler in (
-                (add, high + 1, "BINARY_OP_ADD_INT"),
+                (add, high + 1, "Add.Int"),
                 (subtract, low - 1, "BINARY_OP_SUBTRACT_INT")):
             for _ in range(100):
                 self.assertEqual(function(), expected)

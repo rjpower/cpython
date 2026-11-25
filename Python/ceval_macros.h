@@ -1148,15 +1148,6 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
 #define IR_FB_ARG(FB, F) \
     (assert((F) != IR_FB_SHARED), (int)((_PyFbHeader *)(FB))->arg)
 
-/* A specialisation of BINARY_OP deoptimises to the generic body, run with
- * the operation that its entry, at index F, records. */
-#define IR_DEOPT_BINARY_OP(F) \
-    do { \
-        binary_op_operation = (int)((_PyFbHeader *)IR_FB(F))->arg; \
-        next_instr = this_instr; \
-        goto LABEL_binary_op; \
-    } while (0)
-
 /* On entry to a frame at next_instr, its instr_ptr: if the word there is a
  * RESUME that would do nothing, because the eval breaker has nothing pending
  * and the code's instrumentation is current, start at the word after it, as

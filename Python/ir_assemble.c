@@ -626,15 +626,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     if (opcode == RESUME && _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
         return RESUME_JIT;
     }
-    if (opcode == BINARY_OP) {
-        // NB_SUBSCR is the GetItem family's, never a BINARY_OP handler
-        if (oparg >= NB_SUBSCR) {
-            PyErr_Format(PyExc_SystemError,
-                         "invalid BINARY_OP operation %d", oparg);
-            return ERROR;
-        }
-        return _PyIR_BINARY_OP_FIRST + oparg;
-    }
     return opcode;
 }
 
@@ -694,16 +685,12 @@ enum {
 
 /* Whether the handler needs its entry for its operand: COMPARE_OP and
  * CONTAINS_OP, and the fused words, which keep the operation of their compare
- * and the sense of their jump there.  BINARY_OP has a handler per operation,
- * which runs at entry 0. */
+ * and the sense of their jump there. */
 static int
 needs_entry(int handler)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    return (fmt->imm == _PyIR_LOC_FBARG
-            && !(handler >= _PyIR_BINARY_OP_FIRST
-                 && handler < _PyIR_BINARY_OP_FIRST + NB_SUBSCR))
-           || (fmt->flags & _PyIR_FUSED);
+    return fmt->imm == _PyIR_LOC_FBARG || (fmt->flags & _PyIR_FUSED);
 }
 
 /* The arg of the entry of a fused word: the operation of the compare and
@@ -747,16 +734,16 @@ unfuse(_PyRegCfg *cfg, _PyRegOp *op)
 
 /* The member of IntrinsicId (Intrinsic.Compare's id) that does what a
  * COMPARE_OP or CONTAINS_OP of oparg does, for a site that gets no entry:
- * the compiler's number + 11 (functions.rop). */
+ * the compiler's number + 10 (functions.rop). */
 static int
 fallback_intrinsic(int opcode, int oparg)
 {
     if (opcode == CONTAINS_OP) {
-        return INTRINSIC_CONTAINS_OP + (oparg & 1) + 11;
+        return INTRINSIC_CONTAINS_OP + (oparg & 1) + 10;
     }
     assert(opcode == COMPARE_OP);
     assert((oparg >> 5) <= Py_GE);
-    return INTRINSIC_COMPARE_OP + (oparg >> 5) * 2 + ((oparg >> 4) & 1) + 11;
+    return INTRINSIC_COMPARE_OP + (oparg >> 5) * 2 + ((oparg >> 4) & 1) + 10;
 }
 
 /* The sites inside a loop: the ops of the blocks of the natural loop of each

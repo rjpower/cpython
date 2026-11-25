@@ -34,9 +34,7 @@ with test_tools.imports_under_tool("cases_generator"):
 
 BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
 
-SLICE = ("_GUARD_TOS_INT", "_GUARD_NOS_INT", "_BINARY_OP_ADD_INT", "_POP_TOP_INT",
-         "_BINARY_OP_ADD_FLOAT", "_POP_TOP_NUMBER", "_SPECIALIZE_BINARY_OP", "_BINARY_OP",
-         "_GUARD_TOS_TUPLE", "_GUARD_TOS_LIST", "_UNPACK_SEQUENCE_TUPLE",
+SLICE = ("_GUARD_TOS_TUPLE", "_GUARD_TOS_LIST", "_UNPACK_SEQUENCE_TUPLE",
          "_UNPACK_SEQUENCE_LIST", "_SPECIALIZE_UNPACK_SEQUENCE", "_UNPACK_SEQUENCE",
          "_GUARD_TYPE_VERSION", "_CHECK_MANAGED_OBJECT_HAS_VALUES",
          "_NULL_SLOT_CONDITIONAL")
@@ -63,17 +61,12 @@ class SliceTests(unittest.TestCase):
         for name in SLICE:
             with self.subTest(uop=name):
                 self.assertIsNotNone(ir_contract.contract_of(analysis.uops[name]))
-        for name in ("BINARY_OP", "BINARY_OP_ADD_INT", "BINARY_OP_ADD_FLOAT",
-                     "UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST"):
+        for name in ("UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST"):
             with self.subTest(macro=name):
                 self.assertIsNotNone(analysis.instructions[name].region)
 
     def test_effects_come_from_declarations(self):
         expected = {
-            ("BINARY_OP_ADD_INT", "_GUARD_TOS_INT"): set(),
-            ("BINARY_OP_ADD_INT", "_BINARY_OP_ADD_INT"): {ALLOCATES, MAY_RAISE},
-            ("BINARY_OP_ADD_INT", "_POP_TOP_INT"): {WRITES_HEAP},
-            ("BINARY_OP_ADD_FLOAT", "_POP_TOP_NUMBER"): set(),
             ("UNPACK_SEQUENCE_LIST", "_GUARD_TOS_LIST"): {READS_HEAP},
             ("UNPACK_SEQUENCE_LIST", "_UNPACK_SEQUENCE_LIST"): {READS_HEAP, MAY_RELEASE},
             # Not reviewed: today's inference (G0c reviews the specializers)
@@ -87,15 +80,6 @@ class SliceTests(unittest.TestCase):
     def test_guard_and_result_facts(self):
         def facts(guard):
             return [str(f) for f in guard.facts]
-        add_int = uop_record("BINARY_OP_ADD_INT", "_GUARD_TOS_INT")
-        self.assertEqual([facts(g) for g in add_int.guards], [["ENCODING(v1, inline_int)"]])
-        add_float = uop_record("BINARY_OP_ADD_FLOAT", "_BINARY_OP_ADD_FLOAT")
-        self.assertEqual([facts(g) for g in add_float.guards],
-                         [["ENCODING(v0, inline_float|inline_int)",
-                           "ENCODING(v1, inline_float|inline_int)"]])
-        self.assertEqual([str(f) for f in add_float.results], ["EXACT_TYPE(v2, PyFloat_Type)"])
-        result = uop_record("BINARY_OP_ADD_INT", "_BINARY_OP_ADD_INT").results
-        self.assertEqual([str(f) for f in result], ["EXACT_TYPE(v2, PyLong_Type)"])
         # The implicit pointer-space guard, then the declared type test
         guard_list = uop_record("UNPACK_SEQUENCE_LIST", "_GUARD_TOS_LIST")
         self.assertEqual([facts(g) for g in guard_list.guards],

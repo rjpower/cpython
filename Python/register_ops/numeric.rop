@@ -1,0 +1,91 @@
+// Binary and Unary: the numeric operations other than ordinary addition (Add,
+// add.rop) and subscript (GetItem, items.rop), and the unary protocols.
+
+enum UnaryOp(NEGATIVE, POSITIVE, INVERT);
+
+family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
+  exits(next, raise, redirect, miss, again) generic(Generic) ops(BINARY_OP);
+
+family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>)
+  exits(next, raise) ops(UNARY_NEGATIVE, UNARY_INVERT);
+
+point Binary.OpFailed(current, site, pending) keep() spent(y, x) defs();
+point Binary.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
+point Unary.Failed(current, site, pending) keep() spent(value) defs();
+point Unary.Done(current, next_head, clear) keep() spent(value) defs(dst);
+
+// Adaptation (step 3 adds the typed arms): a site never finds an arm yet,
+// so the counter backs off.
+macro adapt_before_use_binary(f:Fb<Binary>)
+  cases(run())
+  effects(reads, writes)
+  feedback(read(entry), write(entry))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> NoArm();
+    }
+  NoArm():
+    let _:Unit = backoff(f);
+    exit run();
+  Run():
+    exit run();
+}
+
+arm Binary.Generic shared
+  effects(runs_python, raises, releases on (dst))
+  feedback(read(entry), write(entry))
+  exits(next, raise, redirect)
+{
+  entry():
+    call adapt_before_use_binary(fb) {
+      run -> Run();
+    }
+  Run():
+    let a:Anchors = anchor_for_call([x, y]);
+    call binary_at_origin(op, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(y), spent(x), old(dst)] at Binary.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(Binary.OpFailed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// Negation, inversion and unary plus: the operand is consumed.  Inline ints
+// and floats negate without a call.
+extern helper unary_op(op:Enum<UnaryOp>, x:O)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, runs_python, raises, releases)
+  c _PyRop_UnaryOp as value_or_null
+  evidence(
+    review: "Reviewed BN. ceval.c: the old _UNARY_NEGATIVE and _UNARY_INVERT, and"
+            "_PyValue_Positive for the intrinsic.",
+    contract: "Closes x on both outcomes; the result is a new owner or NULL with an"
+              "exception set. Runs Python for objects (__neg__, __pos__, __invert__).");
+
+arm Unary.Generic shared
+  effects(allocates, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(value);
+    call unary_op(op, xo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at Unary.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(Unary.Failed, e);
+}

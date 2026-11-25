@@ -19,7 +19,7 @@ from cwriter import CWriter
 from collections.abc import Sequence
 
 import ir_arms
-from ir_generator import (BINARY_OP_FAMILY, IR_BASE_ONLY, STACK_ONLY, all_instructions,
+from ir_generator import (IR_BASE_ONLY, STACK_ONLY, all_instructions,
                           handler_ids, ir_only_handler_names, num_old_handlers)
 from typing import TextIO
 
@@ -115,9 +115,9 @@ def is_abort_body(analysis: Analysis, name: str) -> bool:
 def classify_handlers(analysis: Analysis) -> tuple[list[str], list[str]]:
     """The handlers that bytecodes.c still defines, as (inherited register
     instructions, stack-only stubs).  A stub is a stack op that has no
-    handler of its own (BINARY_OP has one handler per operation) or whose body
+    handler of its own or whose body
     only aborts: the register instructions its lowering emits run instead.  The arms are not in either list."""
-    stubs = {*STACK_ONLY, BINARY_OP_FAMILY}
+    stubs = {*STACK_ONLY}
     stubs.update(name for name in all_instructions(analysis)
                  if is_abort_body(analysis, name))
     inherited = set(handler_ids(analysis)) | set(IR_BASE_ONLY)

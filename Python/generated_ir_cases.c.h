@@ -407,8 +407,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(_Py_EvalBreaker((PyThreadS
               "_Py_EvalBreaker: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_HandlePending), int (*)(PyThreadState *)),
               "_Py_HandlePending: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_BinaryOp), void (*)(PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *)),
-              "_Py_Specialize_BinaryOp: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_UnpackSequence), void (*)(PyValue, _PyInstr *, int)),
               "_Py_Specialize_UnpackSequence: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyFb_HasEntry), int (*)(int)),
@@ -622,52 +620,10 @@ static _PyIRTransfer ir_run_Add_Float(PyThreadState *tstate, _PyInterpreterFrame
 static _PyIRTransfer ir_run_Add_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Add_Int(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Add_Text(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_ADD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_ADD_FLOAT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_ADD_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_ADD_UNICODE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_AND(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_AND_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_EXTEND(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_FLOOR_DIVIDE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_FLOOR_DIVIDE_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_ADD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_ADD_UNICODE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_AND(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_FLOOR_DIVIDE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_LSHIFT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_MATRIX_MULTIPLY(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_MULTIPLY(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_OR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_POWER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_REMAINDER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_RSHIFT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_SUBTRACT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_TRUE_DIVIDE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_INPLACE_XOR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_LSHIFT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_LSHIFT_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_MATRIX_MULTIPLY(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_MULTIPLY(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_MULTIPLY_FLOAT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_MULTIPLY_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_OR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_OR_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_POWER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_REMAINDER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_REMAINDER_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_RSHIFT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_RSHIFT_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_SUBTRACT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_SUBTRACT_FLOAT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_SUBTRACT_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_TRUEDIV_FLOAT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_TRUE_DIVIDE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_XOR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_BINARY_OP_XOR_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BUILD_INTERPOLATION(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BUILD_STRING(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BUILD_TEMPLATE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Binary_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchNone_Observed(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchNone_Test(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_Bool(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -883,1599 +839,21 @@ static _PyIRTransfer ir_run_Truth_None(PyThreadState *tstate, _PyInterpreterFram
 static _PyIRTransfer ir_run_Truth_Plain(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Truth_Slot(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Truth_Str(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_UNARY_INVERT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_UNARY_NEGATIVE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNKNOWN_OPCODE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNPACK_EX(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNPACK_SEQUENCE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNPACK_SEQUENCE_LIST(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNPACK_SEQUENCE_TUPLE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Unary_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UpdateContainer_Extend(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UpdateContainer_Overlay(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UpdateContainer_Union(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_WITH_EXCEPT_START(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_YIELD_DELEGATED(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_YIELD_VALUE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_binary_op(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word, int binary_op_operation);
 static _PyIRTransfer ir_start_frame(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr);
 static _PyIRTransfer ir_throw_error(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr);
 static const _PyIRForm ir_handler_forms[512];
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_ADD(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_ADD);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_binary_op(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word, int binary_op_operation)
-{
-            int opcode = _PyIR_BINARY_OP_FIRST + binary_op_operation;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + binary_op_operation);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = binary_op_operation;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                IR_STUB_ESCAPE();
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (_PyFb_CounterTriggers(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                _PyFb_AdvanceCounter(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                IR_STUB_ESCAPE();
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_ADD_FLOAT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_ADD_FLOAT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_ADD_FLOAT
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                double a, b;
-                if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a + b);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_ADD_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_ADD_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_ADD_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_ADD_INT
-            {
-                right = value;
-                (void)right;
-                int64_t a = _PyValue_IntScaled(left);
-                int64_t b = _PyValue_IntScaled(right);
-                int64_t sum;
-                STAT_INC(BINARY_OP, hit);
-                if (__builtin_add_overflow(a, b, &sum)) {
-                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + PyValue_InlineInt64(right));
-                }
-                else {
-                    res = _PyValue_FromIntScaled(sum);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_ADD_UNICODE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_ADD_UNICODE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow nos;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_UNICODE
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
-                if (!PyUnicode_CheckExact(value_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_UNICODE
-            {
-                nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
-                if (!PyUnicode_CheckExact(o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_ADD_UNICODE
-            {
-                right = value;
-                (void)right;
-                left = nos;
-                (void)left;
-                PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
-                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
-                assert(PyUnicode_CheckExact(left_o));
-                assert(PyUnicode_CheckExact(right_o));
-                STAT_INC(BINARY_OP, hit);
-                PyObject *res_o = PyUnicode_Concat(left_o, right_o);
-                if (res_o == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = PyValue_FromNonNumberSteal(res_o);
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_UNICODE
-            {
-                value = r;
-                (void)value;
-                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_UNICODE
-            {
-                value = l;
-                (void)value;
-                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_C, _PyUnicode_ExactDealloc);
-            _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_AND(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_AND);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_AND_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_AND_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_AND_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_AND_INT
-            {
-                right = value;
-                (void)right;
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) & PyValue_InlineInt64(right));
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_EXTEND(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_EXTEND;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_EXTEND);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_EXTEND
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                PyObject *descr = (PyObject *)fb->descr;
-                if (!PyValue_IsObject(left) || !PyValue_IsObject(right)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-                assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
-                _PyBinaryOpSpecializationDescr *d = _PyBinaryOp_ExtendDescr(descr);
-                assert(d != NULL);
-                if (Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                binaryopactionfunc action = d->action;
-                PyObject *res_o = action(left_o, right_o);
-                if (res_o == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
-                assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
-                res = PyValue_FromObjectSteal(res_o);
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_ANY
-            {
-                value = r;
-                (void)value;
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_ANY
-            {
-                value = l;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_FLOOR_DIVIDE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_FLOOR_DIVIDE);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_FLOOR_DIVIDE_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_FLOOR_DIVIDE_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_FLOOR_DIVIDE_INT
-            {
-                right = value;
-                (void)right;
-                int64_t b = PyValue_InlineInt64(right);
-                if (b == 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                int64_t a = PyValue_InlineInt64(left);
-                STAT_INC(BINARY_OP, hit);
-                int64_t quotient = a / b;
-                if (quotient * b != a && (a ^ b) < 0) {
-                    quotient--;
-                }
-                res = PyValue_FromInt64(quotient);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_ADD(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_ADD);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_ADD_UNICODE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_INPLACE_ADD_UNICODE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD_UNICODE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow nos;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_UNICODE
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
-                if (!PyUnicode_CheckExact(value_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_UNICODE
-            {
-                nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
-                if (!PyUnicode_CheckExact(o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_INPLACE_ADD_UNICODE
-            {
-                right = value;
-                (void)right;
-                left = nos;
-                (void)left;
-                PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
-                assert(PyUnicode_CheckExact(left_o));
-                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(right)));
-                assert(IR_IS_LOCAL(IR_A(ir_word)));
-                assert(PyUnicode_CheckExact(left_o));
-                PyValue held = IR_SLOT(IR_A(ir_word));
-                if (!PyValue_Is(held, left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                ir_own_B = IR_DETACH(ir_word, B, left);
-                (void)(ir_own_B);
-                assert(Py_REFCNT(left_o) >= 1);
-                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
-                PyObject *temp = PyValue_AsKnownObjectSteal(held);
-                ir_own_C = IR_DETACH(ir_word, C, right);
-                PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(right, ir_own_C));
-                temp = value_unicode_append(temp, right_o);
-                _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
-                if (temp == NULL) {
-                    _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = PyValue_FromNonNumberSteal(temp);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_AND(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_AND);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_FLOOR_DIVIDE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_FLOOR_DIVIDE);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_LSHIFT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_LSHIFT);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_MATRIX_MULTIPLY(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_MATRIX_MULTIPLY);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_MULTIPLY(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_MULTIPLY);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_OR(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_OR);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_POWER(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_POWER);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_REMAINDER(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_REMAINDER);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_RSHIFT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_RSHIFT);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_SUBTRACT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_SUBTRACT);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_TRUE_DIVIDE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_TRUE_DIVIDE);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_INPLACE_XOR(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_INPLACE_XOR);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_LSHIFT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_LSHIFT);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_LSHIFT_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_LSHIFT_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_LSHIFT_INT
-            {
-                right = value;
-                (void)right;
-                int64_t b = PyValue_InlineInt64(right);
-                if (b < 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                int64_t a = PyValue_InlineInt64(left);
-                STAT_INC(BINARY_OP, hit);
-                int64_t shifted = b < 63 ? (int64_t)((uint64_t)a << b) : 0;
-                if (a == 0) {
-                    res = PyValue_FromInlineInt(0);
-                }
-                else if (b < 63 && Py_ARITHMETIC_RIGHT_SHIFT(int64_t, shifted, b) == a) {
-                    res = PyValue_FromInt64(shifted);
-                }
-                else {
-                    res = _PyValue_LshiftInt64(a, b);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_MATRIX_MULTIPLY(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_MATRIX_MULTIPLY);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_MULTIPLY(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_MULTIPLY);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_MULTIPLY_FLOAT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_MULTIPLY_FLOAT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_MULTIPLY_FLOAT
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                double a, b;
-                if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a * b);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_MULTIPLY_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_MULTIPLY_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_MULTIPLY_INT
-            {
-                right = value;
-                (void)right;
-                int64_t a = _PyValue_IntScaled(left);
-                int64_t b = PyValue_InlineInt64(right);
-                int64_t product;
-                STAT_INC(BINARY_OP, hit);
-                if (__builtin_mul_overflow(a, b, &product)) {
-                    res = _PyValue_MultiplyInt64(PyValue_InlineInt64(left), b);
-                }
-                else {
-                    res = _PyValue_FromIntScaled(product);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_OR(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_OR);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_OR_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_OR_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_OR_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_OR_INT
-            {
-                right = value;
-                (void)right;
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) | PyValue_InlineInt64(right));
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_POWER(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_POWER);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_REMAINDER(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_REMAINDER);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_REMAINDER_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_REMAINDER_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_REMAINDER_INT
-            {
-                right = value;
-                (void)right;
-                int64_t b = PyValue_InlineInt64(right);
-                if (b == 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                int64_t a = PyValue_InlineInt64(left);
-                STAT_INC(BINARY_OP, hit);
-                int64_t remainder = a % b;
-                if (remainder != 0 && (remainder ^ b) < 0) {
-                    remainder += b;
-                }
-                res = PyValue_FromInlineInt(remainder);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_RSHIFT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_RSHIFT);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_RSHIFT_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_RSHIFT_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_RSHIFT_INT
-            {
-                right = value;
-                (void)right;
-                int64_t b = PyValue_InlineInt64(right);
-                if (b < 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                int64_t a = PyValue_InlineInt64(left);
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInlineInt(Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, b < 63 ? b : 63));
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_SUBTRACT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_SUBTRACT);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_SUBTRACT_FLOAT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_SUBTRACT_FLOAT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_SUBTRACT_FLOAT
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                double a, b;
-                if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a - b);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_SUBTRACT_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_SUBTRACT_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_SUBTRACT_INT
-            {
-                right = value;
-                (void)right;
-                int64_t a = _PyValue_IntScaled(left);
-                int64_t b = _PyValue_IntScaled(right);
-                int64_t difference;
-                STAT_INC(BINARY_OP, hit);
-                if (__builtin_sub_overflow(a, b, &difference)) {
-                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) - PyValue_InlineInt64(right));
-                }
-                else {
-                    res = _PyValue_FromIntScaled(difference);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_TRUEDIV_FLOAT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_TRUEDIV_FLOAT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_TRUEDIV_FLOAT
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                double a, b;
-                if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                if (b == 0.0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a / b);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_TRUE_DIVIDE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_TRUE_DIVIDE);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_XOR(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, NB_XOR);
-}
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_BINARY_OP_XOR_INT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = BINARY_OP_XOR_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_XOR_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_XOR_INT
-            {
-                right = value;
-                (void)right;
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) ^ PyValue_InlineInt64(right));
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
 
         
 static Py_NO_INLINE _PyIRTransfer
@@ -8620,98 +6998,6 @@ ir_run_STORE_FAST(
 
         
 static Py_NO_INLINE _PyIRTransfer
-ir_run_UNARY_INVERT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = UNARY_INVERT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNARY_INVERT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValue res;
-            PyValueBorrow v;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _UNARY_INVERT
-            {
-                value = IR_VIEW(IR_B(ir_word));
-                res = _PyValue_Invert(value);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 1, this_instr);
-                }
-                v = value;
-                ir_own_B = IR_DETACH(ir_word, B, v);
-            }
-            // _POP_TOP_ANY
-            {
-                value = v;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_UNARY_NEGATIVE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = UNARY_NEGATIVE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNARY_NEGATIVE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValue res;
-            PyValueBorrow v;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _UNARY_NEGATIVE
-            {
-                value = IR_VIEW(IR_B(ir_word));
-                if (PyValue_IsInlineInt(value)) {
-                    res = PyValue_FromInt64(-PyValue_InlineInt64(value));
-                }
-                else if (PyValue_IsInlineFloat(value)) {
-                    res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
-                }
-                else {
-                    res = _PyValue_Negative(value);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                v = value;
-                ir_own_B = IR_DETACH(ir_word, B, v);
-            }
-            // _POP_TOP_ANY
-            {
-                value = v;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
 ir_run_UNPACK_EX(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
@@ -9237,74 +7523,74 @@ static const _PyIRForm ir_handler_forms[512] = {
     [0] = ir_run_CACHE,
     [1] = ir_run_UNKNOWN_OPCODE,
     [2] = ir_run_BUILD_TEMPLATE,
-    [3] = ir_run_BINARY_OP_INPLACE_ADD_UNICODE,
-    [4] = ir_run_CALL_FUNCTION_EX,
-    [5] = ir_run_CHECK_EG_MATCH,
-    [6] = ir_run_CHECK_EXC_MATCH,
-    [7] = ir_run_CLEANUP_THROW,
-    [8] = ir_run_UNKNOWN_OPCODE,
-    [9] = ir_run_END_FOR,
-    [10] = ir_run_END_SEND,
-    [11] = ir_run_UNKNOWN_OPCODE,
-    [12] = ir_run_FORMAT_SIMPLE,
-    [13] = ir_run_FORMAT_WITH_SPEC,
-    [14] = ir_run_GET_AITER,
-    [15] = ir_run_GET_ANEXT,
-    [16] = ir_run_GET_LEN,
+    [3] = ir_run_CALL_FUNCTION_EX,
+    [4] = ir_run_CHECK_EG_MATCH,
+    [5] = ir_run_CHECK_EXC_MATCH,
+    [6] = ir_run_CLEANUP_THROW,
+    [7] = ir_run_UNKNOWN_OPCODE,
+    [8] = ir_run_END_FOR,
+    [9] = ir_run_END_SEND,
+    [10] = ir_run_UNKNOWN_OPCODE,
+    [11] = ir_run_FORMAT_SIMPLE,
+    [12] = ir_run_FORMAT_WITH_SPEC,
+    [13] = ir_run_GET_AITER,
+    [14] = ir_run_GET_ANEXT,
+    [15] = ir_run_GET_LEN,
+    [16] = ir_run_UNKNOWN_OPCODE,
     [17] = ir_run_RESERVED,
     [18] = ir_run_UNKNOWN_OPCODE,
     [19] = ir_run_UNKNOWN_OPCODE,
     [20] = ir_run_UNKNOWN_OPCODE,
-    [21] = ir_run_UNKNOWN_OPCODE,
-    [22] = ir_run_MATCH_KEYS,
-    [23] = ir_run_MATCH_MAPPING,
-    [24] = ir_run_MATCH_SEQUENCE,
-    [25] = ir_run_NOP,
-    [26] = ir_run_UNKNOWN_OPCODE,
-    [27] = ir_run_POP_EXCEPT,
-    [28] = ir_run_POP_ITER,
-    [29] = ir_run_UNKNOWN_OPCODE,
-    [30] = ir_run_PUSH_EXC_INFO,
-    [31] = ir_run_UNKNOWN_OPCODE,
-    [32] = ir_run_RETURN_GENERATOR,
+    [21] = ir_run_MATCH_KEYS,
+    [22] = ir_run_MATCH_MAPPING,
+    [23] = ir_run_MATCH_SEQUENCE,
+    [24] = ir_run_NOP,
+    [25] = ir_run_UNKNOWN_OPCODE,
+    [26] = ir_run_POP_EXCEPT,
+    [27] = ir_run_POP_ITER,
+    [28] = ir_run_UNKNOWN_OPCODE,
+    [29] = ir_run_PUSH_EXC_INFO,
+    [30] = ir_run_UNKNOWN_OPCODE,
+    [31] = ir_run_RETURN_GENERATOR,
+    [32] = ir_run_UNKNOWN_OPCODE,
     [33] = ir_run_UNKNOWN_OPCODE,
     [34] = ir_run_UNKNOWN_OPCODE,
     [35] = ir_run_UNKNOWN_OPCODE,
     [36] = ir_run_UNKNOWN_OPCODE,
     [37] = ir_run_UNKNOWN_OPCODE,
-    [38] = ir_run_UNARY_INVERT,
-    [39] = ir_run_UNARY_NEGATIVE,
-    [40] = ir_run_UNKNOWN_OPCODE,
-    [41] = ir_run_WITH_EXCEPT_START,
-    [42] = ir_run_UNKNOWN_OPCODE,
-    [43] = ir_run_BUILD_INTERPOLATION,
+    [38] = ir_run_UNKNOWN_OPCODE,
+    [39] = ir_run_UNKNOWN_OPCODE,
+    [40] = ir_run_WITH_EXCEPT_START,
+    [41] = ir_run_UNKNOWN_OPCODE,
+    [42] = ir_run_BUILD_INTERPOLATION,
+    [43] = ir_run_UNKNOWN_OPCODE,
     [44] = ir_run_UNKNOWN_OPCODE,
     [45] = ir_run_UNKNOWN_OPCODE,
     [46] = ir_run_UNKNOWN_OPCODE,
-    [47] = ir_run_UNKNOWN_OPCODE,
-    [48] = ir_run_BUILD_STRING,
+    [47] = ir_run_BUILD_STRING,
+    [48] = ir_run_UNKNOWN_OPCODE,
     [49] = ir_run_UNKNOWN_OPCODE,
     [50] = ir_run_UNKNOWN_OPCODE,
     [51] = ir_run_UNKNOWN_OPCODE,
-    [52] = ir_run_UNKNOWN_OPCODE,
-    [53] = ir_run_CALL_KW,
-    [54] = ir_run_COMPARE_OP,
-    [55] = ir_run_CONTAINS_OP,
-    [56] = ir_run_CONVERT_VALUE,
-    [57] = ir_run_UNKNOWN_OPCODE,
-    [58] = ir_run_COPY_FREE_VARS,
-    [59] = ir_run_DELETE_DEREF,
+    [52] = ir_run_CALL_KW,
+    [53] = ir_run_COMPARE_OP,
+    [54] = ir_run_CONTAINS_OP,
+    [55] = ir_run_CONVERT_VALUE,
+    [56] = ir_run_UNKNOWN_OPCODE,
+    [57] = ir_run_COPY_FREE_VARS,
+    [58] = ir_run_DELETE_DEREF,
+    [59] = ir_run_UNKNOWN_OPCODE,
     [60] = ir_run_UNKNOWN_OPCODE,
     [61] = ir_run_UNKNOWN_OPCODE,
-    [62] = ir_run_UNKNOWN_OPCODE,
-    [63] = ir_run_END_ASYNC_FOR,
-    [64] = ir_run_UNKNOWN_OPCODE,
-    [65] = ir_run_FOR_ITER,
-    [66] = ir_run_GET_AWAITABLE,
-    [67] = ir_run_GET_ITER,
+    [62] = ir_run_END_ASYNC_FOR,
+    [63] = ir_run_UNKNOWN_OPCODE,
+    [64] = ir_run_FOR_ITER,
+    [65] = ir_run_GET_AWAITABLE,
+    [66] = ir_run_GET_ITER,
+    [67] = ir_run_UNKNOWN_OPCODE,
     [68] = ir_run_UNKNOWN_OPCODE,
-    [69] = ir_run_UNKNOWN_OPCODE,
-    [70] = ir_run_IS_OP,
+    [69] = ir_run_IS_OP,
+    [70] = ir_run_UNKNOWN_OPCODE,
     [71] = ir_run_UNKNOWN_OPCODE,
     [72] = ir_run_UNKNOWN_OPCODE,
     [73] = ir_run_UNKNOWN_OPCODE,
@@ -9312,162 +7598,162 @@ static const _PyIRForm ir_handler_forms[512] = {
     [75] = ir_run_UNKNOWN_OPCODE,
     [76] = ir_run_UNKNOWN_OPCODE,
     [77] = ir_run_UNKNOWN_OPCODE,
-    [78] = ir_run_UNKNOWN_OPCODE,
-    [79] = ir_run_LOAD_COMMON_CONSTANT,
-    [80] = ir_run_UNKNOWN_OPCODE,
-    [81] = ir_run_LOAD_DEREF,
+    [78] = ir_run_LOAD_COMMON_CONSTANT,
+    [79] = ir_run_UNKNOWN_OPCODE,
+    [80] = ir_run_LOAD_DEREF,
+    [81] = ir_run_UNKNOWN_OPCODE,
     [82] = ir_run_UNKNOWN_OPCODE,
     [83] = ir_run_UNKNOWN_OPCODE,
     [84] = ir_run_UNKNOWN_OPCODE,
     [85] = ir_run_UNKNOWN_OPCODE,
     [86] = ir_run_UNKNOWN_OPCODE,
-    [87] = ir_run_UNKNOWN_OPCODE,
-    [88] = ir_run_LOAD_FROM_DICT_OR_DEREF,
+    [87] = ir_run_LOAD_FROM_DICT_OR_DEREF,
+    [88] = ir_run_UNKNOWN_OPCODE,
     [89] = ir_run_UNKNOWN_OPCODE,
     [90] = ir_run_UNKNOWN_OPCODE,
     [91] = ir_run_UNKNOWN_OPCODE,
-    [92] = ir_run_UNKNOWN_OPCODE,
-    [93] = ir_run_LOAD_SPECIAL,
-    [94] = ir_run_LOAD_SUPER_ATTR,
-    [95] = ir_run_MAKE_CELL,
-    [96] = ir_run_UNKNOWN_OPCODE,
-    [97] = ir_run_MATCH_CLASS,
-    [98] = ir_run_MATERIALIZE_KWARGS,
+    [92] = ir_run_LOAD_SPECIAL,
+    [93] = ir_run_LOAD_SUPER_ATTR,
+    [94] = ir_run_MAKE_CELL,
+    [95] = ir_run_UNKNOWN_OPCODE,
+    [96] = ir_run_MATCH_CLASS,
+    [97] = ir_run_MATERIALIZE_KWARGS,
+    [98] = ir_run_UNKNOWN_OPCODE,
     [99] = ir_run_UNKNOWN_OPCODE,
     [100] = ir_run_UNKNOWN_OPCODE,
     [101] = ir_run_UNKNOWN_OPCODE,
-    [102] = ir_run_UNKNOWN_OPCODE,
-    [103] = ir_run_RAISE_VARARGS,
-    [104] = ir_run_RERAISE,
-    [105] = ir_run_SEND,
+    [102] = ir_run_RAISE_VARARGS,
+    [103] = ir_run_RERAISE,
+    [104] = ir_run_SEND,
+    [105] = ir_run_UNKNOWN_OPCODE,
     [106] = ir_run_UNKNOWN_OPCODE,
     [107] = ir_run_UNKNOWN_OPCODE,
-    [108] = ir_run_UNKNOWN_OPCODE,
-    [109] = ir_run_STORE_ATTR,
-    [110] = ir_run_STORE_DEREF,
-    [111] = ir_run_STORE_FAST,
+    [108] = ir_run_STORE_ATTR,
+    [109] = ir_run_STORE_DEREF,
+    [110] = ir_run_STORE_FAST,
+    [111] = ir_run_UNKNOWN_OPCODE,
     [112] = ir_run_UNKNOWN_OPCODE,
     [113] = ir_run_UNKNOWN_OPCODE,
     [114] = ir_run_UNKNOWN_OPCODE,
     [115] = ir_run_UNKNOWN_OPCODE,
-    [116] = ir_run_UNKNOWN_OPCODE,
-    [117] = ir_run_UNPACK_EX,
-    [118] = ir_run_UNPACK_SEQUENCE,
-    [119] = ir_run_YIELD_VALUE,
-    [120] = ir_run_COMPARE_OP_JUMP,
-    [121] = ir_run_COMPARE_OP_JUMP_FLOAT,
-    [122] = ir_run_COMPARE_OP_JUMP_INT,
-    [123] = ir_run_COMPARE_OP_JUMP_STR,
-    [124] = ir_run_CONTAINS_OP_JUMP,
-    [125] = ir_run_CONTAINS_OP_JUMP_DICT,
-    [126] = ir_run_CONTAINS_OP_JUMP_SEQUENCE,
-    [127] = ir_run_CONTAINS_OP_JUMP_SET,
+    [116] = ir_run_UNPACK_EX,
+    [117] = ir_run_UNPACK_SEQUENCE,
+    [118] = ir_run_YIELD_VALUE,
+    [119] = ir_run_COMPARE_OP_JUMP,
+    [120] = ir_run_COMPARE_OP_JUMP_FLOAT,
+    [121] = ir_run_COMPARE_OP_JUMP_INT,
+    [122] = ir_run_COMPARE_OP_JUMP_STR,
+    [123] = ir_run_CONTAINS_OP_JUMP,
+    [124] = ir_run_CONTAINS_OP_JUMP_DICT,
+    [125] = ir_run_CONTAINS_OP_JUMP_SEQUENCE,
+    [126] = ir_run_CONTAINS_OP_JUMP_SET,
+    [127] = ir_run_FOR_ITER_DICT_ITEMS,
     [128] = ir_run_RESUME,
-    [129] = ir_run_BINARY_OP_ADD_FLOAT,
-    [130] = ir_run_BINARY_OP_ADD_INT,
-    [131] = ir_run_BINARY_OP_ADD_UNICODE,
-    [132] = ir_run_BINARY_OP_AND_INT,
-    [133] = ir_run_BINARY_OP_EXTEND,
-    [134] = ir_run_BINARY_OP_FLOOR_DIVIDE_INT,
-    [135] = ir_run_BINARY_OP_LSHIFT_INT,
-    [136] = ir_run_BINARY_OP_MULTIPLY_FLOAT,
-    [137] = ir_run_BINARY_OP_MULTIPLY_INT,
-    [138] = ir_run_BINARY_OP_OR_INT,
-    [139] = ir_run_BINARY_OP_REMAINDER_INT,
-    [140] = ir_run_BINARY_OP_RSHIFT_INT,
-    [141] = ir_run_BINARY_OP_SUBTRACT_FLOAT,
-    [142] = ir_run_BINARY_OP_SUBTRACT_INT,
-    [143] = ir_run_BINARY_OP_TRUEDIV_FLOAT,
-    [144] = ir_run_BINARY_OP_XOR_INT,
-    [145] = ir_run_CALL_EX_NON_PY_GENERAL,
-    [146] = ir_run_CALL_EX_PY,
-    [147] = ir_run_CALL_KW_BOUND_METHOD,
-    [148] = ir_run_CALL_KW_NON_PY,
-    [149] = ir_run_CALL_KW_PY,
-    [150] = ir_run_COMPARE_OP_FLOAT,
-    [151] = ir_run_COMPARE_OP_INT,
-    [152] = ir_run_COMPARE_OP_STR,
-    [153] = ir_run_CONTAINS_OP_DICT,
-    [154] = ir_run_CONTAINS_OP_SET,
-    [155] = ir_run_FOR_ITER_GEN,
-    [156] = ir_run_FOR_ITER_LIST,
-    [157] = ir_run_FOR_ITER_RANGE,
-    [158] = ir_run_FOR_ITER_TUPLE,
-    [159] = ir_run_FOR_ITER_VIRTUAL,
-    [160] = ir_run_GET_ITER_SELF,
-    [161] = ir_run_GET_ITER_VIRTUAL,
-    [162] = ir_run_LOAD_SUPER_ATTR_ATTR,
-    [163] = ir_run_LOAD_SUPER_ATTR_METHOD,
-    [164] = ir_run_SEND_ASYNC_GEN,
-    [165] = ir_run_SEND_GEN,
-    [166] = ir_run_SEND_VIRTUAL,
-    [167] = ir_run_STORE_ATTR_INSTANCE_VALUE,
-    [168] = ir_run_STORE_ATTR_SHAPE,
-    [169] = ir_run_STORE_ATTR_SHAPE_ADD,
-    [170] = ir_run_STORE_ATTR_SLOT,
-    [171] = ir_run_STORE_ATTR_WITH_HINT,
-    [172] = ir_run_UNPACK_SEQUENCE_LIST,
-    [173] = ir_run_UNPACK_SEQUENCE_TUPLE,
-    [174] = ir_run_FOR_ITER_DICT_ITEMS,
-    [175] = ir_run_GET_ITER_PY_GENERATOR,
-    [176] = ir_run_INSTRUMENTED_COMPARE_OP_JUMP,
-    [177] = ir_run_INSTRUMENTED_CONTAINS_OP_JUMP,
-    [178] = ir_run_INSTRUMENTED_IS_OP_JUMP,
-    [179] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
-    [180] = ir_run_IR_JUMP,
-    [181] = ir_run_IR_OPERANDS,
-    [182] = ir_run_IS_OP_JUMP,
-    [183] = ir_run_RESUME_CHECK,
-    [184] = ir_run_RESUME_JIT,
-    [185] = ir_run_YIELD_DELEGATED,
-    [186] = ir_run_BINARY_OP_ADD,
-    [187] = ir_run_BINARY_OP_AND,
-    [188] = ir_run_BINARY_OP_FLOOR_DIVIDE,
-    [189] = ir_run_BINARY_OP_LSHIFT,
-    [190] = ir_run_BINARY_OP_MATRIX_MULTIPLY,
-    [191] = ir_run_BINARY_OP_MULTIPLY,
-    [192] = ir_run_BINARY_OP_REMAINDER,
-    [193] = ir_run_BINARY_OP_OR,
-    [194] = ir_run_BINARY_OP_POWER,
-    [195] = ir_run_BINARY_OP_RSHIFT,
-    [196] = ir_run_BINARY_OP_SUBTRACT,
-    [197] = ir_run_BINARY_OP_TRUE_DIVIDE,
-    [198] = ir_run_BINARY_OP_XOR,
-    [199] = ir_run_BINARY_OP_INPLACE_ADD,
-    [200] = ir_run_BINARY_OP_INPLACE_AND,
-    [201] = ir_run_BINARY_OP_INPLACE_FLOOR_DIVIDE,
-    [202] = ir_run_BINARY_OP_INPLACE_LSHIFT,
-    [203] = ir_run_BINARY_OP_INPLACE_MATRIX_MULTIPLY,
-    [204] = ir_run_BINARY_OP_INPLACE_MULTIPLY,
-    [205] = ir_run_BINARY_OP_INPLACE_REMAINDER,
-    [206] = ir_run_BINARY_OP_INPLACE_OR,
-    [207] = ir_run_BINARY_OP_INPLACE_POWER,
-    [208] = ir_run_BINARY_OP_INPLACE_RSHIFT,
-    [209] = ir_run_BINARY_OP_INPLACE_SUBTRACT,
-    [210] = ir_run_BINARY_OP_INPLACE_TRUE_DIVIDE,
-    [211] = ir_run_BINARY_OP_INPLACE_XOR,
-    [212] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [213] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [214] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [215] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [216] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [217] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [218] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
-    [219] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
-    [220] = ir_run_INSTRUMENTED_YIELD_VALUE,
-    [221] = ir_run_INSTRUMENTED_YIELD_VALUE,
-    [222] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
-    [223] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
-    [224] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
-    [225] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
-    [226] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
-    [227] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
-    [228] = ir_run_SEND_GEN_XFER_DISCARD,
-    [229] = ir_run_SEND_GEN_XFER_DISCARD,
-    [230] = ir_run_SEND_GEN_XFER_DISCARD,
-    [231] = ir_run_SEND_GEN_XFER_DISCARD,
-    [232] = ir_run_SEND_GEN_XFER_DISCARD,
-    [233] = ir_run_SEND_GEN_XFER_DISCARD,
+    [129] = ir_run_CALL_EX_NON_PY_GENERAL,
+    [130] = ir_run_CALL_EX_PY,
+    [131] = ir_run_CALL_KW_BOUND_METHOD,
+    [132] = ir_run_CALL_KW_NON_PY,
+    [133] = ir_run_CALL_KW_PY,
+    [134] = ir_run_COMPARE_OP_FLOAT,
+    [135] = ir_run_COMPARE_OP_INT,
+    [136] = ir_run_COMPARE_OP_STR,
+    [137] = ir_run_CONTAINS_OP_DICT,
+    [138] = ir_run_CONTAINS_OP_SET,
+    [139] = ir_run_FOR_ITER_GEN,
+    [140] = ir_run_FOR_ITER_LIST,
+    [141] = ir_run_FOR_ITER_RANGE,
+    [142] = ir_run_FOR_ITER_TUPLE,
+    [143] = ir_run_FOR_ITER_VIRTUAL,
+    [144] = ir_run_GET_ITER_SELF,
+    [145] = ir_run_GET_ITER_VIRTUAL,
+    [146] = ir_run_LOAD_SUPER_ATTR_ATTR,
+    [147] = ir_run_LOAD_SUPER_ATTR_METHOD,
+    [148] = ir_run_SEND_ASYNC_GEN,
+    [149] = ir_run_SEND_GEN,
+    [150] = ir_run_SEND_VIRTUAL,
+    [151] = ir_run_STORE_ATTR_INSTANCE_VALUE,
+    [152] = ir_run_STORE_ATTR_SHAPE,
+    [153] = ir_run_STORE_ATTR_SHAPE_ADD,
+    [154] = ir_run_STORE_ATTR_SLOT,
+    [155] = ir_run_STORE_ATTR_WITH_HINT,
+    [156] = ir_run_UNPACK_SEQUENCE_LIST,
+    [157] = ir_run_UNPACK_SEQUENCE_TUPLE,
+    [158] = ir_run_GET_ITER_PY_GENERATOR,
+    [159] = ir_run_INSTRUMENTED_COMPARE_OP_JUMP,
+    [160] = ir_run_INSTRUMENTED_CONTAINS_OP_JUMP,
+    [161] = ir_run_INSTRUMENTED_IS_OP_JUMP,
+    [162] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
+    [163] = ir_run_IR_JUMP,
+    [164] = ir_run_IR_OPERANDS,
+    [165] = ir_run_IS_OP_JUMP,
+    [166] = ir_run_RESUME_CHECK,
+    [167] = ir_run_RESUME_JIT,
+    [168] = ir_run_YIELD_DELEGATED,
+    [169] = ir_run_CLEANUP_THROW_XFER_DISCARD,
+    [170] = ir_run_CLEANUP_THROW_XFER_DISCARD,
+    [171] = ir_run_CLEANUP_THROW_XFER_DISCARD,
+    [172] = ir_run_CLEANUP_THROW_XFER_DISCARD,
+    [173] = ir_run_CLEANUP_THROW_XFER_DISCARD,
+    [174] = ir_run_CLEANUP_THROW_XFER_DISCARD,
+    [175] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
+    [176] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
+    [177] = ir_run_INSTRUMENTED_YIELD_VALUE,
+    [178] = ir_run_INSTRUMENTED_YIELD_VALUE,
+    [179] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
+    [180] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
+    [181] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
+    [182] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
+    [183] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
+    [184] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
+    [185] = ir_run_SEND_GEN_XFER_DISCARD,
+    [186] = ir_run_SEND_GEN_XFER_DISCARD,
+    [187] = ir_run_SEND_GEN_XFER_DISCARD,
+    [188] = ir_run_SEND_GEN_XFER_DISCARD,
+    [189] = ir_run_SEND_GEN_XFER_DISCARD,
+    [190] = ir_run_SEND_GEN_XFER_DISCARD,
+    [191] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
+    [192] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
+    [193] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
+    [194] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
+    [195] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
+    [196] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
+    [197] = ir_run_SEND_XFER_DISCARD,
+    [198] = ir_run_SEND_XFER_DISCARD,
+    [199] = ir_run_SEND_XFER_DISCARD,
+    [200] = ir_run_SEND_XFER_DISCARD,
+    [201] = ir_run_SEND_XFER_DISCARD,
+    [202] = ir_run_SEND_XFER_DISCARD,
+    [203] = ir_run_YIELD_DELEGATED,
+    [204] = ir_run_YIELD_DELEGATED,
+    [205] = ir_run_YIELD_VALUE,
+    [206] = ir_run_YIELD_VALUE,
+    [207] = ir_run_UNKNOWN_OPCODE,
+    [208] = ir_run_UNKNOWN_OPCODE,
+    [209] = ir_run_UNKNOWN_OPCODE,
+    [210] = ir_run_UNKNOWN_OPCODE,
+    [211] = ir_run_UNKNOWN_OPCODE,
+    [212] = ir_run_UNKNOWN_OPCODE,
+    [213] = ir_run_UNKNOWN_OPCODE,
+    [214] = ir_run_UNKNOWN_OPCODE,
+    [215] = ir_run_UNKNOWN_OPCODE,
+    [216] = ir_run_UNKNOWN_OPCODE,
+    [217] = ir_run_UNKNOWN_OPCODE,
+    [218] = ir_run_UNKNOWN_OPCODE,
+    [219] = ir_run_UNKNOWN_OPCODE,
+    [220] = ir_run_UNKNOWN_OPCODE,
+    [221] = ir_run_UNKNOWN_OPCODE,
+    [222] = ir_run_UNKNOWN_OPCODE,
+    [223] = ir_run_UNKNOWN_OPCODE,
+    [224] = ir_run_UNKNOWN_OPCODE,
+    [225] = ir_run_UNKNOWN_OPCODE,
+    [226] = ir_run_UNKNOWN_OPCODE,
+    [227] = ir_run_UNKNOWN_OPCODE,
+    [228] = ir_run_UNKNOWN_OPCODE,
+    [229] = ir_run_UNKNOWN_OPCODE,
+    [230] = ir_run_UNKNOWN_OPCODE,
+    [231] = ir_run_UNKNOWN_OPCODE,
+    [232] = ir_run_UNKNOWN_OPCODE,
+    [233] = ir_run_UNKNOWN_OPCODE,
     [234] = ir_run_INSTRUMENTED_END_FOR,
     [235] = ir_run_INSTRUMENTED_POP_ITER,
     [236] = ir_run_INSTRUMENTED_END_SEND,
@@ -9490,158 +7776,158 @@ static const _PyIRForm ir_handler_forms[512] = {
     [253] = ir_run_INSTRUMENTED_CALL_KW,
     [254] = ir_run_INSTRUMENTED_CALL_FUNCTION_EX,
     [255] = ir_run_INSTRUMENTED_LINE,
-    [256] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
-    [257] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
-    [258] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
-    [259] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
-    [260] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
-    [261] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
-    [262] = ir_run_SEND_XFER_DISCARD,
-    [263] = ir_run_SEND_XFER_DISCARD,
-    [264] = ir_run_SEND_XFER_DISCARD,
-    [265] = ir_run_SEND_XFER_DISCARD,
-    [266] = ir_run_SEND_XFER_DISCARD,
-    [267] = ir_run_SEND_XFER_DISCARD,
-    [268] = ir_run_YIELD_DELEGATED,
-    [269] = ir_run_YIELD_DELEGATED,
-    [270] = ir_run_YIELD_VALUE,
-    [271] = ir_run_YIELD_VALUE,
-    [272] = ir_run_Add_Int,
-    [273] = ir_run_Add_Float,
-    [274] = ir_run_Add_Text,
-    [275] = ir_run_Add_Extended,
-    [276] = ir_run_Add_Generic,
-    [277] = ir_run_Call_Exact,
-    [278] = ir_run_Call_BoundExact,
-    [279] = ir_run_Call_Init,
-    [280] = ir_run_Call_Generic,
-    [281] = ir_run_InitResult_Check,
-    [282] = ir_run_Call_Observed,
-    [283] = ir_run_Return_Ordinary,
-    [284] = ir_run_Return_Empty,
-    [285] = ir_run_Return_Generator,
-    [286] = ir_run_Return_Observed,
-    [287] = ir_run_Return_External,
-    [288] = ir_run_Build_Tuple,
-    [289] = ir_run_Build_List,
-    [290] = ir_run_Build_Set,
-    [291] = ir_run_Build_Map,
-    [292] = ir_run_AddElement_Append,
-    [293] = ir_run_AddElement_Add,
-    [294] = ir_run_AddEntry_Put,
-    [295] = ir_run_UpdateContainer_Extend,
-    [296] = ir_run_UpdateContainer_Union,
-    [297] = ir_run_UpdateContainer_Overlay,
-    [298] = ir_run_MergeKeywords_Merge,
-    [299] = ir_run_Function_Make,
-    [300] = ir_run_Intrinsic_Unary,
-    [301] = ir_run_Intrinsic_ImportStar,
-    [302] = ir_run_Intrinsic_StopIteration,
-    [303] = ir_run_IntrinsicPair_Binary,
-    [304] = ir_run_IntrinsicPair_Compare,
-    [305] = ir_run_IntrinsicPair_Attr,
-    [306] = ir_run_GetAttr_Instance,
-    [307] = ir_run_GetAttr_GetSet,
-    [308] = ir_run_GetAttr_Generic,
-    [309] = ir_run_GetAttr_Shape,
-    [310] = ir_run_GetAttr_PolyShape,
-    [311] = ir_run_GetAttr_Module,
-    [312] = ir_run_GetAttr_Hint,
-    [313] = ir_run_GetAttr_ValueSlot,
-    [314] = ir_run_GetAttr_PointerSlot,
-    [315] = ir_run_GetAttr_Class,
-    [316] = ir_run_GetAttr_NonDescriptorValues,
-    [317] = ir_run_GetAttr_NonDescriptorNoDict,
-    [318] = ir_run_GetMethod_MethodValues,
-    [319] = ir_run_GetMethod_Generic,
-    [320] = ir_run_GetMethod_PolyMethod,
-    [321] = ir_run_GetMethod_NoDict,
-    [322] = ir_run_GetMethod_LazyDict,
-    [323] = ir_run_GetMethod_ClassMethod,
-    [324] = ir_run_GetItem_Generic,
-    [325] = ir_run_SetItem_Generic,
-    [326] = ir_run_DelItem_Generic,
-    [327] = ir_run_SliceRead_Generic,
-    [328] = ir_run_SliceWrite_Generic,
-    [329] = ir_run_BuildSlice_Generic,
-    [330] = ir_run_GetItem_ListIndex,
-    [331] = ir_run_GetItem_TupleIndex,
-    [332] = ir_run_GetItem_Ascii,
-    [333] = ir_run_GetItem_UnicodeAsciiChar,
-    [334] = ir_run_GetItem_ListSlice,
-    [335] = ir_run_GetItem_Dict,
-    [336] = ir_run_SetItem_ListIndex,
-    [337] = ir_run_SetItem_Dict,
-    [338] = ir_run_GlobalRead_Generic,
-    [339] = ir_run_GlobalRead_Module,
-    [340] = ir_run_GlobalRead_Builtin,
-    [341] = ir_run_NamespaceRead_Name,
-    [342] = ir_run_NamespaceRead_Locals,
-    [343] = ir_run_NamespaceRead_BuildClass,
-    [344] = ir_run_NamespaceReadFrom_Mapping,
-    [345] = ir_run_NamespaceWrite_Name,
-    [346] = ir_run_NamespaceWrite_Global,
-    [347] = ir_run_SetupAnnotations_Setup,
-    [348] = ir_run_Import_Eager,
-    [349] = ir_run_Import_Policy,
-    [350] = ir_run_Import_Lazy,
-    [351] = ir_run_ImportFrom_From,
-    [352] = ir_run_ImportFrom_FromLast,
-    [353] = ir_run_Truth_Bool,
-    [354] = ir_run_Truth_Int,
-    [355] = ir_run_Truth_List,
-    [356] = ir_run_Truth_None,
-    [357] = ir_run_Truth_Str,
-    [358] = ir_run_Truth_Plain,
-    [359] = ir_run_Truth_Slot,
-    [360] = ir_run_Truth_Generic,
-    [361] = ir_run_BranchTruth_Bool,
-    [362] = ir_run_BranchTruth_Int,
-    [363] = ir_run_BranchTruth_List,
-    [364] = ir_run_BranchTruth_None,
-    [365] = ir_run_BranchTruth_Str,
-    [366] = ir_run_BranchTruth_Plain,
-    [367] = ir_run_BranchTruth_Slot,
-    [368] = ir_run_BranchTruth_Generic,
-    [369] = ir_run_BranchNone_Test,
-    [370] = ir_run_BranchTruth_Observed,
-    [371] = ir_run_BranchNone_Observed,
-    [372] = ir_run_Jump_Direct,
-    [373] = ir_run_Jump_Poll,
-    [374] = ir_run_Jump_Warm,
-    [375] = ir_run_Jump_Observed,
-    [376] = ir_run_Const_Pool,
-    [377] = ir_run_Const_Small,
-    [378] = ir_run_Const_Common,
-    [379] = ir_run_LocalRead_Bound,
-    [380] = ir_run_LocalRead_Checked,
-    [381] = ir_run_LocalWrite_Store,
-    [382] = ir_run_LocalWrite_Restore,
-    [383] = ir_run_SaveLocal_Take,
-    [384] = ir_run_LocalDelete_Checked,
-    [385] = ir_run_Move_Transfer,
-    [386] = ir_run_Move_Retire,
-    [387] = ir_run_Move_Copy,
-    [388] = ir_run_Call_Observed,
-    [389] = ir_run_Call_Observed,
-    [390] = ir_run_Call_Observed,
-    [391] = ir_run_Call_Observed,
-    [392] = ir_run_Return_Observed,
-    [393] = ir_run_Return_Observed,
-    [394] = ir_run_Return_Observed,
-    [395] = ir_run_Return_Observed,
-    [396] = ir_run_BranchTruth_Observed,
-    [397] = ir_run_BranchTruth_Observed,
-    [398] = ir_run_BranchTruth_Observed,
-    [399] = ir_run_BranchTruth_Observed,
-    [400] = ir_run_BranchTruth_Observed,
-    [401] = ir_run_BranchTruth_Observed,
-    [402] = ir_run_BranchTruth_Observed,
-    [403] = ir_run_BranchTruth_Observed,
-    [404] = ir_run_BranchNone_Observed,
-    [405] = ir_run_Jump_Observed,
-    [406] = ir_run_Jump_Observed,
-    [407] = ir_run_Jump_Observed,
+    [256] = ir_run_Add_Int,
+    [257] = ir_run_Add_Float,
+    [258] = ir_run_Add_Text,
+    [259] = ir_run_Add_Extended,
+    [260] = ir_run_Add_Generic,
+    [261] = ir_run_Call_Exact,
+    [262] = ir_run_Call_BoundExact,
+    [263] = ir_run_Call_Init,
+    [264] = ir_run_Call_Generic,
+    [265] = ir_run_InitResult_Check,
+    [266] = ir_run_Call_Observed,
+    [267] = ir_run_Return_Ordinary,
+    [268] = ir_run_Return_Empty,
+    [269] = ir_run_Return_Generator,
+    [270] = ir_run_Return_Observed,
+    [271] = ir_run_Return_External,
+    [272] = ir_run_Build_Tuple,
+    [273] = ir_run_Build_List,
+    [274] = ir_run_Build_Set,
+    [275] = ir_run_Build_Map,
+    [276] = ir_run_AddElement_Append,
+    [277] = ir_run_AddElement_Add,
+    [278] = ir_run_AddEntry_Put,
+    [279] = ir_run_UpdateContainer_Extend,
+    [280] = ir_run_UpdateContainer_Union,
+    [281] = ir_run_UpdateContainer_Overlay,
+    [282] = ir_run_MergeKeywords_Merge,
+    [283] = ir_run_Function_Make,
+    [284] = ir_run_Intrinsic_Unary,
+    [285] = ir_run_Intrinsic_ImportStar,
+    [286] = ir_run_Intrinsic_StopIteration,
+    [287] = ir_run_IntrinsicPair_Binary,
+    [288] = ir_run_IntrinsicPair_Compare,
+    [289] = ir_run_IntrinsicPair_Attr,
+    [290] = ir_run_GetAttr_Instance,
+    [291] = ir_run_GetAttr_GetSet,
+    [292] = ir_run_GetAttr_Generic,
+    [293] = ir_run_GetAttr_Shape,
+    [294] = ir_run_GetAttr_PolyShape,
+    [295] = ir_run_GetAttr_Module,
+    [296] = ir_run_GetAttr_Hint,
+    [297] = ir_run_GetAttr_ValueSlot,
+    [298] = ir_run_GetAttr_PointerSlot,
+    [299] = ir_run_GetAttr_Class,
+    [300] = ir_run_GetAttr_NonDescriptorValues,
+    [301] = ir_run_GetAttr_NonDescriptorNoDict,
+    [302] = ir_run_GetMethod_MethodValues,
+    [303] = ir_run_GetMethod_Generic,
+    [304] = ir_run_GetMethod_PolyMethod,
+    [305] = ir_run_GetMethod_NoDict,
+    [306] = ir_run_GetMethod_LazyDict,
+    [307] = ir_run_GetMethod_ClassMethod,
+    [308] = ir_run_GetItem_Generic,
+    [309] = ir_run_SetItem_Generic,
+    [310] = ir_run_DelItem_Generic,
+    [311] = ir_run_SliceRead_Generic,
+    [312] = ir_run_SliceWrite_Generic,
+    [313] = ir_run_BuildSlice_Generic,
+    [314] = ir_run_GetItem_ListIndex,
+    [315] = ir_run_GetItem_TupleIndex,
+    [316] = ir_run_GetItem_Ascii,
+    [317] = ir_run_GetItem_UnicodeAsciiChar,
+    [318] = ir_run_GetItem_ListSlice,
+    [319] = ir_run_GetItem_Dict,
+    [320] = ir_run_SetItem_ListIndex,
+    [321] = ir_run_SetItem_Dict,
+    [322] = ir_run_GlobalRead_Generic,
+    [323] = ir_run_GlobalRead_Module,
+    [324] = ir_run_GlobalRead_Builtin,
+    [325] = ir_run_NamespaceRead_Name,
+    [326] = ir_run_NamespaceRead_Locals,
+    [327] = ir_run_NamespaceRead_BuildClass,
+    [328] = ir_run_NamespaceReadFrom_Mapping,
+    [329] = ir_run_NamespaceWrite_Name,
+    [330] = ir_run_NamespaceWrite_Global,
+    [331] = ir_run_SetupAnnotations_Setup,
+    [332] = ir_run_Import_Eager,
+    [333] = ir_run_Import_Policy,
+    [334] = ir_run_Import_Lazy,
+    [335] = ir_run_ImportFrom_From,
+    [336] = ir_run_ImportFrom_FromLast,
+    [337] = ir_run_Binary_Generic,
+    [338] = ir_run_Unary_Generic,
+    [339] = ir_run_Truth_Bool,
+    [340] = ir_run_Truth_Int,
+    [341] = ir_run_Truth_List,
+    [342] = ir_run_Truth_None,
+    [343] = ir_run_Truth_Str,
+    [344] = ir_run_Truth_Plain,
+    [345] = ir_run_Truth_Slot,
+    [346] = ir_run_Truth_Generic,
+    [347] = ir_run_BranchTruth_Bool,
+    [348] = ir_run_BranchTruth_Int,
+    [349] = ir_run_BranchTruth_List,
+    [350] = ir_run_BranchTruth_None,
+    [351] = ir_run_BranchTruth_Str,
+    [352] = ir_run_BranchTruth_Plain,
+    [353] = ir_run_BranchTruth_Slot,
+    [354] = ir_run_BranchTruth_Generic,
+    [355] = ir_run_BranchNone_Test,
+    [356] = ir_run_BranchTruth_Observed,
+    [357] = ir_run_BranchNone_Observed,
+    [358] = ir_run_Jump_Direct,
+    [359] = ir_run_Jump_Poll,
+    [360] = ir_run_Jump_Warm,
+    [361] = ir_run_Jump_Observed,
+    [362] = ir_run_Const_Pool,
+    [363] = ir_run_Const_Small,
+    [364] = ir_run_Const_Common,
+    [365] = ir_run_LocalRead_Bound,
+    [366] = ir_run_LocalRead_Checked,
+    [367] = ir_run_LocalWrite_Store,
+    [368] = ir_run_LocalWrite_Restore,
+    [369] = ir_run_SaveLocal_Take,
+    [370] = ir_run_LocalDelete_Checked,
+    [371] = ir_run_Move_Transfer,
+    [372] = ir_run_Move_Retire,
+    [373] = ir_run_Move_Copy,
+    [374] = ir_run_Call_Observed,
+    [375] = ir_run_Call_Observed,
+    [376] = ir_run_Call_Observed,
+    [377] = ir_run_Call_Observed,
+    [378] = ir_run_Return_Observed,
+    [379] = ir_run_Return_Observed,
+    [380] = ir_run_Return_Observed,
+    [381] = ir_run_Return_Observed,
+    [382] = ir_run_BranchTruth_Observed,
+    [383] = ir_run_BranchTruth_Observed,
+    [384] = ir_run_BranchTruth_Observed,
+    [385] = ir_run_BranchTruth_Observed,
+    [386] = ir_run_BranchTruth_Observed,
+    [387] = ir_run_BranchTruth_Observed,
+    [388] = ir_run_BranchTruth_Observed,
+    [389] = ir_run_BranchTruth_Observed,
+    [390] = ir_run_BranchNone_Observed,
+    [391] = ir_run_Jump_Observed,
+    [392] = ir_run_Jump_Observed,
+    [393] = ir_run_Jump_Observed,
+    [394] = ir_run_UNKNOWN_OPCODE,
+    [395] = ir_run_UNKNOWN_OPCODE,
+    [396] = ir_run_UNKNOWN_OPCODE,
+    [397] = ir_run_UNKNOWN_OPCODE,
+    [398] = ir_run_UNKNOWN_OPCODE,
+    [399] = ir_run_UNKNOWN_OPCODE,
+    [400] = ir_run_UNKNOWN_OPCODE,
+    [401] = ir_run_UNKNOWN_OPCODE,
+    [402] = ir_run_UNKNOWN_OPCODE,
+    [403] = ir_run_UNKNOWN_OPCODE,
+    [404] = ir_run_UNKNOWN_OPCODE,
+    [405] = ir_run_UNKNOWN_OPCODE,
+    [406] = ir_run_UNKNOWN_OPCODE,
+    [407] = ir_run_UNKNOWN_OPCODE,
     [408] = ir_run_UNKNOWN_OPCODE,
     [409] = ir_run_UNKNOWN_OPCODE,
     [410] = ir_run_UNKNOWN_OPCODE,
@@ -9751,1432 +8037,6 @@ static const _PyIRForm ir_handler_forms[512] = {
 
             /* BEGIN INSTRUCTIONS */
 
-        TARGET(BINARY_OP_ADD) {
-            binary_op_operation = NB_ADD;
-            goto LABEL_binary_op;
-        }
-
-        LABEL(binary_op) {
-            int opcode = _PyIR_BINARY_OP_FIRST + binary_op_operation;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + binary_op_operation);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            int oparg = binary_op_operation;
-            (void)oparg;
-            PyValueBorrow lhs;
-            PyValueBorrow rhs;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_BINARY_OP
-            {
-                IR_STUB_ESCAPE();
-                rhs = IR_VIEW(IR_C(ir_word));
-                lhs = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (_PyFb_CounterTriggers(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(BINARY_OP);
-                _PyFb_AdvanceCounter(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                assert(NB_ADD <= oparg);
-                assert(oparg <= NB_OPARG_LAST);
-            }
-            // _BINARY_OP
-            {
-                IR_STUB_ESCAPE();
-                res = value_binary_op(oparg, lhs, rhs);
-                ir_own_C = IR_DETACH(ir_word, C, rhs);
-                ir_own_B = IR_DETACH(ir_word, B, lhs);
-                if (PyValue_IsNull(res)) {
-                    PyValue_XCLOSE(ir_own_C);
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        TARGET(BINARY_OP_ADD_FLOAT) {
-            int opcode = BINARY_OP_ADD_FLOAT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_ADD_FLOAT
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                double a, b;
-                if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a + b);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        TARGET(BINARY_OP_ADD_INT) {
-            int opcode = BINARY_OP_ADD_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_ADD_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_ADD_INT
-            {
-                right = value;
-                (void)right;
-                int64_t a = _PyValue_IntScaled(left);
-                int64_t b = _PyValue_IntScaled(right);
-                int64_t sum;
-                STAT_INC(BINARY_OP, hit);
-                if (__builtin_add_overflow(a, b, &sum)) {
-                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + PyValue_InlineInt64(right));
-                }
-                else {
-                    res = _PyValue_FromIntScaled(sum);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        TARGET(BINARY_OP_ADD_UNICODE) {
-            int opcode = BINARY_OP_ADD_UNICODE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow nos;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_UNICODE
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
-                if (!PyUnicode_CheckExact(value_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_UNICODE
-            {
-                nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
-                if (!PyUnicode_CheckExact(o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_ADD_UNICODE
-            {
-                right = value;
-                (void)right;
-                left = nos;
-                (void)left;
-                PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
-                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
-                assert(PyUnicode_CheckExact(left_o));
-                assert(PyUnicode_CheckExact(right_o));
-                STAT_INC(BINARY_OP, hit);
-                PyObject *res_o = PyUnicode_Concat(left_o, right_o);
-                if (res_o == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = PyValue_FromNonNumberSteal(res_o);
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_UNICODE
-            {
-                value = r;
-                (void)value;
-                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_UNICODE
-            {
-                value = l;
-                (void)value;
-                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(value)));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_C, _PyUnicode_ExactDealloc);
-            _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_AND) {
-            binary_op_operation = NB_AND;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_AND_INT) {
-            int opcode = BINARY_OP_AND_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_AND_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_AND_INT
-            {
-                right = value;
-                (void)right;
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) & PyValue_InlineInt64(right));
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        TARGET(BINARY_OP_EXTEND) {
-            int opcode = BINARY_OP_EXTEND;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_EXTEND);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_EXTEND
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                PyObject *descr = (PyObject *)fb->descr;
-                if (!PyValue_IsObject(left) || !PyValue_IsObject(right)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-                assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
-                _PyBinaryOpSpecializationDescr *d = _PyBinaryOp_ExtendDescr(descr);
-                assert(d != NULL);
-                if (Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                binaryopactionfunc action = d->action;
-                PyObject *res_o = action(left_o, right_o);
-                if (res_o == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
-                assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
-                res = PyValue_FromObjectSteal(res_o);
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_ANY
-            {
-                value = r;
-                (void)value;
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_ANY
-            {
-                value = l;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_FLOOR_DIVIDE) {
-            binary_op_operation = NB_FLOOR_DIVIDE;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_FLOOR_DIVIDE_INT) {
-            int opcode = BINARY_OP_FLOOR_DIVIDE_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_FLOOR_DIVIDE_INT
-            {
-                right = value;
-                (void)right;
-                int64_t b = PyValue_InlineInt64(right);
-                if (b == 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                int64_t a = PyValue_InlineInt64(left);
-                STAT_INC(BINARY_OP, hit);
-                int64_t quotient = a / b;
-                if (quotient * b != a && (a ^ b) < 0) {
-                    quotient--;
-                }
-                res = PyValue_FromInt64(quotient);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_INPLACE_ADD) {
-            binary_op_operation = NB_INPLACE_ADD;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_INPLACE_ADD_UNICODE) {
-            int opcode = BINARY_OP_INPLACE_ADD_UNICODE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD_UNICODE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow nos;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_UNICODE
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
-                if (!PyUnicode_CheckExact(value_o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_UNICODE
-            {
-                nos = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
-                if (!PyUnicode_CheckExact(o)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_INPLACE_ADD_UNICODE
-            {
-                right = value;
-                (void)right;
-                left = nos;
-                (void)left;
-                PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
-                assert(PyUnicode_CheckExact(left_o));
-                assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(right)));
-                assert(IR_IS_LOCAL(IR_A(ir_word)));
-                assert(PyUnicode_CheckExact(left_o));
-                PyValue held = IR_SLOT(IR_A(ir_word));
-                if (!PyValue_Is(held, left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                ir_own_B = IR_DETACH(ir_word, B, left);
-                (void)(ir_own_B);
-                assert(Py_REFCNT(left_o) >= 1);
-                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
-                PyObject *temp = PyValue_AsKnownObjectSteal(held);
-                ir_own_C = IR_DETACH(ir_word, C, right);
-                PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(right, ir_own_C));
-                temp = value_unicode_append(temp, right_o);
-                _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
-                if (temp == NULL) {
-                    _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                res = PyValue_FromNonNumberSteal(temp);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_INPLACE_AND) {
-            binary_op_operation = NB_INPLACE_AND;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_FLOOR_DIVIDE) {
-            binary_op_operation = NB_INPLACE_FLOOR_DIVIDE;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_LSHIFT) {
-            binary_op_operation = NB_INPLACE_LSHIFT;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_MATRIX_MULTIPLY) {
-            binary_op_operation = NB_INPLACE_MATRIX_MULTIPLY;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_MULTIPLY) {
-            binary_op_operation = NB_INPLACE_MULTIPLY;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_OR) {
-            binary_op_operation = NB_INPLACE_OR;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_POWER) {
-            binary_op_operation = NB_INPLACE_POWER;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_REMAINDER) {
-            binary_op_operation = NB_INPLACE_REMAINDER;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_RSHIFT) {
-            binary_op_operation = NB_INPLACE_RSHIFT;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_SUBTRACT) {
-            binary_op_operation = NB_INPLACE_SUBTRACT;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_TRUE_DIVIDE) {
-            binary_op_operation = NB_INPLACE_TRUE_DIVIDE;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_INPLACE_XOR) {
-            binary_op_operation = NB_INPLACE_XOR;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_LSHIFT) {
-            binary_op_operation = NB_LSHIFT;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_LSHIFT_INT) {
-            int opcode = BINARY_OP_LSHIFT_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_LSHIFT_INT
-            {
-                right = value;
-                (void)right;
-                int64_t b = PyValue_InlineInt64(right);
-                if (b < 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                int64_t a = PyValue_InlineInt64(left);
-                STAT_INC(BINARY_OP, hit);
-                int64_t shifted = b < 63 ? (int64_t)((uint64_t)a << b) : 0;
-                if (a == 0) {
-                    res = PyValue_FromInlineInt(0);
-                }
-                else if (b < 63 && Py_ARITHMETIC_RIGHT_SHIFT(int64_t, shifted, b) == a) {
-                    res = PyValue_FromInt64(shifted);
-                }
-                else {
-                    res = _PyValue_LshiftInt64(a, b);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_MATRIX_MULTIPLY) {
-            binary_op_operation = NB_MATRIX_MULTIPLY;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_MULTIPLY) {
-            binary_op_operation = NB_MULTIPLY;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_MULTIPLY_FLOAT) {
-            int opcode = BINARY_OP_MULTIPLY_FLOAT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_MULTIPLY_FLOAT
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                double a, b;
-                if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a * b);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        TARGET(BINARY_OP_MULTIPLY_INT) {
-            int opcode = BINARY_OP_MULTIPLY_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_MULTIPLY_INT
-            {
-                right = value;
-                (void)right;
-                int64_t a = _PyValue_IntScaled(left);
-                int64_t b = PyValue_InlineInt64(right);
-                int64_t product;
-                STAT_INC(BINARY_OP, hit);
-                if (__builtin_mul_overflow(a, b, &product)) {
-                    res = _PyValue_MultiplyInt64(PyValue_InlineInt64(left), b);
-                }
-                else {
-                    res = _PyValue_FromIntScaled(product);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_OR) {
-            binary_op_operation = NB_OR;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_OR_INT) {
-            int opcode = BINARY_OP_OR_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_OR_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_OR_INT
-            {
-                right = value;
-                (void)right;
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) | PyValue_InlineInt64(right));
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_POWER) {
-            binary_op_operation = NB_POWER;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_REMAINDER) {
-            binary_op_operation = NB_REMAINDER;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_REMAINDER_INT) {
-            int opcode = BINARY_OP_REMAINDER_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_REMAINDER_INT
-            {
-                right = value;
-                (void)right;
-                int64_t b = PyValue_InlineInt64(right);
-                if (b == 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                int64_t a = PyValue_InlineInt64(left);
-                STAT_INC(BINARY_OP, hit);
-                int64_t remainder = a % b;
-                if (remainder != 0 && (remainder ^ b) < 0) {
-                    remainder += b;
-                }
-                res = PyValue_FromInlineInt(remainder);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_RSHIFT) {
-            binary_op_operation = NB_RSHIFT;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_RSHIFT_INT) {
-            int opcode = BINARY_OP_RSHIFT_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_RSHIFT_INT
-            {
-                right = value;
-                (void)right;
-                int64_t b = PyValue_InlineInt64(right);
-                if (b < 0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                int64_t a = PyValue_InlineInt64(left);
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInlineInt(Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, b < 63 ? b : 63));
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_SUBTRACT) {
-            binary_op_operation = NB_SUBTRACT;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_SUBTRACT_FLOAT) {
-            int opcode = BINARY_OP_SUBTRACT_FLOAT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_SUBTRACT_FLOAT
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                double a, b;
-                if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a - b);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        TARGET(BINARY_OP_SUBTRACT_INT) {
-            int opcode = BINARY_OP_SUBTRACT_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_SUBTRACT_INT
-            {
-                right = value;
-                (void)right;
-                int64_t a = _PyValue_IntScaled(left);
-                int64_t b = _PyValue_IntScaled(right);
-                int64_t difference;
-                STAT_INC(BINARY_OP, hit);
-                if (__builtin_sub_overflow(a, b, &difference)) {
-                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) - PyValue_InlineInt64(right));
-                }
-                else {
-                    res = _PyValue_FromIntScaled(difference);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        TARGET(BINARY_OP_TRUEDIV_FLOAT) {
-            int opcode = BINARY_OP_TRUEDIV_FLOAT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _BINARY_OP_TRUEDIV_FLOAT
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                double a, b;
-                if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                if (b == 0.0) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromDouble(a / b);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            // _POP_TOP_NUMBER
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(BINARY_OP_TRUE_DIVIDE) {
-            binary_op_operation = NB_TRUE_DIVIDE;
-            goto LABEL_binary_op;
-        }
-        TARGET(BINARY_OP_XOR) {
-            binary_op_operation = NB_XOR;
-            goto LABEL_binary_op;
-        }
-
-        TARGET(BINARY_OP_XOR_INT) {
-            int opcode = BINARY_OP_XOR_INT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP_XOR_INT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _GUARD_TOS_INT
-            {
-                value = IR_VIEW(IR_C(ir_word));
-                if (!PyValue_IsInlineInt(value)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _GUARD_NOS_INT
-            {
-                left = IR_VIEW(IR_B(ir_word));
-                if (!PyValue_IsInlineInt(left)) {
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
-                }
-            }
-            // _BINARY_OP_XOR_INT
-            {
-                right = value;
-                (void)right;
-                STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) ^ PyValue_InlineInt64(right));
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                l = left;
-                r = right;
-                ir_own_B = IR_DETACH(ir_word, B, l);
-                ir_own_C = IR_DETACH(ir_word, C, r);
-            }
-            // _POP_TOP_INT
-            {
-                value = r;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_C);
-            }
-            // _POP_TOP_INT
-            {
-                value = l;
-                (void)value;
-                assert(PyValue_LongCheckExact(value));
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
         TARGET(BUILD_INTERPOLATION) {
             IR_RUN_OUTLINED(ir_run_BUILD_INTERPOLATION);
         }
@@ -15229,90 +12089,6 @@ static const _PyIRForm ir_handler_forms[512] = {
                 value = trash;
                 PyValue_XCLOSE(value);
             }
-            DISPATCH();
-        }
-
-        TARGET(UNARY_INVERT) {
-            int opcode = UNARY_INVERT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNARY_INVERT);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValue res;
-            PyValueBorrow v;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _UNARY_INVERT
-            {
-                value = IR_VIEW(IR_B(ir_word));
-                res = _PyValue_Invert(value);
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 1, this_instr);
-                }
-                v = value;
-                ir_own_B = IR_DETACH(ir_word, B, v);
-            }
-            // _POP_TOP_ANY
-            {
-                value = v;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-
-        TARGET(UNARY_NEGATIVE) {
-            int opcode = UNARY_NEGATIVE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNARY_NEGATIVE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValueBorrow value;
-            PyValue res;
-            PyValueBorrow v;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _UNARY_NEGATIVE
-            {
-                value = IR_VIEW(IR_B(ir_word));
-                if (PyValue_IsInlineInt(value)) {
-                    res = PyValue_FromInt64(-PyValue_InlineInt64(value));
-                }
-                else if (PyValue_IsInlineFloat(value)) {
-                    res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
-                }
-                else {
-                    res = _PyValue_Negative(value);
-                }
-                if (PyValue_IsNull(res)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                v = value;
-                ir_own_B = IR_DETACH(ir_word, B, v);
-            }
-            // _POP_TOP_ANY
-            {
-                value = v;
-                (void)value;
-                (void)(ir_own_B);
-            }
-            IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_B);
-            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
         TARGET(UNPACK_EX) {

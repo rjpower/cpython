@@ -228,10 +228,6 @@ _PyRegCfg_FormatOf(int opcode, int oparg)
     if (opcode == YIELD_VALUE && oparg == 1) {
         return _PyIR_FormatOf(YIELD_DELEGATED);
     }
-    // The handlers of BINARY_OP's operations share its format
-    if (opcode == BINARY_OP) {
-        return _PyIR_FormatOf(_PyIR_BINARY_OP_FIRST);
-    }
     return _PyIR_FormatOf(opcode);
 }
 
@@ -1616,40 +1612,56 @@ rule_load_global(_PyRegTr *t, const _PyRegOp *src)
 
 /* BINARY_OP.  The selector routes to a family; this is the one place that
  * does.  Addition is the Add family (Python/register_ops/add.rop) and
- * subscription the GetItem family (items.rop): the register instruction is
- * the family's Generic arm, with the operands in their declared order (x and
- * y, or obj and key) in and dst out.  The word starts on that arm, which
- * installs the arm the operands call for.  The other operations are
- * unported (-1). */
-static int
-binary_op_handler(int oparg)
-{
-    switch (oparg) {
-        case NB_ADD:
-            return ROP_HANDLER_Add_Generic;
-        case NB_SUBSCR:
-            return ROP_HANDLER_GetItem_Generic;
-        default:
-            return -1;
-    }
-}
-
+ * subscription the GetItem family (items.rop); every other operation is the
+ * Binary family (numeric.rop), which takes the selector as its op operand.
+ * The register instruction is the family's Generic arm, with the operands in
+ * their declared order (x and y, or obj and key) in and dst out.  The word
+ * starts on that arm, which installs the arm the operands call for. */
 static int
 rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
 {
-    int handler = binary_op_handler(src->oparg);
-    if (handler < 0) {
-        return _PyRegTr_Legacy(t, src);
+    if (src->oparg < 0 || src->oparg > NB_OPARG_LAST) {
+        PyErr_SetString(PyExc_SystemError, "invalid BINARY_OP selector");
+        return ERROR;
     }
+    int handler = src->oparg == NB_ADD ? ROP_HANDLER_Add_Generic
+        : src->oparg == NB_SUBSCR ? ROP_HANDLER_GetItem_Generic
+        : ROP_HANDLER_Binary_Generic;
     if (t->sp < 2) {
         return stack_underflow(src);
     }
     int dst;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler,
-                                  &t->stack[t->sp - 2], 2, &dst, 1, NULL));
+                                  &t->stack[t->sp - 2], 2, &dst, 1, &op));
+    op->oparg = handler == ROP_HANDLER_Binary_Generic ? src->oparg : 0;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
     return _PyRegTr_Push(t, dst);
+}
+
+/* UNARY_NEGATIVE and UNARY_INVERT, and the intrinsic that is unary plus,
+ * are the Unary family (numeric.rop); the operation is its op operand. */
+static int
+emit_unary(_PyRegTr *t, const _PyRegOp *src, int op_kind)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Unary_Generic,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = op_kind;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_unary(_PyRegTr *t, const _PyRegOp *src)
+{
+    return emit_unary(t, src, src->opcode == UNARY_NEGATIVE ? NEGATIVE : INVERT);
 }
 
 /* The item and slice stack ops (Python/register_ops/items.rop).  The uses
@@ -2044,9 +2056,9 @@ rule_set_function_attribute(_PyRegTr *t, const _PyRegOp *src)
 
 /* CALL_INTRINSIC_1 is the Intrinsic family and CALL_INTRINSIC_2 IntrinsicPair
  * (functions.rop).  The compiler's number is the member of IntrinsicId: n - 1
- * for the unary table, n + 11 for the binary one, whose escapes (comparisons,
- * GETATTR, SETATTR) follow its seven functions.  The number also picks the
- * arm. */
+ * for the unary table below unary plus, n - 2 above it, and n + 10 for the
+ * binary one, whose escapes (comparisons, GETATTR, SETATTR) follow its seven
+ * functions.  The number also picks the arm.  Unary plus is the Unary family. */
 static int
 rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
 {
@@ -2059,7 +2071,10 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
             PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
             return ERROR;
         }
-        id = n - 1;
+        if (n == INTRINSIC_UNARY_POSITIVE) {
+            return emit_unary(t, src, POSITIVE);
+        }
+        id = n < INTRINSIC_UNARY_POSITIVE ? n - 1 : n - 2;
         handler = _PyRop_SelectIntrinsic(
             n == INTRINSIC_IMPORT_STAR ? ROP_SELECT_IMPORT_STAR
             : n == INTRINSIC_STOPITERATION_ERROR ? ROP_SELECT_STOPITERATION
@@ -2070,7 +2085,7 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
             PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
             return ERROR;
         }
-        id = n + 11;
+        id = n + 10;
         handler = _PyRop_SelectIntrinsicPair(
             n < INTRINSIC_COMPARE_OP ? ROP_SELECT_BINARY
             : n < INTRINSIC_GETATTR ? ROP_SELECT_COMPARE
@@ -2306,6 +2321,8 @@ rule_insert(_PyRegTr *t, const _PyRegOp *src)
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
+    [UNARY_NEGATIVE] = rule_unary,
+    [UNARY_INVERT] = rule_unary,
     [TO_BOOL] = rule_truth,
     [UNARY_NOT] = rule_truth,
     [POP_JUMP_IF_FALSE] = rule_branch,

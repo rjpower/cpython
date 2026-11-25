@@ -4,8 +4,7 @@ Reads the instruction definitions from Python/bytecodes.c and writes
 Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
 
 - the handler indices of the IR-only instructions (annotation `ir_only`),
-  which follow the 256 opcodes in name order, then those of the BINARY_OP
-  operations, and IR_NUM_HANDLERS;
+  which follow the 256 opcodes in name order, and IR_NUM_HANDLERS;
 - _PyFb_<family>, the type of the feedback entry of each family that has
   one (ir_generator.FEEDBACK_LAYOUTS);
 - _PyIR_Formats, the instruction contract of every handler, indexed by
@@ -31,7 +30,6 @@ from analyzer import Analysis, Uop, analyze_files
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
-    BINARY_OP_FAMILY,
     EXECUTION_VARIANTS,
     canonical_handler,
     FUSED_SHADOWS,
@@ -39,8 +37,6 @@ from ir_generator import (
     HandlerContract,
     IRFormat,
     OwnershipEvent,
-    binary_op_handlers,
-    binary_ops,
     call_role_flags,
     compute_formats,
     operand_metadata,
@@ -69,8 +65,6 @@ def shadow_of(name: str, analysis: Analysis) -> str:
         return "YIELD_VALUE"
     if name == "INSTRUMENTED_YIELD_DELEGATED":
         return "INSTRUMENTED_YIELD_VALUE"
-    if name in binary_op_handlers(analysis):
-        return BINARY_OP_FAMILY
     # The fused handlers, their specialisations and twins stand for the
     # compare, whose operation they run
     for fused, compare in FUSED_SHADOWS.items():
@@ -93,7 +87,6 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
            if name not in analysis.pseudos} | handler_ids(analysis)
     dispatch = handler_ids(analysis)
     insts = handler_instructions(analysis)
-    binary = set(binary_op_handlers(analysis))
     boundaries = generator_boundaries(analysis)
     bases = {}
     flags = {}
@@ -115,8 +108,6 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
             parts.append("_PyIR_H_SPECIALIZED")
         if ordinary.startswith("INSTRUMENTED_"):
             parts.append("_PyIR_H_INSTRUMENTED")
-        if name in binary:
-            parts.append("_PyIR_H_BINARY_OP")
         if (name in analysis.ir_only or name in EXECUTION_VARIANTS
                 or name in boundaries):
             parts.append("_PyIR_H_IR_ONLY")
@@ -361,7 +352,7 @@ def generate_ir_metadata(
             out.emit(f"#define {name:<46} {ids[name]}\n")
         out.emit("\n")
         for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
-                          ("BINARY_OP", 4), ("IR_ONLY", 8), ("NOFB", 16),
+                          ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
                           ("SAVES_IP", 1024), ("JIT_EVENT", 2048)):
@@ -403,16 +394,6 @@ def generate_ir_metadata(
             i = arm_id(analysis, arm)
             out.emit(f"[{i}] = {{ {i}, {i}, 0, 0, 0, 0 }},  /* {arm.dotted} */\n")
         out.emit("};\n#endif\n\n")
-        ops = binary_op_handlers(analysis)
-        if ops:
-            out.emit("/* The handler of BINARY_OP operation OP is "
-                     "_PyIR_BINARY_OP_FIRST + OP */\n")
-            out.emit(f"#define {'_PyIR_BINARY_OP_FIRST':<46} {ops[0]}\n")
-            for op, name in zip(binary_ops(), ops):
-                out.emit(f"static_assert({name} == _PyIR_BINARY_OP_FIRST + NB_{op}, "
-                         f'"{name}");\n')
-            out.emit("\n")
-
         layouts = sorted({(fmt.group, fmt.fb_layout) for fmt in formats.values()
                           if fmt.fb_layout is not None})
         if layouts:
@@ -425,14 +406,9 @@ def generate_ir_metadata(
         out.emit(f"PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[{n}];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit(f"const _PyIRFormat _PyIR_Formats[{n}] = {{\n")
-        # BINARY_OP has a format but no handler: its operations decode as
-        # it.  Its row is that of its generic handlers.
         indices = dict(ids)
         rows = dict(contracts)
-        if BINARY_OP_FAMILY in analysis.instructions:
-            indices[BINARY_OP_FAMILY] = analysis.instructions[BINARY_OP_FAMILY].opcode
-            rows[BINARY_OP_FAMILY] = contracts[binary_op_handlers(analysis)[0]]
-        # So have the STACK_ONLY opcodes, which the CFG reads
+        # The STACK_ONLY opcodes have a format, which the CFG reads
         for name in STACK_ONLY:
             if name in analysis.instructions:
                 indices[name] = analysis.instructions[name].opcode

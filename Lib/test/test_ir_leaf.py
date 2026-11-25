@@ -574,9 +574,9 @@ class RecordTests(unittest.TestCase):
     def test_record_dump_prints_the_leaf(self):
         with test_tools.imports_under_tool("cases_generator"):
             import ir_records
-        text = ir_records.format_record(self.records["BINARY_OP_ADD_INT"])
-        self.assertIn("  uop 2 _BINARY_OP_ADD_INT", text)
-        self.assertIn("call _PyValue_BoxInt64", text)
+        text = ir_records.format_record(self.records["COMPARE_OP_FLOAT"])
+        self.assertIn("  uop 2 _COMPARE_OP_FLOAT", text)
+        self.assertIn("prim COMPARISON_BIT", text)
         self.assertRegex(text, r"exit_if EXIT %\d+ \[")
 
 
@@ -670,12 +670,6 @@ def _type_version(tp):
 
 # Handler: (inputs, a function of the inputs giving the cache operands, opargs)
 HANDLERS = {
-    **{name: (int_domain, None, [0]) for name in (
-        "BINARY_OP_ADD_INT", "BINARY_OP_SUBTRACT_INT", "BINARY_OP_MULTIPLY_INT",
-        "BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT")},
-    **{name: (float_domain, None, [0]) for name in (
-        "BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
-        "BINARY_OP_TRUEDIV_FLOAT")},
     "COMPARE_OP_JUMP_INT": (mixed_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
     "COMPARE_OP_JUMP_FLOAT": (float_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
     "IS_OP_JUMP": (mixed_domain, None, [0, 1]),

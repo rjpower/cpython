@@ -439,13 +439,6 @@ read_field(_PyIRWord word, int loc)
     }
 }
 
-static inline int
-is_binary_op_handler(int handler)
-{
-    return handler >= _PyIR_BINARY_OP_FIRST
-           && handler <= _PyIR_BINARY_OP_FIRST + NB_SUBSCR - 1;
-}
-
 int
 _PyIR_FieldOparg(_PyIRWord word)
 {
@@ -706,9 +699,6 @@ _PyCode_InstrOparg(PyCodeObject *co, int i)
         case _PyIR_LOC_NONE:
             return 0;
         case _PyIR_LOC_FBARG: {
-            if (is_binary_op_handler(handler)) {
-                return handler - _PyIR_BINARY_OP_FIRST;
-            }
             // The sites that need the operation have an entry of their own
             int i = _PyCode_FbOrdinal(co, read_field(word, fmt->fb));
             assert(i > 0);

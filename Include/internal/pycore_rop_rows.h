@@ -318,6 +318,15 @@ PyAPI_FUNC(PyValue) _PyRop_ImportName(PyThreadState *, _PyInterpreterFrame *,
 PyAPI_FUNC(PyValue) _PyRop_ImportFrom(PyThreadState *, _PyInterpreterFrame *,
                                       PyValue, uint32_t);
 
+/* Unary (Python/register_ops/numeric.rop).  The members of UnaryOp in
+ * declaration order, the numbers the generated handlers use for the enum's
+ * names. */
+enum {
+    NEGATIVE,
+    POSITIVE,
+    INVERT,
+};
+
 /* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The
  * members of BranchMode in declaration order, the numbers the generated
  * handlers use for the enum's names: the jump is taken when the test is

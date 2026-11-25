@@ -1472,6 +1472,67 @@ translate_instr(_PyRegTr *t, const _PyRegOp *instr)
     return rule(t, instr);
 }
 
+/* A compare that the conditional branch after it consumes, on the same line
+ * and under the same handler: the pair that FuseJump may fuse */
+static int
+feeds_branch(const _PyRegOp *cmp, const _PyRegOp *next)
+{
+    switch (cmp->opcode) {
+        case COMPARE_OP:
+        case IS_OP:
+        case CONTAINS_OP:
+            break;
+        default:
+            return 0;
+    }
+    return (next->opcode == POP_JUMP_IF_FALSE || next->opcode == POP_JUMP_IF_TRUE)
+           && next->loc.lineno == cmp->loc.lineno
+           && next->except == cmp->except && op_jumps(next);
+}
+
+/* The branch's target finds the parameters below the compare's operands,
+ * which the compare leaves alone.  Their moves go before the compare, so
+ * that the compare and the branch stay adjacent and fuse: the moves hold
+ * on both edges, as they did before the compare.  The branch then finds
+ * its parameters bound and emits no move.
+ *
+ * The moves write parameter homes and rename identities below the operands,
+ * so the hoist stands only when the operands are disjoint from them: no
+ * operand is a parameter below, or the identity of a position below.  Else
+ * the moves stay with the branch, between the compare and it. */
+static int
+hoist_edge(_PyRegTr *t, const _PyRegOp *cmp, const _PyRegOp *branch)
+{
+    _PyRegCfg *cfg = t->cfg;
+    int below = Py_MIN(t->sp - _PyOpcode_num_popped(cmp->opcode, cmp->oparg),
+                       t->sp);
+    for (int j = below; j < t->sp; j++) {
+        int v = t->stack[j];
+        if (_PyReg_IS_CANON(cfg, v)
+            && v - cfg->nlocalsplus < below)
+        {
+            return SUCCESS;
+        }
+        for (int k = 0; k < below; k++) {
+            if (t->stack[k] == v) {
+                return SUCCESS;
+            }
+        }
+    }
+    int operands[2];
+    int n = t->sp - below;
+    assert(n <= 2);
+    for (int j = 0; j < n; j++) {
+        operands[j] = t->stack[below + j];
+    }
+    mark_maybe(t, below + 1);
+    RETURN_IF_ERROR(bind_edge(t, below, branch));
+    for (int j = 0; j < n; j++) {
+        assert(t->stack[below + j] == operands[j]);
+    }
+    return SUCCESS;
+}
+
 static int
 translate(_PyRegCfg *cfg)
 {
@@ -1526,6 +1587,12 @@ translate(_PyRegCfg *cfg)
         }
         blk->start = t.nops;
         for (int i = start; err == SUCCESS && i < end; i++) {
+            if (i + 1 < end && feeds_branch(&cfg->ops[i], &cfg->ops[i + 1])) {
+                err = hoist_edge(&t, &cfg->ops[i], &cfg->ops[i + 1]);
+                if (err != SUCCESS) {
+                    break;
+                }
+            }
             err = translate_instr(&t, &cfg->ops[i]);
         }
         if (err == SUCCESS && blk->falls_through

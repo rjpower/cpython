@@ -3,12 +3,9 @@
 //   Python/register_ops/add.rop, Python/register_ops/calls.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/getattr.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 //
-// 1 templates.  Inline arms that keep the call of their form:
-//   BranchNone.Test: BranchNone.Test: same_bool has no leaf lowering
-//   BranchTruth.Bool: BranchTruth.Bool: branch_drops has no leaf lowering
+// 6 templates.  Inline arms that keep the call of their form:
 //   BranchTruth.Int: BranchTruth.Int: exact_int has no leaf lowering
 //   BranchTruth.List: BranchTruth.List: exact_list has no leaf lowering
-//   BranchTruth.None: BranchTruth.None: branch_drops has no leaf lowering
 //   BranchTruth.Plain: BranchTruth.Plain: none_or_plain has no leaf lowering
 //   BranchTruth.Str: BranchTruth.Str: exact_str has no leaf lowering
 //   Const.Common: Const.Common: common_constant has no leaf lowering
@@ -30,8 +27,6 @@
 //   GetMethod.MethodValues: GetMethod.MethodValues: fb is not a leaf value
 //   GetMethod.NoDict: GetMethod.NoDict: fb is not a leaf value
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
-//   Jump.Direct: Jump.Direct: exit jump has no leaf lowering
-//   Jump.Poll: Jump.Poll: thread is not a leaf value
 //   LocalRead.Bound: LocalRead.Bound: dup has no C body (pending)
 //   LocalWrite.Store: LocalWrite.Store: acquire has no C body (pending)
 //   Truth.Bool: Truth.Bool: truth_object has no leaf lowering
@@ -115,6 +110,204 @@ jit_template_Add_Int(_PyJitWordCx *cx)
     _PyJitAsm_Bind(a, L11);
     _PyJitAsm_MovRR(a, _PyJitReg_RCX, _PyJitReg_RAX);
     _PyJitAsm_Jmp(a, L5);
+    _PyJitTemplate_Raise(cx, raise);
+    _PyJitLower_ColdEnd(cx);
+}
+
+// The leaf graph of BranchTruth.Bool:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_BoolCheck %1
+//     %3:bool = lnot %2
+//     exit_if EXIT %3
+//     %4:bool = jconst (IR_C(ir_word)) < 2
+//     %5:bool = lnot %4
+//     exit_if EXIT %5
+//     %6:bool = prim PyValue_IsTrue %1
+//     jmp b1(%6)
+//   b1(%0:bool):
+//     %7:bool = xorb !((IR_C(ir_word)) & 1) %0
+//     br %7, b4, b5
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     jmp b2
+//   b5:
+//     jmp b3
+static void
+jit_template_BranchTruth_Bool(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    _PyJitLower_PyValue_BoolCheck(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    _PyJitAsm_MovImm(a, _PyJitReg_RCX, (int64_t)((IR_C(ir_word)) < 2));
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
+    _PyJitAsm_Bind(a, L10);
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x1; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    }
+    int c8 = _PyJitLower_PyValue_IsTrue(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    int c9 = ((!((IR_C(ir_word)) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c8) : (int)c8);
+    _PyJitTemplate_Branch(cx, c9);
+}
+
+// The leaf graph of BranchTruth.None:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_IsNone %1
+//     %3:bool = lnot %2
+//     exit_if EXIT %3
+//     %4:bool = jconst (IR_C(ir_word)) < 2
+//     %5:bool = lnot %4
+//     exit_if EXIT %5
+//     %6:bool = const 0
+//     jmp b1(%6)
+//   b1(%0:bool):
+//     %7:bool = xorb !((IR_C(ir_word)) & 1) %0
+//     br %7, b4, b5
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     jmp b2
+//   b5:
+//     jmp b3
+static void
+jit_template_BranchTruth_None(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L8 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    int c4 = _PyJitLower_PyValue_IsNone(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c4), cx->slow);
+    _PyJitAsm_Bind(a, L8);
+    _PyJitAsm_MovImm(a, _PyJitReg_RCX, (int64_t)((IR_C(ir_word)) < 2));
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
+    _PyJitAsm_Bind(a, L10);
+    _PyJitAsm_MovImm(a, _PyJitReg_RCX, 0);
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x2; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    }
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    int c9 = ((!((IR_C(ir_word)) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    _PyJitTemplate_Branch(cx, c9);
+}
+
+// The leaf graph of BranchNone.Test:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_IsNone %1
+//     jmp b1(%2)
+//   b1(%0:bool):
+//     %3:bool = xorb !(IR_B(ir_word)) %0
+//     br %3, b4, b5
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     jmp b2
+//   b5:
+//     jmp b3
+static void
+jit_template_BranchNone_Test(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x1; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    }
+    int c4 = _PyJitLower_PyValue_IsNone(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    int c5 = ((!(IR_B(ir_word))) ? (int)_PyJitCond_Not((_PyJitCond)c4) : (int)c4);
+    _PyJitTemplate_Branch(cx, c5);
+}
+
+// The leaf graph of Jump.Direct:
+//   b0:
+//     jump
+static void
+jit_template_Jump_Direct(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_Jmp(a, cx->target);
+}
+
+// The leaf graph of Jump.Poll:
+//   b0:
+//     %0:bool = prim _Py_EvalBreakerHasEvents
+//     br %0, b3, b4
+//   b1:
+//     jump
+//   b2:
+//     raise
+//   b3:
+//     %1:i32 = call _Py_HandlePending
+//     %2:i32 = const 0
+//     %3:bool = cmp ne %1, %2
+//     raise_if %3
+//     jmp b1
+//   b4:
+//     jmp b1
+static void
+jit_template_Jump_Poll(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L2 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel raise = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    int c1 = _PyJitLower__Py_EvalBreakerHasEvents(cx, (const uint8_t[]){0}, NULL);
+    _PyJitAsm_Jcc(a, c1, L4);
+    _PyJitAsm_Bind(a, L2);
+    _PyJitAsm_Jmp(a, cx->target);
+    _PyJitLower_ColdBegin(cx);
+    _PyJitAsm_Bind(a, L4);
+    cx->live = 0x0; cx->live_xmm = 0x0;
+    _PyJitLower_Call(cx, (const void *)_Py_HandlePending, 1, 1, (const _PyJitArg[]){_PyJitArg_GPR(_PyJit_TSTATE)}, _PyJitArg_GPR(_PyJitReg_RAX));
+    _PyJitAsm_ShiftRI(a, _PyJitShift_SHL, _PyJitReg_RAX, 32);
+    _PyJitAsm_ShiftRI(a, _PyJitShift_SAR, _PyJitReg_RAX, 32);
+    _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
+    int c4 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, c4, raise);
+    _PyJitAsm_Jmp(a, L2);
     _PyJitTemplate_Raise(cx, raise);
     _PyJitLower_ColdEnd(cx);
 }

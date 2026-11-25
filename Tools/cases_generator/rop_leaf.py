@@ -31,6 +31,10 @@ LEAF_HANDLE = {Handle.B: ir_leaf.VALUE, Handle.O: ir_leaf.VALUE}
 
 EXIT = "EXIT"
 
+# Primitives of a word's immediates: the template folds them in
+IMMEDIATE_TESTS = frozenset({"_PyRop_BranchDrops", "_PyRop_BranchTaken",
+                             "_PyRop_SameBool"})
+
 
 def leaf_type(t: Type) -> str | None:
     """The leaf IR type of a graph value; None for a token (an `Err`)"""
@@ -122,11 +126,36 @@ class LeafBuilder:
         x = self.program.externs.get(e.callee)
         if x is None or x.c is None:
             raise Unsupported(f"{self.arm.name}: {e.callee} has no C body (pending)")
+        if x.c.symbol in IMMEDIATE_TESTS:
+            return self.immediate_test(x.c.symbol, e)
         prim = ir_leaf.PRIMITIVES.get(x.c.symbol)
         if prim is None or len(prim.results) != 1:
             raise Unsupported(f"{self.arm.name}: {e.callee} has no leaf lowering")
         args = tuple(self.expr(a) for a in e.args)
         return self.emit1("prim", prim.results[0], args, x.c.symbol)
+
+    def immediate(self, e: Expr) -> str:
+        """The C expression, over the word, of an immediate operand of the
+        arm: the word is known when its template is made, so the tests of
+        immediates are not code"""
+        if isinstance(e, Name):
+            for p in self.program.encodings[self.arm.family].placements:
+                if (p.operand == e.name and p.kind is FieldKind.imm
+                        and len(p.slots) == 1 and p.slots[0].word == 0):
+                    return f"IR_{p.slots[0].name}(ir_word)"
+        raise Unsupported(f"{self.arm.name}: {e} is not an immediate of the word")
+
+    def immediate_test(self, symbol: str, e: Call) -> int:
+        """A branch's test of its mode or sense: a bool that is a function of
+        the word, or a test result negated or not by the word"""
+        imm = self.immediate(e.args[0])
+        if symbol == "_PyRop_BranchDrops":
+            return self.emit1("jconst", "bool", (), f"({imm}) < 2")
+        hit = self.expr(e.args[1])
+        if symbol == "_PyRop_BranchTaken":
+            return self.emit1("xorb", "bool", (hit,), f"!(({imm}) & 1)")
+        assert symbol == "_PyRop_SameBool"
+        return self.emit1("xorb", "bool", (hit,), f"!({imm})")
 
     # Statements and terminators
 
@@ -176,7 +205,9 @@ class LeafBuilder:
             bad = self.emit1("lnot", "bool", (ok,))
             self.emit("exit_if", (), (bad,), EXIT)
         elif isinstance(s, Publish):
-            if self.plan is not None and self.plan.publish != s:
+            if self.plan is not None and (
+                    self.plan.publish.bindings != s.bindings
+                    or self.plan.publish.debts != s.debts):
                 raise Unsupported(f"{self.arm.name}: two different publications")
             self.plan = PublishPlan(s)
             for b in s.bindings:
@@ -219,6 +250,10 @@ class LeafBuilder:
             self.cur.term = ("next", None)
         elif t.kind == "raise":
             self.cur.term = ("raise",)
+        elif t.kind == "branch":
+            self.cur.term = ("branch",)
+        elif t.kind == "jump":
+            self.cur.term = ("jump",)
         elif t.kind == "miss":
             self.cur.term = ("exit", EXIT, None)
         else:
@@ -229,6 +264,9 @@ class LeafBuilder:
         if x is None or x.c is None:
             raise Unsupported(f"{self.arm.name}: {t.callee} has no C body (pending)")
         edges = {e.case: e for e in t.edges}
+        if x.c.symbol == "_PyRop_Poll":
+            # The thread is implicit in the template's registers
+            return self.poll(edges)
         args = tuple(self.expr(a) for a in t.args)
         if x.c.convention == "bool_out" and x.c.symbol == "_PyValue_AddCheckedScaled":
             self.add_checked_scaled(args, edges)
@@ -244,6 +282,26 @@ class LeafBuilder:
             self.cur.term = self.jump(edges["ok"].target, (result,))
         else:
             raise Unsupported(f"{self.arm.name}: {t.callee} has no leaf lowering")
+
+    def poll(self, edges) -> None:
+        """The periodic check: a load and a test of the eval breaker, and
+        only when an event is pending the call that handles it"""
+        err = self.blocks[edges["err"].target.label]
+        if err.stmts or not (isinstance(err.term, Exit) and err.term.kind == "raise"):
+            raise Unsupported(f"{self.arm.name}: the error edge of poll is not a raise")
+        self.helpers.append("_Py_HandlePending")
+        self.effects |= set(ir_leaf.HELPERS["_Py_HandlePending"].effects)
+        events = self.emit1("prim", "bool", (), "_Py_EvalBreakerHasEvents")
+        here = self.cur
+        handle = self.new_block()
+        quiet = self.edge_block(edges["ok"].target)
+        here.term = ("br", events, handle.id, quiet)
+        self.cur = handle
+        status = self.emit1("call", "i32", (), "_Py_HandlePending")
+        zero = self.emit1("const", "i32", (), 0)
+        failed = self.emit1("cmp", "bool", (status, zero), "ne")
+        self.emit("raise_if", (), (failed,))
+        self.cur.term = self.jump(edges["ok"].target)
 
     def add_checked_scaled(self, args: tuple[int, ...], edges) -> None:
         """The checked add of the scaled words, a primitive of the closed
@@ -312,7 +370,12 @@ class TemplateBuilder:
                 lmap[p] = gp
         entry.term = ("jmp", bmap[0].id, [])
         outs = self.leaf.body.outputs
-        merge = g.new_block([ir_leaf.VALUE for _ in outs])
+        # A word that can branch ends on the flag that says whether it did
+        branches = any(b.term[0] == "branch" for b in body.blocks)
+        if any(b.term[0] == "jump" for b in body.blocks) and self.leaf.plan is not None:
+            raise jt.Refused("a jump after a publication")
+        merge = g.new_block([ir_leaf.VALUE for _ in outs]
+                            + (["bool"] if branches else []))
         for b in body.blocks:
             gb = bmap[b.id]
             published: dict[str, int] = {}
@@ -328,13 +391,24 @@ class TemplateBuilder:
                 gb.term = ("br", lmap[term[1]], bmap[term[2]].id, bmap[term[3]].id)
             elif term[0] == "jmp":
                 gb.term = ("jmp", bmap[term[1]].id, [lmap[a] for a in term[2]])
-            elif term[0] == "next":
-                gb.term = ("jmp", merge.id, [published[o] for o in outs])
+            elif term[0] in ("next", "branch"):
+                args = [published[o] for o in outs]
+                if branches:
+                    flag = g.value("bool")
+                    gb.ops.append(jt.TOp("const", [flag], [], int(term[0] == "branch")))
+                    args.append(flag)
+                gb.term = ("jmp", merge.id, args)
+            elif term[0] == "jump":
+                gb.term = ("end", None, True)
             elif term[0] == "raise":
                 gb.term = ("jmp", self.exit_block("raise"), [])
             else:
                 gb.term = ("jmp", self.exit_block("deopt"), [])
-        self.epilogue(merge, views)
+        if self.leaf.plan is None and not branches and all(
+                b.term[0] != "next" for b in body.blocks):
+            del g.blocks[merge.id]
+        else:
+            self.epilogue(merge, views, branches)
         return g
 
     @staticmethod
@@ -369,7 +443,8 @@ class TemplateBuilder:
         gb.ops.append(jt.TOp(k, results, args, op.attr))
         return gb
 
-    def epilogue(self, merge: jt.TBlock, views: dict[str, int]) -> None:
+    def epilogue(self, merge: jt.TBlock, views: dict[str, int],
+                 branches: bool = False) -> None:
         """Detach the spent temporaries, store each result, close what the
         displaced and spent owners held: Builder's end of a handler"""
         plan = self.leaf.plan
@@ -399,7 +474,7 @@ class TemplateBuilder:
         merge.ops.extend(deferred)
         for o, dst in olds:
             merge.ops.append(jt.TOp("prim", [], [o], "PyValue_XCLOSE", jt.local_test(dst)))
-        merge.term = ("end", None)
+        merge.term = ("end", merge.params[-1] if branches else None)
 
 
 @dataclass(frozen=True)

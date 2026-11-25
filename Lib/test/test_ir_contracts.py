@@ -4,7 +4,7 @@ A uop of Python/bytecodes.c may declare its contract: modes and facts on its
 stack items, `effects(...)` and `exits(...)`.  Its record then comes from
 the declarations, and the generator verifies its body against them and
 against the rows of Include/internal/pycore_ir_components.h.  The pilot
-declares BINARY_OP's add arms and generic form and UNPACK_SEQUENCE."""
+declares BINARY_OP's add arms and generic form."""
 
 import dataclasses
 import io
@@ -36,8 +36,6 @@ BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
 
 SLICE = ("_GUARD_TOS_INT", "_GUARD_NOS_INT", "_BINARY_OP_ADD_INT", "_POP_TOP_INT",
          "_BINARY_OP_ADD_FLOAT", "_POP_TOP_NUMBER", "_SPECIALIZE_BINARY_OP", "_BINARY_OP",
-         "_GUARD_TOS_TUPLE", "_GUARD_TOS_LIST", "_UNPACK_SEQUENCE_TUPLE",
-         "_UNPACK_SEQUENCE_LIST", "_SPECIALIZE_UNPACK_SEQUENCE", "_UNPACK_SEQUENCE",
          "_GUARD_TYPE_VERSION", "_CHECK_MANAGED_OBJECT_HAS_VALUES",
          "_NULL_SLOT_CONDITIONAL")
 
@@ -63,8 +61,7 @@ class SliceTests(unittest.TestCase):
         for name in SLICE:
             with self.subTest(uop=name):
                 self.assertIsNotNone(ir_contract.contract_of(analysis.uops[name]))
-        for name in ("BINARY_OP", "BINARY_OP_ADD_INT", "BINARY_OP_ADD_FLOAT",
-                     "UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST"):
+        for name in ("BINARY_OP", "BINARY_OP_ADD_INT", "BINARY_OP_ADD_FLOAT"):
             with self.subTest(macro=name):
                 self.assertIsNotNone(analysis.instructions[name].region)
 
@@ -74,11 +71,6 @@ class SliceTests(unittest.TestCase):
             ("BINARY_OP_ADD_INT", "_BINARY_OP_ADD_INT"): {ALLOCATES, MAY_RAISE},
             ("BINARY_OP_ADD_INT", "_POP_TOP_INT"): {WRITES_HEAP},
             ("BINARY_OP_ADD_FLOAT", "_POP_TOP_NUMBER"): set(),
-            ("UNPACK_SEQUENCE_LIST", "_GUARD_TOS_LIST"): {READS_HEAP},
-            ("UNPACK_SEQUENCE_LIST", "_UNPACK_SEQUENCE_LIST"): {READS_HEAP, MAY_RELEASE},
-            # Not reviewed: today's inference (G0c reviews the specializers)
-            ("UNPACK_SEQUENCE", "_SPECIALIZE_UNPACK_SEQUENCE"): set(EFFECTS),
-            ("UNPACK_SEQUENCE", "_UNPACK_SEQUENCE"): set(EFFECTS),
         }
         for (handler, uop), effects in expected.items():
             with self.subTest(handler=handler, uop=uop):
@@ -96,14 +88,6 @@ class SliceTests(unittest.TestCase):
         self.assertEqual([str(f) for f in add_float.results], ["EXACT_TYPE(v2, PyFloat_Type)"])
         result = uop_record("BINARY_OP_ADD_INT", "_BINARY_OP_ADD_INT").results
         self.assertEqual([str(f) for f in result], ["EXACT_TYPE(v2, PyLong_Type)"])
-        # The implicit pointer-space guard, then the declared type test
-        guard_list = uop_record("UNPACK_SEQUENCE_LIST", "_GUARD_TOS_LIST")
-        self.assertEqual([facts(g) for g in guard_list.guards],
-                         [["ENCODING(v0, object)"], ["EXACT_TYPE(v0, PyList_Type)"]])
-        unpack = uop_record("UNPACK_SEQUENCE_LIST", "_UNPACK_SEQUENCE_LIST")
-        self.assertEqual([(facts(g), g.reason) for g in unpack.guards],
-                         [([], "a free-threaded build's critical section"),
-                          (["LENGTH(v0, oparg)"], "")])
 
     # Where the tables (ir_records, deleted at G0d) declare an exit that the
     # macro's expansion cannot take.  IR_TRY_DICT_FIRST_PROBE: a hit stores

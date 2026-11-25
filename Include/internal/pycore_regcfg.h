@@ -68,7 +68,6 @@ extern "C" {
 #define _PyReg_ELIDED_NOP       32  // ... but a NOP stands for it, because it
                                     // alone holds its line
 
-#define _PyReg_UNPACK_LOCALS    128 // an unpack whose elements go to the run
                                     // of locals from dst; out[] stay as the
                                     // window's scratch registers
 #define _PyReg_KWNAMES         4096 // an elided LOAD_CONST of the names of
@@ -226,9 +225,6 @@ _PyRegOp_WritesLocal(const _PyRegOp *op, int z)
     if (op->dst < 0) {
         return 0;
     }
-    if (op->flags & _PyReg_UNPACK_LOCALS) {
-        return z >= op->dst && z < op->dst + op->nout;
-    }
     return z == op->dst;
 }
 
@@ -352,7 +348,6 @@ int _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical);
 /* The passes, in the order the driver runs them */
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
-int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);
 int _PyRegPass_KwNames(_PyRegCfg *cfg);
 int _PyRegPass_ElideNull(_PyRegCfg *cfg);
 int _PyRegPass_CallRoles(_PyRegCfg *cfg);

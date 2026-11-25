@@ -8,8 +8,6 @@ enum PatternKind(Mapping, Sequence, Keys, Class);
 
 // 1E: displays, updates, comprehension insertion, keyword merge, unpack
 
-family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpack>)
-  exits(next, raise, miss, again) ops(UNPACK_SEQUENCE, UNPACK_EX);
 
 // 1F: namespaces, cells, globals, annotations, import
 

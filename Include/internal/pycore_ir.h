@@ -958,7 +958,6 @@ PyAPI_FUNC(int) _PyCode_InstrDiscards(PyCodeObject *co, int i);
 /* The number of elements that the unpack at index i stores to locals (its
  * dst names a run of them), where its stack instruction pushed them; 0 if
  * its elements stay in the window or it is no unpack. */
-PyAPI_FUNC(int) _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */

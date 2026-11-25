@@ -3314,55 +3314,6 @@ success:
 }
 
 #ifdef Py_STATS
-static int
-unpack_sequence_fail_kind(PyObject *seq)
-{
-    if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(seq))) {
-        return SPEC_FAIL_UNPACK_SEQUENCE_SEQUENCE;
-    }
-    if (PyIter_Check(seq)) {
-        return SPEC_FAIL_UNPACK_SEQUENCE_ITERATOR;
-    }
-    return SPEC_FAIL_OTHER;
-}
-#endif   // Py_STATS
-
-Py_NO_INLINE void
-_Py_Specialize_UnpackSequence(PyValue seq_st, _PyInstr *instr, int oparg)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[UNPACK_SEQUENCE] ==
-           INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE);
-    fb_begin_unary(instr, PyValue_TYPE(seq_st));
-    if (PyValue_IsInline(seq_st)) {
-        SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *seq = PyValue_AsKnownObjectBorrow(seq_st);
-    if (PyTuple_CheckExact(seq)) {
-        if (PyTuple_GET_SIZE(seq) != oparg) {
-            SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
-            unspecialize(instr);
-            return;
-        }
-        specialize(instr, UNPACK_SEQUENCE_TUPLE);
-        return;
-    }
-    if (PyList_CheckExact(seq)) {
-        if (PyList_GET_SIZE(seq) != oparg) {
-            SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
-            unspecialize(instr);
-            return;
-        }
-        specialize(instr, UNPACK_SEQUENCE_LIST);
-        return;
-    }
-    SPECIALIZATION_FAIL(UNPACK_SEQUENCE, unpack_sequence_fail_kind(seq));
-    unspecialize(instr);
-}
-
-#ifdef Py_STATS
 int
  _PySpecialization_ClassifyIterator(PyObject *iter)
 {
@@ -3437,16 +3388,15 @@ int
 
 /* Whether the word after the FOR_ITER at instr unpacks its item, which this
  * word leaves in a temporary, into two locals: the loop of
- * `for key, value in d.items()`. */
+ * `for key, value in d.items()`.  Unpack publishes into the homes of its
+ * targets, so a word that does is an Unpack with two element homes that are
+ * both locals; the translator does not yet fold the target stores into the
+ * Unpack word, so none is. */
 static inline int
 for_iter_unpacks_pair(_PyInstr *instr)
 {
-    _PyIRWord for_iter = FT_ATOMIC_LOAD_UINT64_RELAXED(instr[0]);
-    _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(instr[1]);
-    int handler = IR_HANDLER(unpack);
-    return (handler == UNPACK_SEQUENCE || handler == UNPACK_SEQUENCE_TUPLE) &&
-           IR_B(unpack) == 2 && IR_A(unpack) == IR_A(for_iter) &&
-           (unpack & IR_F_LOCAL_D) != 0;
+    (void)instr;
+    return 0;
 }
 
 Py_NO_INLINE void

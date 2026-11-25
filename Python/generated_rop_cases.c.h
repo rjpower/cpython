@@ -2270,7 +2270,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Extend_Failed:
-            PROCESS_ERROR_AT(RAISE, 84, this_instr);
+            PROCESS_ERROR_AT(RAISE, 88, this_instr);
         }
 
         TARGET(UpdateContainer_Union) {
@@ -2298,7 +2298,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Union_Failed:
-            PROCESS_ERROR_AT(RAISE, 84, this_instr);
+            PROCESS_ERROR_AT(RAISE, 88, this_instr);
         }
 
         TARGET(UpdateContainer_Overlay) {
@@ -2326,7 +2326,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Overlay_Failed:
-            PROCESS_ERROR_AT(RAISE, 84, this_instr);
+            PROCESS_ERROR_AT(RAISE, 88, this_instr);
         }
 
         TARGET(MergeKeywords_Merge) {
@@ -2356,6 +2356,72 @@
             DISPATCH();
             rop_MergeKeywords_Merge_Failed:
             PROCESS_ERROR_AT(RAISE, 58, this_instr);
+        }
+
+        TARGET(Unpack_Generic) {
+            // Unpack.Generic (shared)
+            int opcode = ROP_HANDLER_Unpack_Generic;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            INSTRUCTION_STATS(ROP_HANDLER_Unpack_Generic);
+            PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+            _PyRopOwners out1;
+            int ret2;
+            PyValue own_source = PyValue_NULL;
+            _PyRopOwners vals;
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_UnpackIterable(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
+            if (ret2 < 0) {
+                goto rop_Unpack_Generic_Failed;
+            }
+            vals = out1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_source = _PyFrame_TakeHome(frame, home_source);
+            }
+            _PyRop_StoreOwners(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &vals);
+            PyValue_XCLOSE(own_source);
+            IR_STUB_ESCAPE();
+            _PyRop_CloseOwners(&vals);
+            DISPATCH();
+            rop_Unpack_Generic_Failed:
+            PROCESS_ERROR_AT(RAISE, 84, this_instr);
+        }
+
+        TARGET(UnpackStar_Iterable) {
+            // UnpackStar.Iterable (shared)
+            int opcode = ROP_HANDLER_UnpackStar_Iterable;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            INSTRUCTION_STATS(ROP_HANDLER_UnpackStar_Iterable);
+            PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+            _PyRopOwners out1;
+            int ret2;
+            PyValue own_source = PyValue_NULL;
+            _PyRopOwners vals;
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_UnpackStar(home_source, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)), &out1);
+            if (ret2 < 0) {
+                goto rop_UnpackStar_Iterable_Failed;
+            }
+            vals = out1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_source = _PyFrame_TakeHome(frame, home_source);
+            }
+            _PyRop_StoreOwners(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &vals);
+            PyValue_XCLOSE(own_source);
+            IR_STUB_ESCAPE();
+            _PyRop_CloseOwners(&vals);
+            DISPATCH();
+            rop_UnpackStar_Iterable_Failed:
+            PROCESS_ERROR_AT(RAISE, 86, this_instr);
         }
 
         TARGET(Function_Make) {

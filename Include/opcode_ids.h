@@ -174,8 +174,6 @@ extern "C" {
 #define STORE_ATTR_SHAPE_ADD                   169
 #define STORE_ATTR_SLOT                        170
 #define STORE_ATTR_WITH_HINT                   171
-#define UNPACK_SEQUENCE_LIST                   172
-#define UNPACK_SEQUENCE_TUPLE                  173
 #define INSTRUMENTED_END_FOR                   234
 #define INSTRUMENTED_POP_ITER                  235
 #define INSTRUMENTED_END_SEND                  236
@@ -213,7 +211,7 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
-#define IR_NUM_OLD_HANDLERS                    272
+#define IR_NUM_OLD_HANDLERS                    270
 #define IR_NUM_HANDLERS                        408
 
 #ifdef __cplusplus

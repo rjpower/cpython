@@ -3,7 +3,7 @@
 //   Python/register_ops/add.rop, Python/register_ops/calls.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/displays.rop, Python/register_ops/functions.rop, Python/register_ops/getattr.rop, Python/register_ops/items.rop, Python/register_ops/names.rop, Python/register_ops/namespaces.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 //
-// 48 stubs.
+// 50 stubs.
 
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
@@ -1916,7 +1916,7 @@ _PyIR_Rop_Stub_UpdateContainer_Extend(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Extend_Failed:
-    PROCESS_ERROR_AT(RAISE, 84, this_instr);
+    PROCESS_ERROR_AT(RAISE, 88, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -1951,7 +1951,7 @@ _PyIR_Rop_Stub_UpdateContainer_Union(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Union_Failed:
-    PROCESS_ERROR_AT(RAISE, 84, this_instr);
+    PROCESS_ERROR_AT(RAISE, 88, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -1986,7 +1986,7 @@ _PyIR_Rop_Stub_UpdateContainer_Overlay(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Overlay_Failed:
-    PROCESS_ERROR_AT(RAISE, 84, this_instr);
+    PROCESS_ERROR_AT(RAISE, 88, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -2023,6 +2023,86 @@ _PyIR_Rop_Stub_MergeKeywords_Merge(
     DISPATCH();
     rop_MergeKeywords_Merge_Failed:
     PROCESS_ERROR_AT(RAISE, 58, this_instr);
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Unpack_Generic(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Unpack.Generic (shared)
+    int opcode = ROP_HANDLER_Unpack_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_Unpack_Generic);
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    _PyRopOwners out1;
+    int ret2;
+    PyValue own_source = PyValue_NULL;
+    _PyRopOwners vals;
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_UnpackIterable(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
+    if (ret2 < 0) {
+        goto rop_Unpack_Generic_Failed;
+    }
+    vals = out1;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_source = _PyFrame_TakeHome(frame, home_source);
+    }
+    _PyRop_StoreOwners(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &vals);
+    PyValue_XCLOSE(own_source);
+    IR_STUB_ESCAPE();
+    _PyRop_CloseOwners(&vals);
+    DISPATCH();
+    rop_Unpack_Generic_Failed:
+    PROCESS_ERROR_AT(RAISE, 84, this_instr);
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_UnpackStar_Iterable(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // UnpackStar.Iterable (shared)
+    int opcode = ROP_HANDLER_UnpackStar_Iterable;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_UnpackStar_Iterable);
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    _PyRopOwners out1;
+    int ret2;
+    PyValue own_source = PyValue_NULL;
+    _PyRopOwners vals;
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_UnpackStar(home_source, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)), &out1);
+    if (ret2 < 0) {
+        goto rop_UnpackStar_Iterable_Failed;
+    }
+    vals = out1;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_source = _PyFrame_TakeHome(frame, home_source);
+    }
+    _PyRop_StoreOwners(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &vals);
+    PyValue_XCLOSE(own_source);
+    IR_STUB_ESCAPE();
+    _PyRop_CloseOwners(&vals);
+    DISPATCH();
+    rop_UnpackStar_Iterable_Failed:
+    PROCESS_ERROR_AT(RAISE, 86, this_instr);
 }
 
 static Py_NO_INLINE int

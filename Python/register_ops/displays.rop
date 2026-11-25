@@ -327,3 +327,72 @@ arm MergeKeywords.Merge shared
     publish [] retire [spent(source)] at MergeKeywords.Done;
     exit next();
 }
+
+// Unpack: the values of the source, in the order of the targets, go to the
+// destination homes.  The row makes them (a vector of owners) and one
+// publish moves them in, closing what the homes held.
+
+family Unpack(dsts:Span<Dst>, source:Src)
+  exits(next, raise) ops(UNPACK_SEQUENCE);
+
+point Unpack.Failed(current, site, pending) keep(source) spent() defs();
+point Unpack.Done(current, next_head, clear) keep() spent(source) defs(dsts);
+
+extern helper unpack_iterable(source:Src, n:Size)
+  cases(ok(vals:Span<O>), err(e:Err))
+  effects(allocates, raises, runs_python)
+  c _PyRop_UnpackIterable as owners_or_raised
+  evidence(
+    review: "ceval.c _PyRop_UnpackIterable: _PyEval_UnpackIterableValue on a count held across the call; a number raises the cannot-unpack text.",
+    contract: "Reads the source home and keeps it. On success n owners in the order of the targets, in storage the publish frees; on failure the exception is set and nothing is made. Iterating the source runs Python.");
+
+arm Unpack.Generic shared
+  effects(allocates, raises, releases on (dsts), runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call unpack_iterable(source, count(dsts)) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Unpack.Failed, e);
+  Finish(vals:Span<O>):
+    publish [dsts[] = vals] retire [spent(source), old(dsts)] at Unpack.Done;
+    exit next();
+}
+
+// Unpack with a starred target.  `shape` is the oparg: the count before the
+// star, and in the next byte the count after it.
+
+family UnpackStar(dsts:Span<Dst>, source:Src, shape:U16)
+  exits(next, raise) ops(UNPACK_EX);
+
+point UnpackStar.Failed(current, site, pending) keep(source) spent() defs();
+point UnpackStar.Done(current, next_head, clear) keep() spent(source) defs(dsts);
+
+extern helper unpack_star(source:Src, shape:U16)
+  cases(ok(vals:Span<O>), err(e:Err))
+  effects(allocates, raises, runs_python)
+  c _PyRop_UnpackStar as owners_or_raised
+  evidence(
+    review: "ceval.c _PyRop_UnpackStar: _PyEval_UnpackIterableValue with the variable target; the middle value is a list.",
+    contract: "As unpack_iterable, with before + 1 + after owners.");
+
+arm UnpackStar.Iterable shared
+  effects(allocates, raises, releases on (dsts), runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call unpack_star(source, shape) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(UnpackStar.Failed, e);
+  Finish(vals:Span<O>):
+    publish [dsts[] = vals] retire [spent(source), old(dsts)] at UnpackStar.Done;
+    exit next();
+}

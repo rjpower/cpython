@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from rop_catalog import (ENVIRONMENT, DebtKind, Fact, Scalar, ExcRole,
                          FieldKind, FrameRole, Handle, PcRole, Wrap)
 from rop_cgen import Unsupported, flatten, is_transfer
-from rop_check import (CANDIDATE, PRIMITIVES, UNWRAP, Program, field_kind, select_facts)
+from rop_check import (CANDIDATE, COUNT, PRIMITIVES, UNWRAP, Program, field_kind, select_facts)
 from rop_model import (Arm, BoolLit, Branch, Call, CallTerm, Cases, Diagnostic,
                        Each, EnumType, Exit, Expr, Family, Goto, Guard, HandleType, Let, Name, Nat,
                        Null, Publish, ScalarType, SpanLit, SrcSpan, Type,
@@ -65,6 +65,7 @@ class OpKind(enum.Enum):
     store = "store"             # attr: home; args: (owner,)
     null = "null"               # the vacancy a publish may write
     rest = "rest"               # attr: span home; args: (owners,): the items past its count
+    count = "count"             # attr: span home, or args: (span value,): its number of items
     # On a span operand, read, take, old, store and dup act on every item:
     # read gives the items borrowed, take and old their owners, store writes
     # item i of its argument to item i of the span, and dup is a new owner
@@ -302,6 +303,12 @@ class Expander:
             (arg,) = e.args
             v = self.expr(arg)
             return self.emit(OpKind.unwrap, self.types[v].arg, (v,), None, name)
+        if c == COUNT:
+            (arg,) = e.args
+            if (isinstance(arg, Name) and arg.name not in self.env
+                    and self.operands.get(arg.name) is FieldKind.vector):
+                return self.emit(OpKind.count, SIZE, (), arg.name, name)
+            return self.emit(OpKind.count, SIZE, (self.expr(arg),), None, name)
         if c == CANDIDATE:
             target = e.args[0]
             recipe = tuple(self.expr(a) for a in e.args[1:])
@@ -364,7 +371,8 @@ class Expander:
         taken: dict[str, int] = {}
         moved: set[str] = set()
         for b in s.bindings:
-            if not b.vector:
+            if not b.vector or b.owners:
+                # d = v, d = null, or d[] = v: item i of v goes to item i of d
                 values.append((b.target, self.expr(b.value)))
                 continue
             if isinstance(b.value, Call):
@@ -402,7 +410,7 @@ class Expander:
         self.emit(OpKind.checkpoint, None, (), s.point)
         self.point = s.point
         targets = {b.value.name: b.target for b in s.bindings
-                   if b.vector and isinstance(b.value, Name)}
+                   if b.vector and not b.owners and isinstance(b.value, Name)}
         for d in s.debts:
             if d.kind is DebtKind.spent and d.subject not in taken:
                 continue

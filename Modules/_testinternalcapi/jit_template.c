@@ -454,6 +454,66 @@ clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame)
     _PyEval_FrameClearAndPop(tstate, frame);
 }
 
+/* Sets the slots of frame that the dict slots gives (index: object, or
+   index: ("raw", bits) for a word that is no object, such as a tagged
+   index); the frame owns each value */
+static int
+set_slots(_PyInterpreterFrame *frame, PyObject *slots, int nslots)
+{
+    Py_ssize_t pos = 0;
+    PyObject *key, *value;
+    while (PyDict_NextEntryRef(slots, &pos, &key, &value)) {
+        long i = PyLong_AsLong(key);
+        Py_DECREF(key);
+        if (i < 0 || i >= nslots) {
+            Py_DECREF(value);
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_IndexError, "no such slot");
+            }
+            return -1;
+        }
+        PyValue v;
+        PyObject *tag = NULL;
+        if (PyTuple_CheckExact(value) && PyTuple_GET_SIZE(value) == 2) {
+            tag = PyTuple_GetItemRef(value, 0);
+        }
+        int raw = tag != NULL && PyUnicode_Check(tag) && PyUnicode_EqualToUTF8(tag, "raw");
+        Py_XDECREF(tag);
+        if (raw) {
+            PyObject *bits = PyTuple_GetItemRef(value, 1);
+            v.bits = bits ? (uintptr_t)PyLong_AsUnsignedLongLong(bits) : 0;
+            Py_XDECREF(bits);
+            Py_DECREF(value);
+            if (PyErr_Occurred()) {
+                return -1;
+            }
+        }
+        else {
+            v = PyValue_FromObjectSteal(value);
+        }
+        PyValue_XCLOSE(frame->base[i]);
+        frame->base[i] = v;
+    }
+    return 0;
+}
+
+/* The slots of frame, as slot_object() gives them */
+static PyObject *
+frame_slots(_PyInterpreterFrame *frame)
+{
+    int nslots = _PyFrame_NumSlots(frame);
+    PyObject *out = PyTuple_New(nslots);
+    for (int i = 0; out != NULL && i < nslots; i++) {
+        PyObject *o = slot_object(frame->base[i]);
+        if (o == NULL) {
+            Py_CLEAR(out);
+            break;
+        }
+        PyTuple_SET_ITEM(out, i, o);
+    }
+    return out;
+}
+
 /* jit_template_run(func, index, slots, template) -> (next, slow, exc, slots)
 
    Pushes a frame of func (whose code has run, so that it has an executing
@@ -502,42 +562,9 @@ jit_template_run(PyObject *module, PyObject *args)
     }
     _PyIRWord w = words[index];
     frame->instr_ptr = (_PyInstr *)&words[index];
-    Py_ssize_t pos = 0;
-    PyObject *key, *value;
-    while (PyDict_NextEntryRef(slots, &pos, &key, &value)) {
-        long i = PyLong_AsLong(key);
-        Py_DECREF(key);
-        if (i < 0 || i >= nslots) {
-            Py_DECREF(value);
-            if (!PyErr_Occurred()) {
-                PyErr_SetString(PyExc_IndexError, "no such slot");
-            }
-            clear_and_pop(tstate, frame);
-            return NULL;
-        }
-        PyValue v;
-        PyObject *tag = NULL;
-        if (PyTuple_CheckExact(value) && PyTuple_GET_SIZE(value) == 2) {
-            tag = PyTuple_GetItemRef(value, 0);
-        }
-        int raw = tag != NULL && PyUnicode_Check(tag) && PyUnicode_EqualToUTF8(tag, "raw");
-        Py_XDECREF(tag);
-        if (raw) {
-            /* ("raw", bits): a word that is no object, such as a tagged index */
-            PyObject *bits = PyTuple_GetItemRef(value, 1);
-            v.bits = bits ? (uintptr_t)PyLong_AsUnsignedLongLong(bits) : 0;
-            Py_XDECREF(bits);
-            Py_DECREF(value);
-            if (PyErr_Occurred()) {
-                clear_and_pop(tstate, frame);
-                return NULL;
-            }
-        }
-        else {
-            v = PyValue_FromObjectSteal(value);
-        }
-        PyValue_XCLOSE(frame->base[i]);
-        frame->base[i] = v;
+    if (set_slots(frame, slots, nslots) < 0) {
+        clear_and_pop(tstate, frame);
+        return NULL;
     }
     tstate->current_frame = frame;
     Transfer t;
@@ -575,15 +602,7 @@ jit_template_run(PyObject *module, PyObject *args)
     }
     tstate->current_frame = previous;
     PyObject *exc = PyErr_GetRaisedException();
-    PyObject *out = PyTuple_New(nslots);
-    for (int i = 0; out != NULL && i < nslots; i++) {
-        PyObject *o = slot_object(frame->base[i]);
-        if (o == NULL) {
-            Py_CLEAR(out);
-            break;
-        }
-        PyTuple_SET_ITEM(out, i, o);
-    }
+    PyObject *out = frame_slots(frame);
     assert(t.frame == frame || t.next == NULL);
     PyObject *next = status >= 0 ? PyLong_FromLong(status)
         : t.next == NULL ? Py_NewRef(Py_None)
@@ -809,8 +828,123 @@ jit_switch_probe(PyObject *module, PyObject *args, PyObject *kwargs)
     return result;
 }
 
+/* rop_transfer_run(func, index, slots, handler) -> (kind, next, exc, slots, extra)
+
+   Runs word index of func by its form under handler, as jit_template_run
+   does, in a frame whose caller is a second frame of func, so that an arm
+   that enters a child frame or returns to its caller can run.  kind says
+   where the word left control:
+   - "same": in the frame; next is the index of the next word, None if it
+     raised; slots are the frame's;
+   - "enter": in a child frame that the word pushed (with the frame of an
+     __init__ shim between, for a class); extra is (the child's function,
+     its slots); the child is popped without running, and slots are the
+     frame's;
+   - "return": in the caller; next is the caller's head index, extra the
+     value delivered to the caller's return slot, and slots are the
+     caller's.
+   The frames are then cleared and popped. */
+static PyObject *
+rop_transfer_run(PyObject *module, PyObject *args)
+{
+    PyObject *func, *slots;
+    unsigned int index;
+    int handler;
+    if (!PyArg_ParseTuple(args, "O!IO!i", &PyFunction_Type, &func, &index,
+                          &PyDict_Type, &slots, &handler)) {
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
+    if (code->_co_exec == NULL) {
+        PyErr_SetString(PyExc_ValueError, "the code has not run");
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (!_PyThreadState_HasStackSpace(tstate, 2 * code->co_framesize)) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    _PyInterpreterFrame *previous = tstate->current_frame;
+    _PyInterpreterFrame *caller = _PyFrame_PushUnchecked(
+        tstate, PyValue_FromObjectSteal(Py_NewRef(func)), previous);
+    const _PyIRWord *words = (const _PyIRWord *)caller->ir_words;
+    caller->instr_ptr = (_PyInstr *)&words[0];
+    caller->return_pc = (_PyInstr *)&words[0];
+    caller->return_slot = (uint16_t)(_PyFrame_NumSlots(caller) - 1);
+    _PyInterpreterFrame *frame = _PyFrame_PushUnchecked(
+        tstate, PyValue_FromObjectSteal(Py_NewRef(func)), caller);
+    int nslots = _PyFrame_NumSlots(frame);
+    if (handler >= 0) {
+        _PyInstr *site = (_PyInstr *)&words[index];
+        *site = (*site & ~(_PyIRWord)IR_HANDLER_MASK) | (_PyIRWord)handler;
+    }
+    _PyIRWord w = words[index];
+    frame->instr_ptr = (_PyInstr *)&words[index];
+    if (set_slots(frame, slots, nslots) < 0) {
+        clear_and_pop(tstate, frame);
+        clear_and_pop(tstate, caller);
+        return NULL;
+    }
+    tstate->current_frame = frame;
+    tstate->py_recursion_remaining--;
+    Form form = (Form)_PyEval_HandlerForms()[_PyJit_CompiledHandler(w)];
+    Transfer t = form(tstate, frame, (_PyInstr *)&words[index], w);
+    PyObject *exc = PyErr_GetRaisedException();
+    PyObject *kind, *next, *out, *extra;
+    if (t.frame == caller) {
+        /* The frame departed: it left the recursion count and was retired */
+        kind = PyUnicode_FromString("return");
+        next = PyLong_FromLong((long)(t.next - (_PyInstr *)words));
+        extra = slot_object(caller->base[caller->return_slot]);
+        out = frame_slots(caller);
+    }
+    else if (t.frame == frame || t.frame == NULL) {
+        kind = PyUnicode_FromString("same");
+        next = t.next == NULL ? Py_NewRef(Py_None)
+            : PyLong_FromLong((long)(t.next - (_PyInstr *)words));
+        extra = Py_NewRef(Py_None);
+        out = frame_slots(frame);
+        tstate->py_recursion_remaining++;
+    }
+    else {
+        /* A child (ir_start_frame entered the recursion count for it), or
+           an __init__ shim and its child */
+        _PyInterpreterFrame *child = t.frame;
+        PyObject *fn = Py_NewRef((PyObject *)child->f_funcobj);
+        PyObject *child_slots = frame_slots(child);
+        extra = child_slots == NULL ? NULL : Py_BuildValue("(NN)", fn, child_slots);
+        while (child != frame) {
+            _PyInterpreterFrame *up = child->previous;
+            tstate->current_frame = up;
+            tstate->py_recursion_remaining++;
+            _PyEval_FrameClearAndPop(tstate, child);
+            child = up;
+        }
+        tstate->py_recursion_remaining--;
+        kind = PyUnicode_FromString("enter");
+        next = Py_NewRef(Py_None);
+        out = frame_slots(frame);
+        tstate->py_recursion_remaining++;
+    }
+    tstate->current_frame = previous;
+    if (t.frame != caller) {
+        clear_and_pop(tstate, frame);
+    }
+    clear_and_pop(tstate, caller);
+    if (kind == NULL || next == NULL || out == NULL || extra == NULL) {
+        Py_XDECREF(kind);
+        Py_XDECREF(next);
+        Py_XDECREF(out);
+        Py_XDECREF(extra);
+        Py_XDECREF(exc);
+        return NULL;
+    }
+    return Py_BuildValue("(NNNNN)", kind, next, exc ? exc : Py_None, out, extra);
+}
+
 static PyMethodDef test_methods[] = {
     {"jit_template_run", jit_template_run, METH_VARARGS},
+    {"rop_transfer_run", rop_transfer_run, METH_VARARGS},
     {"jit_template_size", jit_template_size, METH_VARARGS},
     {"jit_lower", jit_lower, METH_VARARGS},
     {"jit_lowerings", jit_lowerings, METH_NOARGS},

@@ -1758,7 +1758,7 @@ static PyObject *
 get_feedback(PyObject *self, PyObject *args)
 {
     static const char *const kinds[] = {
-        "COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL",
+        "COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL", "COMPARE", "CONTAINS",
     };
     static const char *const states[] = {"COLD", "MONO", "POLY", "MEGA", "OFF"};
     PyCodeObject *code;

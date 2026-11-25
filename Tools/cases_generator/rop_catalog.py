@@ -71,6 +71,10 @@ class Handle(enum.Enum):
     Gen = "Gen"
     Cursor = "Cursor"
     IterPair = "IterPair"
+    SendWindow = "SendWindow"
+    # A projection `g.p` of a home group: a temporary home the instruction
+    # reads and writes, never a local's
+    Part = "Part"
     Args = "Args"
     Anchors = "Anchors"
     Err = "Err"
@@ -78,6 +82,15 @@ class Handle(enum.Enum):
     Claim = "Claim"
     Pin = "Pin"
     Stamp = "Stamp"
+
+
+# Home groups: one home field naming a run of adjacent temporaries, which
+# the translator keeps for the life of the loop.  Projection i, `g.p`, is
+# the home at the field plus i.
+HOME_GROUPS = {
+    Handle.IterPair: ("receiver", "cursor"),
+    Handle.SendWindow: ("receiver", "cursor", "value"),
+}
 
 
 class Wrap(enum.Enum):
@@ -211,6 +224,10 @@ FB_LAYOUT: dict[Schema, CLayout] = {
         "index": CField("index", _U32)}),
     Schema.Truth: CLayout("_PyFbUnary", {
         "kind": _NONE, "type_version": CField("type_version", _U32)}),
+    Schema.Compare: CLayout("_PyFbCompare", {"kind": CField("kind", _U32)}),
+    Schema.Contains: CLayout("_PyFbContains", {
+        "kind": CField("kind", _U32),
+        "type_version": CField("type_version", _U32)}),
     # The item sites share the binary entry; their evidence is the type
     # versions that it records
     Schema.Item: CLayout("_PyFbBinary", {
@@ -337,6 +354,9 @@ class ExitKind(enum.Enum):
     miss = "miss"
     again = "again"
     raise_ = "raise"
+    # Propagates an exception the word already reported: no traceback
+    # entry and no RAISE event (the old `goto exception_unwind`)
+    unwind = "unwind"
     enter = "enter"
     return_ = "return"
     yield_ = "yield"
@@ -373,7 +393,6 @@ class Select(enum.Enum):
     import_star = "import_star"            # Intrinsic: writes the locals namespace
     stopiteration = "stopiteration"        # Intrinsic: a generator's StopIteration conversion
     binary = "binary"                      # Intrinsic: type parameters, exception groups, isinstance
-    compare = "compare"                    # Intrinsic: a comparison or containment at a site with no entry
     attr = "attr"                          # Intrinsic: an attribute by a name the instruction cannot hold
     named = "named"                        # NamespaceRead: a name in the locals, globals and builtins
     locals_scope = "locals_scope"          # NamespaceRead: the locals themselves
@@ -408,7 +427,7 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "interrupt": (Select.uninterrupted, Select.interruptible),
     "jit": (Select.jit_off, Select.jit_on),
     "intrinsic1": (Select.unary, Select.import_star, Select.stopiteration),
-    "intrinsic2": (Select.binary, Select.compare, Select.attr),
+    "intrinsic2": (Select.binary, Select.attr),
     "name_read": (Select.named, Select.locals_scope, Select.build_class_scope),
     "namespace": (Select.name_scope, Select.global_scope),
     "import_kind": (Select.eager_import, Select.policy_import, Select.lazy_import),

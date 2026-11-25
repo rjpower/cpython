@@ -93,7 +93,7 @@ class CallRoleTests(unittest.TestCase):
                 return fn(first)
             return fn(first == second)
         rows = _testinternalcapi.get_ir(choose.__code__)
-        self.assertTrue(any(row[0] == "IS_OP_JUMP" for row in rows))
+        self.assertTrue(any(row[0] == "TestBranch.Identity" for row in rows))
         for admitted in routes(choose.__code__):
             function = types.FunctionType(admitted, globals())
             for first, second, expected in ((None, 17, 17), (17, None, 17),

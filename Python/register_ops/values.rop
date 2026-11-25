@@ -8,10 +8,6 @@ enum PollMode(POLL, NO_POLL);
 // whether the jump edge keeps the tested owner (JUMP_IF_x_OR_POP)
 enum BranchMode(BRANCH_IF_FALSE, BRANCH_IF_TRUE, BRANCH_KEEP_IF_FALSE, BRANCH_KEEP_IF_TRUE);
 enum UnaryOp(NEGATIVE, POSITIVE, INVERT);
-enum Relation(LT, LE, EQ, NE, GT, GE);
-enum CompareResult(RICH, TRUTH);
-enum BranchTest(IDENTITY, CONTAINS, TEST_LT, TEST_LE, TEST_EQ, TEST_NE, TEST_GT,
-                TEST_GE);
 
 // P1: constants, local bindings, saved locals, residual moves, origins
 
@@ -341,18 +337,3 @@ family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
 family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>)
   exits(next, raise) ops(UNARY_NEGATIVE, UNARY_INVERT);
 
-// 1B: value tests and their fused branch consumers
-
-family Compare(dst:Dst, x:Src, y:Src, relation:Enum<Relation>,
-               result:Enum<CompareResult>, fb:Fb<Compare>)
-  exits(next, raise, miss, again) ops(COMPARE_OP);
-
-family Identity(dst:Dst, x:Src, y:Src, sense:Bool)
-  exits(next) ops(IS_OP);
-
-family Contains(dst:Dst, item:Src, container:Src, sense:Bool, fb:Fb<Contains>)
-  exits(next, raise, miss, again) ops(CONTAINS_OP);
-
-family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, target:NearHead, sense:Bool,
-                  fb:Fb<Compare>)
-  exits(next, branch, raise, miss, again) ops(COMPARE_OP, IS_OP, CONTAINS_OP);

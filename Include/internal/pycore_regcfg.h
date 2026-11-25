@@ -60,8 +60,6 @@ extern "C" {
 #define _PyReg_LOAD_FOLDED      1   // a load that its consumer reads in place
 #define _PyReg_STORE_FOLDED     2   // a store that its producer does
 #define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps
-#define _PyReg_FUSED            8   // set by the assembler: a compare that
-                                    // runs as one word with its fuse jump
 #define _PyReg_DISCARD          64  // a call whose result nothing reads: its
                                     // dst field is IR_NO_DST
 #define _PyReg_ELIDED           16  // a PUSH_NULL that has no word: the NULL
@@ -110,10 +108,6 @@ typedef struct _PyRegOp {
     int flags;
     int reader;             // a folded load: the op that reads the local,
     int reader_k;           // and its input index
-    int fuse;               // a compare whose result only the conditional
-                            // jump at this op index reads, on the same line
-                            // (_PyRegPass_FuseJump); the assembler may fuse
-                            // the pair.  0: none.
     int completion;         // index + 1 of the frontend END_SEND whose
                             // allocated recipient this semantic producer owns
     int noperands;          // a call: the number of operand fields, set by
@@ -362,7 +356,6 @@ int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 /* Returns the number of constant slots, or -1 */
 int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts);
 void _PyRegPass_DiscardSlot(_PyRegCfg *cfg);
-int _PyRegPass_FuseJump(_PyRegCfg *cfg);
 
 /* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if
  * keep is set, copy propagation keeps a pending load across an op that may

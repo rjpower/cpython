@@ -56,7 +56,7 @@ SSA, FAILED = rop_ssa.expand_all(PROGRAM)
 class ExpansionTests(unittest.TestCase):
     def test_every_arm_expands(self):
         self.assertEqual({n: d.message for n, d in FAILED.items()}, {})
-        self.assertEqual(set(SSA), set(PROGRAM.arms))
+        self.assertEqual(set(SSA), set(PROGRAM.arms) | set(PROGRAM.completions))
 
     def test_exits_are_declared_and_name_their_frame_state(self):
         for name, arm in SSA.items():
@@ -67,7 +67,7 @@ class ExpansionTests(unittest.TestCase):
                     homes = {h for h, _ in t.state.homes}
                     self.assertEqual(homes, {n for n, k in arm.operands.items()
                                              if k in (FieldKind.home, FieldKind.vector)})
-                    if t.kind == "raise":
+                    if t.kind in ("raise", "unwind"):
                         self.assertIsNotNone(t.state.point)
                         self.assertEqual(t.state.exc, "pending")
 
@@ -339,6 +339,13 @@ PAIRS = [(3, 4), (2**50, 2**50), (2**60, 5), (-2**50, -2**50), (1.5, 2), (2, 0.2
          (RaisesAdd(), 1), (1, "a"), (b"x", b"y")]
 
 
+COMPARE_PAIRS = PAIRS + [(2**60, 2**60), (float("nan"), float("nan")), (1, 1), ("a", "a"),
+                         ("a", 1), (Plain(), Plain()), (None, None)]
+CONTAINS_PAIRS = [(1, {1, 2}), (3, {1, 2}), (1, frozenset({1})), ([1], {1}), (1, {1: 2}),
+                  (3, {1: 2}), ("a", {"a": 1}), (1, [1, 2]), (3, [1, 2]), (1, (1, 2)),
+                  ("a", "abc"), ("z", "abc"), (1, "abc"), (1, 5), (1, Plain()),
+                  (1, range(3)), (b"a", b"abc"), (1.5, {1.5})]
+
 @dataclass
 class Scenario:
     """A family's words: one function per source (the operands are locals
@@ -382,6 +389,10 @@ class Scenario:
 
     def inputs_of(self, source):
         return self.inputs_by_source.get(source, self.inputs)
+
+
+class Args(tuple):
+    "The arguments of one warming call, where a bare object is one argument"
 
 
 def truth_inputs(operand):
@@ -683,8 +694,7 @@ SCENARIOS = {
             "import_star": [{"x": v} for v in (sys, capi, {"a": 1})]},
         skip={"Intrinsic.StopIteration": STOPITERATION_WHY}),
     "IntrinsicPair": Scenario("IntrinsicPair", {
-        "binary": PAIR_SOURCE,
-        "compare": "def f(a, b):\n" + "    a < b\n" * 1100},
+        "binary": PAIR_SOURCE},
         [{"x": x, "y": y} for x, y in PAIRS], warm=(1, 2), per_arm=True,
         inputs_by_source={
             # TYPEVAR_WITH_BOUND (a name, the bound's evaluator): the new
@@ -727,6 +737,58 @@ SCENARIOS = {
         "async": "async def f(a):\n    async with a:\n        pass\n"},
         [{"obj": v} for v in (Manager(), AsyncManager(), 3, Plain())],
         warm=(Manager(),)),
+    "Compare": Scenario("Compare", {
+        "rich": "def f(a, b):\n    return a < b\n",
+        "equal": "def f(a, b):\n    return a == b\n",
+        "truth": "def f(a, b):\n    return not (a <= b)\n",
+        "int": "def f(a, b):\n    return a >= b\n",
+        "float": "def f(a, b):\n    return a > b\n",
+        "str": "def f(a, b):\n    return a != b\n"},
+        [{"x": x, "y": y} for x, y in COMPARE_PAIRS],
+        warm_by_source={"rich": (Args((1, 2)), Args(("a", "b"))), "equal": (Args((1, 2)),),
+                        "truth": (Args((1, 2)),), "int": (Args((1, 2)),),
+                        "float": (Args((1.5, 2.5)),), "str": (Args(("a", "b")),)},
+        warmups=200, coherent=True),
+    "Identity": Scenario("Identity", {
+        "is": "def f(a, b):\n    return a is b\n",
+        "is_not": "def f(a, b):\n    return a is not b\n"},
+        [{"x": x, "y": y} for x, y in COMPARE_PAIRS], warm=(1, 2)),
+    "Contains": Scenario("Contains", {
+        "in": "def f(a, b):\n    return a in b\n",
+        "not_in": "def f(a, b):\n    return a not in b\n",
+        "set": "def f(a, b):\n    return a in b\n",
+        "dict": "def f(a, b):\n    return a in b\n"},
+        [{"item": x, "container": y} for x, y in CONTAINS_PAIRS],
+        warm_by_source={"in": (Args((1, [1, 2])),), "not_in": (Args((1, (1, 2))),),
+                        "set": (Args((1, {1, 2})),), "dict": (Args((1, {1: 2})),)},
+        warmups=200, coherent=True),
+    "TestBranch": Scenario("TestBranch", {
+        "compare": "def f(a, b):\n    if a < b:\n        return 1\n    return 2\n",
+        "compare_not": "def f(a, b):\n    if not (a == b):\n        return 1\n    return 2\n",
+        "int": "def f(a, b):\n    if a >= b:\n        return 1\n    return 2\n",
+        "float": "def f(a, b):\n    if a > b:\n        return 1\n    return 2\n",
+        "str": "def f(a, b):\n    if a != b:\n        return 1\n    return 2\n",
+        "is": "def f(a, b):\n    if a is b:\n        return 1\n    return 2\n",
+        "is_not": "def f(a, b):\n    if a is not b:\n        return 1\n    return 2\n",
+        "in": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        "not_in": "def f(a, b):\n    if a not in b:\n        return 1\n    return 2\n",
+        "set": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        "dict": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        "sequence": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        "monitored": "def f(a, b):\n    if a < b:\n        return 1\n    return 2\n",
+        "monitored_is": "def f(a, b):\n    if a is b:\n        return 1\n    return 2\n",
+        "monitored_in": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n"},
+        [{"x": x, "y": y} for x, y in COMPARE_PAIRS + CONTAINS_PAIRS],
+        warm_by_source={"compare": (Args((1, 2)),), "compare_not": (Args((1, 2)),),
+                        "int": (Args((1, 2)),), "float": (Args((1.5, 2.5)),),
+                        "str": (Args(("a", "b")),), "is": (Args((1, 2)),),
+                        "is_not": (Args((1, 2)),), "in": (Args((1, [1, 2])),),
+                        "not_in": (Args((1, (1, 2))),), "set": (Args((1, {1, 2})),),
+                        "dict": (Args((1, {1: 2})),), "sequence": (Args(("a", "abc")),),
+                        "monitored": (Args((1, 2)),), "monitored_is": (Args((1, 2)),),
+                        "monitored_in": (Args((1, [1, 2])),)},
+        warmups=200, coherent=True,
+        monitored=("monitored", "monitored_is", "monitored_in")),
 }
 
 
@@ -762,7 +824,7 @@ def compiled(scenario, source, arm=None):
     f = namespace["f"]
     if source in scenario.monitored:
         monitor(f.__code__)
-    phases = ([(o,) for o in scenario.warm_by_source[source]]
+    phases = ([o if isinstance(o, Args) else (o,) for o in scenario.warm_by_source[source]]
               if source in scenario.warm_by_source else [scenario.warm])
     for warm in phases:
         for _ in range(max(1, scenario.warmups)):
@@ -889,7 +951,8 @@ def prepare(arm_name, scenario, source, inputs):
         return None
     f, index, length, words = built
     current = capi.get_ir(f.__code__, True)[index][0].split("+")[0]
-    if scenario.coherent and current != arm_name and not is_generic(arm):
+    if (scenario.coherent and current != arm_name and not is_generic(arm)
+            and not arm.observes):
         return None
     site = ev.decode_site(PROGRAM, arm.family, words, index, length)
     ssa = SSA[arm_name]

@@ -44,8 +44,6 @@ FEEDBACK = {
     "GET_ITER": ("UNARY", 24),
     "SEND": ("UNARY", 24),
     "BINARY_OP": ("BINARY", 32),
-    "COMPARE_OP": ("BINARY", 32),
-    "CONTAINS_OP": ("BINARY", 32),
     "CALL_KW": ("CALL", 40),
     "CALL_FUNCTION_EX": ("CALL", 40),
 }
@@ -203,12 +201,6 @@ class ContractTests(unittest.TestCase):
             if (op >= opcode.MIN_INSTRUMENTED_OPCODE
                     or opcode.opname[row.shadow] in opcode._specialized_opmap):
                 continue
-            if row.flags & _opcode.IR_FUSED:
-                # The compare and the jump on its result: two inputs, no output
-                with self.subTest(handler=opcode.opname[h]):
-                    self.assertEqual((extent(row.reads, 0),
-                                      extent(row.writes, 0)), (2, 0))
-                continue
             for oparg in OPARGS:
                 if not _opcode.has_arg(op) and oparg:
                     continue
@@ -323,17 +315,6 @@ class ContractTests(unittest.TestCase):
             with self.subTest(handler=opcode.opname[h]):
                 if row.fb == _opcode.IR_LOC_NONE:
                     self.assertEqual((row.fb_kind, row.fb_size), (0, 0))
-                    continue
-                if row.flags & _opcode.IR_FUSED:
-                    # The entry of a fused compare is that of the compare;
-                    # IS_OP has no entry apart from its fused form, which
-                    # has the size of the entry of a branch.
-                    if family == "IS_OP":
-                        self.assertEqual((kinds[row.fb_kind], row.fb_size),
-                                         ("UNARY", 24))
-                    else:
-                        self.assertEqual((kinds[row.fb_kind], row.fb_size),
-                                         FEEDBACK[family])
                     continue
                 self.assertIn(family, FEEDBACK)
                 self.assertEqual((kinds[row.fb_kind], row.fb_size),
@@ -843,10 +824,6 @@ class SourceScanTests(unittest.TestCase):
                     expected = (3, 3)
                 if min(expected) < 0:
                     continue
-                if opcode.opname[h].endswith(("OP_JUMP", "OP_JUMP_FLOAT", "OP_JUMP_INT", "OP_JUMP_STR", "OP_JUMP_SET", "OP_JUMP_DICT", "OP_JUMP_SEQUENCE")):
-                    # A fused compare-and-jump consumes the operands
-                    # and the jump consumes the result: no write.
-                    expected = (expected[0], 0)
                 with self.subTest(handler=opcode.opname[h], oparg=oparg):
                     scanned = tuple(_scan_count(e, oparg)
                                     for e in scans.get(h, ()))

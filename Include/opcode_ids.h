@@ -152,23 +152,18 @@ extern "C" {
 #define CALL_KW_BOUND_METHOD                   147
 #define CALL_KW_NON_PY                         148
 #define CALL_KW_PY                             149
-#define COMPARE_OP_FLOAT                       150
-#define COMPARE_OP_INT                         151
-#define COMPARE_OP_STR                         152
-#define CONTAINS_OP_DICT                       153
-#define CONTAINS_OP_SET                        154
-#define FOR_ITER_GEN                           155
-#define FOR_ITER_LIST                          156
-#define FOR_ITER_RANGE                         157
-#define FOR_ITER_TUPLE                         158
-#define FOR_ITER_VIRTUAL                       159
-#define GET_ITER_SELF                          160
-#define GET_ITER_VIRTUAL                       161
-#define SEND_ASYNC_GEN                         162
-#define SEND_GEN                               163
-#define SEND_VIRTUAL                           164
-#define UNPACK_SEQUENCE_LIST                   165
-#define UNPACK_SEQUENCE_TUPLE                  166
+#define FOR_ITER_GEN                           150
+#define FOR_ITER_LIST                          151
+#define FOR_ITER_RANGE                         152
+#define FOR_ITER_TUPLE                         153
+#define FOR_ITER_VIRTUAL                       154
+#define GET_ITER_SELF                          155
+#define GET_ITER_VIRTUAL                       156
+#define SEND_ASYNC_GEN                         157
+#define SEND_GEN                               158
+#define SEND_VIRTUAL                           159
+#define UNPACK_SEQUENCE_LIST                   160
+#define UNPACK_SEQUENCE_TUPLE                  161
 #define INSTRUMENTED_END_FOR                   234
 #define INSTRUMENTED_POP_ITER                  235
 #define INSTRUMENTED_END_SEND                  236
@@ -206,8 +201,8 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
-#define IR_NUM_OLD_HANDLERS                    265
-#define IR_NUM_HANDLERS                        423
+#define IR_NUM_OLD_HANDLERS                    256
+#define IR_NUM_HANDLERS                        438
 
 #ifdef __cplusplus
 }

@@ -361,6 +361,9 @@ class Exit:
     args: tuple[Expr, ...]
     span: SrcSpan = _span()
     resume: str | None = None
+    # The family's completion arm that runs when a generator child returns
+    # (`exit enter(c) resume P complete A`)
+    complete: str | None = None
 
 
 Term = Union[Goto, Branch, CallTerm, Each, Advance, Exit]
@@ -468,6 +471,9 @@ class Arm:
     entry: str | None = None
     # The family's observed wrapper, which runs under instrumented twins
     observes: bool = False
+    # A completion arm (`completion(P)`): no word of its own; it runs in the
+    # consumer's frame, from P's homes, when a generator child returns
+    completion: str | None = None
 
     @property
     def family(self) -> str:

@@ -751,10 +751,15 @@ def same_value(cx: Context, pred, c, binding: dict) -> bool:
     return isinstance(pred, int) and ir_leaf.u64(pred) < cx.k("Py_PTR_LIMIT") and key(cx, pred) == id(c)
 
 
+# The exit a C run shows for each model exit: an unwind leaves the word
+# raised, as a raise does; only the ingress differs
+C_EXIT = {"unwind": "raise"}
+
+
 def disagreement(cx: Context, out: Outcome, obs: Observation, homes: dict[int, str]) -> str | None:
     """Why an outcome does not agree with C, or None.  homes maps each slot
     that is an operand home to its operand"""
-    if out.exit != obs.exit:
+    if C_EXIT.get(out.exit, out.exit) != obs.exit:
         return f"exit {out.exit}, C took {obs.exit}"
     if (out.exit in ("branch", "jump") and obs.next is not None and out.args
             and isinstance(out.args[0], Head) and out.args[0].index != obs.next):

@@ -2859,7 +2859,7 @@ dummy_func(
          * GetAttr or GetMethod (Python/register_ops/getattr.rop). */
         tier1 inst(LOAD_ATTR,
                 (unused/9, owner: consumed -- attr: owned, self_or_null[oparg&1]: owned nullable))
-            effects(reads) exits(abort)
+            effects(reads, runs_python) exits(abort)
         {
             /* The name operand keeps dis and the name flag of the opcode */
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
@@ -4406,7 +4406,7 @@ dummy_func(
         /* A stack op only: CALL is the Call family (Python/register_ops/calls.rop). */
         tier1 inst(CALL,
                 (unused/3, callable: consumed, self_or_null: consumed, args[oparg]: consumed -- res: owned))
-            effects() exits(abort)
+            effects(runs_python) exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -4415,7 +4415,7 @@ dummy_func(
         /* A stack op only: CALL's instrumented form: the Call family's twins run Call.Observed. */
         tier1 inst(INSTRUMENTED_CALL,
                 (unused/3, callable: consumed, self_or_null: consumed, args[oparg]: consumed -- res: owned))
-            effects() exits(abort)
+            effects(runs_python) exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");

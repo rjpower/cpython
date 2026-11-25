@@ -34,23 +34,33 @@ design one:
   stubs and the tracer's SSA.
 
 Astra's [design](design/proposals/rir90-astra-design.md) and
-[addendum](design/proposals/rir90-astra-addendum.md) back the plan.
-`pyjit/rir90` at `eef6362c8f6` (pushed) holds the foundation:
-- F0, the language, and F1, its checker;
-- F2, the generated products, with arms taking handler ids after the old
-  handlers;
-- F3, the stack-op translator: one translation with an edge-move resolver
-  (SWAP words in the corpus 49,866 to 34,957);
-- P0: every arm has a row in every per-handler table; a family declares
-  its stack ops and events; a test hook forces an arm onto a word.
+[addendum](design/proposals/rir90-astra-addendum.md) back the plan. By
+the end condition agreed with the user, the register IR and the
+interpreter hold no reference to the stack at step D, and tests check it.
 
-The pilot ports three families through explicit translator rules:
-- P2, `Add`;
-- P3, `GetAttr` and `GetMethod`;
-- P4, `Call`, `InitResult` and `Return`.
+`pyjit/rir90` at `797247a5775` (pushed) holds:
+- the foundation: F0, the language; F1, its checker; F2, the generated
+  products; F3, the stack-op translator; P0, per-arm tables;
+- the pilot families: locals, constants and `Move` (P1), `Add` (P2),
+  `GetAttr` and `GetMethod` (P3), `Call`, `InitResult` and `Return` (P4),
+  and truth, branches and jumps (P5);
+- handler numbers computed at each build, with no pin table (PN);
+- the freeze units:
+  - PT: POP_TOP emits no instruction, and slots no longer creep;
+  - TT: stack ops carry no semantic flags;
+  - EC: tests show the set of inherited instructions only shrinks;
+  - SSA: 60 of the 69 pilot arms expand to the tracer's SSA form, and 58
+    match the C path.
 
-The module ladder with `always` shows known failures only, plus two
-settrace jump errors from F3 that it is fixing.
+Family arms are 56.0% of the IR words over Lib/; 116 inherited
+instructions remain, in 237 handlers. At the pilot join, `always` ran
+about 1.30 of golden87's interpreter time, and rir90's interpreter about
+1.26. Most of the gap is Call and Return rows compiled out of line (28%)
+and attribute loads (26%). By the user's choice, it is fixed after D.
+
+An Opus review of the checker and products, and a unit that freezes the
+language, are running; the Sonnet port of the remaining families (W1 and
+W2) follows.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

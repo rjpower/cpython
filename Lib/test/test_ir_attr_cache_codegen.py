@@ -25,7 +25,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         self.source.write_text(source)
         with cases.handle_stderr():
             analysis = cases.analyzer.analyze_files(
-                [str(self.source)], None if runtime else cases.SequentialNumbers())
+                [str(self.source)])
         output = io.StringIO()
         ir_generator.generate_ir([str(self.source)], analysis, output, False)
         return output.getvalue()

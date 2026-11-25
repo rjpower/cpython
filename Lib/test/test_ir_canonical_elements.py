@@ -16,7 +16,6 @@ with test_tools.imports_under_tool("cases_generator"):
     import analyzer
     import cwriter
     import ir_generator
-    import ir_numbers
 
 
 class CanonicalElementTests(unittest.TestCase):
@@ -24,15 +23,10 @@ class CanonicalElementTests(unittest.TestCase):
         return (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
 
     def emit(self, source, name):
-        numbers = ir_numbers.load_table()
-        if name == "RENAMED_ELEMENT":
-            numbers = ir_numbers.NumberTable(
-                numbers={**numbers.numbers, name: numbers.numbers["BINARY_OP_SUBSCR_LIST_INT"]},
-                constants=numbers.constants)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "source.c"
             path.write_text(source)
-            analysis = analyzer.analyze_files([str(path)], numbers=numbers)
+            analysis = analyzer.analyze_files([str(path)])
         formats = ir_generator.compute_formats(analysis)
         out = io.StringIO()
         writer = cwriter.CWriter(out, 0, False)

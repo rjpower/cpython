@@ -3,6 +3,7 @@ Tools/cases_generator/rop_cgen.py and rop_generator.py."""
 
 import re
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from test import support, test_tools
@@ -283,15 +284,14 @@ class ArmRowTests(unittest.TestCase):
             self.assertIn(f"[{handler}] = {{ .flags = _PyIR_VALID", header)
 
     def test_too_many_handlers_name_the_overflow(self):
-        import types
-        analysis = types.SimpleNamespace(
-            numbers=types.SimpleNamespace(num_old_handlers=419))
         arms = [None] * 94
-        with self.assertRaisesRegex(ir_generator.ir_numbers.NumberError,
-                                    "419 old handlers and 94 arms and wrappers need "
-                                    "513 handler ids, past the 512"):
-            ir_generator.num_handlers(analysis, arms)
-        self.assertEqual(ir_generator.num_handlers(analysis, arms[:93]), 512)
+        with mock.patch.object(ir_generator, "num_old_handlers",
+                               return_value=419):
+            with self.assertRaisesRegex(ir_generator.ir_arms.HandlerLimitError,
+                                        "419 old handlers and 94 arms and wrappers need "
+                                        "513 handler ids, past the 512"):
+                ir_generator.num_handlers(None, arms)
+            self.assertEqual(ir_generator.num_handlers(None, arms[:93]), 512)
 
 
 ENVIRONMENT = """\

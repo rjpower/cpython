@@ -17,7 +17,7 @@ from generators_common import (
 from cwriter import CWriter
 from collections.abc import Sequence
 
-import ir_numbers
+import ir_arms
 from ir_generator import (IR_BASE_ONLY, first_ir_only_handler, handler_ids,
                           num_old_handlers)
 from typing import TextIO
@@ -75,7 +75,7 @@ def generate_opmap(analysis: Analysis, out: CWriter) -> None:
 
 
 def generate_ir_opmap(analysis: Analysis, out: CWriter,
-                      arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
+                      arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
     """The handlers of the register IR that are not opcodes, by name: the
     old ones, then the register instruction arms by their dotted names"""
     out.emit("_ir_opmap = frozendict(\n")
@@ -97,7 +97,7 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter,
 
 def generate_py_metadata(
     filenames: list[str], analysis: Analysis, outfile: TextIO,
-    arms: Sequence[ir_numbers.ArmEntry] = ()
+    arms: Sequence[ir_arms.ArmEntry] = ()
 ) -> None:
     write_header(__file__, filenames, outfile, "#")
     out = CWriter(outfile, 0, False)

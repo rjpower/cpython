@@ -388,8 +388,11 @@ Known values:
           field is IR_FB_SHARED
    64445: contract87 AT (integration): LOAD_ATTR_METHOD_POLY, IR handler 412
    64446: contract87 SB: .pyc files hold upstream stack bytecode again; the
-          register IR is made at the first call and never stored */
-#define PYC_MAGIC_NUMBER 64446
+          register IR is made at the first call and never stored
+   64447: rir90 PN: opcode numbers are computed densely at each build, with
+          no pinned table; MIN_INSTRUMENTED_OPCODE is 234 and the numbers of
+          the has-argument and specialized opcodes shift */
+#define PYC_MAGIC_NUMBER 64447
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

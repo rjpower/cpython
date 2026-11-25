@@ -43,7 +43,6 @@ with test_tools.imports_under_tool("cases_generator"):
     import stack
     import ir_metadata_generator
     import opcode_metadata_generator
-    import ir_numbers
     import lexer
     import parser
     from stack import Local, Stack
@@ -73,29 +72,6 @@ def expand_outlined(text: str) -> str:
     for name, first, start, end in sorted(functions, key=lambda f: -f[1]):
         text = text[:first] + text[end:]
     return text
-
-
-class SequentialNumbers(ir_numbers.NumberTable):
-    """Numbers the definitions of a test input in order of request, in place
-    of the pinned table, which lists only the handlers of Python/bytecodes.c"""
-
-    def __init__(self):
-        super().__init__(constants={
-            "HAVE_ARGUMENT": 40, "MIN_INSTRUMENTED_OPCODE": 233,
-            "IR_FIRST_ONLY_HANDLER": 0})
-        self.pseudos = {}
-
-    @property
-    def first_ir_only(self):
-        # The IR-only handlers follow the pseudo-instructions
-        return 1 + max(self.pseudos.values(), default=255)
-
-    def number(self, name, low, high, what):
-        if name not in self.numbers:
-            self.numbers[name] = self.next_free(low, 4096)
-        if what == "pseudo-instruction":
-            self.pseudos[name] = self.numbers[name]
-        return self.numbers[name]
 
 
 def handle_stderr():
@@ -156,7 +132,7 @@ class TestAnalysisErrors(unittest.TestCase):
             temp_input.write(parser.END_MARKER)
         with handle_stderr():
             analysis = analyzer.analyze_files(
-                [self.temp_input_filename], SequentialNumbers())
+                [self.temp_input_filename])
             ir_generator.generate_ir([self.temp_input_filename], analysis,
                                      io.StringIO(), False)
 
@@ -337,7 +313,7 @@ class TestIRCases(unittest.TestCase):
             temp_input.write(parser.END_MARKER)
         with handle_stderr():
             return analyzer.analyze_files(
-                [self.temp_input_filename], SequentialNumbers())
+                [self.temp_input_filename])
 
     def formats(self, input: str):
         return ir_generator.compute_formats(self.analyze(input))
@@ -769,7 +745,7 @@ class TestIRCases(unittest.TestCase):
         }
         """
         Path(self.temp_input_filename).write_text(parser.BEGIN_MARKER + source + parser.END_MARKER)
-        analysis = analyzer.analyze_files([self.temp_input_filename], SequentialNumbers())
+        analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
         # Terminal C emission still has the instruction's normal CFG and
         # logical result. It is not a return/frame-exit analysis marker.
@@ -931,7 +907,7 @@ class TestIRCases(unittest.TestCase):
 
         renamed = source.replace('YIELD_VALUE', 'RENAMED_YIELD')
         Path(self.temp_input_filename).write_text(renamed)
-        other = analyzer.analyze_files([self.temp_input_filename], SequentialNumbers())
+        other = analyzer.analyze_files([self.temp_input_filename])
         self.assertTrue(ir_generator.canonical_frame_transfer_input(
             other.instructions['RENAMED_YIELD']))
 
@@ -4070,7 +4046,7 @@ class TestShapeReadMetadata(unittest.TestCase):
         // END BYTECODES //
         """
         Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename], numbers=SequentialNumbers())
+        analysis = analyzer.analyze_files([self.temp_input_filename])
         output = io.StringIO()
         opcode_metadata_generator.generate_expansion_table(analysis, CWriter(output, 0, False))
         table = output.getvalue()

@@ -1635,31 +1635,15 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
-    [119] = 119,
     [120] = 120,
     [121] = 121,
     [122] = 122,
     [123] = 123,
-    [152] = 152,
-    [153] = 153,
-    [154] = 154,
-    [155] = 155,
-    [156] = 156,
-    [157] = 157,
-    [158] = 158,
-    [161] = 161,
-    [165] = 165,
-    [166] = 166,
-    [167] = 167,
-    [168] = 168,
-    [169] = 169,
-    [170] = 170,
-    [171] = 171,
-    [172] = 172,
-    [173] = 173,
-    [174] = 174,
-    [175] = 175,
-    [176] = 176,
+    [124] = 124,
+    [125] = 125,
+    [126] = 126,
+    [127] = 127,
+    [188] = 188,
     [189] = 189,
     [190] = 190,
     [191] = 191,
@@ -1674,6 +1658,13 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [200] = 200,
     [201] = 201,
     [202] = 202,
+    [203] = 203,
+    [204] = 204,
+    [205] = 205,
+    [206] = 206,
+    [207] = 207,
+    [208] = 208,
+    [209] = 209,
     [210] = 210,
     [211] = 211,
     [212] = 212,
@@ -1686,9 +1677,18 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [219] = 219,
     [220] = 220,
     [221] = 221,
+    [222] = 222,
+    [223] = 223,
+    [224] = 224,
+    [225] = 225,
+    [226] = 226,
+    [227] = 227,
+    [228] = 228,
+    [229] = 229,
+    [230] = 230,
+    [231] = 231,
     [232] = 232,
-    [239] = 239,
-    [87] = 87,
+    [233] = 233,
     [BINARY_OP] = BINARY_OP,
     [BINARY_OP_ADD_FLOAT] = BINARY_OP,
     [BINARY_OP_ADD_INT] = BINARY_OP,
@@ -1896,32 +1896,15 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
-    case 87: \
-    case 119: \
     case 120: \
     case 121: \
     case 122: \
     case 123: \
-    case 152: \
-    case 153: \
-    case 154: \
-    case 155: \
-    case 156: \
-    case 157: \
-    case 158: \
-    case 161: \
-    case 165: \
-    case 166: \
-    case 167: \
-    case 168: \
-    case 169: \
-    case 170: \
-    case 171: \
-    case 172: \
-    case 173: \
-    case 174: \
-    case 175: \
-    case 176: \
+    case 124: \
+    case 125: \
+    case 126: \
+    case 127: \
+    case 188: \
     case 189: \
     case 190: \
     case 191: \
@@ -1936,6 +1919,13 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 200: \
     case 201: \
     case 202: \
+    case 203: \
+    case 204: \
+    case 205: \
+    case 206: \
+    case 207: \
+    case 208: \
+    case 209: \
     case 210: \
     case 211: \
     case 212: \
@@ -1948,8 +1938,18 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 219: \
     case 220: \
     case 221: \
+    case 222: \
+    case 223: \
+    case 224: \
+    case 225: \
+    case 226: \
+    case 227: \
+    case 228: \
+    case 229: \
+    case 230: \
+    case 231: \
     case 232: \
-    case 239: \
+    case 233: \
         ;
 struct pseudo_targets {
     uint8_t as_sequence;

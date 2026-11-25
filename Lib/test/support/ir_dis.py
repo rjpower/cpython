@@ -119,9 +119,6 @@ _LOC_AB = _opcode.IR_LOC_AB
 _LOC_FBARG = _opcode.IR_LOC_FBARG
 _IR_JUMPS = _opcode.IR_JUMPS
 _IR_FORWARD = _opcode.IR_FORWARD
-_IR_FUSED = _opcode.IR_FUSED
-_IR_FUSED_IF_FALSE = _opcode.IR_FUSED_IF_FALSE
-_IR_FUSED_OP_MASK = _opcode.IR_FUSED_OP_MASK
 _BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
 _BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
 _FEEDBACK_KINDS = ("COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
@@ -450,17 +447,12 @@ class _ExceptionTableEntry(_ExceptionTableEntryBase):
 _OPNAME_WIDTH = 20
 _OPARG_WIDTH = 5
 
-def _is_fused(handler):
-    """Whether handler runs a compare and the jump after it as one word"""
-    return (handler in _ir_only_handlers
-            and bool(_ir_contract[handler].flags & _IR_FUSED))
-
 def _get_jump_target(op, arg, offset):
     """Gets the word index of the jump target if this is a jump instruction.
 
     Otherwise return None.
     """
-    row = _ir_contract[op if _is_fused(op) else _deoptop(op)]
+    row = _ir_contract[_deoptop(op)]
     if arg is None or row is None:
         return None
     if row.flags & _IR_JUMPS:
@@ -848,11 +840,6 @@ class ArgResolver:
         argval = None
         argrepr = ''
         deop = _deoptop(op)
-        if arg is not None and _is_fused(op):
-            # The distance to the target; the operation is in the entry
-            argval = self.offset_from_jump_arg(op, arg, offset)
-            lbl = self.get_label_for_offset(argval)
-            return argval, f"to L{lbl}" if lbl is not None else ""
         if arg is not None:
             #  Set argval to the dereferenced value of the argument when
             #  available, and argrepr to the string representation of argval.
@@ -1031,24 +1018,6 @@ def _feedback_info(fb, fbinit, feedback):
     return [("kind", 1, kind.to_bytes(1, sys.byteorder)),
             ("arg", 2, arg.to_bytes(2, sys.byteorder))]
 
-def _fused_argrepr(handler, target, entry_arg):
-    """The argrepr of a fused word: the operation of its compare, then the
-    jump, from the arg of its feedback entry"""
-    if entry_arg is None:
-        return target
-    base = _deoptop(handler)
-    oparg = entry_arg & _IR_FUSED_OP_MASK
-    if base == COMPARE_OP:
-        desc = cmp_op[oparg >> 5]
-        if oparg & 16:
-            desc = f"bool({desc})"
-    elif base == IS_OP:
-        desc = 'is not' if oparg else 'is'
-    else:
-        desc = 'not in' if oparg else 'in'
-    sense = "false" if entry_arg & _IR_FUSED_IF_FALSE else "true"
-    return f"{desc} {target} if {sense}"
-
 def _exact_op(op, handler, fields):
     """The stack instruction of a word of a register instruction family that
     several stack instructions share (the family's base names the first):
@@ -1101,7 +1070,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             next(co_positions, ())
         if code is original_code:
             runs = handler
-            op = handler if _is_fused(handler) else _deoptop(handler)
+            op = _deoptop(handler)
         else:
             # The executing copy's handler, which INSTRUMENTED_LINE or
             # INSTRUMENTED_INSTRUCTION may have displaced, has the format of
@@ -1111,11 +1080,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # A handler of the IR only, such as BINARY_OP_ADD,
             # shows as the instruction that it runs; a specialisation shows
             # as itself
-            # (a fused compare-and-jump shows as its own name, which says
-            # that the jump is in the word)
-            if _is_fused(runs):
-                op = runs
-            elif runs in _ir_only_handlers:
+            if runs in _ir_only_handlers:
                 # Execution-only variants preserve their specialization in
                 # the adaptive view; structural IR handlers keep their base.
                 shadow = _ir_contract[runs].shadow
@@ -1124,8 +1089,6 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
                 op = runs
         if arg_resolver:
             argval, argrepr = arg_resolver.get_argval_argrepr(handler, arg, offset)
-            if _is_fused(handler):
-                argrepr = _fused_argrepr(handler, argrepr, _feedback_arg(fbinit, fb))
         else:
             argval, argrepr = arg, repr(arg)
         if arg_resolver and length > 1 and _deoptop(handler) == CALL_KW:

@@ -402,7 +402,7 @@ error:
  * stack of words (Tools/cases_generator/leaf_probe_generator.py), printed by
  * the generators' Emitter with the probe's binding of the statement macros.
  * The interpreter's word and frame stack pointer have no part in a probe:
- * the fused flag is the caller's, and the stack is the caller's array. */
+ * the stack is the caller's array. */
 enum { LEAF_PROBE_NEXT, LEAF_PROBE_EXIT, LEAF_PROBE_DEOPT, LEAF_PROBE_RAISE,
        LEAF_PROBE_COMPLETE };
 
@@ -410,7 +410,6 @@ struct leaf_probe_result {
     PyValue *stack_pointer;     // after NEXT: the top of the outputs
     int branch;                 // JUMPBY or JUMPTO ran
     int edge;                   // 0, or 1 + the flag that IR_REPORT_EDGE saw
-    int fused_if_false;         // IR_FUSED_IF_FALSE(), an input
     PyValue completed;          // after COMPLETE: the completion's value
 };
 
@@ -425,8 +424,6 @@ struct leaf_probe {
 
 #undef ASSERT_WITHIN_STACK_BOUNDS
 #define ASSERT_WITHIN_STACK_BOUNDS(F, L) ((void)0)
-#undef IR_FUSED_IF_FALSE
-#define IR_FUSED_IF_FALSE() (result->fused_if_false)
 
 /* A probe declares each stack item; a body may not use them all */
 #pragma GCC diagnostic push
@@ -449,7 +446,7 @@ tuple_word(PyObject *tuple, Py_ssize_t i)
     return word;
 }
 
-/* leaf_probe(name, inputs, oparg, caches, fused_if_false): run the probe of
+/* leaf_probe(name, inputs, oparg, caches): run the probe of
  * uop name on the input words, in the caller's frame.  Returns (outcome,
  * outputs, branch, edge, completed); the outputs are the stack's words after
  * NEXT, else (). */
@@ -458,9 +455,9 @@ leaf_probe(PyObject *Py_UNUSED(module), PyObject *args)
 {
     const char *name;
     PyObject *inputs, *caches;
-    int oparg, fused_if_false;
-    if (!PyArg_ParseTuple(args, "sO!iO!p", &name, &PyTuple_Type, &inputs,
-                          &oparg, &PyTuple_Type, &caches, &fused_if_false)) {
+    int oparg;
+    if (!PyArg_ParseTuple(args, "sO!iO!", &name, &PyTuple_Type, &inputs,
+                          &oparg, &PyTuple_Type, &caches)) {
         return NULL;
     }
     const struct leaf_probe *probe = LEAF_PROBES;
@@ -487,7 +484,7 @@ leaf_probe(PyObject *Py_UNUSED(module), PyObject *args)
     if (PyErr_Occurred()) {
         return NULL;
     }
-    struct leaf_probe_result result = {NULL, 0, 0, fused_if_false, {0}};
+    struct leaf_probe_result result = {NULL, 0, 0, {0}};
     _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
     int outcome = probe->run(frame, stack + n, oparg, cache_words, &result);
     if (outcome == LEAF_PROBE_RAISE && PyErr_Occurred()) {

@@ -321,19 +321,18 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
             if (!op->nwords) {
                 continue;
             }
-            _PyRegOp *control = op;
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(control->opcode, control->oparg);
-            if (control->target >= 0 && !(fmt->flags & _PyIR_NAMES_TARGET)) {
-                int target = control->target;
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+            if (op->target >= 0 && !(fmt->flags & _PyIR_NAMES_TARGET)) {
+                int target = op->target;
                 RETURN_IF_ERROR(
                     assemble_source_edge(a, cfg, op->word, _PyIR_EDGE_TAKEN,
                                          target, cfg->blocks[target].start));
             }
-            if (!_PyRegOp_EndsFlow(control->opcode)) {
+            if (!_PyRegOp_EndsFlow(op->opcode)) {
                 RETURN_IF_ERROR(
                     assemble_source_edge(a, cfg, op->word,
                                          _PyIR_EDGE_FALLTHROUGH, b,
-                                         control_index + 1));
+                                         i + 1));
             }
         }
     }
@@ -1143,9 +1142,10 @@ layout(struct assembler *a, _PyRegCfg *cfg)
                 // jumps to the target, and the fall-through word jumps over
                 // that one (RELAXED_BRANCH_WORDS)
                 int distance = jump_target(cfg, op) - (op->word + 1);
-                if (op->nwords == 1 && (distance > _PyIR_MaxForward
-                                        || distance < IR_MIN_DISTANCE)) {
-                    op->nwords = RELAXED_BRANCH_WORDS;
+                if (op->nwords == 1 + fmt->fixed_words
+                    && (distance > _PyIR_MaxForward
+                        || distance < IR_MIN_DISTANCE)) {
+                    op->nwords = RELAXED_BRANCH_WORDS + fmt->fixed_words;
                     changed = 1;
                 }
                 continue;
@@ -1218,7 +1218,10 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
     if (fmt->target != _PyIR_LOC_NONE) {
         // A register instruction's target, a signed distance in the fields
         // its encoding gives it; the oparg, if any, has its own field
-        int distance = op->nwords > 1 ? 1 : jump_target(cfg, op) - (op->word + 1);
+        // A relaxed branch takes the second jump, which follows the
+        // operand words and the first jump
+        int distance = op->nwords > 1 + fmt->fixed_words
+            ? 1 + fmt->fixed_words : jump_target(cfg, op) - (op->word + 1);
         int bits = fmt->target == _PyIR_LOC_AB ? 24 : 12;
         if (distance < -(1 << (bits - 1)) || distance >= (1 << (bits - 1))) {
             if (reachable) {
@@ -1364,6 +1367,13 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             else if (_PyIR_FormatOf(op->handler)->fixed_words) {
                 // P0 of the first operand word is the feedback entry
                 words[w + 1] = (_PyIRWord)(op->fb > 0 ? op->fb : IR_FB_SHARED);
+                if (op->nwords > 1 + _PyIR_FormatOf(op->handler)->fixed_words) {
+                    // A relaxed branch: its fall-through word jumps over
+                    // the second jump, which goes to the target
+                    int k = _PyIR_FormatOf(op->handler)->fixed_words;
+                    words[w + 1 + k] = jump_word(w + RELAXED_BRANCH_WORDS + k);
+                    words[w + 2 + k] = jump_word(jump_target(cfg, op));
+                }
             }
             else if (op->nwords > 1) {
                 int exit = jump_target(cfg, op);

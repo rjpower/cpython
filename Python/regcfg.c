@@ -1982,11 +1982,11 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
             PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
             return ERROR;
         }
-        id = n + 11;
+        // The ids of IntrinsicId follow the unary ones in order; the
+        // numbers 8 to 21 are unused
+        id = n < INTRINSIC_GETATTR ? n + 11 : n - 3;
         handler = _PyRop_SelectIntrinsicPair(
-            n < INTRINSIC_COMPARE_OP ? ROP_SELECT_BINARY
-            : n < INTRINSIC_GETATTR ? ROP_SELECT_COMPARE
-            : ROP_SELECT_ATTR);
+            n < INTRINSIC_GETATTR ? ROP_SELECT_BINARY : ROP_SELECT_ATTR);
     }
     if (t->sp < nuses) {
         return stack_underflow(src);

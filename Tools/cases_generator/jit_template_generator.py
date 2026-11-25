@@ -357,8 +357,6 @@ def input_operand(record, k: int):
 def oparg_expr(record) -> str:
     fmt = record.format
     source = record.oparg
-    if source == "FUSED_OP":
-        return "(int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK)"
     if source == "FBARG_ENTRY":
         return "(int)((_PyFbHeader *)fb)->arg"
     if source == "SIGNED_D":
@@ -551,14 +549,8 @@ class Builder:
         if k == "report_edge":
             return gb
         if k == "oparg":
-            self.uses_fb |= self.record.oparg in ("FUSED_OP", "FBARG_ENTRY")
+            self.uses_fb |= self.record.oparg == "FBARG_ENTRY"
             self.add(gb, "jconst", results, [], oparg_expr(self.record))
-            return gb
-        if k == "imm":
-            if op.attr != "fused_if_false":
-                raise Refused(f"immediate {op.attr}")
-            self.uses_fb = True
-            self.add(gb, "jconst", results, [], "((int)(((_PyFbHeader *)fb)->arg >> 8) & 1)")
             return gb
         if k == "cache":
             self.uses_fb = True

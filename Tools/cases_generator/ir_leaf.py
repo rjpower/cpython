@@ -1451,8 +1451,7 @@ class Translator:
             self.terminate(("raise",))
         elif name in ("JUMPTO", "JUMPBY"):
             target = args[0]
-            if not ((target.kind == "name" and target.value == "oparg") or
-                    (target.kind == "call" and target.value == "IR_FUSED_DISTANCE")):
+            if not (target.kind == "name" and target.value == "oparg"):
                 raise LeafError(f"{name} to a computed target", tok)
             self.env["%branch"] = self.const("bool", 1)
         elif name == "IR_REPORT_EDGE":
@@ -1840,8 +1839,6 @@ class Translator:
             if want:
                 raise LeafError(f"{name} has no value", tok)
             return None
-        if name == "IR_FUSED_IF_FALSE":
-            return self.emit1("imm", "i32", (), "fused_if_false")
         if name in CAPABILITY_MACROS:
             return self.capability(e, statement=not want)
         if name in ("__builtin_add_overflow", "__builtin_sub_overflow",

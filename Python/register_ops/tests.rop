@@ -1038,7 +1038,8 @@ arm TestBranch.Generic shared
     let a:Anchors = anchor_for_call([x, y]);
     branch test_is_contains(test) -> RunContains(), RunCompare();
   RunCompare():
-    call compare_test_at_origin(relation_of(test), a) {
+    let rel:Enum<Relation> = relation_of(test);
+    call compare_test_at_origin(rel, a) {
       yes -> Yes();
       no -> No();
       err -> Failed();
@@ -1111,7 +1112,8 @@ arm TestBranch.Observed split observes
     let a:Anchors = anchor_for_call([x, y]);
     branch test_is_contains(test) -> RunContains(), RunCompare();
   RunCompare():
-    call compare_test_at_origin(relation_of(test), a) {
+    let rel:Enum<Relation> = relation_of(test);
+    call compare_test_at_origin(rel, a) {
       yes -> Yes();
       no -> No();
       err -> Failed();

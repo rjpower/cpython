@@ -2294,8 +2294,6 @@ static PyValue _PyRop_IntrinsicImportStar(PyThreadState *tstate, PyValue x);
 static PyValue _PyRop_IntrinsicStopIteration(PyThreadState *tstate, PyValue x);
 static PyValue _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id,
                                       PyValue x, PyValue y);
-static PyValue _PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id,
-                                       PyValue x, PyValue y);
 static PyValue _PyRop_IntrinsicAttr(PyThreadState *tstate, uint32_t id,
                                     PyValue x, PyValue y);
 
@@ -8476,11 +8474,6 @@ static const uint8_t rop_intrinsic_number[] = {
     INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
     INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
     INTRINSIC_MATCH_CLASS_ISINSTANCE,
-    INTRINSIC_COMPARE_OP + 0, INTRINSIC_COMPARE_OP + 1, INTRINSIC_COMPARE_OP + 2,
-    INTRINSIC_COMPARE_OP + 3, INTRINSIC_COMPARE_OP + 4, INTRINSIC_COMPARE_OP + 5,
-    INTRINSIC_COMPARE_OP + 6, INTRINSIC_COMPARE_OP + 7, INTRINSIC_COMPARE_OP + 8,
-    INTRINSIC_COMPARE_OP + 9, INTRINSIC_COMPARE_OP + 10, INTRINSIC_COMPARE_OP + 11,
-    INTRINSIC_CONTAINS_OP, INTRINSIC_CONTAINS_OP + 1,
     INTRINSIC_GETATTR, INTRINSIC_SETATTR,
 };
 
@@ -8531,12 +8524,6 @@ _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
     PyValue_XCLOSE(held1);
     PyValue_XCLOSE(held2);
     return res;
-}
-
-static PyValue
-_PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
-{
-    return _PyRop_IntrinsicBinary(tstate, id, x, y);
 }
 
 static PyValue

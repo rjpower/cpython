@@ -705,7 +705,7 @@ class LeafUopTests(unittest.TestCase):
     def setUpClass(cls):
         RecordTests.setUpClass.__func__(cls)
 
-    def check_uop(self, uop, part, env, caches, oparg, fused, keep):
+    def check_uop(self, uop, part, env, caches, oparg, keep):
         """Run uop on env's words in C and in the evaluator; compare.  Returns
         the outcome, or None if the inputs make the C undefined."""
         for guard in uop.guards:
@@ -724,12 +724,12 @@ class LeafUopTests(unittest.TestCase):
             expected = ir_leaf_eval.evaluate(
                 uop.leaf, cx, {i.name: w for i, w in zip(uop.inputs, words)},
                 {fb.name: caches[fb.name] for fb in uop.feedback}, oparg,
-                {"fused_if_false": fused})
+                {})
         except ir_leaf_eval.UndefinedBehavior:
             for w in consumed:
                 ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
             return None
-        got = capi.leaf_probe(uop.name, tuple(words), oparg, tuple(cache_words), fused)
+        got = capi.leaf_probe(uop.name, tuple(words), oparg, tuple(cache_words))
         outcome, outputs, branch, edge, completed = got
         where = (uop.name, [hex(w) for w in words], oparg, caches)
         self.assertEqual(ir_leaf_eval.OUTCOMES[outcome], expected.outcome, where)
@@ -779,7 +779,7 @@ class LeafUopTests(unittest.TestCase):
                 ctypes.pythonapi.Py_IncRef(ctypes.py_object(value))
             cx = context(frame=capi.leaf_frame())
             expected = ir_leaf_eval.evaluate(leaf, cx, {"value": w}, {}, home)
-            outcome, outputs, *_ = capi.leaf_probe("_SWAP_FAST", (w,), home, (), False)
+            outcome, outputs, *_ = capi.leaf_probe("_SWAP_FAST", (w,), home, ())
             writes = [(ir_leaf_eval.RealMemory().load(addr, t), after)
                       for addr, t, before, after in cx.mem.writes()]
             # The old value is the probe's output now, an owned count
@@ -801,19 +801,18 @@ class LeafUopTests(unittest.TestCase):
             for inputs in domain():
                 for caches in (make_caches(inputs) if make_caches else [{}]):
                     for oparg in opargs:
-                        for fused in (False, True):
-                            env = dict(zip(externals, inputs))
-                            keep = []
-                            try:
-                                for uop in record.uops:
-                                    outcome = self.check_uop(uop, parts[uop.name], env,
-                                                             caches, oparg, fused, keep)
-                                    outcomes.add(outcome)
-                                    if outcome != "NEXT":
-                                        break
-                            finally:
-                                for w in keep:
-                                    ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
+                        env = dict(zip(externals, inputs))
+                        keep = []
+                        try:
+                            for uop in record.uops:
+                                outcome = self.check_uop(uop, parts[uop.name], env,
+                                                         caches, oparg, keep)
+                                outcomes.add(outcome)
+                                if outcome != "NEXT":
+                                    break
+                        finally:
+                            for w in keep:
+                                ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
             with self.subTest(handler=handler):
                 self.assertIn("NEXT", outcomes)
 

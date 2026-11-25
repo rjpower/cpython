@@ -96,43 +96,51 @@ set_word_opcode(PyCodeObject *code, _PyIRWord *words, int i, int opcode)
     _PyIR_SetHandler(&words[i], _PyCode_HandlerFor(code, i, opcode));
 }
 
-/* The words of the assembler's exact relaxation adapter, which shares
- * LINE/branch grouping with a semantic step: 3 for a FOR_ITER, SEND or
- * conditional branch and the two jumps after it, else 1.  Each helper still has INSTRUCTION events. */
-static inline int
-relaxed_length(PyCodeObject *code, int i)
-{
-    int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
-    if ((opcode == FOR_ITER || opcode == SEND || opcode == POP_JUMP_IF_TRUE ||
-         opcode == POP_JUMP_IF_NONE) && i + 2 < _PyCode_IRSize(code) &&
-        _PyCode_InstrHandler(code, i + 1) == IR_JUMP &&
-        _PyCode_InstrHandler(code, i + 2) == IR_JUMP &&
-        _PyCode_InstrTarget(code, i) == i + 2 &&
-        _PyCode_InstrTarget(code, i + 1) == i + 3)
-    {
-        return 3;
-    }
-    return 1;
-}
-
 /* The number of words of the instruction at index i, which tables keyed by
- * word index give one entry and one event: a call head with its operand
- * words (_PyIR_WordLength()), or a relaxation adapter. */
+ * word index give one entry and one event: a head with its operand words
+ * (_PyIR_WordLength()), or the assembler's relaxation of a FOR_ITER, SEND or
+ * conditional branch, which adds two jumps after the head and its operand
+ * words: the first jumps over the second, which goes to the target.  The
+ * jumps share LINE/branch grouping with their step; each still has
+ * INSTRUCTION events. */
 static inline int
 instr_length(PyCodeObject *code, int i)
 {
     int length = _PyCode_InstrLength(code, i);
-    return length > 1 ? length : relaxed_length(code, i);
+    int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
+    if ((opcode == FOR_ITER || opcode == SEND || opcode == POP_JUMP_IF_TRUE ||
+         opcode == POP_JUMP_IF_NONE) && i + length + 1 < _PyCode_IRSize(code) &&
+        _PyCode_InstrHandler(code, i + length) == IR_JUMP &&
+        _PyCode_InstrHandler(code, i + length + 1) == IR_JUMP &&
+        _PyCode_InstrTarget(code, i) == i + length + 1 &&
+        _PyCode_InstrTarget(code, i + length) == i + length + 2)
+    {
+        return length + 2;
+    }
+    return length;
+}
+
+/* Whether the word at index i is one of the two jumps that relax the
+ * instruction at index head */
+static inline bool
+is_relaxation_jump(PyCodeObject *code, int head, int i)
+{
+    int length = _PyCode_InstrLength(code, head);
+    return instr_length(code, head) == length + 2 &&
+           (i == head + length || i == head + length + 1);
 }
 
 static inline int
 line_landing(PyCodeObject *code, int dest)
 {
-    if (_PyCode_InstrHandler(code, dest) == IR_JUMP &&
-        ((dest >= 1 && relaxed_length(code, dest - 1) == 3) ||
-         (dest >= 2 && relaxed_length(code, dest - 2) == 3)))
-    {
-        return _PyCode_InstrTarget(code, dest);
+    if (_PyCode_InstrHandler(code, dest) != IR_JUMP) {
+        return dest;
+    }
+    // The head is up to a head with one operand word and a jump before
+    for (int back = 1; back <= 3 && back <= dest; back++) {
+        if (is_relaxation_jump(code, dest - back, dest)) {
+            return _PyCode_InstrTarget(code, dest);
+        }
     }
     return dest;
 }
@@ -305,7 +313,8 @@ event_offset(PyCodeObject *code, int word, int event)
         event != PY_MONITORING_EVENT_BRANCH_RIGHT) {
         return offset;
     }
-    int end = _PyCode_WordOffset(code, word + 1) / (int)sizeof(_Py_CODEUNIT);
+    int end = _PyCode_WordOffset(code, word + _PyCode_InstrLength(code, word))
+              / (int)sizeof(_Py_CODEUNIT);
     _Py_CODEUNIT *units = _PyCode_CODE(code);
     for (int u = offset / (int)sizeof(_Py_CODEUNIT); u < end; ) {
         int opcode = _PyOpcode_Deopt[units[u].op.code];

@@ -1203,6 +1203,23 @@ class PilotTests(unittest.TestCase):
         raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5, nth=1)
         raise_method = at("getattr.rop", "exit raise(GetMethod.Failed, saved);", 5)
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
+        # The arms of tests.rop that raise, in order of line: the family, the
+        # arm and the operands that its point lists in spent
+        tests_raises = [
+            f"{at('tests.rop', f'exit raise({family}.Failed, saved);', 5, nth=nth)}: "
+            f"{arm}: points: raise at {family}.Failed: {family}.Failed lists "
+            f"{operand} in spent, but {operand} is intact"
+            for family, nth, arm, operands in [
+                ("Compare", 0, "Compare.Generic", ("x", "y")),
+                ("Contains", 0, "Contains.Set", ("container", "item")),
+                ("Contains", 1, "Contains.Dict", ("container", "item")),
+                ("Contains", 2, "Contains.Generic", ("container", "item")),
+                ("TestBranch", 0, "TestBranch.Set", ("x", "y")),
+                ("TestBranch", 1, "TestBranch.Dict", ("x", "y")),
+                ("TestBranch", 2, "TestBranch.Sequence", ("x", "y")),
+                ("TestBranch", 3, "TestBranch.Generic", ("x", "y")),
+                ("TestBranch", 4, "TestBranch.Observed", ("x", "y"))]
+            for operand in operands]
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
         branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
@@ -1250,6 +1267,7 @@ class PilotTests(unittest.TestCase):
               f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
               "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "
               "spent, but mapping is intact",
+              *tests_raises,
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "

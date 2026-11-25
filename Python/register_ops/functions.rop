@@ -54,9 +54,8 @@ extern helper function_new(f:Frame, code:Src)
               "Python and raise.");
 
 // A failed make closes the code operand with the exception set aside
-extern helper retire_failed_function(f:Frame, code:Src, e:Err) -> Err
-  effects(writes, releases, runs_python)
-  spends(code)
+extern helper retire_failed_function(code:O, e:Err) -> Err
+  effects(releases, runs_python)
   c _PyRop_RetireFailedFunction as handle
   evidence(
     review: "Reviewed 1I. The unwinder's close of the operand of a failed"
@@ -78,7 +77,8 @@ arm Function.Make split
     publish [dst = fn] retire [spent(code), old(dst)] at Function.Done;
     exit next();
   NewFailed(e:Err):
-    let saved:Err = retire_failed_function(frame, code, e);
+    let held:O = acquire(code);
+    let saved:Err = retire_failed_function(held, e);
     exit raise(Function.Failed, saved);
 }
 
@@ -119,17 +119,16 @@ point IntrinsicPair.Done(current, next_head, clear) keep() spent(x, y) defs(dst)
 point IntrinsicPair.Failed(current, site, pending) keep() spent(x, y) defs();
 
 // The intrinsic functions take objects: a number is boxed for the call.
-// Every row takes its operands out of their homes (a local's value gets a
-// count) and closes them on both outcomes; the result is a new owner.
+// Every row consumes its operands, closing them on both outcomes; the
+// result is a new owner.
 
 // PRINT (sys.displayhook), ASYNC_GEN_WRAP, UNARY_POSITIVE (__pos__),
 // LIST_TO_TUPLE and BUILD_FROZENSET (the compiler's uniquely referenced
 // temporary), TYPEVAR, PARAMSPEC, TYPEVARTUPLE, SUBSCRIPT_GENERIC (imports
 // typing), TYPEALIAS
-extern helper intrinsic_unary(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src)
+extern helper intrinsic_unary(t:Thread, id:Enum<IntrinsicId>, x:O)
   cases(ok(z:O), err(e:Err))
   effects(allocates, writes, releases, runs_python, raises)
-  spends(x)
   c _PyRop_IntrinsicUnary as value_or_null
   evidence(
     review: "Reviewed 1I. bytecodes.c _CALL_INTRINSIC_1 through _PyEval_CallIntrinsic1.",
@@ -138,10 +137,9 @@ extern helper intrinsic_unary(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src)
 
 // IMPORT_STAR: the frame's locals mapping gains the names of the module (or of
 // its __all__); the only intrinsic that writes a namespace
-extern helper intrinsic_import_star(t:Thread, f:Frame, x:Src)
+extern helper intrinsic_import_star(t:Thread, x:O)
   cases(ok(z:O), err(e:Err))
   effects(allocates, writes, releases, runs_python, raises)
-  spends(x)
   c _PyRop_IntrinsicImportStar as value_or_null
   evidence(
     review: "Reviewed 1I. intrinsics.c import_star: _PyFrame_GetLocals of the current"
@@ -151,10 +149,9 @@ extern helper intrinsic_import_star(t:Thread, f:Frame, x:Src)
 
 // STOPITERATION_ERROR: in a generator's cleanup, a StopIteration becomes a
 // RuntimeError that has it as cause and context
-extern helper intrinsic_stopiteration(t:Thread, f:Frame, x:Src)
+extern helper intrinsic_stopiteration(t:Thread, x:O)
   cases(ok(z:O), err(e:Err))
   effects(allocates, writes, releases, runs_python, raises)
-  spends(x)
   c _PyRop_IntrinsicStopIteration as value_or_null
   evidence(
     review: "Reviewed 1I. intrinsics.c stopiteration_error. The current frame is a"
@@ -164,20 +161,18 @@ extern helper intrinsic_stopiteration(t:Thread, f:Frame, x:Src)
 // PREP_RERAISE_STAR and MATCH_CLASS_ISINSTANCE run Python;
 // SET_FUNCTION_TYPE_PARAMS, SET_TYPEPARAM_DEFAULT and
 // ADD_CONDITIONAL_ANNOTATION write their first object
-extern helper intrinsic_binary(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src, y:Src)
+extern helper intrinsic_binary(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
   cases(ok(z:O), err(e:Err))
   effects(allocates, writes, releases, runs_python, raises)
-  spends(x, y)
   c _PyRop_IntrinsicBinary as value_or_null
   evidence(
     review: "Reviewed 1I. bytecodes.c CALL_INTRINSIC_2 through _PyEval_CallIntrinsic2.",
     contract: "x is the first operand, the function's first argument.");
 
 // A comparison or a containment test at a site with no feedback entry
-extern helper intrinsic_compare(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src, y:Src)
+extern helper intrinsic_compare(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
   cases(ok(z:O), err(e:Err))
   effects(allocates, writes, releases, runs_python, raises)
-  spends(x, y)
   c _PyRop_IntrinsicCompare as value_or_null
   evidence(
     review: "Reviewed 1I. intrinsics.c compare_* and contains_*: rich comparison or"
@@ -185,10 +180,9 @@ extern helper intrinsic_compare(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src, 
     contract: "Runs Python.");
 
 // GETATTR (owner, name) and SETATTR (value or the vacancy, (owner, name) tuple)
-extern helper intrinsic_attr(t:Thread, f:Frame, id:Enum<IntrinsicId>, x:Src, y:Src)
+extern helper intrinsic_attr(t:Thread, id:Enum<IntrinsicId>, x:O, y:O)
   cases(ok(z:O), err(e:Err))
   effects(allocates, writes, releases, runs_python, raises)
-  spends(x, y)
   c _PyRop_IntrinsicAttr as value_or_null
   evidence(
     review: "Reviewed 1I. bytecodes.c CALL_INTRINSIC_2 GETATTR and SETATTR branches.",
@@ -201,7 +195,8 @@ arm Intrinsic.Unary split select(unary)
   exits(next, raise)
 {
   entry():
-    call intrinsic_unary(thread, frame, id, x) {
+    let xo:O = acquire(x);
+    call intrinsic_unary(thread, id, xo) {
       ok -> Done();
       err -> Failed();
     }
@@ -218,7 +213,8 @@ arm Intrinsic.ImportStar split select(import_star)
   exits(next, raise)
 {
   entry():
-    call intrinsic_import_star(thread, frame, x) {
+    let xo:O = acquire(x);
+    call intrinsic_import_star(thread, xo) {
       ok -> Done();
       err -> Failed();
     }
@@ -235,7 +231,8 @@ arm Intrinsic.StopIteration split select(stopiteration)
   exits(next, raise)
 {
   entry():
-    call intrinsic_stopiteration(thread, frame, x) {
+    let xo:O = acquire(x);
+    call intrinsic_stopiteration(thread, xo) {
       ok -> Done();
       err -> Failed();
     }
@@ -252,7 +249,9 @@ arm IntrinsicPair.Binary split select(binary)
   exits(next, raise)
 {
   entry():
-    call intrinsic_binary(thread, frame, id, x, y) {
+    let xo:O = acquire(x);
+    let yo:O = acquire(y);
+    call intrinsic_binary(thread, id, xo, yo) {
       ok -> Done();
       err -> Failed();
     }
@@ -269,7 +268,9 @@ arm IntrinsicPair.Compare split select(compare)
   exits(next, raise)
 {
   entry():
-    call intrinsic_compare(thread, frame, id, x, y) {
+    let xo:O = acquire(x);
+    let yo:O = acquire(y);
+    call intrinsic_compare(thread, id, xo, yo) {
       ok -> Done();
       err -> Failed();
     }
@@ -286,7 +287,9 @@ arm IntrinsicPair.Attr split select(attr)
   exits(next, raise)
 {
   entry():
-    call intrinsic_attr(thread, frame, id, x, y) {
+    let xo:O = acquire(x);
+    let yo:O = acquire(y);
+    call intrinsic_attr(thread, id, xo, yo) {
       ok -> Done();
       err -> Failed();
     }

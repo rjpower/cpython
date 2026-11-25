@@ -1785,6 +1785,7 @@ ir_run_Function_Make(
     PyValue own_code = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue held;
     PyValue fn;
     IR_STUB_ESCAPE();
     ret1 = _PyRop_FunctionNew(frame, home_code);
@@ -1802,8 +1803,9 @@ ir_run_Function_Make(
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_Function_Make_NewFailed:
+    held = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_code) : _PyFrame_TakeHome(frame, home_code));
     IR_STUB_ESCAPE();
-    _PyRop_RetireFailedFunction(frame, home_code);
+    _PyRop_RetireFailedFunction(held);
     PROCESS_ERROR_AT(RAISE, 19, this_instr);
 }
 
@@ -1842,12 +1844,14 @@ ir_run_Intrinsic_Unary(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Intrinsic_Unary);
     PyValue *const home_x = &IR_SLOT(IR_C(ir_word));
+    PyValue xo;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
+    xo = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_x) : _PyFrame_TakeHome(frame, home_x));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_IntrinsicUnary(tstate, frame, (uint32_t)IR_B(ir_word), home_x);
+    ret1 = _PyRop_IntrinsicUnary(tstate, (uint32_t)IR_B(ir_word), xo);
     if (PyValue_IsNull(ret1)) {
         goto rop_Intrinsic_Unary_Failed;
     }
@@ -1875,12 +1879,14 @@ ir_run_Intrinsic_ImportStar(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Intrinsic_ImportStar);
     PyValue *const home_x = &IR_SLOT(IR_C(ir_word));
+    PyValue xo;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
+    xo = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_x) : _PyFrame_TakeHome(frame, home_x));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_IntrinsicImportStar(tstate, frame, home_x);
+    ret1 = _PyRop_IntrinsicImportStar(tstate, xo);
     if (PyValue_IsNull(ret1)) {
         goto rop_Intrinsic_ImportStar_Failed;
     }
@@ -1908,12 +1914,14 @@ ir_run_Intrinsic_StopIteration(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Intrinsic_StopIteration);
     PyValue *const home_x = &IR_SLOT(IR_C(ir_word));
+    PyValue xo;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
+    xo = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_x) : _PyFrame_TakeHome(frame, home_x));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_IntrinsicStopIteration(tstate, frame, home_x);
+    ret1 = _PyRop_IntrinsicStopIteration(tstate, xo);
     if (PyValue_IsNull(ret1)) {
         goto rop_Intrinsic_StopIteration_Failed;
     }
@@ -1941,13 +1949,17 @@ ir_run_IntrinsicPair_Binary(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_IntrinsicPair_Binary);
     PyValue *const home_x = &IR_SLOT(IR_C(ir_word));
+    PyValue xo;
     PyValue *const home_y = &IR_SLOT(IR_D(ir_word));
+    PyValue yo;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
+    xo = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_x) : _PyFrame_TakeHome(frame, home_x));
+    yo = ((ir_word & IR_F_LOCAL_D) ? PyValue_DUP(*home_y) : _PyFrame_TakeHome(frame, home_y));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_IntrinsicBinary(tstate, frame, (uint32_t)IR_B(ir_word), home_x, home_y);
+    ret1 = _PyRop_IntrinsicBinary(tstate, (uint32_t)IR_B(ir_word), xo, yo);
     if (PyValue_IsNull(ret1)) {
         goto rop_IntrinsicPair_Binary_Failed;
     }
@@ -1975,13 +1987,17 @@ ir_run_IntrinsicPair_Compare(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_IntrinsicPair_Compare);
     PyValue *const home_x = &IR_SLOT(IR_C(ir_word));
+    PyValue xo;
     PyValue *const home_y = &IR_SLOT(IR_D(ir_word));
+    PyValue yo;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
+    xo = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_x) : _PyFrame_TakeHome(frame, home_x));
+    yo = ((ir_word & IR_F_LOCAL_D) ? PyValue_DUP(*home_y) : _PyFrame_TakeHome(frame, home_y));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_IntrinsicCompare(tstate, frame, (uint32_t)IR_B(ir_word), home_x, home_y);
+    ret1 = _PyRop_IntrinsicCompare(tstate, (uint32_t)IR_B(ir_word), xo, yo);
     if (PyValue_IsNull(ret1)) {
         goto rop_IntrinsicPair_Compare_Failed;
     }
@@ -2009,13 +2025,17 @@ ir_run_IntrinsicPair_Attr(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_IntrinsicPair_Attr);
     PyValue *const home_x = &IR_SLOT(IR_C(ir_word));
+    PyValue xo;
     PyValue *const home_y = &IR_SLOT(IR_D(ir_word));
+    PyValue yo;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
+    xo = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_x) : _PyFrame_TakeHome(frame, home_x));
+    yo = ((ir_word & IR_F_LOCAL_D) ? PyValue_DUP(*home_y) : _PyFrame_TakeHome(frame, home_y));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_IntrinsicAttr(tstate, frame, (uint32_t)IR_B(ir_word), home_x, home_y);
+    ret1 = _PyRop_IntrinsicAttr(tstate, (uint32_t)IR_B(ir_word), xo, yo);
     if (PyValue_IsNull(ret1)) {
         goto rop_IntrinsicPair_Attr_Failed;
     }

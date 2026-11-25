@@ -2286,27 +2286,18 @@ static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               PyValue *fn, _PyInstr *head);
 /* The rows of Function and Intrinsic (Python/register_ops/functions.rop) */
 static PyValue _PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue *code);
-static void _PyRop_RetireFailedFunction(_PyInterpreterFrame *frame,
-                                        PyValue *code);
+static void _PyRop_RetireFailedFunction(PyValue code);
 static void _PyRop_StoreField(PyValueBorrow fn, uint32_t field, PyValue attr);
-static PyValue _PyRop_IntrinsicUnary(PyThreadState *tstate,
-                                     _PyInterpreterFrame *frame, uint32_t id,
-                                     PyValue *x);
-static PyValue _PyRop_IntrinsicImportStar(PyThreadState *tstate,
-                                          _PyInterpreterFrame *frame,
-                                          PyValue *x);
-static PyValue _PyRop_IntrinsicStopIteration(PyThreadState *tstate,
-                                             _PyInterpreterFrame *frame,
-                                             PyValue *x);
-static PyValue _PyRop_IntrinsicBinary(PyThreadState *tstate,
-                                      _PyInterpreterFrame *frame, uint32_t id,
-                                      PyValue *x, PyValue *y);
-static PyValue _PyRop_IntrinsicCompare(PyThreadState *tstate,
-                                       _PyInterpreterFrame *frame, uint32_t id,
-                                       PyValue *x, PyValue *y);
-static PyValue _PyRop_IntrinsicAttr(PyThreadState *tstate,
-                                    _PyInterpreterFrame *frame, uint32_t id,
-                                    PyValue *x, PyValue *y);
+static PyValue _PyRop_IntrinsicUnary(PyThreadState *tstate, uint32_t id,
+                                     PyValue x);
+static PyValue _PyRop_IntrinsicImportStar(PyThreadState *tstate, PyValue x);
+static PyValue _PyRop_IntrinsicStopIteration(PyThreadState *tstate, PyValue x);
+static PyValue _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id,
+                                      PyValue x, PyValue y);
+static PyValue _PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id,
+                                       PyValue x, PyValue y);
+static PyValue _PyRop_IntrinsicAttr(PyThreadState *tstate, uint32_t id,
+                                    PyValue x, PyValue y);
 
 static PyValue _PyRop_CallNative(PyThreadState *tstate,
                                  _PyInterpreterFrame *frame, PyValue *fn,
@@ -7987,17 +7978,6 @@ static inline Py_ALWAYS_INLINE PyValue
 
 /* Function.Make and Intrinsic.*: the rows (functions.rop) */
 
-/* The owner of the value in a source home: a temporary's owner leaves its
- * home, a local's value gets a count and stays */
-static PyValue
-rop_source_owner(_PyInterpreterFrame *frame, PyValue *home)
-{
-    if (home - _PyFrame_Slots(frame) < _PyFrame_GetCode(frame)->co_nlocalsplus) {
-        return PyValue_DUP(PyValue_Borrow(*home));
-    }
-    return _PyFrame_TakeHome(frame, home);
-}
-
 static PyValue
 _PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue *code)
 {
@@ -8014,10 +7994,10 @@ _PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue *code)
 }
 
 static void
-_PyRop_RetireFailedFunction(_PyInterpreterFrame *frame, PyValue *code)
+_PyRop_RetireFailedFunction(PyValue code)
 {
     PyObject *exc = PyErr_GetRaisedException();
-    PyValue_XCLOSE(rop_source_owner(frame, code));
+    PyValue_XCLOSE(code);
     PyErr_SetRaisedException(exc);
 }
 
@@ -8051,11 +8031,9 @@ static const uint8_t rop_intrinsic_number[] = {
 };
 
 static PyValue
-_PyRop_IntrinsicUnary(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                      uint32_t id, PyValue *x)
+_PyRop_IntrinsicUnary(PyThreadState *tstate, uint32_t id, PyValue x)
 {
-    // Taken before the call, which can run code
-    PyValue value = rop_source_owner(frame, x);
+    PyValue value = x;
     int number = rop_intrinsic_number[id];
     PyValue res;
     if (number == INTRINSIC_UNARY_POSITIVE) {
@@ -8070,20 +8048,18 @@ _PyRop_IntrinsicUnary(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 static PyValue
-_PyRop_IntrinsicImportStar(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                           PyValue *x)
+_PyRop_IntrinsicImportStar(PyThreadState *tstate, PyValue x)
 {
-    PyValue value = rop_source_owner(frame, x);
+    PyValue value = x;
     PyValue res = _PyEval_CallIntrinsic1(tstate, INTRINSIC_IMPORT_STAR, value);
     PyValue_XCLOSE(value);
     return res;
 }
 
 static PyValue
-_PyRop_IntrinsicStopIteration(PyThreadState *tstate,
-                              _PyInterpreterFrame *frame, PyValue *x)
+_PyRop_IntrinsicStopIteration(PyThreadState *tstate, PyValue x)
 {
-    PyValue value = rop_source_owner(frame, x);
+    PyValue value = x;
     PyValue res = _PyEval_CallIntrinsic1(tstate, INTRINSIC_STOPITERATION_ERROR,
                                          value);
     PyValue_XCLOSE(value);
@@ -8092,11 +8068,10 @@ _PyRop_IntrinsicStopIteration(PyThreadState *tstate,
 
 /* x is the deeper stack value, the function's first argument */
 static PyValue
-_PyRop_IntrinsicBinary(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       uint32_t id, PyValue *x, PyValue *y)
+_PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
 {
-    PyValue held2 = rop_source_owner(frame, x);
-    PyValue held1 = rop_source_owner(frame, y);
+    PyValue held2 = x;
+    PyValue held1 = y;
     PyValue res = _PyEval_CallIntrinsic2(tstate, rop_intrinsic_number[id],
                                          held2, held1);
     PyValue_XCLOSE(held1);
@@ -8105,18 +8080,16 @@ _PyRop_IntrinsicBinary(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 static PyValue
-_PyRop_IntrinsicCompare(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        uint32_t id, PyValue *x, PyValue *y)
+_PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
 {
-    return _PyRop_IntrinsicBinary(tstate, frame, id, x, y);
+    return _PyRop_IntrinsicBinary(tstate, id, x, y);
 }
 
 static PyValue
-_PyRop_IntrinsicAttr(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     uint32_t id, PyValue *x, PyValue *y)
+_PyRop_IntrinsicAttr(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
 {
-    PyValue held2 = rop_source_owner(frame, x);
-    PyValue held1 = rop_source_owner(frame, y);
+    PyValue held2 = x;
+    PyValue held1 = y;
     PyValue res;
     if (rop_intrinsic_number[id] == INTRINSIC_GETATTR) {
         // The owner is a value; the name is a str

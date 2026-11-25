@@ -901,9 +901,11 @@ class ArgResolver:
             elif deop == BINARY_OP:
                 _, argrepr = _nb_ops[arg]
             elif deop == CALL_INTRINSIC_1:
-                argrepr = _intrinsic_1_descs[arg]
+                # The word holds the IntrinsicId index; the compiler's number
+                # is one more (unary) or 11 less (binary)
+                argrepr = _intrinsic_1_descs[arg + 1]
             elif deop == CALL_INTRINSIC_2:
-                argrepr = _intrinsic_2_descs[arg]
+                argrepr = _intrinsic_2_descs[arg - 11]
             elif deop == LOAD_COMMON_CONSTANT:
                 obj = _common_constants[arg]
                 argval = obj

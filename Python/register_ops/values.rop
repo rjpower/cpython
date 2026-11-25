@@ -4,7 +4,9 @@
 // takes its origin as an operand.
 
 enum PollMode(POLL, NO_POLL);
-enum KeepMode(DROP, KEEP_ON_TRUE, KEEP_ON_FALSE);
+// The four conditional jumps of the old bytecode: the sense of the test and
+// whether the jump edge keeps the tested owner (JUMP_IF_x_OR_POP)
+enum BranchMode(BRANCH_IF_FALSE, BRANCH_IF_TRUE, BRANCH_KEEP_IF_FALSE, BRANCH_KEEP_IF_TRUE);
 enum UnaryOp(NEGATIVE, POSITIVE, INVERT);
 enum Relation(LT, LE, EQ, NE, GT, GE);
 enum CompareResult(RICH, TRUTH);
@@ -314,18 +316,27 @@ arm Move.Copy shared select(copy)
 // P5: truth, jumps, conditional retention, None branches
 
 family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>)
-  exits(next, raise, miss, again) ops(TO_BOOL);
+  exits(next, raise, miss, again, redirect) ops(TO_BOOL, UNARY_NOT);
 
-// Covers backward jumps, so its target is far
-family Jump(target:FarHead, poll:Enum<PollMode>)
-  exits(jump, raise, redirect, exit) ops(JUMP_BACKWARD, JUMP_FORWARD, JUMP_BACKWARD_NO_INTERRUPT);
+// Covers backward jumps, so its target is far.  The arm says whether it
+// polls: Direct is JUMP_FORWARD and the jumps that must not poll, Poll is
+// JUMP_BACKWARD, Warm is JUMP_BACKWARD with the JIT's warm-up event
+family Jump(target:FarHead)
+  exits(jump, raise, redirect, exit)
+  ops(JUMP_FORWARD, JUMP_BACKWARD, JUMP_BACKWARD_NO_INTERRUPT)
+  events(JUMP);
 
-family BranchTruth(value:Src, target:NearHead, sense:Bool, keep:Enum<KeepMode>,
-                   fb:Fb<Truth>)
-  exits(next, branch, raise, miss, again) ops(POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE, JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP);
+// The operands are in the order of the old conditional jump words: the
+// value in A, the entry in B, the mode in C and the target in D
+family BranchTruth(value:Src, fb:Fb<Truth>, mode:Enum<BranchMode>, target:NearHead)
+  exits(next, branch, raise, miss, again, redirect)
+  ops(POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE, JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP)
+  events(BRANCH_LEFT, BRANCH_RIGHT);
 
-family BranchNone(value:Src, target:NearHead, sense:Bool)
-  exits(next, branch) ops(POP_JUMP_IF_NONE, POP_JUMP_IF_NOT_NONE);
+family BranchNone(value:Src, sense:Bool, target:NearHead)
+  exits(next, branch, raise, redirect)
+  ops(POP_JUMP_IF_NONE, POP_JUMP_IF_NOT_NONE)
+  events(BRANCH_LEFT, BRANCH_RIGHT);
 
 // 1A: numeric and in-place operations, unary protocols
 
@@ -333,7 +344,7 @@ family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
   exits(next, raise, miss, again) ops(BINARY_OP);
 
 family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>)
-  exits(next, raise) ops(UNARY_NEGATIVE, UNARY_INVERT, UNARY_NOT);
+  exits(next, raise) ops(UNARY_NEGATIVE, UNARY_INVERT);
 
 // 1B: value tests and their fused branch consumers
 

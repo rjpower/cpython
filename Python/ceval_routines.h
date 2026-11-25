@@ -120,9 +120,9 @@ IR_HOT_ROUTINE(gen_resume, PyValue gen_value)
             GEN_DISPATCH();
         }
         _PyIRWord jump = *next_instr;
-        assert(IR_HANDLER(jump) == JUMP_BACKWARD_NO_INTERRUPT);
+        assert(IR_HANDLER(jump) == ROP_HANDLER_Jump_Direct);
         INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
-        next_instr = frame->ir_words + IR_CD(jump);
+        next_instr += 1 + _PyIR_FormatDistance(_PyIR_FormatOf(ROP_HANDLER_Jump_Direct), jump);
         PyValue receiver = frame->base[IR_B(*next_instr)];
         if (generator_resume_targets[IR_HANDLER(*next_instr)] != GEN_SEND_INPUT ||
             !PyValue_IsObject(receiver) || tstate->py_recursion_remaining <= 1) {

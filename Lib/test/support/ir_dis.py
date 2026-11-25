@@ -124,7 +124,7 @@ _IR_FUSED_OP_MASK = _opcode.IR_FUSED_OP_MASK
 _IR_FIRST_ONLY_HANDLER = _opcode.IR_FIRST_ONLY_HANDLER
 _BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
 _BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
-_FEEDBACK_KINDS = ("COUNTER", "BRANCH", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
+_FEEDBACK_KINDS = ("COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
 _FEEDBACK_STATES = ("COLD", "MONO", "POLY", "MEGA", "OFF")
 
 
@@ -1045,6 +1045,25 @@ def _fused_argrepr(handler, target, entry_arg):
     sense = "false" if entry_arg & _IR_FUSED_IF_FALSE else "true"
     return f"{desc} {target} if {sense}"
 
+def _exact_op(op, handler, fields):
+    """The stack instruction of a word of a register instruction family that
+    several stack instructions share (the family's base names the first):
+    the mode, sense or direction of the word says which one"""
+    name = _all_opname[handler]
+    if name.startswith("BranchTruth."):
+        return _all_opmap[("POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
+                           "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP")[fields[2]]]
+    if name.startswith("BranchNone."):
+        return _all_opmap["POP_JUMP_IF_NONE" if fields[1] else "POP_JUMP_IF_NOT_NONE"]
+    if name.startswith("Jump."):
+        if name in ("Jump.Poll", "Jump.Warm"):
+            return _all_opmap["JUMP_BACKWARD"]
+        # The target is a signed distance in A and B
+        backward = fields[1] >= 0x800
+        return _all_opmap["JUMP_BACKWARD_NO_INTERRUPT" if backward else "JUMP_FORWARD"]
+    return op
+
+
 def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=None,
                             original_code=None, arg_resolver=None, fbinit=None,
                             feedback=None):
@@ -1116,6 +1135,8 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
         # The flags are the code object's, which the executing copy keeps
         flags = int.from_bytes(original_code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
                                sys.byteorder) & ~_HANDLER_MASK
+        op = _exact_op(op, handler, _word_fields(int.from_bytes(
+            original_code[offset * _WORD_SIZE:(offset + 1) * _WORD_SIZE], sys.byteorder)))
         yield Instruction(_all_opname[op], op, arg, argval, argrepr,
                           offset, offset, starts_line, line_number,
                           label, positions, cache_info,

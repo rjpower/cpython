@@ -44,7 +44,7 @@ class RetirementPlanTests(unittest.TestCase):
                 return value
             return iter(value)
 
-        self.assertIn("POP_JUMP_IF_NOT_NONE",
+        self.assertIn("BranchNone.Test",
                       [row[0] for row in _testinternalcapi.get_ir(f.__code__)])
         for code in self.routes(f.__code__):
             sites = return_sites(code)

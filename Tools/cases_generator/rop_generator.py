@@ -200,6 +200,8 @@ STUB_PREAMBLE = """\
 #undef IR_STUB_ESCAPE
 #pragma push_macro("IR_REDIRECT")
 #undef IR_REDIRECT
+#pragma push_macro("IR_BRANCH")
+#undef IR_BRANCH
 #pragma push_macro("PyValue_CLOSE")
 #undef PyValue_CLOSE
 #pragma push_macro("PyValue_XCLOSE")
@@ -216,6 +218,7 @@ STUB_PREAMBLE = """\
         return ir_status | _PyIR_RAISED; \\
     } while (0)
 #define IR_STUB_ESCAPE() (ir_status |= _PyIR_ESCAPED)
+#define IR_BRANCH(TARGET) return ir_status | _PyIR_BRANCH
 #define IR_REDIRECT() do { \\
         if (frame->pending_redirect) { \\
             _PyFrame_CompleteRedirect(frame); \\
@@ -229,6 +232,7 @@ STUB_PREAMBLE = """\
 STUB_EPILOGUE = """\
 #pragma pop_macro("PyValue_XCLOSE")
 #pragma pop_macro("PyValue_CLOSE")
+#pragma pop_macro("IR_BRANCH")
 #pragma pop_macro("IR_REDIRECT")
 #pragma pop_macro("IR_STUB_ESCAPE")
 #pragma pop_macro("PROCESS_ERROR_AT")
@@ -286,6 +290,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     fb_schema = None
     ninputs = writes = 0
     has_target = has_args = has_span = False
+    target = "_PyIR_LOC_NONE"
     for slot in enc.elements:
         roles[HEAD_FIELDS[slot]] = "_PyIR_ROLE_ELEMENT"
     for pl in enc.placements:
@@ -321,18 +326,28 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         elif pl.kind is FieldKind.feedback:
             role = "_PyIR_ROLE_FB"
             fb_schema = param.type.schema.value
+            if fb_schema == "Truth":
+                # Truth sites share the unary entry
+                fb_schema = "Unary"
         elif pl.kind is FieldKind.target:
             has_target = True
+            target = "_PyIR_LOC_AB" if len(pl.slots) == 2 else LOC_NAMES[pl.slots[0]]
         if not in_head:
             continue
         first = pl.slots[0]
         roles[HEAD_FIELDS[first]] = role
+        if pl.kind is FieldKind.target:
+            for slot in pl.slots:
+                roles[HEAD_FIELDS[slot]] = role
+            # The assembler writes the distance into the target's fields
+            continue
         if pl.kind is FieldKind.feedback:
             fb = LOC_NAMES[first]
         elif role == "_PyIR_ROLE_IMM" and imm == "_PyIR_LOC_NONE":
             both = [s.name for s in pl.slots]
             imm = ("_PyIR_LOC_CD" if both == ["C", "D"] else
                    "_PyIR_LOC_BC" if both == ["B", "C"] else LOC_NAMES.get(first, imm))
+    branch_events = bool({"BRANCH_LEFT", "BRANCH_RIGHT", "JUMP"} & {e.value for e in fam.events})
     exits = set(arm.contract.exits)
     effects = {"_PyIR_RAISES"} if "raise" in exits else set()
     for e in arm.contract.effect_set:
@@ -351,7 +366,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     if "_PyIR_RUNS_PYTHON" in effects:
         flags.append("_PyIR_RUNS_CODE")
     if has_target:
-        flags.append("_PyIR_JUMPS")
+        flags.append("_PyIR_FORWARD")
         if not exits & {"next", "branch"}:
             flags.append("_PyIR_JUMP_ALWAYS")
     return ir_arms.ArmFormat(
@@ -359,14 +374,16 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
         fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
-        0 if has_args else enc.words, writes, arm_transfer(exits, ninputs))
+        0 if has_args else enc.words, writes, arm_transfer(exits, ninputs, arm.family), target,
+        "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE")
+
 
 
 # The exits that end the word abnormally: they carry no normal-edge contract
 ABNORMAL_EXITS = frozenset({"raise", "redirect"})
 
 
-def arm_transfer(exits: set[str], ninputs: int) -> str:
+def arm_transfer(exits: set[str], ninputs: int, family: str) -> str:
     """The normal-edge ownership contract (_PyIR_TRANSFER_*) that an arm's
     declared exits give.  An arm whose every normal exit leaves the frame
     (return, exit) takes its one input with it: EXIT.  The other contracts
@@ -374,6 +391,9 @@ def arm_transfer(exits: set[str], ninputs: int) -> str:
     normal = exits - ABNORMAL_EXITS
     if normal and normal <= {"return", "exit"} and ninputs == 1:
         return "_PyIR_TRANSFER_EXIT"
+    # BranchNone tests its value and retires it on both edges
+    if family == "BranchNone":
+        return "_PyIR_TRANSFER_RETIRE"
     return "_PyIR_TRANSFER_UNKNOWN"
 
 

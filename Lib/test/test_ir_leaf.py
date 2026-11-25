@@ -555,7 +555,7 @@ class RecordTests(unittest.TestCase):
 
     def test_annotated_uops_have_leaf_ir(self):
         annotated = {name for name, uop in self.uops.items() if "leaf" in uop.annotations}
-        self.assertGreater(len(annotated), 50)
+        self.assertGreater(len(annotated), 40)
         for uop in self.record_uops():
             if uop.name in annotated:
                 self.assertIsNotNone(uop.leaf, uop.name)
@@ -679,11 +679,6 @@ HANDLERS = {
     "COMPARE_OP_JUMP_INT": (mixed_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
     "COMPARE_OP_JUMP_FLOAT": (float_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
     "IS_OP_JUMP": (mixed_domain, None, [0, 1]),
-    "POP_JUMP_IF_FALSE_BOOL": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS], None, [0]),
-    "POP_JUMP_IF_TRUE_BOOL": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS], None, [0]),
-    "POP_JUMP_IF_NOT_NONE": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS + INT_WORDS[:3]],
-                             None, [0]),
-    "POP_JUMP_IF_FALSE_INT": (lambda: [(w,) for w in INT_WORDS + OTHER_WORDS], None, [0]),
     "BINARY_OP_SUBSCR_LIST_INT": (lambda: subscript_domain(LISTS), None, [0]),
     "BINARY_OP_SUBSCR_TUPLE_INT": (lambda: subscript_domain(TUPLES), None, [0]),
     "FOR_ITER_LIST": (lambda: iterator_domain(lambda: [(l, len(l)) for l in LISTS]), None, [0]),
@@ -692,8 +687,6 @@ HANDLERS = {
                                 (iter(range(3)), iter(range(5, -2, -2)), iter(range(0)))]
                        + [(word(it), 0) for it in (iter([1]),)], None, [0]),
     "STORE_ATTR_SHAPE": (store_domain, store_caches, [0]),
-    "JUMP_FORWARD": (lambda: [()], None, [0, 3]),
-    "JUMP_BACKWARD": (lambda: [()], None, [0, 3]),
 }
 
 

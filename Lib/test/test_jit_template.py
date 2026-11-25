@@ -702,14 +702,8 @@ TEMPLATE_CASES = [
     *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", (None, None),
        "IS_OP_JUMP", "AB", [(a, b) for a in ANY for b in ANY[::2]])
       for op in ("is", "is not")],
-    ("def f(a, b):\n    if a:\n        return 1\n    return 0", (True, 0),
-     "POP_JUMP_IF_FALSE_BOOL", "A", [(x,) for x in ANY]),
-    ("def f(a, b):\n    if not a:\n        return 1\n    return 0", (True, 0),
-     "POP_JUMP_IF_TRUE_BOOL", "A", [(x,) for x in ANY]),
-    ("def f(a, b):\n    if a is None:\n        return 1\n    return 0", (None, 0),
-     "POP_JUMP_IF_NOT_NONE", "A", [(x,) for x in ANY]),
-    ("def f(a, b):\n    if a is not None:\n        return 1\n    return 0", (None, 0),
-     "POP_JUMP_IF_NONE", "A", [(x,) for x in ANY]),
+    # (The truth and branch arms are tested by test_rop_truth, by their form
+    # and completion stub: they have no template yet.)
     *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
        handler, "ABC", [(Plain(), seq, i) for seq in seqs for i in INDICES])
       for seq_type, handler, seqs in (
@@ -734,8 +728,7 @@ TEMPLATE_CASES = [
             for v in (7, 2.5, "s")] + [(None, 7), (4, 7)]),
     *[("G = 5\ndef f(a, b):\n    x = 1\n    x = G + len(a)\n    return x", ([1], 0), handler,
        "", [()]) for handler in ("LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN")],
-    ("def f(a, b):\n    while a:\n        a -= 1\n    return a", (3, 0), "JUMP_BACKWARD", "",
-     [()]),
+    # (Jump.Poll has no template yet: its poll row has no lowering.)
     *[("def f(a, b):\n    s = 0\n    for x in a:\n        s = x\n    return s", (warm, 0), handler,
        ("A", "B", "B+1"), [(old, it, index) for old in (Plain(), 3) for it, index in iters])
       for warm, handler, iters in (
@@ -748,10 +741,6 @@ TEMPLATE_CASES = [
            [(Fresh(lambda r=r: iter(r)), tagged(0))
             for r in (range(3), range(0), range(2**60, 2**60 + 2), range(5, -5, -3))] +
            [([1], tagged(0))]))],
-    *[(f"def f(a, b):\n    if {neg}a:\n        return 1\n    return 0", (warm, 0),
-       f"POP_JUMP_IF_{sense}_{kind}", "A", [(x,) for x in TRUTHS])
-      for neg, sense in (("", "FALSE"), ("not ", "TRUE"))
-      for warm, kind in ((5, "INT"), ([], "LIST"), (None, "NONE"), (Shape(), "ALWAYS_TRUE"))],
 ]
 
 
@@ -1138,8 +1127,7 @@ class TemplateGraphTests(unittest.TestCase):
     def test_guards_leave_by_their_exit_without_a_bool(self):
         "A predicate that only guards leaves by the exit: no result, no branch on one"
         for handler, name in (("BINARY_OP_ADD_FLOAT", "PyValue_FloatOperandValues"),
-                              ("BINARY_OP_SUBSCR_LIST_INT", "PyValue_IsObject"),
-                              ("POP_JUMP_IF_FALSE_BOOL", "PyValue_BoolCheck")):
+                              ("BINARY_OP_SUBSCR_LIST_INT", "PyValue_IsObject")):
             with self.subTest(handler=handler):
                 graph = graph_of(handler)
                 ops = [op for block in graph.blocks.values() for op in block.ops

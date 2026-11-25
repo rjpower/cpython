@@ -16,6 +16,7 @@
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_regcfg.h"
 #include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic
+#include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_value.h"           // PyValue_FromInlineInt()
 
 #undef SUCCESS
@@ -653,11 +654,25 @@ fall_through_pop(_PyRegCfg *cfg, int start, int end, _PyRegOp *jump, int v)
     return next;
 }
 
+/* Whether op is the BranchTruth that a POP_JUMP_IF_FALSE (0) or
+ * POP_JUMP_IF_TRUE (1) became, which jumps when its operand is false or
+ * true; -1 if it is not one */
 static inline int
-truth_jump(int opcode)
+plain_branch_sense(const _PyRegOp *op)
 {
-    return opcode == POP_JUMP_IF_FALSE ? JUMP_IF_FALSE_OR_POP
-         : opcode == POP_JUMP_IF_TRUE ? JUMP_IF_TRUE_OR_POP : 0;
+    if (op->opcode != ROP_HANDLER_BranchTruth_Generic) {
+        return -1;
+    }
+    return op->oparg == BRANCH_IF_FALSE ? 0 : op->oparg == BRANCH_IF_TRUE ? 1 : -1;
+}
+
+/* The mode of the BranchTruth that keeps its operand where the plain branch
+ * jumps (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP), or -1 */
+static inline int
+keep_mode(const _PyRegOp *jump)
+{
+    int sense = plain_branch_sense(jump);
+    return sense < 0 ? -1 : sense ? BRANCH_KEEP_IF_TRUE : BRANCH_KEEP_IF_FALSE;
 }
 
 /* The jump takes the value of prod's output v, which pop releases where
@@ -674,7 +689,7 @@ make_truth_jump(_PyRegCfg *cfg, _PyRegOp *prod, _PyRegOp *jump,
     cfg->operands[out] = _PyReg_OUT(cfg, prod)[0];
     _PyReg_OUT(cfg, prod)[0] = t;
     cfg->operands[in] = t;
-    jump->opcode = truth_jump(jump->opcode);
+    jump->oparg = keep_mode(jump);
     jump->in = in;
     jump->out = out;
     jump->nread = jump->npop = 1;
@@ -692,7 +707,7 @@ fold_local_truth(_PyRegCfg *cfg, int start, int end, _PyRegOp *load)
     int v = _PyReg_OUT(cfg, load)[0];
     _PyRegOp *jump = live_neighbour(cfg, start, end,
                                     (int)(load - cfg->ops), 1);
-    if (jump == NULL || !truth_jump(jump->opcode) || jump->nread != 1
+    if (jump == NULL || keep_mode(jump) < 0 || jump->nread != 1
         || jump->loc.lineno != load->loc.lineno
         || _PyReg_IN(cfg, jump)[0] != load->oparg
         || !_PyReg_IS_CANON(cfg, v))
@@ -727,7 +742,7 @@ truth_fold_region(_PyRegCfg *cfg, int start, int end)
         _PyRegOp *jump = live_neighbour(cfg, start, end, i, 1);
         if (prod == NULL || jump == NULL
             || jump->loc.lineno != copy->loc.lineno
-            || !truth_jump(jump->opcode) || jump->nread != 1
+            || keep_mode(jump) < 0 || jump->nread != 1
             || _PyReg_IN(cfg, jump)[0] != _PyReg_OUT(cfg, copy)[0]
             || !_PyReg_IS_CANON(cfg, v) || prod->nout != 1
             || _PyReg_OUT(cfg, prod)[0] != v || prod->dst >= 0
@@ -1078,8 +1093,7 @@ _PyRegPass_FuseJump(_PyRegCfg *cfg)
             }
             _PyRegOp *jump = live_neighbour(cfg, blk->start, blk->end, i, 1);
             if (jump == NULL
-                || (jump->opcode != POP_JUMP_IF_FALSE
-                    && jump->opcode != POP_JUMP_IF_TRUE)
+                || plain_branch_sense(jump) < 0
                 || jump->nread != 1 || jump->npop != 1 || jump->nimplicit != 0
                 || jump->target < 0
                 || jump->loc.lineno != cmp->loc.lineno

@@ -29,6 +29,8 @@
 #include "pycore_regcfg.h"
 #include "pycore_rop_metadata.h"       // ROP_HANDLER_GetAttr_Generic
 #include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic, ROP_HANDLER_Call_Generic
+#include "pycore_rop_rows.h"          // BRANCH_IF_FALSE
+#include "pycore_jit.h"             // _PyJIT_OFF
 
 #undef SUCCESS
 #undef ERROR
@@ -1148,6 +1150,78 @@ rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* TO_BOOL and UNARY_NOT: the Truth family (Python/register_ops/truth.rop),
+ * whose register instruction starts on Truth.Generic with the operand in,
+ * dst out and the sense in the immediate; the word installs the arm the
+ * operand calls for. */
+static int
+rule_truth(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Truth_Generic,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = src->opcode == UNARY_NOT;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* The conditional jumps.  A branch reads its operand and, on the jump
+ * edge, binds the target's parameters as the stack op did, so the rule is
+ * the stack op's with the register instruction's handler and immediate:
+ * the mode of BranchTruth (the jump is taken when the test is true or
+ * false), the sense of BranchNone (the jump is taken when the operand is
+ * None). */
+static int
+rule_branch(_PyRegTr *t, const _PyRegOp *src)
+{
+    int handler, imm;
+    switch (src->opcode) {
+        case POP_JUMP_IF_FALSE:
+            handler = ROP_HANDLER_BranchTruth_Generic, imm = BRANCH_IF_FALSE;
+            break;
+        case POP_JUMP_IF_TRUE:
+            handler = ROP_HANDLER_BranchTruth_Generic, imm = BRANCH_IF_TRUE;
+            break;
+        case POP_JUMP_IF_NONE:
+            handler = ROP_HANDLER_BranchNone_Test, imm = 1;
+            break;
+        default:
+            assert(src->opcode == POP_JUMP_IF_NOT_NONE);
+            handler = ROP_HANDLER_BranchNone_Test, imm = 0;
+            break;
+    }
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == src->opcode);
+    op->opcode = handler;
+    op->oparg = imm;
+    return SUCCESS;
+}
+
+/* The jumps: the Jump family (Python/register_ops/truth.rop).  A backedge
+ * that polls is the arm that the baseline JIT's setting selects: the one
+ * that is also its warm-up event while the JIT is on. */
+static int
+rule_jump(_PyRegTr *t, const _PyRegOp *src)
+{
+    int interrupt = src->opcode == JUMP_BACKWARD ? ROP_SELECT_INTERRUPTIBLE
+                                                 : ROP_SELECT_UNINTERRUPTED;
+    int jit = _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF
+                  ? ROP_SELECT_JIT_ON : ROP_SELECT_JIT_OFF;
+    int handler = _PyRop_SelectJump(interrupt, jit);
+    assert(handler >= 0);
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == src->opcode);
+    op->opcode = handler;
+    return SUCCESS;
+}
+
 /* Whether identity v may hold an absent binding (a Maybe value): one that
  * SaveLocal took, or a parameter of a position where one has been.  The
  * positions over-approximate the edges, which is safe: a Restore of a
@@ -1338,6 +1412,15 @@ rule_return_value(_PyRegTr *t, const _PyRegOp *src)
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
+    [TO_BOOL] = rule_truth,
+    [UNARY_NOT] = rule_truth,
+    [POP_JUMP_IF_FALSE] = rule_branch,
+    [POP_JUMP_IF_TRUE] = rule_branch,
+    [POP_JUMP_IF_NONE] = rule_branch,
+    [POP_JUMP_IF_NOT_NONE] = rule_branch,
+    [JUMP_FORWARD] = rule_jump,
+    [JUMP_BACKWARD] = rule_jump,
+    [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,
     [CALL] = rule_call,
     [COPY] = rule_copy,
     [DELETE_FAST] = rule_delete_fast,

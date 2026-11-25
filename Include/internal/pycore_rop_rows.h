@@ -239,10 +239,146 @@ _PyRop_SaveLocal(PyValue *dst, PyValue *local)
 void _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home);
 int _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 
+
+/* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The
+ * members of BranchMode in declaration order, the numbers the generated
+ * handlers use for the enum's names: the jump is taken when the test is
+ * true in the odd modes, false in the even ones, and the KEEP modes leave
+ * the owner in its home on the jump edge. */
+enum {
+    BRANCH_IF_FALSE,
+    BRANCH_IF_TRUE,
+    BRANCH_KEEP_IF_FALSE,
+    BRANCH_KEEP_IF_TRUE,
+};
+
+static inline bool
+_PyRop_BranchTaken(int mode, bool test)
+{
+    return test == (bool)(mode & 1);
+}
+
+static inline bool
+_PyRop_BranchKeeps(int mode)
+{
+    return mode >= BRANCH_KEEP_IF_FALSE;
+}
+
+static inline bool
+_PyRop_BranchDrops(int mode)
+{
+    return mode < BRANCH_KEEP_IF_FALSE;
+}
+
+static inline bool
+_PyRop_SameBool(bool a, bool b)
+{
+    return a == b;
+}
+
+static inline PyValue
+_PyRop_TruthObject(bool test, bool invert)
+{
+    return test != invert ? PyValue_True : PyValue_False;
+}
+
+static inline bool
+_PyRop_NotNone(PyValueBorrow v)
+{
+    return !PyValue_IsNone(v);
+}
+
+static inline bool
+_PyRop_ExactInt(PyValueBorrow v)
+{
+    return PyValue_LongCheckExact(v);
+}
+
+static inline bool
+_PyRop_IntNonzero(PyValueBorrow v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_InlineInt64(v) != 0;
+    }
+    return !_PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(v));
+}
+
+static inline bool
+_PyRop_ExactList(PyValueBorrow v)
+{
+    return PyValue_IsObject(v) && PyList_CheckExact(PyValue_AsKnownObjectBorrow(v));
+}
+
+static inline bool
+_PyRop_ListNonempty(PyValueBorrow v)
+{
+    return PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) != 0;
+}
+
+static inline bool
+_PyRop_ExactStr(PyValueBorrow v)
+{
+    return PyValue_IsObject(v) && PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(v));
+}
+
+static inline bool
+_PyRop_StrNonempty(PyValueBorrow v)
+{
+    return PyUnicode_GET_LENGTH(PyValue_AsKnownObjectBorrow(v)) != 0;
+}
+
+/* An object whose type has the version the entry holds (an entry that
+ * holds none matches nothing) */
+static inline bool
+_PyRop_HasEntryVersion(const _PyFbUnary *fb, PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v) || fb->type_version == 0) {
+        return false;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
+    return FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) == fb->type_version;
+}
+
+/* A word's call may be to a stub that its code was compiled with, after the
+ * word was adapted to another arm: the entry then holds that arm's type
+ * version, so these guards test the kind of value as well as the version. */
+static inline bool
+_PyRop_NoneOrPlain(const _PyFbUnary *fb, PyValueBorrow v)
+{
+    if (PyValue_IsNone(v)) {
+        return true;
+    }
+    return _PyRop_HasEntryVersion(fb, v)
+        && PyType_HasFeature(Py_TYPE(PyValue_AsKnownObjectBorrow(v)), Py_TPFLAGS_HEAPTYPE);
+}
+
+static inline bool
+_PyRop_SlotApplies(const _PyFbUnary *fb, PyValueBorrow v)
+{
+    return _PyRop_HasEntryVersion(fb, v) && !PyValue_IsNone(v)
+        && !PyValue_BoolCheck(v);
+}
+
+/* The truth of any value, and of an object whose type's slots decide */
+static inline int
+_PyRop_ValueTruth(PyValueBorrow v)
+{
+    return _PyValue_IsTrue(v);
+}
+
+static inline int
+_PyRop_SlotTruth(PyValueBorrow v)
+{
+    return _PyValue_IsTrueSlow(v);
+}
+
 /* Python/specialize.c: the adaptation rows */
 bool _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b);
 void _PyRop_Backoff(_PyFbHeader *fb);
 int _PyRop_Install(_PyInstr *site, _PyFbHeader *fb, int handler);
+void _PyRop_BeginTruth(_PyFbUnary *fb, PyValueBorrow v);
+bool _PyRop_ValidatePlain(_PyFbUnary *fb, PyValueBorrow v);
+bool _PyRop_ValidateSlot(_PyFbUnary *fb, PyValueBorrow v);
 int _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
                         const _PyIRWord *head);
 

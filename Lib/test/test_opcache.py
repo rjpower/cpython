@@ -1896,16 +1896,14 @@ class TestSpecializer(TestBase):
                 f = types.FunctionType(to_bool_value.__code__.replace(), {})
                 elems = values * _testinternalcapi.SPECIALIZATION_THRESHOLD
                 self.assertEqual(f(elems), [bool(e) for e in elems])
-                self.assert_specialized(f, f"TO_BOOL_{kind}")
-                self.assert_no_opcode(f, "TO_BOOL")
+                self.assert_specialized(f, f"Truth.{kind.capitalize()}")
+                self.assert_no_opcode(f, "Truth.Generic")
 
     def assert_jump_specialized(self, f, kind):
         # Either sense: the layout of the blocks may invert a jump
-        opnames = {i.opname for i in dis.get_instructions(f, adaptive=True)}
-        self.assertTrue({f"POP_JUMP_IF_FALSE_{kind}",
-                         f"POP_JUMP_IF_TRUE_{kind}"} & opnames, opnames)
-        self.assertFalse({"POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
-                          "TO_BOOL", "UNARY_NOT"} & opnames, opnames)
+        names = adaptive_names(f)
+        self.assertIn(f"BranchTruth.{kind.capitalize()}", names)
+        self.assertNotIn("BranchTruth.Generic", names)
 
     @cpython_only
     @requires_specialization
@@ -2435,7 +2433,7 @@ class TestFeedback(TestBase):
         "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",
         "LOAD_GLOBAL": "GLOBAL",
         "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
-        "POP_JUMP": "BRANCH",
+        "POP_JUMP": "UNARY",
     }
 
     def feedback(self, func, opname):
@@ -2466,8 +2464,9 @@ class TestFeedback(TestBase):
                 entry = _testinternalcapi.get_feedback(func.__code__,
                                                        instr.offset)
                 name = instr.opname
-                if name.startswith("POP_JUMP"):
-                    # A branch keeps its history in the arg of its entry
+                if name.startswith(("POP_JUMP", "JUMP_IF_")):
+                    # A branch keeps the type version of its operand in a
+                    # unary entry, as TO_BOOL does (BranchTruth's Fb<Truth>)
                     name = "POP_JUMP"
                 if instr.fb is None or name in no_entry:
                     self.assertIsNone(entry, instr.opname)

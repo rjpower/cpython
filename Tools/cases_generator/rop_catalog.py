@@ -261,6 +261,10 @@ class Select(enum.Enum):
     checked = "checked"                    # LocalRead: the local may be unbound
     store = "store"                        # LocalWrite: the value is present
     restore = "restore"                    # LocalWrite: a saved binding, maybe absent
+    uninterrupted = "uninterrupted"        # Jump: no poll (a forward jump, a yield-from loop's)
+    interruptible = "interruptible"        # Jump: a backedge polls
+    jit_off = "jit_off"                    # the baseline JIT is off
+    jit_on = "jit_on"                      # the baseline JIT is on, so a backedge warms the code
 
 
 SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
@@ -270,6 +274,8 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "const": (Select.pool, Select.small, Select.common),
     "read": (Select.bound, Select.checked),
     "write": (Select.store, Select.restore),
+    "interrupt": (Select.uninterrupted, Select.interruptible),
+    "jit": (Select.jit_off, Select.jit_on),
 }
 
 
@@ -558,6 +564,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("int_truth", CReturn.int_status,
           COutcome(CTest.positive, _RES, (), False),
           COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # A branch event: zero ran on, positive moved the frame (the token is the
+    # route to the word), negative raised
+    _conv("int_redirect", CReturn.int_status,
+          COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.positive, _RES, (CSource.token,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
     # An adaptation status: positive changed (the ticket is a proof, not a
     # value), zero same, negative blocked; none of them raises

@@ -1,0 +1,1124 @@
+// Truth, BranchTruth and BranchNone (Appendix A, batch P5): the truth of a
+// value as a bool (TO_BOOL, UNARY_NOT) and as a branch.  Every test of an
+// arm is a row; BranchTruth's arms differ from Truth's in the terminal only.
+
+// Truth: the result is a bool, the operand is spent
+point Truth.Done(current, next_head, clear) keep() spent(value) defs(dst) held();
+point Truth.Failed(current, site, pending) keep() spent(value) defs() held();
+
+// BranchTruth: each edge retires the operand, except the jump edge of a
+// keep mode, which leaves the owner in its home
+point BranchTruth.Jumped(current, target, clear) keep() spent(value) defs() held();
+point BranchTruth.Fell(current, next_head, clear) keep() spent(value) defs() held();
+point BranchTruth.Kept(current, target, clear) keep(value) spent() defs() held();
+point BranchTruth.Failed(current, site, pending) keep() spent(value) defs() held();
+
+// A branch event's callback failed: the operand was retired before the event,
+// except where a keep mode jumps
+point BranchTruth.Event(current, site, pending) keep() spent(value) defs() held();
+point BranchTruth.KeptEvent(current, site, pending) keep(value) spent() defs() held();
+point BranchNone.Event(current, site, pending) keep() spent(value) defs() held();
+
+point BranchNone.Jumped(current, target, clear) keep() spent(value) defs() held();
+point BranchNone.Fell(current, next_head, clear) keep() spent(value) defs() held();
+
+// Tests of the admitted kinds
+
+extern primitive exact_bool(v:B) -> Bool
+  effects(reads)
+  test(exact<bool>(v))
+  c PyValue_BoolCheck as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _GUARD_TOS_BOOL: PyValue_BoolCheck.",
+    contract: "A comparison of the word and the type: no memory, no failure.",
+    lowering: "jit_lower.c LOWERING(PyValue_BoolCheck)",
+    test: "test_ir_leaf CASES");
+
+extern primitive bool_is_true(v:B) -> Bool
+  effects()
+  requires(exact<bool>(v))
+  c PyValue_IsTrue as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _POP_JUMP_IF_TRUE: PyValue_IsTrue of a bool.",
+    contract: "A comparison of the word with True: no memory, no failure.",
+    lowering: "jit_lower.c LOWERING(PyValue_IsTrue)",
+    test: "test_ir_leaf CASES");
+
+extern primitive exact_none(v:B) -> Bool
+  effects()
+  test(exact<NoneType>(v))
+  c PyValue_IsNone as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _TO_BOOL_NONE and _IS_NONE: PyValue_IsNone.",
+    contract: "A comparison of the word with None: no memory, no failure.",
+    lowering: "jit_lower.c LOWERING(PyValue_IsNone)",
+    test: "test_ir_leaf CASES");
+
+extern primitive not_none(v:B) -> Bool
+  effects()
+  c _PyRop_NotNone as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _TRUTH_NONE_OR_PLAIN: None is false.",
+    contract: "A comparison of the word with None: no memory, no failure.",
+    lowering: "none yet: PyValue_IsNone negated; add a lowering when a template needs it",
+    test: "test_rop_truth");
+
+extern primitive exact_int(v:B) -> Bool
+  effects()
+  test(exact<int>(v))
+  c _PyRop_ExactInt as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _GUARD_TOS_EXACT_INT: an inline int, or an object of"
+            "exact type int.",
+    contract: "Reads the word and, for an object, its type: no memory, no failure.",
+    lowering: "none yet: PyValue_IsInlineInt or PyValue_LongCheckExact; add a lowering when"
+              "a template needs it",
+    test: "test_rop_truth");
+
+extern primitive int_nonzero(v:B) -> Bool
+  effects()
+  requires(exact<int>(v))
+  c _PyRop_IntNonzero as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _TO_BOOL_INT: inline int != 0, or _PyLong_IsZero.",
+    contract: "Reads the word or the object's size tag: no memory, no failure.",
+    lowering: "none yet: PyValue_InlineInt64 and _PyLong_IsZero",
+    test: "test_rop_truth");
+
+extern primitive exact_list(v:B) -> Bool
+  effects()
+  test(exact<list>(v))
+  c _PyRop_ExactList as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _GUARD_TOS_LIST: PyList_CheckExact.",
+    contract: "Reads the word and the type: no memory, no failure.",
+    lowering: "none yet: PyValue_IsObject and a type test",
+    test: "test_rop_truth");
+
+extern primitive list_nonempty(v:B) -> Bool
+  effects(reads)
+  requires(exact<list>(v))
+  c _PyRop_ListNonempty as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _TO_BOOL_LIST: PyList_GET_SIZE(value) != 0.",
+    contract: "Reads the list's current length: no memory, no failure.",
+    lowering: "none yet: PyList_GET_SIZE",
+    test: "test_rop_truth");
+
+extern primitive exact_str(v:B) -> Bool
+  effects()
+  test(exact<str>(v))
+  c _PyRop_ExactStr as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _GUARD_TOS_UNICODE: PyUnicode_CheckExact.",
+    contract: "Reads the word and the type: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_truth");
+
+extern primitive str_nonempty(v:B) -> Bool
+  effects()
+  requires(exact<str>(v))
+  c _PyRop_StrNonempty as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _TO_BOOL_STR: the empty string is the one object"
+            "of length 0.",
+    contract: "Compares the object with the empty string: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_truth");
+
+// None, or an instance of the heap type whose version the entry holds and
+// whose type has no __bool__ or __len__: None is false, the instance true
+extern helper none_or_plain(f:Fb<Truth>, v:B) -> Bool
+  effects(reads)
+  feedback(read(entry.type_version))
+  c _PyRop_NoneOrPlain as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _GUARD_NONE_OR_TYPE_VERSION.",
+    contract: "Reads the word, the type and its version tag: no memory, no failure.");
+
+// An object whose type has the entry's version, whose slots decide
+extern helper slot_applies(f:Fb<Truth>, v:B) -> Bool
+  effects(reads)
+  feedback(read(entry.type_version))
+  c _PyRop_SlotApplies as bool
+  evidence(
+    review: "Reviewed P5. bytecodes.c _GUARD_TYPE_VERSION before _TO_BOOL_SLOT.",
+    contract: "Reads the word, the type and its version tag: no memory, no failure.");
+
+// The truth of any value: yes, no, or the exception
+extern helper value_truth(v:B)
+  cases(yes(), no(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_ValueTruth as int_truth
+  evidence(
+    review: "Reviewed P5. bytecodes.c _TO_BOOL: _PyValue_IsTrue, which tests an inline"
+            "float, then the type's nb_bool, mp_length and sq_length.",
+    contract: "The operand is borrowed on every path. Callbacks: __bool__ or __len__.");
+
+extern helper slot_truth(v:B)
+  cases(yes(), no(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_SlotTruth as int_truth
+  evidence(
+    review: "Reviewed P5. bytecodes.c _TO_BOOL_SLOT: _PyValue_IsTrueSlow.",
+    contract: "The operand is an object, borrowed on every path. Callbacks: the type's"
+              "slot.");
+
+// The bool object that a test makes: the test's result, inverted when asked
+extern primitive truth_object(t:Bool, invert:Bool) -> O
+  effects()
+  ensures(result.exact<bool>(result))
+  c _PyRop_TruthObject as value
+  evidence(
+    review: "Reviewed P5. bytecodes.c _TO_BOOL and UNARY_NOT: PyValue_True or False.",
+    contract: "True and False are immortal: no count, no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_truth");
+
+// A branch: whether the test sends control to the target, and whether the
+// jump edge leaves the owner in its home
+extern primitive branch_taken(mode:Enum<BranchMode>, t:Bool) -> Bool
+  effects()
+  c _PyRop_BranchTaken as bool
+  evidence(
+    review: "Reviewed P5. POP_JUMP_IF_x jumps when the test is x.",
+    contract: "A function of the immediate and the test: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_truth");
+
+extern primitive branch_keeps(mode:Enum<BranchMode>) -> Bool
+  effects()
+  c _PyRop_BranchKeeps as bool
+  evidence(
+    review: "Reviewed P5. JUMP_IF_x_OR_POP keeps the owner where it jumps.",
+    contract: "A function of the immediate: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_truth");
+
+extern primitive branch_drops(mode:Enum<BranchMode>) -> Bool
+  effects()
+  c _PyRop_BranchDrops as bool
+  evidence(
+    review: "Reviewed P5. POP_JUMP_IF_x retires the owner on both edges.",
+    contract: "A function of the immediate: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_truth");
+
+extern primitive same_bool(a:Bool, b:Bool) -> Bool
+  effects()
+  c _PyRop_SameBool as bool
+  evidence(
+    review: "Reviewed P5. POP_JUMP_IF_NONE jumps when the test is its sense.",
+    contract: "A comparison of two bools: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_truth");
+
+// The branch event of an observed word: BRANCH_RIGHT where the jump is
+// taken, BRANCH_LEFT where it falls through.  The callbacks run Python,
+// may fail, and may move the frame.
+extern helper branch_event(t:Thread, f:Frame, at:Site, taken:Bool)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_BranchEvent as int_redirect
+  evidence(
+    review: "Reviewed P5. bytecodes.c _INSTRUMENTED_POP_JUMP_IF_x:"
+            "IR_OBSERVE_COMMITTED_BRANCH, ceval.c ir_event_edge.",
+    contract: "The operand is retired before the call. A callback may raise,"
+              "or move the frame, whose return_pc then names the word to run.");
+
+// Adaptation (addendum section 2)
+
+// Records the operand's type version in the entry, as specialize_truth begins
+extern helper begin_truth(f:Fb<Truth>, v:B) -> Unit
+  effects(writes)
+  feedback(write(entry.type_version))
+  c _PyRop_BeginTruth as unit
+  evidence(
+    review: "Reviewed P5. specialize.c fb_begin_unary(): the entry takes the type version.",
+    contract: "One store to the entry. No Python, no failure.");
+
+// A heap type with no __bool__ or __len__ (its version is then the guard), or
+// a type whose slots decide: hit stores the validated version in the entry
+extern helper validate_plain(f:Fb<Truth>, v:B)
+  cases(hit(), absent())
+  effects(reads, writes)
+  feedback(write(entry.type_version))
+  requires(object(v))
+  c _PyRop_ValidatePlain as bool_cases
+  evidence(
+    review: "Reviewed P5. specialize.c specialize_truth: a heap type that"
+            "check_type_always_true accepts, through _PyType_Validate.",
+    contract: "No Python. May assign a type version. hit: the entry holds it.");
+
+extern helper validate_slot(f:Fb<Truth>, v:B)
+  cases(hit(), absent())
+  effects(reads, writes)
+  feedback(write(entry.type_version))
+  requires(object(v))
+  c _PyRop_ValidateSlot as bool_cases
+  evidence(
+    review: "Reviewed P5. specialize.c specialize_truth: type_valid through"
+            "_PyType_Validate, the last case.",
+    contract: "No Python. May assign a type version. hit: the entry holds it.");
+
+// Calls the generic test once on the anchored operand and checks the frame
+// on return, as binary_at_origin does
+macro truth_at_origin(a:Anchors)
+  cases(yes(), no(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_truth(arg(a, 0)) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+    }
+  Yes():
+    call redirect_status(frame) {
+      running -> Said(true);
+      redirected -> Moved();
+    }
+  No():
+    call redirect_status(frame) {
+      running -> Said(false);
+      redirected -> Moved();
+    }
+  Said(hit:Bool):
+    branch hit -> Is(), Not();
+  Is():
+    exit yes();
+  Not():
+    exit no();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro slot_truth_at_origin(a:Anchors)
+  cases(yes(), no(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call slot_truth(arg(a, 0)) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+    }
+  Yes():
+    call redirect_status(frame) {
+      running -> Said(true);
+      redirected -> Moved();
+    }
+  No():
+    call redirect_status(frame) {
+      running -> Said(false);
+      redirected -> Moved();
+    }
+  Said(hit:Bool):
+    branch hit -> Is(), Not();
+  Is():
+    exit yes();
+  Not():
+    exit no();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro adapt_before_use_truth(f:Fb<Truth>, v:Src)
+  cases(run(), changed(tk:Ticket<Truth>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    goto Tick();
+  Tick():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    let _:Unit = begin_truth(f, use(v));
+    goto TryBool();
+  TryBool():
+    branch exact_bool(use(v)) -> PickBool(), TryInt();
+  TryInt():
+    branch exact_int(use(v)) -> PickInt(), TryList();
+  TryList():
+    branch exact_list(use(v)) -> PickList(), TryNone();
+  TryNone():
+    branch exact_none(use(v)) -> PickNone(), TryStr();
+  TryStr():
+    branch exact_str(use(v)) -> PickStr(), TryObject();
+  TryObject():
+    branch is_object(use(v)) -> TryPlain(), Backoff();
+  TryPlain():
+    call validate_plain(f, use(v)) {
+      hit -> PickPlain();
+      absent -> TrySlot();
+    }
+  TrySlot():
+    call validate_slot(f, use(v)) {
+      hit -> PickSlot();
+      absent -> Backoff();
+    }
+  PickBool():
+    let c_bool:Candidate<Truth> = candidate(Truth.Bool);
+    call install(site, f, c_bool) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickInt():
+    let c_int:Candidate<Truth> = candidate(Truth.Int);
+    call install(site, f, c_int) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickList():
+    let c_list:Candidate<Truth> = candidate(Truth.List);
+    call install(site, f, c_list) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickNone():
+    let c_none:Candidate<Truth> = candidate(Truth.None);
+    call install(site, f, c_none) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickStr():
+    let c_str:Candidate<Truth> = candidate(Truth.Str);
+    call install(site, f, c_str) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickPlain():
+    let c_plain:Candidate<Truth> = candidate(Truth.Plain);
+    call install(site, f, c_plain) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickSlot():
+    let c_slot:Candidate<Truth> = candidate(Truth.Slot);
+    call install(site, f, c_slot) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Backoff():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(tk:Ticket<Truth>):
+    exit changed(tk);
+  Run():
+    exit run();
+}
+
+macro adapt_before_use_branch_truth(f:Fb<Truth>, v:Src, mode:Enum<BranchMode>)
+  cases(run(), changed(tk:Ticket<Truth>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    branch branch_keeps(mode) -> Run(), Tick();
+  Tick():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    let _:Unit = begin_truth(f, use(v));
+    goto TryBool();
+  TryBool():
+    branch exact_bool(use(v)) -> PickBool(), TryInt();
+  TryInt():
+    branch exact_int(use(v)) -> PickInt(), TryList();
+  TryList():
+    branch exact_list(use(v)) -> PickList(), TryNone();
+  TryNone():
+    branch exact_none(use(v)) -> PickNone(), TryStr();
+  TryStr():
+    branch exact_str(use(v)) -> PickStr(), TryObject();
+  TryObject():
+    branch is_object(use(v)) -> TryPlain(), Backoff();
+  TryPlain():
+    call validate_plain(f, use(v)) {
+      hit -> PickPlain();
+      absent -> TrySlot();
+    }
+  TrySlot():
+    call validate_slot(f, use(v)) {
+      hit -> PickSlot();
+      absent -> Backoff();
+    }
+  PickBool():
+    let c_bool:Candidate<Truth> = candidate(BranchTruth.Bool);
+    call install(site, f, c_bool) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickInt():
+    let c_int:Candidate<Truth> = candidate(BranchTruth.Int);
+    call install(site, f, c_int) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickList():
+    let c_list:Candidate<Truth> = candidate(BranchTruth.List);
+    call install(site, f, c_list) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickNone():
+    let c_none:Candidate<Truth> = candidate(BranchTruth.None);
+    call install(site, f, c_none) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickStr():
+    let c_str:Candidate<Truth> = candidate(BranchTruth.Str);
+    call install(site, f, c_str) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickPlain():
+    let c_plain:Candidate<Truth> = candidate(BranchTruth.Plain);
+    call install(site, f, c_plain) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickSlot():
+    let c_slot:Candidate<Truth> = candidate(BranchTruth.Slot);
+    call install(site, f, c_slot) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Backoff():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(tk:Ticket<Truth>):
+    exit changed(tk);
+  Run():
+    exit run();
+}
+
+arm Truth.Bool inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let v:B = use(value);
+    guard exact_bool(v) else miss;
+    goto Finish(truth_object(bool_is_true(v), invert));
+  Finish(z:O):
+    publish [dst = z] retire [spent(value), old(dst)] at Truth.Done;
+    exit next();
+}
+
+arm Truth.Int inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let v:B = use(value);
+    guard exact_int(v) else miss;
+    goto Finish(truth_object(int_nonzero(v), invert));
+  Finish(z:O):
+    publish [dst = z] retire [spent(value), old(dst)] at Truth.Done;
+    exit next();
+}
+
+arm Truth.List inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let v:B = use(value);
+    guard exact_list(v) else miss;
+    goto Finish(truth_object(list_nonempty(v), invert));
+  Finish(z:O):
+    publish [dst = z] retire [spent(value), old(dst)] at Truth.Done;
+    exit next();
+}
+
+arm Truth.None inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let v:B = use(value);
+    guard exact_none(v) else miss;
+    goto Finish(truth_object(false, invert));
+  Finish(z:O):
+    publish [dst = z] retire [spent(value), old(dst)] at Truth.Done;
+    exit next();
+}
+
+arm Truth.Str inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let v:B = use(value);
+    guard exact_str(v) else miss;
+    goto Finish(truth_object(str_nonempty(v), invert));
+  Finish(z:O):
+    publish [dst = z] retire [spent(value), old(dst)] at Truth.Done;
+    exit next();
+}
+
+arm Truth.Plain inline
+  effects(reads, writes, releases)
+  feedback(read(entry.type_version))
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let v:B = use(value);
+    guard none_or_plain(fb, v) else miss;
+    goto Finish(truth_object(not_none(v), invert));
+  Finish(z:O):
+    publish [dst = z] retire [spent(value), old(dst)] at Truth.Done;
+    exit next();
+}
+
+arm Truth.Slot shared
+  effects(reads, runs_python, writes, releases, raises)
+  feedback(read(entry.type_version))
+  exits(next, miss, raise, redirect)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let v:B = use(value);
+    guard is_object(v) else miss;
+    guard slot_applies(fb, v) else miss;
+    let a:Anchors = anchor_for_call([value]);
+    call slot_truth_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Finish(truth_object(true, invert));
+  No():
+    goto Finish(truth_object(false, invert));
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(value), old(dst)] at Truth.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [value], e);
+    exit raise(Truth.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm Truth.Generic shared
+  effects(reads, runs_python, writes, releases, raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_truth(fb, value) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Truth>):
+    exit again(tk);
+  Run():
+    let a:Anchors = anchor_for_call([value]);
+    call truth_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Finish(truth_object(true, invert));
+  No():
+    goto Finish(truth_object(false, invert));
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(value), old(dst)] at Truth.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [value], e);
+    exit raise(Truth.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+
+arm BranchTruth.Bool inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let v:B = use(value);
+    guard exact_bool(v) else miss;
+    guard branch_drops(mode) else miss;
+    goto Test(bool_is_true(v));
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchTruth.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchTruth.Fell;
+    exit next();
+}
+
+arm BranchTruth.Int inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let v:B = use(value);
+    guard exact_int(v) else miss;
+    guard branch_drops(mode) else miss;
+    goto Test(int_nonzero(v));
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchTruth.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchTruth.Fell;
+    exit next();
+}
+
+arm BranchTruth.List inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let v:B = use(value);
+    guard exact_list(v) else miss;
+    guard branch_drops(mode) else miss;
+    goto Test(list_nonempty(v));
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchTruth.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchTruth.Fell;
+    exit next();
+}
+
+arm BranchTruth.None inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let v:B = use(value);
+    guard exact_none(v) else miss;
+    guard branch_drops(mode) else miss;
+    goto Test(false);
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchTruth.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchTruth.Fell;
+    exit next();
+}
+
+arm BranchTruth.Str inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let v:B = use(value);
+    guard exact_str(v) else miss;
+    guard branch_drops(mode) else miss;
+    goto Test(str_nonempty(v));
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchTruth.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchTruth.Fell;
+    exit next();
+}
+
+arm BranchTruth.Plain inline
+  effects(reads, writes, releases)
+  feedback(read(entry.type_version))
+  exits(next, branch, miss)
+{
+  entry():
+    let v:B = use(value);
+    guard none_or_plain(fb, v) else miss;
+    guard branch_drops(mode) else miss;
+    goto Test(not_none(v));
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchTruth.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchTruth.Fell;
+    exit next();
+}
+
+arm BranchTruth.Slot shared
+  effects(reads, runs_python, writes, releases, raises)
+  feedback(read(entry.type_version))
+  exits(next, branch, miss, raise, redirect)
+{
+  entry():
+    let v:B = use(value);
+    guard is_object(v) else miss;
+    guard slot_applies(fb, v) else miss;
+    guard branch_drops(mode) else miss;
+    let a:Anchors = anchor_for_call([value]);
+    call slot_truth_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [roots(a), spent(value)] at BranchTruth.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(value)] at BranchTruth.Fell;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [value], e);
+    exit raise(BranchTruth.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm BranchTruth.Generic shared
+  effects(reads, runs_python, writes, releases, raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, branch, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_branch_truth(fb, value, mode) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Truth>):
+    exit again(tk);
+  Run():
+    let a:Anchors = anchor_for_call([value]);
+    call truth_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    branch branch_keeps(mode) -> Kept(), Dropped();
+  Kept():
+    publish [] retire [roots(a)] at BranchTruth.Kept;
+    exit branch(target);
+  Dropped():
+    publish [] retire [roots(a), spent(value)] at BranchTruth.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(value)] at BranchTruth.Fell;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [value], e);
+    exit raise(BranchTruth.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// BranchNone: an identity test with None, in either sense
+arm BranchNone.Test inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch)
+{
+  entry():
+    let v:B = use(value);
+    goto Test(exact_none(v));
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchNone.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchNone.Fell;
+    exit next();
+}
+
+
+// The observed wrappers (Observed.<Family>, the twin of every arm of the
+// family when the word's op is instrumented): the generic test, the
+// retirement of the operand, then the branch event, which may move the frame
+
+arm BranchTruth.Observed split
+  effects(reads, runs_python, writes, releases, raises)
+  feedback()
+  exits(next, branch, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([value]);
+    call truth_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    branch branch_keeps(mode) -> Kept(), Dropped();
+  Kept():
+    publish [] retire [roots(a)] at BranchTruth.Kept;
+    call branch_event(thread, frame, site, true) {
+      ok -> KeptJump();
+      moved -> KeptMoved();
+      err -> KeptEventFailed();
+    }
+  KeptJump():
+    exit branch(target);
+  KeptMoved(kr:Route):
+    exit redirect(kr);
+  KeptEventFailed(kee:Err):
+    exit raise(BranchTruth.KeptEvent, kee);
+  Dropped():
+    publish [] retire [roots(a), spent(value)] at BranchTruth.Jumped;
+    call branch_event(thread, frame, site, true) {
+      ok -> Jump();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Jump():
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(value)] at BranchTruth.Fell;
+    call branch_event(thread, frame, site, false) {
+      ok -> Next();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Next():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  EventFailed(ee:Err):
+    exit raise(BranchTruth.Event, ee);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [value], e);
+    exit raise(BranchTruth.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm BranchNone.Observed split
+  effects(reads, writes, releases, raises, runs_python)
+  feedback()
+  exits(next, branch, raise, redirect)
+{
+  entry():
+    let v:B = use(value);
+    goto Test(exact_none(v));
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchNone.Jumped;
+    call branch_event(thread, frame, site, true) {
+      ok -> Jump();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Jump():
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchNone.Fell;
+    call branch_event(thread, frame, site, false) {
+      ok -> Next();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Next():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  EventFailed(ee:Err):
+    exit raise(BranchNone.Event, ee);
+}
+
+
+// Jump (JUMP_FORWARD, JUMP_BACKWARD, JUMP_BACKWARD_NO_INTERRUPT).  Three
+// arms, chosen by the translator and the assembler's jit choice
+// (_PyRop_SelectJump): a jump that never polls, a backedge, and a backedge
+// that is also the baseline JIT's warm-up event.
+
+point Jump.PollFailed(current, site, pending) keep() spent() defs() held();
+point Jump.EventFailed(current, site, pending) keep() spent() defs() held();
+
+// _CHECK_PERIODIC: signals, the GC and other pending events
+extern helper poll(t:Thread)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises, polls)
+  c _PyRop_Poll as int_zero_ok
+  evidence(
+    review: "Reviewed P5. bytecodes.c _CHECK_PERIODIC: check_periodics.",
+    contract: "A signal handler or a finalizer may run Python and raise.");
+
+// IR_JIT_EVENT(): the code's warm-up event.  With a unit it runs the frame
+// natively and the frame goes on where the unit stopped; otherwise the
+// jump goes on at its target.  The forms and stubs run no event.
+extern routine jit_warm(target:Head) -> Unit
+  effects(runs_python)
+  exits(jump, raise, redirect, exit)
+  c ROP_JIT_WARM as tail
+  evidence(
+    review: "Reviewed P5. bytecodes.c _JIT_EVENT after JUMP_BACKWARD_NO_INTERRUPT:"
+            "IR_JIT_EVENT with the target as next_instr, ceval_macros.h.",
+    contract: "jit_run drives the unit and returns the frame and word to run.");
+
+// The word's JUMP event, which a callback may raise from or move the frame
+extern helper jump_event(t:Thread, f:Frame, at:Site)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_JumpEvent as int_redirect
+  evidence(
+    review: "Reviewed P5. bytecodes.c _MONITOR_JUMP_BACKWARD:"
+            "IR_OBSERVE_COMMITTED_BRANCH with PY_MONITORING_EVENT_JUMP.",
+    contract: "A callback may raise, or move the frame, whose return_pc then"
+              "names the word to run.");
+
+// Whether the jump goes back: only a backedge polls before its event
+extern primitive goes_back(at:Site, to:Head) -> Bool
+  effects(reads)
+  c _PyRop_GoesBack as bool
+  evidence(
+    review: "Reviewed P5. The target word precedes the jump's.",
+    contract: "A comparison of two addresses.",
+    lowering: "none: the arm that tests it is observed, so it has no template",
+    test: "test_rop_truth");
+
+arm Jump.Direct inline select(uninterrupted)
+  effects()
+  feedback()
+  exits(jump)
+{
+  entry():
+    exit jump(target);
+}
+
+arm Jump.Poll inline select(interruptible, jit_off)
+  effects(runs_python, polls, raises)
+  feedback()
+  exits(jump, raise)
+{
+  entry():
+    call poll(thread) {
+      ok -> Go();
+      err -> Failed();
+    }
+  Go():
+    exit jump(target);
+  Failed(e:Err):
+    exit raise(Jump.PollFailed, e);
+}
+
+arm Jump.Warm split select(interruptible, jit_on)
+  effects(runs_python, polls, raises)
+  feedback()
+  exits(jump, raise, redirect, exit)
+{
+  entry():
+    call poll(thread) {
+      ok -> Go();
+      err -> Failed();
+    }
+  Go():
+    tail jit_warm(target);
+  Failed(e:Err):
+    exit raise(Jump.PollFailed, e);
+}
+
+arm Jump.Observed split
+  effects(runs_python, polls, raises)
+  feedback()
+  exits(jump, raise, redirect)
+{
+  entry():
+    branch goes_back(site, target) -> Back(), Event();
+  Back():
+    call poll(thread) {
+      ok -> Event();
+      err -> PollFailed();
+    }
+  PollFailed(pe:Err):
+    exit raise(Jump.PollFailed, pe);
+  Event():
+    call jump_event(thread, frame, site) {
+      ok -> Go();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Go():
+    exit jump(target);
+  Moved(r:Route):
+    exit redirect(r);
+  EventFailed(ee:Err):
+    exit raise(Jump.EventFailed, ee);
+}

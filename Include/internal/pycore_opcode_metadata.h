@@ -354,35 +354,11 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 2;
         case POP_JUMP_IF_FALSE:
             return 1;
-        case POP_JUMP_IF_FALSE_ALWAYS_TRUE:
-            return 1;
-        case POP_JUMP_IF_FALSE_BOOL:
-            return 1;
-        case POP_JUMP_IF_FALSE_INT:
-            return 1;
-        case POP_JUMP_IF_FALSE_LIST:
-            return 1;
-        case POP_JUMP_IF_FALSE_NONE:
-            return 1;
-        case POP_JUMP_IF_FALSE_STR:
-            return 1;
         case POP_JUMP_IF_NONE:
             return 1;
         case POP_JUMP_IF_NOT_NONE:
             return 1;
         case POP_JUMP_IF_TRUE:
-            return 1;
-        case POP_JUMP_IF_TRUE_ALWAYS_TRUE:
-            return 1;
-        case POP_JUMP_IF_TRUE_BOOL:
-            return 1;
-        case POP_JUMP_IF_TRUE_INT:
-            return 1;
-        case POP_JUMP_IF_TRUE_LIST:
-            return 1;
-        case POP_JUMP_IF_TRUE_NONE:
-            return 1;
-        case POP_JUMP_IF_TRUE_STR:
             return 1;
         case POP_TOP:
             return 1;
@@ -461,18 +437,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
         case SWAP:
             return 2 + (oparg-2);
         case TO_BOOL:
-            return 1;
-        case TO_BOOL_ALWAYS_TRUE:
-            return 1;
-        case TO_BOOL_BOOL:
-            return 1;
-        case TO_BOOL_INT:
-            return 1;
-        case TO_BOOL_LIST:
-            return 1;
-        case TO_BOOL_NONE:
-            return 1;
-        case TO_BOOL_STR:
             return 1;
         case UNARY_INVERT:
             return 1;
@@ -696,9 +660,9 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
         case INSTRUMENTED_JUMP_FORWARD:
             return 0;
         case INSTRUMENTED_JUMP_IF_FALSE_OR_POP:
-            return 1;
+            return 0;
         case INSTRUMENTED_JUMP_IF_TRUE_OR_POP:
-            return 1;
+            return 0;
         case INSTRUMENTED_LINE:
             return 0;
         case INSTRUMENTED_LOAD_SUPER_ATTR:
@@ -821,35 +785,11 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 0;
         case POP_JUMP_IF_FALSE:
             return 0;
-        case POP_JUMP_IF_FALSE_ALWAYS_TRUE:
-            return 0;
-        case POP_JUMP_IF_FALSE_BOOL:
-            return 0;
-        case POP_JUMP_IF_FALSE_INT:
-            return 0;
-        case POP_JUMP_IF_FALSE_LIST:
-            return 0;
-        case POP_JUMP_IF_FALSE_NONE:
-            return 0;
-        case POP_JUMP_IF_FALSE_STR:
-            return 0;
         case POP_JUMP_IF_NONE:
             return 0;
         case POP_JUMP_IF_NOT_NONE:
             return 0;
         case POP_JUMP_IF_TRUE:
-            return 0;
-        case POP_JUMP_IF_TRUE_ALWAYS_TRUE:
-            return 0;
-        case POP_JUMP_IF_TRUE_BOOL:
-            return 0;
-        case POP_JUMP_IF_TRUE_INT:
-            return 0;
-        case POP_JUMP_IF_TRUE_LIST:
-            return 0;
-        case POP_JUMP_IF_TRUE_NONE:
-            return 0;
-        case POP_JUMP_IF_TRUE_STR:
             return 0;
         case POP_TOP:
             return 0;
@@ -928,18 +868,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
         case SWAP:
             return 2 + (oparg-2);
         case TO_BOOL:
-            return 1;
-        case TO_BOOL_ALWAYS_TRUE:
-            return 1;
-        case TO_BOOL_BOOL:
-            return 1;
-        case TO_BOOL_INT:
-            return 1;
-        case TO_BOOL_LIST:
-            return 1;
-        case TO_BOOL_NONE:
-            return 1;
-        case TO_BOOL_STR:
             return 1;
         case UNARY_INVERT:
             return 1;
@@ -1132,17 +1060,17 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [INSTRUMENTED_END_SEND] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [INSTRUMENTED_FOR_ITER] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INSTRUMENTED_INSTRUCTION] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [INSTRUMENTED_JUMP_BACKWARD] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [INSTRUMENTED_JUMP_FORWARD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [INSTRUMENTED_JUMP_IF_TRUE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
+    [INSTRUMENTED_JUMP_BACKWARD] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
+    [INSTRUMENTED_JUMP_FORWARD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [INSTRUMENTED_JUMP_IF_TRUE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [INSTRUMENTED_LINE] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INSTRUMENTED_LOAD_SUPER_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [INSTRUMENTED_POP_ITER] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [INSTRUMENTED_POP_JUMP_IF_FALSE] = { true, INSTR_FMT_IBC00, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [INSTRUMENTED_POP_JUMP_IF_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [INSTRUMENTED_POP_JUMP_IF_NOT_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [INSTRUMENTED_POP_JUMP_IF_TRUE] = { true, INSTR_FMT_IBC00, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
+    [INSTRUMENTED_POP_JUMP_IF_FALSE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
+    [INSTRUMENTED_POP_JUMP_IF_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
+    [INSTRUMENTED_POP_JUMP_IF_NOT_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
+    [INSTRUMENTED_POP_JUMP_IF_TRUE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [INSTRUMENTED_RESUME] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INSTRUMENTED_RETURN_VALUE] = { true, INSTR_FMT_IX, 0 },
     [INSTRUMENTED_YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
@@ -1191,21 +1119,9 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [POP_EXCEPT] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG },
     [POP_ITER] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG },
     [POP_JUMP_IF_FALSE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [POP_JUMP_IF_FALSE_ALWAYS_TRUE] = { true, INSTR_FMT_IBC00, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [POP_JUMP_IF_FALSE_BOOL] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG },
-    [POP_JUMP_IF_FALSE_INT] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG },
-    [POP_JUMP_IF_FALSE_LIST] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [POP_JUMP_IF_FALSE_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG },
-    [POP_JUMP_IF_FALSE_STR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG },
     [POP_JUMP_IF_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ESCAPES_FLAG },
     [POP_JUMP_IF_NOT_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ESCAPES_FLAG },
     [POP_JUMP_IF_TRUE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [POP_JUMP_IF_TRUE_ALWAYS_TRUE] = { true, INSTR_FMT_IBC00, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [POP_JUMP_IF_TRUE_BOOL] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG },
-    [POP_JUMP_IF_TRUE_INT] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG },
-    [POP_JUMP_IF_TRUE_LIST] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [POP_JUMP_IF_TRUE_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG },
-    [POP_JUMP_IF_TRUE_STR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG },
     [POP_TOP] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG },
     [PUSH_EXC_INFO] = { true, INSTR_FMT_IX, 0 },
     [PUSH_NULL] = { true, INSTR_FMT_IX, HAS_PURE_FLAG },
@@ -1241,12 +1157,6 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [STORE_SUBSCR_LIST_INT] = { true, INSTR_FMT_IXC, HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
     [SWAP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [TO_BOOL] = { true, INSTR_FMT_IXC00, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [TO_BOOL_ALWAYS_TRUE] = { true, INSTR_FMT_IXC00, HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [TO_BOOL_BOOL] = { true, INSTR_FMT_IXC00, HAS_EXIT_FLAG },
-    [TO_BOOL_INT] = { true, INSTR_FMT_IXC00, HAS_EXIT_FLAG },
-    [TO_BOOL_LIST] = { true, INSTR_FMT_IXC00, HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [TO_BOOL_NONE] = { true, INSTR_FMT_IXC00, HAS_EXIT_FLAG },
-    [TO_BOOL_STR] = { true, INSTR_FMT_IXC00, HAS_EXIT_FLAG },
     [UNARY_INVERT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [UNARY_NEGATIVE] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [UNARY_NOT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
@@ -1349,8 +1259,9 @@ _PyOpcode_macro_expansion[256] = {
     [IMPORT_FROM] = { .nuops = 1, .uops = { { _IMPORT_FROM, OPARG_SIMPLE, 0 } } },
     [IMPORT_NAME] = { .nuops = 1, .uops = { { _IMPORT_NAME, OPARG_SIMPLE, 0 } } },
     [IS_OP] = { .nuops = 3, .uops = { { _IS_OP, OPARG_SIMPLE, 0 }, { _POP_TOP, OPARG_SIMPLE, 0 }, { _POP_TOP, OPARG_SIMPLE, 0 } } },
-    [JUMP_BACKWARD] = { .nuops = 2, .uops = { { _CHECK_PERIODIC, OPARG_SIMPLE, 1 }, { _JUMP_BACKWARD_NO_INTERRUPT, OPARG_REPLACED, 1 } } },
-    [JUMP_BACKWARD_NO_INTERRUPT] = { .nuops = 1, .uops = { { _JUMP_BACKWARD_NO_INTERRUPT, OPARG_REPLACED, 0 } } },
+    [JUMP_BACKWARD] = { .nuops = 2, .uops = { { _CHECK_PERIODIC, OPARG_SIMPLE, 1 }, { _JUMP_BACKWARD_NO_INTERRUPT, OPARG_SIMPLE, 1 } } },
+    [JUMP_BACKWARD_NO_INTERRUPT] = { .nuops = 1, .uops = { { _JUMP_BACKWARD_NO_INTERRUPT, OPARG_SIMPLE, 0 } } },
+    [JUMP_FORWARD] = { .nuops = 1, .uops = { { _JUMP_FORWARD, OPARG_SIMPLE, 0 } } },
     [JUMP_IF_FALSE_OR_POP] = { .nuops = 1, .uops = { { _JUMP_IF_FALSE_OR_POP, OPARG_SIMPLE, 0 } } },
     [JUMP_IF_TRUE_OR_POP] = { .nuops = 1, .uops = { { _JUMP_IF_TRUE_OR_POP, OPARG_SIMPLE, 0 } } },
     [LIST_APPEND] = { .nuops = 1, .uops = { { _LIST_APPEND, OPARG_SIMPLE, 0 } } },
@@ -1379,22 +1290,10 @@ _PyOpcode_macro_expansion[256] = {
     [NOP] = { .nuops = 1, .uops = { { _NOP, OPARG_SIMPLE, 0 } } },
     [POP_EXCEPT] = { .nuops = 1, .uops = { { _POP_EXCEPT, OPARG_SIMPLE, 0 } } },
     [POP_ITER] = { .nuops = 1, .uops = { { _POP_ITER, OPARG_SIMPLE, 0 } } },
-    [POP_JUMP_IF_FALSE] = { .nuops = 2, .uops = { { _TO_BOOL, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_FALSE_ALWAYS_TRUE] = { .nuops = 3, .uops = { { _GUARD_NONE_OR_TYPE_VERSION, 2, 1 }, { _POP_JUMP_IF_FALSE_NONE_OR_PLAIN, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 } } },
-    [POP_JUMP_IF_FALSE_BOOL] = { .nuops = 2, .uops = { { _GUARD_TOS_BOOL, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_FALSE_INT] = { .nuops = 4, .uops = { { _GUARD_TOS_EXACT_INT, OPARG_SIMPLE, 0 }, { _TO_BOOL_INT, OPARG_SIMPLE, 1 }, { _POP_TOP_INT, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_FALSE_LIST] = { .nuops = 4, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _TO_BOOL_LIST, OPARG_SIMPLE, 1 }, { _POP_TOP, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_FALSE_NONE] = { .nuops = 2, .uops = { { _TO_BOOL_NONE, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_FALSE_STR] = { .nuops = 4, .uops = { { _GUARD_TOS_UNICODE, OPARG_SIMPLE, 0 }, { _TO_BOOL_STR, OPARG_SIMPLE, 1 }, { _POP_TOP_UNICODE, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_NONE] = { .nuops = 2, .uops = { { _IS_NONE, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_NOT_NONE] = { .nuops = 2, .uops = { { _IS_NONE, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_TRUE] = { .nuops = 2, .uops = { { _TO_BOOL, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_TRUE_ALWAYS_TRUE] = { .nuops = 3, .uops = { { _GUARD_NONE_OR_TYPE_VERSION, 2, 1 }, { _POP_JUMP_IF_TRUE_NONE_OR_PLAIN, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 } } },
-    [POP_JUMP_IF_TRUE_BOOL] = { .nuops = 2, .uops = { { _GUARD_TOS_BOOL, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_TRUE_INT] = { .nuops = 4, .uops = { { _GUARD_TOS_EXACT_INT, OPARG_SIMPLE, 0 }, { _TO_BOOL_INT, OPARG_SIMPLE, 1 }, { _POP_TOP_INT, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_TRUE_LIST] = { .nuops = 4, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _TO_BOOL_LIST, OPARG_SIMPLE, 1 }, { _POP_TOP, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_TRUE_NONE] = { .nuops = 2, .uops = { { _TO_BOOL_NONE, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 1 } } },
-    [POP_JUMP_IF_TRUE_STR] = { .nuops = 4, .uops = { { _GUARD_TOS_UNICODE, OPARG_SIMPLE, 0 }, { _TO_BOOL_STR, OPARG_SIMPLE, 1 }, { _POP_TOP_UNICODE, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 1 } } },
+    [POP_JUMP_IF_FALSE] = { .nuops = 1, .uops = { { _POP_JUMP_IF_FALSE, OPARG_SIMPLE, 1 } } },
+    [POP_JUMP_IF_NONE] = { .nuops = 1, .uops = { { _POP_JUMP_IF_NONE, OPARG_SIMPLE, 1 } } },
+    [POP_JUMP_IF_NOT_NONE] = { .nuops = 1, .uops = { { _POP_JUMP_IF_NOT_NONE, OPARG_SIMPLE, 1 } } },
+    [POP_JUMP_IF_TRUE] = { .nuops = 1, .uops = { { _POP_JUMP_IF_TRUE, OPARG_SIMPLE, 1 } } },
     [POP_TOP] = { .nuops = 1, .uops = { { _POP_TOP, OPARG_SIMPLE, 0 } } },
     [PUSH_EXC_INFO] = { .nuops = 1, .uops = { { _PUSH_EXC_INFO, OPARG_SIMPLE, 0 } } },
     [PUSH_NULL] = { .nuops = 1, .uops = { { _PUSH_NULL, OPARG_SIMPLE, 0 } } },
@@ -1420,12 +1319,6 @@ _PyOpcode_macro_expansion[256] = {
     [STORE_SUBSCR_DICT] = { .nuops = 2, .uops = { { _GUARD_NOS_DICT_STORE_SUBSCRIPT, OPARG_SIMPLE, 0 }, { _STORE_SUBSCR_DICT, OPARG_SIMPLE, 1 } } },
     [STORE_SUBSCR_LIST_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_LIST, OPARG_SIMPLE, 0 }, { _STORE_SUBSCR_LIST_INT, OPARG_SIMPLE, 1 }, { _POP_TOP, OPARG_SIMPLE, 1 }, { _POP_TOP, OPARG_SIMPLE, 1 } } },
     [TO_BOOL] = { .nuops = 1, .uops = { { _TO_BOOL, OPARG_SIMPLE, 3 } } },
-    [TO_BOOL_ALWAYS_TRUE] = { .nuops = 3, .uops = { { _GUARD_NONE_OR_TYPE_VERSION, 2, 1 }, { _TRUTH_NONE_OR_PLAIN, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 } } },
-    [TO_BOOL_BOOL] = { .nuops = 1, .uops = { { _GUARD_TOS_BOOL, OPARG_SIMPLE, 3 } } },
-    [TO_BOOL_INT] = { .nuops = 3, .uops = { { _GUARD_TOS_EXACT_INT, OPARG_SIMPLE, 0 }, { _TO_BOOL_INT, OPARG_SIMPLE, 3 }, { _POP_TOP_INT, OPARG_SIMPLE, 3 } } },
-    [TO_BOOL_LIST] = { .nuops = 3, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _TO_BOOL_LIST, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 } } },
-    [TO_BOOL_NONE] = { .nuops = 1, .uops = { { _TO_BOOL_NONE, OPARG_SIMPLE, 3 } } },
-    [TO_BOOL_STR] = { .nuops = 3, .uops = { { _GUARD_TOS_UNICODE, OPARG_SIMPLE, 0 }, { _TO_BOOL_STR, OPARG_SIMPLE, 3 }, { _POP_TOP_UNICODE, OPARG_SIMPLE, 3 } } },
     [UNARY_INVERT] = { .nuops = 2, .uops = { { _UNARY_INVERT, OPARG_SIMPLE, 0 }, { _POP_TOP, OPARG_SIMPLE, 0 } } },
     [UNARY_NEGATIVE] = { .nuops = 2, .uops = { { _UNARY_NEGATIVE, OPARG_SIMPLE, 0 }, { _POP_TOP, OPARG_SIMPLE, 0 } } },
     [UNARY_NOT] = { .nuops = 1, .uops = { { _UNARY_NOT, OPARG_SIMPLE, 0 } } },
@@ -1600,21 +1493,9 @@ const char *_PyOpcode_OpName[267] = {
     [POP_EXCEPT] = "POP_EXCEPT",
     [POP_ITER] = "POP_ITER",
     [POP_JUMP_IF_FALSE] = "POP_JUMP_IF_FALSE",
-    [POP_JUMP_IF_FALSE_ALWAYS_TRUE] = "POP_JUMP_IF_FALSE_ALWAYS_TRUE",
-    [POP_JUMP_IF_FALSE_BOOL] = "POP_JUMP_IF_FALSE_BOOL",
-    [POP_JUMP_IF_FALSE_INT] = "POP_JUMP_IF_FALSE_INT",
-    [POP_JUMP_IF_FALSE_LIST] = "POP_JUMP_IF_FALSE_LIST",
-    [POP_JUMP_IF_FALSE_NONE] = "POP_JUMP_IF_FALSE_NONE",
-    [POP_JUMP_IF_FALSE_STR] = "POP_JUMP_IF_FALSE_STR",
     [POP_JUMP_IF_NONE] = "POP_JUMP_IF_NONE",
     [POP_JUMP_IF_NOT_NONE] = "POP_JUMP_IF_NOT_NONE",
     [POP_JUMP_IF_TRUE] = "POP_JUMP_IF_TRUE",
-    [POP_JUMP_IF_TRUE_ALWAYS_TRUE] = "POP_JUMP_IF_TRUE_ALWAYS_TRUE",
-    [POP_JUMP_IF_TRUE_BOOL] = "POP_JUMP_IF_TRUE_BOOL",
-    [POP_JUMP_IF_TRUE_INT] = "POP_JUMP_IF_TRUE_INT",
-    [POP_JUMP_IF_TRUE_LIST] = "POP_JUMP_IF_TRUE_LIST",
-    [POP_JUMP_IF_TRUE_NONE] = "POP_JUMP_IF_TRUE_NONE",
-    [POP_JUMP_IF_TRUE_STR] = "POP_JUMP_IF_TRUE_STR",
     [POP_TOP] = "POP_TOP",
     [PUSH_EXC_INFO] = "PUSH_EXC_INFO",
     [PUSH_NULL] = "PUSH_NULL",
@@ -1654,12 +1535,6 @@ const char *_PyOpcode_OpName[267] = {
     [STORE_SUBSCR_LIST_INT] = "STORE_SUBSCR_LIST_INT",
     [SWAP] = "SWAP",
     [TO_BOOL] = "TO_BOOL",
-    [TO_BOOL_ALWAYS_TRUE] = "TO_BOOL_ALWAYS_TRUE",
-    [TO_BOOL_BOOL] = "TO_BOOL_BOOL",
-    [TO_BOOL_INT] = "TO_BOOL_INT",
-    [TO_BOOL_LIST] = "TO_BOOL_LIST",
-    [TO_BOOL_NONE] = "TO_BOOL_NONE",
-    [TO_BOOL_STR] = "TO_BOOL_STR",
     [UNARY_INVERT] = "UNARY_INVERT",
     [UNARY_NEGATIVE] = "UNARY_NEGATIVE",
     [UNARY_NOT] = "UNARY_NOT",
@@ -1675,10 +1550,14 @@ const char *_PyOpcode_OpName[267] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Caches[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Caches[256] = {
+    [TO_BOOL] = 3,
     [LOAD_ATTR] = 9,
+    [POP_JUMP_IF_FALSE] = 1,
+    [POP_JUMP_IF_TRUE] = 1,
+    [POP_JUMP_IF_NONE] = 1,
+    [POP_JUMP_IF_NOT_NONE] = 1,
     [CALL] = 3,
     [RESUME] = 1,
-    [TO_BOOL] = 3,
     [STORE_SUBSCR] = 1,
     [SEND] = 1,
     [FOR_ITER] = 1,
@@ -1689,10 +1568,6 @@ const uint8_t _PyOpcode_Caches[256] = {
     [COMPARE_OP] = 1,
     [CONTAINS_OP] = 1,
     [JUMP_BACKWARD] = 1,
-    [POP_JUMP_IF_TRUE] = 1,
-    [POP_JUMP_IF_FALSE] = 1,
-    [POP_JUMP_IF_NONE] = 1,
-    [POP_JUMP_IF_NOT_NONE] = 1,
     [GET_ITER] = 1,
     [CALL_KW] = 3,
     [CALL_FUNCTION_EX] = 1,
@@ -1719,14 +1594,11 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
     [CALL_KW_PY] = { 1, { { 2, 2, offsetof(_PyFb_CALL_KW, func_version) } } },
     [LOAD_GLOBAL_BUILTIN] = { 3, { { 2, 1, offsetof(_PyFb_LOAD_GLOBAL, globals_version) }, { 3, 1, offsetof(_PyFb_LOAD_GLOBAL, builtins_version) }, { 4, 1, offsetof(_PyFb_LOAD_GLOBAL, index) } } },
     [LOAD_GLOBAL_MODULE] = { 2, { { 2, 1, offsetof(_PyFb_LOAD_GLOBAL, globals_version) }, { 4, 1, offsetof(_PyFb_LOAD_GLOBAL, index) } } },
-    [POP_JUMP_IF_FALSE_ALWAYS_TRUE] = { 1, { { 2, 2, offsetof(_PyFb_POP_JUMP_IF_FALSE, type_version) } } },
-    [POP_JUMP_IF_TRUE_ALWAYS_TRUE] = { 1, { { 2, 2, offsetof(_PyFb_POP_JUMP_IF_TRUE, type_version) } } },
     [STORE_ATTR_INSTANCE_VALUE] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
     [STORE_ATTR_SHAPE] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
     [STORE_ATTR_SHAPE_ADD] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
     [STORE_ATTR_SLOT] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, index) } } },
     [STORE_ATTR_WITH_HINT] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, hint) } } },
-    [TO_BOOL_ALWAYS_TRUE] = { 1, { { 2, 2, offsetof(_PyFb_TO_BOOL, type_version) } } },
 };
 #endif
 
@@ -1741,6 +1613,24 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [125] = 125,
     [126] = 126,
     [127] = 127,
+    [185] = 185,
+    [186] = 186,
+    [187] = 187,
+    [188] = 188,
+    [189] = 189,
+    [190] = 190,
+    [191] = 191,
+    [192] = 192,
+    [193] = 193,
+    [194] = 194,
+    [195] = 195,
+    [196] = 196,
+    [197] = 197,
+    [198] = 198,
+    [199] = 199,
+    [200] = 200,
+    [201] = 201,
+    [202] = 202,
     [203] = 203,
     [204] = 204,
     [205] = 205,
@@ -1924,21 +1814,9 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [POP_EXCEPT] = POP_EXCEPT,
     [POP_ITER] = POP_ITER,
     [POP_JUMP_IF_FALSE] = POP_JUMP_IF_FALSE,
-    [POP_JUMP_IF_FALSE_ALWAYS_TRUE] = POP_JUMP_IF_FALSE,
-    [POP_JUMP_IF_FALSE_BOOL] = POP_JUMP_IF_FALSE,
-    [POP_JUMP_IF_FALSE_INT] = POP_JUMP_IF_FALSE,
-    [POP_JUMP_IF_FALSE_LIST] = POP_JUMP_IF_FALSE,
-    [POP_JUMP_IF_FALSE_NONE] = POP_JUMP_IF_FALSE,
-    [POP_JUMP_IF_FALSE_STR] = POP_JUMP_IF_FALSE,
     [POP_JUMP_IF_NONE] = POP_JUMP_IF_NONE,
     [POP_JUMP_IF_NOT_NONE] = POP_JUMP_IF_NOT_NONE,
     [POP_JUMP_IF_TRUE] = POP_JUMP_IF_TRUE,
-    [POP_JUMP_IF_TRUE_ALWAYS_TRUE] = POP_JUMP_IF_TRUE,
-    [POP_JUMP_IF_TRUE_BOOL] = POP_JUMP_IF_TRUE,
-    [POP_JUMP_IF_TRUE_INT] = POP_JUMP_IF_TRUE,
-    [POP_JUMP_IF_TRUE_LIST] = POP_JUMP_IF_TRUE,
-    [POP_JUMP_IF_TRUE_NONE] = POP_JUMP_IF_TRUE,
-    [POP_JUMP_IF_TRUE_STR] = POP_JUMP_IF_TRUE,
     [POP_TOP] = POP_TOP,
     [PUSH_EXC_INFO] = PUSH_EXC_INFO,
     [PUSH_NULL] = PUSH_NULL,
@@ -1974,12 +1852,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [STORE_SUBSCR_LIST_INT] = STORE_SUBSCR,
     [SWAP] = SWAP,
     [TO_BOOL] = TO_BOOL,
-    [TO_BOOL_ALWAYS_TRUE] = TO_BOOL,
-    [TO_BOOL_BOOL] = TO_BOOL,
-    [TO_BOOL_INT] = TO_BOOL,
-    [TO_BOOL_LIST] = TO_BOOL,
-    [TO_BOOL_NONE] = TO_BOOL,
-    [TO_BOOL_STR] = TO_BOOL,
     [UNARY_INVERT] = UNARY_INVERT,
     [UNARY_NEGATIVE] = UNARY_NEGATIVE,
     [UNARY_NOT] = UNARY_NOT,
@@ -2002,6 +1874,24 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 125: \
     case 126: \
     case 127: \
+    case 185: \
+    case 186: \
+    case 187: \
+    case 188: \
+    case 189: \
+    case 190: \
+    case 191: \
+    case 192: \
+    case 193: \
+    case 194: \
+    case 195: \
+    case 196: \
+    case 197: \
+    case 198: \
+    case 199: \
+    case 200: \
+    case 201: \
+    case 202: \
     case 203: \
     case 204: \
     case 205: \

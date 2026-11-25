@@ -1865,10 +1865,6 @@
      * no lowering. */ \
     HELPER(_Py_Specialize_LoadSuperAttr, void, (PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_truth reads the \
-     * value's type and selects one handler from a table. */ \
-    HELPER(_Py_Specialize_PopJumpIf, void, (PyValueBorrow, _PyInstr *), \
-        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the receiver's type and \
      * its _tp_iteritem slot; no lookup and no lowering. 
      * The receiver is taken as an object without a test (PyValue_AsKnownObjectBorrow; the send loop's receiver is always one): the row requires `object`. */ \
@@ -1882,11 +1878,7 @@
      * _PyType_LookupRef(__setitem__) (released with Py_XDECREF) classify the \
      * container. */ \
     HELPER(_Py_Specialize_StoreSubscr, void, (PyValueBorrow, PyValueBorrow, _PyInstr *), \
-        ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_truth reads the \
-     * value's type and selects one handler from a table. */ \
-    HELPER(_Py_Specialize_ToBool, void, (PyValue, _PyInstr *), \
-        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
+        ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
 
 /* The evaluator's labels (bytecodes.c label(...)): the routines behind them */
 #define _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \

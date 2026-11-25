@@ -659,6 +659,25 @@ static int _PyIR_Rop_Stub_GetMethod_Generic(PyThreadState *, _PyInterpreterFrame
 static int _PyIR_Rop_Stub_GetMethod_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_GetMethod_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_GetMethod_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Slot(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Truth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Slot(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_BranchTruth_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_LocalRead_Checked(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_LocalWrite_Restore(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_SaveLocal_Take(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
@@ -667,92 +686,127 @@ static int _PyIR_Rop_Stub_Move_Transfer(PyThreadState *, _PyInterpreterFrame *, 
 static int _PyIR_Rop_Stub_Move_Retire(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Move_Copy(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
-    [355] = {_PyIR_PLAN_INLINE, 0, 355, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int
-    [356] = {_PyIR_PLAN_SHARED, 0, 356, (const void *)_PyIR_Rop_Stub_Add_Float, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Float
-    [357] = {_PyIR_PLAN_SHARED, 0, 357, (const void *)_PyIR_Rop_Stub_Add_Text, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Text
-    [358] = {_PyIR_PLAN_SHARED, 1, 358, (const void *)_PyIR_Rop_Stub_Add_Extended, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Extended
-    [359] = {_PyIR_PLAN_SHARED, 1, 359, (const void *)_PyIR_Rop_Stub_Add_Generic, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Generic
-    [360] = {_PyIR_PLAN_NONE, 0, 360, NULL, NULL},  // Call_Exact
-    [361] = {_PyIR_PLAN_NONE, 0, 361, NULL, NULL},  // Call_BoundExact
-    [362] = {_PyIR_PLAN_NONE, 0, 362, NULL, NULL},  // Call_Init
-    [363] = {_PyIR_PLAN_NONE, 1, 363, NULL, NULL},  // Call_Generic
-    [364] = {_PyIR_PLAN_NONE, 0, 364, NULL, NULL},  // InitResult_Check
-    [365] = {_PyIR_PLAN_NONE, 1, 365, NULL, NULL},  // Call_Observed
-    [366] = {_PyIR_PLAN_NONE, 0, 366, NULL, NULL},  // Return_Ordinary
-    [367] = {_PyIR_PLAN_NONE, 0, 367, NULL, NULL},  // Return_Empty
-    [368] = {_PyIR_PLAN_NONE, 0, 368, NULL, NULL},  // Return_Generator
-    [369] = {_PyIR_PLAN_NONE, 1, 369, NULL, NULL},  // Return_Observed
-    [370] = {_PyIR_PLAN_NONE, 0, 370, NULL, NULL},  // Return_External
-    [371] = {_PyIR_PLAN_INLINE, 0, 371, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Instance
-    [372] = {_PyIR_PLAN_INLINE, 1, 372, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_GetSet
-    [373] = {_PyIR_PLAN_SHARED, 1, 373, (const void *)_PyIR_Rop_Stub_GetAttr_Generic, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Generic
-    [374] = {_PyIR_PLAN_INLINE, 0, 374, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Shape
-    [375] = {_PyIR_PLAN_INLINE, 0, 375, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_PolyShape
-    [376] = {_PyIR_PLAN_INLINE, 0, 376, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Module
-    [377] = {_PyIR_PLAN_INLINE, 0, 377, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Hint
-    [378] = {_PyIR_PLAN_INLINE, 0, 378, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_ValueSlot
-    [379] = {_PyIR_PLAN_INLINE, 0, 379, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_PointerSlot
-    [380] = {_PyIR_PLAN_INLINE, 0, 380, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Class
-    [381] = {_PyIR_PLAN_INLINE, 0, 381, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_NonDescriptorValues
-    [382] = {_PyIR_PLAN_INLINE, 0, 382, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_NonDescriptorNoDict
-    [383] = {_PyIR_PLAN_INLINE, 0, 383, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_MethodValues
-    [384] = {_PyIR_PLAN_SHARED, 1, 384, (const void *)_PyIR_Rop_Stub_GetMethod_Generic, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_Generic
-    [385] = {_PyIR_PLAN_INLINE, 0, 385, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_PolyMethod
-    [386] = {_PyIR_PLAN_INLINE, 0, 386, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_NoDict
-    [387] = {_PyIR_PLAN_INLINE, 0, 387, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_LazyDict
-    [388] = {_PyIR_PLAN_INLINE, 0, 388, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_ClassMethod
-    [389] = {_PyIR_PLAN_INLINE, 0, 389, NULL, NULL},  // Const_Pool
-    [390] = {_PyIR_PLAN_INLINE, 0, 390, NULL, NULL},  // Const_Small
-    [391] = {_PyIR_PLAN_INLINE, 0, 391, NULL, NULL},  // Const_Common
-    [392] = {_PyIR_PLAN_INLINE, 0, 392, NULL, NULL},  // LocalRead_Bound
-    [393] = {_PyIR_PLAN_SHARED, 0, 393, (const void *)_PyIR_Rop_Stub_LocalRead_Checked, NULL},  // LocalRead_Checked
-    [394] = {_PyIR_PLAN_INLINE, 0, 394, NULL, NULL},  // LocalWrite_Store
-    [395] = {_PyIR_PLAN_SHARED, 0, 395, (const void *)_PyIR_Rop_Stub_LocalWrite_Restore, NULL},  // LocalWrite_Restore
-    [396] = {_PyIR_PLAN_SHARED, 0, 396, (const void *)_PyIR_Rop_Stub_SaveLocal_Take, NULL},  // SaveLocal_Take
-    [397] = {_PyIR_PLAN_SHARED, 0, 397, (const void *)_PyIR_Rop_Stub_LocalDelete_Checked, NULL},  // LocalDelete_Checked
-    [398] = {_PyIR_PLAN_SHARED, 0, 398, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
-    [399] = {_PyIR_PLAN_SHARED, 1, 399, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
-    [400] = {_PyIR_PLAN_SHARED, 0, 400, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
-    [401] = {_PyIR_PLAN_NONE, 1, 401, NULL, NULL},  // Call_Observed
-    [402] = {_PyIR_PLAN_NONE, 1, 402, NULL, NULL},  // Call_Observed
-    [403] = {_PyIR_PLAN_NONE, 1, 403, NULL, NULL},  // Call_Observed
-    [404] = {_PyIR_PLAN_NONE, 1, 404, NULL, NULL},  // Call_Observed
-    [405] = {_PyIR_PLAN_NONE, 1, 405, NULL, NULL},  // Return_Observed
-    [406] = {_PyIR_PLAN_NONE, 1, 406, NULL, NULL},  // Return_Observed
-    [407] = {_PyIR_PLAN_NONE, 1, 407, NULL, NULL},  // Return_Observed
-    [408] = {_PyIR_PLAN_NONE, 1, 408, NULL, NULL},  // Return_Observed
+    [352] = {_PyIR_PLAN_INLINE, 0, 352, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int
+    [353] = {_PyIR_PLAN_SHARED, 0, 353, (const void *)_PyIR_Rop_Stub_Add_Float, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Float
+    [354] = {_PyIR_PLAN_SHARED, 0, 354, (const void *)_PyIR_Rop_Stub_Add_Text, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Text
+    [355] = {_PyIR_PLAN_SHARED, 1, 355, (const void *)_PyIR_Rop_Stub_Add_Extended, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Extended
+    [356] = {_PyIR_PLAN_SHARED, 1, 356, (const void *)_PyIR_Rop_Stub_Add_Generic, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Generic
+    [357] = {_PyIR_PLAN_NONE, 0, 357, NULL, NULL},  // Call_Exact
+    [358] = {_PyIR_PLAN_NONE, 0, 358, NULL, NULL},  // Call_BoundExact
+    [359] = {_PyIR_PLAN_NONE, 0, 359, NULL, NULL},  // Call_Init
+    [360] = {_PyIR_PLAN_NONE, 1, 360, NULL, NULL},  // Call_Generic
+    [361] = {_PyIR_PLAN_NONE, 0, 361, NULL, NULL},  // InitResult_Check
+    [362] = {_PyIR_PLAN_NONE, 1, 362, NULL, NULL},  // Call_Observed
+    [363] = {_PyIR_PLAN_NONE, 0, 363, NULL, NULL},  // Return_Ordinary
+    [364] = {_PyIR_PLAN_NONE, 0, 364, NULL, NULL},  // Return_Empty
+    [365] = {_PyIR_PLAN_NONE, 0, 365, NULL, NULL},  // Return_Generator
+    [366] = {_PyIR_PLAN_NONE, 1, 366, NULL, NULL},  // Return_Observed
+    [367] = {_PyIR_PLAN_NONE, 0, 367, NULL, NULL},  // Return_External
+    [368] = {_PyIR_PLAN_INLINE, 0, 368, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Instance
+    [369] = {_PyIR_PLAN_INLINE, 1, 369, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_GetSet
+    [370] = {_PyIR_PLAN_SHARED, 1, 370, (const void *)_PyIR_Rop_Stub_GetAttr_Generic, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Generic
+    [371] = {_PyIR_PLAN_INLINE, 0, 371, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Shape
+    [372] = {_PyIR_PLAN_INLINE, 0, 372, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_PolyShape
+    [373] = {_PyIR_PLAN_INLINE, 0, 373, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Module
+    [374] = {_PyIR_PLAN_INLINE, 0, 374, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Hint
+    [375] = {_PyIR_PLAN_INLINE, 0, 375, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_ValueSlot
+    [376] = {_PyIR_PLAN_INLINE, 0, 376, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_PointerSlot
+    [377] = {_PyIR_PLAN_INLINE, 0, 377, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Class
+    [378] = {_PyIR_PLAN_INLINE, 0, 378, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_NonDescriptorValues
+    [379] = {_PyIR_PLAN_INLINE, 0, 379, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_NonDescriptorNoDict
+    [380] = {_PyIR_PLAN_INLINE, 0, 380, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_MethodValues
+    [381] = {_PyIR_PLAN_SHARED, 1, 381, (const void *)_PyIR_Rop_Stub_GetMethod_Generic, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_Generic
+    [382] = {_PyIR_PLAN_INLINE, 0, 382, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_PolyMethod
+    [383] = {_PyIR_PLAN_INLINE, 0, 383, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_NoDict
+    [384] = {_PyIR_PLAN_INLINE, 0, 384, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_LazyDict
+    [385] = {_PyIR_PLAN_INLINE, 0, 385, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_ClassMethod
+    [386] = {_PyIR_PLAN_INLINE, 0, 386, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Bool
+    [387] = {_PyIR_PLAN_INLINE, 0, 387, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Int
+    [388] = {_PyIR_PLAN_INLINE, 0, 388, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_List
+    [389] = {_PyIR_PLAN_INLINE, 0, 389, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_None
+    [390] = {_PyIR_PLAN_INLINE, 0, 390, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Str
+    [391] = {_PyIR_PLAN_INLINE, 0, 391, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Plain
+    [392] = {_PyIR_PLAN_SHARED, 1, 392, (const void *)_PyIR_Rop_Stub_Truth_Slot, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Slot
+    [393] = {_PyIR_PLAN_SHARED, 1, 393, (const void *)_PyIR_Rop_Stub_Truth_Generic, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Generic
+    [394] = {_PyIR_PLAN_INLINE, 0, 394, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Bool
+    [395] = {_PyIR_PLAN_INLINE, 0, 395, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Int
+    [396] = {_PyIR_PLAN_INLINE, 0, 396, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_List
+    [397] = {_PyIR_PLAN_INLINE, 0, 397, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_None
+    [398] = {_PyIR_PLAN_INLINE, 0, 398, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Str
+    [399] = {_PyIR_PLAN_INLINE, 0, 399, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Plain
+    [400] = {_PyIR_PLAN_SHARED, 1, 400, (const void *)_PyIR_Rop_Stub_BranchTruth_Slot, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Slot
+    [401] = {_PyIR_PLAN_SHARED, 1, 401, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Generic
+    [402] = {_PyIR_PLAN_INLINE, 0, 402, NULL, NULL},  // BranchNone_Test
+    [403] = {_PyIR_PLAN_NONE, 1, 403, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Observed
+    [404] = {_PyIR_PLAN_NONE, 1, 404, NULL, NULL},  // BranchNone_Observed
+    [405] = {_PyIR_PLAN_INLINE, 0, 405, NULL, NULL},  // Jump_Direct
+    [406] = {_PyIR_PLAN_INLINE, 1, 406, NULL, NULL},  // Jump_Poll
+    [407] = {_PyIR_PLAN_NONE, 1, 407, NULL, NULL},  // Jump_Warm
+    [408] = {_PyIR_PLAN_NONE, 1, 408, NULL, NULL},  // Jump_Observed
+    [409] = {_PyIR_PLAN_INLINE, 0, 409, NULL, NULL},  // Const_Pool
+    [410] = {_PyIR_PLAN_INLINE, 0, 410, NULL, NULL},  // Const_Small
+    [411] = {_PyIR_PLAN_INLINE, 0, 411, NULL, NULL},  // Const_Common
+    [412] = {_PyIR_PLAN_INLINE, 0, 412, NULL, NULL},  // LocalRead_Bound
+    [413] = {_PyIR_PLAN_SHARED, 0, 413, (const void *)_PyIR_Rop_Stub_LocalRead_Checked, NULL},  // LocalRead_Checked
+    [414] = {_PyIR_PLAN_INLINE, 0, 414, NULL, NULL},  // LocalWrite_Store
+    [415] = {_PyIR_PLAN_SHARED, 0, 415, (const void *)_PyIR_Rop_Stub_LocalWrite_Restore, NULL},  // LocalWrite_Restore
+    [416] = {_PyIR_PLAN_SHARED, 0, 416, (const void *)_PyIR_Rop_Stub_SaveLocal_Take, NULL},  // SaveLocal_Take
+    [417] = {_PyIR_PLAN_SHARED, 0, 417, (const void *)_PyIR_Rop_Stub_LocalDelete_Checked, NULL},  // LocalDelete_Checked
+    [418] = {_PyIR_PLAN_SHARED, 0, 418, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
+    [419] = {_PyIR_PLAN_SHARED, 1, 419, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
+    [420] = {_PyIR_PLAN_SHARED, 0, 420, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
+    [421] = {_PyIR_PLAN_NONE, 1, 421, NULL, NULL},  // Call_Observed
+    [422] = {_PyIR_PLAN_NONE, 1, 422, NULL, NULL},  // Call_Observed
+    [423] = {_PyIR_PLAN_NONE, 1, 423, NULL, NULL},  // Call_Observed
+    [424] = {_PyIR_PLAN_NONE, 1, 424, NULL, NULL},  // Call_Observed
+    [425] = {_PyIR_PLAN_NONE, 1, 425, NULL, NULL},  // Return_Observed
+    [426] = {_PyIR_PLAN_NONE, 1, 426, NULL, NULL},  // Return_Observed
+    [427] = {_PyIR_PLAN_NONE, 1, 427, NULL, NULL},  // Return_Observed
+    [428] = {_PyIR_PLAN_NONE, 1, 428, NULL, NULL},  // Return_Observed
+    [429] = {_PyIR_PLAN_NONE, 1, 429, NULL, NULL},  // BranchTruth_Observed
+    [430] = {_PyIR_PLAN_NONE, 1, 430, NULL, NULL},  // BranchTruth_Observed
+    [431] = {_PyIR_PLAN_NONE, 1, 431, NULL, NULL},  // BranchTruth_Observed
+    [432] = {_PyIR_PLAN_NONE, 1, 432, NULL, NULL},  // BranchTruth_Observed
+    [433] = {_PyIR_PLAN_NONE, 1, 433, NULL, NULL},  // BranchTruth_Observed
+    [434] = {_PyIR_PLAN_NONE, 1, 434, NULL, NULL},  // BranchTruth_Observed
+    [435] = {_PyIR_PLAN_NONE, 1, 435, NULL, NULL},  // BranchTruth_Observed
+    [436] = {_PyIR_PLAN_NONE, 1, 436, NULL, NULL},  // BranchTruth_Observed
+    [437] = {_PyIR_PLAN_NONE, 1, 437, NULL, NULL},  // BranchNone_Observed
+    [438] = {_PyIR_PLAN_NONE, 1, 438, NULL, NULL},  // Jump_Observed
+    [439] = {_PyIR_PLAN_NONE, 1, 439, NULL, NULL},  // Jump_Observed
+    [440] = {_PyIR_PLAN_NONE, 1, 440, NULL, NULL},  // Jump_Observed
     [118] = {_PyIR_PLAN_SHARED, 1, 118, (const void *)_PyIR_Stub_UNPACK_SEQUENCE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE
-    [128] = {_PyIR_PLAN_INLINE, 0, 287, NULL, (const void *)_PyIR_Stub_RESUME},  // RESUME
+    [128] = {_PyIR_PLAN_INLINE, 0, 284, NULL, (const void *)_PyIR_Stub_RESUME},  // RESUME
     [129] = {_PyIR_PLAN_INLINE, 0, 129, NULL, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_ADD_FLOAT
     [130] = {_PyIR_PLAN_INLINE, 0, 130, NULL, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_ADD_INT
-    [201] = {_PyIR_PLAN_SHARED, 0, 201, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_LIST, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_LIST
-    [202] = {_PyIR_PLAN_SHARED, 0, 202, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_TUPLE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_TUPLE
-    [287] = {_PyIR_PLAN_INLINE, 0, 287, NULL, (const void *)_PyIR_Stub_RESUME},  // RESUME_CHECK
-    [290] = {_PyIR_PLAN_SHARED, 1, 290, (const void *)_PyIR_Stub_BINARY_OP_ADD, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_ADD
-    [291] = {_PyIR_PLAN_SHARED, 1, 291, (const void *)_PyIR_Stub_BINARY_OP_AND, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_AND
-    [292] = {_PyIR_PLAN_SHARED, 1, 292, (const void *)_PyIR_Stub_BINARY_OP_FLOOR_DIVIDE, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_FLOOR_DIVIDE
-    [293] = {_PyIR_PLAN_SHARED, 1, 293, (const void *)_PyIR_Stub_BINARY_OP_LSHIFT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_LSHIFT
-    [294] = {_PyIR_PLAN_SHARED, 1, 294, (const void *)_PyIR_Stub_BINARY_OP_MATRIX_MULTIPLY, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_MATRIX_MULTIPLY
-    [295] = {_PyIR_PLAN_SHARED, 1, 295, (const void *)_PyIR_Stub_BINARY_OP_MULTIPLY, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_MULTIPLY
-    [296] = {_PyIR_PLAN_SHARED, 1, 296, (const void *)_PyIR_Stub_BINARY_OP_REMAINDER, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_REMAINDER
-    [297] = {_PyIR_PLAN_SHARED, 1, 297, (const void *)_PyIR_Stub_BINARY_OP_OR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_OR
-    [298] = {_PyIR_PLAN_SHARED, 1, 298, (const void *)_PyIR_Stub_BINARY_OP_POWER, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_POWER
-    [299] = {_PyIR_PLAN_SHARED, 1, 299, (const void *)_PyIR_Stub_BINARY_OP_RSHIFT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_RSHIFT
-    [300] = {_PyIR_PLAN_SHARED, 1, 300, (const void *)_PyIR_Stub_BINARY_OP_SUBTRACT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_SUBTRACT
-    [301] = {_PyIR_PLAN_SHARED, 1, 301, (const void *)_PyIR_Stub_BINARY_OP_TRUE_DIVIDE, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_TRUE_DIVIDE
-    [302] = {_PyIR_PLAN_SHARED, 1, 302, (const void *)_PyIR_Stub_BINARY_OP_XOR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_XOR
-    [303] = {_PyIR_PLAN_SHARED, 1, 303, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_ADD, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_ADD
-    [304] = {_PyIR_PLAN_SHARED, 1, 304, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_AND, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_AND
-    [305] = {_PyIR_PLAN_SHARED, 1, 305, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_FLOOR_DIVIDE, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_FLOOR_DIVIDE
-    [306] = {_PyIR_PLAN_SHARED, 1, 306, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_LSHIFT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_LSHIFT
-    [307] = {_PyIR_PLAN_SHARED, 1, 307, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_MATRIX_MULTIPLY, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_MATRIX_MULTIPLY
-    [308] = {_PyIR_PLAN_SHARED, 1, 308, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_MULTIPLY, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_MULTIPLY
-    [309] = {_PyIR_PLAN_SHARED, 1, 309, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_REMAINDER, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_REMAINDER
-    [310] = {_PyIR_PLAN_SHARED, 1, 310, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_OR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_OR
-    [311] = {_PyIR_PLAN_SHARED, 1, 311, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_POWER, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_POWER
-    [312] = {_PyIR_PLAN_SHARED, 1, 312, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_RSHIFT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_RSHIFT
-    [313] = {_PyIR_PLAN_SHARED, 1, 313, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_SUBTRACT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_SUBTRACT
-    [314] = {_PyIR_PLAN_SHARED, 1, 314, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_TRUE_DIVIDE, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_TRUE_DIVIDE
-    [315] = {_PyIR_PLAN_SHARED, 1, 315, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_XOR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_XOR
-    [316] = {_PyIR_PLAN_SHARED, 1, 316, (const void *)_PyIR_Stub_BINARY_OP_SUBSCR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_SUBSCR
+    [183] = {_PyIR_PLAN_SHARED, 0, 183, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_LIST, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_LIST
+    [184] = {_PyIR_PLAN_SHARED, 0, 184, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_TUPLE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_TUPLE
+    [284] = {_PyIR_PLAN_INLINE, 0, 284, NULL, (const void *)_PyIR_Stub_RESUME},  // RESUME_CHECK
+    [287] = {_PyIR_PLAN_SHARED, 1, 287, (const void *)_PyIR_Stub_BINARY_OP_ADD, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_ADD
+    [288] = {_PyIR_PLAN_SHARED, 1, 288, (const void *)_PyIR_Stub_BINARY_OP_AND, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_AND
+    [289] = {_PyIR_PLAN_SHARED, 1, 289, (const void *)_PyIR_Stub_BINARY_OP_FLOOR_DIVIDE, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_FLOOR_DIVIDE
+    [290] = {_PyIR_PLAN_SHARED, 1, 290, (const void *)_PyIR_Stub_BINARY_OP_LSHIFT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_LSHIFT
+    [291] = {_PyIR_PLAN_SHARED, 1, 291, (const void *)_PyIR_Stub_BINARY_OP_MATRIX_MULTIPLY, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_MATRIX_MULTIPLY
+    [292] = {_PyIR_PLAN_SHARED, 1, 292, (const void *)_PyIR_Stub_BINARY_OP_MULTIPLY, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_MULTIPLY
+    [293] = {_PyIR_PLAN_SHARED, 1, 293, (const void *)_PyIR_Stub_BINARY_OP_REMAINDER, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_REMAINDER
+    [294] = {_PyIR_PLAN_SHARED, 1, 294, (const void *)_PyIR_Stub_BINARY_OP_OR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_OR
+    [295] = {_PyIR_PLAN_SHARED, 1, 295, (const void *)_PyIR_Stub_BINARY_OP_POWER, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_POWER
+    [296] = {_PyIR_PLAN_SHARED, 1, 296, (const void *)_PyIR_Stub_BINARY_OP_RSHIFT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_RSHIFT
+    [297] = {_PyIR_PLAN_SHARED, 1, 297, (const void *)_PyIR_Stub_BINARY_OP_SUBTRACT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_SUBTRACT
+    [298] = {_PyIR_PLAN_SHARED, 1, 298, (const void *)_PyIR_Stub_BINARY_OP_TRUE_DIVIDE, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_TRUE_DIVIDE
+    [299] = {_PyIR_PLAN_SHARED, 1, 299, (const void *)_PyIR_Stub_BINARY_OP_XOR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_XOR
+    [300] = {_PyIR_PLAN_SHARED, 1, 300, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_ADD, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_ADD
+    [301] = {_PyIR_PLAN_SHARED, 1, 301, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_AND, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_AND
+    [302] = {_PyIR_PLAN_SHARED, 1, 302, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_FLOOR_DIVIDE, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_FLOOR_DIVIDE
+    [303] = {_PyIR_PLAN_SHARED, 1, 303, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_LSHIFT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_LSHIFT
+    [304] = {_PyIR_PLAN_SHARED, 1, 304, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_MATRIX_MULTIPLY, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_MATRIX_MULTIPLY
+    [305] = {_PyIR_PLAN_SHARED, 1, 305, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_MULTIPLY, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_MULTIPLY
+    [306] = {_PyIR_PLAN_SHARED, 1, 306, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_REMAINDER, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_REMAINDER
+    [307] = {_PyIR_PLAN_SHARED, 1, 307, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_OR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_OR
+    [308] = {_PyIR_PLAN_SHARED, 1, 308, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_POWER, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_POWER
+    [309] = {_PyIR_PLAN_SHARED, 1, 309, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_RSHIFT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_RSHIFT
+    [310] = {_PyIR_PLAN_SHARED, 1, 310, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_SUBTRACT, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_SUBTRACT
+    [311] = {_PyIR_PLAN_SHARED, 1, 311, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_TRUE_DIVIDE, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_TRUE_DIVIDE
+    [312] = {_PyIR_PLAN_SHARED, 1, 312, (const void *)_PyIR_Stub_BINARY_OP_INPLACE_XOR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_INPLACE_XOR
+    [313] = {_PyIR_PLAN_SHARED, 1, 313, (const void *)_PyIR_Stub_BINARY_OP_SUBSCR, (const void *)_PyIR_Stub_BINARY_OP},  // BINARY_OP_SUBSCR
 };

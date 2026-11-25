@@ -265,6 +265,7 @@ enum {
     _PyIR_LOC_C,
     _PyIR_LOC_D,
     _PyIR_LOC_CD,       // C and D, 24 bits
+    _PyIR_LOC_AB,       // A and B, 24 bits
     _PyIR_LOC_FBARG,    // the oparg, in the arg field of the feedback entry
     _PyIR_LOC_BC,       // B and C, 24 bits
 };
@@ -506,6 +507,8 @@ typedef struct _PyIRFormat {
     uint8_t roles[4];       // of fields A, B, C and D
     uint8_t imm;            // _PyIR_LOC_*
     uint8_t fb;             // _PyIR_LOC_*
+    uint8_t target;         // _PyIR_LOC_*: where a register instruction keeps
+                            // its jump target (FORWARD), or NONE: D
     uint8_t ninputs;        // register style
     int8_t dst;             // slot of dst less the depth before, or for
                             // window style less base; or _PyIR_NO_DST
@@ -555,6 +558,22 @@ typedef struct _PyIRFormat {
 static inline int _PyIR_WordLength(_PyIRWord word);
 
 #include "pycore_ir_metadata.h"
+
+/* The signed distance in words from the next word that a word of a FORWARD
+ * format holds.  The legacy formats keep it in D; a register instruction
+ * keeps its target where its family's encoding puts it (fmt->target). */
+static inline int
+_PyIR_FormatDistance(const _PyIRFormat *fmt, _PyIRWord word)
+{
+    switch (fmt->target) {
+        case _PyIR_LOC_C:
+            return (int)(IR_C(word) ^ 0x800) - 0x800;
+        case _PyIR_LOC_AB:
+            return (int)(((uint32_t)(word >> 16) & 0xFFFFFF) ^ 0x800000) - 0x800000;
+        default:
+            return IR_DS(word);
+    }
+}
 
 /* The role of the field of format fmt that holds the oparg: IMM or a slot
  * role; NONE if no single field holds it. */

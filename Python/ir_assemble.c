@@ -9,6 +9,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
 #include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic, ROP_FIRST_HANDLER
+#include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
@@ -375,6 +376,7 @@ int _PyIR_MaxForward = IR_MAX_FORWARD;
  * jump, and completion takes the exit jump. No cleanup word is a target. */
 #define RELAXED_FOR_ITER_WORDS 3
 #define RELAXED_SEND_WORDS 3
+#define RELAXED_BRANCH_WORDS 3
 
 /* A code object past a register IR field limit.  The code is valid stack
  * bytecode, so the first call raises, and _PyIR_LowerCode() names the code. */
@@ -557,12 +559,12 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
     }
-    /* With the baseline JIT on, frame entries, resumes and backward jumps
-     * are its warm-up events and hand-offs (Python/jit.c): a choice made
-     * here, so that with the JIT off the words are what they were. */
-    if ((opcode == RESUME || opcode == JUMP_BACKWARD) &&
-        _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
-        return opcode == RESUME ? RESUME_JIT : JUMP_BACKWARD_JIT;
+    /* With the baseline JIT on, frame entries and resumes are its warm-up
+     * events and hand-offs (Python/jit.c): a choice made here, so that with
+     * the JIT off the words are what they were.  A backedge's is the Jump
+     * family's (the translator's rule). */
+    if (opcode == RESUME && _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
+        return RESUME_JIT;
     }
     if (opcode == BINARY_OP) {
         if (oparg > NB_OPARG_LAST) {
@@ -598,6 +600,11 @@ handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
     const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
     if (fmt->flags & _PyIR_JUMPS) {
         return jump_target(cfg, op);
+    }
+    if ((fmt->flags & _PyIR_FORWARD) && fmt->target != _PyIR_LOC_NONE) {
+        // A register instruction: the oparg is its immediate; the target
+        // is written by encode()
+        return op->oparg;
     }
     if (fmt->flags & _PyIR_FORWARD) {
         if (op->nwords > 1) {
@@ -648,7 +655,7 @@ static int
 fused_arg(_PyRegCfg *cfg, _PyRegOp *op)
 {
     int arg = op->oparg & IR_FUSED_OP_MASK;
-    if (cfg->ops[op->fuse].opcode == POP_JUMP_IF_FALSE) {
+    if (cfg->ops[op->fuse].oparg == BRANCH_IF_FALSE) {
         arg |= _PyIR_FUSED_IF_FALSE;
     }
     return arg;
@@ -1201,6 +1208,20 @@ layout(struct assembler *a, _PyRegCfg *cfg)
             if (word <= _PyIR_MaxForward) {
                 continue;
             }
+            const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
+            if (fmt->target == _PyIR_LOC_C || fmt->target == _PyIR_LOC_D) {
+                // A conditional register instruction whose target a
+                // 12-bit distance cannot reach: it jumps to a word that
+                // jumps to the target, and the fall-through word jumps over
+                // that one (RELAXED_BRANCH_WORDS)
+                int distance = jump_target(cfg, op) - (op->word + 1);
+                if (op->nwords == 1 && (distance > _PyIR_MaxForward
+                                        || distance < IR_MIN_DISTANCE)) {
+                    op->nwords = RELAXED_BRANCH_WORDS;
+                    changed = 1;
+                }
+                continue;
+            }
             if ((op->opcode != FOR_ITER && op->opcode != SEND) || op->nwords > 1) {
                 continue;
             }
@@ -1266,7 +1287,32 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         }
         fields[r] = (uint32_t)value;
     }
-    if (fmt->imm == _PyIR_LOC_CD || fmt->imm == _PyIR_LOC_BC) {
+    if (fmt->target != _PyIR_LOC_NONE) {
+        // A register instruction's target, a signed distance in the fields
+        // its encoding gives it; the oparg, if any, has its own field
+        int distance = op->nwords > 1 ? 1 : jump_target(cfg, op) - (op->word + 1);
+        int bits = fmt->target == _PyIR_LOC_AB ? 24 : 12;
+        if (distance < -(1 << (bits - 1)) || distance >= (1 << (bits - 1))) {
+            if (reachable) {
+                return too_large("distance", distance);
+            }
+            distance = 0;
+        }
+        if (fmt->target == _PyIR_LOC_AB) {
+            fields[0] = (uint32_t)distance & IR_FIELD_MAX;
+            fields[1] = ((uint32_t)distance >> 12) & IR_FIELD_MAX;
+        }
+        else {
+            fields[fmt->target - _PyIR_LOC_A] = (uint32_t)distance & IR_FIELD_MAX;
+        }
+        if (fmt->imm >= _PyIR_LOC_A && fmt->imm <= _PyIR_LOC_D) {
+            if (oparg < 0 || oparg > IR_FIELD_MAX) {
+                return too_large("oparg", oparg);
+            }
+            fields[fmt->imm - _PyIR_LOC_A] = (uint32_t)oparg;
+        }
+    }
+    else if (fmt->imm == _PyIR_LOC_CD || fmt->imm == _PyIR_LOC_BC) {
         if (oparg < 0 || oparg > IR_CD_MAX) {
             if (reachable) {
                 return too_large("oparg", oparg);
@@ -1405,6 +1451,12 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                 int exit = jump_target(cfg, op);
                 if (op->opcode == FOR_ITER) {
                     words[w + 1] = jump_word(w + RELAXED_FOR_ITER_WORDS);
+                    words[w + 2] = jump_word(exit);
+                }
+                else if (_PyIR_FormatOf(op->handler)->target != _PyIR_LOC_NONE) {
+                    // The branch reaches the second jump; the word after the
+                    // branch skips it
+                    words[w + 1] = jump_word(w + RELAXED_BRANCH_WORDS);
                     words[w + 2] = jump_word(exit);
                 }
                 else {

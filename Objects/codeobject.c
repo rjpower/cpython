@@ -1969,7 +1969,8 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
         if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
             !(fmt->flags & _PyIR_NAMES_TARGET))
         {
-            int target = fmt->flags & _PyIR_FORWARD ? i + 1 + IR_DS(words[i]) : (int)IR_CD(words[i]);
+            int target = fmt->flags & _PyIR_FORWARD
+                ? i + 1 + _PyIR_FormatDistance(fmt, words[i]) : (int)IR_CD(words[i]);
             block_at[target] = 1;
             if (i + length < n) {
                 block_at[i + length] = 1;
@@ -2193,7 +2194,7 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                 !(fmt->flags & _PyIR_NAMES_TARGET))
             {
                 int target = fmt->flags & _PyIR_FORWARD
-                    ? last + 1 + IR_DS(words[last]) : (int)IR_CD(words[last]);
+                    ? last + 1 + _PyIR_FormatDistance(fmt, words[last]) : (int)IR_CD(words[last]);
                 /* Each edge starts at the common post-transfer state,
                  * including the finite protocol tuple. Fallthrough facts
                  * must never become facts of the taken successor. */

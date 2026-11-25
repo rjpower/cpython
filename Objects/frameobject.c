@@ -1351,7 +1351,7 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
         !(fmt->flags & _PyIR_NAMES_TARGET))
     {
         next[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
-            ? i + 1 + IR_DS(word) : (int)IR_CD(word);
+            ? i + 1 + _PyIR_FormatDistance(fmt, word) : (int)IR_CD(word);
     }
     /* Project optimized forms through their frontend shadow before removing
      * instrumentation. Encoded family identity alone is not a CFG opcode. */

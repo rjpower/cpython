@@ -79,7 +79,9 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter,
     """The handlers of the register IR that are not opcodes, by name: the
     old ones, then the register instruction arms by their dotted names"""
     out.emit("_ir_opmap = frozendict(\n")
-    ids = handler_ids(analysis)
+    ids = handler_ids(analysis) | {
+        name: analysis.opmap[name] for name in IR_BASE_ONLY
+        if name not in handler_ids(analysis)}
     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
         if handler >= first_ir_only_handler(analysis) or name in IR_BASE_ONLY:
             out.emit(f"{name}={handler},\n")

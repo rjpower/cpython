@@ -97,13 +97,14 @@ set_word_opcode(PyCodeObject *code, _PyIRWord *words, int i, int opcode)
 }
 
 /* The words of the assembler's exact relaxation adapter, which shares
- * LINE/branch grouping with a semantic step: 3 for a FOR_ITER or SEND and the
- * two jumps after it, else 1.  Each helper still has INSTRUCTION events. */
+ * LINE/branch grouping with a semantic step: 3 for a FOR_ITER, SEND or
+ * conditional branch and the two jumps after it, else 1.  Each helper still has INSTRUCTION events. */
 static inline int
 relaxed_length(PyCodeObject *code, int i)
 {
     int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
-    if ((opcode == FOR_ITER || opcode == SEND) && i + 2 < _PyCode_IRSize(code) &&
+    if ((opcode == FOR_ITER || opcode == SEND || opcode == POP_JUMP_IF_TRUE ||
+         opcode == POP_JUMP_IF_NONE) && i + 2 < _PyCode_IRSize(code) &&
         _PyCode_InstrHandler(code, i + 1) == IR_JUMP &&
         _PyCode_InstrHandler(code, i + 2) == IR_JUMP &&
         _PyCode_InstrTarget(code, i) == i + 2 &&

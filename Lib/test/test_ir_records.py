@@ -90,7 +90,6 @@ class HandlerRecordTests(unittest.TestCase):
                 ("BINARY_OP_ADD_FLOAT", "_BINARY_OP_ADD_FLOAT",
                  {("EXACT_TYPE", "PyFloat_Type")}),
                 ("COMPARE_OP_INT", "_COMPARE_OP_INT", {("EXACT_TYPE", "PyBool_Type")}),
-                ("TO_BOOL_STR", "_TO_BOOL_STR", {("EXACT_TYPE", "PyBool_Type")}),
                 # A rich comparison may return any object
                 ("COMPARE_OP", "_COMPARE_OP", set())):
             with self.subTest(uop=uop):
@@ -157,7 +156,7 @@ class HandlerRecordTests(unittest.TestCase):
         def transfers(handler):
             return {(t.kind, t.target) for u in records[handler].uops for t in u.transfers}
         # A specializer that rewrote the word runs it again
-        self.assertIn((ir_records.JUMP, "self"), transfers("TO_BOOL"))
+        self.assertIn((ir_records.JUMP, "self"), transfers("UNPACK_SEQUENCE"))
         # The monitor runs the word with the handler that it chose
         self.assertIn((ir_records.JUMP, "self:handler"), transfers("INSTRUMENTED_INSTRUCTION"))
 

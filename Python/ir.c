@@ -182,7 +182,8 @@ static int
 generator_exit(_PyIRWord word, int pc)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(generator_ordinary(word));
-    return fmt->flags & _PyIR_FORWARD ? pc + 1 + IR_DS(word) : (int)IR_CD(word);
+    return fmt->flags & _PyIR_FORWARD
+        ? pc + 1 + _PyIR_FormatDistance(fmt, word) : (int)IR_CD(word);
 }
 
 /* Resume STORE_LOCAL is an actual STORE_FAST consumer. Completion
@@ -203,11 +204,12 @@ generator_resume_shape(const _PyIRWord *words, int nwords, int nl, int pc,
         *consumer = pc + 2;
         return _PyIR_GEN_CONSUMER_STORE_LOCAL;
     }
-    if (!generator_is(next, JUMP_BACKWARD_NO_INTERRUPT)) {
+    // The yield-from loop's jump back, which never polls
+    if (IR_HANDLER(next) != ROP_HANDLER_Jump_Direct) {
         return _PyIR_GEN_CONSUMER_NONE;
     }
-    int target = (int)IR_CD(next);
-    if (target < 0 || target >= nwords) {
+    int target = pc + 3 + _PyIR_FormatDistance(_PyIR_FormatOf(IR_HANDLER(next)), next);
+    if (target < 0 || target >= pc + 2 || target >= nwords) {
         return _PyIR_GEN_CONSUMER_NONE;
     }
     const _PyIROwnershipEvent *event = generator_completion(words[target]);
@@ -444,7 +446,7 @@ _PyIR_FieldOparg(_PyIRWord word)
         return fmt->operands == _PyIR_OPERANDS_EX
             ? 0 : _PyIR_CallSlotOperands(word) - _PyIR_CallHasSelf(word);
     }
-    if (fmt->flags & _PyIR_FORWARD) {
+    if ((fmt->flags & _PyIR_FORWARD) && fmt->target == _PyIR_LOC_NONE) {
         return IR_DS(word);
     }
     return (int)read_field(word, fmt->imm);
@@ -700,7 +702,7 @@ _PyCode_InstrOparg(PyCodeObject *co, int i)
             return (int)_PyIR_FBINIT_ARG(_PyCode_IR(co)->fbinit[i]);
         }
         default:
-            if (fmt->flags & _PyIR_FORWARD) {
+            if ((fmt->flags & _PyIR_FORWARD) && fmt->target == _PyIR_LOC_NONE) {
                 return IR_DS(word);
             }
             return (int)read_field(word, fmt->imm);
@@ -715,7 +717,7 @@ _PyCode_InstrTarget(PyCodeObject *co, int i)
         return _PyCode_InstrOparg(co, i);
     }
     if (fmt->flags & _PyIR_FORWARD) {
-        return i + 1 + _PyCode_InstrOparg(co, i);
+        return i + 1 + _PyIR_FormatDistance(fmt, _PyCode_IRWords(co)[i]);
     }
     return -1;
 }

@@ -714,13 +714,13 @@ def rop_files() -> list[Path]:
 
 
 def at(filename: str, text: str, column: int | None = None, nth: int = 0,
-       last: bool = False) -> str:
+       last: bool = False, index: int | None = None) -> str:
     """filename:line, and :column if given, of the nth line (the first by
-    default; the last, if last) of the checked-in definition file that
-    contains text"""
+    default; the last, if last; the index'th of all, if index) of the
+    checked-in definition file that contains text"""
     lines = (ROP_DIR / filename).read_text().splitlines()
     found = [i for i, source in enumerate(lines, 1) if text in source]
-    line = found[-1] if last else found[nth]
+    line = found[index] if index is not None else found[-1] if last else found[nth]
     return f"{filename}:{line}" if column is None else f"{filename}:{line}:{column}"
 
 
@@ -749,6 +749,13 @@ class PilotTests(unittest.TestCase):
         raise_getset = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
         raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5, nth=1)
         raise_method = at("getattr.rop", "exit raise(GetMethod.Failed, saved);", 5)
+        truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
+        truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
+        branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
+        # The last is the observed wrapper's, which has no arm of its own to
+        # adapt: the generic arm's is the one before it
+        branch_generic = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5, index=-2)
+        branch_observed = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5, last=True)
         mutations = [
             ("add.rop", "  effects(writes, allocates, raises, releases)\n",
              "  effects(writes, raises, releases)\n",
@@ -785,7 +792,17 @@ class PilotTests(unittest.TestCase):
               f"{raise_attr}: GetAttr.Generic: points: raise at GetAttr.Failed: "
               "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_method}: GetMethod.Generic: points: raise at GetMethod.Failed: "
-              "GetMethod.Failed lists obj in spent, but obj is intact"]),
+              "GetMethod.Failed lists obj in spent, but obj is intact",
+              f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
+              "Truth.Failed lists value in spent, but value is intact",
+              f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "
+              "Truth.Failed lists value in spent, but value is intact",
+              f"{branch_slot}: BranchTruth.Slot: points: raise at BranchTruth.Failed: "
+              "BranchTruth.Failed lists value in spent, but value is intact",
+              f"{branch_generic}: BranchTruth.Generic: points: raise at BranchTruth.Failed: "
+              "BranchTruth.Failed lists value in spent, but value is intact",
+              f"{branch_observed}: BranchTruth.Observed: points: raise at BranchTruth.Failed: "
+              "BranchTruth.Failed lists value in spent, but value is intact"]),
         ]
         for filename, old, new, expected in mutations:
             with self.subTest(old):

@@ -338,8 +338,8 @@ class ErrorEffectTests(unittest.TestCase):
                 self.assertIn("_PyIR_ERROR_COMPLETE", contracts[name].error_routes)
                 self.assertIn("_PyIR_ERROR_DIRECT", contracts[name].error_routes)
                 self.assertTrue(contracts[name].abrupt_operands)
-        self.assertIn("_PyIR_ERROR_COMPLETE", contracts["UNARY_NOT"].error_routes)
-        self.assertIn("_PyIR_ERROR_DIRECT", contracts["UNARY_NOT"].error_routes)
+        self.assertIn("_PyIR_ERROR_COMPLETE", contracts["UNARY_INVERT"].error_routes)
+        self.assertIn("_PyIR_ERROR_DIRECT", contracts["UNARY_INVERT"].error_routes)
         for name in ("GET_LEN", "UNARY_NEGATIVE", "BINARY_OP_ADD"):
             with self.subTest(uncovered=name):
                 self.assertFalse(contracts[name].error_routes)
@@ -507,7 +507,7 @@ class ErrorEffectTests(unittest.TestCase):
         # conditional route in metadata rather than treating PURE as inert.
         self.assertEqual(contracts["LOAD_COMMON_CONSTANT"].error_routes,
                          ("_PyIR_ERROR_COMPLETE", "_PyIR_ERROR_LOCAL_DST"))
-        self.assertEqual(contracts["JUMP_BACKWARD_NO_INTERRUPT"].error_routes,
+        self.assertEqual(contracts["IR_JUMP"].error_routes,
                          ("_PyIR_ERROR_COMPLETE",))
         self.assertFalse(contracts["LOAD_COMMON_CONSTANT"].abrupt_operands)
         original = ir_generator.IREmitter.finish_stores

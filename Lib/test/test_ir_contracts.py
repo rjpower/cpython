@@ -2664,12 +2664,9 @@ class VerifierTests(unittest.TestCase):
             ir_contract.verify_handler(inst)
 
     def test_a_fact_made_in_the_handler_survives_a_reentry(self):
-        # R1, POP_JUMP_IF_FALSE_LIST: the bool _TO_BOOL_LIST makes is a
+        # R1 (the list truth jumps, now BranchTruth.List): the bool made is a
         # temporary, whose exact type no reentry (POP_TOP's close) replaces;
         # a fact of an input that may be in a local home dies there
-        for name in ("POP_JUMP_IF_FALSE_LIST", "POP_JUMP_IF_TRUE_LIST"):
-            with self.subTest(name):
-                ir_contract.verify_handler(analysis.instructions[name])
         source = """
             op(_GUARD, (x: object -- x: exact(PyList_Type))) effects(reads) exits(next, miss) {
                 EXIT_IF(!PyList_CheckExact(PyValue_AsKnownObjectBorrow(x)));

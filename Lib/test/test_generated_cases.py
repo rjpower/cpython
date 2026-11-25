@@ -355,8 +355,6 @@ class TestIRCases(unittest.TestCase):
                 self.assertEqual(ir_generator.monitoring_events(name, instruction),
                                  ir_generator.monitoring_events(row.base, ordinary))
         for before, after in (
-            ("assert(JUMP_TARGET(oparg) < next_instr);",
-             "unknown_effect(); assert(JUMP_TARGET(oparg) < next_instr);"),
             # A call that no row declares is refused by the verifier of the
             # uop's declaration; the closure holds the declaration to what a
             # SEND may do
@@ -3742,7 +3740,6 @@ class TestIRCases(unittest.TestCase):
         expected = {
             "LOAD_COMMON_CONSTANT": "FRESH",
             "STORE_FAST": "LOCAL_STORE", "POP_TOP": "RETIRE",
-            "POP_JUMP_IF_NONE": "RETIRE", "POP_JUMP_IF_NOT_NONE": "RETIRE",
             "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE",
             "CALL_KW": "UNKNOWN", "SEND": "UNKNOWN",
         }

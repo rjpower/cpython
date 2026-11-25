@@ -391,15 +391,10 @@ def generator_boundary_source_closed(boundary: GeneratorBoundary,
     """Only complete audited sources may publish an executable shape."""
     insts = all_instructions(analysis)
     resume = insts.get("RESUME")
-    jump = insts.get("JUMP_BACKWARD_NO_INTERRUPT")
-    if resume is None or jump is None or normal_transfer_kind(
+    # The yield-from loop's jump is a Jump word (Jump.Direct), whose source
+    # the family's rows hold; no handler of the stack op remains to audit.
+    if resume is None or normal_transfer_kind(
             resume, formats["RESUME"]) != "_PyIR_TRANSFER_PRESERVE":
-        return False
-    jump_parts = [part for part in jump.parts if isinstance(part, Uop)]
-    expected = "{ assert(JUMP_TARGET(oparg) < next_instr); JUMPTO(oparg); }"
-    if (len(jump.parts) != 1 or len(jump_parts) != 1 or
-            canonical_body_tokens(jump_parts[0]) !=
-            [token.text for token in tokenize(expected)]):
         return False
     # A new family member without the same source contract closes no shape;
     # eligibility is never recovered by declining its specialization later.
@@ -846,7 +841,7 @@ INPLACE_READERS = {
     # Python/specialize.c: they read types and values
     "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp",
-    "_Py_Specialize_PopJumpIf", "_Py_Specialize_StoreAttr",
+    "_Py_Specialize_StoreAttr",
     "_Py_Specialize_StoreSubscr",
 }
 
@@ -878,7 +873,7 @@ OBJECT_READERS = {
     "PyList_GET_SIZE", "PyList_GET_VALUE", "PyTuple_GET_SIZE",
     "PyTuple_GET_VALUE", "PyUnicode_1BYTE_DATA", "PyUnicode_GET_LENGTH",
     "PyUnicode_IS_COMPACT_ASCII", "PyUnicode_READ_CHAR", "_PyList_ITEMS",
-    "_PyLong_IsZero", "_PyObject_GetManagedDict", "_PyObject_InlineValues",
+    "_PyObject_GetManagedDict", "_PyObject_InlineValues",
     "_PyObject_Shape", "_PyObject_ValueSlot",
     # They take the index of a value slot, an address inside the object
     # less the start of its values
@@ -1296,9 +1291,16 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
               "LOAD_FAST_LOAD_FAST",
               "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
-              "STORE_FAST_STORE_FAST", "LOAD_FAST", "LOAD_FAST_BORROW",
-              "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR", "DELETE_FAST",
-              "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP")
+              "STORE_FAST_STORE_FAST", "TO_BOOL", "UNARY_NOT", "POP_JUMP_IF_FALSE",
+              "POP_JUMP_IF_TRUE", "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE",
+              "JUMP_FORWARD", "JUMP_BACKWARD", "JUMP_BACKWARD_NO_INTERRUPT",
+              "INSTRUMENTED_JUMP_FORWARD", "INSTRUMENTED_JUMP_BACKWARD",
+              "INSTRUMENTED_POP_JUMP_IF_TRUE", "INSTRUMENTED_POP_JUMP_IF_FALSE",
+              "INSTRUMENTED_POP_JUMP_IF_NONE", "INSTRUMENTED_POP_JUMP_IF_NOT_NONE",
+              "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
+              "INSTRUMENTED_JUMP_IF_FALSE_OR_POP", "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
+              "LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
+              "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -1733,8 +1735,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
                 f"{group} has a feedback entry but no layout in "
                 "FEEDBACK_LAYOUTS (ir_generator.py)", head.where)
         fb_layout = FEEDBACK_LAYOUTS[group]
-        fb_kind = ("FB_BRANCH" if group in BRANCH_FAMILIES
-                   else LAYOUT_KINDS[fb_layout])
+        fb_kind = LAYOUT_KINDS[fb_layout]
     return IRFormat(
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
@@ -1758,14 +1759,9 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
 # by the head of the family; the C code names it _PyFb_<head>.  This is the
 # only list: the contract's fb_kind and fb_size and the typedefs come from
 # it.  A family that has an entry must be listed.  Its kind follows from
-# the type, except that the entries of the conditional jumps are FB_BRANCH.
+# the type.
 FB_HEADER = "_PyFbHeader"
 FEEDBACK_LAYOUTS = {
-    "TO_BOOL": "_PyFbUnary",
-    "POP_JUMP_IF_FALSE": "_PyFbUnary",
-    "POP_JUMP_IF_TRUE": "_PyFbUnary",
-    "POP_JUMP_IF_NONE": FB_HEADER,
-    "POP_JUMP_IF_NOT_NONE": FB_HEADER,
     "UNPACK_SEQUENCE": "_PyFbUnary",
     "FOR_ITER": "_PyFbUnary",
     "GET_ITER": "_PyFbUnary",
@@ -1786,8 +1782,6 @@ FEEDBACK_LAYOUTS = {
     # No specialisation; the entry is as large as that of a branch
     "IS_OP_JUMP": "_PyFbUnary",
 }
-BRANCH_FAMILIES = {"POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
-                   "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE"}
 LAYOUT_KINDS = {
     FB_HEADER: "FB_COUNTER",
     "_PyFbUnary": "FB_UNARY",
@@ -7385,8 +7379,6 @@ def check_body(name: str, text: str, where: object, routine_operand: str = "") -
 # that reports its edge (a loop step has an event only for its next item, and
 # its edge is the word that the base returns).
 EDGE_TWINS = {
-    "INSTRUMENTED_POP_JUMP_IF_TRUE": ("POP_JUMP_IF_TRUE", True),
-    "INSTRUMENTED_POP_JUMP_IF_FALSE": ("POP_JUMP_IF_FALSE", True),
     "INSTRUMENTED_COMPARE_OP_JUMP": ("COMPARE_OP_JUMP", True),
     "INSTRUMENTED_CONTAINS_OP_JUMP": ("CONTAINS_OP_JUMP", True),
     "INSTRUMENTED_FOR_ITER": ("FOR_ITER", False),
@@ -8568,22 +8560,12 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")
             and extent([entry.item for entry in outputs], inst) == (0, "_PyIR_EXT_OPARG")
             ) else unknown
-    if inst.name in ("IR_JUMP", "JUMP_FORWARD", "JUMP_BACKWARD_NO_INTERRUPT"):
+    if inst.name == "IR_JUMP":
         return "_PyIR_TRANSFER_PRESERVE" if scalar_shape(0, 0) and bodies_match("{ JUMPTO(oparg); }") else unknown
-    if inst.name in ("POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE"):
-        is_none = """{
-            if (PyValue_IsNone(value)) { b = PyValue_True; DEAD(value); }
-            else { b = PyValue_False; DECREF_INPUTS(); }
-        }"""
-        sense = "True" if inst.name == "POP_JUMP_IF_NONE" else "False"
-        jump = f"""{{
-            assert(PyValue_BoolCheck(cond));
-            int flag = PyValue_Is{sense}(cond);
-            DEAD(cond);
-            IR_REPORT_EDGE(flag);
-            if (flag) {{ JUMPTO(oparg); }}
-        }}"""
-        return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(is_none, jump) else unknown
+    if (inst.name in {"RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
+                      "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"} and
+            canonical_frame_transfer_input(inst)):
+        return "_PyIR_TRANSFER_EXIT"
     return unknown
 
 

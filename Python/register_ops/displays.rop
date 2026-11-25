@@ -344,7 +344,7 @@ extern helper unpack_iterable(source:Src, n:Size)
   c _PyRop_UnpackIterable as owners_or_raised
   evidence(
     review: "ceval.c _PyRop_UnpackIterable: _PyEval_UnpackIterableValue on a count held across the call; a number raises the cannot-unpack text.",
-    contract: "Reads the source home and keeps it. On success n owners in stack order (the first target last), in storage the publish frees; on failure the exception is set and nothing is made. Iterating the source runs Python.");
+    contract: "Reads the source home and keeps it. On success n owners in reverse target order (the first target last), in storage the publish frees; on failure the exception is set and nothing is made. Iterating the source runs Python.");
 
 // The guards of the specialized arms: an exact tuple or list of n items
 extern helper tuple_has_length(v:B, n:Size) -> Bool
@@ -361,7 +361,7 @@ extern helper list_has_length(v:B, n:Size) -> Bool
     review: "ceval.c _PyRop_ListHasLength: the old _GUARD_TOS_LIST and the length test of _UNPACK_SEQUENCE_LIST.",
     contract: "Reads the type and the size. True for an object that is an exact list of n items.");
 
-// The items, duplicated, in stack order.  The list's length is checked again
+// The items, duplicated, in reverse target order.  The list's length is checked again
 // in the critical section that copies it; a list that changed since the guard
 // goes the generic way, which raises what the generic arm raises.
 extern helper tuple_items(source:Src, n:Size)
@@ -370,7 +370,7 @@ extern helper tuple_items(source:Src, n:Size)
   c _PyRop_UnpackTuple as owners_or_raised
   evidence(
     review: "ceval.c _PyRop_UnpackTuple: the old _UNPACK_SEQUENCE_TUPLE: the items are duplicated.",
-    contract: "Reads the source home and keeps it. n owners in stack order, in storage the publish frees; err: the allocation failed, MemoryError set.");
+    contract: "Reads the source home and keeps it. n owners in reverse target order, in storage the publish frees; err: the allocation failed, MemoryError set.");
 
 extern helper list_items(source:Src, n:Size)
   cases(ok(vals:Span<O>), err(e:Err))

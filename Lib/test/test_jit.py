@@ -1073,14 +1073,14 @@ class TestCompletionStubs(JitTestCase):
                 return s
             print(f(200, [3, 4]))
             names = [w[0] for w in t.get_ir(f.__code__, True)]
-            print([n for n in names if n.startswith("UNPACK_SEQUENCE")])
+            print([n for n in names if n.startswith("Unpack.")])
             u = t.jit_unit(f.__code__)
             print(u["compiles"], u["invalid"])
             print(f(3, [5, 6]), t.jit_unit(f.__code__)["compiles"])
         """, "jit=always")
         lines = out.splitlines()
         self.assertEqual(lines[0], str(200 * 12))
-        self.assertEqual(lines[1], "['UNPACK_SEQUENCE_LIST']")
+        self.assertEqual(lines[1], "['Unpack.List']")
         # The rewrites recompiled the code within the call (words that run
         # once per call, such as the call of range, specialize later)
         compiles, invalid = map(int, lines[2].split())
@@ -1130,14 +1130,14 @@ class TestCompletionStubs(JitTestCase):
             print(t.jit_unit(f.__code__)["compiles"])
             print(f(200, [3, 4]))
             names = [w[0] for w in t.get_ir(f.__code__, True)]
-            print([n for n in names if n.startswith("UNPACK_SEQUENCE")])
+            print([n for n in names if n.startswith("Unpack.")])
             u = t.jit_unit(f.__code__)
             print(u["compiles"], u["invalid"])
         """, "jit=always")
         lines = out.splitlines()
         self.assertGreaterEqual(int(lines[0]), 8)
         self.assertEqual(lines[1], str(200 * 12))
-        self.assertEqual(lines[2], "['UNPACK_SEQUENCE_LIST']")
+        self.assertEqual(lines[2], "['Unpack.List']")
         compiles, invalid = map(int, lines[3].split())
         self.assertEqual(compiles, int(lines[0]))
         self.assertEqual(invalid, 0)

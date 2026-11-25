@@ -23,9 +23,12 @@ class UnpackTransferTests(unittest.TestCase):
             return a, b
 
         # Both targets are locals: the word's elements are their homes
-        self.assertTrue(any(row[0] == "Unpack.Generic" and
-                            max(row[3:5]) < unpack.__code__.co_nlocals for row in
-                            _testinternalcapi.get_ir(unpack.__code__)))
+        code = unpack.__code__
+        rows = _testinternalcapi.get_ir(code)
+        [found] = [i for i, row in enumerate(rows) if row[0] == "Unpack.Generic"]
+        [(is_source, homes)] = _testinternalcapi.ir_span_probe(code, found)[0]
+        self.assertFalse(is_source)
+        self.assertTrue(all(h < code.co_nlocals for h in homes), homes)
         a, b = [], {}
         codes = routes(unpack.__code__)
         for admitted in codes:

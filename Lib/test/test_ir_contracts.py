@@ -191,6 +191,12 @@ EXTRA_ROWS = """
     MACRO(SPAM_DESCR, ARGS(scalar), VALUE(borrowed assumed(nonnull) by spam_cache), \
           EFFECTS(reads), EXITS()) \
     MACRO(SPAM_DESCR_OR_NULL, ARGS(scalar), VALUE_OR_NULL(borrowed), EFFECTS(reads), EXITS()) \
+    MACRO(IR_UNPACK_ITEMS, ARGS(out, scalar, scalar), NONE, EFFECTS(reads), \\
+          EXITS()) \\
+    HELPER(_PyEval_UnpackIterableValue, int, \\
+           (PyThreadState *, PyObject *, int, int, PyValue *), \\
+           ARGS(tstate, consumed, scalar, scalar, out), STATUS(ZERO), \\
+           EFFECTS(runs_python, raises)) \\
     SLOT(hashfunc, Py_hash_t, (PyObject *), ARGS(object), SCALAR, EFFECTS(runs_python)) \
     FIELD(PyTypeObject, tp_hash, hashfunc, ON(type), SLOT(hashfunc), EFFECTS(reads))
 """

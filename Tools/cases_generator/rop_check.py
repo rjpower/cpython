@@ -80,7 +80,7 @@ EXIT_NAMES = {e.value: e for e in ExitKind}
 # as definitions
 SOURCE_HANDLES = frozenset({Handle.Src, Handle.Local, Handle.Cell, Handle.Free,
                             Handle.IterPair, Handle.Args})
-DEST_HANDLES = frozenset({Handle.Dst, Handle.Local, Handle.Cell, Handle.IterPair})
+DEST_HANDLES = frozenset({Handle.Dst, Handle.Local, Handle.IterPair})
 
 
 # Language primitives (operation dictionary, P).  Actions may stand only as

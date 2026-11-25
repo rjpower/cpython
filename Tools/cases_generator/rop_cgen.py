@@ -651,6 +651,7 @@ class ArmLowerer:
             elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
                 out.append("&" + self.expr_text(a))
             elif (t in (HandleType(Handle.Src), HandleType(Handle.Local),
+                        HandleType(Handle.Cell),
                         WrapType(Wrap.Maybe, HandleType(Handle.Src)))
                     and isinstance(a, Name) and a.name in self.placements):
                 # A row that reads or spends a home takes its address

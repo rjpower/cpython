@@ -506,6 +506,27 @@ _PyFrame_Initialize(
     }
 }
 
+/* The free variables of a frame that is about to run: a new owner of each of
+ * the function's closure cells in the last co_nfreevars slots, where
+ * LOAD_DEREF reads them.  Entry does this, not a word of the code, so the
+ * cells are there before the first word, in a generator's frame and in a
+ * frame that is inspected before it runs.  It cannot fail or run Python.
+ * A frame that never runs (PyFrame_New) has no closure and is not given them. */
+static inline Py_ALWAYS_INLINE void
+_PyFrame_CopyFreeVars(_PyInterpreterFrame *frame, PyCodeObject *code)
+{
+    int nfree = code->co_nfreevars;
+    if (nfree == 0) {
+        return;
+    }
+    PyObject *closure = _PyFrame_GetFunction(frame)->func_closure;
+    assert(closure != NULL && PyTuple_GET_SIZE(closure) == nfree);
+    PyValue *free = frame->base + code->co_nlocalsplus - nfree;
+    for (int i = 0; i < nfree; i++) {
+        free[i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+    }
+}
+
 /* Gets the pointer to the locals array
  * that precedes this frame.
  */
@@ -838,6 +859,7 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame 
         tstate, _PyFrame_NumSlotsForCodeObject(code));
     _PyFrame_Initialize(tstate, new_frame, func, NULL, code,
                         new_frame->base, previous);
+    _PyFrame_CopyFreeVars(new_frame, code);
     return new_frame;
 }
 

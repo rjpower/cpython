@@ -2812,6 +2812,40 @@ _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home)
     return _PyFrame_TakeHome(frame, home);
 }
 
+/* The rows of the cell families (Python/register_ops/cells.rop) */
+void
+_PyRop_UnboundCell(_PyInterpreterFrame *frame, PyValue *home)
+{
+    _PyEval_FormatExcUnbound(_PyThreadState_GET(), _PyFrame_GetCode(frame),
+                             (int)(home - frame->base));
+}
+
+PyValue
+_PyRop_MakeCell(_PyInterpreterFrame *frame, PyValue *home)
+{
+    (void)frame;
+    // The cell holds its own count, so closing the binding cannot finalize it
+    PyValue binding = *home;
+    *home = PyValue_NULL;
+    PyObject *cell = PyCell_NewValue(binding);
+    PyValue_XCLOSE(binding);
+    if (cell == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(cell);
+}
+
+_PyStatusValue
+_PyRop_LoadFromDictCell(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        PyValueBorrow mapping, PyValue *home)
+{
+    assert(PyValue_IsObject(mapping));
+    int index = (int)(home - frame->base);
+    PyObject *name = _PyTuple_GET_OBJECT(
+        _PyFrame_GetCode(frame)->co_localsplusnames, index);
+    return value_load_from_dict(tstate, PyValue_AsKnownObjectBorrow(mapping), name);
+}
+
 /* The rows of the namespace families (Python/register_ops/namespaces.rop).
  * Each is the body of the stack op's old handler.  A row that takes an
  * owner closes it on every path. */
@@ -5490,6 +5524,7 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
         goto fail;
     }
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, previous);
+    _PyFrame_CopyFreeVars(frame, code);
     if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
@@ -6986,6 +7021,7 @@ eval_vector(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
         _PyFrame_Initialize(tstate, frame,
                             PyValue_DUP(PyValue_FromObjectBorrow(func)),
                             locals, code, frame->base, NULL);
+        _PyFrame_CopyFreeVars(frame, code);
         for (Py_ssize_t i = 0; i < nargs; i++) {
             frame->base[i] = PyValue_DUP(vector_arg(args, i, objects));
         }

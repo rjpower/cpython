@@ -73,7 +73,7 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->builtins_version, uint32_t: 1, de
 static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
               "recipe Global.index: _PyGlobalRecipe.index is not uint32_t");
 //
-// 30 templates.  Inline arms that keep the call of their form:
+// 32 templates.  Inline arms that keep the call of their form:
 //   Const.Common: Const.Common: common_constant has no leaf lowering
 //   FunctionSet.SetField: FunctionSet.SetField: store_field has no leaf lowering
 //   GetAttr.GetSet: GetAttr.GetSet: home has no leaf lowering
@@ -82,8 +82,6 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 //   GetAttr.PolyShape: GetAttr.PolyShape: poly_shape has no leaf lowering
 //   GetMethod.ClassMethod: GetMethod.ClassMethod: builtin_metaclass has no leaf lowering
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: poly_method has no leaf lowering
-//   GlobalRead.Builtin: GlobalRead.Builtin: admitted_global_builtin has no leaf lowering
-//   GlobalRead.Module: GlobalRead.Module: admitted_global_module has no leaf lowering
 
 // The leaf graph of Add.Int:
 //   b0:
@@ -1229,6 +1227,245 @@ jit_template_GetMethod_LazyDict(_PyJitWordCx *cx)
     if ((ir_word & IR_F_LOCAL_B)) {
         cx->live = 0x0; cx->live_xmm = 0x0;
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
+    }
+}
+
+// The leaf graph of GlobalRead.Module:
+//   b0:
+//     %3:u32 = cache globals_version
+//     %4:u32 = const 0
+//     %5:bool = cmp ne %3, %4
+//     %6:u32 = cache index
+//     %7:u32 = const 0
+//     br %5, b3, b4
+//   b1(%0:u32, %1:u32, %2:u32):
+//     %8:PyObject* = prim GLOBALS
+//     %9:PyDictKeysObject* = load PyDictObject.ma_keys %8
+//     %10:u32 = load PyDictKeysObject.dk_version %9
+//     %11:bool = cmp eq %10, %0
+//     %12:bool = lnot %11
+//     exit_if EXIT %12
+//     %13:PyObject* = prim GLOBALS
+//     %14:PyDictKeysObject* = load PyDictObject.ma_keys %13
+//     %15:i64 = conv %2
+//     %16:i64 = load PyDictKeysObject.dk_nentries %14
+//     %17:bool = cmp ult %15, %16
+//     br %17, b5, b6
+//   b2:
+//     exit EXIT
+//   b3:
+//     jmp b1(%3, %7, %6)
+//   b4:
+//     jmp b2
+//   b5:
+//     %19:PyDictUnicodeEntry* = prim DK_UNICODE_ENTRIES %14
+//     %20:PyDictUnicodeEntry* = ptradd PyDictUnicodeEntry %19, %15
+//     %21:value = load PyDictUnicodeEntry.me_value %20
+//     jmp b7(%21)
+//   b6:
+//     %22:value = const PyValue_NULL
+//     jmp b7(%22)
+//   b7(%18:value):
+//     %23:bool = prim PyValue_IsNull %18
+//     %24:bool = lnot %23
+//     %25:bool = lnot %24
+//     exit_if EXIT %25
+//     %26:value = prim PyValue_DUP %18
+//     out dst %26
+//     next
+static void
+jit_template_GlobalRead_Module(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyFbGlobal *fb = (_PyFbGlobal *)_PyIR_FbEntry(cx->words, IR_C(ir_word));
+    (void)fb;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L8 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L12 = _PyJitAsm_NewLabel(a);
+    _PyJitTemplate_CheckHandler(cx);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM32(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_WORDS, (int32_t)((char *)&fb->globals_version - (char *)cx->words)));
+    _PyJitAsm_MovRM32(a, _PyJitReg_RDX, _PyJitMem_At(_PyJit_WORDS, (int32_t)((char *)&fb->index - (char *)cx->words)));
+    _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
+    int c8 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c8), cx->slow);
+    _PyJitAsm_Bind(a, L4);
+    _PyJitLower_GLOBALS(cx, (const uint8_t[]){_PyJitReg_RCX}, NULL);
+    _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJitReg_RCX, (int32_t)offsetof(PyDictObject, ma_keys)));
+    _PyJitAsm_MovRM32(a, _PyJitReg_RSI, _PyJitMem_At(_PyJitReg_RCX, (int32_t)offsetof(PyDictKeysObject, dk_version)));
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RSI, _PyJitReg_RAX);
+    int c14 = _PyJitCond_E;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c14), cx->slow);
+    _PyJitAsm_Bind(a, L10);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJitReg_RCX, (int32_t)offsetof(PyDictKeysObject, dk_nentries)));
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RDX, _PyJitReg_RAX);
+    int c20 = _PyJitCond_B;
+    _PyJitAsm_Jcc(a, c20, L6);
+    _PyJitAsm_Bind(a, L7);
+    _PyJitAsm_MovImm(a, _PyJitReg_RAX, 0);
+    _PyJitAsm_Jmp(a, L8);
+    _PyJitAsm_Bind(a, L6);
+    _PyJitLower_DK_UNICODE_ENTRIES(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RCX, _PyJitReg_RAX, _PyJitReg_RSI}, NULL);
+    _PyJitTemplate_PtrAdd(cx, _PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX, sizeof(PyDictUnicodeEntry));
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(PyDictUnicodeEntry, me_value)));
+    _PyJitAsm_Bind(a, L8);
+    int c25 = _PyJitLower_PyValue_IsNull(cx, (const uint8_t[]){_PyJitReg_RAX}, NULL);
+    _PyJitAsm_Jcc(a, c25, cx->slow);
+    _PyJitAsm_Bind(a, L12);
+    cx->live = 0x0; cx->live_xmm = 0x0;
+    _PyJitLower_PyValue_DUP(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    if ((ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    }
+    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), _PyJitReg_RAX);
+    if ((ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x0; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+    }
+}
+
+// The leaf graph of GlobalRead.Builtin:
+//   b0:
+//     %3:u32 = cache globals_version
+//     %4:u32 = cache builtins_version
+//     %5:u32 = const 0
+//     %6:bool = cmp ne %3, %5
+//     %7:u32 = const 0
+//     %8:bool = cmp ne %4, %7
+//     %9:u32 = cache index
+//     br %6, b4, b3
+//   b1(%0:u32, %1:u32, %2:u32):
+//     %10:PyObject* = prim GLOBALS
+//     %11:PyDictKeysObject* = load PyDictObject.ma_keys %10
+//     %12:u32 = load PyDictKeysObject.dk_version %11
+//     %13:bool = cmp eq %12, %0
+//     %14:bool = lnot %13
+//     exit_if EXIT %14
+//     %15:PyObject* = prim BUILTINS
+//     %16:bool = prim PyDict_CheckExact %15
+//     br %16, b6, b7
+//   b2:
+//     exit EXIT
+//   b3:
+//     jmp b2
+//   b4:
+//     br %8, b5, b3
+//   b5:
+//     jmp b1(%3, %4, %9)
+//   b6:
+//     %18:PyDictKeysObject* = load PyDictObject.ma_keys %15
+//     %19:u32 = load PyDictKeysObject.dk_version %18
+//     %20:bool = cmp eq %19, %1
+//     jmp b8(%20)
+//   b7:
+//     %21:bool = const 0
+//     jmp b8(%21)
+//   b8(%17:bool):
+//     %22:bool = lnot %17
+//     exit_if EXIT %22
+//     %23:PyObject* = prim BUILTINS
+//     %24:PyDictKeysObject* = load PyDictObject.ma_keys %23
+//     %25:i64 = conv %2
+//     %26:i64 = load PyDictKeysObject.dk_nentries %24
+//     %27:bool = cmp ult %25, %26
+//     br %27, b9, b10
+//   b9:
+//     %29:PyDictUnicodeEntry* = prim DK_UNICODE_ENTRIES %24
+//     %30:PyDictUnicodeEntry* = ptradd PyDictUnicodeEntry %29, %25
+//     %31:value = load PyDictUnicodeEntry.me_value %30
+//     jmp b11(%31)
+//   b10:
+//     %32:value = const PyValue_NULL
+//     jmp b11(%32)
+//   b11(%28:value):
+//     %33:bool = prim PyValue_IsNull %28
+//     %34:bool = lnot %33
+//     %35:bool = lnot %34
+//     exit_if EXIT %35
+//     %36:value = prim PyValue_DUP %28
+//     out dst %36
+//     next
+static void
+jit_template_GlobalRead_Builtin(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyFbGlobal *fb = (_PyFbGlobal *)_PyIR_FbEntry(cx->words, IR_C(ir_word));
+    (void)fb;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L14 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L16 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L12 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L17 = _PyJitAsm_NewLabel(a);
+    _PyJitTemplate_CheckHandler(cx);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM32(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_WORDS, (int32_t)((char *)&fb->globals_version - (char *)cx->words)));
+    _PyJitAsm_MovRM32(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_WORDS, (int32_t)((char *)&fb->builtins_version - (char *)cx->words)));
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    _PyJitAsm_Setcc(a, _PyJitCond_NE, _PyJitReg_RSI);
+    _PyJitAsm_AluRI(a, _PyJitAlu_AND, _PyJitReg_RSI, 0xFF);
+    _PyJitAsm_MovRM32(a, _PyJitReg_RDI, _PyJitMem_At(_PyJit_WORDS, (int32_t)((char *)&fb->index - (char *)cx->words)));
+    _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
+    int c10 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c10), cx->slow);
+    _PyJitAsm_Bind(a, L5);
+    _PyJitAsm_TestRR(a, _PyJitReg_RSI, _PyJitReg_RSI);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
+    _PyJitAsm_Bind(a, L6);
+    _PyJitLower_GLOBALS(cx, (const uint8_t[]){_PyJitReg_RDX}, NULL);
+    _PyJitAsm_MovRM(a, _PyJitReg_RDX, _PyJitMem_At(_PyJitReg_RDX, (int32_t)offsetof(PyDictObject, ma_keys)));
+    _PyJitAsm_MovRM32(a, _PyJitReg_RDX, _PyJitMem_At(_PyJitReg_RDX, (int32_t)offsetof(PyDictKeysObject, dk_version)));
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RDX, _PyJitReg_RAX);
+    int c17 = _PyJitCond_E;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c17), cx->slow);
+    _PyJitAsm_Bind(a, L14);
+    _PyJitLower_BUILTINS(cx, (const uint8_t[]){_PyJitReg_RAX}, NULL);
+    int c20 = _PyJitLower_PyDict_CheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c20), cx->slow);
+    _PyJitAsm_Bind(a, L7);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(PyDictObject, ma_keys)));
+    _PyJitAsm_MovRM32(a, _PyJitReg_RDX, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(PyDictKeysObject, dk_version)));
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RDX, _PyJitReg_RCX);
+    int c23 = _PyJitCond_E;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c23), cx->slow);
+    _PyJitAsm_Bind(a, L16);
+    _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(PyDictKeysObject, dk_nentries)));
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RDI, _PyJitReg_RCX);
+    int c30 = _PyJitCond_B;
+    _PyJitAsm_Jcc(a, c30, L10);
+    _PyJitAsm_Bind(a, L11);
+    _PyJitAsm_MovImm(a, _PyJitReg_RAX, 0);
+    _PyJitAsm_Jmp(a, L12);
+    _PyJitAsm_Bind(a, L10);
+    _PyJitLower_DK_UNICODE_ENTRIES(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX}, NULL);
+    _PyJitTemplate_PtrAdd(cx, _PyJitReg_RCX, _PyJitReg_RAX, _PyJitReg_RDI, sizeof(PyDictUnicodeEntry));
+    _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJitReg_RCX, (int32_t)offsetof(PyDictUnicodeEntry, me_value)));
+    _PyJitAsm_MovRR(a, _PyJitReg_RAX, _PyJitReg_RCX);
+    _PyJitAsm_Bind(a, L12);
+    int c35 = _PyJitLower_PyValue_IsNull(cx, (const uint8_t[]){_PyJitReg_RAX}, NULL);
+    _PyJitAsm_Jcc(a, c35, cx->slow);
+    _PyJitAsm_Bind(a, L17);
+    cx->live = 0x0; cx->live_xmm = 0x0;
+    _PyJitLower_PyValue_DUP(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    if ((ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    }
+    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), _PyJitReg_RAX);
+    if ((ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x0; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
     }
 }
 

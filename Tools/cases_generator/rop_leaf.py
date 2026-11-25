@@ -666,15 +666,19 @@ def _borrow_present(b, m):
     return (b.emit1("lnot", "bool", (b.prim1("PyValue_IsNull", b.leaf(m)),)),)
 
 
-def _attr_recipe(b, **values) -> Record:
-    "An attribute recipe; the fields the admission row leaves unset are zero"
+def _recipe(b, schema: Schema, **values) -> Record:
+    "A recipe; the fields the admission row leaves unset are zero"
     fields = []
-    for name, t in record_fields(Schema.Attr):
+    for name, t in record_fields(schema):
         v = values.get(name)
         if v is None:
             v = b.const(t, "PyValue_NULL" if t == ir_leaf.VALUE else 0)
         fields.append((name, v))
-    return Record(Schema.Attr, tuple(fields))
+    return Record(schema, tuple(fields))
+
+
+def _attr_recipe(b, **values) -> Record:
+    return _recipe(b, Schema.Attr, **values)
 
 
 def _null(b) -> int:
@@ -710,22 +714,70 @@ def _is_module(b, o):
     return (b.prim1("PyModule_CheckExact", b.leaf(o)),)
 
 
+def _keys_entry(b, keys: int, index: int) -> int:
+    "The value of a unicode keys object's entry at index (u32), NULL past the entries"
+    index = b.zext("i64", index)
+
+    def entry():
+        entries = b.prim1("DK_UNICODE_ENTRIES", keys)
+        e = b.emit1("ptradd", "PyDictUnicodeEntry*", (entries, index), "PyDictUnicodeEntry")
+        return b.load("PyDictUnicodeEntry.me_value", e)
+    in_range = b.cmp("ult", index, b.load("PyDictKeysObject.dk_nentries", keys))
+    return b.choose(in_range, ir_leaf.VALUE, entry, lambda: _null(b))
+
+
+def _dict_keys(b, d: int) -> int:
+    return b.load("PyDictObject.ma_keys", d)
+
+
+def _keys_current(b, keys: int, version: int) -> int:
+    return b.cmp("eq", b.load("PyDictKeysObject.dk_version", keys), version)
+
+
 def _module_entry(b, o, r):
     """_PyAttr_ModuleEntry: the module's entry at the recipe's index while
     its keys have the recipe's version, else NULL"""
-    keys = b.load("PyDictObject.ma_keys", b.load("PyModuleObject.md_dict", b.leaf(o)))
+    keys = _dict_keys(b, b.load("PyModuleObject.md_dict", b.leaf(o)))
+    return (b.choose(_keys_current(b, keys, r["aux"]), ir_leaf.VALUE,
+                     lambda: _keys_entry(b, keys, r["offset"]), lambda: _null(b)),)
 
-    def at_index():
-        index = b.zext("i64", r["offset"])
 
-        def entry():
-            entries = b.prim1("DK_UNICODE_ENTRIES", keys)
-            e = b.emit1("ptradd", "PyDictUnicodeEntry*", (entries, index), "PyDictUnicodeEntry")
-            return b.load("PyDictUnicodeEntry.me_value", e)
-        in_range = b.cmp("ult", index, b.load("PyDictKeysObject.dk_nentries", keys))
-        return b.choose(in_range, ir_leaf.VALUE, entry, lambda: _null(b))
-    current = b.cmp("eq", b.load("PyDictKeysObject.dk_version", keys), r["aux"])
-    return (b.choose(current, ir_leaf.VALUE, at_index, lambda: _null(b)),)
+def _admitted_global_module(b, fb):
+    "_PyGlobal_AdmittedModule: a globals keys version"
+    gv = b.cache(fb, "globals_version")
+    hit = b.cmp("ne", gv, b.const("u32", 0))
+    return hit, _recipe(b, Schema.Global, globals_version=gv, index=b.cache(fb, "index"))
+
+
+def _admitted_global_builtin(b, fb):
+    "_PyGlobal_AdmittedBuiltin: both keys versions"
+    gv = b.cache(fb, "globals_version")
+    bv = b.cache(fb, "builtins_version")
+    hit = Conj((b.cmp("ne", gv, b.const("u32", 0)), b.cmp("ne", bv, b.const("u32", 0))))
+    return hit, _recipe(b, Schema.Global, globals_version=gv, builtins_version=bv,
+                        index=b.cache(fb, "index"))
+
+
+def _globals_current(b, frame, r):
+    "_PyGlobal_GlobalsCurrent"
+    return (_keys_current(b, _dict_keys(b, b.prim1("GLOBALS")), r["globals_version"]),)
+
+
+def _builtins_current(b, frame, r):
+    "_PyGlobal_BuiltinsCurrent: an exact dict whose keys have the recipe's version"
+    builtins = b.prim1("BUILTINS")
+    return (b.and_then(b.prim1("PyDict_CheckExact", builtins), lambda: _keys_current(
+        b, _dict_keys(b, builtins), r["builtins_version"])),)
+
+
+def _globals_slot(b, frame, r):
+    "_PyGlobal_GlobalsSlot"
+    return (_keys_entry(b, _dict_keys(b, b.prim1("GLOBALS")), r["index"]),)
+
+
+def _builtins_slot(b, frame, r):
+    "_PyGlobal_BuiltinsSlot"
+    return (_keys_entry(b, _dict_keys(b, b.prim1("BUILTINS")), r["index"]),)
 
 
 def _has_type_flag(b, tp: int, flag: str) -> int:
@@ -916,6 +968,13 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     "_PyAttr_BorrowMethod": _borrow_method,
     "_PyAttr_IsModule": _is_module,
     "_PyAttr_ClassCurrent": _class_current,
+    # Global recipes
+    "_PyGlobal_AdmittedModule": _admitted_global_module,
+    "_PyGlobal_AdmittedBuiltin": _admitted_global_builtin,
+    "_PyGlobal_GlobalsCurrent": _globals_current,
+    "_PyGlobal_BuiltinsCurrent": _builtins_current,
+    "_PyGlobal_GlobalsSlot": _globals_slot,
+    "_PyGlobal_BuiltinsSlot": _builtins_slot,
     "_PyAttr_LazyDictAbsent": _lazy_dict_absent,
     "_PyAttr_ModuleEntry": _module_entry,
     "_PyAttr_InstanceVersion": _instance_version,

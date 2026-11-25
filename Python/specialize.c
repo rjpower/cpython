@@ -1745,18 +1745,33 @@ attr_arm_of(int kind, bool method)
     return NULL;
 }
 
+/* Put back the payload of an entry, keeping its header: the counter and
+ * the state belong to the adaptation. */
+static void
+attr_restore_entry(_PyFbAttr *fb, const _PyFbAttr *before)
+{
+    memcpy((char *)fb + sizeof(_PyFbHeader),
+           (const char *)before + sizeof(_PyFbHeader),
+           sizeof(_PyFbAttr) - sizeof(_PyFbHeader));
+}
+
 static int
 attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
               PyObject *name, bool method, _PyAttrRecipe *recipe)
 {
     assert(attr_collect == NULL);
     attr_nomination nominated = {0};
+    /* The attribute specializer writes its findings into the entry as it
+     * goes, and an arm reads the entry.  A classification that installs
+     * nothing must leave the entry as the site's arm expects it. */
+    _PyFbAttr before = *fb;
     attr_collect = &nominated;
     attr_specialize(owner, site, name, method);
     attr_collect = NULL;
     int none = method ? 4 : 10;
     const attr_arm *chosen = attr_arm_of(nominated.kind, method);
     if (chosen == NULL) {
+        attr_restore_entry((_PyFbAttr *)fb, &before);
         return none;
     }
     // The first poly observation saves what the entry described before
@@ -1777,7 +1792,11 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
             admitted = _PyAttr_AdmittedRecipe(fb, name, recipe);
             break;
     }
-    return admitted ? kind : none;
+    if (!admitted) {
+        attr_restore_entry((_PyFbAttr *)fb, &before);
+        return none;
+    }
+    return kind;
 }
 
 int

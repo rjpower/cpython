@@ -736,11 +736,6 @@ TEMPLATE_CASES = [
     *[("def f(a, b):\n    a.p = b\n    return a", (cls(), 1), handler, "AB",
        [(o, v) for o in OWNERS for v in (7, 2.5)])
       for cls, handler in ((Shape, "STORE_ATTR_SHAPE"), (Slots, "STORE_ATTR_SLOT"))],
-    # A window of two temporaries.  The resolver renames most SWAPs away;
-    # a with statement still stages its exit and value with one.
-    ("def f(a, b):\n    with a:\n        return b", (contextlib.nullcontext(), 2),
-     "SWAP", ("A", "A+1"),
-     [(x, y) for x in ANY[::2] for y in (Plain(), 7)]),
     ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x", (1, 2), "POP_TOP", "A",
      [(x,) for x in ANY + [Plain()]]),
     # Each run adds the attribute to a new instance

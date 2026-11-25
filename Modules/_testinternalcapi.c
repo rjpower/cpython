@@ -1921,8 +1921,12 @@ get_ir(PyObject *self, PyObject *args)
             continue;
         }
         int handler = IR_HANDLER(word);
-        if (handler >= IR_NUM_OLD_HANDLERS) {
-            fixed_left = _PyIR_FormatOf(handler)->fixed_words;
+        /* The code object's own word names the arm even while the executing
+         * copy's word is wrapped by LINE or INSTRUCTION, whose length reads
+         * as 1 */
+        int original = IR_HANDLER(ir->words[w]);
+        if (original >= IR_NUM_OLD_HANDLERS) {
+            fixed_left = _PyIR_FormatOf(original)->fixed_words;
         }
         const char *name = handler < IR_FIRST_ONLY_HANDLER
             ? _PyOpcode_OpName[handler]

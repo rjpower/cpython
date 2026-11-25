@@ -420,7 +420,9 @@ class ContractTests(unittest.TestCase):
                                      opcode.opname[h])
                     seen.add(dis._FEEDBACK_KINDS[kind])
         # COUNTER is entry 0, which no word names
-        self.assertEqual(seen, set(dis._FEEDBACK_KINDS) - {"COUNTER"})
+        # (No word names BRANCH: a conditional jump keeps its operand's type
+        # in a unary entry, BranchTruth's Fb<Truth>.)
+        self.assertEqual(seen, set(dis._FEEDBACK_KINDS) - {"COUNTER", "BRANCH"})
 
     def test_monitoring(self):
         events = sys.monitoring.events

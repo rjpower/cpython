@@ -25,8 +25,11 @@ class EdgeNullTests(unittest.TestCase):
             return function(value or 23)
 
         for template, expected in ((left, (0, 23)), (right, (23, 1))):
-            names = {row[0] for row in _testinternalcapi.get_ir(template.__code__)}
-            self.assertTrue(names & {"JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP"})
+            # A branch that keeps its operand where it jumps is BranchTruth
+            # in a keep mode (BRANCH_KEEP_IF_FALSE, BRANCH_KEEP_IF_TRUE)
+            rows = _testinternalcapi.get_ir(template.__code__)
+            self.assertTrue([row for row in rows
+                             if row[0] == "BranchTruth.Generic" and row[3] in (2, 3)])
             for code in routes(template.__code__):
                 function = types.FunctionType(code, globals())
                 for value, result in zip((0, 1), expected):

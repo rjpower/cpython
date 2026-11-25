@@ -1374,7 +1374,7 @@ def result_offset(inst: Instruction, outputs: list[Entry]) -> int | None:
     """window_dst(), or for a window-style instruction that leaves its result
     in the slot of an input, the offset of that slot: the output passes the
     input through, and a uop reassigns it other than from an input (as
-    _CALL_BUILTIN_FAST puts its result where the callable was)."""
+    _CALL_KW_NON_PY puts its result where the callable was)."""
     j = window_dst(outputs)
     if j is not None:
         return j
@@ -6233,11 +6233,8 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
                if t.text == "IR_INVOKE_GUARDED_PYTHON_CALL"]
     if not markers:
         return
-    keyword = inst.name == "CALL_KW_PY"
-    expected = ["_CHECK_PEP_523",
-                "_CHECK_FUNCTION_VERSION_KW" if keyword else "_CHECK_FUNCTION_VERSION",
-                "_CHECK_RECURSION_REMAINING",
-                "_PY_FRAME_KW_GUARDED" if keyword else "_PY_FRAME_GENERAL_GUARDED",
+    expected = ["_CHECK_PEP_523", "_CHECK_FUNCTION_VERSION_KW",
+                "_CHECK_RECURSION_REMAINING", "_PY_FRAME_KW_GUARDED",
                 "_SAVE_RETURN_SLOT", "_PUSH_FRAME"]
     if len(markers) != 1 or [p.name for p in parts] != expected:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
@@ -6248,16 +6245,13 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         return [(item.name, item.peek, item.size) for item in items]
     guard_shapes = [([], []),
                     ([("callable", True, ""), ("unused", True, ""),
-                      ("unused", True, "oparg")],
+                      ("unused", True, "oparg"), ("unused", True, "")],
                      [("callable", True, ""), ("unused", True, ""),
-                      ("unused", True, "oparg")]),
+                      ("unused", True, "oparg"), ("unused", True, "")]),
                     ([], [])]
     invoke_shape = ([("callable", False, ""), ("self_or_null", False, ""),
-                     ("args", False, "oparg")], [("new_frame", False, "")])
-    if keyword:
-        guard_shapes[1][0].append(("unused", True, ""))
-        guard_shapes[1][1].append(("unused", True, ""))
-        invoke_shape[0].append(("kwnames", False, ""))
+                     ("args", False, "oparg"), ("kwnames", False, "")],
+                    [("new_frame", False, "")])
     contracts = [ir_contract.declared_contract(p) for p in prefix]
     facts: set = set()
     reasons = set()
@@ -6266,13 +6260,12 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         for site in site_tokens(part):
             if site.text in GUARD_TOKENS:
                 reasons.add(ir_contract.record_guard_facts(part, site, ())[1])
-    if (inst.name not in ("CALL_PY_GENERAL", "CALL_KW_PY") or
+    if (inst.name != "CALL_KW_PY" or
             not fmt.window or not fmt.store_dst
             or fmt.field_of(ROLE_BASE) is None or fmt.field_of(ROLE_DST) is None
-            or fmt.group != ("CALL_KW" if keyword else "CALL")
+            or fmt.group != "CALL_KW"
             or not inst.properties.oparg
-            or [(i.size) for i in inputs] !=
-                (["", "", "oparg", ""] if keyword else ["", "", "oparg"])
+            or [(i.size) for i in inputs] != ["", "", "oparg", ""]
             or len(outputs) != 1 or outputs[0].item.size
             or [(shape(p.stack.inputs), shape(p.stack.outputs))
                 for p in prefix] != guard_shapes
@@ -6960,7 +6953,7 @@ def canonical_body_tokens(part: Uop) -> list[str]:
 
 
 def canonical_frame_transfer_input(inst: Instruction) -> bool:
-    """A return or yield transfers a canonical home owner unchanged.
+    """A yield transfers a canonical home owner unchanged.
 
     Fail closed to ordinary publication if the checked uop chain changes.
     Native/SEND results do not acquire this fact from their handler name.
@@ -7018,51 +7011,7 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
                     and canonical_body_tokens(transfer)
                     == [token.text for token in tokenize(expected_yield)]):
                 return True
-    if (len(parts) != 2 or parts[0].name not in {
-            "_MAKE_HEAP_SAFE", "_RETURN_VALUE_EVENT"} or
-            parts[1].name not in {"_RETURN_VALUE", "_RETURN_VALUE_EMPTY"}):
-        return False
-    prefix = [t.text for t in parts[0].body.tokens() if t.kind != "COMMENT"]
-    body = [t.text for t in parts[1].body.tokens() if t.kind != "COMMENT"]
-    expected_body = """{
-        assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-        PyValue temp = retval;
-        DEAD(retval);
-        SAVE_STACK();
-        DTRACE_FUNCTION_RETURN();
-        _Py_LeaveRecursiveCallPy(tstate);
-        _PyInterpreterFrame *dying = frame;
-        int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
-        frame = tstate->current_frame = dying->previous;
-        if (generator_return) {
-            IR_FINISH_GENERATOR_RETURN(temp, dying);
-        }
-        temp = RETIRE_HELPER(tstate, dying, temp);
-        RELOAD_STACK();
-        IR_RETURN_TO_CALLER(temp, generator_return);
-    }"""
-    if parts[1].name == "_RETURN_VALUE_EMPTY":
-        expected_body = expected_body.replace(
-            "IR_FINISH_GENERATOR_RETURN(", "IR_FINISH_GENERATOR_RETURN_EMPTY(")
-    expected_body = expected_body.replace("RETIRE_HELPER", (
-        "_PyEval_FrameClearAndPopGeneralWithResult"
-        if parts[1].name == "_RETURN_VALUE"
-        else "_PyEval_RetireThreadFrameWithResult"))
-    if body != [t.text for t in tokenize(expected_body)]:
-        return False
-    if parts[0].name == "_MAKE_HEAP_SAFE":
-        return prefix == ["{", "taken", "=", "TAKE", "(", "value", ")", ";", "}"]
-    expected_event = """{
-        PyValue held = TAKE(val);
-        int err = _Py_call_instrumentation_arg(
-            tstate, PY_MONITORING_EVENT_PY_RETURN, frame, this_instr, held);
-        if (err) {
-            PyValue_CLOSE(held);
-            ERROR_IF(true);
-        }
-        taken = held;
-    }"""
-    return prefix == [t.text for t in tokenize(expected_event)]
+    return False
 
 
 def current_operation_preserves_scratch(inst: Instruction, fmt: IRFormat, source) -> bool:
@@ -7152,7 +7101,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
                                    "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
@@ -8675,10 +8624,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             if (flag) {{ JUMPTO(oparg); }}
         }}"""
         return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(is_none, jump) else unknown
-    if (inst.name in {"RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
-                      "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"} and
-            canonical_frame_transfer_input(inst)):
-        return "_PyIR_TRANSFER_EXIT"
     return unknown
 
 
@@ -9079,7 +9024,8 @@ def handler_contracts(analysis: Analysis,
             observer_outcome=observer_outcomes(inst, fmt),
             transfer_kind=normal_transfer_kind(inst, fmt),
             ownership_events=programs.get(name, ()),
-            word_flags=call_role_flags(name, inst),
+            # A stack-only op has no handler, so no word admits flags
+            word_flags=() if name in STACK_ONLY else call_role_flags(name, inst),
             abrupt_prefix=abrupt.get(name, False),
             abrupt_operands=operand_abrupt.get(name, False),
             error_routes=error_routes.get(name, ()),

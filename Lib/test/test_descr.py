@@ -5287,24 +5287,24 @@ class ClassPropertiesAndMethods(unittest.TestCase):
         thing = Thing()
         for i in range(20):
             with self.assertRaises(TypeError):
-                # CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
+                # A METH_FASTCALL|METH_KEYWORDS method descriptor
                 list.sort(thing)
         for i in range(20):
             with self.assertRaises(TypeError):
-                # CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
+                # A METH_FASTCALL|METH_KEYWORDS method descriptor
                 str.split(thing)
         for i in range(20):
             with self.assertRaises(TypeError):
-                # CALL_METHOD_DESCRIPTOR_NOARGS
+                # A METH_NOARGS method descriptor
                 str.upper(thing)
         for i in range(20):
             with self.assertRaises(TypeError):
-                # CALL_METHOD_DESCRIPTOR_FAST
+                # A METH_FASTCALL method descriptor
                 str.strip(thing)
         from collections import deque
         for i in range(20):
             with self.assertRaises(TypeError):
-                # CALL_METHOD_DESCRIPTOR_O
+                # A METH_O method descriptor
                 deque.append(thing, thing)
 
     @support.skip_if_huge_c_stack()

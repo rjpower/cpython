@@ -42,6 +42,7 @@ from ir_generator import (
     OwnershipEvent,
     binary_op_handlers,
     binary_ops,
+    call_role_flags,
     compute_formats,
     operand_metadata,
     generator_boundaries,
@@ -64,10 +65,6 @@ def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP."""
     name = name.split("_XFER_", 1)[0]
-    if name == "RETURN_VALUE_EMPTY":
-        return "RETURN_VALUE"
-    if name == "INSTRUMENTED_RETURN_VALUE_EMPTY":
-        return "INSTRUMENTED_RETURN_VALUE"
     if name == "YIELD_DELEGATED":
         return "YIELD_VALUE"
     if name == "INSTRUMENTED_YIELD_DELEGATED":
@@ -274,6 +271,8 @@ def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry,
     shadow = arm.base
     if arm.observes is not None and f"INSTRUMENTED_{arm.base}" in analysis.opmap:
         shadow = f"INSTRUMENTED_{arm.base}"
+    # An arm of a call family reads the call-role flags of its word
+    word_flags = bits(list(call_role_flags(arm.base, None)))
     return (
         f"{{ .flags = {bits(list(fmt.flags))}, .effects = {bits(list(fmt.effects))}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
@@ -282,7 +281,7 @@ def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry,
         f".fb_size = {fb_size}, .result_phase = _PyIR_RESULT_PHASE_NONE, "
         f".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
         f".transfer_kind = {fmt.transfer}, .owner_program = {program[0]}, "
-        f".owner_events = {program[1]}, .word_flags = 0, .error_routes = 0, "
+        f".owner_events = {program[1]}, .word_flags = {word_flags}, .error_routes = 0, "
         f".operands = {fmt.operands}, {fixed}"
         f".observer_outcome = {{ _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }}, "
         f".reads = {{ {fmt.ninputs}, _PyIR_EXT_FIXED }}, "

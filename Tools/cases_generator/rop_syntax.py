@@ -572,15 +572,17 @@ class Parser:
             return Binding(target.text, self.expr(), target.span)
         self.expect("]")
         self.expect("=")
-        # A vector binding's value: `s[]` or `dup(s[])`
+        # A vector binding's value: `s[]`, `dup(s[])`, or a Span<O> value `v`
         dup = self.peek("dup") and self.peek("(", 1)
         if dup:
             call = self.take()
             self.expect("(")
         source = self.qname()
+        value: Expr = Name(source.text, source.span)
+        if not dup and not self.peek("["):
+            return Binding(target.text, value, target.span, vector=True, owners=True)
         self.expect("[")
         self.expect("]")
-        value: Expr = Name(source.text, source.span)
         if dup:
             self.expect(")")
             value = Call("dup", (value,), call.span)

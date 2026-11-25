@@ -17,7 +17,7 @@ import struct
 
 import _opcode
 import _testinternalcapi
-from _opcode_metadata import _ir_opmap
+from _opcode_metadata import _ir_opmap, _ir_only_handlers
 from opcode import *
 from opcode import (
     MIN_INSTRUMENTED_OPCODE,
@@ -121,7 +121,6 @@ _IR_FORWARD = _opcode.IR_FORWARD
 _IR_FUSED = _opcode.IR_FUSED
 _IR_FUSED_IF_FALSE = _opcode.IR_FUSED_IF_FALSE
 _IR_FUSED_OP_MASK = _opcode.IR_FUSED_OP_MASK
-_IR_FIRST_ONLY_HANDLER = _opcode.IR_FIRST_ONLY_HANDLER
 _BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
 _BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
 _FEEDBACK_KINDS = ("COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
@@ -452,7 +451,7 @@ _OPARG_WIDTH = 5
 
 def _is_fused(handler):
     """Whether handler runs a compare and the jump after it as one word"""
-    return (handler >= _IR_FIRST_ONLY_HANDLER
+    return (handler in _ir_only_handlers
             and bool(_ir_contract[handler].flags & _IR_FUSED))
 
 def _get_jump_target(op, arg, offset):
@@ -1113,11 +1112,11 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # that the jump is in the word)
             if _is_fused(runs):
                 op = runs
-            elif runs >= _IR_FIRST_ONLY_HANDLER:
+            elif runs in _ir_only_handlers:
                 # Execution-only variants preserve their specialization in
                 # the adaptive view; structural IR handlers keep their base.
                 shadow = _ir_contract[runs].shadow
-                op = shadow if shadow < _IR_FIRST_ONLY_HANDLER else _deoptop(runs)
+                op = shadow if shadow not in _ir_only_handlers else _deoptop(runs)
             else:
                 op = runs
         if arg_resolver:

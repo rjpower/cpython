@@ -387,6 +387,14 @@ _PyIR_EventOpcode(int handler)
     return _PyIR_BaseOpcode(handler);
 }
 
+const char *
+_PyIR_HandlerName(int handler)
+{
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
+    return _PyIR_IsOnlyHandler(handler)
+        ? _PyIR_OnlyNames[handler] : _PyOpcode_OpName[handler];
+}
+
 int
 _PyIR_BaseOpcode(int handler)
 {
@@ -398,9 +406,9 @@ _PyIR_BaseOpcode(int handler)
         // Part of the instruction before it, as a CACHE is upstream
         return CACHE;
     }
-    if (handler >= IR_FIRST_ONLY_HANDLER) {
+    if (_PyIR_IsOnlyHandler(handler)) {
         handler = _PyIR_Formats[handler].shadow;
-        assert(handler < IR_FIRST_ONLY_HANDLER);
+        assert(!_PyIR_IsOnlyHandler(handler));
     }
     // _PyOpcode_Deopt is sized for the stack ops: a handler id is no index
     assert(handler < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
@@ -760,7 +768,7 @@ ordinary_handler_for(int handler, int opcode)
         return opcode;
     }
     if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
-        opcode >= MIN_INSTRUMENTED_OPCODE && opcode < IR_FIRST_ONLY_HANDLER &&
+        opcode >= MIN_INSTRUMENTED_OPCODE && !_PyIR_IsOnlyHandler(opcode) &&
         _PyIR_HandlerBase[opcode] == _PyIR_HandlerBase[handler])
     {
         // A register instruction arm of a family that has events: the

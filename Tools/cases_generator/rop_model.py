@@ -265,11 +265,14 @@ class Binding:
     """`dst = value` in a publish: a destination operand and its owner, or
     `null`.  A vector binding `d[] = s[]` (or `d[] = dup(s[])`) gives
     element i of the span operand d the owner taken from (or a second owner
-    of) element i of the span operand s."""
+    of) element i of the span operand s.  An owners binding `d[] = v` (owners)
+    gives element i of d item i of v, a let or case value of type Span<O>
+    with count(d) items; old(d) then retires the owners it displaces."""
     target: str
     value: Expr
     span: SrcSpan = _span()
     vector: bool = False
+    owners: bool = False
 
 
 @dataclass(frozen=True, slots=True)

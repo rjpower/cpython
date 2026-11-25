@@ -397,9 +397,9 @@ class Analysis:
     # Instructions annotated `ir_only`: handlers of the register IR that
     # have no opcode, kept apart so that the opcode tables do not see them.
     ir_only: dict[str, Instruction]
-    # The handler number of the first IR-only handler: the one after the
-    # last pseudo-instruction.
-    first_ir_only: int
+    # The numbers below 256 that no stack opcode holds, in order: the holes
+    # that deleted specializations leave.  IR-only handlers take them first.
+    free_ids: list[int]
     # The declared generator-boundary clauses, by source
     boundaries: dict[str, Boundary] = field(default_factory=dict)
 
@@ -1437,9 +1437,11 @@ def analyze_forest(
         families["BINARY_OP"].members.append(inst)
     opmap, first_arg, min_instrumented = assign_opcodes(
         instructions, families, pseudos)
+    held = set(opmap.values())
+    free_ids = [number for number in range(256) if number not in held]
     return Analysis(
         instructions, uops, families, pseudos, labels, opmap, first_arg,
-        min_instrumented, ir_only, 256 + len(pseudos), boundaries
+        min_instrumented, ir_only, free_ids, boundaries
     )
 
 

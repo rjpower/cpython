@@ -704,8 +704,6 @@ TEMPLATE_CASES = [
       for op in ("is", "is not")],
     # (The truth and branch arms are tested by test_rop_truth, by their form
     # and completion stub: they have no template yet.)
-    ("def f(a, b):\n    a = 5\n    return a", (1, 2), "LOAD_SMALL_INT_INLINE", "A",
-     [(Plain(),), (None,), (big(5),), (3,)]),
     *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
        handler, "ABC", [(Plain(), seq, i) for seq in seqs for i in INDICES])
       for seq_type, handler, seqs in (

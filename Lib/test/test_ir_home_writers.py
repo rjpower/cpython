@@ -86,8 +86,8 @@ class HomeWriterTests(unittest.TestCase):
                 self.assertTrue(all(reference() is None for reference in references))
 
     def test_container_success_vacates_before_displaced_local_callback(self):
-        for opening, closing, handler in (("(", ")", "BUILD_TUPLE"),
-                                           ("[", "]", "BUILD_LIST")):
+        for opening, closing, handler in (("(", ")", "Build.Tuple"),
+                                           ("[", "]", "Build.List")):
             namespace = {}
             exec("def build(factory):\n"
                  "    current = 17\n"
@@ -140,8 +140,8 @@ class HomeWriterTests(unittest.TestCase):
             def routes(code):
                 return (code, code.replace(), marshal.loads(marshal.dumps(code)))
 
-            for opening, closing, handler in (("(", ")", "BUILD_TUPLE"),
-                                               ("[", "]", "BUILD_LIST")):
+            for opening, closing, handler in (("(", ")", "Build.Tuple"),
+                                               ("[", "]", "Build.List")):
                 # Twenty-four avoids the tuple freelist. Arm after every
                 # element exists; exactly one allocation fails, so traceback
                 # creation can identify the actual failing builder.
@@ -149,7 +149,7 @@ class HomeWriterTests(unittest.TestCase):
                 namespace = {}
                 exec(f"def build(factory):\\n    return {opening}{elements}{closing}\\n", namespace)
                 original = namespace["build"].__code__
-                assert any(row[0] == handler and row[3] == 24
+                assert any(row[0] == handler and row[2] == 24
                            for row in _testinternalcapi.get_ir(original))
                 for code in routes(original):
                     references = []
@@ -221,7 +221,7 @@ class HomeWriterTests(unittest.TestCase):
         def build():
             return {*()}
 
-        self.assertTrue(any(row[0] == "BUILD_SET" and row[3] == 0
+        self.assertTrue(any(row[0] == "Build.Set" and row[2] == 0
                             for row in _testinternalcapi.get_ir(build.__code__)))
         for code in routes(build.__code__):
             self.assertEqual(types.FunctionType(code, globals())(), set())
@@ -232,7 +232,7 @@ class HomeWriterTests(unittest.TestCase):
             result = {factory(0), factory(1), factory(2)}
             return result, current
 
-        self.assertTrue(any(row[0] == "BUILD_SET"
+        self.assertTrue(any(row[0] == "Build.Set"
                             for row in _testinternalcapi.get_ir(build.__code__)))
         for code in routes(build.__code__):
             for failing in (False, True):
@@ -291,7 +291,7 @@ class HomeWriterTests(unittest.TestCase):
             value = dynamic
             return value, current
 
-        self.assertTrue(any(row[0] == "LOAD_GLOBAL"
+        self.assertTrue(any(row[0] == "GlobalRead.Generic"
                             for row in _testinternalcapi.get_ir(read.__code__)))
         for code in routes(read.__code__):
             function = types.FunctionType(code, {"__builtins__": Builtins()})
@@ -312,7 +312,7 @@ class HomeWriterTests(unittest.TestCase):
             result = {key: value}
             return result, current
 
-        self.assertTrue(any(row[0] == "BUILD_MAP"
+        self.assertTrue(any(row[0] == "Build.Map"
                             for row in _testinternalcapi.get_ir(build.__code__)))
         payload = object()
         for code in routes(build.__code__):

@@ -1540,6 +1540,7 @@ extern "C" {
     INIT_ID(_bootstrap_external), \
     INIT_ID(_check_retval_), \
     INIT_ID(_dealloc_warn), \
+    INIT_ID(_errcheck_), \
     INIT_ID(_feature_version), \
     INIT_ID(_field_types), \
     INIT_ID(_fields_), \
@@ -1662,9 +1663,7 @@ extern "C" {
     INIT_ID(co_cellvars), \
     INIT_ID(co_code), \
     INIT_ID(co_consts), \
-    INIT_ID(co_constslots), \
     INIT_ID(co_exceptiontable), \
-    INIT_ID(co_fbinit), \
     INIT_ID(co_filename), \
     INIT_ID(co_firstlineno), \
     INIT_ID(co_flags), \

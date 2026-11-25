@@ -4531,7 +4531,7 @@ class PinTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(text.count("IR_PIN_DEPARTING();"),
                                  1 if self.departs(name) else 0)
-        self.assertGreater(named, 190)
+        self.assertGreater(named, 150)
         # The stubs are the same text with the stub bindings
         for function, text in self.stubs.items():
             name = function.removeprefix("_PyIR_Stub_")

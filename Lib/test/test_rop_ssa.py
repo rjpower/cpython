@@ -409,6 +409,12 @@ SCENARIOS = {
         "or": "def f(a, b):\n    return (a and b) or a\n"},
         [{"srcs": [v]} for v in (1, "s", Plain(), 2**70)], warm=("__x__", 1),
         per_arm=True),
+    "Import": Scenario("Import", {
+        "eager": "def f(a):\n    import os\n    return a\n"},
+        [{"level": 0, "fromlist": None}], warm=(1,)),
+    "ImportFrom": Scenario("ImportFrom", {
+        "from": "def f(a):\n    from os import path, sep\n    return a\n"},
+        [{"module": __import__("os")}], warm=(1,)),
     "Jump": Scenario("Jump", {
         "loop": "def f(n):\n    while n:\n        n -= 1\n    return n\n",
         "forward": "def f(a):\n    x = 1 if a else 2\n    y = (x, x)\n    return y\n",
@@ -446,6 +452,12 @@ SCENARIOS = {
         warm_by_source={"values": (Point(),), "nodict": (WithSlots(),),
                         "classmethod": (ClassAttr,), "poly": (Point(), Swapped()),
                         "lazy": (LazyNorm(),)},
+        warmups=200, coherent=True),
+    "GlobalRead": Scenario("GlobalRead", {
+        "module": "G = 3\ndef f():\n    return G\n",
+        "builtin": "def f():\n    return len\n",
+        "missing": "def f():\n    return no_such_global\n"},
+        [{}], warm_by_source={"module": ((),), "builtin": ((),), "missing": ((),)},
         warmups=200, coherent=True),
     "Return": Scenario("Return", {
         "empty": "def f(a):\n    return a\n",
@@ -775,10 +787,35 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
+    # The display families have no scenarios: their rows take spans of homes
+    # and run Python (test_rop_displays runs them)
+    "Build.Tuple": "no scenario; test_rop_displays runs it",
+    "Build.List": "no scenario; test_rop_displays runs it",
+    "AddElement.Append": "no scenario; test_rop_displays runs it",
+    "AddElement.Add": "no scenario; test_rop_displays runs it",
+    "AddEntry.Put": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Extend": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Overlay": "no scenario; test_rop_displays runs it",
+    "MergeKeywords.Merge": "no scenario; test_rop_displays runs it",
+    "Build.Set": "no scenario; test_rop_displays runs it",
+    "Build.Map": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Union": "no scenario; test_rop_displays runs it",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
                         "synthetic caller cannot hold",
+    "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "
+                          "cannot call as a function",
+    "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",
+    "NamespaceRead.BuildClass": "LOAD_BUILD_CLASS occurs in class definitions' callers: "
+                                "a class body is not a function the probe warms",
+    "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
+    "NamespaceWrite.Global": "the value moves into the globals dict, an owner the probe's "
+                             "home count does not see; a delete shares the arm",
+    "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
+    "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
+    "Import.Policy": "a function's imports are eager; the policy applies to module code",
+    "Import.Lazy": "`lazy import` is a module-level statement",
     # select(jit_on) and select(jit_off): the word is the one the JIT's
     # state chose when the function was lowered
     "Intrinsic.StopIteration": STOPITERATION_WHY,

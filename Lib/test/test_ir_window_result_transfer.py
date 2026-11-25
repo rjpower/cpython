@@ -14,7 +14,7 @@ class WindowResultTransferTests(unittest.TestCase):
             return predicate(first, second)
 
         rows = _testinternalcapi.get_ir(prepare.__code__)
-        self.assertTrue(any(row[0] == "BUILD_LIST" and
+        self.assertTrue(any(row[0] == "Build.List" and
                             row[1] < prepare.__code__.co_nlocals for row in rows))
         for admitted in routes(prepare.__code__):
             function = types.FunctionType(admitted, globals())

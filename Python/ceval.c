@@ -2,6 +2,7 @@
 
 #include "ceval.h"
 #include "pycore_attr_recipe.h"   // _PyAttr_AdmittedInstanceSlot()
+#include "pycore_global_recipe.h" // _PyGlobalRecipe
 #include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
@@ -2298,9 +2299,9 @@ static PyValue _PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id,
 static PyValue _PyRop_IntrinsicAttr(PyThreadState *tstate, uint32_t id,
                                     PyValue x, PyValue y);
 
-static PyValue _PyRop_CallNative(PyThreadState *tstate,
-                                 _PyInterpreterFrame *frame, PyValue *fn,
-                                 const _PyIRWord *head);
+static inline PyValue _PyRop_CallNative(PyThreadState *tstate,
+                                        _PyInterpreterFrame *frame, PyValue *fn,
+                                        const _PyIRWord *head);
 static int _PyRop_CallEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                             _PyInstr *site, PyValue *fn,
                             const _PyIRWord *head);
@@ -2412,7 +2413,8 @@ _PyRop_Depart(PyThreadState *tstate, _PyInterpreterFrame *frame)
     return frame;
 }
 
-static void _PyRop_RetireFrame(PyThreadState *tstate, _PyInterpreterFrame *dying);
+static inline void _PyRop_RetireFrame(PyThreadState *tstate,
+                                      _PyInterpreterFrame *dying);
 static inline void _PyRop_RetireFrameEmpty(PyThreadState *tstate,
                                            _PyInterpreterFrame *dying);
 
@@ -2813,6 +2815,184 @@ _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home)
     return _PyFrame_TakeHome(frame, home);
 }
 
+/* The rows of the namespace families (Python/register_ops/namespaces.rop).
+ * Each is the body of the stack op's old handler.  A row that takes an
+ * owner closes it on every path. */
+
+PyValue
+_PyRop_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                uint32_t index)
+{
+    return _PyEval_LoadName(tstate, frame, _PyRop_NameAt(frame, index));
+}
+
+PyValue
+_PyRop_LoadLocals(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    PyObject *l = frame->f_locals;
+    if (l == NULL) {
+        _PyErr_SetString(tstate, PyExc_SystemError, "no locals found");
+        return PyValue_NULL;
+    }
+    return PyValue_DUP(PyValue_FromObjectBorrow(l));
+}
+
+PyValue
+_PyRop_LoadBuildClass(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    _PyStatusValue found = _PyValue_GetOptionalItem(
+        PyValue_FromObjectBorrow(frame->f_builtins),
+        PyValue_FromObjectBorrow(&_Py_ID(__build_class__)));
+    if (found.status < 0) {
+        return PyValue_NULL;
+    }
+    if (found.status == 0) {
+        _PyErr_SetString(tstate, PyExc_NameError,
+                         "__build_class__ not found");
+        return PyValue_NULL;
+    }
+    return found.value;
+}
+
+_PyStatusValue
+_PyRop_LoadFromDict(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValueBorrow mapping, uint32_t index)
+{
+    assert(PyValue_IsObject(mapping));
+    return value_load_from_dict(tstate, PyValue_AsKnownObjectBorrow(mapping),
+                                _PyRop_NameAt(frame, index));
+}
+
+PyValue
+_PyRop_LoadGlobalOrBuiltin(_PyInterpreterFrame *frame, uint32_t index)
+{
+    PyObject *name = _PyRop_NameAt(frame, index);
+    return value_load_global(frame->f_globals, frame->f_builtins, name);
+}
+
+/* A NULL value deletes: _PyEval_StoreName's convention */
+int
+_PyRop_StoreName(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 uint32_t index, PyValue v)
+{
+    PyObject *name = _PyRop_NameAt(frame, index);
+    int error = _PyEval_StoreName(tstate, PyValue_Borrow(v), name,
+                                  frame->f_locals);
+    PyValue_XCLOSE(v);
+    return error ? -1 : 0;
+}
+
+int
+_PyRop_DeleteName(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  uint32_t index)
+{
+    return _PyRop_StoreName(tstate, frame, index, PyValue_NULL);
+}
+
+int
+_PyRop_StoreGlobal(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   uint32_t index, PyValue v)
+{
+    PyObject *name = _PyRop_NameAt(frame, index);
+    int err = PyDict_SetValue(frame->f_globals, PyValue_FromObjectBorrow(name),
+                              PyValue_Borrow(v));
+    PyValue_XCLOSE(v);
+    return err < 0 ? -1 : 0;
+}
+
+int
+_PyRop_DeleteGlobal(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    uint32_t index)
+{
+    PyObject *name = _PyRop_NameAt(frame, index);
+    int err = PyDict_PopValue(frame->f_globals, PyValue_FromObjectBorrow(name),
+                              NULL);
+    if (err == 0) {
+        _PyEval_FormatExcCheckArg(tstate, PyExc_NameError, NAME_ERROR_MSG,
+                                  name);
+        return -1;
+    }
+    return err < 0 ? -1 : 0;
+}
+
+int
+_PyRop_SetupAnnotations(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    PyObject *locals = frame->f_locals;
+    if (locals == NULL) {
+        _PyErr_Format(tstate, PyExc_SystemError,
+                      "no locals found when setting up annotations");
+        return -1;
+    }
+    /* check if __annotations__ in locals()... */
+    _PyStatusValue found = _PyValue_GetOptionalItem(
+        PyValue_FromObjectBorrow(locals),
+        PyValue_FromObjectBorrow(&_Py_ID(__annotations__)));
+    if (found.status < 0) {
+        return -1;
+    }
+    if (found.status > 0) {
+        PyValue_CLOSE(found.value);
+        return 0;
+    }
+    PyObject *ann_dict = PyDict_New();
+    if (ann_dict == NULL) {
+        return -1;
+    }
+    int err = _PyValue_SetItem(PyValue_FromObjectBorrow(locals),
+                               PyValue_FromObjectBorrow(&_Py_ID(__annotations__)),
+                               PyValue_FromObjectBorrow(ann_dict));
+    Py_DECREF(ann_dict);
+    return err ? -1 : 0;
+}
+
+PyValue
+_PyRop_ImportName(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  PyObject *name, PyValue level, PyValue fromlist,
+                  uint32_t kind)
+{
+    // The compiler loads fromlist from a constant: None or a tuple of str
+    PyObject *fromlist_o = PyValue_AsKnownObjectBorrow(fromlist);
+    // The level is an inline int: read it without a box
+    int ilevel = value_import_level(level);
+    PyObject *res_o = NULL;
+    if (ilevel != -1 || !_PyErr_Occurred(tstate)) {
+        if (kind != IMPORT_EAGER) {
+            res_o = _PyEval_LazyImportName(tstate, frame->f_builtins,
+                                           frame->f_globals, frame->f_locals,
+                                           name, fromlist_o, ilevel,
+                                           kind == IMPORT_LAZY);
+        }
+        else {
+            res_o = _PyEval_ImportName(tstate, frame->f_builtins,
+                                       frame->f_globals, frame->f_locals,
+                                       name, fromlist_o, ilevel);
+        }
+    }
+    PyValue_XCLOSE(level);
+    PyValue_XCLOSE(fromlist);
+    return res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+}
+
+PyValue
+_PyRop_ImportFrom(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  PyValue module, uint32_t index)
+{
+    PyObject *name = _PyRop_NameAt(frame, index);
+    // The module may be a number, if __import__ returned one
+    PyObject *from_o = PyValue_ObjectOrNull(PyValue_Borrow(module));
+    PyValue res;
+    if (from_o != NULL && PyLazyImport_CheckExact(from_o)) {
+        PyObject *res_o = _PyEval_LazyImportFrom(tstate, frame, from_o, name);
+        res = res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+    }
+    else {
+        res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(module), name);
+    }
+    PyValue_XCLOSE(module);
+    return res;
+}
+
 /* The rows of the Move arms (Python/register_ops/values.rop).  The homes of
  * a span are decoded once; a set has at most IR_FIELD_MAX pairs. */
 static int
@@ -2864,6 +3044,260 @@ _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s)
         _PyFrame_WriteHome(d->frame, &d->frame->base[to],
                            PyValue_DUP(PyValue_Borrow(d->frame->base[from])));
     }
+}
+
+/* The rows of Build, AddElement, AddEntry, UpdateContainer and
+ * MergeKeywords (Python/register_ops/displays.rop). */
+
+/* The owners of the items of a span, in order: a temporary's owner moves out
+ * of its home, and a local's binding gets an owner of its own.  Every home
+ * of a temporary is vacant on return. */
+static void
+rop_take_items(const _PyRopSpan *span, PyValue *vals)
+{
+    _PyInterpreterFrame *frame = span->frame;
+    int nlocals = _PyCode_IRFixed(_PyFrame_GetCode(frame));
+    for (int i = 0; i < span->count; i++) {
+        int slot = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+        PyValue *home = &frame->base[slot];
+        vals[i] = slot < nlocals ? PyValue_DUP(PyValue_Borrow(*home))
+                                 : _PyFrame_TakeHome(frame, home);
+    }
+}
+
+static void
+rop_close_items(PyValue *vals, int n)
+{
+    for (int i = 0; i < n; i++) {
+        PyValue_XCLOSE(vals[i]);
+    }
+}
+
+PyValue
+_PyRop_BuildTuple(const _PyRopSpan *items)
+{
+    int n = items->count;
+    PyValue vals[n + 1];
+    rop_take_items(items, vals);
+    PyObject *tup = _PyTuple_FromValueStealOnSuccess(vals, n);
+    if (tup == NULL) {
+        rop_close_items(vals, n);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(tup);
+}
+
+PyValue
+_PyRop_BuildList(const _PyRopSpan *items)
+{
+    int n = items->count;
+    PyValue vals[n + 1];
+    rop_take_items(items, vals);
+    PyObject *list = _PyList_FromValueStealOnSuccess(vals, n);
+    if (list == NULL) {
+        rop_close_items(vals, n);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(list);
+}
+
+PyValue
+_PyRop_BuildSet(const _PyRopSpan *items)
+{
+    int n = items->count;
+    PyValue vals[n + 1];
+    rop_take_items(items, vals);
+    PyObject *set = PySet_New(NULL);
+    int err = set == NULL;
+    for (int i = 0; i < n; i++) {
+        if (err == 0) {
+            // Steals the value, on failure too
+            err = _PySet_AddValueTakeRef((PySetObject *)set, vals[i]);
+        }
+        else {
+            PyValue_CLOSE(vals[i]);
+        }
+    }
+    if (err) {
+        Py_XDECREF(set);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(set);
+}
+
+PyValue
+_PyRop_BuildMap(const _PyRopSpan *items)
+{
+    int n = items->count;
+    assert(n % 2 == 0);
+    PyValue vals[n + 1];
+    rop_take_items(items, vals);
+    PyObject *map = _PyDict_FromValueItems(vals, 2, vals + 1, 2, n / 2);
+    rop_close_items(vals, n);
+    if (map == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(map);
+}
+
+int
+_PyRop_ListAppend(PyValue *list, PyValue item)
+{
+    PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(*list));
+    return _PyList_AppendTakeValueInline(list_o, item) < 0 ? -1 : 0;
+}
+
+int
+_PyRop_SetAdd(PyValue *set, PyValue item)
+{
+    PySetObject *set_o = (PySetObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(*set));
+    return _PySet_AddValueTakeRef(set_o, item) ? -1 : 0;
+}
+
+int
+_PyRop_DictPut(PyValue *dict, PyValue key, PyValue value)
+{
+    PyObject *dict_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*dict));
+    assert(PyDict_CheckExact(dict_o));
+    return _PyDict_SetValue_Take2((PyDictObject *)dict_o, key, value) != 0 ? -1 : 0;
+}
+
+/* The three updates read the container and the source from their homes. A
+ * count of their own holds each across the call, which runs Python and may
+ * reassign a local that names either. */
+int
+_PyRop_ListExtend(PyValue *list_home, PyValue *it_home)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue list_st = PyValue_DUP(PyValue_Borrow(*list_home));
+    PyValue iterable_st = PyValue_DUP(PyValue_Borrow(*it_home));
+    int res = 0;
+    // A number is not iterable
+    if (!PyValue_IsObject(PyValue_Borrow(iterable_st))) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "Value after * must be an iterable, not %.200s",
+                      PyValue_TYPE(PyValue_Borrow(iterable_st))->tp_name);
+        res = -1;
+        goto done;
+    }
+    PyObject *list = PyValue_AsKnownObjectBorrow(PyValue_Borrow(list_st));
+    PyObject *iterable = PyValue_AsKnownObjectBorrow(PyValue_Borrow(iterable_st));
+    PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
+    if (none_val == NULL) {
+        int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
+        if (matches &&
+            (Py_TYPE(iterable)->tp_iter == NULL &&
+             !_PyValue_SequenceCheck(PyValue_FromObjectBorrow(iterable))))
+        {
+            _PyErr_Clear(tstate);
+            _PyErr_Format(tstate, PyExc_TypeError,
+                          "Value after * must be an iterable, not %.200s",
+                          Py_TYPE(iterable)->tp_name);
+        }
+        res = -1;
+        goto done;
+    }
+    assert(Py_IsNone(none_val));
+done:
+    PyValue_CLOSE(iterable_st);
+    PyValue_CLOSE(list_st);
+    return res;
+}
+
+int
+_PyRop_SetUnion(PyValue *set_home, PyValue *it_home)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue set = PyValue_DUP(PyValue_Borrow(*set_home));
+    PyValue iterable = PyValue_DUP(PyValue_Borrow(*it_home));
+    int res = 0;
+    // A number is not iterable
+    if (!PyValue_IsObject(PyValue_Borrow(iterable))) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "'%.200s' object is not iterable",
+                      PyValue_TYPE(PyValue_Borrow(iterable))->tp_name);
+        res = -1;
+    }
+    else if (_PySet_Update(PyValue_AsKnownObjectBorrow(PyValue_Borrow(set)),
+                           PyValue_AsKnownObjectBorrow(PyValue_Borrow(iterable))) < 0)
+    {
+        res = -1;
+    }
+    PyValue_CLOSE(iterable);
+    PyValue_CLOSE(set);
+    return res;
+}
+
+int
+_PyRop_DictOverlay(PyValue *dict_home, PyValue *update_home)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue dict = PyValue_DUP(PyValue_Borrow(*dict_home));
+    PyValue update = PyValue_DUP(PyValue_Borrow(*update_home));
+    int res = 0;
+    // A number is not a mapping
+    if (!PyValue_IsObject(PyValue_Borrow(update))) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "'%N' object is not a mapping",
+                      PyValue_TYPE(PyValue_Borrow(update)));
+        res = -1;
+        goto done;
+    }
+    PyObject *dict_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(dict));
+    PyObject *update_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(update));
+    if (PyDict_Update(dict_o, update_o) < 0) {
+        int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
+        if (matches) {
+            PyObject *exc = _PyErr_GetRaisedException(tstate);
+            int has_keys = PyObject_HasAttrWithError(update_o, &_Py_ID(keys));
+            if (has_keys == 0) {
+                _PyErr_Format(tstate, PyExc_TypeError,
+                              "'%T' object is not a mapping",
+                              update_o);
+                Py_XDECREF(exc);
+            }
+            else {
+                _PyErr_ChainExceptions1(exc);
+            }
+        }
+        res = -1;
+    }
+done:
+    PyValue_CLOSE(update);
+    PyValue_CLOSE(dict);
+    return res;
+}
+
+int
+_PyRop_MergeKeywords(PyValue *fn_home, PyValue *dict_home, PyValue *update_home)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue dict = PyValue_DUP(PyValue_Borrow(*dict_home));
+    PyValue update = PyValue_DUP(PyValue_Borrow(*update_home));
+    PyValue callable = PyValue_DUP(PyValue_Borrow(*fn_home));
+    int res = 0;
+    // A number is not a mapping
+    if (!PyValue_IsObject(PyValue_Borrow(update))) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "Value after ** must be a mapping, not %N",
+                      PyValue_TYPE(PyValue_Borrow(update)));
+        res = -1;
+        goto done;
+    }
+    PyObject *dict_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(dict));
+    PyObject *update_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(update));
+    _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
+    if (merged.status < 0) {
+        _PyEval_FormatKwargsError(tstate, PyValue_Borrow(callable), update_o,
+                                  merged.object);
+        Py_XDECREF(merged.object);
+        res = -1;
+    }
+done:
+    PyValue_CLOSE(callable);
+    PyValue_CLOSE(update);
+    PyValue_CLOSE(dict);
+    return res;
 }
 
 void
@@ -4697,7 +5131,7 @@ frame_clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* Retire the unlinked frame of a return; the caller holds the result
  * (_PyEval_FrameClearAndPopGeneralWithResult) */
-static Py_NO_INLINE void
+static inline void
 _PyRop_RetireFrame(PyThreadState *tstate, _PyInterpreterFrame *dying)
 {
     if (dying->owner != FRAME_OWNED_BY_THREAD) {
@@ -5993,7 +6427,7 @@ _PyRop_PushPython(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return pushed.child;
 }
 
-static Py_NO_INLINE PyValue
+static inline PyValue
 _PyRop_CallNative(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   PyValue *fn, const _PyIRWord *head)
 {

@@ -30,7 +30,8 @@ import rop_check
 import rop_leaf
 import rop_verify
 from generators_common import root_relative_path, write_header
-from rop_cgen import ESCAPING, Lowering, Unsupported, lower_arm, pending_blockers
+from rop_cgen import (ESCAPING, Lowering, Unsupported, inline_rows, lower_arm,
+                      outlined_name, pending_blockers, row_signature)
 from rop_catalog import SELECT_DIMENSIONS, Effect, FieldKind, Handle, Slot, Wrap
 from rop_check import Program, select_dimension
 from rop_model import Arm, HandleType, Param, WrapType
@@ -72,6 +73,12 @@ class Products:
     lowered: Mapping[str, Lowering]
     left_out: Mapping[str, str]       # arm -> what blocks it
     generic: Mapping[str, str | None]  # family -> its generic arm, if emitted
+    # The same arms for the forms and stubs, which call the out-of-line copy
+    # of a row declared inline; empty when no row is
+    outlined: Mapping[str, Lowering] = dataclasses.field(default_factory=dict)
+
+    def for_forms(self, name: str) -> Lowering:
+        return self.outlined.get(name, self.lowered[name])
 
 
 def point_numbers(program: Program) -> dict[str, int]:
@@ -106,8 +113,13 @@ def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
         if is_generic(program, arm):
             generic[arm.family] = c_name(arm.name)
             generic_arms[arm.family] = arm.name
+    outlined: dict[str, Lowering] = {}
+    if inline_rows(program):
+        outlined = {name: lower_arm(program, program.arms[name], numbers, points,
+                                    generic, outline=True)
+                    for name in lowered}
     return Products(program, numbers, points, lowered, left_out,
-                    generic_arms)
+                    generic_arms, outlined)
 
 
 # Interpreter cases and function forms
@@ -169,12 +181,37 @@ MISS_MACRO = """\
 """
 
 
+def write_inline_rows(out: TextIO, p: Products) -> None:
+    """The out-of-line copy of each row declared `inline`.  The interpreter
+    calls the row's own symbol, which is always inlined (the redeclaration
+    adds the attribute to the C body, defined once in the runtime); the
+    forms and stubs call this copy."""
+    out.write("/* Rows declared inline: always inlined into the interpreter, one\n"
+              " * out-of-line copy for the forms and stubs */\n")
+    for x in inline_rows(p.program):
+        assert x.c is not None
+        try:
+            ret, params = row_signature(x)
+        except Unsupported as e:
+            raise GenerateError(str(e)) from e
+        sep = "" if ret.endswith("*") else " "
+        out.write(f"static Py_ALWAYS_INLINE {ret}{sep}{x.c.symbol}({', '.join(params)});\n")
+        formals = ", ".join(f"{t}{'' if t.endswith('*') else ' '}p{i}"
+                            for i, t in enumerate(params))
+        actuals = ", ".join(f"p{i}" for i in range(len(params)))
+        keep = "" if ret == "void" else "return "
+        out.write(f"static Py_NO_INLINE {ret}{sep}{outlined_name(x)}({formals})\n"
+                  f"{{ {keep}{x.c.symbol}({actuals}); }}\n")
+    out.write("\n")
+
+
 def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
     write_header(__file__, sources, out)
     write_left_out(out, p)
     out.write(MISS_MACRO + "\n")
-    for name, low in p.lowered.items():
-        arm = p.program.arms[name]
+    write_inline_rows(out, p)
+    for name in p.lowered:
+        arm, low = p.program.arms[name], p.for_forms(name)
         out.write(f"\nstatic Py_NO_INLINE _PyIRTransfer\nir_run_{c_name(name)}(\n"
                   "    PyThreadState *tstate, _PyInterpreterFrame *frame, "
                   "_PyInstr *next_instr, _PyIRWord ir_word)\n{\n")
@@ -268,7 +305,7 @@ def write_stubs(out: TextIO, p: Products, sources: list[str]) -> None:
                   "    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)\n{\n"
                   "    _PyInstr *next_instr = site;\n    _PyIRWord ir_word = *site;\n"
                   "    int ir_status = 0;\n\n")
-        out.write("\n".join(handler_text(arm, p.lowered[name], "    ")) + "\n}\n")
+        out.write("\n".join(handler_text(arm, p.for_forms(name), "    ")) + "\n}\n")
     out.write("\n" + STUB_EPILOGUE)
 
 
@@ -356,7 +393,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         elif role == "_PyIR_ROLE_IMM" and imm == "_PyIR_LOC_NONE":
             both = [s.name for s in pl.slots]
             imm = ("_PyIR_LOC_CD" if both == ["C", "D"] else
-                   "_PyIR_LOC_BC" if both == ["B", "C"] else LOC_NAMES.get(first, imm))
+                   "_PyIR_LOC_BC" if both == ["B", "C"] else
+                   "_PyIR_LOC_AB" if both == ["A", "B"] else LOC_NAMES.get(first, imm))
     branch_events = bool({"BRANCH_LEFT", "BRANCH_RIGHT", "JUMP"} & {e.value for e in fam.events})
     exits = set(arm.contract.exits)
     effects = {"_PyIR_RAISES"} if "raise" in exits else set()

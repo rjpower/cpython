@@ -1,0 +1,329 @@
+// 1E: displays, element insertion, container updates, keyword merge.
+// The arm is the kind of container, chosen by the lowering (`select`).  The
+// sources of Build and the item of AddElement are spent on every outcome:
+// each leaves its home, a temporary's owner moving into the container and a
+// local's binding giving a count of its own.  UpdateContainer and
+// MergeKeywords read their sources, keep them on failure for the unwinder,
+// and retire the source on success.
+
+family Build(dst:Dst, items:Span<Src>)
+  exits(next, raise) ops(BUILD_TUPLE, BUILD_LIST, BUILD_SET, BUILD_MAP);
+
+point Build.Failed(current, site, pending) keep() spent(items) defs();
+point Build.Done(current, next_head, clear) keep() spent(items) defs(dst);
+
+extern helper build_tuple(items:Span<Src>)
+  cases(ok(z:O), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  spends(items)
+  ensures(ok.exact<tuple>(z))
+  c _PyRop_BuildTuple as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_BuildTuple: each item's owner is taken out of its home (a local's gets a count of its own), then Ceval.c rop_take_items, _PyTuple_FromValueStealOnSuccess.",
+    contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed (which may run a finalizer). NULL with an exception set on failure.");
+
+arm Build.Tuple shared select(tuple)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
+  feedback()
+  exits(next, raise)
+  ensures(next.exact<tuple>(dst))
+{
+  entry():
+    call build_tuple(items) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Build.Failed, e);
+  Finish(z:O):
+    publish [dst = z] retire [old(dst)] at Build.Done;
+    exit next();
+}
+
+extern helper build_list(items:Span<Src>)
+  cases(ok(z:O), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  spends(items)
+  ensures(ok.exact<list>(z))
+  c _PyRop_BuildList as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_BuildList: each item's owner is taken out of its home (a local's gets a count of its own), then _PyList_FromValueStealOnSuccess.",
+    contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed (which may run a finalizer). NULL with an exception set on failure.");
+
+arm Build.List shared select(list)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
+  feedback()
+  exits(next, raise)
+  ensures(next.exact<list>(dst))
+{
+  entry():
+    call build_list(items) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Build.Failed, e);
+  Finish(z:O):
+    publish [dst = z] retire [old(dst)] at Build.Done;
+    exit next();
+}
+
+extern helper build_set(items:Span<Src>)
+  cases(ok(z:O), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  spends(items)
+  ensures(ok.exact<set>(z))
+  c _PyRop_BuildSet as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_BuildSet: each item's owner is taken out of its home (a local's gets a count of its own), then PySet_New and _PySet_AddValueTakeRef for each item.",
+    contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed. A hash or equality of an item can run Python. The result is NULL with an exception set on failure.");
+
+arm Build.Set shared select(set)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
+  feedback()
+  exits(next, raise)
+  ensures(next.exact<set>(dst))
+{
+  entry():
+    call build_set(items) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Build.Failed, e);
+  Finish(z:O):
+    publish [dst = z] retire [old(dst)] at Build.Done;
+    exit next();
+}
+
+extern helper build_map(items:Span<Src>)
+  cases(ok(z:O), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  spends(items)
+  ensures(ok.exact<dict>(z))
+  c _PyRop_BuildMap as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_BuildMap: each item's owner is taken out of its home (a local's gets a count of its own), then _PyDict_FromValueItems over the key and value pairs.",
+    contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed. A hash or equality of an item can run Python. The result is NULL with an exception set on failure.");
+
+arm Build.Map shared select(map)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
+  feedback()
+  exits(next, raise)
+  ensures(next.exact<dict>(dst))
+{
+  entry():
+    call build_map(items) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Build.Failed, e);
+  Finish(z:O):
+    publish [dst = z] retire [old(dst)] at Build.Done;
+    exit next();
+}
+
+family AddElement(container:Src, item:Src)
+  exits(next, raise) ops(LIST_APPEND, SET_ADD);
+
+point AddElement.Failed(current, site, pending) keep(container) spent(item) defs();
+point AddElement.Done(current, next_head, clear) keep(container) spent(item) defs();
+
+extern helper list_append(list:Src, item:O)
+  cases(ok(), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  c _PyRop_ListAppend as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_ListAppend: _PyList_AppendTakeValueInline: the store is in line while the list has room. The container is the word's home.",
+    contract: "The item is taken on every outcome. The container is read and kept. Growth may allocate; a finalizer may run when a failed append closes the item.");
+
+extern helper set_add(set:Src, item:O)
+  cases(ok(), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  c _PyRop_SetAdd as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_SetAdd: _PySet_AddValueTakeRef. The container is the word's home.",
+    contract: "The item is taken on every outcome. The container is read and kept. A hash or equality of the item can run Python.");
+
+arm AddElement.Append shared select(append)
+  effects(writes, allocates, raises, releases, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let v:O = acquire(item);
+    call list_append(container, v) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(AddElement.Failed, e);
+  Finish():
+    publish [] retire [spent(item)] at AddElement.Done;
+    exit next();
+}
+
+arm AddElement.Add shared select(add)
+  effects(writes, allocates, raises, releases, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let v:O = acquire(item);
+    call set_add(container, v) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(AddElement.Failed, e);
+  Finish():
+    publish [] retire [spent(item)] at AddElement.Done;
+    exit next();
+}
+
+family AddEntry(container:Src, key:Src, value:Src)
+  exits(next, raise) ops(MAP_ADD);
+
+point AddEntry.Failed(current, site, pending) keep(container) spent(key, value) defs();
+point AddEntry.Done(current, next_head, clear) keep(container) spent(key, value) defs();
+
+extern helper dict_put(dict:Src, key:O, value:O)
+  cases(ok(), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  c _PyRop_DictPut as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_DictPut: _PyDict_SetValue_Take2 on the word's dict home.",
+    contract: "The key and value are taken on every outcome. The dict is read and kept. A hash or equality can run Python.");
+
+arm AddEntry.Put shared
+  effects(writes, allocates, raises, releases, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let k:O = acquire(key);
+    let v:O = acquire(value);
+    call dict_put(container, k, v) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(AddEntry.Failed, e);
+  Finish():
+    publish [] retire [spent(key), spent(value)] at AddEntry.Done;
+    exit next();
+}
+
+family UpdateContainer(container:Src, source:Src)
+  exits(next, raise) ops(LIST_EXTEND, SET_UPDATE, DICT_UPDATE);
+
+point UpdateContainer.Failed(current, site, pending) keep(container, source) spent() defs();
+point UpdateContainer.Done(current, next_head, clear) keep(container) spent(source) defs();
+
+extern helper list_extend(list:Src, source:Src)
+  cases(ok(), err(e:Err))
+  effects(allocates, raises, runs_python)
+  c _PyRop_ListExtend as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_ListExtend: _PyList_Extend, with the TypeError text 'Value after * must be an iterable, not %.200s' for a value that has no iterator.",
+    contract: "Reads the two homes and holds a count of each across the call, which runs Python. Nothing is spent: on failure the exception is set and both stay in their homes.");
+
+extern helper set_union(set:Src, source:Src)
+  cases(ok(), err(e:Err))
+  effects(allocates, raises, runs_python)
+  c _PyRop_SetUnion as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_SetUnion: _PySet_Update, with the text '%.200s' object is not iterable for a number.",
+    contract: "Reads the two homes and holds a count of each across the call, which runs Python. Nothing is spent: on failure the exception is set and both stay in their homes.");
+
+extern helper dict_overlay(dict:Src, source:Src)
+  cases(ok(), err(e:Err))
+  effects(allocates, raises, runs_python)
+  c _PyRop_DictOverlay as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_DictOverlay: PyDict_Update, with the '%N' object is not a mapping texts and the keys probe of the inherited handler.",
+    contract: "Reads the two homes and holds a count of each across the call, which runs Python. Nothing is spent: on failure the exception is set and both stay in their homes.");
+
+arm UpdateContainer.Extend shared select(extend)
+  effects(allocates, raises, releases, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call list_extend(container, source) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(UpdateContainer.Failed, e);
+  Finish():
+    publish [] retire [spent(source)] at UpdateContainer.Done;
+    exit next();
+}
+
+arm UpdateContainer.Union shared select(union)
+  effects(allocates, raises, releases, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call set_union(container, source) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(UpdateContainer.Failed, e);
+  Finish():
+    publish [] retire [spent(source)] at UpdateContainer.Done;
+    exit next();
+}
+
+arm UpdateContainer.Overlay shared select(overlay)
+  effects(allocates, raises, releases, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call dict_overlay(container, source) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(UpdateContainer.Failed, e);
+  Finish():
+    publish [] retire [spent(source)] at UpdateContainer.Done;
+    exit next();
+}
+
+// The operands are in operand order: the callable, the dict, then the mapping
+family MergeKeywords(fn:Src, dict:Src, source:Src)
+  exits(next, raise) ops(DICT_MERGE);
+
+point MergeKeywords.Failed(current, site, pending) keep(fn, dict, source) spent() defs();
+point MergeKeywords.Done(current, next_head, clear) keep(fn, dict) spent(source) defs();
+
+extern helper merge_unique(fn:Src, dict:Src, source:Src)
+  cases(ok(), err(e:Err))
+  effects(allocates, raises, runs_python)
+  c _PyRop_MergeKeywords as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_MergeKeywords: value_dict_merge_uniq; a duplicate key or a non-mapping raises through _PyEval_FormatKwargsError, which names the callable fn.",
+    contract: "Reads the three homes and holds a count of each across the call. Nothing is spent. The messages are the inherited handler's.");
+
+arm MergeKeywords.Merge shared
+  effects(allocates, raises, releases, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call merge_unique(fn, dict, source) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(MergeKeywords.Failed, e);
+  Finish():
+    publish [] retire [spent(source)] at MergeKeywords.Done;
+    exit next();
+}

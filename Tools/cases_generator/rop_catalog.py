@@ -119,7 +119,7 @@ SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
     Schema.Binary: ("kind", "descr"),
     Schema.Attr: ("kind", "type_version", "offset", "shape", "keys_version", "index",
                   "descr", "rows"),
-    Schema.Global: ("kind", "module_keys_version", "builtin_keys_version", "index"),
+    Schema.Global: ("globals_version", "builtins_version", "index"),
     Schema.Truth: ("kind", "type_version"),
     Schema.Compare: ("kind",),
     Schema.Contains: ("kind", "type_version"),
@@ -171,9 +171,8 @@ FB_LAYOUT: dict[Schema, CLayout] = {
         "descr": CField("descr", "PyObject *"),
         "rows": CField("h.poly", _U32)}),
     Schema.Global: CLayout("_PyFbGlobal", {
-        "kind": _NONE,
-        "module_keys_version": CField("globals_version", _U32),
-        "builtin_keys_version": CField("builtins_version", _U32),
+        "globals_version": CField("globals_version", _U32),
+        "builtins_version": CField("builtins_version", _U32),
         "index": CField("index", _U32)}),
     Schema.Truth: CLayout("_PyFbUnary", {
         "kind": _NONE, "type_version": CField("type_version", _U32)}),
@@ -194,6 +193,10 @@ RECIPE_LAYOUT: dict[Schema, CLayout] = {
         "read_kind": CField("read_kind", _U32),
         "values_layout": CField("values_layout", "bool"),
         "class_value": CField("class_value", "_PyValueGuarded")}),
+    Schema.Global: CLayout("_PyGlobalRecipe", {
+        "globals_version": CField("globals_version", _U32),
+        "builtins_version": CField("builtins_version", _U32),
+        "index": CField("index", _U32)}),
 }
 
 
@@ -332,6 +335,25 @@ class Select(enum.Enum):
     binary = "binary"                      # Intrinsic: type parameters, exception groups, isinstance
     compare = "compare"                    # Intrinsic: a comparison or containment at a site with no entry
     attr = "attr"                          # Intrinsic: an attribute by a name the instruction cannot hold
+    named = "named"                        # NamespaceRead: a name in the locals, globals and builtins
+    locals_scope = "locals_scope"          # NamespaceRead: the locals themselves
+    build_class_scope = "build_class_scope"  # NamespaceRead: the builtins' __build_class__
+    name_scope = "name_scope"              # NamespaceWrite: the locals
+    global_scope = "global_scope"          # NamespaceWrite: the globals
+    eager_import = "eager_import"          # Import: forced eager
+    policy_import = "policy_import"        # Import: lazy when the policy says so
+    lazy_import = "lazy_import"            # Import: `lazy import`
+    module_kept = "module_kept"            # ImportFrom: the module stays for the next read
+    module_spent = "module_spent"          # ImportFrom: the last read spends the module
+    tuple = "tuple"                        # Build: a tuple display
+    list = "list"                          # Build: a list display
+    set = "set"                            # Build: a set display
+    map = "map"                            # Build: a dict display
+    append = "append"                      # AddElement: a list takes the item
+    add = "add"                            # AddElement: a set takes the item
+    extend = "extend"                      # UpdateContainer: a list takes an iterable
+    union = "union"                        # UpdateContainer: a set takes an iterable
+    overlay = "overlay"                    # UpdateContainer: a dict takes a mapping
     present = "present"                    # the family's optional operands hold values
     absent = "absent"                      # its optional operands are vacant
 
@@ -347,6 +369,13 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "jit": (Select.jit_off, Select.jit_on),
     "intrinsic1": (Select.unary, Select.import_star, Select.stopiteration),
     "intrinsic2": (Select.binary, Select.compare, Select.attr),
+    "name_read": (Select.named, Select.locals_scope, Select.build_class_scope),
+    "namespace": (Select.name_scope, Select.global_scope),
+    "import_kind": (Select.eager_import, Select.policy_import, Select.lazy_import),
+    "module_use": (Select.module_kept, Select.module_spent),
+    "display": (Select.tuple, Select.list, Select.set, Select.map),
+    "element": (Select.append, Select.add),
+    "update": (Select.extend, Select.union, Select.overlay),
     "operand": (Select.present, Select.absent),
 }
 
@@ -695,6 +724,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("bool_out", CReturn.bool,
           COutcome(CTest.false, _RES, (CSource.out,), False, "fits"),
           COutcome(CTest.true, _RES, (CSource.out,), False, "overflow")),
+    # _PyStatusValue of an optional lookup: found(value) for a positive
+    # status, missing() for zero, raised for a negative one
+    _conv("status_optional", CReturn.status_value,
+          COutcome(CTest.positive, _RES, (_VAL,), False),
+          COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,
           COutcome(CTest.zero, _RES, (_VAL,), False),

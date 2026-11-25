@@ -49,7 +49,6 @@ FEEDBACK = {
     "STORE_SUBSCR": ("BINARY", 32),
     "STORE_ATTR": ("ATTR", 48),
     "LOAD_SUPER_ATTR": ("ATTR", 48),
-    "LOAD_GLOBAL": ("GLOBAL", 32),
     "CALL_KW": ("CALL", 40),
     "CALL_FUNCTION_EX": ("CALL", 40),
 }
@@ -130,10 +129,6 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(transfer("FOR_ITER_RANGE", for_iter, 1, 1, 4), set_null)
         self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 1, 4), set_null)
         self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 0, 7), unknown)
-
-        load_global = (5, 0, 0, 0)
-        self.assertEqual(transfer("LOAD_GLOBAL", load_global, 0, 0, 6), preserve)
-        self.assertEqual(transfer("LOAD_GLOBAL", load_global, 1, 0, 6), unknown)
 
     def test_call_family(self):
         # Pin the finite family of calls: the words that name their operands
@@ -511,7 +506,7 @@ class ContractTests(unittest.TestCase):
                             name)
         for name in ("LOAD_COMMON_CONSTANT",):
             self.assertFalse(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        for name in ("CALL_KW", "STORE_FAST", "LOAD_GLOBAL", "BINARY_OP"):
+        for name in ("CALL_KW", "STORE_FAST", "BINARY_OP"):
             self.assertTrue(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
         self.assertTrue(BY_NAME["RESUME"].effects & _opcode.IR_POLLS)
         self.assertTrue(BY_NAME["BINARY_OP_ADD_INT"].effects & _opcode.IR_DEOPTS)

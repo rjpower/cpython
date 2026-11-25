@@ -187,6 +187,299 @@ ir_run_Add_Generic(
 }
 
 static Py_NO_INLINE _PyIRTransfer
+ir_run_AttrWrite_Generic(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // AttrWrite.Generic (shared)
+    int opcode = ROP_HANDLER_AttrWrite_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_AttrWrite_Generic);
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a;
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors d;
+    int ret2;
+    _PyAttrRecipe out3;
+    int ret4;
+    int adapt_before_use_setattr3_cInstance;
+    int ret5;
+    int adapt_before_use_setattr3_cSlot;
+    int ret6;
+    int adapt_before_use_setattr3_cHint;
+    int ret7;
+    int adapt_before_use_setattr3_cShapeAdd;
+    int ret8;
+    int adapt_before_use_setattr3_cShape;
+    int ret9;
+    _PyAttrRecipe adapt_before_use_setattr3_rInstance;
+    _PyAttrRecipe adapt_before_use_setattr3_rShape;
+    _PyAttrRecipe adapt_before_use_setattr3_rShapeAdd;
+    _PyAttrRecipe adapt_before_use_setattr3_rHint;
+    _PyAttrRecipe adapt_before_use_setattr3_rSlot;
+    if (_PyRop_SrcPresent(home_value)) {
+        goto rop_AttrWrite_Generic_Adapt;
+    }
+    goto rop_AttrWrite_Generic_Delete;
+    rop_AttrWrite_Generic_Adapt:
+    if (!_PyFb_TickQuiet(&((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h)) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Sample;
+    }
+    rop_AttrWrite_Generic_adapt_before_use_setattr3_Run:
+    rop_AttrWrite_Generic_Store:
+    a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}});
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_SetAttr(_PyRop_AnchorArg(&a, 0), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), _PyRop_AnchorArg(&a, 1));
+    if (ret1 < 0) {
+        goto rop_AttrWrite_Generic_setattr_at_origin2_Failed;
+    }
+    if (_PyRop_RedirectPending(frame)) {
+        goto rop_AttrWrite_Generic_setattr_at_origin2_Moved;
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        own_value = _PyFrame_TakeHome(frame, home_value);
+    }
+    _PyRop_CloseAnchors(&a);
+    PyValue_XCLOSE(own_obj);
+    PyValue_XCLOSE(own_value);
+    DISPATCH();
+    rop_AttrWrite_Generic_Delete:
+    d = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_obj}});
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_DelAttr(_PyRop_AnchorArg(&d, 0), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)));
+    if (ret2 < 0) {
+        goto rop_AttrWrite_Generic_delattr_at_origin1_Failed;
+    }
+    if (_PyRop_RedirectPending(frame)) {
+        goto rop_AttrWrite_Generic_delattr_at_origin1_Moved;
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    _PyRop_CloseAnchors(&d);
+    PyValue_XCLOSE(own_obj);
+    DISPATCH();
+    rop_AttrWrite_Generic_delattr_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedCall(&d, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_obj}});
+    PROCESS_ERROR_AT(RAISE, 9, this_instr);
+    rop_AttrWrite_Generic_delattr_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireAbandoned(&d);
+    IR_REDIRECT();
+    rop_AttrWrite_Generic_adapt_before_use_setattr3_Sample:
+    ret4 = _PyAttr_ClassifySetAttr(PyValue_Borrow(*home_obj), this_instr, ((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out3);
+    if (ret4 == 1) {
+        adapt_before_use_setattr3_rShape = out3;
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_LShape;
+    }
+    if (ret4 == 2) {
+        adapt_before_use_setattr3_rShapeAdd = out3;
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_LShapeAdd;
+    }
+    if (ret4 == 3) {
+        adapt_before_use_setattr3_rHint = out3;
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_LHint;
+    }
+    if (ret4 == 4) {
+        adapt_before_use_setattr3_rSlot = out3;
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_LSlot;
+    }
+    if (ret4 == 5) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Other;
+    }
+    adapt_before_use_setattr3_rInstance = out3;
+    adapt_before_use_setattr3_cInstance = ROP_HANDLER_AttrWrite_Instance;
+    ret5 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_setattr3_cInstance);
+    if (ret5 == 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    }
+    if (ret5 < 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    }
+    rop_AttrWrite_Generic_adapt_before_use_setattr3_Changed:
+    next_instr = this_instr;
+    DISPATCH_SAME_OPARG();
+    rop_AttrWrite_Generic_adapt_before_use_setattr3_Other:
+    _PyRop_Backoff(&((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h);
+    goto rop_AttrWrite_Generic_Store;
+    rop_AttrWrite_Generic_adapt_before_use_setattr3_LSlot:
+    adapt_before_use_setattr3_cSlot = ROP_HANDLER_AttrWrite_Slot;
+    ret6 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_setattr3_cSlot);
+    if (ret6 > 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Changed;
+    }
+    if (ret6 == 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    }
+    goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    rop_AttrWrite_Generic_adapt_before_use_setattr3_LHint:
+    adapt_before_use_setattr3_cHint = ROP_HANDLER_AttrWrite_Hint;
+    ret7 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_setattr3_cHint);
+    if (ret7 > 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Changed;
+    }
+    if (ret7 == 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    }
+    goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    rop_AttrWrite_Generic_adapt_before_use_setattr3_LShapeAdd:
+    adapt_before_use_setattr3_cShapeAdd = ROP_HANDLER_AttrWrite_ShapeAdd;
+    ret8 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_setattr3_cShapeAdd);
+    if (ret8 > 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Changed;
+    }
+    if (ret8 == 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    }
+    goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    rop_AttrWrite_Generic_adapt_before_use_setattr3_LShape:
+    adapt_before_use_setattr3_cShape = ROP_HANDLER_AttrWrite_Shape;
+    ret9 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_setattr3_cShape);
+    if (ret9 > 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Changed;
+    }
+    if (ret9 == 0) {
+        goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    }
+    goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
+    rop_AttrWrite_Generic_setattr_at_origin2_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}});
+    PROCESS_ERROR_AT(RAISE, 11, this_instr);
+    rop_AttrWrite_Generic_setattr_at_origin2_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireAbandoned(&a);
+    IR_REDIRECT();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_SuperAttr_Generic(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // SuperAttr.Generic (shared)
+    int opcode = ROP_HANDLER_SuperAttr_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_SuperAttr_Generic);
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    int adapt_before_use_super1_c;
+    int ret3;
+    PyValue z;
+    if (!_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h)) {
+        goto rop_SuperAttr_Generic_adapt_before_use_super1_Sample;
+    }
+    rop_SuperAttr_Generic_adapt_before_use_super1_Run:
+    rop_SuperAttr_Generic_Run:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_SuperLookup(tstate, frame, this_instr, &(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)}, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    if (PyValue_IsNull(ret1)) {
+        goto rop_SuperAttr_Generic_Failed;
+    }
+    z = ret1;
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+    rop_SuperAttr_Generic_adapt_before_use_super1_Sample:
+    ret2 = _PyRop_ClassifySuper(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)}, this_instr, ((_PyFbUnary *)IR_FB(IR_D(ir_word))));
+    if (ret2 == 1) {
+        goto rop_SuperAttr_Generic_adapt_before_use_super1_Other;
+    }
+    adapt_before_use_super1_c = ROP_HANDLER_SuperAttr_Builtin;
+    ret3 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_super1_c);
+    if (ret3 == 0) {
+        goto rop_SuperAttr_Generic_adapt_before_use_super1_Run;
+    }
+    if (ret3 < 0) {
+        goto rop_SuperAttr_Generic_adapt_before_use_super1_Run;
+    }
+    next_instr = this_instr;
+    DISPATCH_SAME_OPARG();
+    rop_SuperAttr_Generic_adapt_before_use_super1_Other:
+    _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h);
+    goto rop_SuperAttr_Generic_Run;
+    rop_SuperAttr_Generic_Failed:
+    PROCESS_ERROR_AT(RAISE, 97, this_instr);
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_SuperAttrExplicit_Generic(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // SuperAttrExplicit.Generic (shared)
+    int opcode = ROP_HANDLER_SuperAttrExplicit_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_SuperAttrExplicit_Generic);
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    int adapt_before_use_super_explicit1_c;
+    int ret3;
+    PyValue z;
+    if (!_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h)) {
+        goto rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Sample;
+    }
+    rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Run:
+    rop_SuperAttrExplicit_Generic_Run:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_SuperLookupExplicit(tstate, frame, this_instr, &(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)}, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    if (PyValue_IsNull(ret1)) {
+        goto rop_SuperAttrExplicit_Generic_Failed;
+    }
+    z = ret1;
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+    rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Sample:
+    ret2 = _PyRop_ClassifySuper(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)}, this_instr, ((_PyFbUnary *)IR_FB(IR_D(ir_word))));
+    if (ret2 == 1) {
+        goto rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Other;
+    }
+    adapt_before_use_super_explicit1_c = ROP_HANDLER_SuperAttrExplicit_Builtin;
+    ret3 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_super_explicit1_c);
+    if (ret3 == 0) {
+        goto rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Run;
+    }
+    if (ret3 < 0) {
+        goto rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Run;
+    }
+    next_instr = this_instr;
+    DISPATCH_SAME_OPARG();
+    rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Other:
+    _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h);
+    goto rop_SuperAttrExplicit_Generic_Run;
+    rop_SuperAttrExplicit_Generic_Failed:
+    PROCESS_ERROR_AT(RAISE, 99, this_instr);
+}
+
+static Py_NO_INLINE _PyIRTransfer
 ir_run_Call_Generic(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
@@ -1777,105 +2070,309 @@ ir_run_Add_Extended(
 }
 
 static Py_NO_INLINE _PyIRTransfer
-ir_run_AttrWrite_Generic(
+ir_run_AttrWrite_Instance(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    // AttrWrite.Generic (shared)
-    int opcode = ROP_HANDLER_AttrWrite_Generic;
+    // AttrWrite.Instance (inline)
+    int opcode = ROP_HANDLER_AttrWrite_Instance;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
     IR_HOLD_NEXT();
     next_instr += 1;
-    INSTRUCTION_STATS(ROP_HANDLER_AttrWrite_Generic);
+    INSTRUCTION_STATS(ROP_HANDLER_AttrWrite_Instance);
+    _PyAttrRecipe out1;
     PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
     PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
-    _PyRopAnchors a;
-    int ret1;
+    PyValueBorrow v;
+    PyObject * o;
+    PyValue x;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    _PyAttrRecipe r;
+    PyValue old;
+    if (!_PyAttr_AdmittedInstanceSlot(((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out1)) {
+        goto rop_AttrWrite_Instance_Miss;
+    }
+    r = out1;
+    if (!_PyRop_SrcPresent(home_value)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    v = PyValue_Borrow(*home_obj);
+    if (!PyValue_IsObject(v)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    o = PyValue_AsKnownObjectBorrow(v);
+    if (!_PyAttr_InstanceVersion(o, r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    if (!_PyAttr_StoreValuesReady(o, r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    x = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+    if (!_PyAttr_StoreInstanceValue(v, r, x, &out2)) {
+        goto rop_AttrWrite_Instance_Added;
+    }
+    old = out2;
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    PyValue_XCLOSE(old);
+    PyValue_XCLOSE(own_obj);
+    DISPATCH();
+    rop_AttrWrite_Instance_Miss:
+    JUMP_TO_PREDICTED(AttrWrite_Generic);
+    rop_AttrWrite_Instance_Added:
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    PyValue_XCLOSE(own_obj);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_AttrWrite_Shape(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // AttrWrite.Shape (inline)
+    int opcode = ROP_HANDLER_AttrWrite_Shape;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_AttrWrite_Shape);
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValue x;
+    PyValue old;
+    PyValue own_obj = PyValue_NULL;
+    _PyAttrRecipe r;
+    if (!_PyAttr_AdmittedStoreShape(((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out1)) {
+        goto rop_AttrWrite_Shape_Miss;
+    }
+    r = out1;
+    if (!_PyRop_SrcPresent(home_value)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    v = PyValue_Borrow(*home_obj);
+    if (!PyValue_IsObject(v)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    o = PyValue_AsKnownObjectBorrow(v);
+    if (!_PyAttr_InstanceVersion(o, r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    if (!_PyAttr_StoreShapeFilled(o, r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    x = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+    old = _PyAttr_StoreShapeSlot(v, r, x);
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    PyValue_XCLOSE(old);
+    PyValue_XCLOSE(own_obj);
+    DISPATCH();
+    rop_AttrWrite_Shape_Miss:
+    JUMP_TO_PREDICTED(AttrWrite_Generic);
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_AttrWrite_ShapeAdd(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // AttrWrite.ShapeAdd (inline)
+    int opcode = ROP_HANDLER_AttrWrite_ShapeAdd;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_AttrWrite_ShapeAdd);
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValue x;
+    PyValue own_obj = PyValue_NULL;
+    _PyAttrRecipe r;
+    if (!_PyAttr_AdmittedStoreShape(((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out1)) {
+        goto rop_AttrWrite_ShapeAdd_Miss;
+    }
+    r = out1;
+    if (!_PyRop_SrcPresent(home_value)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    v = PyValue_Borrow(*home_obj);
+    if (!PyValue_IsObject(v)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    o = PyValue_AsKnownObjectBorrow(v);
+    if (!_PyAttr_InstanceVersion(o, r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    if (!_PyAttr_StoreShapeVacant(o, r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    x = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+    _PyAttr_StoreShapeAdd(v, r, x);
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    PyValue_XCLOSE(own_obj);
+    DISPATCH();
+    rop_AttrWrite_ShapeAdd_Miss:
+    JUMP_TO_PREDICTED(AttrWrite_Generic);
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_AttrWrite_Hint(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // AttrWrite.Hint (inline)
+    int opcode = ROP_HANDLER_AttrWrite_Hint;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_AttrWrite_Hint);
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue old;
     PyValue own_obj = PyValue_NULL;
     PyValue own_value = PyValue_NULL;
-    _PyRopAnchors d;
-    int ret2;
-    if (_PyRop_SrcPresent(home_value)) {
-        goto rop_AttrWrite_Generic_Store;
+    _PyAttrRecipe r;
+    if (!_PyAttr_AdmittedInstanceSlot(((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out1)) {
+        goto rop_AttrWrite_Hint_Miss;
     }
-    goto rop_AttrWrite_Generic_Delete;
-    rop_AttrWrite_Generic_Store:
-    a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}});
-    IR_STUB_ESCAPE();
-    ret1 = _PyRop_SetAttr(_PyRop_AnchorArg(&a, 0), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), _PyRop_AnchorArg(&a, 1));
-    if (ret1 < 0) {
-        goto rop_AttrWrite_Generic_setattr_at_origin2_Failed;
+    r = out1;
+    if (!_PyRop_SrcPresent(home_value)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
-    if (_PyRop_RedirectPending(frame)) {
-        goto rop_AttrWrite_Generic_setattr_at_origin2_Moved;
+    v = PyValue_Borrow(*home_obj);
+    if (!PyValue_IsObject(v)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
+    o = PyValue_AsKnownObjectBorrow(v);
+    if (!_PyAttr_InstanceVersion(o, r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    if (!_PyAttr_HintStoreReady(o, GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    w = PyValue_Borrow(*home_value);
+    old = _PyAttr_StoreHinted(v, r, w);
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_obj = _PyFrame_TakeHome(frame, home_obj);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    _PyRop_CloseAnchors(&a);
+    PyValue_XCLOSE(old);
     PyValue_XCLOSE(own_obj);
     PyValue_XCLOSE(own_value);
     DISPATCH();
-    rop_AttrWrite_Generic_Delete:
-    d = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_obj}});
-    IR_STUB_ESCAPE();
-    ret2 = _PyRop_DelAttr(_PyRop_AnchorArg(&d, 0), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)));
-    if (ret2 < 0) {
-        goto rop_AttrWrite_Generic_delattr_at_origin1_Failed;
-    }
-    if (_PyRop_RedirectPending(frame)) {
-        goto rop_AttrWrite_Generic_delattr_at_origin1_Moved;
-    }
-    if (!(ir_word & IR_F_LOCAL_A)) {
-        own_obj = _PyFrame_TakeHome(frame, home_obj);
-    }
-    _PyRop_CloseAnchors(&d);
-    PyValue_XCLOSE(own_obj);
-    DISPATCH();
-    rop_AttrWrite_Generic_delattr_at_origin1_Failed:
-    IR_STUB_ESCAPE();
-    _PyRop_RetireFailedCall(&d, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_obj}});
-    PROCESS_ERROR_AT(RAISE, 9, this_instr);
-    rop_AttrWrite_Generic_delattr_at_origin1_Moved:
-    IR_STUB_ESCAPE();
-    _PyRop_RetireAbandoned(&d);
-    IR_REDIRECT();
-    rop_AttrWrite_Generic_setattr_at_origin2_Failed:
-    IR_STUB_ESCAPE();
-    _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}});
-    PROCESS_ERROR_AT(RAISE, 11, this_instr);
-    rop_AttrWrite_Generic_setattr_at_origin2_Moved:
-    IR_STUB_ESCAPE();
-    _PyRop_RetireAbandoned(&a);
-    IR_REDIRECT();
+    rop_AttrWrite_Hint_Miss:
+    JUMP_TO_PREDICTED(AttrWrite_Generic);
 }
 
 static Py_NO_INLINE _PyIRTransfer
-ir_run_SuperAttr_Generic(
+ir_run_AttrWrite_Slot(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    // SuperAttr.Generic (shared)
-    int opcode = ROP_HANDLER_SuperAttr_Generic;
+    // AttrWrite.Slot (inline)
+    int opcode = ROP_HANDLER_AttrWrite_Slot;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_AttrWrite_Slot);
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValue x;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    _PyAttrRecipe r;
+    PyValue old;
+    if (!_PyAttr_AdmittedInstanceSlot(((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out1)) {
+        goto rop_AttrWrite_Slot_Miss;
+    }
+    r = out1;
+    if (!_PyRop_SrcPresent(home_value)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    v = PyValue_Borrow(*home_obj);
+    if (!PyValue_IsObject(v)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    o = PyValue_AsKnownObjectBorrow(v);
+    if (!_PyAttr_InstanceVersion(o, r)) {
+        JUMP_TO_PREDICTED(AttrWrite_Generic);
+    }
+    x = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+    if (!_PyAttr_StoreMemberSlot(v, r, x, &out2)) {
+        goto rop_AttrWrite_Slot_Added;
+    }
+    old = out2;
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    PyValue_XCLOSE(old);
+    PyValue_XCLOSE(own_obj);
+    DISPATCH();
+    rop_AttrWrite_Slot_Miss:
+    JUMP_TO_PREDICTED(AttrWrite_Generic);
+    rop_AttrWrite_Slot_Added:
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    PyValue_XCLOSE(own_obj);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_SuperAttr_Builtin(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // SuperAttr.Builtin (inline)
+    int opcode = ROP_HANDLER_SuperAttr_Builtin;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
     IR_HOLD_NEXT();
     next_instr += _PyIR_SpanWordLength(opcode, ir_word);
-    INSTRUCTION_STATS(ROP_HANDLER_SuperAttr_Generic);
+    INSTRUCTION_STATS(ROP_HANDLER_SuperAttr_Builtin);
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
+    if (!_PyRop_SuperBuiltinReady(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)})) {
+        JUMP_TO_PREDICTED(SuperAttr_Generic);
+    }
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_SuperLookup(tstate, frame, this_instr, &(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)}, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    ret1 = _PyRop_SuperLookupBuiltin(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)}, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
     if (PyValue_IsNull(ret1)) {
-        goto rop_SuperAttr_Generic_Failed;
+        goto rop_SuperAttr_Builtin_Failed;
     }
     z = ret1;
     old_dst = *home_dst;
@@ -1883,7 +2380,7 @@ ir_run_SuperAttr_Generic(
     _PyValue_CheckHome(*home_dst);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
-    rop_SuperAttr_Generic_Failed:
+    rop_SuperAttr_Builtin_Failed:
     PROCESS_ERROR_AT(RAISE, 97, this_instr);
 }
 
@@ -1920,26 +2417,29 @@ ir_run_SuperAttr_Observed(
 }
 
 static Py_NO_INLINE _PyIRTransfer
-ir_run_SuperAttrExplicit_Generic(
+ir_run_SuperAttrExplicit_Builtin(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    // SuperAttrExplicit.Generic (shared)
-    int opcode = ROP_HANDLER_SuperAttrExplicit_Generic;
+    // SuperAttrExplicit.Builtin (inline)
+    int opcode = ROP_HANDLER_SuperAttrExplicit_Builtin;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
     IR_HOLD_NEXT();
     next_instr += _PyIR_SpanWordLength(opcode, ir_word);
-    INSTRUCTION_STATS(ROP_HANDLER_SuperAttrExplicit_Generic);
+    INSTRUCTION_STATS(ROP_HANDLER_SuperAttrExplicit_Builtin);
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
+    if (!_PyRop_SuperBuiltinReady(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)})) {
+        JUMP_TO_PREDICTED(SuperAttrExplicit_Generic);
+    }
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_SuperLookupExplicit(tstate, frame, this_instr, &(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)}, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    ret1 = _PyRop_SuperLookupBuiltin(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)}, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
     if (PyValue_IsNull(ret1)) {
-        goto rop_SuperAttrExplicit_Generic_Failed;
+        goto rop_SuperAttrExplicit_Builtin_Failed;
     }
     z = ret1;
     old_dst = *home_dst;
@@ -1947,7 +2447,7 @@ ir_run_SuperAttrExplicit_Generic(
     _PyValue_CheckHome(*home_dst);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
-    rop_SuperAttrExplicit_Generic_Failed:
+    rop_SuperAttrExplicit_Builtin_Failed:
     PROCESS_ERROR_AT(RAISE, 99, this_instr);
 }
 

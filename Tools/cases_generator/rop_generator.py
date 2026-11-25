@@ -401,8 +401,9 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         elif pl.kind is FieldKind.feedback:
             role = "_PyIR_ROLE_FB"
             fb_schema = param.type.schema.value
-            if fb_schema == "Truth":
-                # Truth sites share the unary entry
+            if fb_schema in ("Truth", "Super"):
+                # Truth sites share the unary entry; super sites need only
+                # its counter
                 fb_schema = "Unary"
             elif fb_schema == "Item":
                 # The item families keep the entry of BINARY_OP and STORE_SUBSCR

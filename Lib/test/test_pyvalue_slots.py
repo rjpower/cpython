@@ -161,7 +161,7 @@ class PyValueSlotTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             replace()
-        self.assertIn('STORE_ATTR_SLOT', executing_handlers(replace))
+        self.assertIn('AttrWrite.Slot', executing_handlers(replace))
         item.value = Old()
         try:
             replace()
@@ -195,7 +195,7 @@ class PyValueSlotTests(unittest.TestCase):
             events.clear()
             assign()
             self.assertEqual(events, ['old field', ('owner', 1234567)])
-        self.assertIn('STORE_ATTR_SLOT', executing_handlers(assign))
+        self.assertIn('AttrWrite.Slot', executing_handlers(assign))
 
     def test_load_owner_retires_before_folded_local_replacement(self):
         # The result is stored into the local, then the owner and the
@@ -267,7 +267,7 @@ class PyValueSlotTests(unittest.TestCase):
             events.clear()
             assign()
             self.assertEqual(events, [1234567])
-        self.assertIn('STORE_ATTR_SLOT', executing_handlers(assign))
+        self.assertIn('AttrWrite.Slot', executing_handlers(assign))
 
     def test_clear_and_cycles_release_pointer_values(self):
         class Item:

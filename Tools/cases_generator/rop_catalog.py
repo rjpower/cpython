@@ -118,7 +118,7 @@ class Schema(enum.Enum):
 SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
     Schema.Binary: ("kind", "descr"),
     Schema.Attr: ("kind", "type_version", "offset", "shape", "keys_version", "index",
-                  "descr", "rows", "class_value"),
+                  "descr", "rows", "class_value", "shape_to"),
     Schema.Global: ("globals_version", "builtins_version", "index"),
     Schema.Truth: ("kind", "type_version"),
     Schema.Compare: ("kind",),
@@ -194,13 +194,17 @@ FB_LAYOUT: dict[Schema, CLayout] = {
         "index": CField("index", _U32),
         "descr": CField("descr", "PyObject *"),
         "rows": CField("h.poly", _U32),
-        "class_value": CField("class_value", "_PyValueGuarded")},
+        "class_value": CField("class_value", "_PyValueGuarded"),
+        "shape_to": CField("shape_to", _U32)},
         unions=(
             # A module's keys version, a class's version or a shape index
             CUnion(("keys_version", "shape"),
                    ("dict_version", "func_version", "class_version", "shape")),
             CUnion(("offset", "index"), ("index", "offset", "hint", "dictoffset")),
-            CUnion(("descr",), ("descr", "fget", "getattribute", "shape_to")))),
+            CUnion(("descr", "shape_to"), ("descr", "fget", "getattribute", "shape_to")))),
+    # The super sites record nothing but the counter: the guards read the
+    # operands
+    Schema.Super: CLayout("_PyFbUnary", {"kind": _NONE, "type_version": _NONE}),
     Schema.Global: CLayout("_PyFbGlobal", {
         "globals_version": CField("globals_version", _U32),
         "builtins_version": CField("builtins_version", _U32),
@@ -226,6 +230,7 @@ RECIPE_LAYOUT: dict[Schema, CLayout] = {
         "aux": CField("aux", _U32),
         "offset": CField("offset", _U32),
         "read_kind": CField("read_kind", _U32),
+        "shape_to": CField("shape_to", _U32),
         "values_layout": CField("values_layout", "bool"),
         "class_value": CField("class_value", "_PyValueGuarded")}),
     Schema.Global: CLayout("_PyGlobalRecipe", {

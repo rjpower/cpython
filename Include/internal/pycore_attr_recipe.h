@@ -34,6 +34,7 @@ typedef struct {
     uint32_t aux;               // the owner's shape; a module's keys version; a class's version
     uint32_t offset;            // a slot's byte offset, a dict hint or index, a dict offset
     uint32_t read_kind;         // _Py_FB_READ_*
+    uint32_t shape_to;          // a store that adds the attribute: the shape after it
     bool values_layout;         // a method row whose receiver has inline values
     _PyValueGuarded class_value;    // the cached method or class value
 } _PyAttrRecipe;
@@ -54,6 +55,9 @@ extern int _PyAttr_ClassifyGetAttr(PyValueBorrow owner, _PyInstr *site,
 extern int _PyAttr_ClassifyGetMethod(PyValueBorrow owner, _PyInstr *site,
                                      const _PyFbAttr *fb, PyObject *name,
                                      _PyAttrRecipe *recipe);
+extern int _PyAttr_ClassifySetAttr(PyValueBorrow owner, _PyInstr *site,
+                                   const _PyFbAttr *fb, PyObject *name,
+                                   _PyAttrRecipe *recipe);
 extern bool _PyAttr_PolyShapeReady(_PyInstr *site, const _PyFbAttr *fb);
 extern bool _PyAttr_PolyMethodReady(_PyInstr *site, const _PyFbAttr *fb);
 
@@ -106,6 +110,29 @@ _PyAttr_AdmittedShape(const _PyFbAttr *fb, PyObject *name, _PyAttrRecipe *out)
     out->aux = fb->shape;
     out->offset = fb->offset;
     out->read_kind = _Py_FB_READ_SHAPE;
+    out->values_layout = false;
+    return true;
+#else
+    (void)fb; (void)out;
+    return false;
+#endif
+}
+
+/* The site's recipe for a store under a shape: the entry holds the type
+   version and the owner's shape, and for an addition the shape after it */
+static inline bool
+_PyAttr_AdmittedStoreShape(const _PyFbAttr *fb, PyObject *name, _PyAttrRecipe *out)
+{
+    (void)name;
+#ifdef Py_SHAPES
+    if (fb->type_version == 0) {
+        return false;
+    }
+    out->type_version = fb->type_version;
+    out->aux = fb->shape;
+    out->offset = fb->offset;
+    out->shape_to = fb->shape_to;
+    out->read_kind = 0;
     out->values_layout = false;
     return true;
 #else
@@ -226,6 +253,153 @@ static inline PyValueBorrow
 _PyAttr_BorrowValueSlot(PyObject *o, _PyAttrRecipe r)
 {
     return PyValue_Borrow(*_PyObject_ValueSlot(o, r.offset));
+}
+
+/* Stores.  The guards and the store of an arm run under the GIL with nothing
+   between them; the free-threaded build's object lock of the old handlers is
+   not carried over. */
+
+/* The owner has no dictionary, its inline values are valid and, under
+   shapes, a store that fills a vacant slot has its transition */
+static inline bool
+_PyAttr_StoreValuesReady(PyObject *o, _PyAttrRecipe r)
+{
+    assert(Py_TYPE(o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
+    if (_PyObject_GetManagedDict(o) || !_PyAttr_ValidInlineValues(o)) {
+        return false;
+    }
+#ifdef Py_SHAPES
+    PyValue *slot = _PyObject_ValueSlot(o, r.offset);
+    if (PyValue_IsNull(*slot)) {
+        PyDictValues *values = _PyObject_InlineValues(o);
+        if (_PyShape_TransitionMissing(Py_TYPE(o), values->shape,
+                                       slot - values->values))
+        {
+            return false;
+        }
+    }
+#else
+    (void)r;
+#endif
+    return true;
+}
+
+/* The owner's shape is the recipe's and the recipe's slot is filled (a
+   store replaces it) or vacant (a store adds it).  The shape proves this
+   for an entry written for this handler; the test of the slot keeps a
+   store from filling a filled slot when the entry was rewritten for
+   another nomination. */
+static inline bool
+_PyAttr_StoreShapeFilled(PyObject *o, _PyAttrRecipe r)
+{
+    return _PyAttr_ShapeCurrent(o, r)
+        && !PyValue_IsNull(*_PyObject_ValueSlot(o, r.offset));
+}
+
+static inline bool
+_PyAttr_StoreShapeVacant(PyObject *o, _PyAttrRecipe r)
+{
+    return _PyAttr_ShapeCurrent(o, r)
+        && PyValue_IsNull(*_PyObject_ValueSlot(o, r.offset));
+}
+
+/* The managed dict has an entry at the recipe's hint whose key is the name
+   and which holds a value, in split or combined keys, and the dict has no
+   watchers (their notification may run Python). */
+static inline bool
+_PyAttr_HintStoreReady(PyObject *o, PyObject *name, _PyAttrRecipe r)
+{
+    assert(Py_TYPE(o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
+    PyDictObject *dict = _PyObject_GetManagedDict(o);
+    if (dict == NULL) {
+        return false;
+    }
+    assert(PyDict_CheckExact((PyObject *)dict));
+    PyDictKeysObject *dk = dict->ma_keys;
+    if (r.offset >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries) ||
+        dk->dk_kind == DICT_KEYS_GENERAL)
+    {
+        return false;
+    }
+    PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dk) + r.offset;
+    if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
+        return false;
+    }
+    // A split table keeps its values, such as an object's inline values,
+    // apart from its keys.
+    PyValue *slot = dict->ma_values == NULL ?
+        &ep->me_value : &dict->ma_values->values[r.offset];
+    return !PyValue_IsNull(*slot) && !(dict->_ma_watcher_tag & DICT_WATCHER_MASK);
+}
+
+/* The slot of the hinted entry: the guards of _PyAttr_HintStoreReady hold */
+static inline PyValue *
+_PyAttr_HintedSlot(PyObject *o, _PyAttrRecipe r)
+{
+    PyDictObject *dict = _PyObject_GetManagedDict(o);
+    PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dict->ma_keys) + r.offset;
+    return dict->ma_values == NULL ? &ep->me_value : &dict->ma_values->values[r.offset];
+}
+
+/* true with the previous owner when the slot was filled; false when it was
+   vacant, which adds the attribute: insertion order and shape follow */
+static inline bool
+_PyAttr_StoreInstanceValue(PyValueBorrow owner, _PyAttrRecipe r, PyValue x,
+                           PyValue *old)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    PyValue *slot = _PyObject_ValueSlot(o, r.offset);
+    PyValue previous = _PyValueSlot_Exchange(slot, x);
+    if (!PyValue_IsNull(previous)) {
+        *old = previous;
+        return true;
+    }
+    PyDictValues *values = _PyObject_InlineValues(o);
+    Py_ssize_t index = slot - values->values;
+    _PyDictValues_AddToInsertionOrder(values, index);
+#ifdef Py_SHAPES
+    _PyDictValues_SetShape(values,
+        _PyShape_FindTransition(Py_TYPE(o), values->shape, index));
+#endif
+    return false;
+}
+
+/* The shape proves the slot filled */
+static inline PyValue
+_PyAttr_StoreShapeSlot(PyValueBorrow owner, _PyAttrRecipe r, PyValue x)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    return _PyValueSlot_ExchangeFilled(_PyObject_ValueSlot(o, r.offset), x);
+}
+
+/* The shape proves the slot vacant */
+static inline void
+_PyAttr_StoreShapeAdd(PyValueBorrow owner, _PyAttrRecipe r, PyValue x)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    PyValue *slot = _PyObject_ValueSlot(o, r.offset);
+    _PyValueSlot_Fill(slot, x);
+    PyDictValues *values = _PyObject_InlineValues(o);
+    _PyDictValues_AddToInsertionOrder(values, slot - values->values);
+    _PyDictValues_SetShape(values, (uint8_t)r.shape_to);
+}
+
+static inline PyValue
+_PyAttr_StoreHinted(PyValueBorrow owner, _PyAttrRecipe r, PyValueBorrow x)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    return _PyValueSlot_ExchangeFilled(_PyAttr_HintedSlot(o, r), PyValue_DUP(x));
+}
+
+/* A member slot: true with the previous owner when it held one */
+static inline bool
+_PyAttr_StoreMemberSlot(PyValueBorrow owner, _PyAttrRecipe r, PyValue x,
+                        PyValue *old)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    PyValue previous = _PyValueSlot_Exchange(_PyObject_ValueSlot(o, r.offset), x);
+    *old = previous;
+    return !PyValue_IsNull(previous);
 }
 
 /* The recipe of an entry that an arm of the lookups installed: every field

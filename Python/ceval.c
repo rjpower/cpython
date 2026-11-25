@@ -2384,6 +2384,58 @@ _PyRop_SuperLookupExplicitObserved(PyThreadState *tstate, _PyInterpreterFrame *f
                             true);
 }
 
+/* The part i of a super span, borrowed from its home */
+static inline PyValueBorrow
+rop_super_part(const _PyRopSpan *parts, int i)
+{
+    int slot = _PyIR_SpanElement(parts->head, parts->handler, parts->first + i);
+    return PyValue_Borrow(parts->frame->base[slot]);
+}
+
+/* `super` is the builtin and the class is a type: the lookup needs no super
+ * object */
+static inline bool
+_PyRop_SuperBuiltinReady(const _PyRopSpan *parts)
+{
+    PyValueBorrow sup = rop_super_part(parts, 0);
+    PyValueBorrow cls = rop_super_part(parts, 1);
+    return PyValue_IsObject(sup) && PyValue_IsObject(cls)
+        && PyValue_AsKnownObjectBorrow(sup) == (PyObject *)&PySuper_Type
+        && PyType_Check(PyValue_AsKnownObjectBorrow(cls));
+}
+
+/* The case of the adaptation row: 0 when the site can use the builtin
+ * lookup, 1 when it cannot */
+static inline int
+_PyRop_ClassifySuper(const _PyRopSpan *parts, _PyInstr *site,
+                     const _PyFbUnary *fb)
+{
+    (void)site;
+    (void)fb;
+    return _PyRop_SuperBuiltinReady(parts) ? 0 : 1;
+}
+
+/* super(...).name without the super object, as LOAD_SUPER_ATTR_ATTR did: the
+ * parts are the row's to close on both outcomes */
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupBuiltin(const _PyRopSpan *parts, PyObject *name)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    _PyStatusValue found = _PySuper_LookupValue(
+        (PyTypeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(vals[1])),
+        PyValue_Borrow(vals[2]), name, 0);
+    PyObject *exc = found.status < 0 ? PyErr_GetRaisedException() : NULL;
+    for (int i = 0; i < 3; i++) {
+        PyValue_XCLOSE(vals[i]);
+    }
+    if (exc != NULL) {
+        PyErr_SetRaisedException(exc);
+        return PyValue_NULL;
+    }
+    return found.value;
+}
+
 /* The method of a special name on the receiver's type.  The lookup works on
  * a counted copy of the receiver, which it keeps (*self) when the method is
  * unbound and closes when the method is bound.  A missing method raises the

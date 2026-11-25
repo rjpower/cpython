@@ -1017,6 +1017,13 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
+    "AttrWrite.Instance": "needs a warmed recipe in the entry; scenarios are not extended in the interpreter-first batch",
+    "AttrWrite.Shape": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.ShapeAdd": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.Hint": "needs a warmed hint recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.Slot": "needs a warmed slot recipe in the entry; as AttrWrite.Instance",
+    "SuperAttr.Builtin": "installed only by adaptation; as AttrWrite.Instance",
+    "SuperAttrExplicit.Builtin": "installed only by adaptation; as AttrWrite.Instance",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
@@ -1042,7 +1049,8 @@ NOT_RUN = {
 
 
 def evaluated_arms():
-    return [n for n in SSA if PROGRAM.arms[n].family in SCENARIOS]
+    return [n for n in SSA
+            if PROGRAM.arms[n].family in SCENARIOS and n not in NOT_RUN]
 
 
 class AgainstCTests(unittest.TestCase):

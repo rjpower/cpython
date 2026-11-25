@@ -315,7 +315,7 @@ def verify(program: Program) -> tuple[Diagnostic, ...]:
     for name, macro in program.macros.items():
         if macro.graph is not None and name not in broken and name in program.graphs:
             out += check_graph(program, name, None, macro)
-    for name, arm in program.arms.items():
+    for name, arm in [*program.arms.items(), *program.completions.items()]:
         if name not in broken and name in program.graphs:
             out += check_graph(program, name, arm, None)
     out += check_families(program, broken)
@@ -391,12 +391,13 @@ def check_graph(program: Program, name: str, arm: Arm | None, macro: Macro | Non
         for s in b.stmts:
             if isinstance(s, Let):
                 defblock[s.name] = b.label
+    homes = rop_check.home_params(params)
     w = Walk(program, name, blocks, info.order, info.idom, family, macro, contract,
-             {p.name: p.type for p in params}, defblock)
+             {p.name: p.type for p in params + homes}, defblock)
     w.transfers = frozenset(e.target.label for b in graph.blocks
                             if isinstance(b.term, CallTerm) and is_transfer(program, b.term.callee)
                             for e in b.term.edges)
-    walk(w, entry_state(w, params))
+    walk(w, entry_state(w, homes))
     if arm is not None:
         for f in contract.requires:
             w.report(f.span, Rule.facts, f"arm requires "
@@ -434,12 +435,32 @@ def entry_state(w: Walk, params: tuple[Param, ...]) -> State:
         return st
     # The static evidence that selected the arm, and the instrumentation
     # that runs an observed wrapper, hold at its entry
-    arm = w.program.arms[w.definition]
+    arm = arm_of(w.program, w.definition)
+    if arm.completion is not None:
+        completion_state(w, st, arm)
     for fact, subject in rop_check.select_facts(w.family, arm):
         st.add_fact(FactT(fact, None, (subject,)))
     if arm.observes:
         st.add_fact(FactT(Fact.instrumented, None, ("site",)))
     return st
+
+
+def arm_of(program: Program, name: str) -> Arm:
+    return program.arms[name] if name in program.arms else program.completions[name]
+
+
+def completion_state(w: Walk, st: State, arm: Arm) -> None:
+    """A completion starts from its resume point: P's kept homes intact,
+    its spent ones spent, every destination (P's definition among them)
+    vacant, and the child's value live"""
+    p = w.program.points.get(arm.completion or "")
+    if p is not None:
+        spent = {h for n in p.spent for h in rop_check.expand_group(n, w.operands)}
+        for h in st.homes:
+            if h in spent:
+                st.homes[h] = HomeState(Home.spent, p.span, f"resume point {p.name}")
+    for param in arm.graph.blocks[0].params:
+        st.live[param.name] = Token(param.span, "the child's return")
 
 
 # The walk
@@ -1028,6 +1049,7 @@ def do_publish(w: Walk, st: State, s: Publish) -> None:
     spent temporaries, install all results, then discharge the debts in
     order; the point describes the state after."""
     what = f"publish at {s.point}"
+    s = replace(s, debts=rop_check.expand_debts(s.debts, w.operands))
     bound: dict[str, str] = {}
     owners: dict[str, str] = {}
     vectors: list[Binding] = []
@@ -1098,7 +1120,7 @@ def do_publish(w: Walk, st: State, s: Publish) -> None:
                 if not acquired:
                     releases.append(f"spent({subject})")
         elif kind == DebtKind.old:
-            check_old(w, subject, span, what, releases)
+            check_old(w, st, subject, span, what, releases)
             h = st.homes.get(subject)
             if h is not None and h.state == Home.intact:
                 # A Local's binding, read as a source, is the displaced owner
@@ -1137,14 +1159,22 @@ def do_publish(w: Walk, st: State, s: Publish) -> None:
         check_point(w, st, point, s.span, what)
 
 
-def check_old(w: Walk, subject: str, span: SrcSpan, what: str,
+def check_old(w: Walk, st: State, subject: str, span: SrcSpan, what: str,
               releases: list[str]) -> None:
     """old(d) releases d's displaced owner, per home class.  A temporary's
     is vacant by construction.  A destination that may name a local's home
     (a Dst, which a folded store can make a local's) releases a binding
     there, which may run Python: the arm declares `releases on (d)`.  A
-    Local operand always releases a binding."""
+    Local operand always releases a binding.  A group's projection is never
+    a local's: it displaces an owner only if it is still full, and none if
+    it holds a tagged index."""
     t = w.operands.get(subject)
+    if t == rop_check.PART:
+        h = st.homes.get(subject)
+        if (h is not None and h.state == Home.intact
+                and not st.has(FactT(Fact.tagged_index, None, (subject,)))):
+            releases.append(f"old({subject})")
+        return
     if t is not None and handle_of(t) == Handle.Local:
         releases.append(f"old({subject})")
         use_effect(w, State(), Effect.runs_python, span,
@@ -1265,7 +1295,7 @@ def do_exit(w: Walk, st: State, t: Exit, transfer: bool = False) -> None:
         use_effect(w, st, Effect.switches_frame, t.span, what)
         if args[0] is not None:
             take(w, st, args[0], t.span, what)
-        check_enter(w, st, t)
+        check_enter(w, st, t, args[0])
     elif kind == "return":
         use_effect(w, st, Effect.switches_frame, t.span, what)
         if not transfer:
@@ -1334,10 +1364,21 @@ def check_pinned(w: Walk, st: State, span: SrcSpan, what: str) -> None:
                  f"code is not pinned on this path: call {PIN_DEPARTING}() first")
 
 
-def check_enter(w: Walk, st: State, t: Exit) -> None:
+def check_enter(w: Walk, st: State, t: Exit, frame: str | None) -> None:
     """`exit enter(c) resume P`: the caller's homes are P's when the child
     returns, except P's definition, which the child's value makes.  It is
-    not defined before the transfer."""
+    not defined before the transfer.  A generator's frame returns through
+    the family's completion, so the enter names it (`complete A`) exactly
+    when generator_frame(c) holds."""
+    if frame is not None:
+        generator = st.has(FactT(Fact.generator_frame, None, (st.canonical(frame),)))
+        if generator and t.complete is None:
+            w.report(t.span, Rule.control, f"exit enter({display(frame)}): the frame is "
+                     "a generator's, which returns through a completion: name it "
+                     "(resume P complete A)")
+        elif not generator and t.complete is not None:
+            w.report(t.span, Rule.control, f"exit enter({display(frame)}) complete "
+                     f"{t.complete}: no fact proves generator_frame({display(frame)})")
     p = w.program.points.get(t.resume or "")
     if p is None:
         return
@@ -1368,11 +1409,13 @@ def check_point(w: Walk, st: State, p: Point, span: SrcSpan, what: str,
     roles: dict[str, str] = {}
     for role, names in (("keep", p.keep), ("spent", p.spent)):
         for n in names:
-            roles[n] = role
+            for h in rop_check.expand_group(n, w.operands):
+                roles[h] = role
+    defs = {h for n in p.defs for h in rop_check.expand_group(n, w.operands)}
     for h, hs in sorted(st.homes.items()):
         if h.endswith("/dst"):
             name = h.removesuffix("/dst")
-            declared = name in p.defs
+            declared = name in defs
             actual = hs.state == Home.defined
             if resume:
                 if actual:

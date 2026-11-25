@@ -55,7 +55,7 @@ SSA, FAILED = rop_ssa.expand_all(PROGRAM)
 class ExpansionTests(unittest.TestCase):
     def test_every_arm_expands(self):
         self.assertEqual({n: d.message for n, d in FAILED.items()}, {})
-        self.assertEqual(set(SSA), set(PROGRAM.arms))
+        self.assertEqual(set(SSA), set(PROGRAM.arms) | set(PROGRAM.completions))
 
     def test_exits_are_declared_and_name_their_frame_state(self):
         for name, arm in SSA.items():

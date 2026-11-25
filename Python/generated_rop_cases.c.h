@@ -517,7 +517,7 @@
             rop_GetAttr_Generic_getattr_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_obj}});
-            PROCESS_ERROR_AT(RAISE, 32, this_instr);
+            PROCESS_ERROR_AT(RAISE, 31, this_instr);
             rop_GetAttr_Generic_getattr_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(getattr_at_origin1_dropped);
@@ -708,7 +708,7 @@
             rop_GetMethod_Generic_getmethod_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}});
-            PROCESS_ERROR_AT(RAISE, 36, this_instr);
+            PROCESS_ERROR_AT(RAISE, 35, this_instr);
             rop_GetMethod_Generic_getmethod_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(getmethod_at_origin1_dropped);
@@ -873,7 +873,7 @@
             rop_GetItem_Generic_getitem_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}});
-            PROCESS_ERROR_AT(RAISE, 34, this_instr);
+            PROCESS_ERROR_AT(RAISE, 33, this_instr);
             rop_GetItem_Generic_getitem_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(getitem_at_origin1_dropped);
@@ -968,7 +968,7 @@
             rop_SetItem_Generic_setitem_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}});
-            PROCESS_ERROR_AT(RAISE, 75, this_instr);
+            PROCESS_ERROR_AT(RAISE, 74, this_instr);
             rop_SetItem_Generic_setitem_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_RetireAbandoned(&a);
@@ -1057,7 +1057,7 @@
             }
             goto rop_GlobalRead_Generic_adapt_before_use_global2_Run;
             rop_GlobalRead_Generic_global_at_origin1_Failed:
-            PROCESS_ERROR_AT(RAISE, 38, this_instr);
+            PROCESS_ERROR_AT(RAISE, 37, this_instr);
             rop_GlobalRead_Generic_global_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(global_at_origin1_dropped);
@@ -1247,7 +1247,7 @@
             rop_Truth_Generic_truth_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-            PROCESS_ERROR_AT(RAISE, 83, this_instr);
+            PROCESS_ERROR_AT(RAISE, 82, this_instr);
             rop_Truth_Generic_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 truth_at_origin1_hit = false;
@@ -1830,7 +1830,7 @@
             DISPATCH();
             rop_InitResult_Check_Wrong:
             _PyRop_InitResultError(PyValue_Borrow(*home_value));
-            PROCESS_ERROR_AT(RAISE, 46, this_instr);
+            PROCESS_ERROR_AT(RAISE, 45, this_instr);
         }
 
         TARGET(Call_Observed) {
@@ -2023,7 +2023,7 @@
             gdying = _PyRop_Depart(tstate, frame);
             ROP_GEN_RETURN(gcaller, v, gdying);
             rop_Return_Observed_Failed:
-            PROCESS_ERROR_AT(RAISE, 72, this_instr);
+            PROCESS_ERROR_AT(RAISE, 71, this_instr);
             rop_Return_Observed_Thread:
             caller = _PyRop_PreviousFrame(frame);
             dying = _PyRop_Depart(tstate, frame);
@@ -2270,7 +2270,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Extend_Failed:
-            PROCESS_ERROR_AT(RAISE, 85, this_instr);
+            PROCESS_ERROR_AT(RAISE, 84, this_instr);
         }
 
         TARGET(UpdateContainer_Union) {
@@ -2298,7 +2298,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Union_Failed:
-            PROCESS_ERROR_AT(RAISE, 85, this_instr);
+            PROCESS_ERROR_AT(RAISE, 84, this_instr);
         }
 
         TARGET(UpdateContainer_Overlay) {
@@ -2326,7 +2326,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Overlay_Failed:
-            PROCESS_ERROR_AT(RAISE, 85, this_instr);
+            PROCESS_ERROR_AT(RAISE, 84, this_instr);
         }
 
         TARGET(MergeKeywords_Merge) {
@@ -2355,7 +2355,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_MergeKeywords_Merge_Failed:
-            PROCESS_ERROR_AT(RAISE, 59, this_instr);
+            PROCESS_ERROR_AT(RAISE, 58, this_instr);
         }
 
         TARGET(Function_Make) {
@@ -2366,7 +2366,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += 1;
+            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
             INSTRUCTION_STATS(ROP_HANDLER_Function_Make);
             PyValue *const home_code = &IR_SLOT(IR_B(ir_word));
             PyValue held;
@@ -2376,7 +2376,7 @@
             PyValue fn;
             held = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_code) : _PyFrame_TakeHome(frame, home_code));
             IR_STUB_ESCAPE();
-            ret1 = _PyRop_FunctionNew(frame, held);
+            ret1 = _PyRop_FunctionMake(frame, held, &(_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)}, (uint32_t)IR_D(ir_word));
             if (PyValue_IsNull(ret1)) {
                 goto rop_Function_Make_NewFailed;
             }
@@ -2388,24 +2388,6 @@
             DISPATCH();
             rop_Function_Make_NewFailed:
             PROCESS_ERROR_AT(RAISE, 29, this_instr);
-        }
-
-        TARGET(FunctionSet_SetField) {
-            // FunctionSet.SetField (inline)
-            int opcode = ROP_HANDLER_FunctionSet_SetField;
-            (void)opcode;
-            _PyIRWord *const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(ROP_HANDLER_FunctionSet_SetField);
-            PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
-            PyValue attr;
-            PyValue *const home_fn = &IR_SLOT(IR_A(ir_word));
-            attr = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
-            _PyRop_StoreField(PyValue_Borrow(*home_fn), (uint32_t)IR_C(ir_word), attr);
-            DISPATCH();
         }
 
         TARGET(Intrinsic_Unary) {
@@ -2437,7 +2419,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_Intrinsic_Unary_Failed:
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
+            PROCESS_ERROR_AT(RAISE, 47, this_instr);
         }
 
         TARGET(Intrinsic_ImportStar) {
@@ -2469,7 +2451,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_Intrinsic_ImportStar_Failed:
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
+            PROCESS_ERROR_AT(RAISE, 47, this_instr);
         }
 
         TARGET(Intrinsic_StopIteration) {
@@ -2501,7 +2483,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_Intrinsic_StopIteration_Failed:
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
+            PROCESS_ERROR_AT(RAISE, 47, this_instr);
         }
 
         TARGET(IntrinsicPair_Binary) {
@@ -2536,7 +2518,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_IntrinsicPair_Binary_Failed:
-            PROCESS_ERROR_AT(RAISE, 50, this_instr);
+            PROCESS_ERROR_AT(RAISE, 49, this_instr);
         }
 
         TARGET(IntrinsicPair_Compare) {
@@ -2571,7 +2553,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_IntrinsicPair_Compare_Failed:
-            PROCESS_ERROR_AT(RAISE, 50, this_instr);
+            PROCESS_ERROR_AT(RAISE, 49, this_instr);
         }
 
         TARGET(IntrinsicPair_Attr) {
@@ -2606,7 +2588,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_IntrinsicPair_Attr_Failed:
-            PROCESS_ERROR_AT(RAISE, 50, this_instr);
+            PROCESS_ERROR_AT(RAISE, 49, this_instr);
         }
 
         TARGET(GetAttr_Instance) {
@@ -2726,7 +2708,7 @@
             rop_GetAttr_GetSet_getset_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_obj}});
-            PROCESS_ERROR_AT(RAISE, 32, this_instr);
+            PROCESS_ERROR_AT(RAISE, 31, this_instr);
             rop_GetAttr_GetSet_getset_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(getset_at_origin1_dropped);
@@ -3520,7 +3502,7 @@
             rop_SliceRead_Generic_binary_slice_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_D), !!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_stop, home_start, home_obj}});
-            PROCESS_ERROR_AT(RAISE, 79, this_instr);
+            PROCESS_ERROR_AT(RAISE, 78, this_instr);
             rop_SliceRead_Generic_binary_slice_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(binary_slice_at_origin1_dropped);
@@ -3579,7 +3561,7 @@
             rop_SliceWrite_Generic_store_slice_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 4, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_D)}, {home_stop, home_start, home_obj, home_value}});
-            PROCESS_ERROR_AT(RAISE, 81, this_instr);
+            PROCESS_ERROR_AT(RAISE, 80, this_instr);
             rop_SliceWrite_Generic_store_slice_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_RetireAbandoned(&a);
@@ -3872,7 +3854,7 @@
             rop_GetItem_ListSlice_list_slice_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}});
-            PROCESS_ERROR_AT(RAISE, 34, this_instr);
+            PROCESS_ERROR_AT(RAISE, 33, this_instr);
             rop_GetItem_ListSlice_list_slice_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(list_slice_at_origin1_dropped);
@@ -3960,7 +3942,7 @@
             rop_GetItem_Dict_getitem_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}});
-            PROCESS_ERROR_AT(RAISE, 34, this_instr);
+            PROCESS_ERROR_AT(RAISE, 33, this_instr);
             rop_GetItem_Dict_getitem_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(getitem_at_origin1_dropped);
@@ -4062,7 +4044,7 @@
             rop_SetItem_Dict_dict_store_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}});
-            PROCESS_ERROR_AT(RAISE, 75, this_instr);
+            PROCESS_ERROR_AT(RAISE, 74, this_instr);
             rop_SetItem_Dict_dict_store_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_RetireAbandoned(&a);
@@ -4172,7 +4154,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_NamespaceRead_Name_Failed:
-            PROCESS_ERROR_AT(RAISE, 63, this_instr);
+            PROCESS_ERROR_AT(RAISE, 62, this_instr);
         }
 
         TARGET(NamespaceRead_Locals) {
@@ -4200,7 +4182,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_NamespaceRead_Locals_Failed:
-            PROCESS_ERROR_AT(RAISE, 63, this_instr);
+            PROCESS_ERROR_AT(RAISE, 62, this_instr);
         }
 
         TARGET(NamespaceRead_BuildClass) {
@@ -4229,7 +4211,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_NamespaceRead_BuildClass_Failed:
-            PROCESS_ERROR_AT(RAISE, 63, this_instr);
+            PROCESS_ERROR_AT(RAISE, 62, this_instr);
         }
 
         TARGET(NamespaceReadFrom_Mapping) {
@@ -4281,7 +4263,7 @@
             rop_NamespaceReadFrom_Mapping_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}});
-            PROCESS_ERROR_AT(RAISE, 65, this_instr);
+            PROCESS_ERROR_AT(RAISE, 64, this_instr);
         }
 
         TARGET(NamespaceWrite_Name) {
@@ -4318,9 +4300,9 @@
             }
             DISPATCH();
             rop_NamespaceWrite_Name_DeleteFailed:
-            PROCESS_ERROR_AT(RAISE, 66, this_instr);
+            PROCESS_ERROR_AT(RAISE, 65, this_instr);
             rop_NamespaceWrite_Name_Failed:
-            PROCESS_ERROR_AT(RAISE, 69, this_instr);
+            PROCESS_ERROR_AT(RAISE, 68, this_instr);
         }
 
         TARGET(NamespaceWrite_Global) {
@@ -4357,9 +4339,9 @@
             }
             DISPATCH();
             rop_NamespaceWrite_Global_DeleteFailed:
-            PROCESS_ERROR_AT(RAISE, 66, this_instr);
+            PROCESS_ERROR_AT(RAISE, 65, this_instr);
             rop_NamespaceWrite_Global_Failed:
-            PROCESS_ERROR_AT(RAISE, 69, this_instr);
+            PROCESS_ERROR_AT(RAISE, 68, this_instr);
         }
 
         TARGET(SetupAnnotations_Setup) {
@@ -4380,7 +4362,7 @@
             }
             DISPATCH();
             rop_SetupAnnotations_Setup_Failed:
-            PROCESS_ERROR_AT(RAISE, 77, this_instr);
+            PROCESS_ERROR_AT(RAISE, 76, this_instr);
         }
 
         TARGET(Import_Eager) {
@@ -4415,7 +4397,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_Import_Eager_Failed:
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            PROCESS_ERROR_AT(RAISE, 39, this_instr);
         }
 
         TARGET(Import_Policy) {
@@ -4450,7 +4432,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_Import_Policy_Failed:
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            PROCESS_ERROR_AT(RAISE, 39, this_instr);
         }
 
         TARGET(Import_Lazy) {
@@ -4485,7 +4467,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_Import_Lazy_Failed:
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            PROCESS_ERROR_AT(RAISE, 39, this_instr);
         }
 
         TARGET(ImportFrom_From) {
@@ -4517,7 +4499,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_ImportFrom_From_Failed:
-            PROCESS_ERROR_AT(RAISE, 42, this_instr);
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
         }
 
         TARGET(ImportFrom_FromLast) {
@@ -4549,7 +4531,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_ImportFrom_FromLast_Failed:
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            PROCESS_ERROR_AT(RAISE, 43, this_instr);
         }
 
         TARGET(Truth_Bool) {
@@ -4804,7 +4786,7 @@
             rop_Truth_Slot_slot_truth_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-            PROCESS_ERROR_AT(RAISE, 83, this_instr);
+            PROCESS_ERROR_AT(RAISE, 82, this_instr);
             rop_Truth_Slot_slot_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 slot_truth_at_origin1_hit = false;
@@ -5380,7 +5362,7 @@
             }
             IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
             rop_Jump_Poll_Failed:
-            PROCESS_ERROR_AT(RAISE, 52, this_instr);
+            PROCESS_ERROR_AT(RAISE, 51, this_instr);
         }
 
         TARGET(Jump_Warm) {
@@ -5402,7 +5384,7 @@
             }
             ROP_JIT_WARM((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
             rop_Jump_Warm_Failed:
-            PROCESS_ERROR_AT(RAISE, 52, this_instr);
+            PROCESS_ERROR_AT(RAISE, 51, this_instr);
         }
 
         TARGET(Jump_Observed) {
@@ -5438,9 +5420,9 @@
             }
             IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
             rop_Jump_Observed_PollFailed:
-            PROCESS_ERROR_AT(RAISE, 52, this_instr);
-            rop_Jump_Observed_EventFailed:
             PROCESS_ERROR_AT(RAISE, 51, this_instr);
+            rop_Jump_Observed_EventFailed:
+            PROCESS_ERROR_AT(RAISE, 50, this_instr);
             rop_Jump_Observed_Moved:
             IR_REDIRECT();
         }
@@ -5559,7 +5541,7 @@
             DISPATCH();
             rop_LocalRead_Checked_Unbound:
             _PyRop_UnboundLocal(frame, home_local);
-            PROCESS_ERROR_AT(RAISE, 56, this_instr);
+            PROCESS_ERROR_AT(RAISE, 55, this_instr);
         }
 
         TARGET(LocalWrite_Store) {
@@ -5653,7 +5635,7 @@
             PyValue_XCLOSE(old);
             DISPATCH();
             rop_LocalDelete_Checked_Failed:
-            PROCESS_ERROR_AT(RAISE, 54, this_instr);
+            PROCESS_ERROR_AT(RAISE, 53, this_instr);
         }
 
         TARGET(Move_Transfer) {

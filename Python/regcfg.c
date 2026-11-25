@@ -1963,8 +1963,8 @@ rule_call(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
-/* MAKE_FUNCTION is Function.Make: the code in, the function out.  Its
- * attributes are installed by the SET_FUNCTION_ATTRIBUTEs after it
+/* MAKE_FUNCTION is Function.Make: the code in, the function out.  The
+ * SET_FUNCTION_ATTRIBUTEs after it add their attributes to the word
  * (rule_set_function_attribute). */
 static int
 rule_make_function(_PyRegTr *t, const _PyRegOp *src)
@@ -1973,19 +1973,26 @@ rule_make_function(_PyRegTr *t, const _PyRegOp *src)
         return stack_underflow(src);
     }
     int dst;
+    _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Function_Make,
-                                  &t->stack[t->sp - 1], 1, &dst, 1, NULL));
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    // The attributes of the SET_FUNCTION_ATTRIBUTEs that follow join the word
+    op->oparg = 0;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
     return _PyRegTr_Push(t, dst);
 }
 
-/* SET_FUNCTION_ATTRIBUTE is FunctionSet.SetField: the attribute, then the
- * function below it, which keeps its home and its identity.  The oparg is
- * the compiler's flag, 1 << k for member k of FunctionField. */
+/* SET_FUNCTION_ATTRIBUTE adds an attribute to the Function.Make that made
+ * the function: the compiler computes every attribute before the code, so
+ * the word reads them all.  The attribute (below the function) joins the
+ * word's span at the place of its bit, and the stack op stays as a
+ * source-only op, for its line and offset.  The oparg is the compiler's
+ * flag, 1 << k for bit k of the word's `present`. */
 static int
 rule_set_function_attribute(_PyRegTr *t, const _PyRegOp *src)
 {
+    _PyRegCfg *cfg = t->cfg;
     int flag = src->oparg;
     if (t->sp < 2) {
         return stack_underflow(src);
@@ -1994,14 +2001,43 @@ rule_set_function_attribute(_PyRegTr *t, const _PyRegOp *src)
         PyErr_SetString(PyExc_SystemError, "bad SET_FUNCTION_ATTRIBUTE flag");
         return ERROR;
     }
-    int uses[2] = {t->stack[t->sp - 1], t->stack[t->sp - 2]};
-    int func = uses[0];
-    _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_FunctionSet_SetField,
-                                  uses, 2, NULL, 0, &op));
-    op->oparg = _Py_bit_length((unsigned)flag) - 1;
-    // The function is read and left: only the attribute is taken
-    op->npop = 1;
+    int k = _Py_bit_length((unsigned)flag) - 1;
+    int attr = t->stack[t->sp - 2];
+    int func = t->stack[t->sp - 1];
+    // The word that made the function: the last of the block, past source-only ops
+    _PyRegOp *make = NULL;
+    for (int i = t->nops - 1; i >= t->block_op; i--) {
+        _PyRegOp *op = &t->ops[i];
+        if (op->opcode == NOP && op->nread == 0 && op->nout == 0) {
+            continue;
+        }
+        make = op;
+        break;
+    }
+    if (make == NULL || make->opcode != ROP_HANDLER_Function_Make ||
+        _PyReg_OUT(cfg, make)[0] != func || (make->oparg & flag))
+    {
+        PyErr_Format(PyExc_SystemError,
+                     "SET_FUNCTION_ATTRIBUTE at line %d does not follow its MAKE_FUNCTION",
+                     src->loc.lineno);
+        return ERROR;
+    }
+    int n = make->nread + make->nimplicit;
+    int in;
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, n + 1, &in));
+    const int *old = &cfg->operands[make->in];
+    int *new = &cfg->operands[in];
+    // The code, the attributes of lower bits, this one, the rest
+    int at = 1 + _Py_popcount32((unsigned)(make->oparg & (flag - 1)));
+    memcpy(new, old, at * sizeof(int));
+    new[at] = attr;
+    memcpy(new + at + 1, old + at, (n - at) * sizeof(int));
+    make->in = in;
+    make->nread++;
+    make->npop++;
+    make->oparg |= flag;
+    note_op(t, make);
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL));
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
     return _PyRegTr_Push(t, func);
 }

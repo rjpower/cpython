@@ -75,7 +75,6 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 //
 // 32 templates.  Inline arms that keep the call of their form:
 //   Const.Common: Const.Common: common_constant has no leaf lowering
-//   FunctionSet.SetField: FunctionSet.SetField: store_field has no leaf lowering
 //   GetAttr.GetSet: GetAttr.GetSet: home has no leaf lowering
 //   GetAttr.Hint: GetAttr.Hint: hinted_entry has no leaf lowering
 //   GetAttr.PointerSlot: GetAttr.PointerSlot: borrow_pointer_slot has no leaf lowering

@@ -466,6 +466,47 @@ SCENARIOS = {
         + [{"fn": fn, "args": [v]} for fn in (identity, Point().norm, Holder, two)
            for v in (1, "s")], warm=([],),
         monitored=("monitored",)),
+    "Build": Scenario("Build", {
+        "tuple": "def f(a, b):\n    return (a, b)\n",
+        "list": "def f(a, b):\n    return [a, b]\n",
+        "set": "def f(a, b):\n    return {a, b}\n",
+        "map": "def f(a, b):\n    return {a: b}\n"},
+        [{"items": [x, y]} for x, y in ((1, 2), ("s", 2.5), (2**70, "t"), ((), None))],
+        warm=(1, 2), holds=True),
+    "AddElement": Scenario("AddElement", {
+        "append": "def f(a):\n    return [x for x in a]\n",
+        "add": "def f(a):\n    return {x for x in a}\n"},
+        [{"container": c, "item": x} for c, x in (([], 1), ([3], "s"), ([], 2.5))],
+        warm=([1],), holds=True,
+        # (a set takes only a set: the word's arm is chosen by the display)
+        inputs_by_source={"add": [{"container": c, "item": x}
+                                  for c, x in ((set(), 1), ({3}, "s"), (set(), 2.5))]}),
+    "AddEntry": Scenario("AddEntry", {
+        "put": "def f(a):\n    return {x: x for x in a}\n"},
+        [{"container": {}, "key": 1, "value": "v"}, {"container": {2: 3}, "key": "s",
+                                                      "value": None}],
+        warm=([1],), holds=True),
+    "UpdateContainer": Scenario("UpdateContainer", {
+        "extend": "def f(a):\n    return [*a]\n",
+        "union": "def f(a):\n    return {*a}\n",
+        "overlay": "def f(a):\n    return {**a}\n"},
+        [{"container": [], "source": [1]}],
+        # (each arm takes only its own kind of container)
+        inputs_by_source={
+            "extend": [{"container": c, "source": x} for c, x in (
+                ([], [1]), ([0], (2, 3)), ([], "ab"), ([], 5), ([1], iter([2])))],
+            "union": [{"container": c, "source": x} for c, x in (
+                (set(), [1]), ({0}, (2, 3)), (set(), "ab"), (set(), 5), ({1}, {2: 3}))],
+            "overlay": [{"container": c, "source": x} for c, x in (
+                ({}, {1: 2}), ({"a": 1}, {"a": 2}), ({}, 5), ({}, [1]))]},
+        warm=([1],), holds=True),
+    "MergeKeywords": Scenario("MergeKeywords", {
+        "merge": "def f(g, a, b):\n    return g(**a, **b)\n"},
+        [{"fn": identity, "dict": {}, "source": {"k": 1}},
+         {"fn": identity, "dict": {"k": 1}, "source": {"j": 2}},
+         {"fn": identity, "dict": {"k": 1}, "source": {"k": 2}},
+         {"fn": identity, "dict": {}, "source": 5}],
+        warm=(identity, {}, {}), holds=True),
     "Function": Scenario("Function", {
         "def": "def f():\n    def g():\n        pass\n    return g\n"},
         [{"code": code} for code in (identity.__code__, Holder.__init__.__code__)],
@@ -774,19 +815,6 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
-    # The display families have no scenarios: their rows take spans of homes
-    # and run Python (test_rop_displays runs them)
-    "Build.Tuple": "no scenario; test_rop_displays runs it",
-    "Build.List": "no scenario; test_rop_displays runs it",
-    "AddElement.Append": "no scenario; test_rop_displays runs it",
-    "AddElement.Add": "no scenario; test_rop_displays runs it",
-    "AddEntry.Put": "no scenario; test_rop_displays runs it",
-    "UpdateContainer.Extend": "no scenario; test_rop_displays runs it",
-    "UpdateContainer.Overlay": "no scenario; test_rop_displays runs it",
-    "MergeKeywords.Merge": "no scenario; test_rop_displays runs it",
-    "Build.Set": "no scenario; test_rop_displays runs it",
-    "Build.Map": "no scenario; test_rop_displays runs it",
-    "UpdateContainer.Union": "no scenario; test_rop_displays runs it",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "

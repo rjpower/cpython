@@ -880,7 +880,7 @@ OBJECT_READERS = {
     "_PyDict_ContainsValue", "PySet_ContainsValue",
     "PyUnicode_Concat",
 
-    "_PyDict_SetValue_Take2", "_PyDict_SetValue", "value_exception_group_match",
+    "_PyDict_SetValue", "value_exception_group_match",
     "_PyList_SliceSubscript",
     "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal",

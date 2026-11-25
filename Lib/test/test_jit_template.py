@@ -714,6 +714,8 @@ TEMPLATE_CASES = [
      "BranchNone.Test", "A", [(x,) for x in ANY]),
     ("def f(a, b):\n    if a is None:\n        x = 1\n    else:\n        x = 2\n"
      "    return (x + b) * (b - x) - 3", (None, 0), "Jump.Direct", "", [()]),
+    ("def f(a, b):\n    while a is not None:\n        a = None\n    return b", (None, 0),
+     "Jump.Poll", "", [()]),
     *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
        handler, "ABC", [(Plain(), seq, i) for seq in seqs for i in INDICES])
       for seq_type, handler, seqs in (

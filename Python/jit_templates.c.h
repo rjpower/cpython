@@ -1703,4 +1703,5 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [ROP_HANDLER_BranchTruth_None] = jit_template_BranchTruth_None,
     [ROP_HANDLER_BranchNone_Test] = jit_template_BranchNone_Test,
     [ROP_HANDLER_Jump_Direct] = jit_template_Jump_Direct,
+    [ROP_HANDLER_Jump_Poll] = jit_template_Jump_Poll,
 };

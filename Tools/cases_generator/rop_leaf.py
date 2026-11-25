@@ -264,6 +264,9 @@ class LeafBuilder:
         if x is None or x.c is None:
             raise Unsupported(f"{self.arm.name}: {t.callee} has no C body (pending)")
         edges = {e.case: e for e in t.edges}
+        if x.c.symbol == "_PyRop_Poll":
+            # The thread is implicit in the template's registers
+            return self.poll(edges)
         args = tuple(self.expr(a) for a in t.args)
         if x.c.convention == "bool_out" and x.c.symbol == "_PyValue_AddCheckedScaled":
             self.add_checked_scaled(args, edges)
@@ -279,6 +282,26 @@ class LeafBuilder:
             self.cur.term = self.jump(edges["ok"].target, (result,))
         else:
             raise Unsupported(f"{self.arm.name}: {t.callee} has no leaf lowering")
+
+    def poll(self, edges) -> None:
+        """The periodic check: a load and a test of the eval breaker, and
+        only when an event is pending the call that handles it"""
+        err = self.blocks[edges["err"].target.label]
+        if err.stmts or not (isinstance(err.term, Exit) and err.term.kind == "raise"):
+            raise Unsupported(f"{self.arm.name}: the error edge of poll is not a raise")
+        self.helpers.append("_Py_HandlePending")
+        self.effects |= set(ir_leaf.HELPERS["_Py_HandlePending"].effects)
+        events = self.emit1("prim", "bool", (), "_Py_EvalBreakerHasEvents")
+        here = self.cur
+        handle = self.new_block()
+        quiet = self.edge_block(edges["ok"].target)
+        here.term = ("br", events, handle.id, quiet)
+        self.cur = handle
+        status = self.emit1("call", "i32", (), "_Py_HandlePending")
+        zero = self.emit1("const", "i32", (), 0)
+        failed = self.emit1("cmp", "bool", (status, zero), "ne")
+        self.emit("raise_if", (), (failed,))
+        self.cur.term = self.jump(edges["ok"].target)
 
     def add_checked_scaled(self, args: tuple[int, ...], edges) -> None:
         """The checked add of the scaled words, a primitive of the closed

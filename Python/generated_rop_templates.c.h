@@ -3,7 +3,7 @@
 //   Python/register_ops/add.rop, Python/register_ops/calls.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/getattr.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 //
-// 5 templates.  Inline arms that keep the call of their form:
+// 6 templates.  Inline arms that keep the call of their form:
 //   BranchTruth.Int: BranchTruth.Int: exact_int has no leaf lowering
 //   BranchTruth.List: BranchTruth.List: exact_list has no leaf lowering
 //   BranchTruth.Plain: BranchTruth.Plain: none_or_plain has no leaf lowering
@@ -27,7 +27,6 @@
 //   GetMethod.MethodValues: GetMethod.MethodValues: fb is not a leaf value
 //   GetMethod.NoDict: GetMethod.NoDict: fb is not a leaf value
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
-//   Jump.Poll: Jump.Poll: thread is not a leaf value
 //   LocalRead.Bound: LocalRead.Bound: dup has no C body (pending)
 //   LocalWrite.Store: LocalWrite.Store: acquire has no C body (pending)
 //   Truth.Bool: Truth.Bool: truth_object has no leaf lowering
@@ -266,5 +265,50 @@ jit_template_Jump_Direct(_PyJitWordCx *cx)
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_Jmp(a, cx->target);
+}
+
+// The leaf graph of Jump.Poll:
+//   b0:
+//     %0:bool = prim _Py_EvalBreakerHasEvents
+//     br %0, b3, b4
+//   b1:
+//     jump
+//   b2:
+//     raise
+//   b3:
+//     %1:i32 = call _Py_HandlePending
+//     %2:i32 = const 0
+//     %3:bool = cmp ne %1, %2
+//     raise_if %3
+//     jmp b1
+//   b4:
+//     jmp b1
+static void
+jit_template_Jump_Poll(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L2 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel raise = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    int c1 = _PyJitLower__Py_EvalBreakerHasEvents(cx, (const uint8_t[]){0}, NULL);
+    _PyJitAsm_Jcc(a, c1, L4);
+    _PyJitAsm_Bind(a, L2);
+    _PyJitAsm_Jmp(a, cx->target);
+    _PyJitLower_ColdBegin(cx);
+    _PyJitAsm_Bind(a, L4);
+    cx->live = 0x0; cx->live_xmm = 0x0;
+    _PyJitLower_Call(cx, (const void *)_Py_HandlePending, 1, 1, (const _PyJitArg[]){_PyJitArg_GPR(_PyJit_TSTATE)}, _PyJitArg_GPR(_PyJitReg_RAX));
+    _PyJitAsm_ShiftRI(a, _PyJitShift_SHL, _PyJitReg_RAX, 32);
+    _PyJitAsm_ShiftRI(a, _PyJitShift_SAR, _PyJitReg_RAX, 32);
+    _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
+    int c4 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, c4, raise);
+    _PyJitAsm_Jmp(a, L2);
+    _PyJitTemplate_Raise(cx, raise);
+    _PyJitLower_ColdEnd(cx);
 }
 

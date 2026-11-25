@@ -30,7 +30,7 @@ from pathlib import Path
 
 from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, Fact,
                          FrameRole, Handle, Region, SchemaCtor, Wrap)
-from rop_check import (CONVENTIONS, CANDIDATE, ROP_DIR, UNWRAP, Program, feedback_schemas,
+from rop_check import (CONVENTIONS, CANDIDATE, COUNT, ROP_DIR, UNWRAP, Program, feedback_schemas,
                        is_linear, is_source, result_cases)
 import rop_check
 from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
@@ -753,6 +753,9 @@ def call_value(w: Walk, st: State, e: Call, name: str | None) -> str | None:
             st.homes[src] = HomeState(Home.vacant, e.span, f"move({src})")
         st.live[vid] = Token(e.span, f"move({expr_text(arg)})")
         return vid
+    if e.callee == COUNT:
+        # The count is read from the word or the span's header: no token
+        return vid
     if e.callee == UNWRAP:
         (arg,) = e.args
         src = value(w, st, arg)
@@ -1030,7 +1033,7 @@ def do_publish(w: Walk, st: State, s: Publish) -> None:
     vectors: list[Binding] = []
     vacated: list[str] = []
     for b in s.bindings:
-        if b.vector:
+        if b.vector and not b.owners:
             vectors.append(b)
             continue
         if isinstance(b.value, Null):

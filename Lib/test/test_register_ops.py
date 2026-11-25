@@ -121,6 +121,24 @@ class ParseTests(unittest.TestCase):
                 self.assertEqual(rop_syntax.parse(text, str(path)), parsed)
                 self.assertEqual(rop_print.print_file(rop_syntax.parse(text, "x")), text)
 
+    def test_vector_bindings(self):
+        # d[] = s[] and d[] = dup(s[]) bind span operands; d[] = v binds the
+        # items of a Span<O> value
+        text = """\
+arm F.A shared effects() feedback() exits(next) {
+  entry():
+    publish [d[] = s[], e[] = dup(t[]), f[] = v] retire [old(f)] at F.Done;
+    exit next();
+}
+"""
+        (arm,) = rop_syntax.parse(text, "t.rop").decls
+        publish = arm.graph.blocks[0].stmts[0]
+        self.assertEqual([(b.target, b.vector, b.owners) for b in publish.bindings],
+                         [("d", True, False), ("e", True, False), ("f", True, True)])
+        printed = rop_print.print_file(rop_syntax.parse(text, "t.rop"))
+        self.assertIn("publish [d[] = s[], e[] = dup(t[]), f[] = v]", printed)
+        self.assertEqual(rop_syntax.parse(printed, "t.rop"), rop_syntax.parse(text, "t.rop"))
+
     def test_family_clause(self):
         text = "family F(x:Src) exits(next) ops(BINARY_OP, COMPARE_OP) events(CALL, C_RETURN);"
         (family,) = rop_syntax.parse(text, "t.rop").decls

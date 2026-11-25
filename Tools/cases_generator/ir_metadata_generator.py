@@ -35,7 +35,6 @@ from ir_generator import (
     EXECUTION_VARIANTS,
     canonical_handler,
     FUSED_SHADOWS,
-    first_ir_only_handler,
     Extent,
     HandlerContract,
     IRFormat,
@@ -50,6 +49,7 @@ from ir_generator import (
     handler_contracts,
     handler_ids,
     handler_instructions,
+    ir_only_handler_names,
     monitoring_events,
     STACK_ONLY,
     num_handlers,
@@ -88,7 +88,9 @@ def shadow_of(name: str, analysis: Analysis) -> str:
 def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
                   ) -> tuple[dict[str, int], dict[str, str], dict[str, list[str]]]:
     """The named IR domain, its canonical bases and generated properties."""
-    ids = {**analysis.opmap, **handler_ids(analysis)}
+    # A pseudo-instruction has no handler: its number may name one.
+    ids = {name: number for name, number in analysis.opmap.items()
+           if name not in analysis.pseudos} | handler_ids(analysis)
     dispatch = handler_ids(analysis)
     insts = handler_instructions(analysis)
     binary = set(binary_op_handlers(analysis))
@@ -126,8 +128,6 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
         if inst is not None and any(isinstance(part, Uop) and part.name == "_JIT_EVENT"
                                     for part in inst.parts):
             parts.append("_PyIR_H_JIT_EVENT")
-        if name in analysis.pseudos:
-            parts.append("_PyIR_H_PSEUDO")
         if name in dispatch and (inst is None or not inst.family) \
                 and not ordinary.startswith("INSTRUMENTED_"):
             parts.append("_PyIR_H_PRISTINE")
@@ -219,7 +219,7 @@ def arm_base_ids(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry],
     result = {}
     for arm in arms:
         op = arm.base
-        if op not in analysis.opmap or analysis.opmap[op] >= first_ir_only_handler(analysis):
+        if op not in analysis.opmap or op in analysis.pseudos:
             raise ValueError(f"{arm.dotted}: ops({op}) is not a stack op")
         if bases[op] != op:
             raise ValueError(f"{arm.dotted}: ops({op}) is not a canonical opcode "
@@ -335,9 +335,7 @@ def generate_ir_metadata(
     fact_ids, bases, flags = handler_facts(analysis, formats)
     n = num_handlers(analysis, arms)
     base_ids = arm_base_ids(analysis, arms, fact_ids, bases)
-    first = first_ir_only_handler(analysis)
-    ir_only = sorted((name for name in ids if ids[name] >= first),
-                     key=lambda name: ids[name])
+    ir_only = sorted(ir_only_handler_names(analysis), key=lambda name: ids[name])
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     with out.header_guard("Py_CORE_IR_METADATA_H"):
@@ -357,15 +355,14 @@ def generate_ir_metadata(
         if not ownership:
             out.emit("{0},\n")
         out.emit("};\n#endif\n\n")
-        out.emit("/* Handlers of the IR only, after the opcodes and the "
-                 "pseudo-instructions */\n")
-        out.emit(f"#define {'IR_FIRST_ONLY_HANDLER':<46} {first}\n")
+        out.emit("/* Handlers of the IR only: the numbers that no opcode holds, "
+                 "then 256 and up */\n")
         for name in ir_only:
             out.emit(f"#define {name:<46} {ids[name]}\n")
         out.emit("\n")
         for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
                           ("BINARY_OP", 4), ("IR_ONLY", 8), ("NOFB", 16),
-                          ("PSEUDO", 32), ("METADATA", 64), ("DISPATCH", 128),
+                          ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
                           ("SAVES_IP", 1024), ("JIT_EVENT", 2048)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
@@ -459,16 +456,21 @@ def generate_ir_metadata(
         out.emit("};\n")
         out.emit("#endif\n\n")
 
-        out.emit(f"PyAPI_DATA(const char *const) _PyIR_OnlyNames[{n - first}];\n")
+        out.emit(f"PyAPI_DATA(const char *const) _PyIR_OnlyNames[IR_NUM_HANDLERS];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit(f"const char *const _PyIR_OnlyNames[{n - first}] = {{\n")
+        out.emit("const char *const _PyIR_OnlyNames[IR_NUM_HANDLERS] = {\n")
         for name in ir_only:
-            out.emit(f'[{name} - IR_FIRST_ONLY_HANDLER] = "{name}",\n')
+            out.emit(f'[{name}] = "{name}",\n')
         for arm in arms:
-            out.emit(f'[{arm_id(analysis, arm)} - IR_FIRST_ONLY_HANDLER] = '
-                     f'"{arm.dotted}",\n')
+            out.emit(f'[{arm_id(analysis, arm)}] = "{arm.dotted}",\n')
         out.emit("};\n")
-        out.emit("#endif\n")
+        out.emit("#endif\n\n")
+        out.emit("/* The IR-only handlers and the arms have a name here; the "
+                 "opcodes do not */\n")
+        out.emit("static inline int\n_PyIR_IsOnlyHandler(int handler)\n{\n")
+        out.emit("    return _PyIR_OnlyNames[handler] != NULL;\n}\n\n")
+        out.emit("/* Defined in Python/ir.c */\n")
+        out.emit("PyAPI_FUNC(const char *) _PyIR_HandlerName(int handler);\n")
 
 
 arg_parser = argparse.ArgumentParser(

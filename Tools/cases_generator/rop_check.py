@@ -25,7 +25,8 @@ from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMI
                          EVIDENCE_REQUIRED, FEEDBACK_ROOTS, INDEX_BITS, LINEAR_HANDLES,
                          TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
-                         OPTIONAL, SELECT_DIMENSIONS, SELECT_FACTS, SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind,
+                         OPTIONAL, SELECT_DIMENSIONS, SELECT_FACTS, SLOT_ORDER,
+                         WIDEST_IMMEDIATE, DebtKind,
                          Effect, ExitKind, Fact, FieldKind, FrameRole, Handle, PcRole,
                          Region, RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
 from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
@@ -97,10 +98,13 @@ PRIMITIVES = {p.name: p for p in (
     Primitive("move", (WrapType(Wrap.InOut, O),), O, True),
     Primitive("acquire", (SRC,), O, True),
 )}
-# unwrap(Maybe<T>) -> T, given `present` (F1); candidate(Family.Arm[, recipe])
+# unwrap(Maybe<T>) -> T, given `present` (F1); candidate(Family.Arm[, recipe]);
+# count(Span<T>) -> Size, the number of items, which neither reads nor
+# spends them
 UNWRAP = "unwrap"
 CANDIDATE = "candidate"
-SPECIAL_PRIMITIVES = frozenset((UNWRAP, CANDIDATE))
+COUNT = "count"
+SPECIAL_PRIMITIVES = frozenset((UNWRAP, CANDIDATE, COUNT))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1057,6 +1061,9 @@ def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> N
         if bind.target in seen:
             c.report(bind.span, scope.definition, f"publish binds {bind.target} twice")
         seen.add(bind.target)
+        if bind.owners:
+            check_owners_binding(c, scope, bind, t, block, i)
+            continue
         if bind.vector:
             vectors.add(bind.target)
             check_vector_binding(c, scope, bind, t)
@@ -1084,6 +1091,8 @@ def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> N
         if d.kind == DebtKind.old and d.subject in vectors:
             c.report(d.span, scope.definition, f"old({d.subject}): a vector binding "
                      "writes vacant destinations; it displaces no owner")
+        elif d.kind == DebtKind.old and is_span_of(operand_type(scope, d.subject), DST):
+            pass
         elif d.kind == DebtKind.spent:
             t = operand_type(scope, d.subject)
             if not (t is not None and (is_source(t) or is_args(t) or is_span_of(t, SRC))):
@@ -1123,6 +1132,24 @@ def check_vector_binding(c: Checker, scope: Scope, bind: Binding, t: Type | None
     if not is_span_of(operand_type(scope, value.name), SRC):
         c.report(value.span, scope.definition, f"publish [{bind.target}[] = "
                  f"{value.name}[]]: {value.name} is not a Span<Src> operand")
+
+
+def check_owners_binding(c: Checker, scope: Scope, bind: Binding, t: Type | None,
+                         block: str, i: int) -> None:
+    """`d[] = v`: v is a value the arm made, a Span<O> of count(d) owners"""
+    if not is_span_of(t, DST):
+        c.report(bind.span, scope.definition, f"publish [{bind.target}[] = ...]: "
+                 f"{bind.target} is not a Span<Dst> operand")
+    value = bind.value
+    assert isinstance(value, Name)
+    if operand_type(scope, value.name) is not None:
+        c.report(value.span, scope.definition, f"publish [{bind.target}[] = "
+                 f"{value.name}]: an operand span binds as {value.name}[]")
+        return
+    have = type_of(c, scope, value, None, block, i, False)
+    if have is not None and not is_span_of(have, O):
+        c.report(value.span, scope.definition, f"publish [{bind.target}[] = "
+                 f"{value.name}]: {value.name} is {type_text(have)}, expected Span<O>")
 
 
 def operand_type(scope: Scope, name: str) -> Type | None:
@@ -1447,6 +1474,15 @@ def type_of_call(c: Checker, scope: Scope, e: Call, block: str, i: int, outer: b
         return t.arg
     if e.callee == CANDIDATE:
         return type_of_candidate(c, scope, e, block, i)
+    if e.callee == COUNT:
+        if len(e.args) != 1:
+            c.report(e.span, scope.definition, "count takes one argument")
+            return None
+        t = type_of(c, scope, e.args[0], None, block, i, outer=False)
+        if t is not None and not (isinstance(t, WrapType) and t.wrap == Wrap.Span):
+            c.report(e.span, scope.definition, f"count({expr_text(e.args[0])}): "
+                     f"{type_text(t)} is not a Span")
+        return SIZE
     prim = PRIMITIVES.get(e.callee)
     if prim is not None:
         if prim.action and not outer:

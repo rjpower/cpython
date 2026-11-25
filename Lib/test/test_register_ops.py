@@ -698,7 +698,7 @@ class DefinitionTests(unittest.TestCase):
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 68)
+        self.assertEqual(len(self.APPENDIX_A), 70)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

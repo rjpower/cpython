@@ -18,7 +18,7 @@ with test_tools.imports_under_tool("cases_generator"):
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 
 ROOT = Path(test_tools.basepath)
-ARMS = ["Generic"]
+ARMS = ["Generic", "Module", "Builtin"]
 
 
 def program():
@@ -27,6 +27,16 @@ def program():
 
 def names(fn):
     return [row[0] for row in _testinternalcapi.get_ir(fn.__code__)]
+
+
+def adapted(fn, *args):
+    """The words of the executing copy, after enough calls to specialise"""
+    for _ in range(300):
+        try:
+            fn(*args)
+        except NameError:
+            pass
+    return [row[0] for row in _testinternalcapi.get_ir(fn.__code__, True)]
 
 
 def warmed(fn, *args):
@@ -104,6 +114,75 @@ class LoweringTests(unittest.TestCase):
                 self.fail("no NameError")
 
 
+class ArmTests(unittest.TestCase):
+    def test_module_and_builtin_arms(self):
+        ns = {}
+        exec("v = 1\ndef f():\n    return v + len('a')", ns)
+        words = adapted(ns["f"])
+        self.assertIn("GlobalRead.Module", words)
+        self.assertIn("GlobalRead.Builtin", words)
+        self.assertEqual(ns["f"](), 2)
+
+    def test_module_misses_on_new_key_and_deletion(self):
+        ns = {"v": 1}
+        exec("def f():\n    return v", ns)
+        f = ns["f"]
+        self.assertIn("GlobalRead.Module", adapted(f))
+        for i in range(5):
+            ns["w%d" % i] = i
+            self.assertEqual(f(), 1)
+        del ns["v"]
+        with self.assertRaises(NameError):
+            f()
+        ns["v"] = 7
+        self.assertEqual(f(), 7)
+        for _ in range(300):
+            self.assertEqual(f(), 7)
+
+    def test_builtin_misses_when_shadowed_or_changed(self):
+        ns = {"__builtins__": {"b": 1}}
+        exec("def f():\n    return b", ns)
+        f = ns["f"]
+        self.assertIn("GlobalRead.Builtin", adapted(f))
+        ns["b"] = 2
+        self.assertEqual(f(), 2)
+        del ns["b"]
+        self.assertEqual(f(), 1)
+        ns["__builtins__"]["b"] = 3
+        self.assertEqual(f(), 3)
+        del ns["__builtins__"]["b"]
+        with self.assertRaises(NameError):
+            f()
+
+    def test_refcounts_do_not_drift(self):
+        class Box:
+            pass
+
+        ns = {"v": Box()}
+        exec("def f():\n    x = v\n    return None", ns)
+        f = ns["f"]
+        adapted(f)
+        before = sys.getrefcount(ns["v"])
+        for _ in range(1000):
+            f()
+        self.assertEqual(sys.getrefcount(ns["v"]), before)
+
+    def test_value_released_when_global_is_discarded(self):
+        class Box:
+            released = 0
+
+            def __del__(self):
+                Box.released += 1
+
+        ns = {}
+        exec("def f():\n    v\n", ns)
+        for _ in range(300):
+            ns["v"] = Box()
+            ns["f"]()
+        ns["v"] = None
+        self.assertEqual(Box.released, 300)
+
+
 class NamespaceTests(unittest.TestCase):
     def test_mapping_globals_and_builtins(self):
         class Namespace(dict):
@@ -157,8 +236,8 @@ class ObservationTests(unittest.TestCase):
             b = counter
             return a + b
 
-        for _ in range(3):
-            target()
+        words = adapted(target)
+        self.assertIn("GlobalRead.Module", words)
         lines = []
 
         def tracer(frame, event, arg):
@@ -182,8 +261,8 @@ class ObservationTests(unittest.TestCase):
         def target():
             return counter
 
-        for _ in range(3):
-            target()
+        words = adapted(target)
+        self.assertIn("GlobalRead.Module", words)
         code = target.__code__
 
         def on_line(c, line):

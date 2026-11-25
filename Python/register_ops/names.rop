@@ -3,7 +3,7 @@
 // family: the translator pushes it as an elided PUSH_NULL.
 
 family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
-  exits(next, raise, redirect) ops(LOAD_GLOBAL);
+  exits(next, raise, redirect, miss, again) ops(LOAD_GLOBAL);
 
 point GlobalRead.Failed(current, site, pending) keep() spent() defs() held();
 point GlobalRead.Done(current, next_head, clear) keep() spent() defs(dst) held();
@@ -43,12 +43,130 @@ extern helper load_global(f:Frame, n:Name)
     review: "ceval.c: value_load_global; _PyEval_LoadGlobalValue on the frame's globals and builtins.",
     contract: "Both namespaces are borrowed; the result is owned, or NULL with an exception set (NameError on a miss). A non-dict namespace and a lazy import run Python.");
 
-arm GlobalRead.Generic shared
-  effects(runs_python, raises, releases)
-  feedback()
-  exits(next, raise, redirect)
+// Evidence (specialize.c): the site's name in the frame's globals and
+// builtins.  The case is the arm that the name calls for; the recipe is the
+// entry the classification wrote.
+extern helper classify_global(fr:Frame, at:Site, f:Fb<Global>, n:Name)
+  cases(module(r:Recipe<Global>), builtin(r:Recipe<Global>), none())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyGlobal_Classify as case_index
+  evidence(
+    review: "specialize.c global_classify_lock_held: the old specialize_load_global_lock_held without its handler choice.",
+    contract: "Writes the site's entry only for a nominated arm, assigns keys versions and watches the dictionaries. No Python runs: the lookups are by index.");
+
+// The site's recipe when its entry holds the evidence of the arm
+extern helper admitted_global_module(f:Fb<Global>)
+  cases(hit(r:Recipe<Global>), absent())
+  effects(reads)
+  feedback(read(entry.globals_version), read(entry.index))
+  c _PyGlobal_AdmittedModule as bool_out_hit
+  evidence(
+    review: "pycore_global_recipe.h: the entry is the recipe when it holds a globals keys version.",
+    contract: "Reads the entry only; no callee, no failure.");
+
+extern helper admitted_global_builtin(f:Fb<Global>)
+  cases(hit(r:Recipe<Global>), absent())
+  effects(reads)
+  feedback(read(entry.globals_version), read(entry.builtins_version), read(entry.index))
+  c _PyGlobal_AdmittedBuiltin as bool_out_hit
+  evidence(
+    review: "pycore_global_recipe.h: the entry is the recipe when it holds both keys versions.",
+    contract: "Reads the entry only; no callee, no failure.");
+
+// Guards and slot reads of the inline arms.  The frame's globals are a
+// dict whenever a keys version matches; builtins can be any object.
+extern primitive globals_current(fr:Frame, r:Recipe<Global>) -> Bool
+  effects(reads)
+  c _PyGlobal_GlobalsCurrent as bool
+  evidence(
+    review: "pycore_global_recipe.h: the keys version of the frame's globals is the recipe's.",
+    contract: "Two loads, no memory write, no callee.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_globalread row tests");
+
+extern primitive builtins_current(fr:Frame, r:Recipe<Global>) -> Bool
+  effects(reads)
+  c _PyGlobal_BuiltinsCurrent as bool
+  evidence(
+    review: "pycore_global_recipe.h: the frame's builtins are an exact dict whose keys version is the recipe's.",
+    contract: "A type test and two loads, no memory write, no callee.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_globalread row tests");
+
+// The value at the recipe's index; vacant, or past the entries, is absent
+extern primitive global_slot(fr:Frame, r:Recipe<Global>) -> Maybe<B>
+  effects(reads)
+  c _PyGlobal_GlobalsSlot as borrow
+  evidence(
+    review: "pycore_global_recipe.h: the entry of the globals' keys at the recipe's index.",
+    contract: "Requires that globals_current held on this path. A read; NULL is absent.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_globalread row tests");
+
+extern primitive builtin_slot(fr:Frame, r:Recipe<Global>) -> Maybe<B>
+  effects(reads)
+  c _PyGlobal_BuiltinsSlot as borrow
+  evidence(
+    review: "pycore_global_recipe.h: the entry of the builtins' keys at the recipe's index.",
+    contract: "Requires that builtins_current held on this path. A read; NULL is absent.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_globalread row tests");
+
+// Adaptation policy (addendum section 2): sample when the counter is due,
+// nominate by evidence.
+macro adapt_before_use_global(f:Fb<Global>, n:Name)
+  cases(run(), changed(t:Ticket<Global>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
 {
   entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_global(frame, site, f, n) {
+      module -> LModule();
+      builtin -> LBuiltin();
+      none -> Other();
+    }
+  LModule(rModule:Recipe<Global>):
+    let cModule:Candidate<Global> = candidate(GlobalRead.Module, rModule);
+    call install(site, f, cModule) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LBuiltin(rBuiltin:Recipe<Global>):
+    let cBuiltin:Candidate<Global> = candidate(GlobalRead.Builtin, rBuiltin);
+    call install(site, f, cBuiltin) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Global>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm GlobalRead.Generic shared
+  effects(runs_python, raises, releases)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_global(fb, name) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Global>):
+    exit again(t);
+  Run():
     call global_at_origin(name) {
       ok -> Result();
       err -> Failed();
@@ -61,4 +179,47 @@ arm GlobalRead.Generic shared
     exit raise(GlobalRead.Failed, e);
   Gone(route:Route):
     exit redirect(route);
+}
+
+arm GlobalRead.Module inline
+  effects(reads, writes, releases)
+  feedback(read(entry.globals_version), read(entry.index))
+  exits(next, miss)
+{
+  entry():
+    call admitted_global_module(fb) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Global>):
+    guard globals_current(frame, r) else miss;
+    let item:Maybe<B> = global_slot(frame, r);
+    guard present(item) else miss;
+    let result:O = dup(unwrap(item));
+    publish [dst = result] retire [old(dst)] at GlobalRead.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm GlobalRead.Builtin inline
+  effects(reads, writes, releases)
+  feedback(read(entry.globals_version), read(entry.builtins_version), read(entry.index))
+  exits(next, miss)
+{
+  entry():
+    call admitted_global_builtin(fb) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Global>):
+    guard globals_current(frame, r) else miss;
+    guard builtins_current(frame, r) else miss;
+    let item:Maybe<B> = builtin_slot(frame, r);
+    guard present(item) else miss;
+    let result:O = dup(unwrap(item));
+    publish [dst = result] retire [old(dst)] at GlobalRead.Done;
+    exit next();
+  Miss():
+    exit miss();
 }

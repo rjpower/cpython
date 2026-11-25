@@ -27,6 +27,8 @@
 //   GetMethod.MethodValues: GetMethod.MethodValues: fb is not a leaf value
 //   GetMethod.NoDict: GetMethod.NoDict: fb is not a leaf value
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
+//   GlobalRead.Builtin: GlobalRead.Builtin: fb is not a leaf value
+//   GlobalRead.Module: GlobalRead.Module: fb is not a leaf value
 //   LocalRead.Bound: LocalRead.Bound: dup has no C body (pending)
 //   LocalWrite.Store: LocalWrite.Store: acquire has no C body (pending)
 //   Truth.Bool: Truth.Bool: truth_object has no leaf lowering

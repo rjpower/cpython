@@ -684,10 +684,23 @@ _PyIR_Rop_Stub_GlobalRead_Generic(
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyGlobalRecipe out2;
+    int ret3;
+    int adapt_before_use_global2_cModule;
+    int ret4;
+    int adapt_before_use_global2_cBuiltin;
+    int ret5;
     PyValue z;
     PyValue global_at_origin1_value;
     PyValue global_at_origin1_kept;
     PyValue global_at_origin1_dropped;
+    _PyGlobalRecipe adapt_before_use_global2_rModule;
+    _PyGlobalRecipe adapt_before_use_global2_rBuiltin;
+    if (!_PyFb_TickQuiet(&((_PyFbGlobal *)IR_FB(IR_C(ir_word)))->h)) {
+        goto rop_GlobalRead_Generic_adapt_before_use_global2_Sample;
+    }
+    rop_GlobalRead_Generic_adapt_before_use_global2_Run:
+    rop_GlobalRead_Generic_Run:
     IR_STUB_ESCAPE();
     ret1 = _PyRop_LoadGlobal(frame, GETITEM(FRAME_CO_NAMES, IR_B(ir_word)));
     if (PyValue_IsNull(ret1)) {
@@ -705,6 +718,40 @@ _PyIR_Rop_Stub_GlobalRead_Generic(
     _PyValue_CheckHome(*home_dst);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
+    rop_GlobalRead_Generic_adapt_before_use_global2_Sample:
+    ret3 = _PyGlobal_Classify(frame, this_instr, ((_PyFbGlobal *)IR_FB(IR_C(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out2);
+    if (ret3 == 1) {
+        adapt_before_use_global2_rBuiltin = out2;
+        goto rop_GlobalRead_Generic_adapt_before_use_global2_LBuiltin;
+    }
+    if (ret3 == 2) {
+        goto rop_GlobalRead_Generic_adapt_before_use_global2_Other;
+    }
+    adapt_before_use_global2_rModule = out2;
+    adapt_before_use_global2_cModule = ROP_HANDLER_GlobalRead_Module;
+    ret4 = _PyRop_Install(this_instr, &((_PyFbGlobal *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_global2_cModule);
+    if (ret4 == 0) {
+        goto rop_GlobalRead_Generic_adapt_before_use_global2_Run;
+    }
+    if (ret4 < 0) {
+        goto rop_GlobalRead_Generic_adapt_before_use_global2_Run;
+    }
+    rop_GlobalRead_Generic_adapt_before_use_global2_Changed:
+    next_instr = this_instr;
+    DISPATCH_SAME_OPARG();
+    rop_GlobalRead_Generic_adapt_before_use_global2_Other:
+    _PyRop_Backoff(&((_PyFbGlobal *)IR_FB(IR_C(ir_word)))->h);
+    goto rop_GlobalRead_Generic_Run;
+    rop_GlobalRead_Generic_adapt_before_use_global2_LBuiltin:
+    adapt_before_use_global2_cBuiltin = ROP_HANDLER_GlobalRead_Builtin;
+    ret5 = _PyRop_Install(this_instr, &((_PyFbGlobal *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_global2_cBuiltin);
+    if (ret5 > 0) {
+        goto rop_GlobalRead_Generic_adapt_before_use_global2_Changed;
+    }
+    if (ret5 == 0) {
+        goto rop_GlobalRead_Generic_adapt_before_use_global2_Run;
+    }
+    goto rop_GlobalRead_Generic_adapt_before_use_global2_Run;
     rop_GlobalRead_Generic_global_at_origin1_Failed:
     PROCESS_ERROR_AT(RAISE, 23, this_instr);
     rop_GlobalRead_Generic_global_at_origin1_Moved:

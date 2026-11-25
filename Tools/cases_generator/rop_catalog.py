@@ -119,7 +119,7 @@ SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
     Schema.Binary: ("kind", "descr"),
     Schema.Attr: ("kind", "type_version", "offset", "shape", "keys_version", "index",
                   "descr", "rows"),
-    Schema.Global: ("kind", "module_keys_version", "builtin_keys_version", "index"),
+    Schema.Global: ("globals_version", "builtins_version", "index"),
     Schema.Truth: ("kind", "type_version"),
     Schema.Compare: ("kind",),
     Schema.Contains: ("kind", "type_version"),

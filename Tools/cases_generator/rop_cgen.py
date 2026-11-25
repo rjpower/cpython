@@ -116,7 +116,7 @@ SCHEMA_C = {Schema.Binary: "_PyFbBinary", Schema.Attr: "_PyFbAttr",
 def c_type(t: Type) -> str | None:
     """The C type of a graph value, None for one that has no C variable"""
     if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Recipe:
-        return {Schema.Attr: "_PyAttrRecipe"}.get(t.schema)
+        return {Schema.Attr: "_PyAttrRecipe", Schema.Global: "_PyGlobalRecipe"}.get(t.schema)
     if isinstance(t, ScalarType):
         return SCALAR_C.get(t.scalar)
     if isinstance(t, HandleType):

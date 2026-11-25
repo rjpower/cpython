@@ -539,6 +539,11 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("bool_out_hit", CReturn.bool,
           COutcome(CTest.true, _RES, (CSource.out,), False, "hit"),
           COutcome(CTest.false, _RES, (), False, "absent")),
+    # ok(v, w) when the word is not NULL, w written through the last
+    # parameter; err(e) with the exception set
+    _conv("value_out_or_null", CReturn.value,
+          COutcome(CTest.nonnull, _RES, (_RES, CSource.out), False),
+          COutcome(CTest.null, _RES, (_EXC,), True)),
     # k(): the int is the position of the case among the row's cases
     Convention("case_index", CReturn.int_status, False, (), True),
     # A status int: 0 is success, negative raised

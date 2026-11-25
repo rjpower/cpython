@@ -26,7 +26,7 @@ int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
 
 # Instances with inline values and no __dict__ get the shape handlers
 # under --with-shapes.
-LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE" if Py_SHAPES else "LOAD_ATTR_INSTANCE_VALUE"
+LOAD_ATTR_INSTANCE = "GetAttr.Shape" if Py_SHAPES else "GetAttr.Instance"
 STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE" if Py_SHAPES else "STORE_ATTR_INSTANCE_VALUE"
 
 
@@ -814,7 +814,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 item.a = make_deferred_ref_count_obj()
 
-        opname = "LOAD_ATTR_CLASS"
+        opname = "GetAttr.Class"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -847,7 +847,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 item.a = make_deferred_ref_count_obj()
 
-        opname = "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK"
+        opname = "GetAttr.Class"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -877,7 +877,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).__getattribute__ = lambda self, name: None
 
-        opname = "LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN"
+        opname = "GetAttr.Generic"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -931,7 +931,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).m = lambda self: None
 
-        opname = "LOAD_ATTR_METHOD_LAZY_DICT"
+        opname = "GetMethod.LazyDict"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -962,7 +962,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).m = lambda self: None
 
-        opname = "LOAD_ATTR_METHOD_NO_DICT"
+        opname = "GetMethod.NoDict"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -992,7 +992,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).m = lambda self: None
 
-        opname = "LOAD_ATTR_METHOD_WITH_VALUES"
+        opname = "GetMethod.MethodValues"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1017,7 +1017,7 @@ class TestRacesDoNotCrash(TestBase):
                 item.__dict__.clear()
                 item.__dict__.update(d)
 
-        opname = "LOAD_ATTR_MODULE"
+        opname = "GetAttr.Module"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1047,7 +1047,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).a = property(lambda self: None)
 
-        opname = "LOAD_ATTR_PROPERTY"
+        opname = "GetAttr.Generic"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1074,7 +1074,7 @@ class TestRacesDoNotCrash(TestBase):
                 item.a = 100
                 item.b = 200
 
-        opname = "LOAD_ATTR_SLOT"
+        opname = "GetAttr.ValueSlot"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1101,7 +1101,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "LOAD_ATTR_WITH_HINT"
+        opname = "GetAttr.Hint"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1871,7 +1871,7 @@ class TestSpecializer(TestBase):
 
         n = _testinternalcapi.SPECIALIZATION_THRESHOLD
         get_value(n)
-        self.assert_specialized(get_value, "LOAD_ATTR_INSTANCE_VALUE")
+        self.assert_specialized(get_value, "GetAttr.Instance")
         self.assert_no_opcode(get_value, "LOAD_ATTR")
 
         set_value(n)
@@ -2467,7 +2467,7 @@ class TestSpecializer(TestBase):
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
                 self.assertEqual(load_module_attr_present(), "foo")
 
-            self.assert_specialized(load_module_attr_present, "LOAD_ATTR_MODULE")
+            self.assert_specialized(load_module_attr_present, "GetAttr.Module")
             self.assert_no_opcode(load_module_attr_present, "LOAD_ATTR")
 
             def load_module_attr_missing():
@@ -2477,7 +2477,7 @@ class TestSpecializer(TestBase):
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
                 self.assertEqual(load_module_attr_missing(), 42)
 
-            self.assert_no_opcode(load_module_attr_missing, "LOAD_ATTR_MODULE")
+            self.assert_no_opcode(load_module_attr_missing, "GetAttr.Module")
         finally:
             sys.modules.pop("test_module_with_getattr", None)
 
@@ -2486,7 +2486,7 @@ class TestSpecializer(TestBase):
     def test_load_attr_module_subclass_with_data_descriptor(self):
         # gh-156399: a types.ModuleType subclass inherits
         # PyModule_Type.tp_getattro, so guarding specialization on tp_getattro
-        # alone let subclasses take LOAD_ATTR_MODULE. That reads the module
+        # alone let subclasses take GetAttr.Module. That reads the module
         # dict directly, silently bypassing a data descriptor defined on the
         # subclass once the instruction had specialized.
         class Descriptor:
@@ -2508,7 +2508,7 @@ class TestSpecializer(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             self.assertEqual(load_module_attr(), "from descriptor")
 
-        self.assert_no_opcode(load_module_attr, "LOAD_ATTR_MODULE")
+        self.assert_no_opcode(load_module_attr, "GetAttr.Module")
 
     @cpython_only
     @requires_specialization
@@ -2539,7 +2539,7 @@ class TestSpecializer(TestBase):
 
         load_enum_member()
         self.assert_specialized(load_enum_member,
-                                "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK")
+                                "GetAttr.Class")
 
 
 @cpython_only
@@ -2615,7 +2615,7 @@ class TestFeedback(TestBase):
         def f(o):
             return o.x
 
-        handler = dis._specialized_opmap[LOAD_ATTR_INSTANCE]
+        handler = _testinternalcapi.arm_handlers()[LOAD_ATTR_INSTANCE]
         # A row's aux field holds the shape of the object, if it has one.
         aux = _testinternalcapi.get_object_shape(objects[0]) if Py_SHAPES else 0
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):

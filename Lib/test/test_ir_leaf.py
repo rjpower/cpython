@@ -691,8 +691,6 @@ HANDLERS = {
     "FOR_ITER_RANGE": (lambda: [(word(it), 0) for it in
                                 (iter(range(3)), iter(range(5, -2, -2)), iter(range(0)))]
                        + [(word(it), 0) for it in (iter([1]),)], None, [0]),
-    "LOAD_ATTR_SHAPE": (lambda: [(word(o),) for o in SHAPED], shape_caches, [0, 1]),
-    "LOAD_ATTR_INSTANCE_VALUE": (lambda: [(word(o),) for o in SHAPED], shape_caches, [0, 1]),
     "STORE_ATTR_SHAPE": (store_domain, store_caches, [0]),
     "LOAD_SMALL_INT_INLINE": (lambda: [()], None, [0, 1, 200, 255]),
     "LOAD_FAST_BORROW": (lambda: [()], None, [0, 1]),

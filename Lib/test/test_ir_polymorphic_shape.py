@@ -13,7 +13,7 @@ from test.support import import_helper
 from test.test_ir_admission import construct
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-POLY = {"LOAD_ATTR_SHAPE_POLY", "LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP"}
+POLY = {"GetAttr.PolyShape", "GetAttr.PolyShape"}
 ROUNDS = _testinternalcapi.SPECIALIZATION_COOLDOWN * 4
 
 
@@ -55,11 +55,11 @@ class PolymorphicShapeTests(unittest.TestCase):
             with self.subTest(route=code):
                 read = types.FunctionType(code, globals())
                 self.train(read, owners[:4])
-                self.assertIn("LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP", handlers(code))
+                self.assertIn("GetAttr.PolyShape", handlers(code))
                 for _ in range(8):
                     for owner in owners[:4]:
                         self.assertIs(read(owner), owner.value)
-                self.assertIn("LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP", handlers(code))
+                self.assertIn("GetAttr.PolyShape", handlers(code))
                 for _ in range(ROUNDS):
                     self.assertIs(read(owners[4]), owners[4].value)
                 self.assertFalse(handlers(code) & POLY)
@@ -164,7 +164,7 @@ class PolymorphicShapeTests(unittest.TestCase):
         for cls in (First, Second):
             for _ in range(ROUNDS):
                 read(lambda: factory(cls))
-        self.assertIn("LOAD_ATTR_SHAPE_POLY", handlers(read.__code__))
+        self.assertIn("GetAttr.PolyShape", handlers(read.__code__))
         events.clear()
         result = read(lambda: factory(First))
         reference = weakref.ref(result)

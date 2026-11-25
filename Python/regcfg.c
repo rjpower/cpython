@@ -27,6 +27,7 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
+#include "pycore_rop_metadata.h"       // ROP_HANDLER_GetAttr_Generic
 #include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic, ROP_HANDLER_Call_Generic
 #include "pycore_rop_rows.h"          // BRANCH_IF_FALSE
 #include "pycore_jit.h"             // _PyJIT_OFF
@@ -1019,6 +1020,38 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL);
 }
 
+/* LOAD_ATTR is the GetAttr family, or GetMethod when oparg's low bit asks
+ * for a method.  The rule names its operands: the receiver is the one use;
+ * GetAttr defines dst, GetMethod the callable and then self, pushed in the
+ * order the stack held them, so the legacy CALL finds them as its window.
+ * Every site starts under the family's Generic arm, which adapts it. */
+static int
+rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
+{
+    // The family's name operand is the index into co_names; the stack op's
+    // oparg carries the method flag below it
+    int name = src->oparg >> 1;
+    _PyRegOp *op;
+    int obj;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, &obj));
+    if (!(src->oparg & 1)) {
+        int dst;
+        RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+        RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GetAttr_Generic,
+                                      &obj, 1, &dst, 1, &op));
+        op->oparg = name;
+        return _PyRegTr_Push(t, dst);
+    }
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GetMethod_Generic,
+                                  &obj, 1, defs, 2, &op));
+    op->oparg = name;
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    return _PyRegTr_Push(t, defs[1]);
+}
+
 /* BINARY_OP.  Addition is the Add family (Python/register_ops/add.rop): its
  * register instruction is Add.Generic's, with the family's operands in their
  * declared order, x and y in, dst out.  The word starts on that arm, which
@@ -1174,6 +1207,7 @@ static const _PyRegRule rules[256] = {
     [CALL] = rule_call,
     [RETURN_VALUE] = rule_return_value,
     [SWAP] = rule_swap,
+    [LOAD_ATTR] = rule_load_attr,
 };
 
 static int
@@ -1488,6 +1522,12 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     for (int k = 0; k < 4; k++) {
         slots->in[k] = 0;
     }
+    slots->out[1] = 0;
+    if (op->opcode >= IR_NUM_OLD_HANDLERS && op->nout > 1) {
+        // A register family's second output has a DST role of its own
+        slots->out[1] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
+                    : _PyRegCfg_Slot(cfg, out[1]);
+    }
     if (fmt->flags & _PyIR_WINDOW) {
         slots->base = op->nread > 0 ? _PyRegCfg_Slot(cfg, in[0]) : op->base;
         // The top ninputs inputs of a window are its sources
@@ -1496,10 +1536,10 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
             slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
         }
         if (fmt->flags & _PyIR_UNPACKS) {
-            slots->dst = op->dst >= 0 ? op->dst : IR_NO_DST;
+            slots->out[0] = op->dst >= 0 ? op->dst : IR_NO_DST;
             return;
         }
-        slots->dst = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
+        slots->out[0] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
                    : op->dst >= 0 ? op->dst : slots->base + fmt->dst;
         return;
     }
@@ -1508,13 +1548,13 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         // The callable is the deepest input, and the rest are operand words
         slots->in[0] = _PyRegCfg_Slot(cfg, in[0]);
         if (op->flags & _PyReg_DISCARD) {
-            slots->dst = IR_NO_DST;
+            slots->out[0] = IR_NO_DST;
         }
         else if (op->dst >= 0) {
-            slots->dst = op->dst;
+            slots->out[0] = op->dst;
         }
         else {
-            slots->dst = _PyRegCfg_Slot(cfg, out[0]);
+            slots->out[0] = _PyRegCfg_Slot(cfg, out[0]);
         }
         return;
     }
@@ -1523,17 +1563,17 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
     }
     if (op->flags & _PyReg_DISCARD) {
-        slots->dst = IR_NO_DST;
+        slots->out[0] = IR_NO_DST;
     }
     else if (op->dst >= 0) {
-        slots->dst = op->dst;
+        slots->out[0] = op->dst;
     }
     else if (fmt->dst == _PyIR_NO_DST) {
-        slots->dst = 0;
+        slots->out[0] = 0;
     }
     else {
         int j = op->npop + fmt->dst;
-        slots->dst = j < op->nout ? _PyRegCfg_Slot(cfg, out[j]) : top + fmt->dst;
+        slots->out[0] = j < op->nout ? _PyRegCfg_Slot(cfg, out[j]) : top + fmt->dst;
     }
 }
 
@@ -2556,11 +2596,12 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         _PyRegSlots slots;
         _PyRegCfg_OpSlots(cfg, op, &slots);
         int high = -1;
+        int ndst = 0;
         for (int r = 0; r < 4; r++) {
             int role = fmt->roles[r];
             if (role == _PyIR_ROLE_DST && fmt->dst != _PyIR_NO_DST
                 && !(op->flags & _PyReg_DISCARD)) {
-                high = Py_MAX(high, slots.dst);
+                high = Py_MAX(high, slots.out[ndst++]);
             }
             else if (role == _PyIR_ROLE_BASE) {
                 // A window's handler reads and writes from its base up

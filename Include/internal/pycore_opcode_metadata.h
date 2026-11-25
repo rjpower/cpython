@@ -320,34 +320,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 2 + (oparg-1);
         case LOAD_ATTR:
             return 1;
-        case LOAD_ATTR_CLASS:
-            return 1;
-        case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
-            return 1;
-        case LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN:
-            return 1;
-        case LOAD_ATTR_INSTANCE_VALUE:
-            return 1;
-        case LOAD_ATTR_METHOD_LAZY_DICT:
-            return 1;
-        case LOAD_ATTR_METHOD_NO_DICT:
-            return 1;
-        case LOAD_ATTR_METHOD_WITH_VALUES:
-            return 1;
-        case LOAD_ATTR_MODULE:
-            return 1;
-        case LOAD_ATTR_NONDESCRIPTOR_NO_DICT:
-            return 1;
-        case LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES:
-            return 1;
-        case LOAD_ATTR_PROPERTY:
-            return 1;
-        case LOAD_ATTR_SHAPE:
-            return 1;
-        case LOAD_ATTR_SLOT:
-            return 1;
-        case LOAD_ATTR_WITH_HINT:
-            return 1;
         case LOAD_BUILD_CLASS:
             return 0;
         case LOAD_CLOSURE:
@@ -861,34 +833,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 1 + (oparg-1);
         case LOAD_ATTR:
             return 1 + (oparg&1);
-        case LOAD_ATTR_CLASS:
-            return 1 + (oparg & 1);
-        case LOAD_ATTR_CLASS_WITH_METACLASS_CHECK:
-            return 1 + (oparg & 1);
-        case LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN:
-            return 0;
-        case LOAD_ATTR_INSTANCE_VALUE:
-            return 1 + (oparg & 1);
-        case LOAD_ATTR_METHOD_LAZY_DICT:
-            return 2;
-        case LOAD_ATTR_METHOD_NO_DICT:
-            return 2;
-        case LOAD_ATTR_METHOD_WITH_VALUES:
-            return 2;
-        case LOAD_ATTR_MODULE:
-            return 1 + (oparg & 1);
-        case LOAD_ATTR_NONDESCRIPTOR_NO_DICT:
-            return 1;
-        case LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES:
-            return 1;
-        case LOAD_ATTR_PROPERTY:
-            return 0;
-        case LOAD_ATTR_SHAPE:
-            return 1 + (oparg & 1);
-        case LOAD_ATTR_SLOT:
-            return 1 + (oparg & 1);
-        case LOAD_ATTR_WITH_HINT:
-            return 1 + (oparg & 1);
         case LOAD_BUILD_CLASS:
             return 1;
         case LOAD_CLOSURE:
@@ -1323,21 +1267,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [JUMP_IF_TRUE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [LIST_APPEND] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [LIST_EXTEND] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_CLASS] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_CLASS_WITH_METACLASS_CHECK] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [LOAD_ATTR_INSTANCE_VALUE] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_METHOD_LAZY_DICT] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG },
-    [LOAD_ATTR_METHOD_NO_DICT] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG },
-    [LOAD_ATTR_METHOD_WITH_VALUES] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG },
-    [LOAD_ATTR_MODULE] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_NONDESCRIPTOR_NO_DICT] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_PROPERTY] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [LOAD_ATTR_SHAPE] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_SLOT] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_ATTR_WITH_HINT] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
+    [LOAD_ATTR] = { true, INSTR_FMT_IBC00000000, HAS_ARG_FLAG | HAS_NAME_FLAG },
     [LOAD_BUILD_CLASS] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [LOAD_COMMON_CONSTANT] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_PURE_FLAG },
     [LOAD_CONST] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_CONST_FLAG | HAS_PURE_FLAG },
@@ -1455,7 +1385,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
 };
 #endif
 
-#define MAX_UOP_PER_EXPANSION 6
+#define MAX_UOP_PER_EXPANSION 5
 struct opcode_macro_expansion {
     int nuops;
     struct { int16_t uop; int8_t size; int8_t offset; } uops[MAX_UOP_PER_EXPANSION];
@@ -1551,21 +1481,6 @@ _PyOpcode_macro_expansion[256] = {
     [JUMP_IF_TRUE_OR_POP] = { .nuops = 1, .uops = { { _JUMP_IF_TRUE_OR_POP, OPARG_SIMPLE, 0 } } },
     [LIST_APPEND] = { .nuops = 1, .uops = { { _LIST_APPEND, OPARG_SIMPLE, 0 } } },
     [LIST_EXTEND] = { .nuops = 2, .uops = { { _LIST_EXTEND, OPARG_SIMPLE, 0 }, { _POP_TOP, OPARG_SIMPLE, 0 } } },
-    [LOAD_ATTR] = { .nuops = 1, .uops = { { _LOAD_ATTR, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_CLASS] = { .nuops = 3, .uops = { { _CHECK_ATTR_CLASS, 2, 1 }, { _LOAD_ATTR_CLASS, 4, 5 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_CLASS_WITH_METACLASS_CHECK] = { .nuops = 4, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _CHECK_ATTR_CLASS, 2, 3 }, { _LOAD_ATTR_CLASS, 4, 5 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN] = { .nuops = 6, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _CHECK_PEP_523, OPARG_SIMPLE, 3 }, { _LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME, 2, 3 }, { _LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME, OPERAND1_4, 5 }, { _SAVE_RETURN_SLOT, OPARG_SAVE_RETURN_SLOT, 9 }, { _PUSH_FRAME, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_INSTANCE_VALUE] = { .nuops = 4, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _CHECK_MANAGED_OBJECT_HAS_VALUES, OPARG_SIMPLE, 3 }, { _LOAD_ATTR_INSTANCE_VALUE, 1, 3 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_METHOD_LAZY_DICT] = { .nuops = 3, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _CHECK_ATTR_METHOD_LAZY_DICT, 1, 3 }, { _LOAD_ATTR_METHOD_LAZY_DICT, 4, 5 } } },
-    [LOAD_ATTR_METHOD_NO_DICT] = { .nuops = 2, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _LOAD_ATTR_METHOD_NO_DICT, 4, 5 } } },
-    [LOAD_ATTR_METHOD_WITH_VALUES] = { .nuops = 3, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _CHECK_MANAGED_OBJECT_HAS_VALUES, OPARG_SIMPLE, 3 }, { _LOAD_ATTR_METHOD_WITH_VALUES, 4, 5 } } },
-    [LOAD_ATTR_MODULE] = { .nuops = 4, .uops = { { _GUARD_MODULE_EXACT, OPARG_SIMPLE, 1 }, { _LOAD_ATTR_MODULE, 2, 1 }, { _LOAD_ATTR_MODULE, OPERAND1_1, 3 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_NONDESCRIPTOR_NO_DICT] = { .nuops = 2, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _LOAD_ATTR_NONDESCRIPTOR_NO_DICT, 4, 5 } } },
-    [LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES] = { .nuops = 3, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _CHECK_MANAGED_OBJECT_HAS_VALUES, OPARG_SIMPLE, 3 }, { _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, 4, 5 } } },
-    [LOAD_ATTR_PROPERTY] = { .nuops = 6, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _CHECK_PEP_523, OPARG_SIMPLE, 3 }, { _LOAD_ATTR_PROPERTY_FRAME, 2, 3 }, { _LOAD_ATTR_PROPERTY_FRAME, OPERAND1_4, 5 }, { _SAVE_RETURN_SLOT, OPARG_SAVE_RETURN_SLOT, 9 }, { _PUSH_FRAME, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_SHAPE] = { .nuops = 3, .uops = { { _GUARD_SHAPE_READ, 2, 1 }, { _LOAD_ATTR_SHAPE, 1, 3 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_SLOT] = { .nuops = 3, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _LOAD_ATTR_SLOT, 1, 3 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 9 } } },
-    [LOAD_ATTR_WITH_HINT] = { .nuops = 3, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _LOAD_ATTR_WITH_HINT, 1, 3 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 9 } } },
     [LOAD_BUILD_CLASS] = { .nuops = 1, .uops = { { _LOAD_BUILD_CLASS, OPARG_SIMPLE, 0 } } },
     [LOAD_COMMON_CONSTANT] = { .nuops = 1, .uops = { { _LOAD_COMMON_CONSTANT, OPARG_SIMPLE, 0 } } },
     [LOAD_CONST] = { .nuops = 1, .uops = { { _LOAD_CONST, OPARG_SIMPLE, 0 } } },
@@ -1804,20 +1719,6 @@ const char *_PyOpcode_OpName[267] = {
     [LIST_APPEND] = "LIST_APPEND",
     [LIST_EXTEND] = "LIST_EXTEND",
     [LOAD_ATTR] = "LOAD_ATTR",
-    [LOAD_ATTR_CLASS] = "LOAD_ATTR_CLASS",
-    [LOAD_ATTR_CLASS_WITH_METACLASS_CHECK] = "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK",
-    [LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN] = "LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN",
-    [LOAD_ATTR_INSTANCE_VALUE] = "LOAD_ATTR_INSTANCE_VALUE",
-    [LOAD_ATTR_METHOD_LAZY_DICT] = "LOAD_ATTR_METHOD_LAZY_DICT",
-    [LOAD_ATTR_METHOD_NO_DICT] = "LOAD_ATTR_METHOD_NO_DICT",
-    [LOAD_ATTR_METHOD_WITH_VALUES] = "LOAD_ATTR_METHOD_WITH_VALUES",
-    [LOAD_ATTR_MODULE] = "LOAD_ATTR_MODULE",
-    [LOAD_ATTR_NONDESCRIPTOR_NO_DICT] = "LOAD_ATTR_NONDESCRIPTOR_NO_DICT",
-    [LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES] = "LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES",
-    [LOAD_ATTR_PROPERTY] = "LOAD_ATTR_PROPERTY",
-    [LOAD_ATTR_SHAPE] = "LOAD_ATTR_SHAPE",
-    [LOAD_ATTR_SLOT] = "LOAD_ATTR_SLOT",
-    [LOAD_ATTR_WITH_HINT] = "LOAD_ATTR_WITH_HINT",
     [LOAD_BUILD_CLASS] = "LOAD_BUILD_CLASS",
     [LOAD_CLOSURE] = "LOAD_CLOSURE",
     [LOAD_COMMON_CONSTANT] = "LOAD_COMMON_CONSTANT",
@@ -1933,6 +1834,7 @@ const char *_PyOpcode_OpName[267] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Caches[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Caches[256] = {
+    [LOAD_ATTR] = 9,
     [RESUME] = 1,
     [TO_BOOL] = 3,
     [STORE_SUBSCR] = 1,
@@ -1942,7 +1844,6 @@ const uint8_t _PyOpcode_Caches[256] = {
     [STORE_ATTR] = 4,
     [LOAD_GLOBAL] = 4,
     [LOAD_SUPER_ATTR] = 1,
-    [LOAD_ATTR] = 9,
     [COMPARE_OP] = 1,
     [CONTAINS_OP] = 1,
     [JUMP_BACKWARD] = 1,
@@ -1980,20 +1881,6 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
     [CALL_KW_PY] = { 1, { { 2, 2, offsetof(_PyFb_CALL_KW, func_version) } } },
     [CALL_PY_EXACT_ARGS] = { 1, { { 2, 2, offsetof(_PyFb_CALL, func_version) } } },
     [CALL_PY_GENERAL] = { 1, { { 2, 2, offsetof(_PyFb_CALL, func_version) } } },
-    [LOAD_ATTR_CLASS] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, class_version) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, class_value) } } },
-    [LOAD_ATTR_CLASS_WITH_METACLASS_CHECK] = { 3, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 4, 2, offsetof(_PyFb_LOAD_ATTR, class_version) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, class_value) } } },
-    [LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN] = { 3, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 4, 2, offsetof(_PyFb_LOAD_ATTR, func_version) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, getattribute) } } },
-    [LOAD_ATTR_INSTANCE_VALUE] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_LOAD_ATTR, offset) } } },
-    [LOAD_ATTR_METHOD_LAZY_DICT] = { 3, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_LOAD_ATTR, dictoffset) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, class_value) } } },
-    [LOAD_ATTR_METHOD_NO_DICT] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, class_value) } } },
-    [LOAD_ATTR_METHOD_WITH_VALUES] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, class_value) } } },
-    [LOAD_ATTR_MODULE] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, dict_version) }, { 4, 1, offsetof(_PyFb_LOAD_ATTR, index) } } },
-    [LOAD_ATTR_NONDESCRIPTOR_NO_DICT] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, class_value) } } },
-    [LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, class_value) } } },
-    [LOAD_ATTR_PROPERTY] = { 3, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 4, 2, offsetof(_PyFb_LOAD_ATTR, func_version) }, { 6, 4, offsetof(_PyFb_LOAD_ATTR, fget) } } },
-    [LOAD_ATTR_SHAPE] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_LOAD_ATTR, offset) } } },
-    [LOAD_ATTR_SLOT] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_LOAD_ATTR, index) } } },
-    [LOAD_ATTR_WITH_HINT] = { 2, { { 2, 2, offsetof(_PyFb_LOAD_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_LOAD_ATTR, hint) } } },
     [LOAD_GLOBAL_BUILTIN] = { 3, { { 2, 1, offsetof(_PyFb_LOAD_GLOBAL, globals_version) }, { 3, 1, offsetof(_PyFb_LOAD_GLOBAL, builtins_version) }, { 4, 1, offsetof(_PyFb_LOAD_GLOBAL, index) } } },
     [LOAD_GLOBAL_MODULE] = { 2, { { 2, 1, offsetof(_PyFb_LOAD_GLOBAL, globals_version) }, { 4, 1, offsetof(_PyFb_LOAD_GLOBAL, index) } } },
     [POP_JUMP_IF_FALSE_ALWAYS_TRUE] = { 1, { { 2, 2, offsetof(_PyFb_POP_JUMP_IF_FALSE, type_version) } } },
@@ -2010,6 +1897,20 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
+    [189] = 189,
+    [190] = 190,
+    [191] = 191,
+    [192] = 192,
+    [193] = 193,
+    [194] = 194,
+    [195] = 195,
+    [196] = 196,
+    [197] = 197,
+    [198] = 198,
+    [199] = 199,
+    [200] = 200,
+    [201] = 201,
+    [202] = 202,
     [239] = 239,
     [87] = 87,
     [BINARY_OP] = BINARY_OP,
@@ -2149,20 +2050,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [LIST_APPEND] = LIST_APPEND,
     [LIST_EXTEND] = LIST_EXTEND,
     [LOAD_ATTR] = LOAD_ATTR,
-    [LOAD_ATTR_CLASS] = LOAD_ATTR,
-    [LOAD_ATTR_CLASS_WITH_METACLASS_CHECK] = LOAD_ATTR,
-    [LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN] = LOAD_ATTR,
-    [LOAD_ATTR_INSTANCE_VALUE] = LOAD_ATTR,
-    [LOAD_ATTR_METHOD_LAZY_DICT] = LOAD_ATTR,
-    [LOAD_ATTR_METHOD_NO_DICT] = LOAD_ATTR,
-    [LOAD_ATTR_METHOD_WITH_VALUES] = LOAD_ATTR,
-    [LOAD_ATTR_MODULE] = LOAD_ATTR,
-    [LOAD_ATTR_NONDESCRIPTOR_NO_DICT] = LOAD_ATTR,
-    [LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES] = LOAD_ATTR,
-    [LOAD_ATTR_PROPERTY] = LOAD_ATTR,
-    [LOAD_ATTR_SHAPE] = LOAD_ATTR,
-    [LOAD_ATTR_SLOT] = LOAD_ATTR,
-    [LOAD_ATTR_WITH_HINT] = LOAD_ATTR,
     [LOAD_BUILD_CLASS] = LOAD_BUILD_CLASS,
     [LOAD_COMMON_CONSTANT] = LOAD_COMMON_CONSTANT,
     [LOAD_CONST] = LOAD_CONST,
@@ -2272,6 +2159,20 @@ const uint8_t _PyOpcode_Deopt[256] = {
 
 #define EXTRA_CASES \
     case 87: \
+    case 189: \
+    case 190: \
+    case 191: \
+    case 192: \
+    case 193: \
+    case 194: \
+    case 195: \
+    case 196: \
+    case 197: \
+    case 198: \
+    case 199: \
+    case 200: \
+    case 201: \
+    case 202: \
     case 239: \
         ;
 struct pseudo_targets {

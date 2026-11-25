@@ -115,24 +115,15 @@ class HandlerRecordTests(unittest.TestCase):
             return {str(f) for g in found.guards for f in g.facts}
 
         # A specific version
-        self.assertIn("TYPE_VERSION(v0, type_version)",
-                      facts("LOAD_ATTR_METHOD_WITH_VALUES", "_GUARD_TYPE_VERSION"))
-        # A version without naming it is no fact that a row establishes:
-        # the declared guard gives its reason instead
-        [guard] = [u for u in records["LOAD_ATTR_METHOD_POLY"].uops
-                   if u.name == "_GUARD_TYPE_HAS_VERSION"]
-        self.assertIn("the type has no version", [g.reason for g in guard.guards])
-        self.assertNotIn("TYPE_VERSION(v0)",
-                         facts("LOAD_ATTR_METHOD_POLY", "_GUARD_TYPE_HAS_VERSION"))
+        self.assertIn("TYPE_VERSION(v1, type_version)",
+                      facts("STORE_ATTR_SHAPE", "_GUARD_TYPE_VERSION"))
 
     def test_poly_table_readers(self):
-        # The poly execution variants and the handlers that call a
-        # POLY_TABLE_READERS macro
+        # The poly arms are register instruction arms: no record of an
+        # old handler reads a poly table
         self.assertEqual(
             {name for name, record in records.items() if record.reads_poly_table},
-            {"LOAD_ATTR_SHAPE_POLY", "LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP",
-             "LOAD_ATTR_METHOD_POLY"})
-        self.assertIn(READS_HEAP, ir_records.uop_record_effects(uops["_LOAD_ATTR_METHOD_POLY"]))
+            set())
 
     def test_feedback_operands_are_schema_fields(self):
         for record in records.values():

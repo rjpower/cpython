@@ -713,14 +713,14 @@ def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
 
-def at(filename: str, text: str, column: int | None = None, last: bool = False,
-       index: int | None = None) -> str:
-    """filename:line, and :column if given, of the first line (the last, if
-    last; the index'th, if index) of the checked-in definition file that
-    contains text"""
+def at(filename: str, text: str, column: int | None = None, nth: int = 0,
+       last: bool = False, index: int | None = None) -> str:
+    """filename:line, and :column if given, of the nth line (the first by
+    default; the last, if last; the index'th of all, if index) of the
+    checked-in definition file that contains text"""
     lines = (ROP_DIR / filename).read_text().splitlines()
     found = [i for i, source in enumerate(lines, 1) if text in source]
-    line = found[index] if index is not None else found[-1] if last else found[0]
+    line = found[index] if index is not None else found[-1] if last else found[nth]
     return f"{filename}:{line}" if column is None else f"{filename}:{line}:{column}"
 
 
@@ -745,7 +745,9 @@ class PilotTests(unittest.TestCase):
         raise_ext = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
         dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
         guard = at("getattr.rop", "guard present(item) else miss;")
-        raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
+        # The GetSet arm raises first; Generic's is the second
+        raise_getset = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
+        raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5, nth=1)
         raise_method = at("getattr.rop", "exit raise(GetMethod.Failed, saved);", 5)
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
@@ -785,6 +787,8 @@ class PilotTests(unittest.TestCase):
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact",
+              f"{raise_getset}: GetAttr.GetSet: points: raise at GetAttr.Failed: "
+              "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_attr}: GetAttr.Generic: points: raise at GetAttr.Failed: "
               "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_method}: GetMethod.Generic: points: raise at GetMethod.Failed: "

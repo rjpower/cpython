@@ -2235,24 +2235,32 @@ _PyRop_RetireFailedArgs(_PyInterpreterFrame *frame, PyValue *fn,
 }
 
 /* Closes the temporary operands of the call at head, all but the home kept,
- * which the call's result now holds; each home is cleared before its value
- * is closed */
+ * which the call's result now holds.  Every home is cleared before the first
+ * value is closed, so no finalizer finds an operand still in the frame
+ * (handlers81 rule 5); the values close in reverse order. */
 static Py_NO_INLINE void
 _PyRop_SpendArgs(_PyInterpreterFrame *frame, const _PyIRWord *head,
                  const PyValue *kept)
 {
     PyValue *slots = _PyFrame_Slots(frame);
-    int left = (int)IR_C(head[0]);
-    for (int w = 1; left > 0; w++, left -= IR_OPERANDS_PER_WORD) {
+    int operands = (int)IR_C(head[0]);
+    PyValue owners[operands + 1];
+    int taken = 0;
+    for (int w = 1, left = operands; left > 0;
+         w++, left -= IR_OPERANDS_PER_WORD)
+    {
         _PyIRWord ops = head[w];
         uint64_t homes = ops >> 16;
         int count = Py_MIN(left, IR_OPERANDS_PER_WORD);
         for (int k = 0; k < count; k++, homes >>= 12) {
             PyValue *home = &slots[homes & IR_FIELD_MAX];
             if (home != kept && !(ops & (IR_F_LOCAL_A << k))) {
-                PyValue_XCLOSE(_PyFrame_TakeHome(frame, home));
+                owners[taken++] = _PyFrame_TakeHome(frame, home);
             }
         }
+    }
+    while (taken > 0) {
+        PyValue_XCLOSE(owners[--taken]);
     }
 }
 

@@ -33,8 +33,9 @@ def role_flags(name):
 
 
 def call_rows(code, adaptive=False):
+    # An OPERAND word (an arm's operand) has no handler
     return [row for row in _testinternalcapi.get_ir(code, adaptive)
-            if contract_of(row[0]).base in
+            if row[0] != "OPERAND" and contract_of(row[0]).base in
             (opcode.opmap["CALL"], opcode.opmap["CALL_KW"],
              opcode.opmap["CALL_FUNCTION_EX"])]
 

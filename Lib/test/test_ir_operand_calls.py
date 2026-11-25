@@ -24,7 +24,8 @@ def head_rows(code):
     rows = _testinternalcapi.get_ir(code)
     result = []
     for i, row in enumerate(rows):
-        if row[0].startswith(("CALL", "INSTRUMENTED_CALL")):
+        # The stack op CALL lowers to the Call family's arms
+        if row[0].startswith(("CALL", "INSTRUMENTED_CALL", "Call.")):
             result.append((row, rows[i + 1:i + 1 + (row[3] + 3) // 4]))
     return result
 

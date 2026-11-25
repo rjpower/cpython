@@ -9,6 +9,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
 #include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic, ROP_FIRST_HANDLER
+#include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
@@ -668,7 +669,7 @@ static int
 fused_arg(_PyRegCfg *cfg, _PyRegOp *op)
 {
     int arg = op->oparg & IR_FUSED_OP_MASK;
-    if (cfg->ops[op->fuse].opcode == POP_JUMP_IF_FALSE) {
+    if (cfg->ops[op->fuse].oparg == BRANCH_IF_FALSE) {
         arg |= _PyIR_FUSED_IF_FALSE;
     }
     return arg;

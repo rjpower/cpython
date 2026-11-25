@@ -650,13 +650,13 @@ class TestHandOff(JitTestCase):
                     pass
             f(1)
             names = {w[0] for w in t.get_ir(f.__code__, True)}
-            print(sorted(n for n in names if n.startswith(("RESUME", "JUMP_BACKWARD"))))
+            print(sorted(n for n in names if n.startswith(("RESUME", "Jump"))))
         """
-        self.assertEqual(run(src, "jit=off").strip(), "['JUMP_BACKWARD', 'RESUME']")
+        self.assertEqual(run(src, "jit=off").strip(), "['Jump.Poll', 'RESUME']")
         for mode in ("on", "always"):
             with self.subTest(mode=mode):
                 self.assertEqual(run(src, f"jit={mode}").strip(),
-                                 "['JUMP_BACKWARD_JIT', 'RESUME_JIT']")
+                                 "['Jump.Warm', 'RESUME_JIT']")
 
     def test_ir_forms_turns_the_jit_off(self):
         # The forms executor runs no unit, so a JIT mode under -X ir_forms

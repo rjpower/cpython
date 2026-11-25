@@ -1025,7 +1025,7 @@ extern helper poll(t:Thread)
 // natively and the frame goes on where the unit stopped; otherwise the
 // jump goes on at its target.  The forms and stubs run no event.
 extern routine jit_warm(target:Head) -> Unit
-  effects(runs_python, switches_frame)
+  effects(runs_python)
   exits(jump, raise, redirect, exit)
   c ROP_JIT_WARM as tail
   evidence(
@@ -1080,7 +1080,7 @@ arm Jump.Poll inline select(interruptible, jit_off)
 }
 
 arm Jump.Warm split select(interruptible, jit_on)
-  effects(runs_python, polls, raises, switches_frame)
+  effects(runs_python, polls, raises)
   feedback()
   exits(jump, raise, redirect, exit)
 {

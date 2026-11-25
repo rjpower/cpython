@@ -194,11 +194,12 @@ generator_resume_shape(const _PyIRWord *words, int nwords, int nl, int pc,
         *consumer = pc + 2;
         return _PyIR_GEN_CONSUMER_STORE_LOCAL;
     }
-    if (!generator_is(next, JUMP_BACKWARD_NO_INTERRUPT)) {
+    // The yield-from loop's jump back, which never polls
+    if (IR_HANDLER(next) != ROP_HANDLER_Jump_Direct) {
         return _PyIR_GEN_CONSUMER_NONE;
     }
-    int target = (int)IR_CD(next);
-    if (target < 0 || target >= nwords) {
+    int target = pc + 3 + _PyIR_FormatDistance(_PyIR_FormatOf(IR_HANDLER(next)), next);
+    if (target < 0 || target >= pc + 2 || target >= nwords) {
         return _PyIR_GEN_CONSUMER_NONE;
     }
     const _PyIROwnershipEvent *event = generator_completion(words[target]);

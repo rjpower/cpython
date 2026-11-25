@@ -386,7 +386,7 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
             self.assertEqual(f(False, noop), 2)
         self.assertEqual(f(True, noop), 1)
-        self.assertIn("POP_JUMP_IF_FALSE_BOOL", handlers(f))
+        self.assertIn("BranchTruth.Bool", handlers(f))
         instructions = list(dis.get_instructions(f))
         self.assertNotIn("NOP", [i.opname for i in instructions])
         source_line = f.__code__.co_firstlineno + 5  # try:
@@ -544,8 +544,7 @@ class AssemblerTest(unittest.TestCase):
                 self.assertEqual(f(xs, y), expected)
                 ir = handlers(f)
                 self.assertEqual(ir.count(handler), 3)
-                self.assertNotIn("POP_JUMP_IF_FALSE_BOOL", ir)
-                self.assertNotIn("POP_JUMP_IF_TRUE_BOOL", ir)
+                self.assertNotIn("BranchTruth.Bool", ir)
                 self.assertEqual(f(xs, y), expected)
                 # Operands of another type deoptimise the compare
                 self.assertEqual(f([None, y], y), 11)
@@ -1799,8 +1798,12 @@ class TruthTest(unittest.TestCase):
             if not x:
                 return 1
             return 2
-        self.assertEqual(words(f)[0], ("POP_JUMP_IF_FALSE", None, (0,)))
-        self.assertEqual(words(g)[0], ("POP_JUMP_IF_TRUE", None, (0,)))
+        # The word is the BranchTruth family's; the stack instruction it came
+        # from shows as the opname
+        self.assertEqual(words(f)[0], ("BranchTruth.Generic", None, (0,)))
+        self.assertEqual(words(g)[0], ("BranchTruth.Generic", None, (0,)))
+        self.assertEqual([i.opname for i in dis.get_instructions(f)][1], "POP_JUMP_IF_FALSE")
+        self.assertEqual([i.opname for i in dis.get_instructions(g)][1], "POP_JUMP_IF_TRUE")
         for func in f, g:
             names = [instr.opname for instr in dis.get_instructions(func)]
             self.assertNotIn("TO_BOOL", names)
@@ -1845,8 +1848,10 @@ class TruthTest(unittest.TestCase):
                     self.assertEqual(f(false), 1 if false else 2)
                     self.assertEqual(g(true), 2 if true else 1)
                     self.assertEqual(g(false), 2 if false else 1)
-                self.assertIn(f"POP_JUMP_IF_FALSE_{kind}", handlers(f))
-                self.assertIn(f"POP_JUMP_IF_TRUE_{kind}", handlers(g))
+                arm = {"BOOL": "Bool", "INT": "Int", "LIST": "List", "NONE": "None",
+                       "STR": "Str", "ALWAYS_TRUE": "Plain"}[kind]
+                self.assertIn(f"BranchTruth.{arm}", handlers(f))
+                self.assertIn(f"BranchTruth.{arm}", handlers(g))
                 # Another type deoptimises
                 for value in (Falsy(), 0.0, (), 1.5, (1,)):
                     self.assertEqual(f(value), 1 if value else 2)
@@ -2303,6 +2308,10 @@ class RegCfgTest(unittest.TestCase):
     def names(self, func):
         return [w[0] for w in words(func)]
 
+    def ops(self, func):
+        """The stack instructions that the words came from"""
+        return [i.opname for i in dis.get_instructions(func)]
+
     # a. Copy propagation
 
     def test_load_does_not_fold_under_a_global_or_a_call(self):
@@ -2476,8 +2485,8 @@ class RegCfgTest(unittest.TestCase):
             return o.x and b
         def disj(o, b):
             return o.x or b
-        self.assertIn("JUMP_IF_FALSE_OR_POP", self.names(conj))
-        self.assertIn("JUMP_IF_TRUE_OR_POP", self.names(disj))
+        self.assertIn("JUMP_IF_FALSE_OR_POP", self.ops(conj))
+        self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
         for f in conj, disj:
             self.assertNotIn("COPY", self.names(f))
             self.assertNotIn("POP_TOP", self.names(f))
@@ -2502,7 +2511,7 @@ class RegCfgTest(unittest.TestCase):
             return a or b
         def window(a, b):
             return list((a or b(), 1))
-        self.assertIn("JUMP_IF_TRUE_OR_POP", self.names(disj))
+        self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
         self.assertNotIn("POP_TOP", self.names(disj))
         empty, full = [], [1]
         for a in empty, full, 0, 2.5:
@@ -3158,7 +3167,7 @@ class FusedJumpTest(AssemblerTestCase):
                 co = self.insts_to_code_object(insts, metadata)
                 ir = [w[0] for w in get_ir(co, True)]
                 self.assertEqual("COMPARE_OP_JUMP" in ir, fused)
-                self.assertEqual("POP_JUMP_IF_FALSE" in ir, not fused)
+                self.assertEqual("BranchTruth.Generic" in ir, not fused)
                 f = types.FunctionType(co, {})
                 self.assertEqual(f(1, 2), 1)
                 self.assertEqual(f(2, 1), 2)

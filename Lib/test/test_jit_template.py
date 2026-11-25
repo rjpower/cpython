@@ -702,14 +702,8 @@ TEMPLATE_CASES = [
     *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", (None, None),
        "IS_OP_JUMP", "AB", [(a, b) for a in ANY for b in ANY[::2]])
       for op in ("is", "is not")],
-    ("def f(a, b):\n    if a:\n        return 1\n    return 0", (True, 0),
-     "POP_JUMP_IF_FALSE_BOOL", "A", [(x,) for x in ANY]),
-    ("def f(a, b):\n    if not a:\n        return 1\n    return 0", (True, 0),
-     "POP_JUMP_IF_TRUE_BOOL", "A", [(x,) for x in ANY]),
-    ("def f(a, b):\n    if a is None:\n        return 1\n    return 0", (None, 0),
-     "POP_JUMP_IF_NOT_NONE", "A", [(x,) for x in ANY]),
-    ("def f(a, b):\n    if a is not None:\n        return 1\n    return 0", (None, 0),
-     "POP_JUMP_IF_NONE", "A", [(x,) for x in ANY]),
+    # (The truth and branch arms are tested by test_rop_truth, by their form
+    # and completion stub: they have no template yet.)
     ("def f(a, b):\n    a = 5\n    return a", (1, 2), "LOAD_SMALL_INT_INLINE", "A",
      [(Plain(),), (None,), (big(5),), (3,)]),
     *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
@@ -758,8 +752,7 @@ TEMPLATE_CASES = [
             for v in (7, 2.5, "s")] + [(None, 7), (4, 7)]),
     *[("G = 5\ndef f(a, b):\n    x = 1\n    x = G + len(a)\n    return x", ([1], 0), handler,
        "", [()]) for handler in ("LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN")],
-    ("def f(a, b):\n    while a:\n        a -= 1\n    return a", (3, 0), "JUMP_BACKWARD", "",
-     [()]),
+    # (Jump.Poll has no template yet: its poll row has no lowering.)
     # A site that has seen two shapes of one type reads the instance's values
     ("def f(a, b):\n    x = 1\n    x = a.q\n    return x",
      [(Shape(), 0), (reversed_shape(), 0)], "LOAD_ATTR_INSTANCE_VALUE",
@@ -776,10 +769,6 @@ TEMPLATE_CASES = [
            [(Fresh(lambda r=r: iter(r)), tagged(0))
             for r in (range(3), range(0), range(2**60, 2**60 + 2), range(5, -5, -3))] +
            [([1], tagged(0))]))],
-    *[(f"def f(a, b):\n    if {neg}a:\n        return 1\n    return 0", (warm, 0),
-       f"POP_JUMP_IF_{sense}_{kind}", "A", [(x,) for x in TRUTHS])
-      for neg, sense in (("", "FALSE"), ("not ", "TRUE"))
-      for warm, kind in ((5, "INT"), ([], "LIST"), (None, "NONE"), (Shape(), "ALWAYS_TRUE"))],
 ]
 
 

@@ -372,9 +372,6 @@ _PyIR_NullableInputs(_PyIRWord word)
             return (1u << 1) | (1u << 2);
         case WITH_EXCEPT_START:
             return 1u << 1;  /* Optional bound exit-method receiver. */
-        case STORE_GLOBAL:
-        case STORE_NAME:
-            return 1u << 0;  /* NULL value requests deletion, never a receiver. */
         default:
             return 0;
     }
@@ -451,7 +448,29 @@ _PyIR_ReadsWindowHome(_PyIRWord word, int arg, int home)
 static inline int
 _PyIR_IsMoveWord(_PyIRWord word)
 {
-    return _PyIR_FormatOf(IR_HANDLER(word))->operands == _PyIR_OPERANDS_SPANS;
+    return _PyIR_IsMoveFormat(_PyIR_FormatOf(IR_HANDLER(word)));
+}
+
+/* Whether home is an element of a span that the word at wp reads */
+static inline int
+_PyIR_SpanReadsHome(const _PyIRWord *wp, int home)
+{
+    int handler = IR_HANDLER(*wp);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (fmt->operands != _PyIR_OPERANDS_SPANS) {
+        return 0;
+    }
+    int nspans = _PyIR_SpanCountFields(fmt);
+    for (int k = 0; k < nspans; k++) {
+        int first, is_source;
+        int count = _PyIR_SpanBounds(wp, handler, k, &first, &is_source);
+        for (int j = 0; is_source && j < count; j++) {
+            if (_PyIR_SpanElement(wp, handler, first + j) == home) {
+                return 1;
+            }
+        }
+    }
+    return 0;
 }
 
 /* The pair of a Move whose source is home, or -1; *extra says that home is
@@ -496,9 +515,13 @@ static inline int
 _PyIR_NullableHomeAs(_PyIRWord word, const _PyIRWord *wp, int arg, int home)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+    if (_PyIR_IsMoveFormat(fmt)) {
         // A move moves what it finds, NULL too
         return _PyIR_MoveReads(wp, home);
+    }
+    if (_PyIR_SpanReadsHome(wp, home)) {
+        // The elements of a span are values that the word takes
+        return 0;
     }
     uint32_t inputs = _PyIR_NullableInputs(word);
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
@@ -550,8 +573,11 @@ _PyIR_ReadsHome(const _PyIRWord *wp, int arg, int home)
 {
     _PyIRWord word = *wp;
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+    if (_PyIR_IsMoveFormat(fmt)) {
         return _PyIR_MoveReads(wp, home);
+    }
+    if (_PyIR_SpanReadsHome(wp, home)) {
+        return 1;
     }
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     for (int f = 0; f < 4; f++) {
@@ -577,11 +603,16 @@ _PyIR_ReadBounds(const _PyIRWord *wp, int arg, int *lo, int *hi)
     int low = INT_MAX, high = INT_MIN;
     int window = -1;
     if (fmt->operands == _PyIR_OPERANDS_SPANS) {
-        int nd = (int)IR_A(word), ns = (int)IR_B(word);
-        for (int k = 0; k < ns; k++) {
-            int src = _PyIR_SpanElement(wp, IR_HANDLER(word), nd + k);
-            low = Py_MIN(low, src);
-            high = Py_MAX(high, src + 1);
+        int nspans = _PyIR_SpanCountFields(fmt);
+        for (int s = 0; s < nspans; s++) {
+            int first, is_source;
+            int count = _PyIR_SpanBounds(wp, IR_HANDLER(word), s, &first,
+                                         &is_source);
+            for (int k = 0; is_source && k < count; k++) {
+                int src = _PyIR_SpanElement(wp, IR_HANDLER(word), first + k);
+                low = Py_MIN(low, src);
+                high = Py_MAX(high, src + 1);
+            }
         }
     }
     for (int f = 0; f < 4; f++) {
@@ -852,7 +883,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
     {
         return;
     }
-    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+    if (_PyIR_IsMoveFormat(fmt)) {
         if (edge) {
             return;
         }

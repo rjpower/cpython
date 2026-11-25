@@ -1123,7 +1123,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__globals__[None] = None
 
-        opname = "LOAD_GLOBAL_MODULE"
+        opname = "GlobalRead.Module"
         self.assert_races_do_not_crash(
             opname, get_items, read, write, check_items=True
         )

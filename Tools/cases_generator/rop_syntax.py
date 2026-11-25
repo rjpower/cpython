@@ -354,11 +354,12 @@ class Parser:
             symbol = self.ident("a C symbol")
             self.expect("as")
             convention = self.ident("a C convention")
+            inline = self.accept("inline") is not None
             evidence: tuple[EvidenceItem, ...] = ()
             if self.accept("evidence"):
                 self.expect("(")
                 evidence = self.nonempty(")", self.evidence_item)
-            binding = CBinding(symbol.text, convention.text, evidence, c.span)
+            binding = CBinding(symbol.text, convention.text, evidence, c.span, inline)
         self.expect(";")
         return Extern(kind, name.text, schemas, params, result, contract, test,
                       binding, start.span)

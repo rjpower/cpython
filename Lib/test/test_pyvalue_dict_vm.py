@@ -349,14 +349,14 @@ class PyValueDictVMTests(unittest.TestCase):
         read = namespace['read']
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(read(), 2147483647)
-        self.assertIn('LOAD_GLOBAL_BUILTIN', handlers(read))
+        self.assertIn('GlobalRead.Builtin', handlers(read))
         namespace['selected'] = None
         self.assertIsNone(read())
         # A specialisation starts its counter at the cooldown value and each
         # deoptimisation advances it (register-ir.md, "Specialisation").
         for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN + 1):
             self.assertIsNone(read())
-        self.assertIn('LOAD_GLOBAL_MODULE', handlers(read))
+        self.assertIn('GlobalRead.Module', handlers(read))
         namespace['selected'] = 3.25
         self.assertEqual(read(), 3.25)
         del namespace['selected']

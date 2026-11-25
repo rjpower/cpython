@@ -15,15 +15,15 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, CReturn, CSource, CTest, DebtKind,
-                         Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
+from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
+                         CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          Slot, Wrap)
 from rop_check import GraphInfo, Program, is_args
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
                        ScalarType, SchemaType, SchemaVar, SpanLit, Target, Type,
-                       WrapType)
+                       Returns, WrapType)
 
 
 class Unsupported(Exception):
@@ -108,15 +108,14 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
 
 
 # The C entry type of each feedback schema whose arms are lowered
-SCHEMA_C = {Schema.Binary: "_PyFbBinary", Schema.Attr: "_PyFbAttr",
-            Schema.Global: "_PyFbGlobal", Schema.Call: "_PyFbCall",
-            Schema.Truth: "_PyFbUnary", Schema.Item: "_PyFbBinary"}
+SCHEMA_C = {schema: layout.struct for schema, layout in FB_LAYOUT.items()}
 
 
 def c_type(t: Type) -> str | None:
     """The C type of a graph value, None for one that has no C variable"""
     if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Recipe:
-        return {Schema.Attr: "_PyAttrRecipe"}.get(t.schema)
+        layout = RECIPE_LAYOUT.get(t.schema)
+        return layout.struct if layout is not None else None
     if isinstance(t, ScalarType):
         return SCALAR_C.get(t.scalar)
     if isinstance(t, HandleType):
@@ -128,6 +127,50 @@ def c_type(t: Type) -> str | None:
     if t == WrapType(Wrap.Span, HandleType(Handle.O)):
         return "_PyRopOwners"
     return None
+
+
+def inline_rows(program: Program) -> list[Extern]:
+    """The rows declared `inline`, in declaration order"""
+    return [x for x in program.externs.values() if x.c is not None and x.c.inline]
+
+
+def row_signature(x: Extern) -> tuple[str, list[str]]:
+    """The C return type and parameter types of a row's entry point, from
+    its declaration, the way a call passes them (c_args).  The C compiler
+    checks them against the body."""
+    assert x.c is not None
+    conv = CONVENTIONS[x.c.convention]
+    params = []
+    for p in x.params:
+        t = p.type
+        if isinstance(t, HandleType) and t.handle in TOKENS:
+            continue
+        if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Ticket:
+            continue
+        if t in (HandleType(Handle.Src), HandleType(Handle.Local),
+                 WrapType(Wrap.Maybe, HandleType(Handle.Src))):
+            params.append("PyValue *")
+        elif isinstance(t, SchemaType) and t.ctor is SchemaCtor.Fb:
+            params.append(f"const {SCHEMA_C[t.schema]} *")
+        elif c_type(t) is not None:
+            params.append(c_type(t))
+        else:
+            raise Unsupported(f"{x.name}: parameter {p.name} has no C type for an "
+                              "inline row's out-of-line copy")
+    if conv.returns is CReturn.void:
+        ret = "void"
+    elif conv.returns is CReturn.pointer:
+        if not isinstance(x.result, Returns) or c_type(x.result.type) is None:
+            raise Unsupported(f"{x.name}: no C result type for an inline row")
+        ret = c_type(x.result.type)
+    else:
+        ret = RETURN_C[conv.returns]
+    return ret, params
+
+
+def outlined_name(x: Extern) -> str:
+    assert x.c is not None
+    return f"{x.c.symbol}_Outlined"
 
 
 @dataclass(frozen=True)
@@ -435,9 +478,12 @@ class Lowering:
 
 class ArmLowerer:
     def __init__(self, program: Program, arm: Arm, numbers: Mapping[str, int],
-                 points: Mapping[str, int], generic: Mapping[str, str | None]
-                 ) -> None:
+                 points: Mapping[str, int], generic: Mapping[str, str | None],
+                 outline: bool = False) -> None:
         self.program = program
+        # The function forms and stubs call the out-of-line copy of a row
+        # declared inline; the interpreter calls the row's own symbol
+        self.outline = outline
         self.arm = arm
         self.info: FlatGraph = flatten(program, arm)
         self.family = program.families[arm.family]
@@ -584,6 +630,10 @@ class ArmLowerer:
         return (f"&(_PyRopSpan){{frame, this_instr, opcode, {first}, "
                 f"{self.field(operand)}}}")
 
+    def row_symbol(self, x: Extern) -> str:
+        assert x.c is not None
+        return outlined_name(x) if self.outline and x.c.inline else x.c.symbol
+
     def c_args(self, args, params) -> list[str]:
         """The C arguments of a row call: a token has no value, an anchor
         and a span of sources are passed by address"""
@@ -726,7 +776,7 @@ class ArmLowerer:
         conv = CONVENTIONS[x.c.convention]
         if not conv.single:
             raise Unsupported(f"{self.arm.name}: {e.callee} has cases; use a call")
-        return f"{x.c.symbol}({', '.join(self.c_args(e.args, x.params))})"
+        return f"{self.row_symbol(x)}({', '.join(self.c_args(e.args, x.params))})"
 
     # Statements
 
@@ -983,7 +1033,7 @@ class ArmLowerer:
         edges = {e.case: e for e in t.edges}
         if conv.transfer:
             # The callee leaves the word by the exit of the case it takes
-            self.emit(f"{x.c.symbol}({', '.join(args)});")
+            self.emit(f"{self.row_symbol(x)}({', '.join(args)});")
             return
         if conv.indexed:
             self.lower_indexed_call(t, x, args)
@@ -999,7 +1049,7 @@ class ArmLowerer:
         # A bool result is tested in place; any other is kept for the tests
         # and the payloads that read it
         inline = conv.returns is CReturn.bool and len(conv.outcomes) == 2
-        ret = f"{x.c.symbol}({', '.join(args)})"
+        ret = f"{self.row_symbol(x)}({', '.join(args)})"
         if x.contract.effect_set & ESCAPING_CALL:
             self.emit("IR_STUB_ESCAPE();")
         if conv.returns is CReturn.void:
@@ -1036,7 +1086,7 @@ class ArmLowerer:
         if x.contract.effect_set & ESCAPING:
             self.emit("IR_STUB_ESCAPE();")
         ret = self.new_temp("int", "ret")
-        self.emit(f"{ret} = {x.c.symbol}({', '.join(args)});")
+        self.emit(f"{ret} = {self.row_symbol(x)}({', '.join(args)});")
         edges = {e.case: e.target for e in t.edges}
         ways = [(i, edges[c.name], (out,) if c.params else ()) for i, c in enumerate(cases)]
         ways.sort(key=lambda w: w[1].label == self.next_label)
@@ -1090,5 +1140,6 @@ class ArmLowerer:
 
 
 def lower_arm(program: Program, arm: Arm, numbers: Mapping[str, int],
-              points: Mapping[str, int], generic: Mapping[str, str | None]) -> Lowering:
-    return ArmLowerer(program, arm, numbers, points, generic).lower()
+              points: Mapping[str, int], generic: Mapping[str, str | None],
+              outline: bool = False) -> Lowering:
+    return ArmLowerer(program, arm, numbers, points, generic, outline).lower()

@@ -10,6 +10,7 @@
 #include "pycore_descrobject.h"   // _PyMethodWrapper_Type
 #include "pycore_dict.h"          // DICT_KEYS_UNICODE
 #include "pycore_function.h"      // _PyFunction_GetVersionForCurrentState()
+#include "pycore_global_recipe.h" // _PyGlobalRecipe
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
 #include "pycore_lazyimportobject.h" // PyLazyImport_CheckExact
 #include "pycore_list.h"          // _PyListIterObject, _PyList_Concat
@@ -66,9 +67,9 @@ typedef enum {
 #define SPEC_FAIL_CODE_COMPLEX_PARAMETERS 7
 #define SPEC_FAIL_CODE_NOT_OPTIMIZED 8
 
-
 #define SPEC_FAIL_LOAD_GLOBAL_NON_DICT 17
 #define SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT 18
+
 
 /* Super */
 
@@ -2060,34 +2061,37 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
     return 1;
 }
 
-static void
-specialize_load_global_lock_held(
-    PyObject *globals, PyObject *builtins,
-    _PyInstr *instr, PyObject *name)
+/* Evidence for GlobalRead (Python/register_ops/names.rop): which arm the
+ * site's name calls for, and its recipe.  The entry takes the versions and
+ * the index only when an arm is nominated.  Both dictionaries are watched, so
+ * that a write to a global or a builtin invalidates the keys version. */
+enum { GLOBAL_MODULE, GLOBAL_BUILTIN, GLOBAL_NONE };
+
+static int
+global_classify_lock_held(PyObject *globals, PyObject *builtins, _PyFbGlobal *fb,
+                          PyObject *name, _PyGlobalRecipe *recipe)
 {
-    assert(ENABLE_SPECIALIZATION);
     PyValue value = PyValue_NULL;
-    assert(_PyOpcode_Caches[LOAD_GLOBAL] == INLINE_CACHE_ENTRIES_LOAD_GLOBAL);
-    _PyFbGlobal *fb = instr_entry(instr);
     assert(PyUnicode_CheckExact(name));
+    int result = GLOBAL_NONE;
     if (!PyDict_CheckExact(globals)) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
-        goto fail;
+        goto done;
     }
     PyDictKeysObject * globals_keys = ((PyDictObject *)globals)->ma_keys;
     if (globals_keys->dk_kind != DICT_KEYS_UNICODE) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
-        goto fail;
+        goto done;
     }
     Py_ssize_t index = _PyDict_LookupIndexAndOwnedValue((PyDictObject *)globals, name, &value);
     if (index == DKIX_ERROR) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
-        goto fail;
+        goto done;
     }
     if (PyValue_IsObject(value) &&
         PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
-        goto fail;
+        goto done;
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (index != DKIX_EMPTY) {
@@ -2095,80 +2099,88 @@ specialize_load_global_lock_held(
                 interp, (PyDictObject*) globals);
         if (keys_version == 0) {
             SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
-            goto fail;
+            goto done;
         }
         PyDict_Watch(MODULE_WATCHER_ID, globals);
         fb->index = (uint32_t)index;
         fb->globals_version = keys_version;
-        specialize(instr, LOAD_GLOBAL_MODULE);
-        PyValue_XCLOSE(value);
-        return;
+        fb->builtins_version = 0;
+        result = GLOBAL_MODULE;
+        goto done;
     }
     if (!PyDict_CheckExact(builtins)) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
-        goto fail;
+        goto done;
     }
     PyDictKeysObject * builtin_keys = ((PyDictObject *)builtins)->ma_keys;
     if (builtin_keys->dk_kind != DICT_KEYS_UNICODE) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
-        goto fail;
+        goto done;
     }
     assert(PyValue_IsNull(value));
     index = _PyDict_LookupIndexAndOwnedValue((PyDictObject *)builtins, name, &value);
     if (index == DKIX_ERROR) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
-        goto fail;
+        goto done;
     }
     if (PyValue_IsObject(value) &&
         PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
-        goto fail;
+        goto done;
     }
     if (index == DKIX_EMPTY) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
-        goto fail;
+        goto done;
     }
     uint32_t globals_version = _PyDict_GetKeysVersionForCurrentState(
             interp, (PyDictObject*) globals);
     if (globals_version == 0) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
-        goto fail;
+        goto done;
     }
     PyDict_Watch(MODULE_WATCHER_ID, globals);
     uint32_t builtins_version = _PyDict_GetKeysVersionForCurrentState(
             interp, (PyDictObject*) builtins);
     if (builtins_version == 0) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
-        goto fail;
+        goto done;
     }
     PyDict_Watch(MODULE_WATCHER_ID, builtins);
     fb->index = (uint32_t)index;
     fb->globals_version = globals_version;
     fb->builtins_version = builtins_version;
-    specialize(instr, LOAD_GLOBAL_BUILTIN);
+    result = GLOBAL_BUILTIN;
+done:
     PyValue_XCLOSE(value);
-    return;
-fail:
-    PyValue_XCLOSE(value);
-    unspecialize(instr);
+    if (result == GLOBAL_MODULE) {
+        (void)_PyGlobal_AdmittedModule(fb, recipe);
+    }
+    else if (result == GLOBAL_BUILTIN) {
+        (void)_PyGlobal_AdmittedBuiltin(fb, recipe);
+    }
+    return result;
 }
 
-Py_NO_INLINE void
-_Py_Specialize_LoadGlobal(
-    PyObject *globals, PyObject *builtins,
-    _PyInstr *instr, PyObject *name)
+int
+_PyGlobal_Classify(_PyInterpreterFrame *frame, _PyInstr *site,
+                   const _PyFbGlobal *fb, PyObject *name, _PyGlobalRecipe *recipe)
 {
+    (void)site;
+    PyObject *globals = frame->f_globals;
+    PyObject *builtins = frame->f_builtins;
+    int result;
 #ifdef Py_GIL_DISABLED
     if (PyMutex_IsLocked(&globals->ob_mutex) || PyMutex_IsLocked(&builtins->ob_mutex)) {
         // Skip specialization if either dictionary is locked to avoid lock
         // contention.
-        unspecialize(instr);
-        return;
+        return GLOBAL_NONE;
     }
 #endif
     Py_BEGIN_CRITICAL_SECTION2(globals, builtins);
-    specialize_load_global_lock_held(globals, builtins, instr, name);
+    result = global_classify_lock_held(globals, builtins, (_PyFbGlobal *)fb,
+                                       name, recipe);
     Py_END_CRITICAL_SECTION2();
+    return result;
 }
 
 static FunctionSignature

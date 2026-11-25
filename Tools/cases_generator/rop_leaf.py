@@ -1,43 +1,58 @@
-"""Leaf graphs and baseline templates of register instruction arms (F2).
+"""Leaf graphs and baseline templates of register instruction arms.
 
-`leaf_of_arm` translates an inline arm's value computation into the leaf IR
-of ir_leaf.py (`LeafBody`), the type the old uops produce.  A register arm's
-operands are named homes, so the body reads them with `arg` ops and ends in
-`out` ops, one per published value.  `publish` is not part of the leaf IR:
-it stays in a `PublishPlan` that `template_of_arm` lowers, next to the body,
-to the home-class-conditional detach, load, store and close that
-jit_template_generator.Builder emits for a stack handler.  The graph is then
-simplified and emitted by jit_template_generator unchanged.
+A template is derived from the arm's SSA expansion (`rop_ssa.SsaArm`), the
+graph the tracer uses and test_rop_ssa runs against C: one graph for both.
+`leaf_of_arm` lowers the expansion into the leaf IR of ir_leaf.py
+(`LeafBody`):
+
+- a home read is an `arg`, an immediate operand is folded where it is used
+  (`jconst`), a feedback-entry field is a `cache` read typed by the schema's
+  C layout (rop_catalog.FB_LAYOUT), a recipe is a record of leaf values;
+- a row is its leaf lowering: the primitive of ir_leaf.PRIMITIVES that its C
+  symbol names, a lowering in ROW_LOWERINGS, or a call of a helper of
+  ir_leaf.HELPERS;
+- a row with cases branches on the test that its C convention gives each
+  case (`outcome_test`, over rop_catalog.CONVENTIONS);
+- a guard leaves for the miss; `publish` (take, old, store, checkpoint,
+  release) becomes a `PublishPlan`, the same on every path that publishes.
+
+`template_of_arm` joins the body with its publication, the home-class
+conditional detach, load, store and close that jit_template_generator.Builder
+emits for a stack handler, and emits it with jit_template_generator.  An arm
+that uses anything else keeps the call of its form; `Unsupported` says why.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Callable
 
 import ir_leaf
 import jit_template_generator as jt
-from rop_catalog import CONVENTIONS, DebtKind, Fact, FieldKind, Handle, Scalar
-from rop_cgen import (Unsupported, add_test_facts, arm_facts, edges_of,
-                      flatten, home_views)
+from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLayout,
+                         CSource, CTest, DebtKind, Fact, FieldKind, Handle, Scalar,
+                         Schema, SchemaCtor, Wrap)
+from rop_cgen import Unsupported, arm_facts, flatten, home_views
 from rop_check import Program
-from rop_model import (Arm, BoolLit, Branch, Call, CallTerm, Cases, Exit,
-                       Expr, Goto, Guard, HandleType, Let, Name, Nat, Publish,
-                       ScalarType, Type)
+from rop_model import (Arm, EnumType, HandleType, Publish, ScalarType, SchemaType, Type,
+                       WrapType)
+from rop_ssa import (INTACT, BranchTerm, ExitTerm, Jump, Op, OpKind, SsaArm, Switch,
+                     expand)
 
 LEAF_SCALAR = {
     Scalar.Bool: "bool", Scalar.U8: "u8", Scalar.U16: "u16", Scalar.U32: "u32",
     Scalar.U64: "u64", Scalar.I32: "i32", Scalar.I64: "i64", Scalar.F64: "f64",
     Scalar.I51: "i64", Scalar.Scaled51: "i64", Scalar.Size: "u64",
 }
-LEAF_HANDLE = {Handle.B: ir_leaf.VALUE, Handle.O: ir_leaf.VALUE}
+LEAF_HANDLE = {Handle.B: ir_leaf.VALUE, Handle.O: ir_leaf.VALUE,
+               Handle.Obj: "PyObject*"}
 
 EXIT = "EXIT"
 
-# Primitives of a word's immediates: the template folds them in
-IMMEDIATE_TESTS = frozenset({"_PyRop_BranchDrops", "_PyRop_BranchTaken",
-                             "_PyRop_SameBool"})
-
 
 def leaf_type(t: Type) -> str | None:
-    """The leaf IR type of a graph value; None for a token (an `Err`)"""
+    """The leaf IR type of a value, None for one that has no leaf value (a
+    token such as `Err`, a handle such as `Fb`, a record)"""
+    if isinstance(t, WrapType) and t.wrap is Wrap.Maybe:
+        return leaf_type(t.arg)
     if isinstance(t, ScalarType):
         return LEAF_SCALAR.get(t.scalar)
     if isinstance(t, HandleType):
@@ -45,11 +60,84 @@ def leaf_type(t: Type) -> str | None:
     return None
 
 
+def ctype_leaf(ctype: str) -> str | None:
+    "The leaf type of a C type of a layout field"
+    if ctype == "_PyValueGuarded":
+        return ir_leaf.VALUE
+    if ctype.endswith("*"):
+        target = ctype.rstrip("* ")
+        return f"{target}*" if target in ir_leaf.POINTER_TARGETS else None
+    return ir_leaf.C_TYPES.get(ctype)
+
+
+# What the leaf graph holds for a value of the expansion that is no leaf value
+
+@dataclass(frozen=True)
+class Imm:
+    "An immediate of the word: a C expression over ir_word, known at compile time"
+    expr: str
+    type: str
+
+
+@dataclass(frozen=True)
+class Entry:
+    "The word's feedback entry"
+    schema: Schema
+
+
+@dataclass(frozen=True)
+class Opaque:
+    "A name, target, thread or frame operand: no code of its own"
+    kind: str
+
+
+@dataclass(frozen=True)
+class Record:
+    "A recipe: one leaf value per field of its C layout, in layout order"
+    schema: Schema
+    fields: tuple[tuple[str, int], ...]
+
+    def __getitem__(self, name: str) -> int:
+        return dict(self.fields)[name]
+
+
+@dataclass(frozen=True)
+class Conj:
+    "A test that holds when every one of its bools does, tested in order"
+    tests: tuple[int, ...]
+
+
+Rep = int | Imm | Entry | Opaque | Record | Conj | None
+
+
+def record_fields(schema: Schema) -> list[tuple[str, str]]:
+    layout = RECIPE_LAYOUT.get(schema)
+    if layout is None:
+        raise Unsupported(f"no recipe layout for {schema.value}")
+    fields = []
+    for name, f in layout.fields.items():
+        t = ctype_leaf(f.ctype)
+        if t is None:
+            raise Unsupported(f"recipe field {name} has no leaf type")
+        fields.append((name, t))
+    return fields
+
+
+# The publication
+
+@dataclass(frozen=True)
+class Step:
+    """One op of a publish: take, old or store of a home, or a release of a
+    debt (kind) of a home"""
+    op: str
+    home: str
+    kind: DebtKind | None = None
+
+
 @dataclass(frozen=True)
 class PublishPlan:
-    """The `publish` that ends every path of the arm: the value published
-    to each destination (by name of its `out` op) and the debts"""
-    publish: Publish
+    "The publish that ends every publishing path, in the expansion's order"
+    steps: tuple[Step, ...]
 
 
 @dataclass
@@ -60,25 +148,43 @@ class ArmLeaf:
     inputs: tuple[str, ...]
     # Operands whose values are known inline ints on every path to the publish
     inline: frozenset[str]
+    # The source homes whose owner the arm acquires, in order
+    acquired: tuple[str, ...] = ()
+    # The feedback entry's C type when the body reads the entry
+    entry: str | None = None
+
+
+def layout_of(arm: Arm, entry: Entry) -> CLayout:
+    layout = FB_LAYOUT.get(entry.schema)
+    if layout is None:
+        raise Unsupported(f"{arm.name}: no C layout for feedback {entry.schema.value}")
+    return layout
 
 
 class LeafBuilder:
-    def __init__(self, program: Program, arm: Arm) -> None:
+    def __init__(self, program: Program, arm: Arm, ssa: SsaArm) -> None:
         self.program = program
         self.arm = arm
-        self.info = program.graphs[arm.name]
-        self.blocks = {b.label: b for b in arm.graph.blocks}
+        self.ssa = ssa
         self.types: dict[int, str] = {}
-        self.out: dict[str, ir_leaf.Block] = {}
         self.ids: dict[str, int] = {}
-        self.env: dict[str, int] = {}
+        self.env: dict[int, Rep] = {}
         self.inputs: list[str] = []
         self.plan: PublishPlan | None = None
         self.count = 0
         self.block_list: list[ir_leaf.Block] = []
         self.effects: set[str] = set()
         self.helpers: list[str] = []
+        self.entry: str | None = None
+        self.acquired: list[str] = []
         self.cur: ir_leaf.Block
+        # The publish ops of the current block so far, and the home whose
+        # owner each take or old gives
+        self.steps: list[Step] = []
+        self.owners: dict[int, str] = {}
+
+    def refuse(self, why: str):
+        raise Unsupported(f"{self.arm.name}: {why}")
 
     # Values and ops
 
@@ -101,141 +207,225 @@ class LeafBuilder:
     def emit1(self, kind: str, t: str, args: tuple[int, ...] = (), attr=None) -> int:
         return self.emit(kind, (t,), args, attr)[0]
 
-    # Expressions
+    def leaf(self, rep: Rep) -> int:
+        "The leaf value of rep: an immediate becomes a constant of the word"
+        if isinstance(rep, Imm):
+            return self.emit1("jconst", rep.type, (), rep.expr)
+        if not isinstance(rep, int):
+            self.refuse(f"{rep} is not a leaf value")
+        return rep
 
-    def expr(self, e: Expr) -> int:
-        if isinstance(e, Name):
-            if e.name not in self.env:
-                raise Unsupported(f"{self.arm.name}: {e.name} is not a leaf value")
-            return self.env[e.name]
-        if isinstance(e, Nat):
-            return self.emit1("const", "u64", (), e.value)
-        if isinstance(e, BoolLit):
-            return self.emit1("const", "bool", (), int(e.value))
-        if isinstance(e, Call):
-            return self.call(e)
-        raise Unsupported(f"{self.arm.name}: expression {e}")
+    def const(self, t: str, x) -> int:
+        return self.emit1("const", t, (), x)
 
-    def call(self, e: Call) -> int:
-        if e.callee == "use":
-            (home,) = e.args
-            assert isinstance(home, Name)
-            if home.name not in self.inputs:
-                self.inputs.append(home.name)
-            return self.emit1("arg", ir_leaf.VALUE, (), home.name)
-        x = self.program.externs.get(e.callee)
-        if x is None or x.c is None:
-            raise Unsupported(f"{self.arm.name}: {e.callee} has no C body (pending)")
-        if x.c.symbol in IMMEDIATE_TESTS:
-            return self.immediate_test(x.c.symbol, e)
-        prim = ir_leaf.PRIMITIVES.get(x.c.symbol)
-        if prim is None or len(prim.results) != 1:
-            raise Unsupported(f"{self.arm.name}: {e.callee} has no leaf lowering")
-        args = tuple(self.expr(a) for a in e.args)
-        return self.emit1("prim", prim.results[0], args, x.c.symbol)
+    def prim(self, name: str, *args: int) -> tuple[int, ...]:
+        p = ir_leaf.PRIMITIVES[name]
+        return self.emit("prim", p.results, args, name)
 
-    def immediate(self, e: Expr) -> str:
-        """The C expression, over the word, of an immediate operand of the
-        arm: the word is known when its template is made, so the tests of
-        immediates are not code"""
-        if isinstance(e, Name):
-            for p in self.program.encodings[self.arm.family].placements:
-                if (p.operand == e.name and p.kind is FieldKind.imm
-                        and len(p.slots) == 1 and p.slots[0].word == 0):
-                    return f"IR_{p.slots[0].name}(ir_word)"
-        raise Unsupported(f"{self.arm.name}: {e} is not an immediate of the word")
+    def prim1(self, name: str, *args: int) -> int:
+        (r,) = self.prim(name, *args)
+        return r
 
-    def immediate_test(self, symbol: str, e: Call) -> int:
-        """A branch's test of its mode or sense: a bool that is a function of
-        the word, or a test result negated or not by the word"""
-        imm = self.immediate(e.args[0])
-        if symbol == "_PyRop_BranchDrops":
-            return self.emit1("jconst", "bool", (), f"({imm}) < 2")
-        hit = self.expr(e.args[1])
-        if symbol == "_PyRop_BranchTaken":
-            return self.emit1("xorb", "bool", (hit,), f"!(({imm}) & 1)")
-        assert symbol == "_PyRop_SameBool"
-        return self.emit1("xorb", "bool", (hit,), f"!({imm})")
+    def cmp(self, pred: str, a: int, b: int) -> int:
+        return self.emit1("cmp", "bool", (a, b), pred)
 
-    # Statements and terminators
+    def load(self, field: str, ptr: int) -> int:
+        "A field of ir_leaf.FIELDS, or a leaf type read through the pointer"
+        t = ir_leaf.FIELDS[field].type if field in ir_leaf.FIELDS else field
+        return self.emit1("load", t, (ptr,), field)
+
+    def zext(self, t: str, v: int) -> int:
+        return self.emit1("conv", t, (v,))
+
+    def cache(self, entry: Rep, field: str) -> int:
+        """A field of the word's feedback entry, read when the template runs:
+        the entry can be rewritten while the word keeps its handler"""
+        if not isinstance(entry, Entry):
+            self.refuse(f"{entry} is not a feedback entry")
+        declared = {a.field for a in self.arm.contract.feedback if a.mode is AccessMode.read}
+        if f"entry.{field}" not in declared and "entry" not in declared:
+            self.refuse(f"reads entry.{field}, which it does not declare")
+        layout = layout_of(self.arm, entry)
+        f = layout.fields.get(field)
+        if f is None or f.member is None:
+            self.refuse(f"entry.{field} of {entry.schema.value} has no C member")
+        t = ctype_leaf(f.ctype)
+        if t is None:
+            self.refuse(f"entry.{field} has no leaf type")
+        self.entry = layout.struct
+        return self.emit1("cache", t, (), f.member)
+
+    # Blocks
+
+    def order(self) -> list[str]:
+        """The expansion's blocks: those the arm writes, in its written
+        order, then the blocks of the macros it expands"""
+        written = [b.label for b in self.arm.graph.blocks]
+        labels = list(self.ssa.blocks)
+        return sorted(labels, key=lambda l: (written.index(l) if l in written
+                                             else len(written) + labels.index(l)))
+
+    def param(self, t: Type) -> Rep:
+        lt = leaf_type(t)
+        if lt is not None:
+            v = self.value(lt)
+            self.cur.params.append(v)
+            return v
+        if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Recipe:
+            fields = []
+            for name, ft in record_fields(t.schema):
+                v = self.value(ft)
+                self.cur.params.append(v)
+                fields.append((name, v))
+            return Record(t.schema, tuple(fields))
+        if isinstance(t, HandleType) and t.handle in (Handle.Err, Handle.Route):
+            return None
+        if isinstance(t, ScalarType) and t.scalar is Scalar.Unit:
+            return None
+        self.refuse(f"a block parameter of type {t}")
 
     def build(self) -> ArmLeaf:
-        for b in self.arm.graph.blocks:
-            self.ids[b.label] = self.new_block().id
-        for b in self.arm.graph.blocks:
-            self.cur = self.block_list[self.ids[b.label]]
-            for p in b.params:
-                t = leaf_type(p.type)
-                if t is not None:
-                    self.cur.params.append(self.value(t))
-                    self.env[p.name] = self.cur.params[-1]
-        for b in self.arm.graph.blocks:
-            self.cur = self.block_list[self.ids[b.label]]
-            for s in b.stmts:
-                self.stmt(s)
+        order = self.order()
+        for label in order:
+            self.ids[label] = self.new_block().id
+        for label in order:
+            self.cur = self.block_list[self.ids[label]]
+            for p in self.ssa.blocks[label].params:
+                self.env[p] = self.param(self.ssa.types[p])
+        for label in order:
+            b = self.ssa.blocks[label]
+            self.cur = self.block_list[self.ids[label]]
+            self.steps = []
+            for op in b.ops:
+                self.op(op)
             self.term(b.term)
+        outputs = tuple(s.home for s in self.plan.steps if s.op == "store") if self.plan else ()
+        body = ir_leaf.LeafBody(
+            self.arm.name, self.block_list, self.types, tuple(self.inputs), outputs,
+            frozenset(self.effects), tuple(self.helpers))
+        return ArmLeaf(body, self.plan, tuple(self.inputs), self.inline(),
+                       tuple(self.acquired), self.entry)
+
+    def inline(self) -> frozenset[str]:
+        """The homes whose value the arm's facts show an inline int on every
+        path that publishes (rop_cgen's analysis, as the interpreter's C)"""
         flat = flatten(self.program, self.arm)
         facts = arm_facts(self.program, flat)
         views = home_views(flat)
-        inline = frozenset(
-            home for home, view in views.items()
-            if all(f.has(view, Fact.inline_int) for lbl, f in facts.items()
-                   if self.publishes(lbl)))
-        body = ir_leaf.LeafBody(
-            self.arm.name, self.block_list, self.types, tuple(self.inputs),
-            tuple(self.outputs()), frozenset(self.effects), tuple(self.helpers))
-        return ArmLeaf(body, self.plan, tuple(self.inputs), inline)
+        publishes = [label for label, b in flat.blocks.items()
+                     if any(isinstance(s, Publish) for s in b.stmts)]
+        return frozenset(home for home, view in views.items()
+                         if all(facts[label].has(view, Fact.inline_int)
+                                for label in publishes if label in facts))
 
-    def publishes(self, label: str) -> bool:
-        return any(isinstance(s, Publish) for s in self.blocks[label].stmts)
+    # Ops
 
-    def outputs(self) -> list[str]:
-        if self.plan is None:
-            return []
-        return [b.target for b in self.plan.publish.bindings]
-
-    def stmt(self, s) -> None:
-        if isinstance(s, Let):
-            t = leaf_type(s.type)
-            if t is None:
-                raise Unsupported(f"{self.arm.name}: let {s.name} has no leaf type")
-            self.env[s.name] = self.expr(s.value)
-        elif isinstance(s, Guard):
-            ok = self.expr(s.cond)
-            bad = self.emit1("lnot", "bool", (ok,))
+    def op(self, op: Op) -> None:
+        k = op.kind
+        args = [self.env.get(a) for a in op.args]
+        if self.steps and k not in (OpKind.take, OpKind.old, OpKind.store,
+                                    OpKind.checkpoint, OpKind.release, OpKind.operand):
+            self.refuse(f"{k.value} inside a publish")
+        if k is OpKind.read:
+            if self.ssa.operands[op.attr] is not FieldKind.home:
+                self.refuse(f"a read of the span {op.attr}")
+            if op.attr not in self.inputs:
+                self.inputs.append(op.attr)
+            self.env[op.result] = self.emit1("arg", ir_leaf.VALUE, (), op.attr)
+        elif k is OpKind.operand:
+            self.env[op.result] = self.operand(op.attr)
+        elif k is OpKind.env:
+            self.env[op.result] = Opaque(op.attr)
+        elif k is OpKind.const:
+            t = self.ssa.types[op.result]
+            lt = leaf_type(t)
+            if lt is None or isinstance(t, EnumType):
+                self.refuse(f"a constant of type {t}")
+            self.env[op.result] = self.const(lt, int(op.attr))
+        elif k in (OpKind.prim, OpKind.call):
+            results = self.row(op.attr, args)
+            self.env[op.result] = results[0] if results else None
+        elif k is OpKind.dup:
+            self.env[op.result] = self.prim1("PyValue_DUP", self.leaf(args[0]))
+        elif k is OpKind.acquire:
+            if op.attr not in self.inputs:
+                self.inputs.append(op.attr)
+            self.acquired.append(op.attr)
+            self.env[op.result] = self.emit1("arg", ir_leaf.VALUE, (), op.attr)
+        elif k is OpKind.unwrap:
+            self.env[op.result] = args[0]
+        elif k is OpKind.guard:
+            if self.acquired:
+                self.refuse("a guard after an acquire")
+            bad = self.emit1("lnot", "bool", (self.leaf(args[0]),))
             self.emit("exit_if", (), (bad,), EXIT)
-        elif isinstance(s, Publish):
-            if self.plan is not None and (
-                    self.plan.publish.bindings != s.bindings
-                    or self.plan.publish.debts != s.debts):
-                raise Unsupported(f"{self.arm.name}: two different publications")
-            self.plan = PublishPlan(s)
-            for b in s.bindings:
-                self.emit("out", (), (self.expr(b.value),), b.target)
+        elif k in (OpKind.take, OpKind.old):
+            self.steps.append(Step(k.value, op.attr))
+            self.owners[op.result] = op.attr
+        elif k is OpKind.store:
+            self.steps.append(Step("store", op.attr))
+            self.emit("out", (), (self.leaf(args[0]),), op.attr)
+        elif k is OpKind.checkpoint:
+            pass
+        elif k is OpKind.release:
+            if op.args[0] not in self.owners:
+                self.refuse(f"a release of {op.attr.value} that no take or old gives")
+            self.steps.append(Step("release", self.owners[op.args[0]], op.attr))
         else:
-            raise Unsupported(f"{self.arm.name}: statement {s}")
+            self.refuse(f"{k.value} has no leaf lowering")
 
-    def jump(self, target, payload: tuple[int, ...] = ()):
-        params = self.blocks[target.label].params
-        values = list(payload) + [self.expr(a) for a in target.args]
-        args = tuple(v for p, v in zip(params, values) if leaf_type(p.type) is not None)
-        return ("jmp", self.ids[target.label], args)
+    def operand(self, name: str) -> Rep:
+        kind = self.ssa.operands[name]
+        param = next(p for p in self.program.families[self.arm.family].params
+                     if p.name == name)
+        if kind in (FieldKind.imm, FieldKind.const):
+            t = "u32" if isinstance(param.type, EnumType) else leaf_type(param.type)
+            for p in self.program.encodings[self.arm.family].placements:
+                if (p.operand == name and len(p.slots) == 1 and p.slots[0].word == 0
+                        and t is not None):
+                    return Imm(f"IR_{p.slots[0].name}(ir_word)", t)
+            self.refuse(f"the immediate {name} is not one field of the head")
+        if kind is FieldKind.feedback:
+            return Entry(param.type.schema)
+        if kind in (FieldKind.name, FieldKind.target):
+            return Opaque(kind.value)
+        self.refuse(f"operand {name} ({kind.value})")
 
-    def term(self, t) -> None:
-        if isinstance(t, Goto):
-            self.cur.term = self.jump(t.target)
-        elif isinstance(t, Branch):
-            cond = self.expr(t.cond)
-            self.cur.term = ("br", cond, self.edge_block(t.if_true),
-                             self.edge_block(t.if_false))
-        elif isinstance(t, CallTerm):
-            self.call_term(t)
-        elif isinstance(t, Exit):
-            self.exit(t)
-        else:
-            raise Unsupported(f"{self.arm.name}: terminator {t}")
+    def row(self, name: str, args: list[Rep]) -> tuple[Rep, ...]:
+        """The C result of a row as leaf values: its primitive, its
+        lowering, or a call of its helper"""
+        x = self.program.externs.get(name)
+        if x is None or x.c is None:
+            self.refuse(f"{name} has no C body")
+        symbol = x.c.symbol
+        if symbol in ROW_LOWERINGS:
+            return ROW_LOWERINGS[symbol](self, *args)
+        if symbol in ir_leaf.PRIMITIVES:
+            return self.prim(symbol, *(self.leaf(a) for a in args))
+        if symbol in ir_leaf.HELPERS:
+            h = ir_leaf.HELPERS[symbol]
+            self.helpers.append(symbol)
+            self.effects |= set(h.effects)
+            return self.emit("call", h.results, tuple(self.leaf(a) for a in args), symbol)
+        self.refuse(f"{name} has no leaf lowering")
 
-    def edge_block(self, target, payload: tuple[int, ...] = ()) -> int:
+    # Terminators
+
+    def args_of(self, label: str, reps: list[Rep]) -> list[int]:
+        "The leaf arguments of a jump to label with these values"
+        out = []
+        for p, rep in zip(self.ssa.blocks[label].params, reps):
+            if leaf_type(self.ssa.types[p]) is not None:
+                out.append(self.leaf(rep))
+            elif isinstance(rep, Record):
+                out.extend(v for _, v in rep.fields)
+        return out
+
+    def jump(self, target: Jump, payload: list[Rep] = ()):
+        reps = list(payload) + [self.env.get(a) for a in target.args]
+        return ("jmp", self.ids[target.block], tuple(self.args_of(target.block, reps)))
+
+    def edge_block(self, target: Jump, payload: list[Rep] = ()) -> int:
         """A block that jumps to target, so that a branch edge can carry
         arguments"""
         here = self.cur
@@ -245,77 +435,200 @@ class LeafBuilder:
         self.cur = here
         return edge.id
 
-    def exit(self, t: Exit) -> None:
-        if t.kind == "next":
-            self.cur.term = ("next", None)
+    def term(self, t) -> None:
+        if self.steps and not isinstance(t, ExitTerm):
+            self.refuse("a publish that does not end its block")
+        if isinstance(t, Jump):
+            self.cur.term = self.jump(t)
+        elif isinstance(t, BranchTerm):
+            cond = self.leaf(self.env[t.cond])
+            self.cur.term = ("br", cond, self.edge_block(t.if_true),
+                             self.edge_block(t.if_false))
+        elif isinstance(t, Switch):
+            self.switch(t)
+        else:
+            self.exit(t)
+
+    def exit(self, t: ExitTerm) -> None:
+        if t.kind in ("next", "branch"):
+            plan = PublishPlan(tuple(self.steps))
+            if self.plan is not None and self.plan != plan:
+                self.refuse("two different publications")
+            self.plan = plan
+            self.cur.term = ("next", None) if t.kind == "next" else ("branch",)
+        elif self.steps:
+            self.refuse(f"exit {t.kind} after a publish")
+        elif self.acquired:
+            self.refuse(f"exit {t.kind} after an acquire")
         elif t.kind == "raise":
+            if any(h != INTACT for _, h in t.state.homes):
+                self.refuse("a raise whose point changes a home")
             self.cur.term = ("raise",)
-        elif t.kind == "branch":
-            self.cur.term = ("branch",)
         elif t.kind == "jump":
             self.cur.term = ("jump",)
         elif t.kind == "miss":
             self.cur.term = ("exit", EXIT, None)
         else:
-            raise Unsupported(f"{self.arm.name}: exit {t.kind} has no leaf lowering")
+            self.refuse(f"exit {t.kind} has no leaf lowering")
 
-    def call_term(self, t: CallTerm) -> None:
-        x = self.program.externs.get(t.callee)
-        if x is None or x.c is None:
-            raise Unsupported(f"{self.arm.name}: {t.callee} has no C body (pending)")
+    def raise_block(self, target: Jump) -> bool:
+        "Whether target is a block that only raises, with every home intact"
+        b = self.ssa.blocks[target.block]
+        return (not b.ops and isinstance(b.term, ExitTerm) and b.term.kind == "raise"
+                and all(h == INTACT for _, h in b.term.state.homes))
+
+    def switch(self, t: Switch) -> None:
+        x = self.program.externs[t.row]
+        if x.c is None:
+            self.refuse(f"{t.row} has no C body")
+        if t.transfer:
+            self.refuse(f"the transfer row {t.row}")
+        args = [self.env.get(a) for a in t.args]
         edges = {e.case: e for e in t.edges}
-        if x.c.symbol == "_PyRop_Poll":
-            # The thread is implicit in the template's registers
-            return self.poll(edges)
-        args = tuple(self.expr(a) for a in t.args)
-        if x.c.convention == "bool_out" and x.c.symbol == "_PyValue_AddCheckedScaled":
-            self.add_checked_scaled(args, edges)
-        elif x.c.convention == "value_or_null" and x.c.symbol in ir_leaf.HELPERS:
-            self.helpers.append(x.c.symbol)
-            self.effects |= set(ir_leaf.HELPERS[x.c.symbol].effects)
-            result = self.emit1("call", ir_leaf.VALUE, args, x.c.symbol)
-            failed = self.emit1("prim", "bool", (result,), "PyValue_IsNull")
-            err = self.blocks[edges["err"].target.label]
-            if err.stmts or not (isinstance(err.term, Exit) and err.term.kind == "raise"):
-                raise Unsupported(f"{self.arm.name}: the error edge of {t.callee} is not a raise")
-            self.emit("raise_if", (), (failed,))
-            self.cur.term = self.jump(edges["ok"].target, (result,))
-        else:
-            raise Unsupported(f"{self.arm.name}: {t.callee} has no leaf lowering")
+        if x.c.symbol in SWITCH_LOWERINGS:
+            SWITCH_LOWERINGS[x.c.symbol](self, args, edges)
+            return
+        conv = CONVENTIONS[x.c.convention]
+        if len(conv.outcomes) != 2:
+            self.refuse(f"{t.row}: the convention {conv.name} has no leaf lowering")
+        results = self.row(t.row, args)
+        cases = [c.name for c in x.result.cases]
+        outs = [(oc, edges[oc.case or cases[i]]) for i, oc in enumerate(conv.outcomes)]
+        payloads = [self.payload(oc, results) for oc, _ in outs]
+        raised = [i for i, (oc, _) in enumerate(outs) if oc.raised]
+        if raised:
+            (i,) = raised
+            if not self.raise_block(outs[i][1].target):
+                self.refuse(f"the error edge of {t.row} is not a raise")
+            test, negated = self.outcome_test(outs[i][0], results)
+            test = self.leaf(test)
+            if negated:
+                test = self.emit1("lnot", "bool", (test,))
+            self.emit("raise_if", (), (test,))
+            self.cur.term = self.jump(outs[1 - i][1].target, payloads[1 - i])
+            return
+        test, negated = self.outcome_test(outs[0][0], results)
+        yes, no = (1, 0) if negated else (0, 1)
+        self.branch(test, (outs[yes][1].target, payloads[yes]),
+                    (outs[no][1].target, payloads[no]))
 
-    def poll(self, edges) -> None:
-        """The periodic check: a load and a test of the eval breaker, and
-        only when an event is pending the call that handles it"""
-        err = self.blocks[edges["err"].target.label]
-        if err.stmts or not (isinstance(err.term, Exit) and err.term.kind == "raise"):
-            raise Unsupported(f"{self.arm.name}: the error edge of poll is not a raise")
-        self.helpers.append("_Py_HandlePending")
-        self.effects |= set(ir_leaf.HELPERS["_Py_HandlePending"].effects)
-        events = self.emit1("prim", "bool", (), "_Py_EvalBreakerHasEvents")
-        here = self.cur
-        handle = self.new_block()
-        quiet = self.edge_block(edges["ok"].target)
-        here.term = ("br", events, handle.id, quiet)
-        self.cur = handle
-        status = self.emit1("call", "i32", (), "_Py_HandlePending")
-        zero = self.emit1("const", "i32", (), 0)
-        failed = self.emit1("cmp", "bool", (status, zero), "ne")
-        self.emit("raise_if", (), (failed,))
-        self.cur.term = self.jump(edges["ok"].target)
+    def branch(self, test: Rep, yes, no) -> None:
+        "A branch to yes when the test holds, each edge in a block of its own"
+        if not isinstance(test, Conj):
+            self.cur.term = ("br", self.leaf(test), self.edge_block(*yes),
+                             self.edge_block(*no))
+            return
+        fail = self.edge_block(*no)
+        *first, last = test.tests
+        for t in first:
+            cont = self.new_block()
+            self.cur.term = ("br", t, cont.id, fail)
+            self.cur = cont
+        self.cur.term = ("br", last, self.edge_block(*yes), fail)
 
-    def add_checked_scaled(self, args: tuple[int, ...], edges) -> None:
-        """The checked add of the scaled words, a primitive of the closed
-        set: the bool says which case, the i64 is the payload of both"""
-        overflowed, out = self.emit(
-            "prim", ("bool", "i64"), args, "_PyValue_AddCheckedScaled")
-        here = self.cur
-        over = self.edge_block(edges["overflow"].target, (out,))
-        fits = self.edge_block(edges["fits"].target, (out,))
-        here.term = ("br", overflowed, over, fits)
+    def outcome_test(self, oc, results) -> tuple[Rep, bool]:
+        """The leaf test of one outcome of a C convention, and whether the
+        outcome is the test's false side"""
+        r = results[0]
+        match oc.test:
+            case CTest.true:
+                return r, False
+            case CTest.false:
+                return r, True
+            case CTest.null:
+                return self.prim1("PyValue_IsNull", self.leaf(r)), False
+            case CTest.nonnull:
+                return self.prim1("PyValue_IsNull", self.leaf(r)), True
+        pred = {CTest.zero: ("eq", False), CTest.nonzero: ("eq", True),
+                CTest.negative: ("slt", False), CTest.nonnegative: ("slt", True),
+                CTest.positive: ("sgt", False)}.get(oc.test)
+        if pred is None:
+            self.refuse(f"the outcome test {oc.test.value}")
+        v = self.leaf(r)
+        return self.cmp(pred[0], v, self.const(self.types[v], 0)), pred[1]
+
+    def payload(self, oc, results) -> list[Rep]:
+        out = []
+        for src in oc.payload:
+            if src is CSource.result:
+                out.append(results[0])
+            elif src is CSource.out:
+                out.append(results[1])
+            elif src in (CSource.exception, CSource.token):
+                out.append(None)
+            else:
+                self.refuse(f"the payload source {src.value}")
+        return out
 
 
-def leaf_of_arm(program: Program, arm: Arm) -> ArmLeaf:
-    return LeafBuilder(program, arm).build()
+# The rows' leaf lowerings, by C symbol: the leaf IR of each row's C body
+# (Include/internal/pycore_rop_rows.h, pycore_attr_recipe.h).  A lowering
+# returns the C result, and for an out-parameter convention the value
+# written through it.
+
+LoweringFn = Callable[..., tuple[Rep, ...]]
+
+
+def _imm(b: LeafBuilder, rep: Rep) -> str:
+    if not isinstance(rep, Imm):
+        b.refuse(f"{rep} is not an immediate of the word")
+    return rep.expr
+
+
+def _branch_drops(b, mode):
+    return (b.emit1("jconst", "bool", (), f"({_imm(b, mode)}) < 2"),)
+
+
+def _branch_taken(b, mode, hit):
+    return (b.emit1("xorb", "bool", (b.leaf(hit),), f"!(({_imm(b, mode)}) & 1)"),)
+
+
+def _same_bool(b, sense, hit):
+    return (b.emit1("xorb", "bool", (b.leaf(hit),), f"!({_imm(b, sense)})"),)
+
+
+def _borrow_present(b, m):
+    "_PyValue_BorrowPresent"
+    return (b.emit1("lnot", "bool", (b.prim1("PyValue_IsNull", b.leaf(m)),)),)
+
+
+ROW_LOWERINGS: dict[str, LoweringFn] = {
+    # A branch's tests of its mode or sense: functions of the word, or a
+    # test result negated or not by the word
+    "_PyRop_BranchDrops": _branch_drops,
+    "_PyRop_BranchTaken": _branch_taken,
+    "_PyRop_SameBool": _same_bool,
+    "_PyValue_BorrowPresent": _borrow_present,
+}
+
+
+def _poll(b: LeafBuilder, args, edges) -> None:
+    """_PyRop_Poll: a load and a test of the eval breaker, and only when an
+    event is pending the call that handles it"""
+    if not b.raise_block(edges["err"].target):
+        b.refuse("the error edge of poll is not a raise")
+    b.helpers.append("_Py_HandlePending")
+    b.effects |= set(ir_leaf.HELPERS["_Py_HandlePending"].effects)
+    events = b.prim1("_Py_EvalBreakerHasEvents")
+    here = b.cur
+    handle = b.new_block()
+    quiet = b.edge_block(edges["ok"].target)
+    here.term = ("br", events, handle.id, quiet)
+    b.cur = handle
+    status = b.emit1("call", "i32", (), "_Py_HandlePending")
+    failed = b.cmp("ne", status, b.const("i32", 0))
+    b.emit("raise_if", (), (failed,))
+    b.cur.term = b.jump(edges["ok"].target)
+
+
+# Rows whose lowering is control flow of its own: it ends the block
+SWITCH_LOWERINGS: dict[str, Callable[[LeafBuilder, list, dict], None]] = {
+    "_PyRop_Poll": _poll,
+}
+
+
+def leaf_of_arm(program: Program, arm: Arm, ssa: SsaArm | None = None) -> ArmLeaf:
+    return LeafBuilder(program, arm, ssa or expand(program, arm)).build()
 
 
 # The template: the leaf body joined with its publication, as
@@ -359,6 +672,8 @@ class TemplateBuilder:
         entry = g.blocks[g.entry]
         views: dict[str, int] = {}
         for name in self.leaf.inputs:
+            if name not in self.homes:
+                raise jt.Refused(f"{name} is not a home of the head")
             views[name] = g.value(ir_leaf.VALUE)
             entry.ops.append(jt.TOp("view", [views[name]], [], self.homes[name].field))
         lmap: dict[int, int] = {}
@@ -445,18 +760,24 @@ class TemplateBuilder:
 
     def epilogue(self, merge: jt.TBlock, views: dict[str, int],
                  branches: bool = False) -> None:
-        """Detach the spent temporaries, store each result, close what the
-        displaced and spent owners held: Builder's end of a handler"""
+        """The publication by home class: move the acquired owners, detach
+        the spent temporaries (in operand order: a detach is a store of NULL,
+        which nothing observes), load the displaced owners of locals, store,
+        then close in the declared retire order"""
         plan = self.leaf.plan
         if plan is None:
             raise jt.Refused("an arm that publishes nothing")
         g = self.g
-        publish = plan.publish
         order = list(self.homes)
-        spent = sorted((d.subject for d in publish.debts if d.kind is DebtKind.spent),
-                       key=order.index)
-        deferred = []
-        for name in spent:
+        for name in self.leaf.acquired:
+            # The owner moves out of a temporary; a local keeps its own, and
+            # the arm takes a count of its own
+            home = self.homes[name]
+            merge.ops.append(jt.TOp("detach", [], [], home.field, jt.temp_test(home)))
+            merge.ops.append(jt.TOp("take", [], [views[name]], None, jt.local_test(home)))
+        owners: dict[str, int] = {}
+        taken = sorted((s.home for s in plan.steps if s.op == "take"), key=order.index)
+        for name in taken:
             home = self.homes[name]
             if name not in self.leaf.inline:
                 # A temporary's owner closes after the stores; one the body
@@ -466,29 +787,40 @@ class TemplateBuilder:
                     v = g.value(ir_leaf.VALUE)
                     merge.ops.append(jt.TOp("slot_load", [v], [], home.field,
                                             jt.temp_test(home)))
-                deferred.append(jt.TOp("prim", [], [v], "PyValue_XCLOSE",
-                                       jt.temp_test(home)))
+                owners[name] = v
             merge.ops.append(jt.TOp("detach", [], [], home.field, jt.temp_test(home)))
-        olds = []
-        for binding, v in zip(publish.bindings, merge.params):
-            dst = self.homes[binding.target]
-            if any(d.kind is DebtKind.old and d.subject == binding.target
-                   for d in publish.debts):
-                o = g.value(ir_leaf.VALUE)
-                merge.ops.append(jt.TOp("slot_load", [o], [], dst.field, jt.local_test(dst)))
-                olds.append((o, dst))
-            merge.ops.append(jt.TOp("slot_store", [], [v], dst.field))
-        merge.ops.extend(deferred)
-        for o, dst in olds:
-            merge.ops.append(jt.TOp("prim", [], [o], "PyValue_XCLOSE", jt.local_test(dst)))
+        olds: dict[str, int] = {}
+        stores = [s.home for s in plan.steps if s.op == "store"]
+        for s in plan.steps:
+            if s.op == "old":
+                dst = self.homes[s.home]
+                olds[s.home] = g.value(ir_leaf.VALUE)
+                merge.ops.append(jt.TOp("slot_load", [olds[s.home]], [], dst.field,
+                                        jt.local_test(dst)))
+            elif s.op == "store":
+                merge.ops.append(jt.TOp("slot_store", [], [merge.params[stores.index(s.home)]],
+                                        self.homes[s.home].field))
+        for s in plan.steps:
+            if s.op != "release":
+                continue
+            home = self.homes[s.home]
+            if s.kind is DebtKind.spent and s.home in owners:
+                merge.ops.append(jt.TOp("prim", [], [owners[s.home]], "PyValue_XCLOSE",
+                                        jt.temp_test(home)))
+            elif s.kind is DebtKind.old:
+                merge.ops.append(jt.TOp("prim", [], [olds[s.home]], "PyValue_XCLOSE",
+                                        jt.local_test(home)))
         merge.term = ("end", merge.params[-1] if branches else None)
 
 
-@dataclass(frozen=True)
-class FamilyRecord:
-    """The only thing Emitter reads of a record, for an arm that uses no
-    feedback entry"""
-    format: object = None
+def entry_decl(program: Program, arm: Arm, leaf: ArmLeaf) -> "jt.FbEntry | None":
+    "The feedback entry that the template reads, from the family's fb operand"
+    if leaf.entry is None:
+        return None
+    for p in program.encodings[arm.family].placements:
+        if p.kind is FieldKind.feedback and len(p.slots) == 1 and p.slots[0].word == 0:
+            return jt.FbEntry(leaf.entry, f"IR_{p.slots[0].name}(ir_word)")
+    raise Unsupported(f"{arm.name}: the feedback operand is not one field of the head")
 
 
 def template_graph(program: Program, arm: Arm, leaf: ArmLeaf) -> jt.Graph:
@@ -502,4 +834,4 @@ def template_of_arm(program: Program, arm: Arm, name: str,
     """The lines of the arm's `jit_template_NAME`"""
     leaf = leaf or leaf_of_arm(program, arm)
     g = template_graph(program, arm, leaf)
-    return jt.Emitter(name, FamilyRecord(), g, False).emit()
+    return jt.Emitter(name, g, entry_decl(program, arm, leaf)).emit()

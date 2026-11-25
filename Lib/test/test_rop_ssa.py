@@ -30,6 +30,7 @@ test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import ir_leaf_eval
     import rop_check
+    import rop_generator
     import rop_ssa
     import rop_ssa_eval as ev
     import rop_syntax
@@ -37,7 +38,7 @@ with test_tools.imports_under_tool("cases_generator"):
     from rop_catalog import FieldKind, Region
 
 ROOT = Path(test_tools.basepath)
-FORM, STUB = 0, 2
+FORM, TEMPLATE, STUB = 0, 1, 2
 STATUS = ((4, "raise"), (16, "again"), (1, "miss"), (32, "redirect"), (8, "branch"))
 
 
@@ -303,6 +304,15 @@ class Scenario:
     # Each arm runs on its own first word, which the translator chose by
     # handler (Move's arms have no select)
     per_arm: bool = False
+    # Inputs for a source whose word wants other values than `inputs`
+    # (an arm whose operand is of one kind: a namespace, an exception)
+    inputs_by_source: dict[str, list] = field(default_factory=dict)
+    # The result holds an input (a function holds its code), which the
+    # count check cannot see
+    holds: bool = False
+
+    def inputs_of(self, source):
+        return self.inputs_by_source.get(source, self.inputs)
 
 
 def truth_inputs(operand):
@@ -332,6 +342,26 @@ def two(x, y):
 class Holder:
     def __init__(self, x):
         self.x = x
+
+
+def function_of(source):
+    namespace = {}
+    exec(source, namespace)
+    return namespace["f"]
+
+
+FUNCTION = function_of("def f(x=1):\n    pass\n")
+
+# A function whose code is the module's, so that its words are the module's
+MODULE_SOURCE = ("import types\n"
+                 "f = types.FunctionType(compile(%r, 'm', 'exec'), globals())\n")
+
+# The code of a generic function's scope, which makes its type parameters
+PAIR_SOURCE = (
+    "import types\n"
+    "m = compile('def g[T: int](): pass', 'm', 'exec')\n"
+    "scope = next(c for c in m.co_consts if hasattr(c, 'co_code'))\n"
+    "f = types.FunctionType(scope, globals())\n")
 
 
 SCENARIOS = {
@@ -383,6 +413,12 @@ SCENARIOS = {
         "or": "def f(a, b):\n    return (a and b) or a\n"},
         [{"srcs": [v]} for v in (1, "s", Plain(), 2**70)], warm=("__x__", 1),
         per_arm=True),
+    "Import": Scenario("Import", {
+        "eager": "def f(a):\n    import os\n    return a\n"},
+        [{"level": 0, "fromlist": None}], warm=(1,)),
+    "ImportFrom": Scenario("ImportFrom", {
+        "from": "def f(a):\n    from os import path, sep\n    return a\n"},
+        [{"module": __import__("os")}], warm=(1,)),
     "Jump": Scenario("Jump", {
         "loop": "def f(n):\n    while n:\n        n -= 1\n    return n\n",
         "forward": "def f(a):\n    x = 1 if a else 2\n    y = (x, x)\n    return y\n",
@@ -463,6 +499,12 @@ SCENARIOS = {
                         "classmethod": (ClassAttr,), "poly": (Point(), Swapped()),
                         "lazy": (LazyNorm(),)},
         warmups=200, coherent=True),
+    "GlobalRead": Scenario("GlobalRead", {
+        "module": "G = 3\ndef f():\n    return G\n",
+        "builtin": "def f():\n    return len\n",
+        "missing": "def f():\n    return no_such_global\n"},
+        [{}], warm_by_source={"module": ((),), "builtin": ((),), "missing": ((),)},
+        warmups=200, coherent=True),
     "Return": Scenario("Return", {
         "empty": "def f(a):\n    return a\n",
         "monitored": "def f(a):\n    return a\n"},
@@ -478,6 +520,34 @@ SCENARIOS = {
         + [{"fn": fn, "args": [v]} for fn in (identity, Point().norm, Holder, two)
            for v in (1, "s")], warm=([],),
         monitored=("monitored",)),
+    "Function": Scenario("Function", {
+        "def": "def f():\n    def g():\n        pass\n    return g\n"},
+        [{"code": code} for code in (identity.__code__, Holder.__init__.__code__)],
+        warm=(), holds=True),
+    "FunctionSet": Scenario("FunctionSet", {
+        "defaults": "def f(a):\n    def g(x=a):\n        pass\n    return g\n"},
+        # The function keeps the value, which the count check cannot see: only
+        # an immortal value is exact
+        [{"fn": FUNCTION, "value": ()}], warm=(1,)),
+    "Intrinsic": Scenario("Intrinsic", {
+        "unary": "def f(a):\n    return +a\n",
+        "stopiteration": "def f(a):\n    yield a\n",
+        "import_star": MODULE_SOURCE % "from sys import *"},
+        [{"x": v} for v in (1, 1.5, 2**70, "s", Plain(), [1])], warm=(1,),
+        inputs_by_source={
+            # (A StopIteration becomes a new error that holds it, which the
+            # count check cannot see; test_rop_functions runs that case)
+            "stopiteration": [{"x": v} for v in (ValueError(1), KeyError("k"))],
+            "import_star": [{"x": v} for v in (sys, capi, {"a": 1})]},
+        requires={}),
+    "IntrinsicPair": Scenario("IntrinsicPair", {
+        "binary": PAIR_SOURCE,
+        "compare": "def f(a, b):\n" + "    a < b\n" * 1100},
+        [{"x": x, "y": y} for x, y in PAIRS], warm=(1, 2), per_arm=True,
+        inputs_by_source={
+            # TYPEVAR_WITH_BOUND (a name, the bound's evaluator): the new
+            # typevar holds the evaluator, so it is immortal
+            "binary": [{"x": x, "y": None} for x in ("T", "U", 1)]}),
 }
 
 
@@ -553,11 +623,11 @@ class CRun:
         objects = list({id(o): o for o in slots.values()}.values())
         fb_before = capi.get_ir_raw(code)[-1]
         counts = [sys.getrefcount(o) for o in objects]
-        self.kind, self.extra = "same", None
+        self.kind, self.extra, self.slow = "same", None, False
         if mode is TRANSFER:
             self.kind, nxt, exc, out, self.extra = capi.rop_transfer_run(f, index, slots, handler)
         else:
-            nxt, _, exc, out = capi.jit_template_run(f, index, slots, mode, handler)
+            nxt, self.slow, exc, out = capi.jit_template_run(f, index, slots, mode, handler)
         self.exc_type = type(exc) if exc is not None else None
         del exc
         # Indexing, not zip: zip's reused result tuple would hold a reference
@@ -611,11 +681,20 @@ class Result:
 REPEATS = 3
 
 
-def check(cx, arm_name, scenario, source, inputs):
-    """Run the C arm REPEATS times on one word (its counter moves on between
-    runs, so a generic arm adapts and then runs) and the expansion on the
-    same homes; a Result for each run, None if the arm does not run on the
-    scenario's word"""
+@dataclass
+class Word:
+    "A fresh word of a scenario's source for an arm, and the homes to fill"
+    f: object
+    index: int
+    length: int
+    site: object
+    slots: dict
+    homes: dict
+
+
+def prepare(arm_name, scenario, source, inputs):
+    """A fresh word that the arm runs on, with its homes filled from the
+    inputs, or None if the arm does not run on the scenario's word"""
     arm = PROGRAM.arms[arm_name]
     if arm_name in scenario.skip:
         return None
@@ -654,16 +733,32 @@ def check(cx, arm_name, scenario, source, inputs):
     for slot, operand in homes.items():
         if slot not in slots and operand in ("dst", "callable"):
             slots[slot] = Old()
+    return Word(f, index, length, site, slots, homes)
+
+
+def check(cx, arm_name, scenario, source, inputs):
+    """Run the C arm REPEATS times on one word (its counter moves on between
+    runs, so a generic arm adapts and then runs) and the expansion on the
+    same homes; a Result for each run, None if the arm does not run on the
+    scenario's word"""
+    word = prepare(arm_name, scenario, source, inputs)
+    if word is None:
+        return None
+    arm = PROGRAM.arms[arm_name]
+    f, index, length, site, slots, homes = (word.f, word.index, word.length, word.site,
+                                            word.slots, word.homes)
+    ssa = SSA[arm_name]
     before = {slot: capi.list_value_bits([v], 0) for slot, v in slots.items()}
     constants = [capi.list_value_bits([c], 0) for c in f.__code__.co_consts]
     mode = (STUB if arm.region is Region.shared
             else TRANSFER if transfers(arm) else FORM)
     return [one_run(cx, arm, ssa, f, index, length, site, slots, homes, before,
-                    constants, mode, inputs) for _ in range(REPEATS)]
+                    constants, mode, inputs, scenario.holds)
+            for _ in range(REPEATS)]
 
 
 def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constants,
-            mode, inputs):
+            mode, inputs, holds=False):
     arm_name = arm.name
     handler = capi.arm_handlers()[arm_name]
     run = CRun(f, index, slots, mode, handler)
@@ -719,7 +814,7 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
         held = (sum(1 for s in after if s is o)
                 + sum(1 for s in after if type(s) is o and not any(s is x for x in run.objects)))
         # (In the entered __init__ frame, the new instance is not yet a home)
-        if (is_mortal(o) and run.exc_type is None and not run.feedback_written
+        if (not holds and is_mortal(o) and run.exc_type is None and not run.feedback_written
                 and not (run.kind == "enter" and isinstance(o, type))
                 and delta != held):
             return Result(False, obs.exit, f"C changed the count of {o!r} by {delta:+d}, "
@@ -733,12 +828,40 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
+    # The display families have no scenarios: their rows take spans of homes
+    # and run Python (test_rop_displays runs them)
+    "Build.Tuple": "no scenario; test_rop_displays runs it",
+    "Build.List": "no scenario; test_rop_displays runs it",
+    "AddElement.Append": "no scenario; test_rop_displays runs it",
+    "AddElement.Add": "no scenario; test_rop_displays runs it",
+    "AddEntry.Put": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Extend": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Overlay": "no scenario; test_rop_displays runs it",
+    "MergeKeywords.Merge": "no scenario; test_rop_displays runs it",
+    "Build.Set": "no scenario; test_rop_displays runs it",
+    "Build.Map": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Union": "no scenario; test_rop_displays runs it",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
                         "synthetic caller cannot hold",
+    "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "
+                          "cannot call as a function",
+    "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",
+    "NamespaceRead.BuildClass": "LOAD_BUILD_CLASS occurs in class definitions' callers: "
+                                "a class body is not a function the probe warms",
+    "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
+    "NamespaceWrite.Global": "the value moves into the globals dict, an owner the probe's "
+                             "home count does not see; a delete shares the arm",
+    "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
+    "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
+    "Import.Policy": "a function's imports are eager; the policy applies to module code",
+    "Import.Lazy": "`lazy import` is a module-level statement",
     # select(jit_on) and select(jit_off): the word is the one the JIT's
     # state chose when the function was lowered
+    "IntrinsicPair.Attr": "GETATTR and SETATTR are escapes for a name too wide for "
+                          "LOAD_ATTR and STORE_ATTR; no function's source compiles "
+                          "to one on a word",
     "Jump.Poll" if sys._jit.is_enabled() else "Jump.Warm": "the JIT's state selects the "
                                                            "other loop jump",
 }
@@ -762,7 +885,7 @@ class AgainstCTests(unittest.TestCase):
         scenario = SCENARIOS[PROGRAM.arms[name].family]
         seen = self.exits.setdefault(name, set())
         for source in scenario.sources:
-            for inputs in scenario.inputs:
+            for inputs in scenario.inputs_of(source):
                 with self.subTest(arm=name, source=source, inputs=inputs):
                     for result in check(self.cx, name, scenario, source, inputs) or ():
                         seen.add(result.exit)
@@ -773,6 +896,67 @@ class AgainstCTests(unittest.TestCase):
             self.run_arm(name)
         ran = {n for n, seen in self.exits.items() if seen}
         self.assertEqual(set(SSA) - ran, set(NOT_RUN))
+
+
+def templated_arms():
+    "The arms that have a baseline template"
+    p = rop_generator.lower_all(PROGRAM, rop_generator.number_arms(PROGRAM))
+    made, _ = rop_generator.template_texts(p)
+    return sorted(made)
+
+
+def same_slot(x, y):
+    "The same object, or equal values of one type (a new int or a word)"
+    return x is y or (type(x) is type(y) and x == y)
+
+
+class TemplateTests(unittest.TestCase):
+    """Every arm's template against its form, on every scenario: each runs
+    on a fresh word of its own, from the same homes, and they must agree on
+    the next word, the exception, every slot, each input's count and the
+    feedback and handler writes.  Each template stays on its own code for
+    some input."""
+
+    maxDiff = None
+
+    def run_both(self, name, scenario, source, inputs):
+        handler = capi.arm_handlers()[name]
+        words = [prepare(name, scenario, source, inputs) for _ in (TEMPLATE, FORM)]
+        if None in words:
+            return None
+        # One set of objects for both runs, so that their counts compare.  A
+        # destination temporary is vacant, as the translator leaves it: a
+        # template stores into it without a close
+        nfixed = capi.get_ir_raw(words[0].f.__code__)[2]
+        slots = {slot: v for slot, v in words[0].slots.items()
+                 if not (isinstance(v, Old) and slot >= nfixed)}
+        runs = [CRun(w.f, w.index, slots, mode, handler)
+                for w, mode in zip(words, (TEMPLATE, FORM))]
+        template, form = runs
+        self.assertEqual(template.next, form.next, "next word")
+        self.assertIs(template.exc_type, form.exc_type)
+        self.assertEqual(len(template.slots), len(form.slots))
+        for i, (x, y) in enumerate(zip(form.slots, template.slots)):
+            self.assertTrue(same_slot(x, y), f"slot {i}: {x!r} != {y!r}")
+        self.assertEqual(template.counts, form.counts, "counts")
+        self.assertEqual(template.feedback_written, form.feedback_written, "feedback")
+        self.assertEqual(template.handler, form.handler, "handler")
+        return not template.slow
+
+    def test_templates_against_forms(self):
+        arms = templated_arms()
+        self.assertTrue(arms)
+        for name in arms:
+            scenario = SCENARIOS.get(PROGRAM.arms[name].family)
+            if scenario is None or name in NOT_RUN:
+                continue
+            fast = 0
+            for source in scenario.sources:
+                for inputs in scenario.inputs_of(source):
+                    with self.subTest(arm=name, source=source, inputs=inputs):
+                        fast += bool(self.run_both(name, scenario, source, inputs))
+            with self.subTest(arm=name):
+                self.assertGreater(fast, 0, "no input stayed on the template's code")
 
 
 if __name__ == "__main__":

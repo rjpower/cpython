@@ -1854,12 +1854,6 @@
      * (prepare_function_exec). */ \
     HELPER(_Py_Specialize_GetIter, void, (PyValue, _PyInstr *), \
         ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. \
-     * specialize_load_global_lock_held reads the globals' and builtins' keys under \
-     * their critical sections and PyDict_Watch es both; for a call it may lower \
-     * the function's code. */ \
-    HELPER(_Py_Specialize_LoadGlobal, void, (PyObject *, PyObject *, _PyInstr *, PyObject *), \
-        ARGS(object, object, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Compares the global `super` \
      * with PySuper_Type by address and tests the class's type flag; no lookup and \
      * no lowering. */ \

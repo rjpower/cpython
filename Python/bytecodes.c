@@ -1079,25 +1079,22 @@ dummy_func(
             EXIT_IF(!PyAnyDict_CheckExact(o));
         }
 
-        inline_ok inst(LIST_APPEND,
+        /* A stack op only: LIST_APPEND is the AddElement family (Python/register_ops/displays.rop). */
+        tier1 inst(LIST_APPEND,
                 (list: object, unused[oparg-1], v: consumed -- list, unused[oparg-1]))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
-            PyValue item = TAKE(v);
-            PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
-            // The store is in line while the list has room; growth is the
-            // function's.
-            int err = _PyList_AppendTakeValueInline(list_o, item);
-            ERROR_IF(err < 0);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok inst(SET_ADD,
+        /* A stack op only: SET_ADD is the AddElement family (Python/register_ops/displays.rop). */
+        tier1 inst(SET_ADD,
                 (set: object, unused[oparg-1], v: consumed -- set, unused[oparg-1]))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
-            PyValue item = TAKE(v);
-            int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
-            ERROR_IF(err);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* Stack ops only: STORE_SUBSCR and DELETE_SUBSCR are the SetItem and
@@ -1116,60 +1113,21 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok op(_CALL_INTRINSIC_1, (value: taken -- res: owned, v: moved(value)))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: its words are Intrinsic.*. */
+        tier1 inst(CALL_INTRINSIC_1, (value: consumed -- res: owned))
+            exits(abort)
         {
-            assert(oparg <= MAX_INTRINSIC_1);
-            if (oparg == INTRINSIC_UNARY_POSITIVE) {
-                res = _PyValue_Positive(value);
-                if (PyValue_IsNull(res)) {
-                    ERROR_NO_POP();
-                }
-            }
-            else {
-                // The other intrinsics take objects: the helper boxes a number
-                res = _PyEval_CallIntrinsic1(tstate, oparg, value);
-                if (PyValue_IsNull(res)) {
-                    ERROR_NO_POP();
-                }
-            }
-            v = value;
-            DEAD(value);
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + _POP_TOP_ANY;
-
-        outlined inst(CALL_INTRINSIC_2, (value2_st: consumed nullable, value1_st: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(CALL_INTRINSIC_2, (value2_st: consumed nullable, value1_st: consumed -- res: owned))
+            exits(abort)
         {
-            assert(oparg <= MAX_INTRINSIC_2);
-            // Taken before the calls, which can run code
-            PyValue held2 = TAKE(value2_st);
-            PyValue held1 = TAKE(value1_st);
-            if (oparg == INTRINSIC_GETATTR) {
-                // The owner is a value; the name is a str
-                PyObject *name = PyValue_ObjectOrNull(held1);
-                assert(name != NULL && PyUnicode_CheckExact(name));
-                res = _PyValue_GetAttr(held2, name);
-            }
-            else if (oparg == INTRINSIC_SETATTR) {
-                // value2_st is the value, NULL for a deletion; value1_st is
-                // the tuple (owner, name), which stays in its slot
-                PyObject *target = PyValue_ObjectOrNull(held1);
-                assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
-                PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
-                PyObject *attr_name = _PyTuple_GET_OBJECT(target, 1);
-                int err = _PyValue_SetAttr(owner, attr_name, held2);
-                res = err < 0 ? PyValue_NULL : PyValue_None;
-            }
-            else {
-                // The other intrinsics take objects: the helper boxes a
-                // number (the subject or class of MATCH_CLASS_ISINSTANCE)
-                res = _PyEval_CallIntrinsic2(tstate, oparg, held2, held1);
-            }
-            PyValue_XCLOSE(held1);
-            PyValue_XCLOSE(held2);
-            ERROR_IF(PyValue_IsNull(res));
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         outlined tier1 inst(RAISE_VARARGS, (args[oparg]: consumed -- ))
@@ -1691,29 +1649,25 @@ dummy_func(
             value = PyValue_DUP(constant);
         }
 
-        outlined inst(LOAD_BUILD_CLASS, ( -- bc: owned))
-            effects(runs_python) exits(next, raise)
+        /* The namespace and import stack ops only: their rules in
+         * Python/regcfg.c lower them to NamespaceRead, NamespaceReadFrom,
+         * NamespaceWrite, NamespaceDelete, SetupAnnotations, Import and
+         * ImportFrom (Python/register_ops/namespaces.rop).  A store of NULL
+         * is the compiler's `del name`. */
+        tier1 inst(LOAD_BUILD_CLASS, ( -- bc: owned))
+            exits(abort)
         {
-            _PyStatusValue found = _PyValue_GetOptionalItem(
-                PyValue_FromObjectBorrow(BUILTINS()),
-                PyValue_FromObjectBorrow(&_Py_ID(__build_class__)));
-            ERROR_IF(found.status < 0);
-            if (found.status == 0) {
-                _PyErr_SetString(tstate, PyExc_NameError,
-                                 "__build_class__ not found");
-                ERROR_IF(true);
-            }
-            bc = found.value;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(STORE_NAME, (v: consumed -- ))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(STORE_NAME, (v: consumed -- ))
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *ns = LOCALS();
-            int error = _PyEval_StoreName(tstate, v, name, ns);
-            PyValue_XCLOSE(v);
-            ERROR_IF(error);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         family(UNPACK_SEQUENCE, INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE) = {
@@ -1844,98 +1798,41 @@ dummy_func(
 
         macro(STORE_ATTR) = unused/1 + _SPECIALIZE_STORE_ATTR + unused/3 + _STORE_ATTR;
 
-        outlined inst(STORE_GLOBAL, (v: consumed nullable --))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(STORE_GLOBAL, (v: consumed nullable --))
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            int err;
-            if (PyValue_IsNull(v)) {
-                err = PyDict_PopValue(GLOBALS(), PyValue_FromObjectBorrow(name), NULL);
-                if (err == 0) {
-                    err = -1;
-                    _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,
-                                            NAME_ERROR_MSG, name);
-                }
-            }
-            else {
-                err = PyDict_SetValue(GLOBALS(), PyValue_FromObjectBorrow(name), v);
-            }
-            PyValue_XCLOSE(v);
-            ERROR_IF(err < 0);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(LOAD_LOCALS, ( -- locals: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(LOAD_LOCALS, ( -- locals: owned))
+            exits(abort)
         {
-            PyObject *l = LOCALS();
-            if (l == NULL) {
-                _PyErr_SetString(tstate, PyExc_SystemError,
-                                 "no locals found");
-                ERROR_IF(true);
-            }
-            locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // The operand is the class namespace that the compiler loads from the
         // __classdict__ cell: type.__build_class__ checked it as a mapping
-        outlined inst(LOAD_FROM_DICT_OR_GLOBALS,
+        tier1 inst(LOAD_FROM_DICT_OR_GLOBALS,
                 (mod_or_class_dict: consumed assumed(object) by compiler -- v: owned))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            // Also declared above; the generator's object analysis reads the assert
-            assert(PyValue_IsObject(mod_or_class_dict));
-            PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
-            // Taken before the lookup, which can run code
-            PyValue held_namespace = TAKE(mod_or_class_dict);
-            _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
-            PyValue_CLOSE(held_namespace);
-            ERROR_IF(found.status < 0);
-            if (found.status == 0) {
-                v = value_load_global(GLOBALS(), BUILTINS(), name);
-                ERROR_IF(PyValue_IsNull(v));
-            }
-            else {
-                v = found.value;
-            }
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(LOAD_NAME, (-- v: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(LOAD_NAME, (-- v: owned))
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            v = _PyEval_LoadName(tstate, frame, name);
-            ERROR_IF(PyValue_IsNull(v));
-        }
-
-        family(LOAD_GLOBAL, INLINE_CACHE_ENTRIES_LOAD_GLOBAL) = {
-            LOAD_GLOBAL_MODULE,
-            LOAD_GLOBAL_BUILTIN,
-        };
-
-        specializing op(_SPECIALIZE_LOAD_GLOBAL, ( -- ))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                next_instr = this_instr;
-                _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        op(_LOAD_GLOBAL, ( -- res[1]: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-            PyValue found = value_load_global(GLOBALS(), BUILTINS(), name);
-            ERROR_IF(PyValue_IsNull(found));
-            IR_WRITE_OUTPUT(res, 0, found);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // The NULL of a call's window needs no write: the slot is NULL by the
@@ -1946,70 +1843,18 @@ dummy_func(
         {
         }
 
-        macro(LOAD_GLOBAL) =
-            unused/1 +
-            _SPECIALIZE_LOAD_GLOBAL +
-            unused/3 +
-            _LOAD_GLOBAL +
-            _NULL_SLOT_CONDITIONAL;
-
-        // Globals are always a dict, and a keys object has one owner and a
-        // version that is never reused, so a match on the keys version
-        // names the dict the specialiser saw.  Builtins can be any object,
-        // so _LOAD_GLOBAL_BUILTINS still checks the type before it reads
-        // the keys.
-        leaf op(_GUARD_GLOBALS_VERSION, (globals_version/1 --))
-            effects(reads) exits(next, deopt) paths(globals: keys_version(globals_version))
+        /* A stack op only: rule_load_global (Python/regcfg.c) lowers it to
+         * GlobalRead (Python/register_ops/names.rop). */
+        tier1 inst(LOAD_GLOBAL,
+                (unused/4 -- res: owned, null[oparg&1]: owned nullable))
+            exits(abort)
         {
-            PyDictObject *dict = (PyDictObject *)GLOBALS();
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
+            /* The name operand keeps dis and the name flag of the opcode */
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        leaf op(_LOAD_GLOBAL_MODULE, (globals_version/1, unused/1, index/1 -- res: owned))
-            effects(reads) exits(next, deopt) paths(globals: keys_version(globals_version))
-        {
-            PyDictObject *dict = (PyDictObject *)GLOBALS();
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-            DEOPT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries),
-                     "the index is past the entries of the keys");
-            PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-            DEOPT_IF(PyValue_IsNull(found));
-            res = PyValue_XDUP(found);
-            STAT_INC(LOAD_GLOBAL, hit);
-        }
-
-        leaf op(_LOAD_GLOBAL_BUILTINS, (builtins_version/1, index/1 -- res: owned))
-            effects(reads) exits(next, deopt) paths(builtins: keys_version(builtins_version))
-        {
-            PyDictObject *dict = (PyDictObject *)BUILTINS();
-            DEOPT_IF(!PyDict_CheckExact(dict));
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-            DEOPT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries),
-                     "the index is past the entries of the keys");
-            PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-            DEOPT_IF(PyValue_IsNull(found));
-            res = PyValue_XDUP(found);
-            STAT_INC(LOAD_GLOBAL, hit);
-        }
-
-        macro(LOAD_GLOBAL_MODULE) =
-            unused/1 + // Skip over the entry distance
-            _LOAD_GLOBAL_MODULE +
-            _NULL_SLOT_CONDITIONAL;
-
-        macro(LOAD_GLOBAL_BUILTIN) =
-            unused/1 + // Skip over the entry distance
-            _GUARD_GLOBALS_VERSION +
-            _LOAD_GLOBAL_BUILTINS +
-            _NULL_SLOT_CONDITIONAL;
 
         outlined inst(MAKE_CELL, (--))
             effects(runs_python) exits(next, raise)
@@ -2161,214 +2006,100 @@ dummy_func(
             template = PyValue_FromObjectSteal(template_o);
         }
 
-        inst(BUILD_TUPLE, (values[oparg]: taken -- tup: owned))
-            effects(allocates, raises) exits(next, raise)
+        /* A stack op only: BUILD_TUPLE is the Build family (Python/register_ops/displays.rop). */
+        tier1 inst(BUILD_TUPLE,
+                (values[oparg]: consumed -- tup: owned))
+            exits(abort)
         {
-            PyObject *tup_o = IR_BUILD_TUPLE(values);
-            if (tup_o == NULL) {
-                ERROR_NO_POP();
-            }
-            INPUTS_DEAD();
-            tup = PyValue_FromObjectSteal(tup_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inst(BUILD_LIST, (values[oparg]: taken -- list: owned))
-            effects(allocates, raises) exits(next, raise)
+        /* A stack op only: BUILD_LIST is the Build family (Python/register_ops/displays.rop). */
+        tier1 inst(BUILD_LIST,
+                (values[oparg]: consumed -- seq: owned))
+            exits(abort)
         {
-            PyObject *list_o = IR_BUILD_LIST(values);
-            if (list_o == NULL) {
-                ERROR_NO_POP();
-            }
-            INPUTS_DEAD();
-            list = PyValue_FromObjectSteal(list_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        op(_LIST_EXTEND,
-                (list_st: assumed(object) by BUILD_LIST, unused[oparg-1], iterable_st: taken -- list_st, unused[oparg-1], i: moved(iterable_st) object))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: LIST_EXTEND is the UpdateContainer family (Python/register_ops/displays.rop). */
+        tier1 inst(LIST_EXTEND,
+                (list_st: object, unused[oparg-1], iterable_st: consumed -- list_st, unused[oparg-1]))
+            exits(abort)
         {
-            // A number is not iterable
-            if (!PyValue_IsObject(iterable_st)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "Value after * must be an iterable, not %.200s",
-                              PyValue_TYPE(iterable_st)->tp_name);
-                ERROR_NO_POP();
-            }
-            PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-            PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
-
-            PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
-            if (none_val == NULL) {
-                int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
-                if (matches &&
-                   (Py_TYPE(iterable)->tp_iter == NULL && !_PyValue_SequenceCheck(PyValue_FromObjectBorrow(iterable))))
-                {
-                    _PyErr_Clear(tstate);
-                    _PyErr_Format(tstate, PyExc_TypeError,
-                          "Value after * must be an iterable, not %.200s",
-                          Py_TYPE(iterable)->tp_name);
-                }
-                ERROR_NO_POP();
-            }
-            assert(Py_IsNone(none_val));
-            i = iterable_st;
-            DEAD(iterable_st);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(LIST_EXTEND) = _LIST_EXTEND + _POP_TOP_ANY;
 
-        op(_SET_UPDATE,
-                (set: assumed(object) by BUILD_SET, unused[oparg-1], iterable: taken -- set, unused[oparg-1], i: moved(iterable) object))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: SET_UPDATE is the UpdateContainer family (Python/register_ops/displays.rop). */
+        tier1 inst(SET_UPDATE,
+                (set: object, unused[oparg-1], iterable: consumed -- set, unused[oparg-1]))
+            exits(abort)
         {
-            // A number is not iterable
-            if (!PyValue_IsObject(iterable)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'%.200s' object is not iterable",
-                              PyValue_TYPE(iterable)->tp_name);
-                ERROR_NO_POP();
-            }
-            int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
-                                    PyValue_AsKnownObjectBorrow(iterable));
-            if (err < 0) {
-                ERROR_NO_POP();
-            }
-            i = iterable;
-            DEAD(iterable);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(SET_UPDATE) = _SET_UPDATE + _POP_TOP_ANY;
 
-        outlined inst(BUILD_SET, (values[oparg]: consumed -- set: owned))
-            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
+        /* A stack op only: BUILD_SET is the Build family (Python/register_ops/displays.rop). */
+        tier1 inst(BUILD_SET,
+                (values[oparg]: consumed -- items: owned))
+            exits(abort)
         {
-            PyObject *set_o = IR_BUILD_SET(values);
-            DEAD(values);
-            ERROR_IF(set_o == NULL);
-            set = PyValue_FromObjectSteal(set_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inline_ok inst(BUILD_MAP, (values[oparg*2]: consumed -- map: owned))
-            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
+        /* A stack op only: BUILD_MAP is the Build family (Python/register_ops/displays.rop). */
+        tier1 inst(BUILD_MAP,
+                (values[oparg*2]: consumed -- mapping: owned))
+            exits(abort)
         {
-            PyObject *map_o = IR_BUILD_MAP(values);
-            DEAD(values);
-            ERROR_IF(map_o == NULL);
-            map = PyValue_FromObjectSteal(map_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(SETUP_ANNOTATIONS, (--))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(SETUP_ANNOTATIONS, (--))
+            exits(abort)
         {
-            if (LOCALS() == NULL) {
-                _PyErr_Format(tstate, PyExc_SystemError,
-                              "no locals found when setting up annotations");
-                ERROR_IF(true);
-            }
-            /* check if __annotations__ in locals()... */
-            _PyStatusValue found = _PyValue_GetOptionalItem(
-                PyValue_FromObjectBorrow(LOCALS()),
-                PyValue_FromObjectBorrow(&_Py_ID(__annotations__)));
-            ERROR_IF(found.status < 0);
-            int err;
-            if (found.status == 0) {
-                PyObject *ann_dict;
-                ann_dict = PyDict_New();
-                ERROR_IF(ann_dict == NULL);
-                err = _PyValue_SetItem(PyValue_FromObjectBorrow(LOCALS()),
-                                       PyValue_FromObjectBorrow(&_Py_ID(__annotations__)),
-                                       PyValue_FromObjectBorrow(ann_dict));
-                Py_DECREF(ann_dict);
-                ERROR_IF(err);
-            }
-            else {
-                PyValue_CLOSE(found.value);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         pseudo(ANNOTATIONS_PLACEHOLDER, (--)) = {
             NOP,
         };
 
-        op(_DICT_UPDATE,
-                (dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken -- dict, unused[oparg - 1], upd: moved(update) object))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: DICT_UPDATE is the UpdateContainer family (Python/register_ops/displays.rop). */
+        tier1 inst(DICT_UPDATE,
+                (dict: object, unused[oparg - 1], update: consumed -- dict, unused[oparg - 1]))
+            exits(abort)
         {
-            // A number is not a mapping
-            if (!PyValue_IsObject(update)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'%N' object is not a mapping",
-                              PyValue_TYPE(update));
-                ERROR_NO_POP();
-            }
-            PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-            PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
-
-            int err = PyDict_Update(dict_o, update_o);
-            if (err < 0) {
-                int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
-                if (matches) {
-                    PyObject *exc = _PyErr_GetRaisedException(tstate);
-                    int has_keys = PyObject_HasAttrWithError(update_o, &_Py_ID(keys));
-                    if (has_keys == 0) {
-                        _PyErr_Format(tstate, PyExc_TypeError,
-                                        "'%T' object is not a mapping",
-                                        update_o);
-                        Py_XDECREF(exc);
-                    }
-                    else {
-                        _PyErr_ChainExceptions1(exc);
-                    }
-                }
-                ERROR_NO_POP();
-            }
-            upd = update;
-            DEAD(update);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(DICT_UPDATE) = _DICT_UPDATE + _POP_TOP_ANY;
 
-        op(_DICT_MERGE,
-                (callable, unused, unused, dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken
-                 -- callable, unused, unused, dict, unused[oparg - 1], u: moved(update) object))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: DICT_MERGE is the MergeKeywords family (Python/register_ops/displays.rop). */
+        tier1 inst(DICT_MERGE,
+                (callable, unused, unused, dict: object, unused[oparg - 1], update: consumed -- callable, unused, unused, dict, unused[oparg - 1]))
+            exits(abort)
         {
-            // A number is not a mapping
-            if (!PyValue_IsObject(update)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "Value after ** must be a mapping, not %N",
-                              PyValue_TYPE(update));
-                ERROR_NO_POP();
-            }
-            PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-            PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
-
-            _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
-            if (merged.status < 0) {
-                _PyEval_FormatKwargsError(tstate, callable, update_o, merged.object);
-                Py_XDECREF(merged.object);
-                ERROR_NO_POP();
-            }
-            u = update;
-            DEAD(update);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(DICT_MERGE) = _DICT_MERGE + _POP_TOP_ANY;
 
-        inline_ok inst(MAP_ADD,
-                (dict_st: object, unused[oparg - 1], key: consumed, value: consumed
-                 -- dict_st, unused[oparg - 1]))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: MAP_ADD is the AddEntry family (Python/register_ops/displays.rop). */
+        tier1 inst(MAP_ADD,
+                (dict_st: object, unused[oparg - 1], key: consumed, value: consumed -- dict_st, unused[oparg - 1]))
+            exits(abort)
         {
-            PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
-            assert(PyDict_CheckExact(dict));
-            /* dict[key] = value */
-            // Do not DECREF INPUTS because the function steals the references
-            PyValue stored_key = TAKE(key);
-            PyValue stored_value = TAKE(value);
-            int err = _PyDict_SetValue_Take2(
-                (PyDictObject *)dict, stored_key, stored_value);
-            ERROR_IF(err != 0);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         macro(INSTRUMENTED_LOAD_SUPER_ATTR) =
@@ -3202,53 +2933,23 @@ dummy_func(
         }
 
         // The compiler loads fromlist from a constant: None or a tuple of str
-        outlined inst(IMPORT_NAME,
+        tier1 inst(IMPORT_NAME,
                 (level: consumed, fromlist: consumed assumed(object) by compiler -- res: owned))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyObject *res_o;
-            // The level is an inline int: read it without a box
-            int ilevel = value_import_level(level);
-            if (ilevel == -1 && _PyErr_Occurred(tstate)) {
-                DECREF_INPUTS();
-                ERROR_IF(true);
-            }
-            if (!(oparg & 0x02)) {
-                res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
-                                LOCALS(), name,
-                                PyValue_AsKnownObjectBorrow(fromlist),
-                                ilevel, oparg & 0x01);
-
-            }
-            else {
-                res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
-                                LOCALS(), name,
-                                PyValue_AsKnownObjectBorrow(fromlist),
-                                ilevel);
-            }
-            DECREF_INPUTS();
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObjectSteal(res_o);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(IMPORT_FROM, (from -- from, res: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(IMPORT_FROM, (from -- from, res: owned))
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            // The module may be a number, if __import__ returned one
-            PyObject *from_o = PyValue_ObjectOrNull(from);
-            if (from_o != NULL && PyLazyImport_CheckExact(from_o))
-            {
-                PyObject *res_o = _PyEval_LazyImportFrom(
-                    tstate, frame, from_o, name);
-                ERROR_IF(res_o == NULL);
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else {
-                res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
-                ERROR_IF(PyValue_IsNull(res));
-            }
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* Stack ops only: rule_jump, rule_branch and rule_truth
@@ -4383,40 +4084,20 @@ dummy_func(
             _DO_CALL_FUNCTION_EX +
             _CHECK_PERIODIC_AT_END;
 
-        op(_MAKE_FUNCTION, (codeobj_st: taken assumed(object) by codegen -- func: owned, co: moved(codeobj_st)))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: its words are Function.Make. */
+        tier1 inst(MAKE_FUNCTION, (codeobj_st: consumed -- func: owned))
+            exits(abort)
         {
-            // The compiler loads the code object from a constant
-            PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
-
-            PyFunctionObject *func_obj = (PyFunctionObject *)
-                PyFunction_New(codeobj, GLOBALS());
-
-            if (func_obj == NULL) {
-                ERROR_NO_POP();
-            }
-            co = codeobj_st;
-            DEAD(codeobj_st);
-
-            // The function's own reference: PyFunction_New can run code
-            _PyFunction_SetVersion(
-                func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
-            func = PyValue_FromObjectSteal((PyObject *)func_obj);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(MAKE_FUNCTION) = _MAKE_FUNCTION + _POP_TOP_ANY;
-
-        outlined inst(SET_FUNCTION_ATTRIBUTE,
-                (attr_st: consumed assumed(object) by codegen,
-                 func_in: consumed assumed(exact(PyFunction_Type)) by _MAKE_FUNCTION -- func_out: moved(func_in)))
-            effects(reads, writes) exits(next)
+        tier1 inst(SET_FUNCTION_ATTRIBUTE, (attr_st: consumed, func_in: consumed -- func_out: owned))
+            exits(abort)
         {
-            // The attribute is a tuple, dict or function that the compiler built
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
-            PyObject *attr = PyValue_AsKnownObjectSteal(attr_st);
-            func_out = TAKE(func_in);
-            assert(PyFunction_Check(func));
-            _PyFunction_StoreAttribute((PyFunctionObject *)func, oparg, attr);
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // The marker at the start of a generator's code: nothing executes it,

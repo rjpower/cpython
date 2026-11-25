@@ -123,7 +123,7 @@ class CallRoleTests(unittest.TestCase):
     def test_through_prefix_is_retained_and_consumed_tail_becomes_empty(self):
         def invoke(fn, values, names):
             return fn(*values, **names)
-        self.assertTrue(any(row[0] == "DICT_MERGE" for row in
+        self.assertTrue(any(row[0] == "MergeKeywords.Merge" for row in
                             _testinternalcapi.get_ir(invoke.__code__)))
         for admitted in routes(invoke.__code__):
             function = types.FunctionType(admitted, globals())

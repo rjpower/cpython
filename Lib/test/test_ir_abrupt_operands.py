@@ -47,7 +47,7 @@ class AbruptOperandTests(unittest.TestCase):
             with self.subTest(function=function.__name__):
                 for code in routes(function.__code__):
                     names = {row[0] for row in _testinternalcapi.get_ir(code, True)}
-                    self.assertTrue(names & {"LIST_APPEND", "SET_ADD"}, names)
+                    self.assertTrue(names & {"AddElement.Append", "AddElement.Add"}, names)
                     result = types.FunctionType(code, globals())([3, 4, 3])
                     self.assertEqual(result, ((0, 1, 2, 3, 4, 5, 6, container([3, 4, 3])), 7))
 

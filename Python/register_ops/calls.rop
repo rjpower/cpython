@@ -64,7 +64,7 @@ extern helper function_version(fn:B, f:Fb<Call>) -> Bool
 extern helper exact_positional(f:Frame, fn:B, a:Args) -> Bool
   effects(reads)
   requires(exact<function>(fn))
-  c _PyRop_ExactPositional as bool
+  c _PyRop_ExactPositional as bool inline
   evidence(
     review: "P4. ceval.c: co_argcount equals the arguments of the call, counting a"
             "self that is present at run time (_CHECK_FUNCTION_EXACT_ARGS).",
@@ -93,7 +93,7 @@ extern helper push_exact(t:Thread, f:Frame, fn:Src, a:Args) -> NewFrame
   effects(reads, writes, releases)
   spends(fn, a)
   requires(exact<function>(fn))
-  c _PyRop_PushExact as pointer
+  c _PyRop_PushExact as pointer inline
   evidence(
     review: "P4. ceval.c: call_push_exact without expansion; the operand homes of"
             "temporaries are cleared.",
@@ -133,7 +133,7 @@ extern helper no_weakrefs(fn:B) -> Bool
 extern helper exact_positional_bound(f:Frame, fn:B, a:Args) -> Bool
   effects(reads)
   requires(exact<method>(fn))
-  c _PyRop_ExactPositionalBound as bool
+  c _PyRop_ExactPositionalBound as bool inline
   evidence(
     review: "P4. ceval.c: the function's co_argcount is the arguments and the"
             "receiver (_CHECK_METHOD_EXACT_ARGS).",
@@ -156,7 +156,7 @@ extern helper push_bound_exact(t:Thread, f:Frame, fn:Src, a:Args) -> NewFrame
   effects(reads, writes, releases)
   spends(fn, a)
   requires(exact<method>(fn))
-  c _PyRop_PushBoundExact as pointer
+  c _PyRop_PushBoundExact as pointer inline
   evidence(
     review: "P4. ceval.c: call_push_exact with CALL_EXPANDED, as"
             "_INIT_CALL_BOUND_METHOD_EXACT_ARGS and _INIT_CALL_PY_EXACT_ARGS.",
@@ -232,7 +232,7 @@ extern helper push_python(t:Thread, f:Frame, fn:Src, a:Args)
 extern helper call_native(t:Thread, f:Frame, fn:Src, a:Args)
   cases(ok(z:O), err(e:Err))
   effects(runs_python, raises)
-  c _PyRop_CallNative as value_or_null
+  c _PyRop_CallNative as value_or_null inline
   evidence(
     review: "P4. ceval.c: call_vector_impl after call_expand_method, as call_run's"
             "native path.",
@@ -414,7 +414,7 @@ extern helper depart(t:Thread, f:Frame) -> DeadFrame
 
 extern helper retire_frame(t:Thread, d:DeadFrame) -> Unit
   effects(releases)
-  c _PyRop_RetireFrame as unit
+  c _PyRop_RetireFrame as unit inline
   evidence(
     review: "P4. ceval.c: _PyEval_FrameClearAndPopGeneralWithResult without a result.",
     contract: "Closes every owner of the frame in turn, then pops it; a finalizer may"
@@ -423,7 +423,7 @@ extern helper retire_frame(t:Thread, d:DeadFrame) -> Unit
 // The frame's scratch is vacant: only the locals can own values
 extern helper retire_frame_empty(t:Thread, d:DeadFrame) -> Unit
   effects(releases)
-  c _PyRop_RetireFrameEmpty as unit
+  c _PyRop_RetireFrameEmpty as unit inline
   evidence(
     review: "P4. ceval.c: _PyEval_RetireThreadFrameWithResult without a result.",
     contract: "As retire_frame, over the fixed slots only.");
@@ -432,7 +432,7 @@ extern helper retire_frame_empty(t:Thread, d:DeadFrame) -> Unit
 // goes on, which a pending redirect may have moved
 extern helper deliver(c:Frame, v:O) -> Head
   effects(writes, releases)
-  c _PyRop_Deliver as pointer
+  c _PyRop_Deliver as pointer inline
   evidence(
     review: "P4. ceval.c: _PyFrame_SetReturnValue, then the caller's return_pc.",
     contract: "The slot's old value is released after the write, as STORE_FAST"

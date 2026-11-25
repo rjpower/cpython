@@ -1107,9 +1107,7 @@ call_null_step(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *state, uint8_t *outputs)
     int through = _PyIR_Extent(fmt->through, op->oparg);
     for (int j = 0; j < op->nout; j++) {
         int value = 0;
-        if (op->opcode == PUSH_NULL ||
-            (op->opcode == LOAD_GLOBAL && (op->oparg & 1) && j == op->nout - 1))
-        {
+        if (op->opcode == PUSH_NULL) {
             value = 1;
         }
         else if (op->opcode == COPY || op->opcode == ROP_HANDLER_Move_Copy) {

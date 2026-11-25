@@ -1,41 +1,12 @@
 // Family interfaces of Appendix A, "Data, bindings, constructors, and
 // matching".  Arms come with their batches.
 
-enum BuildKind(TUPLE, LIST, SET, MAP);
-enum ElementKind(ListAppend, SetAdd, MapPut);
-enum UpdateKind(ListExtend, SetUpdate, DictUpdate);
 enum CellMode(MAKE, GET, MAPPING_GET, CELL_SET, CELL_DELETE, COPY_FREE);
-enum NamespaceScope(LOCALS, NAME, MAPPING, BUILD_CLASS, GLOBAL);
-enum ImportMode(Name, From, LazyName, LazyFrom);
 enum TextKind(JOIN, INTERPOLATION, TEMPLATE);
 enum ConvertKind(STR, REPR, ASCII);
 enum PatternKind(Mapping, Sequence, Keys, Class);
-enum FunctionMode(Make, SetField);
-enum FunctionField(DEFAULTS, KWDEFAULTS, ANNOTATIONS, CLOSURE, ANNOTATE);
-// Include/internal/pycore_intrinsics.h: one typed signature per ID
-enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
-                 INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
-                 INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
-                 INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
-                 INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
-                 INTRINSIC_PREP_RERAISE_STAR, INTRINSIC_TYPEVAR_WITH_BOUND,
-                 INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
-                 INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
-                 INTRINSIC_MATCH_CLASS_ISINSTANCE);
 
 // 1E: displays, updates, comprehension insertion, keyword merge, unpack
-
-family Build(dst:Dst, kind:Enum<BuildKind>, items:Span<Src>)
-  exits(next, raise) ops(BUILD_TUPLE, BUILD_LIST, BUILD_SET, BUILD_MAP);
-
-family AddElement(container:Src, kind:Enum<ElementKind>, item:Src, value:Maybe<Src>)
-  exits(next, raise) ops(LIST_APPEND, SET_ADD, MAP_ADD);
-
-family UpdateContainer(container:Src, kind:Enum<UpdateKind>, source:Src)
-  exits(next, raise) ops(LIST_EXTEND, SET_UPDATE, DICT_UPDATE);
-
-family MergeKeywords(dict:Src, source:Src, fn:Src)
-  exits(next, raise) ops(DICT_MERGE);
 
 family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpack>)
   exits(next, raise, miss, again) ops(UNPACK_SEQUENCE, UNPACK_EX);
@@ -45,24 +16,6 @@ family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpa
 family Cell(mode:Enum<CellMode>, cell:Cell, value:Maybe<Src>, dst:Maybe<Dst>,
             frees:Span<Free>)
   exits(next, raise) ops(MAKE_CELL, LOAD_DEREF, STORE_DEREF, DELETE_DEREF, COPY_FREE_VARS, LOAD_FROM_DICT_OR_DEREF);
-
-family NamespaceRead(dst:Dst, scope:Enum<NamespaceScope>, name:Maybe<Name>,
-                     mapping:Maybe<Src>)
-  exits(next, raise) ops(LOAD_NAME, LOAD_LOCALS, LOAD_BUILD_CLASS, LOAD_FROM_DICT_OR_GLOBALS);
-
-family NamespaceWrite(scope:Enum<NamespaceScope>, name:Name, value:Maybe<Src>,
-                      mode:Enum<WriteMode>)
-  exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
-
-family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
-  exits(next, raise, miss, again) ops(LOAD_GLOBAL);
-
-family SetupAnnotations()
-  exits(next, raise) ops(SETUP_ANNOTATIONS);
-
-family Import(dst:Dst, mode:Enum<ImportMode>, name:Name, level:Maybe<Src>,
-              fromlist:Maybe<Src>, module:Maybe<Src>, flags:U8)
-  exits(next, raise) ops(IMPORT_NAME, IMPORT_FROM);
 
 // 1G: text
 
@@ -83,12 +36,3 @@ family Length(dst:Dst, value:Src)
 family Pattern(dst:Maybe<Dst>, subject:Src, kind:Enum<PatternKind>, cls:Maybe<Src>,
                names:Maybe<Src>, count:Maybe<U8>, mismatch:NearHead)
   exits(next, branch, raise) ops(MATCH_CLASS, MATCH_KEYS, MATCH_MAPPING, MATCH_SEQUENCE);
-
-// 1I: functions and intrinsics
-
-family Function(mode:Enum<FunctionMode>, dst:Maybe<Dst>, target:Src, value:Maybe<Src>,
-                field:Maybe<Enum<FunctionField>>)
-  exits(next, raise) ops(MAKE_FUNCTION, SET_FUNCTION_ATTRIBUTE);
-
-family Intrinsic(dst:Dst, id:Enum<IntrinsicId>, args:Span<Src>)
-  exits(next, raise) ops(CALL_INTRINSIC_1, CALL_INTRINSIC_2);

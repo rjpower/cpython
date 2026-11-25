@@ -732,8 +732,8 @@ TEMPLATE_CASES = [
     ("def f(a, b):\n    a.z = b\n    return a", Fresh(lambda: (Shape(), 0)), "STORE_ATTR_SHAPE_ADD",
      "AB", [(Fresh(o), v) for o in (Shape, owners_with_z, reversed_shape, Slots, Other)
             for v in (7, 2.5, "s")] + [(None, 7), (4, 7)]),
-    *[("G = 5\ndef f(a, b):\n    x = 1\n    x = G + len(a)\n    return x", ([1], 0), handler,
-       "", [()]) for handler in ("LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN")],
+    # (GlobalRead.Module and .Builtin have no template yet: their rows read a
+    # recipe from the feedback entry, which the leaf IR cannot express.)
     # (Jump.Poll has no template yet: its poll row has no lowering.)
     *[("def f(a, b):\n    s = 0\n    for x in a:\n        s = x\n    return s", (warm, 0), handler,
        ("A", "B", "B+1"), [(old, it, index) for old in (Plain(), 3) for it, index in iters])
@@ -1074,10 +1074,6 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertNotIn("PyValue_BothInlineInt", names)
 
     def test_without_a_nonnull_form_the_test_for_null_stays_in_the_primitive(self):
-        with declared("PyValue_DUP", nonnull_form=""):
-            graph, names = self.graph_names("LOAD_GLOBAL_MODULE")
-        self.assertIn("PyValue_XDUP", names)
-        self.assertNotIn("PyValue_DUP", names)
         # The form is chosen where the word is known not NULL
         for declare in (False, True):
             g, (test, dup) = prim_graph(("PyValue_IsNull", "leave"), ("PyValue_XDUP", None))

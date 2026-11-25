@@ -1468,6 +1468,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_moduleobject.h \
 		$(srcdir)/Include/internal/pycore_namespace.h \
 		$(srcdir)/Include/internal/pycore_attr_recipe.h \
+		$(srcdir)/Include/internal/pycore_global_recipe.h \
 		$(srcdir)/Include/internal/pycore_object.h \
 		$(srcdir)/Include/internal/pycore_object_alloc.h \
 		$(srcdir)/Include/internal/pycore_object_deferred.h \

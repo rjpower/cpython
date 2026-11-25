@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_ceval.h"         // _PyEval_LoadGlobalValue()
 #include "pycore_code.h"          // _PyBinaryOp_ExtendDescr()
 #include "pycore_feedback.h"      // _PyFbBinary
 #include "pycore_interpframe.h"   // _PyFrame_TakeHome()
@@ -50,6 +51,19 @@ PyAPI_FUNC(void) _PyFrame_ApplyRecipe(_PyInterpreterFrame *frame,
 PyAPI_FUNC(void) _PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s);
 PyAPI_FUNC(void) _PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s);
 PyAPI_FUNC(void) _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s);
+
+/* Build, AddElement, AddEntry, UpdateContainer and MergeKeywords, in ceval.c */
+PyAPI_FUNC(PyValue) _PyRop_BuildTuple(const _PyRopSpan *items);
+PyAPI_FUNC(PyValue) _PyRop_BuildList(const _PyRopSpan *items);
+PyAPI_FUNC(PyValue) _PyRop_BuildSet(const _PyRopSpan *items);
+PyAPI_FUNC(PyValue) _PyRop_BuildMap(const _PyRopSpan *items);
+PyAPI_FUNC(int) _PyRop_ListAppend(PyValue *list, PyValue item);
+PyAPI_FUNC(int) _PyRop_SetAdd(PyValue *set, PyValue item);
+PyAPI_FUNC(int) _PyRop_DictPut(PyValue *dict, PyValue key, PyValue value);
+PyAPI_FUNC(int) _PyRop_ListExtend(PyValue *list, PyValue *iterable);
+PyAPI_FUNC(int) _PyRop_SetUnion(PyValue *set, PyValue *iterable);
+PyAPI_FUNC(int) _PyRop_DictOverlay(PyValue *dict, PyValue *update);
+PyAPI_FUNC(int) _PyRop_MergeKeywords(PyValue *fn, PyValue *dict, PyValue *update);
 
 /* A Span<O> value: count owners in storage from PyMem_Malloc (NULL when
  * count is 0), which the row that makes it allocates.  A publish
@@ -134,6 +148,16 @@ static inline void
 _PyRop_DiscardResult(PyValue z)
 {
     PyValue_XCLOSE(z);
+}
+
+/* GlobalRead: the name in the frame's globals, then its builtins; an owned
+ * value, or PyValue_NULL with an exception set */
+static inline PyValue
+_PyRop_LoadGlobal(_PyInterpreterFrame *frame, PyObject *name)
+{
+    PyValue v = PyValue_NULL;
+    _PyEval_LoadGlobalValue(frame->f_globals, frame->f_builtins, name, &v);
+    return v;
 }
 
 /* Add: floats, text and the extension descriptor */
@@ -263,6 +287,36 @@ void _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home);
  * set when it is unbound */
 PyValue _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 
+
+/* The members of ImportKind in declaration order */
+enum { IMPORT_EAGER, IMPORT_POLICY, IMPORT_LAZY };
+
+/* Python/ceval.c: the namespace rows (Python/register_ops/namespaces.rop).
+ * A name is passed as its index in co_names, which an operand holds in 16
+ * bits, wider than a name field. */
+static inline PyObject *
+_PyRop_NameAt(_PyInterpreterFrame *frame, uint32_t index)
+{
+    return _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_names, index);
+}
+
+PyAPI_FUNC(PyValue) _PyRop_LoadName(PyThreadState *, _PyInterpreterFrame *, uint32_t);
+PyAPI_FUNC(PyValue) _PyRop_LoadLocals(PyThreadState *, _PyInterpreterFrame *);
+PyAPI_FUNC(PyValue) _PyRop_LoadBuildClass(PyThreadState *, _PyInterpreterFrame *);
+PyAPI_FUNC(_PyStatusValue) _PyRop_LoadFromDict(PyThreadState *, _PyInterpreterFrame *,
+                                               PyValueBorrow, uint32_t);
+PyAPI_FUNC(PyValue) _PyRop_LoadGlobalOrBuiltin(_PyInterpreterFrame *, uint32_t);
+PyAPI_FUNC(int) _PyRop_StoreName(PyThreadState *, _PyInterpreterFrame *,
+                                 uint32_t, PyValue);
+PyAPI_FUNC(int) _PyRop_DeleteName(PyThreadState *, _PyInterpreterFrame *, uint32_t);
+PyAPI_FUNC(int) _PyRop_StoreGlobal(PyThreadState *, _PyInterpreterFrame *,
+                                   uint32_t, PyValue);
+PyAPI_FUNC(int) _PyRop_DeleteGlobal(PyThreadState *, _PyInterpreterFrame *, uint32_t);
+PyAPI_FUNC(int) _PyRop_SetupAnnotations(PyThreadState *, _PyInterpreterFrame *);
+PyAPI_FUNC(PyValue) _PyRop_ImportName(PyThreadState *, _PyInterpreterFrame *,
+                                      PyObject *, PyValue, PyValue, uint32_t);
+PyAPI_FUNC(PyValue) _PyRop_ImportFrom(PyThreadState *, _PyInterpreterFrame *,
+                                      PyValue, uint32_t);
 
 /* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The
  * members of BranchMode in declaration order, the numbers the generated

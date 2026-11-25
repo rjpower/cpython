@@ -164,20 +164,18 @@ extern "C" {
 #define FOR_ITER_VIRTUAL                       159
 #define GET_ITER_SELF                          160
 #define GET_ITER_VIRTUAL                       161
-#define LOAD_GLOBAL_BUILTIN                    162
-#define LOAD_GLOBAL_MODULE                     163
-#define LOAD_SUPER_ATTR_ATTR                   164
-#define LOAD_SUPER_ATTR_METHOD                 165
-#define SEND_ASYNC_GEN                         166
-#define SEND_GEN                               167
-#define SEND_VIRTUAL                           168
-#define STORE_ATTR_INSTANCE_VALUE              169
-#define STORE_ATTR_SHAPE                       170
-#define STORE_ATTR_SHAPE_ADD                   171
-#define STORE_ATTR_SLOT                        172
-#define STORE_ATTR_WITH_HINT                   173
-#define UNPACK_SEQUENCE_LIST                   174
-#define UNPACK_SEQUENCE_TUPLE                  175
+#define LOAD_SUPER_ATTR_ATTR                   162
+#define LOAD_SUPER_ATTR_METHOD                 163
+#define SEND_ASYNC_GEN                         164
+#define SEND_GEN                               165
+#define SEND_VIRTUAL                           166
+#define STORE_ATTR_INSTANCE_VALUE              167
+#define STORE_ATTR_SHAPE                       168
+#define STORE_ATTR_SHAPE_ADD                   169
+#define STORE_ATTR_SLOT                        170
+#define STORE_ATTR_WITH_HINT                   171
+#define UNPACK_SEQUENCE_LIST                   172
+#define UNPACK_SEQUENCE_TUPLE                  173
 #define INSTRUMENTED_END_FOR                   234
 #define INSTRUMENTED_POP_ITER                  235
 #define INSTRUMENTED_END_SEND                  236
@@ -215,8 +213,8 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
-#define IR_NUM_OLD_HANDLERS                    274
-#define IR_NUM_HANDLERS                        377
+#define IR_NUM_OLD_HANDLERS                    272
+#define IR_NUM_HANDLERS                        409
 
 #ifdef __cplusplus
 }

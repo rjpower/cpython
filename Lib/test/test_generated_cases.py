@@ -1786,17 +1786,16 @@ class TestIRCases(unittest.TestCase):
             PyValue_CLOSE(value);
         }
         inst(OP_POINTER, (value: consumed object -- res: owned))
-            effects(reads, runs_python, raises, releases) exits(next, raise)
+            effects(reads, runs_python, raises, releases) exits(next)
         {
             assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             binaryfunc action = Py_TYPE(o)->tp_as_number->nb_add;
             Py_ssize_t n = Py_TYPE(o)->tp_basicsize;
-            PyObject *r = action(o, o);
+            res = SPAM(spam_call(o));
             PyValue_CLOSE(value);
-            ERROR_IF(r == NULL);
+            (void)action;
             (void)n;
-            res = PyValue_FromObjectSteal(r);
         }
     """
         formats = self.formats(input)

@@ -7,6 +7,7 @@ from unittest import mock
 from pathlib import Path
 
 from test import support, test_tools
+from test.support import os_helper
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
@@ -133,7 +134,7 @@ class AddIntTemplateTests(unittest.TestCase):
 
 SHARED = """\
 family F(dst:Dst, x:Src) exits(next, miss) ops(NOP);
-point F.Done(current, next_head, clear) keep() spent(x) defs(dst) held();
+point F.Done(current, next_head, clear) keep() spent(x) defs(dst);
 extern primitive is_int(v:B) -> Bool
   effects()
   test(inline_int(v))
@@ -149,6 +150,36 @@ arm F.Copy shared effects(writes, releases) feedback() exits(next, miss)
     exit next();
 }
 """
+
+
+# An arm rop_check accepts and rop_verify refuses: the owner it acquires
+# leaks and no publish names a point (RV's g01)
+UNVERIFIED = """\
+family Leak(x:Src) exits(next) ops(NOP);
+arm Leak.Owner split effects(reads, writes) feedback() exits(next) {
+  entry():
+    let o:O = acquire(x);
+    exit next();
+}
+"""
+
+
+class FailClosedTests(unittest.TestCase):
+    def test_the_generator_writes_nothing_for_an_arm_the_checker_refuses(self):
+        import contextlib
+        import io
+        program = rop_check.check([rop_syntax.parse(UNVERIFIED, "leak.rop")])
+        self.assertEqual(program.diagnostics, ())
+        with os_helper.temp_dir() as tmp:
+            src = Path(tmp) / "leak.rop"
+            src.write_text(UNVERIFIED)
+            out = Path(tmp) / "cases.c.h"
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                status = rop_generator.main([str(src), "--cases", str(out)])
+            self.assertEqual(status, 1)
+            self.assertFalse(out.exists())
+            self.assertIn("Leak.Owner", err.getvalue())
 
 
 class StubTests(unittest.TestCase):

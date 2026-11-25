@@ -130,6 +130,18 @@ class ParseTests(unittest.TestCase):
                          text.split())
 
     ERRORS = [
+        # Forms the language freeze removed: a routine's tail (a row with
+        # cases whose callee performs the exits replaces it), a point's held
+        # owners and a row's exits (its cases are its exits)
+        ("arm F.A split effects() feedback() exits(next) { entry(): tail f(x); }", 1, 59,
+         "expected a statement or a terminator (goto, branch, call, each, advance, "
+         "exit), found 'tail'"),
+        ("point F.P(current, site, pending) keep() spent() defs() held(x);", 1, 57,
+         "expected ';', found 'held'"),
+        ("extern helper h() -> Unit effects() exits(next) pending;", 1, 37,
+         "a row's exits are its cases: no 'exits' clause"),
+        ("extern routine r() -> Unit effects() pending;", 1, 8,
+         "'routine' is not a row kind (one of: primitive, helper)"),
         ("family F(x:Src) exits(next) events(CALLS);", 1, 36,
          "'CALLS' is not a monitoring event (one of: PY_START, PY_RESUME, PY_RETURN, "
          "PY_YIELD, CALL, JUMP, BRANCH, BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION, "
@@ -146,10 +158,10 @@ class ParseTests(unittest.TestCase):
          "releases, runs_python, polls, switches_frame)"),
         ("arm F.A inline effects() feedback() exits() { entry(): x = 1; }", 1, 56,
          "expected a statement or a terminator (goto, branch, call, each, advance, "
-         "exit, tail), found 'x'"),
+         "exit), found 'x'"),
         ("macro m() -> Unit effects() feedback() exits() pending;", 1, 40,
          "a macro's exits are its cases: no 'exits' clause"),
-        ("point F.P(current, here, clear) keep() spent() defs() held();", 1, 20,
+        ("point F.P(current, here, clear) keep() spent() defs();", 1, 20,
          "'here' is not a pc role (one of: site, next_head, target, resume_head, "
          "saved_origin)"),
         ("extern helper h() -> Unit effects() c h as value evidence();", 1, 59,
@@ -179,8 +191,8 @@ CHECK_BASE = """\
 enum Op(PLUS, MINUS);
 family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
   exits(next, miss, again, raise) ops(BINARY_OP);
-point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
-point F.Failed(current, site, pending) keep(x, y) spent() defs() held();
+point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
+point F.Failed(current, site, pending) keep(x, y) spent() defs();
 extern primitive test2(a:B, b:B) -> Bool effects() test(inline_int(a), inline_int(b)) pending;
 extern primitive scale(v:B) -> Scaled51 effects() pending;
 extern helper box(v:Scaled51) cases(ok(z:O), err(e:Err)) effects(allocates, raises) pending;
@@ -226,8 +238,8 @@ arm F.G shared effects(reads, writes) feedback(read(entry.kind)) exits(next, aga
     exit again(t);
   Loop():
     each [x, y] limit 2 body Body exhaust After();
-  Body(s:Src, k:Size):
-    let _:Unit = op(MINUS, [s]);
+  Body(s:B, k:Size):
+    let _:Unit = op(MINUS, [x]);
     advance Body;
   After():
     exit next();
@@ -253,10 +265,10 @@ CHECK_CASES = [
          (40, 16, 'declared exit return is not reached'),
      ]),
     ('observer', 'arm F.A inline',
-     'arm F.Observed inline', [
+     'arm F.A inline observes', [
          (23, 1, "an observed wrapper needs its family's events: F declares no "
                  "events(...)"),
-         (23, 23, 'an observed wrapper adapts nothing (miss)'),
+         (23, 25, 'an observed wrapper adapts nothing (miss)'),
      ]),
     ('callee', 'box(scale(l))',
      'box(scael(l))', [
@@ -290,8 +302,8 @@ CHECK_CASES = [
          (40, 48, 'read(entry.kind): no feedback operand'),
          (43, 16, 'adapt: argument f is Fb<Binary>; fb is Name'),
      ]),
-    ('role', 'defs(dst) held',
-     'defs(x) held', [
+    ('role', 'defs(dst);\npoint F.Failed',
+     'defs(x);\npoint F.Failed', [
          (4, 1, 'defs(x): operand x is Src, not a defs role'),
      ]),
     ('arity', 'test(inline_int(a), inline_int(b))',
@@ -350,13 +362,13 @@ CHECK_CASES = [
          (55, 5, 'advance Body from block After, which is outside the body of Body'),
      ]),
     ('intobody', '    exit again(t);',
-     '    goto Body(x, 0);', [
+     '    goto Body(use(x), 0);', [
          (40, 16, 'declared exit again is not reached'),
          (48, 5, 'block Body is the body of the each at base.rop:50; only each and advance enter it'),
      ]),
-    ('bodyparams', 'Body(s:Src, k:Size)',
-     'Body(s:Src, k:U8)', [
-         (51, 3, 'each body Body takes (Src, Size), not (Src, U8)'),
+    ('bodyparams', 'Body(s:B, k:Size)',
+     'Body(s:B, k:U8)', [
+         (51, 3, 'each body Body takes (B, Size), not (B, U8)'),
      ]),
     ('recursion', '}\narm F.A',
      '}\nmacro m(f:Fb<Binary>) cases(run()) effects() feedback() { entry(): call m(f) { run -> R(); } R(): exit run(); }\narm F.A', [
@@ -432,7 +444,7 @@ CHECK_CASES = [
      ]),
     ('spent', 'spent(y), spent(x)',
      'spent(dst), spent(x)', [
-         (35, 31, 'spent(dst): dst is not a Src operand'),
+         (35, 31, 'spent(dst): dst is not a source operand'),
      ]),
     ('schema', 'macro adapt(f:Fb<Binary>)',
      'macro adapt(f:Fb<Attr>)', [
@@ -557,31 +569,32 @@ class CheckTests(unittest.TestCase):
          [(1, 52, "fact object takes no type argument")]),
         ("extern helper h(v:B) -> O effects() ensures(result.exact<frozenset>(result)) "
          "pending;", []),
-        # An optional owner may bind an optional destination, not a plain one
+        # An optional owner may bind any destination: its absence leaves the
+        # home vacant
         ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next) ops(NOP);\n"
-         "point F.Done(current, next_head, clear) keep() spent(x) defs(d, e) held();\n"
+         "point F.Done(current, next_head, clear) keep() spent(x) defs(d, e);\n"
          "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
          "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
          "{ entry(): let m:Maybe<O> = h(use(x));\n"
          "  publish [e = m] retire [spent(x), old(e)] at F.Done; exit next(); }",
          []),
         ("family F(d:Dst, x:Src) exits(next) ops(NOP);\n"
-         "point F.Done(current, next_head, clear) keep() spent(x) defs(d) held();\n"
+         "point F.Done(current, next_head, clear) keep() spent(x) defs(d);\n"
          "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
          "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
          "{ entry(): let m:Maybe<O> = h(use(x));\n"
          "  publish [d = m] retire [spent(x), old(d)] at F.Done; exit next(); }",
-         [(6, 16, "m is Maybe<O>, expected O")]),
+         []),
         # Parameter modes: borrows names a linear parameter, spends a source
-        # one, and spending releases
-        ("extern helper h(a:Anchors, s:Span<Src>, e:Err) -> Err effects(releases) "
+        # one, and spending takes the source out of its home (writes)
+        ("extern helper h(a:Anchors, s:Span<Src>, e:Err) -> Err effects(writes, releases) "
          "borrows(a) spends(s) pending;", []),
-        ("extern helper h(v:B, s:Src) -> Unit effects(releases) borrows(v) spends(v) "
+        ("extern helper h(v:B, s:Src) -> Unit effects(writes, releases) borrows(v) spends(v) "
          "pending;",
          [(1, 37, "borrows(v): v is not a linear parameter"),
           (1, 37, "spends(v): v is not a source parameter")]),
         ("macro m(s:Span<Src>) -> Unit effects() feedback() spends(s) pending;",
-         [(1, 30, "spends(s): spending a source releases its owner; declare releases")]),
+         [(1, 30, "spends(s): spending a source takes it out of its home; declare writes")]),
     ]
 
     def test_targets_and_typed_facts(self):

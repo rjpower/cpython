@@ -216,12 +216,11 @@ class DebtKind(enum.Enum):
 
 
 class RowKind(enum.Enum):
-    """`extern` kinds: a value primitive (has a leaf lowering), an
-    out-of-line helper (SysV call) and a VM routine (may leave the word by
-    its own exits)."""
+    """`extern` kinds: a value primitive (has a leaf lowering) and an
+    out-of-line helper (SysV call).  A row that leaves the word itself is a
+    helper bound with the `transfer` convention."""
     primitive = "primitive"
     helper = "helper"
-    routine = "routine"
 
 
 # The arm exits and their payload types.  `again`'s ticket is over the
@@ -274,6 +273,8 @@ class Select(enum.Enum):
     extend = "extend"                      # UpdateContainer: a list takes an iterable
     union = "union"                        # UpdateContainer: a set takes an iterable
     overlay = "overlay"                    # UpdateContainer: a dict takes a mapping
+    present = "present"                    # the family's optional operands hold values
+    absent = "absent"                      # its optional operands are vacant
 
 
 SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
@@ -288,6 +289,7 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "display": (Select.tuple, Select.list, Select.set, Select.map),
     "element": (Select.append, Select.add),
     "update": (Select.extend, Select.union, Select.overlay),
+    "operand": (Select.present, Select.absent),
 }
 
 
@@ -334,6 +336,16 @@ class Fact(enum.Enum):
     type_version = "type_version"
     has_values = "has_values"
     tagged_index = "tagged_index"
+    # Facts of the execution context that select evidence states
+    # (SELECT_FACTS) and rows require
+    thread_frame = "thread_frame"
+    generator_frame = "generator_frame"
+    entry_frame = "entry_frame"
+    vacant_scratch = "vacant_scratch"
+    interruptible = "interruptible"
+    jit_on = "jit_on"
+    # The word runs under its instrumented twin: an `observes` arm's entry
+    instrumented = "instrumented"
 
     @property
     def arity(self) -> int:
@@ -349,6 +361,23 @@ class Fact(enum.Enum):
 FACT_ARITY = {Fact.in_bounds: 2, Fact.type_version: 2}
 # exact<T>(v): v's type is exactly the builtin type T
 FACT_TYPED = frozenset({Fact.exact})
+
+
+# The facts each select item states at the arm's entry, and their subjects:
+# an environment name, the family operand of that name, or OPTIONAL, which
+# stands for each of the family's Maybe<Src> operands.  The other items
+# choose a body and state no fact.
+OPTIONAL = "*optional"
+SELECT_FACTS: dict[Select, tuple[tuple[Fact, str], ...]] = {
+    Select.thread_frame: ((Fact.thread_frame, "frame"),),
+    Select.generator_frame: ((Fact.generator_frame, "frame"),),
+    Select.entry_frame: ((Fact.entry_frame, "frame"),),
+    Select.vacant_scratch: ((Fact.vacant_scratch, "frame"),),
+    Select.interruptible: ((Fact.interruptible, "site"),),
+    Select.jit_on: ((Fact.jit_on, "thread"),),
+    Select.bound: ((Fact.nonnull, "local"),),
+    Select.present: ((Fact.present, OPTIONAL),),
+}
 
 
 class BuiltinType(enum.Enum):
@@ -514,6 +543,9 @@ class Convention:
     # with one payload value gets it through the last C parameter.  The row
     # declares any number of cases.
     indexed: bool = False
+    # The callee performs the exit that each case names (TRANSFER_EXITS) and
+    # does not return: the cases are stated for the checker and the tracer
+    transfer: bool = False
 
 
 def _conv(name: str, returns: CReturn, *outcomes: COutcome, single: bool = False
@@ -550,8 +582,9 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("pointer_or_raised", CReturn.pointer,
           COutcome(CTest.nonnull, _RES, (_RES,), False),
           COutcome(CTest.null, _RES, (_EXC,), True)),
-    # A routine's binding: a macro that leaves the word itself (`tail`)
-    _conv("tail", CReturn.void, COutcome(CTest.always, _RES, (), False), single=True),
+    # A transfer row: the callee leaves the word by the exit its case names
+    # (TRANSFER_EXITS), so no C result selects the case
+    Convention("transfer", CReturn.void, False, (), transfer=True),
     # hit(p)/absent(): a pointer or NULL, no exception
     _conv("pointer_or_null", CReturn.pointer,
           COutcome(CTest.nonnull, _RES, (_RES,), False),
@@ -610,6 +643,14 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (_VAL,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
 )}
+
+
+# A transfer row's cases: each is named for the arm exit that the callee
+# performs, and its payload is that exit's (a raise's point is the arm's)
+TRANSFER_EXITS = {
+    "jump": "jump", "branch": "branch", "return": "return",
+    "redirect": "redirect", "exit": "exit", "raise": "raise",
+}
 
 
 # The evidence an extern with a C body carries (root, 2026-11-24): the

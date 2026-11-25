@@ -21,6 +21,8 @@ Ownership follows the declarations alone:
   one;
 - a spent source is taken out of its home when it is a temporary, and left
   when it is a local.
+
+A span operand's home ops act on each of its items.
 """
 
 import ctypes
@@ -250,6 +252,27 @@ def _str_nonempty(ev, v):
     return len(obj_of(ev.cx, v)) != 0
 
 
+def _home_value(ev, home):
+    "A row that spends a source and returns its owner: the source's word"
+    return ev.slot_of(home.operand)
+
+
+def _vacate(ev, home):
+    """The owner a row takes out of a local and returns.  A spent local is
+    otherwise left (after_row), so the owner that leaves it is consumed
+    here; the returned owner is the row's result"""
+    w = ev.slot_of(home.operand)
+    ev.set_slot(home.operand, EMPTY)
+    ev.consume(w)
+    return w
+
+
+def _delete_local(ev, frame, home):
+    if ev.slot_of(home.operand) == EMPTY:
+        return ("err", (Token("Err", "UnboundLocalError"),))
+    return ("ok", (_vacate(ev, home),))
+
+
 MODELS = {
     "_PyRop_ExactInt": lambda ev, v: bool(spec("PyValue_LongCheckExact")(ev.cx, v)),
     "_PyRop_ExactList": lambda ev, v: exact(ev.cx, v, "PyList_Type"),
@@ -277,6 +300,10 @@ MODELS = {
     "_PyRop_RetireFailedCall": lambda ev, a, s, e: e,
     "_PyRop_RetireAbandoned": lambda ev, a, r: r,
     "_PyRop_LocalView": _local_view,
+    "_PyRop_SrcPresent": lambda ev, home: ev.slot_of(home.operand) != EMPTY,
+    "_PyRop_RestoreLocal": _home_value,
+    "_PyRop_SaveLocal": _vacate,
+    "_PyRop_DeleteLocal": _delete_local,
     "_PyRop_UnboundLocal": lambda ev, frame, home: ("err", (Token("Err", "UnboundLocalError"),)),
     "_PyRop_InitResultError": lambda ev, v: ("err", (Token("Err", "TypeError"),)),
     "_PyRop_DiscardResult": lambda ev, z: None,
@@ -350,13 +377,30 @@ class Path:
     # Homes
 
     def slot_of(self, operand: str):
-        return self.slots.get(self.site.operands[operand], EMPTY)
+        where = self.site.operands[operand]
+        if isinstance(where, list):
+            return tuple(self.slots.get(x, EMPTY) for x in where)
+        return self.slots.get(where, EMPTY)
 
     def set_slot(self, operand: str, w) -> None:
-        self.slots[self.site.operands[operand]] = w
+        where = self.site.operands[operand]
+        if isinstance(where, list):
+            # Item i of the value to item i of the span
+            for x, item in zip(where, w):
+                self.slots[x] = item
+            return
+        self.slots[where] = w
 
     def take(self, operand: str):
         "A spent source: a temporary's owner leaves its home; a local stays"
+        where = self.site.operands[operand]
+        if isinstance(where, list):
+            out = []
+            for x, local in zip(where, self.site.local[operand]):
+                out.append(EMPTY if local else self.slots.get(x, EMPTY))
+                if not local:
+                    self.slots[x] = EMPTY
+            return tuple(out)
         if self.site.local[operand]:
             return EMPTY
         w = self.slot_of(operand)
@@ -373,7 +417,10 @@ class Path:
     # Ownership
 
     def make_owner(self, w) -> None:
-        if owns(self.cx, w):
+        if isinstance(w, tuple):
+            for item in w:
+                self.make_owner(item)
+        elif owns(self.cx, w):
             self.owners[key(self.cx, w)] += 1
 
     def consume(self, w) -> None:
@@ -382,6 +429,9 @@ class Path:
                 if owned:
                     self.owners[key(self.cx, item)] -= 1
             w.owned = [False] * len(w.owned)
+        elif isinstance(w, tuple):
+            for item in w:
+                self.consume(item)
         elif owns(self.cx, w):
             self.owners[key(self.cx, w)] -= 1
 
@@ -525,6 +575,10 @@ class Path:
             r = self.slot_of(op.attr)
         elif k is OpKind.store:
             self.set_slot(op.attr, a[0])
+        elif k is OpKind.null:
+            r = EMPTY
+        elif k is OpKind.rest:
+            r = a[0][len(self.site.operands[op.attr]):]
         elif k is OpKind.checkpoint:
             self.point = op.attr
         elif k is OpKind.release:
@@ -616,7 +670,24 @@ def decode_site(program: Program, family: str, words: list[int], index: int,
     payload = words[index + 1:index + length]
     operands: dict[str, object] = {}
     local: dict[str, bool] = {}
-    for p in program.encodings[family].placements:
+    enc = program.encodings[family]
+    # The elements of the word's spans, in declaration order: first the head
+    # fields the encoding gives them, then the words after the fixed ones,
+    # four to a word (pycore_ir.h, _PyIR_SpanElement())
+    in_head = sorted(enc.elements, key=lambda s: HEAD_FIELDS.index(s.name))
+    taken = 0
+
+    def element(j: int) -> tuple[int, bool]:
+        if j < len(in_head):
+            f = HEAD_FIELDS.index(in_head[j].name)
+            return (field(word, [], in_head[j]),
+                    bool(word >> (IR_F_LOCAL_SHIFT + f) & 1))
+        j -= len(in_head)
+        w = payload[enc.words + j // 4]
+        name = HEAD_FIELDS[j % 4]
+        return field(w, [], Slot[name]), bool(w >> (IR_F_LOCAL_SHIFT + j % 4) & 1)
+
+    for p in enc.placements:
         value = 0
         for i, slot in enumerate(p.slots):
             value |= field(word, payload, slot) << (12 * i)
@@ -625,14 +696,13 @@ def decode_site(program: Program, family: str, words: list[int], index: int,
                 value -= 1 << p.bits
             value += index + length
         if p.kind is FieldKind.vector:
-            # The count; the elements fill the head fields of the payload
-            # words that follow, four to a word
+            # The count; the span's elements follow the earlier spans'
             slots, flags = [], []
             for i in range(value):
-                w = payload[i // 4]
-                name = HEAD_FIELDS[i % 4]
-                slots.append(field(w, [], Slot[name]))
-                flags.append(bool(w >> (IR_F_LOCAL_SHIFT + i % 4) & 1))
+                slot, flag = element(taken + i)
+                slots.append(slot)
+                flags.append(flag)
+            taken += value
             operands[p.operand] = slots
             local[p.operand] = flags
             continue

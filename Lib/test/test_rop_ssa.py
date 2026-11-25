@@ -2,8 +2,7 @@
 (Tools/cases_generator/rop_ssa.py), run by its evaluator (rop_ssa_eval.py)
 against the C arm on the same live objects.
 
-Each arm either expands or is listed in BLOCKED with the diagnostic that
-stops it.  An arm that expands is run on the scenarios of its family: the
+Every arm expands.  Each is run on the scenarios of its family: the
 C arm runs once on a word of a fresh function (jit_template_run, forced to
 the arm), and the evaluator runs the expansion from the same homes.  Some
 path of the expansion must agree with C:
@@ -50,29 +49,10 @@ def program():
 PROGRAM = program()
 SSA, FAILED = rop_ssa.expand_all(PROGRAM)
 
-# The arms that do not expand, and the declaration each lacks (the report's
-# language findings)
-DEST = "declares no definition of it: the homes at the exit are not declared"
-TAIL = "declare no payload and no point, so the frame state at each is not declared"
-BLOCKED = {
-    "LocalWrite.Restore": f"row restore_local takes the destination home x and {DEST}",
-    "SaveLocal.Take": f"row save_local takes the destination home d and {DEST}",
-    "LocalDelete.Checked": f"row delete_local takes the destination home x and {DEST}",
-    "Move.Transfer": f"row parallel_move takes the destination home d and {DEST}",
-    "Move.Retire": f"row parallel_move takes the destination home d and {DEST}",
-    "Move.Copy": f"row copy_homes takes the destination home d and {DEST}",
-    "Jump.Warm": f"tail jit_warm: the routine's exits (jump, raise, redirect, exit) {TAIL}",
-    "Return.Generator": "tail generator_return: the routine's exits "
-                        f"(return, exit, raise, redirect) {TAIL}",
-    "Return.Observed": "tail generator_return: the routine's exits "
-                       f"(return, exit, raise, redirect) {TAIL}",
-}
-
-
 class ExpansionTests(unittest.TestCase):
-    def test_every_arm_expands_or_names_its_blocker(self):
-        self.assertEqual(set(SSA) | set(FAILED), set(PROGRAM.arms))
-        self.assertEqual({n: d.message for n, d in FAILED.items()}, BLOCKED)
+    def test_every_arm_expands(self):
+        self.assertEqual({n: d.message for n, d in FAILED.items()}, {})
+        self.assertEqual(set(SSA), set(PROGRAM.arms))
 
     def test_exits_are_declared_and_name_their_frame_state(self):
         for name, arm in SSA.items():
@@ -100,6 +80,30 @@ class ExpansionTests(unittest.TestCase):
         ops = [op.kind.value for op in SSA["Add.Int"].blocks["Finish"].ops]
         self.assertEqual(ops, ["take", "take", "old", "store", "checkpoint",
                                "release", "release", "release"])
+
+    def test_a_vector_publish_moves_then_closes_the_rest(self):
+        ops = [(op.kind.value, op.attr) for op in SSA["Move.Retire"].entry.ops]
+        self.assertEqual(ops, [("take", "srcs"), ("old", "dsts"), ("store", "dsts"),
+                               ("checkpoint", "Move.Done"), ("rest", "dsts"),
+                               ("release", rop_check.DebtKind.spent)])
+        ops = [op.kind.value for op in SSA["Move.Copy"].entry.ops]
+        self.assertEqual(ops, ["read", "dup", "old", "store", "checkpoint"])
+
+    def test_a_transfer_row_performs_its_edges_exits(self):
+        for name in ("Jump.Warm", "Return.Generator", "Return.Observed"):
+            switches = [b.term for b in SSA[name].blocks.values()
+                        if isinstance(b.term, rop_ssa.Switch) and b.term.transfer]
+            with self.subTest(arm=name):
+                self.assertEqual(len(switches), 1)
+                for e in switches[0].edges:
+                    target = SSA[name].blocks[e.target.block].term
+                    self.assertIsInstance(target, rop_ssa.ExitTerm)
+                    self.assertEqual(target.kind, e.case)
+
+    def test_select_and_observes_are_entry_facts(self):
+        self.assertEqual(SSA["LocalRead.Bound"].facts, ("nonnull(local)",))
+        self.assertEqual(SSA["Return.Generator"].facts, ("generator_frame(frame)",))
+        self.assertEqual(SSA["Call.Observed"].facts, ("instrumented(site)",))
 
     def test_a_row_with_cases_has_an_edge_per_case(self):
         for name, arm in SSA.items():
@@ -262,12 +266,16 @@ class Scenario:
     # An arm whose static evidence is weaker than another's runs on that
     # arm's words: `live_scratch` admits the vacant scratch of `Return.Empty`
     words_of: dict[str, str] = field(default_factory=dict)
-    # An observed twin runs only on code with local CALL events: it reads
-    # the code's monitoring state, which no fact declares (the report's
-    # finding).  The arm runs only on its source, whose code is monitored.
-    monitored: dict[str, str] = field(default_factory=dict)
+    # The sources whose code has local events (EVENTS).  An arm
+    # that `observes` runs only on them: its event rows require
+    # instrumented(site), which its declaration grants on the instrumented
+    # twin's words only
+    monitored: tuple[str, ...] = ()
     # Arms the probe cannot run on these words, and why (the report lists them)
     skip: dict[str, str] = field(default_factory=dict)
+    # Each arm runs on its own first word, which the translator chose by
+    # handler (Move's arms have no select)
+    per_arm: bool = False
 
 
 def truth_inputs(operand):
@@ -300,12 +308,15 @@ SCENARIOS = {
     "BranchTruth": Scenario("BranchTruth", {
         "locals": "def f(a):\n    if a:\n        return 1\n    return 2\n",
         "temporaries": "def f(a):\n    if a * 1:\n        return 1\n    return 2\n",
-        "keep": "def f(a, b):\n    return a or b\n"},
-        truth_inputs("value"), warm=(0, 0)),
+        "keep": "def f(a, b):\n    return a or b\n",
+        "monitored": "def f(a):\n    if a:\n        return 1\n    return 2\n"},
+        truth_inputs("value"), warm=(0, 0), monitored=("monitored",)),
     "BranchNone": Scenario("BranchNone", {
         "locals": "def f(a):\n    if a is None:\n        return 1\n    return 2\n",
-        "not": "def f(a):\n    if a is not None:\n        return 1\n    return 2\n"},
-        [{"value": v} for v in (None, 0, 1, "a", Plain(), [])], warm=(0,)),
+        "not": "def f(a):\n    if a is not None:\n        return 1\n    return 2\n",
+        "monitored": "def f(a):\n    if a is None:\n        return 1\n    return 2\n"},
+        [{"value": v} for v in (None, 0, 1, "a", Plain(), [])], warm=(0,),
+        monitored=("monitored",)),
     "Const": Scenario("Const", {
         "pool": "def f():\n    x = 300000\n    return x\n",
         "small": "def f():\n    x = 3\n    return x\n",
@@ -317,12 +328,27 @@ SCENARIOS = {
         [{"local": v} for v in (1, "s", Plain(), [2**70])] + [{}], warm=(1,),
         requires={"LocalRead.Bound": "local"}),
     "LocalWrite": Scenario("LocalWrite", {
-        "store": "def f(a):\n    b = a\n    return b\n"},
-        [{"value": v} for v in (1, "s", Plain(), 2**70)], warm=(1,)),
+        "store": "def f(a):\n    b = a\n    return b\n",
+        "restore": "def f(a):\n    x = 1\n    y = [x for x in a]\n    return x\n"},
+        [{"value": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=([1],),
+        requires={"LocalWrite.Store": "value"}),
+    "SaveLocal": Scenario("SaveLocal", {
+        "comprehension": "def f(a):\n    return [x for x in a]\n"},
+        [{"local": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=([1],)),
+    "LocalDelete": Scenario("LocalDelete", {
+        "delete": "def f(a):\n    b = a\n    del b\n    return a\n"},
+        [{"local": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,)),
+    "Move": Scenario("Move", {
+        "join": "def f(a):\n    return (len(a) > 4 and\n            a[:2] == a[-2:] == '__'"
+                " and\n            a[2] != '_')\n",
+        "or": "def f(a, b):\n    return (a and b) or a\n"},
+        [{"srcs": [v]} for v in (1, "s", Plain(), 2**70)], warm=("__x__", 1),
+        per_arm=True),
     "Jump": Scenario("Jump", {
         "loop": "def f(n):\n    while n:\n        n -= 1\n    return n\n",
-        "forward": "def f(a):\n    x = 1 if a else 2\n    y = (x, x)\n    return y\n"},
-        [{}], warm=(0,)),
+        "forward": "def f(a):\n    x = 1 if a else 2\n    y = (x, x)\n    return y\n",
+        "monitored": "def f(n):\n    while n:\n        n -= 1\n    return n\n"},
+        [{}], warm=(0,), monitored=("monitored",)),
     "GetAttr": Scenario("GetAttr", {
         "shape": "def f(a):\n    return a.x\n",
         "slot": "def f(a):\n    return a.x\n",
@@ -357,9 +383,10 @@ SCENARIOS = {
                         "lazy": (LazyNorm(),)},
         warmups=200, coherent=True),
     "Return": Scenario("Return", {
-        "empty": "def f(a):\n    return a\n"},
+        "empty": "def f(a):\n    return a\n",
+        "monitored": "def f(a):\n    return a\n"},
         [{"value": v} for v in (1, "s", Plain(), [1])], warm=([1],),
-        words_of={"Return.Ordinary": "Return.Empty"},
+        words_of={"Return.Ordinary": "Return.Empty"}, monitored=("monitored",),
         skip={"Return.External": "chosen only for the evaluator's entry frame, which "
                                  "no function's word runs in"}),
     "Call": Scenario("Call", {
@@ -369,19 +396,26 @@ SCENARIOS = {
         + [{"fn": abs, "args": [v]} for v in (-3, "x")]
         + [{"fn": fn, "args": [v]} for fn in (identity, Point().norm, Holder, two)
            for v in (1, "s")], warm=([],),
-        monitored={"Call.Observed": "monitored"}),
+        monitored=("monitored",)),
 }
 
 
 MONITOR = sys.monitoring.OPTIMIZER_ID
 
 
+EVENTS = ("CALL", "PY_RETURN", "BRANCH_LEFT", "BRANCH_RIGHT", "JUMP")
+
+
 def monitor(code):
     mon = sys.monitoring
     if mon.get_tool(MONITOR) is None:
         mon.use_tool_id(MONITOR, "test_rop_ssa")
-        mon.register_callback(MONITOR, mon.events.CALL, lambda *args: None)
-    mon.set_local_events(MONITOR, code, mon.events.CALL)
+        for e in EVENTS:
+            mon.register_callback(MONITOR, getattr(mon.events, e), lambda *args: None)
+    events = 0
+    for e in EVENTS:
+        events |= getattr(mon.events, e)
+    mon.set_local_events(MONITOR, code, events)
 
 
 def tearDownModule():
@@ -396,7 +430,7 @@ def compiled(scenario, source, arm=None):
     namespace = {}
     exec(scenario.sources[source], namespace)
     f = namespace["f"]
-    if source in scenario.monitored.values():
+    if source in scenario.monitored:
         monitor(f.__code__)
     phases = ([(o,) for o in scenario.warm_by_source[source]]
               if source in scenario.warm_by_source else [scenario.warm])
@@ -504,13 +538,14 @@ def check(cx, arm_name, scenario, source, inputs):
     arm = PROGRAM.arms[arm_name]
     if arm_name in scenario.skip:
         return None
-    if scenario.monitored.get(arm_name, source) != source:
+    if arm.observes and source not in scenario.monitored:
         return None
     if arm_name in scenario.requires and scenario.requires[arm_name] not in inputs:
         return None
     # An arm chosen by static evidence runs only on the words it was chosen for
     built = compiled(scenario, source,
-                     scenario.words_of.get(arm_name, arm_name) if arm.select else None)
+                     scenario.words_of.get(arm_name, arm_name)
+                     if arm.select or scenario.per_arm else None)
     if built is None:
         return None
     f, index, length, words = built
@@ -530,6 +565,11 @@ def check(cx, arm_name, scenario, source, inputs):
                 homes[slot] = operand
         else:
             slots[site.operands[operand]] = value
+    # A destination span's homes are compared too
+    for param in PROGRAM.families[arm.family].params:
+        if rop_check.is_span_of(param.type, rop_check.DST):
+            for slot in site.operands[param.name]:
+                homes.setdefault(slot, param.name)
     for slot, operand in homes.items():
         if slot not in slots and operand in ("dst", "callable"):
             slots[slot] = Old()
@@ -610,6 +650,19 @@ def cx():
     return ir_leaf_eval.Context(ir_leaf_eval.Layout.from_c(capi), ir_leaf_eval.RealMemory())
 
 
+# The arms no scenario runs, and why.  Each expands.
+NOT_RUN = {
+    "InitResult.Check": "its word exists only in the init shim",
+    "Return.External": "chosen only for the evaluator's entry frame",
+    "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
+                        "synthetic caller cannot hold",
+    # select(jit_on) and select(jit_off): the word is the one the JIT's
+    # state chose when the function was lowered
+    "Jump.Poll" if sys._jit.is_enabled() else "Jump.Warm": "the JIT's state selects the "
+                                                           "other loop jump",
+}
+
+
 def evaluated_arms():
     return [n for n in SSA if PROGRAM.arms[n].family in SCENARIOS]
 
@@ -637,6 +690,8 @@ class AgainstCTests(unittest.TestCase):
     def test_arms(self):
         for name in evaluated_arms():
             self.run_arm(name)
+        ran = {n for n, seen in self.exits.items() if seen}
+        self.assertEqual(set(SSA) - ran, set(NOT_RUN))
 
 
 if __name__ == "__main__":

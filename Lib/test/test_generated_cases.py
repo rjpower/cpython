@@ -3827,93 +3827,6 @@ class TestIRCases(unittest.TestCase):
                          (analysis.free_ids[0], 256))
         self.assertEqual(ir_generator.num_old_handlers(analysis), 257)
 
-    def test_binary_op_handlers(self):
-        # BINARY_OP has one generic handler per operation, with the operation
-        # as a constant, after the other IR-only handlers.  Its
-        # specialisations deoptimise to the handler of the operation that
-        # their entry records.
-        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
-            MACRO(SPAM_BINARY, ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), \\
-                  EFFECTS(runs_python, raises), EXITS()) \\
-            MACRO(HAM_VALUE, ARGS(borrowed, borrowed), VALUE(owned), EFFECTS(), EXITS())
-        """)
-        input = """
-        family(BINARY_OP, 1) = { BINARY_OP_ADD_INT };
-        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs))
-            effects(writes) exits(next)
-            feedback(read(entry), write(entry))
-        {
-            _PyFbHeader *feedback = FB_COUNTER();
-            _PyFb_AdvanceCounter(feedback);
-        }
-        op(_BINARY_OP, (lhs: consumed, rhs: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            res = SPAM_BINARY(lhs, rhs, oparg);
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(res));
-        }
-        macro(BINARY_OP) = _SPECIALIZE_BINARY_OP + _BINARY_OP;
-        op(_GUARD_INT, (left, right -- left, right))
-            effects() exits(next, deopt)
-        {
-            DEOPT_IF(!EGGS(left, right), "eggs");
-        }
-        op(_ADD_INT, (left: consumed, right: consumed -- res: owned))
-            effects(releases) exits(next)
-        {
-            res = HAM_VALUE(left, right);
-            DECREF_INPUTS();
-        }
-        macro(BINARY_OP_ADD_INT) = unused/1 + _GUARD_INT + _ADD_INT;
-        ir_only inst(IR_BACON, ( -- ))
-            effects() exits(next)
-        {
-            SPAM_FLAG();
-        }
-    """
-        analysis = self.analyze(input)
-        handlers = ir_generator.binary_op_handlers(analysis)
-        self.assertEqual(handlers[0], "BINARY_OP_ADD")
-        ids = ir_generator.handler_ids(analysis)
-        self.assertNotIn("BINARY_OP", ids)
-        self.assertEqual([ids["IR_BACON"], *(ids[name] for name in handlers)],
-                         analysis.free_ids[:1 + len(handlers)])
-        formats = ir_generator.compute_formats(analysis)
-        self.assertIs(formats["BINARY_OP_ADD"], formats["BINARY_OP"])
-        self.assertEqual(
-            ir_metadata_generator.shadow_of("BINARY_OP_ADD", analysis),
-            "BINARY_OP")
-
-        out = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-        code = out.getvalue()
-        self.assertNotIn("TARGET(BINARY_OP)", code)
-        # The generic handlers set their operation and enter one body
-        generic = code[code.index("TARGET(BINARY_OP_SUBTRACT)"):]
-        generic = generic[:generic.index("}")]
-        self.assertIn("binary_op_operation = NB_SUBTRACT;", generic)
-        self.assertIn("goto LABEL_binary_op;", generic)
-        self.assertEqual(code.count("LABEL(binary_op)"), 1)
-        shared = code[code.index("LABEL(binary_op)"):]
-        shared = shared[:shared.index("DISPATCH();")]
-        self.assertIn("int oparg = binary_op_operation;", shared)
-        self.assertIn("INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + binary_op_operation);",
-                      shared)
-        handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
-        handler = handler[:handler.index("DISPATCH();")]
-        self.assertIn("IR_DEOPT_BINARY_OP(IR_D(ir_word));", handler)
-        self.assertNotIn("JUMP_TO_PREDICTED", handler)
-
-        out = io.StringIO()
-        ir_metadata_generator.generate_ir_metadata(
-            [self.temp_input_filename], analysis, out)
-        lines = [line.strip() for line in out.getvalue().splitlines()]
-        self.assertIn("#define _PyIR_OBSERVER_ENTRY_ABSENCE 0", lines)
-        self.assertIn("#define _PyIR_BINARY_OP_FIRST" + " " * 26
-                      + "BINARY_OP_ADD", lines)
-        self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
-                      'NB_ADD, "BINARY_OP_ADD");', lines)
 
 def generated_address_sites(text):
     "The sites in each generated handler or label that take a local's address"
@@ -4011,7 +3924,7 @@ class TestCallMarkers(unittest.TestCase):
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
         # A floor, not a count: ported families delete old handlers
-        self.assertGreater(len(handlers), 150)
+        self.assertGreater(len(handlers), 100)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))
@@ -4090,7 +4003,7 @@ class TestCallMarkers(unittest.TestCase):
         # generator emits.  No handler keeps a value record or a box area.
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
-        self.assertGreater(len(sites), 150)
+        self.assertGreater(len(sites), 100)
         for name, found in sites.items():
             self.assertEqual(found, [], name)
 

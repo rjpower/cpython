@@ -1220,6 +1220,7 @@ class PilotTests(unittest.TestCase):
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
+        binary_raise = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5)
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
         branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
@@ -1268,6 +1269,10 @@ class PilotTests(unittest.TestCase):
               f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
               "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "
               "spent, but mapping is intact",
+              f"{binary_raise}: Binary.Generic: points: raise at Binary.OpFailed: "
+              "Binary.OpFailed lists x in spent, but x is intact",
+              f"{binary_raise}: Binary.Generic: points: raise at Binary.OpFailed: "
+              "Binary.OpFailed lists y in spent, but y is intact",
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "

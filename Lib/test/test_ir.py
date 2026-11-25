@@ -83,13 +83,15 @@ class C:
 class AssemblerTest(unittest.TestCase):
 
     def check_offsets(self, func):
-        # An instruction per word, at the word's index, and line ranges
+        # An instruction per head word, at the word's index, and line ranges
         # that cover the words
         ir = IRCode(func.__code__)
         nwords = len(ir.co_code) // 8
         self.assertEqual(len(get_ir(func.__code__)), nwords)
+        # The operand word of a two-word instruction has no instruction
         self.assertEqual([instr.offset for instr in dis.get_instructions(func)],
-                         list(range(nwords)))
+                         [i for i, word in enumerate(get_ir(func.__code__))
+                          if word[0] != "OPERAND"])
         ranges = [(start, end) for start, end, _ in ir.co_lines()]
         self.assertEqual(ranges[0][0], 0)
         self.assertEqual(ranges[-1][1], nwords)
@@ -718,9 +720,8 @@ class AssemblerTest(unittest.TestCase):
         if SPECIALIZES:
             self.assertNotEqual(ir[owned[0].offset], "GetAttr.Generic")
         # The binary operations, last in source order, have no entry left
-        # and keep the handlers of their operations
-        for name in ("BINARY_OP_SUBTRACT", "BINARY_OP_FLOOR_DIVIDE"):
-            self.assertIn(name, ir)
+        # and stay on the generic arm
+        self.assertIn("Binary.Generic", ir)
         # Other operands take the generic paths, and many runs more change
         # nothing about the shared sites
         self.assertEqual(f(O(), 2.0), (-2, 3.0, True, True))
@@ -765,45 +766,17 @@ class AssemblerTest(unittest.TestCase):
         self.assertTrue(get_ir(f.__code__))
 
     def test_binary_op_handlers(self):
-        # BINARY_OP runs the handler of its operation
+        # Every operation but addition and subscript is a Binary word, which
+        # holds its operation in the operand word
         def f(a, b):
             a -= b
             return a - b, a * b
         ir = [word[0] for word in get_ir(f.__code__)]
-        self.assertEqual(ir.count("BINARY_OP_SUBTRACT"), 1)
-        self.assertIn("BINARY_OP_INPLACE_SUBTRACT", ir)
-        self.assertIn("BINARY_OP_MULTIPLY", ir)
+        self.assertEqual(ir.count("Binary.Generic"), 3)
         self.assertEqual(f(7, 2), (3, 10))
         self.assertEqual(f(7.0, 2), (3.0, 10.0))
         ops = [instr.opname for instr in dis.get_instructions(f)]
-        self.assertNotIn("BINARY_OP_SUBTRACT", ops)
         self.assertEqual(ops.count("BINARY_OP"), 3)
-
-    @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
-    def test_binary_op_deopt(self):
-        # A specialisation of BINARY_OP deoptimises to the handler of its own
-        # operation, which the specialiser installs when it gives up.
-        class Sub:
-            def __sub__(self, other):
-                return "sub"
-            def __rsub__(self, other):
-                return "rsub"
-            def __add__(self, other):
-                return "add"
-
-        def f(a, b):
-            return a - b
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
-            self.assertEqual(f(3, 1), 2)
-        self.assertIn("BINARY_OP_SUBTRACT_INT", handlers(f))
-        self.assertEqual(f(Sub(), 1), "sub")
-        self.assertEqual(f(1, Sub()), "rsub")
-        # Each deoptimisation advances the counter of the specialisation
-        for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN + 1):
-            self.assertEqual(f(Sub(), 1), "sub")
-        self.assertIn("BINARY_OP_SUBTRACT", handlers(f))
-        self.assertNotIn("BINARY_OP_SUBTRACT_INT", handlers(f))
-        self.assertEqual(f(3, 1), 2)
 
 
 def call_and_return(function):
@@ -2761,7 +2734,7 @@ class RegCfgTest(unittest.TestCase):
             return x + one()
         for f in mul, add:
             self.assertIn("LocalRead.Bound", self.names(f))
-            op = [w for w in words(f) if w[0].startswith(("BINARY_OP", "Add."))][0]
+            op = [w for w in words(f) if w[0].startswith(("Binary.", "Add."))][0]
             self.assertNotEqual(op[2][0], 0)
         self.run_specialized(lambda: self.assertEqual(mul(2), 6))
         self.run_specialized(lambda: self.assertEqual(add(2), 3))
@@ -3018,10 +2991,14 @@ class RegCfgTest(unittest.TestCase):
         t = nlocalsplus(f)
         ir = IRCode(f.__code__)
         self.assertEqual(ir.nslots - ir.nfixed, 2)
-        self.assertEqual(words(f), [
+        got = words(f)
+        # Binary's operation is in its operand word, which its sources list
+        # carries after the two values
+        got[2] = (got[2][0], got[2][1], got[2][2][:2])
+        self.assertEqual(got, [
             ("Add.Generic", t, (0, 1)),
             ("Add.Generic", t + 1, (2, 3)),
-            ("BINARY_OP_MULTIPLY", t, (t, t + 1)),
+            ("Binary.Generic", t, (t, t + 1)),
             ("Return.Empty", None, (t,)),
         ])
         self.run_specialized(lambda: self.assertEqual(f(1, 2, 3, 4), 21))

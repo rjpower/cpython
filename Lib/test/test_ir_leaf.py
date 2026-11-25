@@ -555,7 +555,7 @@ class RecordTests(unittest.TestCase):
 
     def test_annotated_uops_have_leaf_ir(self):
         annotated = {name for name, uop in self.uops.items() if "leaf" in uop.annotations}
-        self.assertGreater(len(annotated), 30)
+        self.assertGreater(len(annotated), 25)
         for uop in self.record_uops():
             if uop.name in annotated:
                 self.assertIsNotNone(uop.leaf, uop.name)

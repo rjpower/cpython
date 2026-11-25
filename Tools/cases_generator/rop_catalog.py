@@ -332,6 +332,16 @@ class Select(enum.Enum):
     binary = "binary"                      # Intrinsic: type parameters, exception groups, isinstance
     compare = "compare"                    # Intrinsic: a comparison or containment at a site with no entry
     attr = "attr"                          # Intrinsic: an attribute by a name the instruction cannot hold
+    named = "named"                        # NamespaceRead: a name in the locals, globals and builtins
+    locals_scope = "locals_scope"          # NamespaceRead: the locals themselves
+    build_class_scope = "build_class_scope"  # NamespaceRead: the builtins' __build_class__
+    name_scope = "name_scope"              # NamespaceWrite: the locals
+    global_scope = "global_scope"          # NamespaceWrite: the globals
+    eager_import = "eager_import"          # Import: forced eager
+    policy_import = "policy_import"        # Import: lazy when the policy says so
+    lazy_import = "lazy_import"            # Import: `lazy import`
+    module_kept = "module_kept"            # ImportFrom: the module stays for the next read
+    module_spent = "module_spent"          # ImportFrom: the last read spends the module
     present = "present"                    # the family's optional operands hold values
     absent = "absent"                      # its optional operands are vacant
 
@@ -347,6 +357,10 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "jit": (Select.jit_off, Select.jit_on),
     "intrinsic1": (Select.unary, Select.import_star, Select.stopiteration),
     "intrinsic2": (Select.binary, Select.compare, Select.attr),
+    "name_read": (Select.named, Select.locals_scope, Select.build_class_scope),
+    "namespace": (Select.name_scope, Select.global_scope),
+    "import_kind": (Select.eager_import, Select.policy_import, Select.lazy_import),
+    "module_use": (Select.module_kept, Select.module_spent),
     "operand": (Select.present, Select.absent),
 }
 
@@ -695,6 +709,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("bool_out", CReturn.bool,
           COutcome(CTest.false, _RES, (CSource.out,), False, "fits"),
           COutcome(CTest.true, _RES, (CSource.out,), False, "overflow")),
+    # _PyStatusValue of an optional lookup: found(value) for a positive
+    # status, missing() for zero, raised for a negative one
+    _conv("status_optional", CReturn.status_value,
+          COutcome(CTest.positive, _RES, (_VAL,), False),
+          COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,
           COutcome(CTest.zero, _RES, (_VAL,), False),

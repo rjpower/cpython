@@ -1315,14 +1315,15 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
             fields[fmt->imm - _PyIR_LOC_A] = (uint32_t)oparg;
         }
     }
-    else if (fmt->imm == _PyIR_LOC_CD || fmt->imm == _PyIR_LOC_BC) {
+    else if (fmt->imm == _PyIR_LOC_CD || fmt->imm == _PyIR_LOC_BC ||
+             fmt->imm == _PyIR_LOC_AB) {
         if (oparg < 0 || oparg > IR_CD_MAX) {
             if (reachable) {
                 return too_large("oparg", oparg);
             }
             oparg = 0;
         }
-        int low = fmt->imm == _PyIR_LOC_CD ? 2 : 1;
+        int low = fmt->imm == _PyIR_LOC_CD ? 2 : fmt->imm == _PyIR_LOC_BC ? 1 : 0;
         fields[low] = oparg & IR_FIELD_MAX;
         fields[low + 1] = oparg >> 12;
     }

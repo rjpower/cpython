@@ -1202,6 +1202,7 @@ class PilotTests(unittest.TestCase):
         raise_getset = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
         raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5, nth=1)
         raise_method = at("getattr.rop", "exit raise(GetMethod.Failed, saved);", 5)
+        mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
         branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
@@ -1246,6 +1247,9 @@ class PilotTests(unittest.TestCase):
               "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_method}: GetMethod.Generic: points: raise at GetMethod.Failed: "
               "GetMethod.Failed lists obj in spent, but obj is intact",
+              f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
+              "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "
+              "spent, but mapping is intact",
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "

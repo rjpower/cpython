@@ -2004,29 +2004,25 @@ dummy_func(
             value = PyValue_DUP(constant);
         }
 
-        outlined inst(LOAD_BUILD_CLASS, ( -- bc: owned))
-            effects(runs_python) exits(next, raise)
+        /* The namespace and import stack ops only: their rules in
+         * Python/regcfg.c lower them to NamespaceRead, NamespaceReadFrom,
+         * NamespaceWrite, NamespaceDelete, SetupAnnotations, Import and
+         * ImportFrom (Python/register_ops/namespaces.rop).  A store of NULL
+         * is the compiler's `del name`. */
+        tier1 inst(LOAD_BUILD_CLASS, ( -- bc: owned))
+            exits(abort)
         {
-            _PyStatusValue found = _PyValue_GetOptionalItem(
-                PyValue_FromObjectBorrow(BUILTINS()),
-                PyValue_FromObjectBorrow(&_Py_ID(__build_class__)));
-            ERROR_IF(found.status < 0);
-            if (found.status == 0) {
-                _PyErr_SetString(tstate, PyExc_NameError,
-                                 "__build_class__ not found");
-                ERROR_IF(true);
-            }
-            bc = found.value;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(STORE_NAME, (v: consumed -- ))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(STORE_NAME, (v: consumed -- ))
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *ns = LOCALS();
-            int error = _PyEval_StoreName(tstate, v, name, ns);
-            PyValue_XCLOSE(v);
-            ERROR_IF(error);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         family(UNPACK_SEQUENCE, INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE) = {
@@ -2157,68 +2153,41 @@ dummy_func(
 
         macro(STORE_ATTR) = unused/1 + _SPECIALIZE_STORE_ATTR + unused/3 + _STORE_ATTR;
 
-        outlined inst(STORE_GLOBAL, (v: consumed nullable --))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(STORE_GLOBAL, (v: consumed nullable --))
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            int err;
-            if (PyValue_IsNull(v)) {
-                err = PyDict_PopValue(GLOBALS(), PyValue_FromObjectBorrow(name), NULL);
-                if (err == 0) {
-                    err = -1;
-                    _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,
-                                            NAME_ERROR_MSG, name);
-                }
-            }
-            else {
-                err = PyDict_SetValue(GLOBALS(), PyValue_FromObjectBorrow(name), v);
-            }
-            PyValue_XCLOSE(v);
-            ERROR_IF(err < 0);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(LOAD_LOCALS, ( -- locals: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(LOAD_LOCALS, ( -- locals: owned))
+            exits(abort)
         {
-            PyObject *l = LOCALS();
-            if (l == NULL) {
-                _PyErr_SetString(tstate, PyExc_SystemError,
-                                 "no locals found");
-                ERROR_IF(true);
-            }
-            locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // The operand is the class namespace that the compiler loads from the
         // __classdict__ cell: type.__build_class__ checked it as a mapping
-        outlined inst(LOAD_FROM_DICT_OR_GLOBALS,
+        tier1 inst(LOAD_FROM_DICT_OR_GLOBALS,
                 (mod_or_class_dict: consumed assumed(object) by compiler -- v: owned))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            // Also declared above; the generator's object analysis reads the assert
-            assert(PyValue_IsObject(mod_or_class_dict));
-            PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
-            // Taken before the lookup, which can run code
-            PyValue held_namespace = TAKE(mod_or_class_dict);
-            _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
-            PyValue_CLOSE(held_namespace);
-            ERROR_IF(found.status < 0);
-            if (found.status == 0) {
-                v = value_load_global(GLOBALS(), BUILTINS(), name);
-                ERROR_IF(PyValue_IsNull(v));
-            }
-            else {
-                v = found.value;
-            }
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(LOAD_NAME, (-- v: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(LOAD_NAME, (-- v: owned))
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            v = _PyEval_LoadName(tstate, frame, name);
-            ERROR_IF(PyValue_IsNull(v));
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         family(LOAD_GLOBAL, INLINE_CACHE_ENTRIES_LOAD_GLOBAL) = {
@@ -2570,33 +2539,11 @@ dummy_func(
             map = PyValue_FromObjectSteal(map_o);
         }
 
-        outlined inst(SETUP_ANNOTATIONS, (--))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(SETUP_ANNOTATIONS, (--))
+            exits(abort)
         {
-            if (LOCALS() == NULL) {
-                _PyErr_Format(tstate, PyExc_SystemError,
-                              "no locals found when setting up annotations");
-                ERROR_IF(true);
-            }
-            /* check if __annotations__ in locals()... */
-            _PyStatusValue found = _PyValue_GetOptionalItem(
-                PyValue_FromObjectBorrow(LOCALS()),
-                PyValue_FromObjectBorrow(&_Py_ID(__annotations__)));
-            ERROR_IF(found.status < 0);
-            int err;
-            if (found.status == 0) {
-                PyObject *ann_dict;
-                ann_dict = PyDict_New();
-                ERROR_IF(ann_dict == NULL);
-                err = _PyValue_SetItem(PyValue_FromObjectBorrow(LOCALS()),
-                                       PyValue_FromObjectBorrow(&_Py_ID(__annotations__)),
-                                       PyValue_FromObjectBorrow(ann_dict));
-                Py_DECREF(ann_dict);
-                ERROR_IF(err);
-            }
-            else {
-                PyValue_CLOSE(found.value);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         pseudo(ANNOTATIONS_PLACEHOLDER, (--)) = {
@@ -3515,53 +3462,23 @@ dummy_func(
         }
 
         // The compiler loads fromlist from a constant: None or a tuple of str
-        outlined inst(IMPORT_NAME,
+        tier1 inst(IMPORT_NAME,
                 (level: consumed, fromlist: consumed assumed(object) by compiler -- res: owned))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyObject *res_o;
-            // The level is an inline int: read it without a box
-            int ilevel = value_import_level(level);
-            if (ilevel == -1 && _PyErr_Occurred(tstate)) {
-                DECREF_INPUTS();
-                ERROR_IF(true);
-            }
-            if (!(oparg & 0x02)) {
-                res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
-                                LOCALS(), name,
-                                PyValue_AsKnownObjectBorrow(fromlist),
-                                ilevel, oparg & 0x01);
-
-            }
-            else {
-                res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
-                                LOCALS(), name,
-                                PyValue_AsKnownObjectBorrow(fromlist),
-                                ilevel);
-            }
-            DECREF_INPUTS();
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObjectSteal(res_o);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(IMPORT_FROM, (from -- from, res: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(IMPORT_FROM, (from -- from, res: owned))
+            exits(abort)
         {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            // The module may be a number, if __import__ returned one
-            PyObject *from_o = PyValue_ObjectOrNull(from);
-            if (from_o != NULL && PyLazyImport_CheckExact(from_o))
-            {
-                PyObject *res_o = _PyEval_LazyImportFrom(
-                    tstate, frame, from_o, name);
-                ERROR_IF(res_o == NULL);
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else {
-                res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
-                ERROR_IF(PyValue_IsNull(res));
-            }
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* Stack ops only: rule_jump, rule_branch and rule_truth

@@ -201,7 +201,12 @@ _PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
         fmt->operands == _PyIR_OPERANDS_SPANS) {
         return 0;
     }
-    return fmt->dst == _PyIR_NO_DST ? op->nout : op->npop + fmt->dst;
+    if (fmt->dst == _PyIR_NO_DST) {
+        return op->nout;
+    }
+    // An op that reads an input without popping it (ImportFrom.From) puts
+    // its output above the input: nothing passes through
+    return Py_MAX(op->npop + fmt->dst, 0);
 }
 
 /* Whether op reads its input k through a field that may name a local: the

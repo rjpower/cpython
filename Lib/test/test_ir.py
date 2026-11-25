@@ -2892,9 +2892,10 @@ class RegCfgTest(unittest.TestCase):
                          [1, 2, 3])
 
     def test_pop_top_retires_each_value_once(self):
-        # A popped value that its producer cannot discard is closed by a
-        # Move.Retire, never by a POP_TOP word: here the intermediate
-        # objects of a dotted import, each finalized exactly once
+        # A popped value is closed by its producer or a Move.Retire, never
+        # by a POP_TOP word: here the intermediate objects of a dotted
+        # import, each closed by the ImportFrom.FromLast that reads it last
+        # and finalized exactly once
         deaths = []
 
         class Part:
@@ -2908,7 +2909,8 @@ class RegCfgTest(unittest.TestCase):
         ns = {"__builtins__": {"__import__": lambda *args: Part(0)}}
         exec("def f():\n import m.m.m.m as x\n return x.depth", ns)
         f = ns["f"]
-        self.assertIn("Move.Retire", self.names(f))
+        self.assertIn("ImportFrom.FromLast", self.names(f))
+        self.assertNotIn("POP_TOP", self.names(f))
         for _ in range(3):
             deaths.clear()
             self.assertEqual(f(), 3)

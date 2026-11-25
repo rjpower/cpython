@@ -5,8 +5,6 @@ enum BuildKind(TUPLE, LIST, SET, MAP);
 enum ElementKind(ListAppend, SetAdd, MapPut);
 enum UpdateKind(ListExtend, SetUpdate, DictUpdate);
 enum CellMode(MAKE, GET, MAPPING_GET, CELL_SET, CELL_DELETE, COPY_FREE);
-enum NamespaceScope(LOCALS, NAME, MAPPING, BUILD_CLASS, GLOBAL);
-enum ImportMode(Name, From, LazyName, LazyFrom);
 enum TextKind(JOIN, INTERPOLATION, TEMPLATE);
 enum ConvertKind(STR, REPR, ASCII);
 enum PatternKind(Mapping, Sequence, Keys, Class);
@@ -54,23 +52,8 @@ family Cell(mode:Enum<CellMode>, cell:Cell, value:Maybe<Src>, dst:Maybe<Dst>,
             frees:Span<Free>)
   exits(next, raise) ops(MAKE_CELL, LOAD_DEREF, STORE_DEREF, DELETE_DEREF, COPY_FREE_VARS, LOAD_FROM_DICT_OR_DEREF);
 
-family NamespaceRead(dst:Dst, scope:Enum<NamespaceScope>, name:Maybe<Name>,
-                     mapping:Maybe<Src>)
-  exits(next, raise) ops(LOAD_NAME, LOAD_LOCALS, LOAD_BUILD_CLASS, LOAD_FROM_DICT_OR_GLOBALS);
-
-family NamespaceWrite(scope:Enum<NamespaceScope>, name:Name, value:Maybe<Src>,
-                      mode:Enum<WriteMode>)
-  exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
-
 family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
   exits(next, raise, miss, again) ops(LOAD_GLOBAL);
-
-family SetupAnnotations()
-  exits(next, raise) ops(SETUP_ANNOTATIONS);
-
-family Import(dst:Dst, mode:Enum<ImportMode>, name:Name, level:Maybe<Src>,
-              fromlist:Maybe<Src>, module:Maybe<Src>, flags:U8)
-  exits(next, raise) ops(IMPORT_NAME, IMPORT_FROM);
 
 // 1G: text
 

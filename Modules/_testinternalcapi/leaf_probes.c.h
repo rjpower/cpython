@@ -486,24 +486,6 @@ leaf_probe__CHECK_FUNCTION_VERSION_KW(_PyInterpreterFrame *frame, PyValue *stack
 }
 
 static int
-leaf_probe__CHECK_PERIODIC(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
-    QSBR_QUIESCENT_STATE(tstate);
-    if (_Py_EvalBreakerHasEvents(tstate)) {
-        int err = _Py_HandlePending(tstate);
-        if (err != 0) {
-            return LEAF_PROBE_RAISE;
-        }
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__COMPARE_OP_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -705,25 +687,6 @@ leaf_probe__GUARD_GLOBALS_VERSION(_PyInterpreterFrame *frame, PyValue *stack_poi
 }
 
 static int
-leaf_probe__GUARD_NONE_OR_TYPE_VERSION(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t type_version = (uint32_t)caches[0];
-    PyValue value;
-    value = stack_pointer[-1];
-    if (!PyValue_IsNone(value)) {
-        PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(value));
-        if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-            return LEAF_PROBE_EXIT;
-        }
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__GUARD_NOS_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -810,37 +773,6 @@ leaf_probe__GUARD_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int 
     PyValue owner;
     owner = stack_pointer[-1];
     if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_TOS_BOOL(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    value = stack_pointer[-1];
-    if (!PyValue_BoolCheck(value)) {
-        return LEAF_PROBE_EXIT;
-    }
-    STAT_INC(TO_BOOL, hit);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_TOS_EXACT_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    value = stack_pointer[-1];
-    if (!PyValue_LongCheckExact(value)) {
         return LEAF_PROBE_EXIT;
     }
     result->stack_pointer = stack_pointer;
@@ -1002,29 +934,6 @@ leaf_probe__IR_JUMP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int opar
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     result->branch = 1;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__IS_NONE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, b;
-    value = stack_pointer[-1];
-    if (PyValue_IsNone(value)) {
-        b = PyValue_True;
-    }
-    else {
-        b = PyValue_False;
-        PyValue tmp = value;
-        value = b;
-        stack_pointer[-1] = value;
-        PyValue_CLOSE(tmp);
-    }
-    stack_pointer[-1] = b;
     result->stack_pointer = stack_pointer;
     return LEAF_PROBE_NEXT;
 }
@@ -1251,28 +1160,6 @@ leaf_probe__ITER_NEXT_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
     stack_pointer[0] = next;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__JUMP_BACKWARD_NO_INTERRUPT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    result->branch = 1;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__JUMP_FORWARD(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    result->branch = 1;
     result->stack_pointer = stack_pointer;
     return LEAF_PROBE_NEXT;
 }
@@ -1554,74 +1441,6 @@ leaf_probe__POP_ITER(_PyInterpreterFrame *frame, PyValue *stack_pointer, int opa
 }
 
 static int
-leaf_probe__POP_JUMP_IF_FALSE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue cond;
-    cond = stack_pointer[-1];
-    int flag = PyValue_IsFalse(cond);result->edge = 1 + !!(flag);
-    if (flag) {result->branch = 1;
-    }
-    stack_pointer += -1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__POP_JUMP_IF_FALSE_NONE_OR_PLAIN(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, v;
-    value = stack_pointer[-1];
-    int flag = PyValue_IsNone(value);result->edge = 1 + !!(flag);
-    v = value;
-    if (flag) {result->branch = 1;
-    }
-    stack_pointer[-1] = v;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__POP_JUMP_IF_TRUE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue cond;
-    cond = stack_pointer[-1];
-    int flag = PyValue_IsTrue(cond);result->edge = 1 + !!(flag);
-    if (flag) {result->branch = 1;
-    }
-    stack_pointer += -1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__POP_JUMP_IF_TRUE_NONE_OR_PLAIN(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, v;
-    value = stack_pointer[-1];
-    int flag = !PyValue_IsNone(value);result->edge = 1 + !!(flag);
-    v = value;
-    if (flag) {result->branch = 1;
-    }
-    stack_pointer[-1] = v;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__POP_TOP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1873,88 +1692,6 @@ leaf_probe__SWAP_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int op
     return LEAF_PROBE_NEXT;
 }
 
-static int
-leaf_probe__TO_BOOL_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, res, v;
-    value = stack_pointer[-1];
-    STAT_INC(TO_BOOL, hit);
-    bool zero;
-    if (PyValue_IsInlineInt(value)) {
-        zero = PyValue_InlineInt64(value) == 0;
-    }
-    else {
-        zero = _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
-    }
-    res = zero ? PyValue_False : PyValue_True;
-    v = value;
-    stack_pointer[-1] = res;
-    stack_pointer[0] = v;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__TO_BOOL_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, res, v;
-    value = stack_pointer[-1];
-    PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
-    STAT_INC(TO_BOOL, hit);
-    res = PyList_GET_SIZE(value_o) ? PyValue_True : PyValue_False;
-    v = value;
-    stack_pointer[-1] = res;
-    stack_pointer[0] = v;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__TO_BOOL_NONE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, res;
-    value = stack_pointer[-1];
-    if (!PyValue_IsNone(value)) {
-        return LEAF_PROBE_EXIT;
-    }
-    STAT_INC(TO_BOOL, hit);
-    res = PyValue_False;
-    stack_pointer[-1] = res;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__TRUTH_NONE_OR_PLAIN(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, res, v;
-    value = stack_pointer[-1];
-    res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
-    v = value;
-    stack_pointer[-1] = res;
-    stack_pointer[0] = v;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
 static const struct leaf_probe LEAF_PROBES[] = {
     {"_BINARY_OP_ADD_FLOAT", leaf_probe__BINARY_OP_ADD_FLOAT, 2},
     {"_BINARY_OP_ADD_INT", leaf_probe__BINARY_OP_ADD_INT, 2},
@@ -1973,7 +1710,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_BINARY_OP_XOR_INT", leaf_probe__BINARY_OP_XOR_INT, 2},
     {"_CHECK_FUNCTION_VERSION", leaf_probe__CHECK_FUNCTION_VERSION, 2},
     {"_CHECK_FUNCTION_VERSION_KW", leaf_probe__CHECK_FUNCTION_VERSION_KW, 3},
-    {"_CHECK_PERIODIC", leaf_probe__CHECK_PERIODIC, 0},
     {"_COMPARE_OP_FLOAT", leaf_probe__COMPARE_OP_FLOAT, 2},
     {"_COMPARE_OP_INT", leaf_probe__COMPARE_OP_INT, 2},
     {"_COPY", leaf_probe__COPY, 1},
@@ -1986,15 +1722,12 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_GUARD_ELEMENT_LIST", leaf_probe__GUARD_ELEMENT_LIST, 2},
     {"_GUARD_ELEMENT_TUPLE", leaf_probe__GUARD_ELEMENT_TUPLE, 2},
     {"_GUARD_GLOBALS_VERSION", leaf_probe__GUARD_GLOBALS_VERSION, 0},
-    {"_GUARD_NONE_OR_TYPE_VERSION", leaf_probe__GUARD_NONE_OR_TYPE_VERSION, 1},
     {"_GUARD_NOS_FLOAT", leaf_probe__GUARD_NOS_FLOAT, 2},
     {"_GUARD_NOS_INT", leaf_probe__GUARD_NOS_INT, 2},
     {"_GUARD_NOS_LIST", leaf_probe__GUARD_NOS_LIST, 2},
     {"_GUARD_NOS_NOT_NULL", leaf_probe__GUARD_NOS_NOT_NULL, 2},
     {"_GUARD_NOS_UNICODE", leaf_probe__GUARD_NOS_UNICODE, 2},
     {"_GUARD_SHAPE", leaf_probe__GUARD_SHAPE, 1},
-    {"_GUARD_TOS_BOOL", leaf_probe__GUARD_TOS_BOOL, 1},
-    {"_GUARD_TOS_EXACT_INT", leaf_probe__GUARD_TOS_EXACT_INT, 1},
     {"_GUARD_TOS_FLOAT", leaf_probe__GUARD_TOS_FLOAT, 1},
     {"_GUARD_TOS_INT", leaf_probe__GUARD_TOS_INT, 1},
     {"_GUARD_TOS_IS_NONE", leaf_probe__GUARD_TOS_IS_NONE, 1},
@@ -2005,7 +1738,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_GUARD_TYPE_VERSION", leaf_probe__GUARD_TYPE_VERSION, 1},
     {"_GUARD_TYPE_VERSION_LOCKED", leaf_probe__GUARD_TYPE_VERSION_LOCKED, 1},
     {"_IR_JUMP", leaf_probe__IR_JUMP, 0},
-    {"_IS_NONE", leaf_probe__IS_NONE, 1},
     {"_IS_OP", leaf_probe__IS_OP, 2},
     {"_ITER_CHECK_LIST", leaf_probe__ITER_CHECK_LIST, 2},
     {"_ITER_CHECK_RANGE", leaf_probe__ITER_CHECK_RANGE, 2},
@@ -2016,8 +1748,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_ITER_NEXT_LIST", leaf_probe__ITER_NEXT_LIST, 2},
     {"_ITER_NEXT_RANGE", leaf_probe__ITER_NEXT_RANGE, 2},
     {"_ITER_NEXT_TUPLE", leaf_probe__ITER_NEXT_TUPLE, 2},
-    {"_JUMP_BACKWARD_NO_INTERRUPT", leaf_probe__JUMP_BACKWARD_NO_INTERRUPT, 0},
-    {"_JUMP_FORWARD", leaf_probe__JUMP_FORWARD, 0},
     {"_JUMP_IF_COND", leaf_probe__JUMP_IF_COND, 1},
     {"_LOAD_CONST", leaf_probe__LOAD_CONST, 0},
     {"_LOAD_CONST_INLINE_FLOAT", leaf_probe__LOAD_CONST_INLINE_FLOAT, 0},
@@ -2034,10 +1764,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_NOP", leaf_probe__NOP, 0},
     {"_NULL_SLOT_CONDITIONAL", leaf_probe__NULL_SLOT_CONDITIONAL, 0},
     {"_POP_ITER", leaf_probe__POP_ITER, 2},
-    {"_POP_JUMP_IF_FALSE", leaf_probe__POP_JUMP_IF_FALSE, 1},
-    {"_POP_JUMP_IF_FALSE_NONE_OR_PLAIN", leaf_probe__POP_JUMP_IF_FALSE_NONE_OR_PLAIN, 1},
-    {"_POP_JUMP_IF_TRUE", leaf_probe__POP_JUMP_IF_TRUE, 1},
-    {"_POP_JUMP_IF_TRUE_NONE_OR_PLAIN", leaf_probe__POP_JUMP_IF_TRUE_NONE_OR_PLAIN, 1},
     {"_POP_TOP", leaf_probe__POP_TOP, 1},
     {"_POP_TOP_FLOAT", leaf_probe__POP_TOP_FLOAT, 1},
     {"_POP_TOP_INT", leaf_probe__POP_TOP_INT, 1},
@@ -2051,9 +1777,5 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_STORE_SUBSCR_LIST_INT", leaf_probe__STORE_SUBSCR_LIST_INT, 3},
     {"_SWAP", leaf_probe__SWAP, 2},
     {"_SWAP_FAST", leaf_probe__SWAP_FAST, 1},
-    {"_TO_BOOL_INT", leaf_probe__TO_BOOL_INT, 1},
-    {"_TO_BOOL_LIST", leaf_probe__TO_BOOL_LIST, 1},
-    {"_TO_BOOL_NONE", leaf_probe__TO_BOOL_NONE, 1},
-    {"_TRUTH_NONE_OR_PLAIN", leaf_probe__TRUTH_NONE_OR_PLAIN, 1},
 {NULL, NULL, 0},
 };

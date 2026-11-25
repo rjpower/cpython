@@ -37,10 +37,8 @@ extern "C" {
  * contract's fb_kind and fb_size (Include/internal/pycore_ir.h) and the
  * _PyFb_<family> typedefs come.  Entry 0 is a header of kind COUNTER.
  *
- * POP_JUMP_IF_FALSE and _TRUE test the truth of any value and specialise
- * as TO_BOOL does, so their entries are UNARY entries of kind BRANCH: the
- * counter drives specialisation, and no oparg is kept.  A conditional
- * jump records nothing else: no handler writes a taken history.
+ * The truth families (Truth, BranchTruth) have UNARY entries: the counter drives
+ * adaptation, and no oparg is kept.
  *
  * Fields carry the names of the cache effects in Python/bytecodes.c, which
  * is how the cases generator maps "type_version/2" to fb->type_version.
@@ -60,7 +58,6 @@ extern "C" {
 
 typedef enum {
     FB_COUNTER,
-    FB_BRANCH,
     FB_UNARY,
     FB_BINARY,
     FB_ATTR,

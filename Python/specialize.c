@@ -235,16 +235,9 @@ typedef enum {
 #define SPEC_FAIL_UNPACK_SEQUENCE_SEQUENCE 10
 
 // TO_BOOL
-#define SPEC_FAIL_TO_BOOL_BYTEARRAY    9
-#define SPEC_FAIL_TO_BOOL_BYTES       10
-#define SPEC_FAIL_TO_BOOL_DICT        11
-#define SPEC_FAIL_TO_BOOL_FLOAT       12
 #define SPEC_FAIL_TO_BOOL_MAPPING     13
-#define SPEC_FAIL_TO_BOOL_MEMORY_VIEW 14
 #define SPEC_FAIL_TO_BOOL_NUMBER      15
 #define SPEC_FAIL_TO_BOOL_SEQUENCE    16
-#define SPEC_FAIL_TO_BOOL_SET         17
-#define SPEC_FAIL_TO_BOOL_TUPLE       18
 
 // CONTAINS_OP
 #define SPEC_FAIL_CONTAINS_OP_STR        9
@@ -430,7 +423,6 @@ fb_row_of(_PyFbHeader *h, int opcode)
     fb_row row = {0};
     switch (h->kind) {
         case FB_UNARY:
-        case FB_BRANCH:     // POP_JUMP_IF_FALSE and _TRUE
             row.type_version = ((_PyFbUnary *)h)->type_version;
             break;
         case FB_BINARY:
@@ -526,7 +518,6 @@ fb_begin_ex(_PyInstr *instr, bool may_allocate)
     // Constant sizes, so that the compiler inlines the stores
     switch (h->kind) {
         case FB_UNARY:
-        case FB_BRANCH:     // POP_JUMP_IF_FALSE and _TRUE
             memset(h + 1, 0, sizeof(_PyFbUnary) - sizeof(_PyFbHeader));
             break;
         case FB_BINARY:
@@ -3933,35 +3924,6 @@ failure:
     unspecialize(instr);
 }
 
-#ifdef Py_STATS
-static int
-to_bool_fail_kind(PyObject *value)
-{
-    if (PyByteArray_CheckExact(value)) {
-        return SPEC_FAIL_TO_BOOL_BYTEARRAY;
-    }
-    if (PyBytes_CheckExact(value)) {
-        return SPEC_FAIL_TO_BOOL_BYTES;
-    }
-    if (PyDict_CheckExact(value)) {
-        return SPEC_FAIL_TO_BOOL_DICT;
-    }
-    if (PyFloat_CheckExact(value)) {
-        return SPEC_FAIL_TO_BOOL_FLOAT;
-    }
-    if (PyMemoryView_Check(value)) {
-        return SPEC_FAIL_TO_BOOL_MEMORY_VIEW;
-    }
-    if (PyAnySet_CheckExact(value)) {
-        return SPEC_FAIL_TO_BOOL_SET;
-    }
-    if (PyTuple_CheckExact(value)) {
-        return SPEC_FAIL_TO_BOOL_TUPLE;
-    }
-    return SPEC_FAIL_OTHER;
-}
-#endif  // Py_STATS
-
 static int
 check_type_always_true(PyTypeObject *ty)
 {
@@ -4019,110 +3981,6 @@ _PyRop_ValidateSlot(_PyFbUnary *fb, PyValueBorrow v)
     assert(version);
     fb->type_version = version;
     return true;
-}
-
-/* The specialisations of a truth test, in the order of truth_ops below */
-enum { TRUTH_BOOL, TRUTH_INT, TRUTH_LIST, TRUTH_NONE, TRUTH_STR,
-       TRUTH_ALWAYS_TRUE, TRUTH_SLOT, TRUTH_COUNT };
-
-/* TO_BOOL and the conditional jumps, which test the truth of a value the
- * same way, choose a specialisation from their own row of ops. */
-static void
-specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint16_t *ops)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[TO_BOOL] == INLINE_CACHE_ENTRIES_TO_BOOL);
-    fb_begin_unary(instr, PyValue_TYPE(value_o));
-    if (PyValue_IsInlineInt(value_o)) {
-        specialize(instr, ops[TRUTH_INT]);
-        return;
-    }
-    if (PyValue_IsInlineFloat(value_o)) {
-        SPECIALIZATION_FAIL(TO_BOOL, SPEC_FAIL_TO_BOOL_FLOAT);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *value = PyValue_AsKnownObjectBorrow(value_o);
-    int specialized_op;
-    if (PyBool_Check(value)) {
-        specialized_op = ops[TRUTH_BOOL];
-        goto success;
-    }
-    if (PyLong_CheckExact(value)) {
-        specialized_op = ops[TRUTH_INT];
-        goto success;
-    }
-    if (PyList_CheckExact(value)) {
-        specialized_op = ops[TRUTH_LIST];
-        goto success;
-    }
-    if (Py_IsNone(value)) {
-        specialized_op = ops[TRUTH_NONE];
-        goto success;
-    }
-    if (PyUnicode_CheckExact(value)) {
-        specialized_op = ops[TRUTH_STR];
-        goto success;
-    }
-    unsigned int version = 0;
-    if (PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_HEAPTYPE)) {
-        int err = _PyType_Validate(Py_TYPE(value), check_type_always_true, &version);
-        if (err == 0) {
-            assert(version);
-            ((_PyFbUnary *)instr_entry(instr))->type_version = version;
-            specialized_op = ops[TRUTH_ALWAYS_TRUE];
-            goto success;
-        }
-    }
-    if (ops[TRUTH_SLOT] != 0) {
-        // The type's slots decide; the version guards them
-        int err = _PyType_Validate(Py_TYPE(value), type_valid, &version);
-        if (err == 0) {
-            assert(version);
-            ((_PyFbUnary *)instr_entry(instr))->type_version = version;
-            specialized_op = ops[TRUTH_SLOT];
-            goto success;
-        }
-        SPECIALIZATION_FAIL(TO_BOOL, SPEC_FAIL_OUT_OF_VERSIONS);
-        goto failure;
-    }
-
-    SPECIALIZATION_FAIL(TO_BOOL, to_bool_fail_kind(value));
-failure:
-    unspecialize(instr);
-    return;
-success:
-    specialize(instr, specialized_op);
-}
-#define specialize_truth(V0, V1, V2) (specialize_truth)(PyValue_Borrow(V0), V1, V2)
-
-Py_NO_INLINE void
-_Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
-{
-    static const uint16_t ops[TRUTH_COUNT] = {
-        TO_BOOL_BOOL, TO_BOOL_INT, TO_BOOL_LIST, TO_BOOL_NONE, TO_BOOL_STR,
-        TO_BOOL_ALWAYS_TRUE, 0,
-    };
-    specialize_truth(value_o, instr, ops);
-}
-
-Py_NO_INLINE void
-(_Py_Specialize_PopJumpIf)(PyValueBorrow value_o, _PyInstr *instr)
-{
-    static const uint16_t if_false[TRUTH_COUNT] = {
-        POP_JUMP_IF_FALSE_BOOL, POP_JUMP_IF_FALSE_INT, POP_JUMP_IF_FALSE_LIST,
-        POP_JUMP_IF_FALSE_NONE, POP_JUMP_IF_FALSE_STR,
-        POP_JUMP_IF_FALSE_ALWAYS_TRUE, POP_JUMP_IF_FALSE_SLOT,
-    };
-    static const uint16_t if_true[TRUTH_COUNT] = {
-        POP_JUMP_IF_TRUE_BOOL, POP_JUMP_IF_TRUE_INT, POP_JUMP_IF_TRUE_LIST,
-        POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
-        POP_JUMP_IF_TRUE_ALWAYS_TRUE, POP_JUMP_IF_TRUE_SLOT,
-    };
-    int opcode = instr_base_opcode(instr);
-    assert(opcode == POP_JUMP_IF_FALSE || opcode == POP_JUMP_IF_TRUE);
-    specialize_truth(value_o, instr,
-                     opcode == POP_JUMP_IF_FALSE ? if_false : if_true);
 }
 
 #ifdef Py_STATS

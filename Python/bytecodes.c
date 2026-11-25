@@ -571,82 +571,21 @@ dummy_func(
             DEAD(value);
         }
 
-        // UNARY_NOT tests the truth of any value: the compiler drops the
-        // TO_BOOL before it (Python/flowgraph.c).  A bool is the fast path.
-        inst(UNARY_NOT, (value: consumed -- res: owned exact(PyBool_Type)))
-            effects(runs_python) exits(next, raise)
+        /* Stack ops only: rule_truth (Python/regcfg.c) lowers them to Truth
+         * (Python/register_ops/truth.rop). */
+        tier1 inst(UNARY_NOT, (value: consumed -- res: owned exact(PyBool_Type)))
+            effects() exits(abort)
         {
-            int truth = _PyValue_IsTrue(value);
-            PyValue_CLOSE(value);
-            ERROR_IF(truth < 0);
-            res = truth ? PyValue_False : PyValue_True;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        family(TO_BOOL, INLINE_CACHE_ENTRIES_TO_BOOL) = {
-            TO_BOOL_ALWAYS_TRUE,
-            TO_BOOL_BOOL,
-            TO_BOOL_INT,
-            TO_BOOL_LIST,
-            TO_BOOL_NONE,
-            TO_BOOL_STR,
-        };
-
-        specializing op(_SPECIALIZE_TO_BOOL, (value -- value))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        tier1 inst(TO_BOOL, (unused/3, value: consumed -- res: owned exact(PyBool_Type)))
+            effects() exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_ToBool(value, next_instr);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(TO_BOOL);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        // Floats do not specialize, so inline values are tested here
-        // without a box.
-        inline_ok op(_TO_BOOL, (value: consumed -- res: owned exact(PyBool_Type)))
-            effects(runs_python) exits(next, raise)
-        {
-            int err = _PyValue_IsTrue(value);
-            PyValue_CLOSE(value);
-            ERROR_IF(err < 0);
-            res = err ? PyValue_True : PyValue_False;
-        }
-
-        macro(TO_BOOL) = unused/1 + _SPECIALIZE_TO_BOOL + unused/2 + _TO_BOOL;
-
-        leaf op(_GUARD_TOS_BOOL, (value -- value: exact(PyBool_Type)))
-            effects(reads) exits(next, miss)
-        {
-            EXIT_IF(!PyValue_BoolCheck(value));
-            STAT_INC(TO_BOOL, hit);
-        }
-
-        macro(TO_BOOL_BOOL) = unused/1 + unused/2 + _GUARD_TOS_BOOL;
-
-        leaf inline_ok op(_TO_BOOL_INT,
-                (value: consumed exact(PyLong_Type) -- res: owned exact(PyBool_Type), v: moved(value)))
-            effects(reads) exits(next)
-        {
-            STAT_INC(TO_BOOL, hit);
-            bool zero;
-            if (PyValue_IsInlineInt(value)) {
-                zero = PyValue_InlineInt64(value) == 0;
-            }
-            else {
-                zero = _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
-            }
-            res = zero ? PyValue_False : PyValue_True;
-            v = value;
-            DEAD(value);
-        }
-
-        macro(TO_BOOL_INT) =
-            _GUARD_TOS_EXACT_INT + unused/1 + unused/2 + _TO_BOOL_INT + _POP_TOP_INT;
 
         leaf op(_GUARD_NOS_LIST, (nos: object, unused -- nos: exact(PyList_Type), unused))
             effects(reads) exits(next, miss)
@@ -668,32 +607,6 @@ dummy_func(
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
             EXIT_IF(!PySlice_Check(o), "the operand is not a slice");
         }
-
-        macro(TO_BOOL_LIST) = _GUARD_TOS_LIST + unused/1 + unused/2 + _TO_BOOL_LIST + POP_TOP;
-
-        op(_TO_BOOL_LIST,
-                (value: consumed object -- res: owned exact(PyBool_Type), v: moved(value)))
-            effects(reads) exits(next)
-        {
-            PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
-            assert(PyList_CheckExact(value_o));
-            STAT_INC(TO_BOOL, hit);
-            res = PyList_GET_SIZE(value_o) ? PyValue_True : PyValue_False;
-            v = value;
-            DEAD(value);
-        }
-
-        op(_TO_BOOL_NONE, (value: consumed -- res: owned exact(PyBool_Type)))
-            effects() exits(next, miss)
-        {
-            // This one is a bit weird, because we expect *some* failures:
-            EXIT_IF(!PyValue_IsNone(value));
-            DEAD(value);
-            STAT_INC(TO_BOOL, hit);
-            res = PyValue_False;
-        }
-
-        macro(TO_BOOL_NONE) = unused/1 + unused/2 + _TO_BOOL_NONE;
 
         op(_GUARD_NOS_COMPACT_ASCII,
                 (nos: object, unused -- nos: exact(PyUnicode_Type), unused))
@@ -717,49 +630,6 @@ dummy_func(
             PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
             EXIT_IF(!PyUnicode_CheckExact(value_o));
         }
-
-        op(_TO_BOOL_STR,
-                (value: consumed object -- res: owned exact(PyBool_Type), v: moved(value)))
-            effects() exits(next)
-        {
-            STAT_INC(TO_BOOL, hit);
-            PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
-            res = value_o == &_Py_STR(empty) ? PyValue_False : PyValue_True;
-            v = value;
-            DEAD(value);
-        }
-
-        macro(TO_BOOL_STR) =
-            _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE;
-
-        // The one guarded form for a value that is None or an instance of a
-        // type with no __bool__ or __len__ (the version covers those
-        // slots): None is false, any such instance true.
-        op(_GUARD_NONE_OR_TYPE_VERSION, (type_version/2, value: object -- value: object))
-            effects(reads) exits(next, miss)
-        {
-            assert(type_version != 0);
-            if (!PyValue_IsNone(value)) {
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(value));
-                EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version,
-                        "a value other than None must have the type version the word was specialized for");
-            }
-        }
-
-        op(_TRUTH_NONE_OR_PLAIN,
-                (value: consumed -- res: owned exact(PyBool_Type), v: moved(value)))
-            effects() exits(next)
-        {
-            res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
-            v = value;
-            DEAD(value);
-        }
-
-        macro(TO_BOOL_ALWAYS_TRUE) =
-            unused/1 +
-            _GUARD_NONE_OR_TYPE_VERSION +
-            _TRUTH_NONE_OR_PLAIN +
-            POP_TOP;
 
         macro(UNARY_INVERT) = _UNARY_INVERT + POP_TOP;
 
@@ -814,12 +684,6 @@ dummy_func(
             effects() exits(next, miss)
         {
             EXIT_IF(!PyValue_IsInlineInt(value));
-        }
-
-        leaf inline_ok op(_GUARD_TOS_EXACT_INT, (value -- value: exact(PyLong_Type)))
-            effects(reads) exits(next, miss)
-        {
-            EXIT_IF(!PyValue_LongCheckExact(value));
         }
 
         // Int arithmetic on inline operands, on scaled values (see
@@ -3896,26 +3760,30 @@ dummy_func(
             }
         }
 
-        leaf tier1 inst(JUMP_FORWARD, (--))
+        /* Stack ops only: rule_jump, rule_branch and rule_truth
+         * (Python/regcfg.c) lower them to Jump, BranchTruth, BranchNone and
+         * Truth (Python/register_ops/truth.rop).  The jumps keep JUMPTO so that
+         * the opcode metadata knows them as jumps. */
+        tier1 inst(JUMP_FORWARD, ( -- ))
             effects() exits(next, jump)
         {
+            assert(0 && "Executing a stack-only instruction.");
             JUMPTO(oparg);
         }
 
-        macro(JUMP_BACKWARD) =
-            unused/1 +
-            _CHECK_PERIODIC +
-            JUMP_BACKWARD_NO_INTERRUPT;
+        tier1 inst(JUMP_BACKWARD, (unused/1 -- ))
+            effects() exits(next, jump)
+        {
+            assert(0 && "Executing a stack-only instruction.");
+            JUMPTO(oparg);
+        }
 
-        family(JUMP_BACKWARD, 1) = {
-            JUMP_BACKWARD_JIT,
-        };
-
-        macro(JUMP_BACKWARD_JIT) =
-            unused/1 +
-            _CHECK_PERIODIC +
-            JUMP_BACKWARD_NO_INTERRUPT +
-            _JIT_EVENT;
+        tier1 inst(JUMP_BACKWARD_NO_INTERRUPT, ( -- ))
+            effects() exits(next, jump)
+        {
+            assert(0 && "Executing a stack-only instruction.");
+            JUMPTO(oparg);
+        }
 
         pseudo(JUMP, (--)) = {
             JUMP_FORWARD,
@@ -3935,233 +3803,62 @@ dummy_func(
             COPY, TO_BOOL, POP_JUMP_IF_TRUE,
         ];
 
-        // cond is an exact bool, which owes nothing (True and False are
-        // immortal): every handler makes it with a _TO_BOOL, _IS_NONE or
-        // _GUARD_TOS_BOOL before this uop
-        leaf replaced op(_POP_JUMP_IF_FALSE, (cond: consumed exact(PyBool_Type) -- ))
-            effects() exits(next, branch)
-        {
-            assert(PyValue_BoolCheck(cond));
-            int flag = PyValue_IsFalse(cond);
-            DEAD(cond);
-            IR_REPORT_EDGE(flag);
-            if (flag) {
-                JUMPTO(oparg);
-            }
-        }
-
-        // cond is an exact bool, which owes nothing (True and False are
-        // immortal): every handler makes it with a _TO_BOOL, _IS_NONE or
-        // _GUARD_TOS_BOOL before this uop
-        leaf replaced op(_POP_JUMP_IF_TRUE, (cond: consumed exact(PyBool_Type) -- ))
-            effects() exits(next, branch)
-        {
-            assert(PyValue_BoolCheck(cond));
-            int flag = PyValue_IsTrue(cond);
-            DEAD(cond);
-            IR_REPORT_EDGE(flag);
-            if (flag) {
-                JUMPTO(oparg);
-            }
-        }
-
-        leaf op(_IS_NONE, (value: consumed -- b: owned exact(PyBool_Type)))
-            effects(releases) exits(next)
-        {
-            if (PyValue_IsNone(value)) {
-                b = PyValue_True;
-                DEAD(value);
-            }
-            else {
-                b = PyValue_False;
-                DECREF_INPUTS();
-            }
-        }
-
-        // A conditional jump tests the truth of any value: the compiler
-        // drops the TO_BOOL before it (Python/flowgraph.c), so the jumps
-        // specialise as TO_BOOL does, and their entries keep the
-        // specialisation counter.
-        family(POP_JUMP_IF_FALSE, 1) = {
-            POP_JUMP_IF_FALSE_ALWAYS_TRUE,
-            POP_JUMP_IF_FALSE_BOOL,
-            POP_JUMP_IF_FALSE_INT,
-            POP_JUMP_IF_FALSE_LIST,
-            POP_JUMP_IF_FALSE_NONE,
-            POP_JUMP_IF_FALSE_SLOT,
-            POP_JUMP_IF_FALSE_STR,
-        };
-
-        family(POP_JUMP_IF_TRUE, 1) = {
-            POP_JUMP_IF_TRUE_ALWAYS_TRUE,
-            POP_JUMP_IF_TRUE_BOOL,
-            POP_JUMP_IF_TRUE_INT,
-            POP_JUMP_IF_TRUE_LIST,
-            POP_JUMP_IF_TRUE_NONE,
-            POP_JUMP_IF_TRUE_SLOT,
-            POP_JUMP_IF_TRUE_STR,
-        };
-
-        specializing op(_SPECIALIZE_POP_JUMP_IF, (value -- value))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_PopJumpIf(value, next_instr);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(TO_BOOL);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        macro(POP_JUMP_IF_TRUE) =
-            unused/1 + _SPECIALIZE_POP_JUMP_IF + _TO_BOOL + _POP_JUMP_IF_TRUE;
-
-        macro(POP_JUMP_IF_FALSE) =
-            unused/1 + _SPECIALIZE_POP_JUMP_IF + _TO_BOOL + _POP_JUMP_IF_FALSE;
-
-        macro(POP_JUMP_IF_FALSE_BOOL) =
-            unused/1 + _GUARD_TOS_BOOL + _POP_JUMP_IF_FALSE;
-        macro(POP_JUMP_IF_TRUE_BOOL) =
-            unused/1 + _GUARD_TOS_BOOL + _POP_JUMP_IF_TRUE;
-        macro(POP_JUMP_IF_FALSE_INT) =
-            _GUARD_TOS_EXACT_INT + unused/1 + _TO_BOOL_INT + _POP_TOP_INT + _POP_JUMP_IF_FALSE;
-        macro(POP_JUMP_IF_TRUE_INT) =
-            _GUARD_TOS_EXACT_INT + unused/1 + _TO_BOOL_INT + _POP_TOP_INT + _POP_JUMP_IF_TRUE;
-        macro(POP_JUMP_IF_FALSE_LIST) =
-            _GUARD_TOS_LIST + unused/1 + _TO_BOOL_LIST + POP_TOP + _POP_JUMP_IF_FALSE;
-        macro(POP_JUMP_IF_TRUE_LIST) =
-            _GUARD_TOS_LIST + unused/1 + _TO_BOOL_LIST + POP_TOP + _POP_JUMP_IF_TRUE;
-        macro(POP_JUMP_IF_FALSE_NONE) =
-            unused/1 + _TO_BOOL_NONE + _POP_JUMP_IF_FALSE;
-        macro(POP_JUMP_IF_TRUE_NONE) =
-            unused/1 + _TO_BOOL_NONE + _POP_JUMP_IF_TRUE;
-        macro(POP_JUMP_IF_FALSE_STR) =
-            _GUARD_TOS_UNICODE + unused/1 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_FALSE;
-        macro(POP_JUMP_IF_TRUE_STR) =
-            _GUARD_TOS_UNICODE + unused/1 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_TRUE;
-        // The jump of the None-or-plain form tests the None the guard
-        // allowed, without forming the bool: the object path then carries no
-        // result to select.
-        op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value: consumed -- v: moved(value)))
-            effects() exits(next, branch)
-        {
-            int flag = PyValue_IsNone(value);
-            IR_REPORT_EDGE(flag);
-            v = value;
-            DEAD(value);
-            if (flag) {
-                JUMPTO(oparg);
-            }
-        }
-
-        op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value: consumed -- v: moved(value)))
-            effects() exits(next, branch)
-        {
-            int flag = !PyValue_IsNone(value);
-            IR_REPORT_EDGE(flag);
-            v = value;
-            DEAD(value);
-            if (flag) {
-                JUMPTO(oparg);
-            }
-        }
-
-        macro(POP_JUMP_IF_FALSE_ALWAYS_TRUE) =
-            unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_FALSE_NONE_OR_PLAIN + POP_TOP;
-        macro(POP_JUMP_IF_TRUE_ALWAYS_TRUE) =
-            unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_TRUE_NONE_OR_PLAIN + POP_TOP;
-
-        // The truth of an instance of a type that the other forms do not
-        // take: after the guard on the type's version, which covers its
-        // slots, the type's own slot decides (a dict, set, tuple, deque,
-        // a class with __len__ or __bool__).  The test is the generic
-        // one's without its decision of the inline kinds, and the site
-        // keeps no counter.
-        // Contract (seed, corrected G0d1): _PyValue_IsTrueSlow requires an object
-        // (PyValue_AsKnownObjectBorrow), which _GUARD_TYPE_VERSION before it
-        // requires too: `object`, which the seed lacked.  The slot runs Python and
-        // may fail with value kept (taken); value then moves to v.
-        ir_only op(_TO_BOOL_SLOT,
-                (value: taken object -- res: owned exact(PyBool_Type), v: moved(value)))
-            effects(runs_python) exits(next, raise)
-        {
-            int truth = _PyValue_IsTrueSlow(value);
-            if (truth < 0) {
-                ERROR_NO_POP();
-            }
-            res = truth ? PyValue_True : PyValue_False;
-            v = value;
-            DEAD(value);
-        }
-
-        macro(POP_JUMP_IF_FALSE_SLOT) =
-            unused/1 + _GUARD_TYPE_VERSION + _TO_BOOL_SLOT + POP_TOP + _POP_JUMP_IF_FALSE;
-        macro(POP_JUMP_IF_TRUE_SLOT) =
-            unused/1 + _GUARD_TYPE_VERSION + _TO_BOOL_SLOT + POP_TOP + _POP_JUMP_IF_TRUE;
-
-        macro(POP_JUMP_IF_NONE) = unused/1 + _IS_NONE + _POP_JUMP_IF_TRUE;
-
-        macro(POP_JUMP_IF_NOT_NONE) = unused/1 + _IS_NONE + _POP_JUMP_IF_FALSE;
-
-        // The value of "x and y" or "x or y": the jump keeps the value it
-        // tests where it jumps and releases it where it falls through, so
-        // neither a COPY before it nor a POP_TOP after it runs.  The
-        // register passes make it from those three (Python/regcfg_passes.c);
-        // the result slot is NULL where it falls through.  It has no
-        // feedback entry, since its fields fill the word.
-        inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
-            effects(runs_python) exits(next, branch, raise)
-        {
-            // Taken before the truth test, which can run code
-            PyValue held = TAKE(cond);
-            int truth = _PyValue_IsTrue(held);
-            if (truth < 0) {
-                PyValue_CLOSE(held);
-                ERROR_NO_POP();
-            }
-            if (!truth) {
-                res = held;
-                JUMPTO(oparg);
-            }
-            else {
-                PyValue_CLOSE(held);
-                res = PyValue_NULL;
-            }
-        }
-
-        inst(JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
-            effects(runs_python) exits(next, branch, raise)
-        {
-            // Taken before the truth test, which can run code
-            PyValue held = TAKE(cond);
-            int truth = _PyValue_IsTrue(held);
-            if (truth < 0) {
-                PyValue_CLOSE(held);
-                ERROR_NO_POP();
-            }
-            if (truth) {
-                res = held;
-                JUMPTO(oparg);
-            }
-            else {
-                PyValue_CLOSE(held);
-                res = PyValue_NULL;
-            }
-        }
-
-        replaced inst(JUMP_BACKWARD_NO_INTERRUPT, (--))
+        /* The keeping jumps of "x and y" and "x or y" are BranchTruth words
+         * (the keep modes); these names remain for the family's ops and the
+         * event tables of Python/instrumentation.c, with no handler. */
+        tier1 inst(JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
             effects() exits(next, jump)
         {
-            /* This bytecode is used in the `yield from` or `await` loop.
-             * If there is an interrupt, we want it handled in the innermost
-             * generator or coroutine, so we deliberately do not check it here.
-             * (see bpo-30039).
-             */
-            assert(JUMP_TARGET(oparg) < next_instr);
+            assert(0 && "Executing a stack-only instruction.");
+            JUMPTO(oparg);
+        }
+
+        tier1 inst(JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
+            effects() exits(next, jump)
+        {
+            assert(0 && "Executing a stack-only instruction.");
+            JUMPTO(oparg);
+        }
+
+        tier1 inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
+            effects() exits(abort)
+        {
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
+            effects() exits(abort)
+        {
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(POP_JUMP_IF_FALSE, (unused/1, cond: closed -- ))
+            effects() exits(next, jump)
+        {
+            assert(0 && "Executing a stack-only instruction.");
+            JUMPTO(oparg);
+        }
+
+        tier1 inst(POP_JUMP_IF_TRUE, (unused/1, cond: closed -- ))
+            effects() exits(next, jump)
+        {
+            assert(0 && "Executing a stack-only instruction.");
+            JUMPTO(oparg);
+        }
+
+        tier1 inst(POP_JUMP_IF_NONE, (unused/1, value: closed -- ))
+            effects() exits(next, jump)
+        {
+            assert(0 && "Executing a stack-only instruction.");
+            JUMPTO(oparg);
+        }
+
+        tier1 inst(POP_JUMP_IF_NOT_NONE, (unused/1, value: closed -- ))
+            effects() exits(next, jump)
+        {
+            assert(0 && "Executing a stack-only instruction.");
             JUMPTO(oparg);
         }
 
@@ -6321,127 +6018,49 @@ dummy_func(
             DISPATCH_GOTO();
         }
 
-        inst(INSTRUMENTED_JUMP_FORWARD, ( -- ))
-            effects(runs_python) exits(next, branch, raise)
+        /* The instrumented forms of the stack ops that the Truth, BranchTruth,
+         * BranchNone and Jump families lower.  Stack ops only: the words are
+         * the families' Observed arms (Python/register_ops/truth.rop). */
+        tier1 inst(INSTRUMENTED_JUMP_FORWARD, ( -- ))
+            effects() exits(abort)
         {
-            IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
-                PY_MONITORING_EVENT_JUMP, _PyIR_EDGE_TAKEN);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        op(_MONITOR_JUMP_BACKWARD, (-- ))
-            effects(runs_python) exits(next, branch, raise)
+        tier1 inst(INSTRUMENTED_JUMP_BACKWARD, (unused/1 -- ))
+            effects() exits(abort)
         {
-            IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
-                PY_MONITORING_EVENT_JUMP, _PyIR_EDGE_TAKEN);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(INSTRUMENTED_JUMP_BACKWARD) =
-            unused/1 +
-            _CHECK_PERIODIC +
-            _MONITOR_JUMP_BACKWARD;
-
-        op(_INSTRUMENTED_POP_JUMP_IF_TRUE, (cond: closed -- ))
-            effects(runs_python) exits(next, branch, raise)
+        tier1 inst(INSTRUMENTED_POP_JUMP_IF_TRUE, (unused/1, cond: closed -- ))
+            effects() exits(abort)
         {
-            assert(PyValue_BoolCheck(cond));
-            int jump = PyValue_IsTrue(cond);
-            DEAD(cond);
-            if (jump) {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
-            }
-            else {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        op(_INSTRUMENTED_POP_JUMP_IF_FALSE, (cond: closed -- ))
-            effects(runs_python) exits(next, branch, raise)
+        tier1 inst(INSTRUMENTED_POP_JUMP_IF_FALSE, (unused/1, cond: closed -- ))
+            effects() exits(abort)
         {
-            assert(PyValue_BoolCheck(cond));
-            int jump = PyValue_IsFalse(cond);
-            DEAD(cond);
-            if (jump) {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
-            }
-            else {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(INSTRUMENTED_POP_JUMP_IF_TRUE) =
-            unused/1 + unused/2 + _TO_BOOL + _INSTRUMENTED_POP_JUMP_IF_TRUE;
-
-        macro(INSTRUMENTED_POP_JUMP_IF_FALSE) =
-            unused/1 + unused/2 + _TO_BOOL + _INSTRUMENTED_POP_JUMP_IF_FALSE;
-
-        inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value: consumed -- ))
-            effects(runs_python) exits(next, branch, raise)
+        tier1 inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value: closed -- ))
+            effects() exits(abort)
         {
-            int jump = PyValue_IsNone(value);
-            // None owes nothing; any other value is closed before the event
-            PyValue_CLOSE(value);
-            if (jump) {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
-            }
-            else {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
-            effects(runs_python) exits(next, branch, raise)
+        tier1 inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value: closed -- ))
+            effects() exits(abort)
         {
-            // Taken before the truth test, which can run code
-            PyValue held = TAKE(cond);
-            int truth = _PyValue_IsTrue(held);
-            if (truth < 0) {
-                PyValue_CLOSE(held);
-                ERROR_NO_POP();
-            }
-            if (!truth) {
-                res = held;
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
-            }
-            else {
-                IR_DEFER_CLOSE(held);
-                res = PyValue_NULL;
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
-            }
-        }
-
-        inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
-            effects(runs_python) exits(next, branch, raise)
-        {
-            // Taken before the truth test, which can run code
-            PyValue held = TAKE(cond);
-            int truth = _PyValue_IsTrue(held);
-            if (truth < 0) {
-                PyValue_CLOSE(held);
-                ERROR_NO_POP();
-            }
-            if (truth) {
-                res = held;
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
-            }
-            else {
-                IR_DEFER_CLOSE(held);
-                res = PyValue_NULL;
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
-            }
-        }
-
-        inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value: consumed -- ))
-            effects(runs_python) exits(next, branch, raise)
-        {
-            int jump = !PyValue_IsNone(value);
-            // None owes nothing; any other value is closed before the event
-            PyValue_CLOSE(value);
-            if (jump) {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
-            }
-            else {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         tier1 inst(CACHE, (--))

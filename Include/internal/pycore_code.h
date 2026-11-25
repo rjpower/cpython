@@ -54,7 +54,6 @@ extern void _PyCode_Fini(PyInterpreterState *interp);
 #define INLINE_CACHE_ENTRIES_FOR_ITER 1
 #define INLINE_CACHE_ENTRIES_GET_ITER 1
 #define INLINE_CACHE_ENTRIES_SEND 1
-#define INLINE_CACHE_ENTRIES_TO_BOOL 3
 #define INLINE_CACHE_ENTRIES_CONTAINS_OP 1
 #define INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX 1
 
@@ -223,10 +222,6 @@ PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(PyValue seq, _PyInstr *instr,
                                           int oparg);
 PyAPI_FUNC(void) _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg);
 PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_ToBool(PyValue value, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(PyValueBorrow value, _PyInstr *instr);
-#define _Py_Specialize_PopJumpIf(V0, V1) \
-    (_Py_Specialize_PopJumpIf)(PyValue_Borrow(V0), V1)
 PyAPI_FUNC(void) _Py_Specialize_ContainsOp(PyValueBorrow item, PyValueBorrow value,
                                            _PyInstr *instr);
 #define _Py_Specialize_ContainsOp(V0, V1, V2) \

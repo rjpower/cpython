@@ -2282,6 +2282,25 @@ static inline bool _PyRop_PythonTarget(PyThreadState *tstate,
 static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
+/* The rows of Raise, Reraise, ExceptEnter, ExceptLeave, ExceptMatch and
+ * ExceptGroupMatch (Python/register_ops/exceptions.rop) */
+static int _PyRop_RaiseArgs(PyThreadState *tstate, const _PyRopSpan *args);
+static void _PyRop_ReraisePending(PyThreadState *tstate,
+                                  _PyInterpreterFrame *frame, _PyInstr *at);
+static void _PyRop_RestoreException(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, _PyInstr *at,
+                                    PyValue *home);
+static void _PyRop_SetOrigin(_PyInterpreterFrame *frame, PyValue *home);
+static void _PyRop_RetireFailedOperand(_PyInterpreterFrame *frame,
+                                       PyValue *home);
+static PyValue _PyRop_SwapHandled(PyThreadState *tstate, PyValue *home);
+static void _PyRop_RestoreHandled(PyThreadState *tstate, PyValue x);
+static int _PyRop_CheckExceptType(PyThreadState *tstate, PyValue *home);
+static bool _PyRop_ExceptionMatches(PyValueBorrow exc, PyValueBorrow pattern);
+static int _PyRop_CheckExceptStarType(PyThreadState *tstate, PyValue *home);
+static PyValue _PyRop_GroupMatch(PyThreadState *tstate,
+                                 _PyInterpreterFrame *frame, PyValue *exc,
+                                 PyValue *pattern, PyValue *rest);
 /* The rows of Function and Intrinsic (Python/register_ops/functions.rop) */
 static PyValue _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
                                    const _PyRopSpan *fields, uint32_t present);
@@ -8717,6 +8736,164 @@ _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
     }
     assert(i == n);
     return PyValue_FromObjectSteal((PyObject *)func_obj);
+}
+
+/* Raise, Reraise, ExceptEnter, ExceptLeave, ExceptMatch and ExceptGroupMatch:
+ * the rows (exceptions.rop) */
+
+/* RAISE_VARARGS: the exception and the cause, if any, are spent.  Returns 0
+ * for a bare raise that found a handled exception, now pending, and -1 for
+ * every other outcome, with an exception pending. */
+static int
+_PyRop_RaiseArgs(PyThreadState *tstate, const _PyRopSpan *args)
+{
+    int n = args->count;
+    assert(n < 3);
+    PyValue vals[3];
+    rop_take_items(args, vals);
+    PyObject *exc = NULL;
+    PyObject *cause = NULL;
+    bool bad_exc = false;
+    bool cause_is_number = false;
+    if (n > 0) {
+        // A number is not an exception
+        exc = PyValue_ObjectOrNull(vals[0]);
+        bad_exc = exc == NULL;
+    }
+    // A number is not a cause: do_raise reports it after the exception is made
+    if (n == 2) {
+        cause = PyValue_ObjectOrNull(vals[1]);
+        cause_is_number = cause == NULL;
+    }
+    // do_raise consumes owners of its own, made before the operands close
+    PyObject *exc_owner = Py_XNewRef(exc);
+    PyObject *cause_owner = Py_XNewRef(cause);
+    rop_close_items(vals, n);
+    if (bad_exc) {
+        _PyErr_SetString(tstate, PyExc_TypeError,
+                         "exceptions must derive from BaseException");
+        Py_XDECREF(cause_owner);
+        return -1;
+    }
+    return do_raise(tstate, exc_owner, cause_owner, cause_is_number) ? 0 : -1;
+}
+
+static void
+_PyRop_ReraisePending(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *at)
+{
+    monitor_reraise(tstate, frame, at);
+}
+
+/* The exception in the home becomes the pending one, with a reference of its
+ * own: the arm closes the home afterwards */
+static void
+_PyRop_RestoreException(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        _PyInstr *at, PyValue *home)
+{
+    // An exception being handled is an instance of BaseException
+    PyObject *exc = PyValue_AsKnownObjectBorrow(*home);
+    assert(exc && PyExceptionInstance_Check(exc));
+    _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
+    monitor_reraise(tstate, frame, at);
+}
+
+/* RERAISE n names the word that raised the exception: the unwinder's tagged
+ * index, which it wrote into the home below the exception */
+static void
+_PyRop_SetOrigin(_PyInterpreterFrame *frame, PyValue *home)
+{
+    frame->instr_ptr = _PyFrame_InstrAt(frame, (int)PyValue_UntagIndex(*home));
+}
+
+/* Closes the operand in the home, if it is a temporary, with the pending
+ * exception set aside; a local keeps its binding */
+static void
+_PyRop_RetireFailedOperand(_PyInterpreterFrame *frame, PyValue *home)
+{
+    if (home - _PyFrame_Slots(frame) < _PyCode_IRFixed(_PyFrame_GetCode(frame))) {
+        return;
+    }
+    PyObject *exc = PyErr_GetRaisedException();
+    PyValue_XCLOSE(_PyFrame_TakeHome(frame, home));
+    PyErr_SetRaisedException(exc);
+}
+
+/* The thread's handled exception (None when there is none) leaves the
+ * exception state; the exception in the home takes its place, with a new
+ * reference */
+static PyValue
+_PyRop_SwapHandled(PyThreadState *tstate, PyValue *home)
+{
+    _PyErr_StackItem *exc_info = tstate->exc_info;
+    PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
+    PyValue prev = prev_o != NULL ? PyValue_FromObjectSteal(prev_o)
+                                  : PyValue_None;
+    assert(PyValue_ExceptionInstanceCheck(*home));
+    exc_info->exc_value = PyValue_AsPyObjectNew(*home);
+    return prev;
+}
+
+/* The saved exception (or None) is the handled one again; the one it
+ * replaces is released */
+static void
+_PyRop_RestoreHandled(PyThreadState *tstate, PyValue x)
+{
+    _PyErr_StackItem *exc_info = tstate->exc_info;
+    if (PyValue_IsNone(x)) {
+        // Immortal: it owes no count
+        Py_CLEAR(exc_info->exc_value);
+        return;
+    }
+    Py_XSETREF(exc_info->exc_value, PyValue_AsKnownObjectSteal(x));
+}
+
+static int
+_PyRop_CheckExceptType(PyThreadState *tstate, PyValue *home)
+{
+    return _PyEval_CheckExceptTypeValidValue(tstate, PyValue_Borrow(*home));
+}
+
+static bool
+_PyRop_ExceptionMatches(PyValueBorrow exc, PyValueBorrow pattern)
+{
+    assert(PyValue_IsObject(exc) && PyValue_IsObject(pattern));
+    return PyErr_GivenExceptionMatches(PyValue_AsKnownObjectBorrow(exc),
+                                       PyValue_AsKnownObjectBorrow(pattern));
+}
+
+static int
+_PyRop_CheckExceptStarType(PyThreadState *tstate, PyValue *home)
+{
+    return _PyEval_CheckExceptStarTypeValidValue(tstate, PyValue_Borrow(*home));
+}
+
+/* The match is returned, the rest through *rest.  Both operands are spent. */
+static PyValue
+_PyRop_GroupMatch(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  PyValue *exc, PyValue *pattern, PyValue *rest)
+{
+    int nlocals = _PyCode_IRFixed(_PyFrame_GetCode(frame));
+    PyValue held_exc = exc - _PyFrame_Slots(frame) < nlocals
+        ? PyValue_DUP(PyValue_Borrow(*exc)) : _PyFrame_TakeHome(frame, exc);
+    PyValue held_type = pattern - _PyFrame_Slots(frame) < nlocals
+        ? PyValue_DUP(PyValue_Borrow(*pattern))
+        : _PyFrame_TakeHome(frame, pattern);
+    // The exception being handled is an object
+    PyObject *exc_value = PyValue_AsKnownObjectBorrow(held_exc);
+    PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
+    _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
+    PyValue_CLOSE(held_type);
+    PyValue_CLOSE(held_exc);
+    // A null match is an error, including a failed match
+    if (matched.match == NULL) {
+        return PyValue_NULL;
+    }
+    if (!Py_IsNone(matched.match)) {
+        PyErr_SetHandledException(matched.match);
+    }
+    *rest = PyValue_FromObjectSteal(matched.rest);
+    return PyValue_FromObjectSteal(matched.match);
 }
 
 /* The compiler's number of each member of IntrinsicId, in declaration order */

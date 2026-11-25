@@ -1296,7 +1296,9 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
               "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
               "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
-              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE")
+              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
+              "RAISE_VARARGS", "RERAISE", "PUSH_EXC_INFO", "POP_EXCEPT",
+              "CHECK_EXC_MATCH", "CHECK_EG_MATCH")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are

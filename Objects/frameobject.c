@@ -2369,7 +2369,10 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
     int base = -1;
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] == _PyIR_ROLE_BASE ||
-            (opcode == POP_EXCEPT && fmt->roles[f] == _PyIR_ROLE_IN0))
+            (opcode == POP_EXCEPT && fmt->roles[f] == _PyIR_ROLE_IN0) ||
+            // The saved exception: ExceptEnter's first destination
+            (opcode == PUSH_EXC_INFO && fmt->roles[f] == _PyIR_ROLE_DST &&
+             base < 0))
         {
             base = (int)fields[f] - analysis->nl;
         }

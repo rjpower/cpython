@@ -477,12 +477,8 @@ span_elems(_PyRegCfg *cfg, const _PyRegOp *op, int counts[2], int *elems)
         span_out = 1;
     }
     else {
-        // The span is the outputs unless the word has a destination of its own
-        int has_dst = 0;
-        for (int f = 0; f < 4; f++) {
-            has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
-        }
-        span_out = !has_dst;
+        // The span is the outputs unless the word reads it (_PyIR_SingleSpanReads())
+        span_out = !_PyIR_SingleSpanReads(fmt);
         counts[0] = span_out ? op->nout : op->nread - nfixed_in;
     }
     int n = 0;
@@ -517,12 +513,11 @@ span_nelems(_PyRegCfg *cfg, const _PyRegOp *op)
     if (_PyIR_SpanCountFields(fmt) == 2) {
         return op->nout + op->nread;
     }
-    int nfixed_in = 0, has_dst = 0;
+    int nfixed_in = 0;
     for (int f = 0; f < 4; f++) {
         nfixed_in += fmt->roles[f] >= _PyIR_ROLE_IN0;
-        has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
     }
-    return has_dst ? op->nread - nfixed_in : op->nout;
+    return _PyIR_SingleSpanReads(fmt) ? op->nread - nfixed_in : op->nout;
 }
 
 /* The words of a span instruction (pycore_ir.h, _PyIR_SpanElement()): the

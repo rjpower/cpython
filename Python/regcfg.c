@@ -1026,9 +1026,9 @@ collapse_unwound(_PyRegTr *t, const _PyRegOp *instr, int k)
 }
 
 /* The rule of an unported stack op: its old handler op.  It reads the top
- * nread identities, the popped ones on top, and for a raise every identity
- * below; a register-style op's outputs below its dst pass their inputs
- * through, and a window's are its stack positions from its base. */
+ * nread identities, the popped ones on top; a register-style op's outputs
+ * below its dst pass their inputs through, and a window's are its stack
+ * positions from its base. */
 int
 _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
 {
@@ -1036,10 +1036,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(instr->opcode, instr->oparg);
     int window = (fmt->flags & _PyIR_WINDOW) != 0;
     int popped = _PyOpcode_num_popped(instr->opcode, instr->oparg);
-    // A scope exit leaves nothing behind for this frame: RETURN_VALUE
-    // pushes its result to the caller's, and RERAISE does not go on
-    int pushed = IS_SCOPE_EXIT_OPCODE(instr->opcode)
-        ? 0 : _PyOpcode_num_pushed(instr->opcode, instr->oparg);
+    int pushed = _PyOpcode_num_pushed(instr->opcode, instr->oparg);
     if (instr->opcode == YIELD_VALUE && instr->oparg == 1) {
         /* The frontend leaves receiver/cursor below its one-value yield.
          * Canonical delegated IR retains both as explicit logical uses;
@@ -1074,18 +1071,6 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
                      instr->loc.lineno);
         return ERROR;
     }
-    int nimplicit = IS_RAISE_OPCODE(instr->opcode) ? depth - popped : 0;
-    // The values the raise leaves, less those whose one owner a copy
-    // already spent (collapse_unwound())
-    char unwound[IR_MAX_SLOTS];
-    int nleft = 0;
-    for (int k = 0; k < nimplicit; k++) {
-        int merged = k < IR_MAX_SLOTS && collapse_unwound(t, instr, k);
-        if (k < IR_MAX_SLOTS) {
-            unwound[k] = (char)merged;
-        }
-        nleft += !merged;
-    }
     // Register style: the outputs below dst pass their inputs through
     int through = 0;
     if (!window) {
@@ -1119,7 +1104,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     }
     _PyRegOp *op;
     if (err == SUCCESS) {
-        err = new_op(t, instr, nread + nleft + nrec, pushed, &op);
+        err = new_op(t, instr, nread + nrec, pushed, &op);
     }
     if (err == SUCCESS && nrec) {
         err = _PyRegCfg_AddOperands(cfg, nrec, &op->recipe);
@@ -1129,27 +1114,20 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         for (int k = 0; k < nread; k++) {
             in[k] = t->stack[depth - nread + k];
         }
-        int left = 0;
-        for (int k = 0; k < nimplicit; k++) {
-            if (k >= IR_MAX_SLOTS || !unwound[k]) {
-                in[nread + left++] = t->stack[k];
-            }
-        }
-        nimplicit = left;
         // A window's outputs go from its base: where its first input is,
         // unless allocation stages its inputs
         int wbase = window && nread > 0 ? natural_pos(t, in[0]) : -1;
         op->nread = (int16_t)nread;
         op->npop = (int16_t)popped;
-        op->nimplicit = (int16_t)nimplicit;
+        op->nimplicit = 0;
         memcpy(_PyReg_OUT(cfg, op), out, pushed * sizeof(int));
         note_op(t, op);
         // The recipe's identities live until the op, which takes none
         for (int q = 0; q < nrec; q++) {
-            in[nread + nimplicit + q] = t->rec[2 * q];
+            in[nread + q] = t->rec[2 * q];
             cfg->operands[op->recipe + q] = t->rec[2 * q + 1];
         }
-        op->nimplicit = (int16_t)(nimplicit + nrec);
+        op->nimplicit = (int16_t)nrec;
         op->nrecipe = (int16_t)nrec;
         for (int j = 0; wbase >= 0 && j < pushed; j++) {
             if (out[j] >= _PyReg_FRESH0(cfg)) {
@@ -2385,6 +2363,171 @@ rule_insert(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Pop(t, popped, NULL);
 }
 
+/* The exception stack ops (Python/register_ops/exceptions.rop) */
+
+/* A raise that ends its block (RAISE_VARARGS, RERAISE).  The op reads the
+ * identities at the stack positions pos[0..nuses) and takes the last ntaken
+ * of them; the stack op pops nstack positions.  The values it leaves on the
+ * stack are the unwinder's, and the op names them as implicit reads, so that
+ * allocation keeps their homes until then, less those whose one owner a
+ * copy already spent (collapse_unwound()).  The caller's positions name the
+ * stack as it is on entry. */
+static int
+emit_terminal_raise(_PyRegTr *t, const _PyRegOp *src, int handler,
+                    const int *pos, int nuses, int ntaken, int nstack)
+{
+    _PyRegCfg *cfg = t->cfg;
+    int depth = t->sp;
+    // Every handler finds its parameters before the op can raise: renamed
+    // while the region keeps stack order, else by the edge's recipe
+    if (src->except >= 0 && !t->permuted) {
+        int hbase = Py_MIN(handler_base(cfg, src->except), depth);
+        for (int k = 0; k < hbase; k++) {
+            (void)rename_param(t, k);
+        }
+    }
+    t->nrec = 0;
+    if (src->except >= 0) {
+        RETURN_IF_ERROR(handler_recipe(t, handler_base(cfg, src->except)));
+    }
+    int nrec = t->nrec;
+    int *left = PyMem_Malloc(Py_MAX(depth, 1) * sizeof(int));
+    if (left == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    int nleft = 0;
+    for (int k = 0; k < depth; k++) {
+        int used = 0;
+        for (int q = 0; q < nuses; q++) {
+            used |= pos[q] == k;
+        }
+        if (used || (k < IR_MAX_SLOTS && collapse_unwound(t, src, k))) {
+            continue;
+        }
+        left[nleft++] = t->stack[k];
+    }
+    _PyRegOp *op;
+    int err = new_op(t, src, nuses + nleft + nrec, 0, &op);
+    if (err == SUCCESS && nrec) {
+        err = _PyRegCfg_AddOperands(cfg, nrec, &op->recipe);
+    }
+    if (err == SUCCESS) {
+        op->opcode = handler;
+        int *in = _PyReg_IN(cfg, op);
+        for (int q = 0; q < nuses; q++) {
+            in[q] = t->stack[pos[q]];
+        }
+        memcpy(in + nuses, left, nleft * sizeof(int));
+        op->nread = (int16_t)nuses;
+        op->npop = (int16_t)ntaken;
+        op->nimplicit = (int16_t)nleft;
+        note_op(t, op);
+        for (int q = 0; q < nrec; q++) {
+            in[nuses + nleft + q] = t->rec[2 * q];
+            cfg->operands[op->recipe + q] = t->rec[2 * q + 1];
+        }
+        op->nimplicit = (int16_t)(nleft + nrec);
+        op->nrecipe = (int16_t)nrec;
+        t->sp -= nstack;
+    }
+    PyMem_Free(left);
+    return err;
+}
+
+/* RAISE_VARARGS: the exception and the cause, if any, are the span, all
+ * taken */
+static int
+rule_raise_varargs(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->oparg;
+    if (n > 2 || n > t->sp) {
+        return stack_underflow(src);
+    }
+    int pos[2] = {t->sp - n, t->sp - n + 1};
+    return emit_terminal_raise(t, src, ROP_HANDLER_Raise_Throw, pos, n, n, n);
+}
+
+/* RERAISE n: the exception (top) is taken.  For n > 0 the origin is the
+ * identity n below it, which the unwinder wrote; for n = 2 the value between
+ * them is left to the unwinder. */
+static int
+rule_reraise(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->oparg;
+    if (n > 2 || n + 1 > t->sp) {
+        return stack_underflow(src);
+    }
+    int top = t->sp - 1;
+    int pos[2] = {top - n, top};
+    int handler = n > 0 ? ROP_SELECT_Reraise_present : ROP_SELECT_Reraise_absent;
+    return emit_terminal_raise(t, src, handler, n > 0 ? pos : pos + 1,
+                               n > 0 ? 2 : 1, 1, n + 1);
+}
+
+/* PUSH_EXC_INFO: the exception becomes the handled one.  The previous
+ * handled exception is pushed under the handler's exception. */
+static int
+rule_push_exc_info(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_ExceptEnter_Install,
+                                  &t->stack[t->sp - 1], 1, defs, 2, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    return _PyRegTr_Push(t, defs[1]);
+}
+
+static int
+rule_pop_except(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_ExceptLeave_Restore,
+                                  &t->stack[t->sp - 1], 1, NULL, 0, NULL));
+    return _PyRegTr_Pop(t, 1, NULL);
+}
+
+/* CHECK_EXC_MATCH: the exception (below) stays; the pattern (top) goes */
+static int
+rule_check_exc_match(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_ExceptMatch_Match,
+                                  &t->stack[t->sp - 2], 2, &dst, 1, &op));
+    op->npop = 1;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* CHECK_EG_MATCH: both operands go; the rest is pushed, then the match */
+static int
+rule_check_eg_match(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int defs[2];  // the rest, then the match: the stack order
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_ExceptGroupMatch_Split,
+                                  &t->stack[t->sp - 2], 2, defs, 2, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    return _PyRegTr_Push(t, defs[1]);
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
@@ -2453,6 +2596,12 @@ static const _PyRegRule rules[256] = {
     [DICT_UPDATE] = rule_insert,
     [DICT_MERGE] = rule_insert,
     [LOAD_GLOBAL] = rule_load_global,
+    [RAISE_VARARGS] = rule_raise_varargs,
+    [RERAISE] = rule_reraise,
+    [PUSH_EXC_INFO] = rule_push_exc_info,
+    [POP_EXCEPT] = rule_pop_except,
+    [CHECK_EXC_MATCH] = rule_check_exc_match,
+    [CHECK_EG_MATCH] = rule_check_eg_match,
 };
 
 /* An edge binds the parameters of the positions below depth: one that

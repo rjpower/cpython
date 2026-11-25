@@ -692,8 +692,6 @@ static _PyIRTransfer ir_run_CALL_KW(PyThreadState *tstate, _PyInterpreterFrame *
 static _PyIRTransfer ir_run_CALL_KW_BOUND_METHOD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CALL_KW_NON_PY(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CALL_KW_PY(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_CHECK_EG_MATCH(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_CHECK_EXC_MATCH(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CLEANUP_THROW(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CLEANUP_THROW_XFER_DISCARD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_COMPARE_OP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -731,6 +729,10 @@ static _PyIRTransfer ir_run_DelItem_Generic(PyThreadState *tstate, _PyInterprete
 static _PyIRTransfer ir_run_END_ASYNC_FOR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_END_FOR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_END_SEND(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_ExceptEnter_Install(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_ExceptGroupMatch_Split(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_ExceptLeave_Restore(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_ExceptMatch_Match(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_FORMAT_SIMPLE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_FORMAT_WITH_SPEC(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_FOR_ITER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -842,16 +844,15 @@ static _PyIRTransfer ir_run_NamespaceRead_Locals(PyThreadState *tstate, _PyInter
 static _PyIRTransfer ir_run_NamespaceRead_Name(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_NamespaceWrite_Global(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_NamespaceWrite_Name(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_POP_EXCEPT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_POP_ITER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_PUSH_EXC_INFO(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_RAISE_VARARGS(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_RERAISE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESERVED(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESUME(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESUME_CHECK(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESUME_JIT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RETURN_GENERATOR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Raise_Throw(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Reraise_Origin(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Reraise_Plain(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Return_Empty(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Return_External(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Return_Generator(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -3105,102 +3106,6 @@ ir_run_CALL_KW_PY(
                     DISPATCH();
                 }
             }
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_CHECK_EG_MATCH(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = CHECK_EG_MATCH;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(CHECK_EG_MATCH);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
-            PyValueBorrow exc_value_st;
-            PyValueBorrow match_type_st;
-            PyValue exc_rest;
-            PyValue exc_match;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            match_type_st = IR_VIEW(IR_C(ir_word));
-            exc_value_st = IR_VIEW(IR_B(ir_word));
-            assert(PyValue_IsObject(exc_value_st));
-            PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
-            ir_own_B = IR_DETACH(ir_word, B, exc_value_st);
-            PyValue held_exc = IR_TAKEN_POINTER(exc_value_st, ir_own_B);
-            ir_own_C = IR_DETACH(ir_word, C, match_type_st);
-            PyValue held_type = IR_TAKEN_REQUIRED(match_type_st, ir_own_C);
-            int err = _PyEval_CheckExceptStarTypeValidValue(tstate, held_type);
-            if (err < 0) {
-                PyValue_CLOSE(held_type);
-                PyValue_CLOSE(held_exc);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
-            _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyValue_CLOSE(held_type);
-            PyValue_CLOSE(held_exc);
-            if (matched.match == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (!Py_IsNone(matched.match)) {
-                PyErr_SetHandledException(matched.match);
-            }
-            exc_rest = PyValue_FromObjectSteal(matched.rest);
-            exc_match = PyValue_FromObjectSteal(matched.match);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), exc_rest);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), exc_match);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_CHECK_EXC_MATCH(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = CHECK_EXC_MATCH;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(CHECK_EXC_MATCH);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue left;
-            PyValueBorrow right;
-            PyValue b;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            right = IR_VIEW(IR_C(ir_word));
-            left = IR_SLOT(IR_B(ir_word));
-            assert(PyValue_IsObject(left));
-            PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
-            ir_own_C = IR_DETACH(ir_word, C, right);
-            PyValue held_right = IR_TAKEN_REQUIRED(right, ir_own_C);
-            assert(PyExceptionInstance_Check(left_o));
-            int err = _PyEval_CheckExceptTypeValidValue(tstate, held_right);
-            if (err < 0) {
-                PyValue_CLOSE(held_right);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);
-            int res = PyErr_GivenExceptionMatches(left_o, right_o);
-            PyValue_CLOSE(held_right);
-            b = res ? PyValue_True : PyValue_False;
-            IR_STORE_DST(ir_word, A, b);
-            PyValue_XCLOSE(ir_old);
-            DISPATCH();
         }
 
         
@@ -7008,37 +6913,6 @@ ir_run_NOP(
 
         
 static Py_NO_INLINE _PyIRTransfer
-ir_run_POP_EXCEPT(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = POP_EXCEPT;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(POP_EXCEPT);
-            PyValueBorrow exc_value;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            exc_value = IR_VIEW(IR_A(ir_word));
-            assert(PyValue_IsObject(exc_value));
-            _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (PyValue_IsNone(exc_value)) {
-                ir_own_A = IR_DETACH(ir_word, A, exc_value);
-                Py_CLEAR(exc_info->exc_value);
-            }
-            else {
-                ir_own_A = IR_DETACH(ir_word, A, exc_value);
-                PyObject *exc = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(exc_value, ir_own_A));
-                Py_XSETREF(exc_info->exc_value, exc);
-            }
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
 ir_run_POP_ITER(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
@@ -7064,136 +6938,6 @@ ir_run_POP_ITER(
             (void)(ir_own_A);
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_PUSH_EXC_INFO(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = PUSH_EXC_INFO;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(PUSH_EXC_INFO);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
-            PyValue exc;
-            PyValue prev_exc;
-            PyValue new_exc;
-            exc = window[0];
-            _PyErr_StackItem *exc_info = tstate->exc_info;
-            PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
-            if (prev_o != NULL) {
-                prev_exc = PyValue_FromObjectSteal(prev_o);
-            }
-            else {
-                prev_exc = PyValue_None;
-            }
-            assert(PyValue_ExceptionInstanceCheck(exc));
-            exc_info->exc_value = PyValue_AsPyObjectNew(exc);
-            new_exc = exc;
-            IR_SET_TEMP(window[0], prev_exc);
-            IR_SET_TEMP(window[1], new_exc);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_RAISE_VARARGS(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = RAISE_VARARGS;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(RAISE_VARARGS);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue *args;
-            args = &window[0];
-            assert(oparg < 3);
-            _PyValue_RecheckWindow(args, oparg);
-            PyObject *exc = NULL;
-            PyObject *cause = NULL;
-            if (oparg > 0) {
-                exc = PyValue_ObjectOrNull(args[0]);
-                if (exc == NULL) {
-                    _PyErr_SetString(tstate, PyExc_TypeError,
-                                     "exceptions must derive from BaseException");
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            bool cause_is_number = false;
-            if (oparg == 2) {
-                cause = PyValue_ObjectOrNull(args[1]);
-                cause_is_number = cause == NULL;
-            }
-            PyObject *exc_owner = Py_XNewRef(exc);
-            PyObject *cause_owner = Py_XNewRef(cause);
-            PyValue tmp;
-            for (int _i = oparg; --_i >= 0;) {
-                tmp = args[_i];
-                args[_i] = PyValue_NULL;
-                PyValue_CLOSE(tmp);
-            }
-            IR_CLEAR_SLOTS(&window[0], oparg);
-            int err = do_raise(tstate, exc_owner, cause_owner, cause_is_number);
-            if (err) {
-                assert(oparg == 0);
-                monitor_reraise(tstate, frame, this_instr);
-                PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
-            }
-            PROCESS_ERROR_AT(RAISE, 0, this_instr);
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_RERAISE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = RERAISE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(RERAISE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue *values;
-            PyValue exc_st;
-            exc_st = window[oparg];
-            values = &window[0];
-            assert(PyValue_IsObject(exc_st));
-            PyObject *exc = _PyValue_AsPyObjectStealPointer(exc_st);
-            assert(oparg >= 0 && oparg <= 2);
-            if (oparg) {
-                frame->instr_ptr = _PyFrame_InstrAt(frame, PyValue_UntagIndex(values[0]));
-            }
-            assert(exc && PyExceptionInstance_Check(exc));
-            window[oparg] = PyValue_NULL;
-            _PyErr_SetRaisedException(tstate, exc);
-            monitor_reraise(tstate, frame, this_instr);
-            PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
         }
 
         
@@ -9216,8 +8960,8 @@ static const _PyIRForm ir_handler_forms[512] = {
     [2] = ir_run_BUILD_TEMPLATE,
     [3] = ir_run_BINARY_OP_INPLACE_ADD_UNICODE,
     [4] = ir_run_CALL_FUNCTION_EX,
-    [5] = ir_run_CHECK_EG_MATCH,
-    [6] = ir_run_CHECK_EXC_MATCH,
+    [5] = ir_run_UNKNOWN_OPCODE,
+    [6] = ir_run_UNKNOWN_OPCODE,
     [7] = ir_run_CLEANUP_THROW,
     [8] = ir_run_UNKNOWN_OPCODE,
     [9] = ir_run_END_FOR,
@@ -9238,10 +8982,10 @@ static const _PyIRForm ir_handler_forms[512] = {
     [24] = ir_run_MATCH_SEQUENCE,
     [25] = ir_run_NOP,
     [26] = ir_run_UNKNOWN_OPCODE,
-    [27] = ir_run_POP_EXCEPT,
+    [27] = ir_run_UNKNOWN_OPCODE,
     [28] = ir_run_POP_ITER,
     [29] = ir_run_UNKNOWN_OPCODE,
-    [30] = ir_run_PUSH_EXC_INFO,
+    [30] = ir_run_UNKNOWN_OPCODE,
     [31] = ir_run_UNKNOWN_OPCODE,
     [32] = ir_run_RETURN_GENERATOR,
     [33] = ir_run_UNKNOWN_OPCODE,
@@ -9314,8 +9058,8 @@ static const _PyIRForm ir_handler_forms[512] = {
     [100] = ir_run_UNKNOWN_OPCODE,
     [101] = ir_run_UNKNOWN_OPCODE,
     [102] = ir_run_UNKNOWN_OPCODE,
-    [103] = ir_run_RAISE_VARARGS,
-    [104] = ir_run_RERAISE,
+    [103] = ir_run_UNKNOWN_OPCODE,
+    [104] = ir_run_UNKNOWN_OPCODE,
     [105] = ir_run_SEND,
     [106] = ir_run_UNKNOWN_OPCODE,
     [107] = ir_run_UNKNOWN_OPCODE,
@@ -9515,122 +9259,122 @@ static const _PyIRForm ir_handler_forms[512] = {
     [301] = ir_run_UpdateContainer_Union,
     [302] = ir_run_UpdateContainer_Overlay,
     [303] = ir_run_MergeKeywords_Merge,
-    [304] = ir_run_Function_Make,
-    [305] = ir_run_Intrinsic_Unary,
-    [306] = ir_run_Intrinsic_ImportStar,
-    [307] = ir_run_Intrinsic_StopIteration,
-    [308] = ir_run_IntrinsicPair_Binary,
-    [309] = ir_run_IntrinsicPair_Compare,
-    [310] = ir_run_IntrinsicPair_Attr,
-    [311] = ir_run_GetAttr_Instance,
-    [312] = ir_run_GetAttr_GetSet,
-    [313] = ir_run_GetAttr_Generic,
-    [314] = ir_run_GetAttr_Shape,
-    [315] = ir_run_GetAttr_PolyShape,
-    [316] = ir_run_GetAttr_Module,
-    [317] = ir_run_GetAttr_Hint,
-    [318] = ir_run_GetAttr_ValueSlot,
-    [319] = ir_run_GetAttr_PointerSlot,
-    [320] = ir_run_GetAttr_Class,
-    [321] = ir_run_GetAttr_NonDescriptorValues,
-    [322] = ir_run_GetAttr_NonDescriptorNoDict,
-    [323] = ir_run_GetMethod_MethodValues,
-    [324] = ir_run_GetMethod_Generic,
-    [325] = ir_run_GetMethod_PolyMethod,
-    [326] = ir_run_GetMethod_NoDict,
-    [327] = ir_run_GetMethod_LazyDict,
-    [328] = ir_run_GetMethod_ClassMethod,
-    [329] = ir_run_GetItem_Generic,
-    [330] = ir_run_SetItem_Generic,
-    [331] = ir_run_DelItem_Generic,
-    [332] = ir_run_SliceRead_Generic,
-    [333] = ir_run_SliceWrite_Generic,
-    [334] = ir_run_BuildSlice_Generic,
-    [335] = ir_run_GetItem_ListIndex,
-    [336] = ir_run_GetItem_TupleIndex,
-    [337] = ir_run_GetItem_Ascii,
-    [338] = ir_run_GetItem_UnicodeAsciiChar,
-    [339] = ir_run_GetItem_ListSlice,
-    [340] = ir_run_GetItem_Dict,
-    [341] = ir_run_SetItem_ListIndex,
-    [342] = ir_run_SetItem_Dict,
-    [343] = ir_run_GlobalRead_Generic,
-    [344] = ir_run_GlobalRead_Module,
-    [345] = ir_run_GlobalRead_Builtin,
-    [346] = ir_run_NamespaceRead_Name,
-    [347] = ir_run_NamespaceRead_Locals,
-    [348] = ir_run_NamespaceRead_BuildClass,
-    [349] = ir_run_NamespaceReadFrom_Mapping,
-    [350] = ir_run_NamespaceWrite_Name,
-    [351] = ir_run_NamespaceWrite_Global,
-    [352] = ir_run_SetupAnnotations_Setup,
-    [353] = ir_run_Import_Eager,
-    [354] = ir_run_Import_Policy,
-    [355] = ir_run_Import_Lazy,
-    [356] = ir_run_ImportFrom_From,
-    [357] = ir_run_ImportFrom_FromLast,
-    [358] = ir_run_Truth_Bool,
-    [359] = ir_run_Truth_Int,
-    [360] = ir_run_Truth_List,
-    [361] = ir_run_Truth_None,
-    [362] = ir_run_Truth_Str,
-    [363] = ir_run_Truth_Plain,
-    [364] = ir_run_Truth_Slot,
-    [365] = ir_run_Truth_Generic,
-    [366] = ir_run_BranchTruth_Bool,
-    [367] = ir_run_BranchTruth_Int,
-    [368] = ir_run_BranchTruth_List,
-    [369] = ir_run_BranchTruth_None,
-    [370] = ir_run_BranchTruth_Str,
-    [371] = ir_run_BranchTruth_Plain,
-    [372] = ir_run_BranchTruth_Slot,
-    [373] = ir_run_BranchTruth_Generic,
-    [374] = ir_run_BranchNone_Test,
-    [375] = ir_run_BranchTruth_Observed,
-    [376] = ir_run_BranchNone_Observed,
-    [377] = ir_run_Jump_Direct,
-    [378] = ir_run_Jump_Poll,
-    [379] = ir_run_Jump_Warm,
-    [380] = ir_run_Jump_Observed,
-    [381] = ir_run_Const_Pool,
-    [382] = ir_run_Const_Small,
-    [383] = ir_run_Const_Common,
-    [384] = ir_run_LocalRead_Bound,
-    [385] = ir_run_LocalRead_Checked,
-    [386] = ir_run_LocalWrite_Store,
-    [387] = ir_run_LocalWrite_Restore,
-    [388] = ir_run_SaveLocal_Take,
-    [389] = ir_run_LocalDelete_Checked,
-    [390] = ir_run_Move_Transfer,
-    [391] = ir_run_Move_Retire,
-    [392] = ir_run_Move_Copy,
-    [393] = ir_run_Call_Observed,
-    [394] = ir_run_Call_Observed,
-    [395] = ir_run_Call_Observed,
-    [396] = ir_run_Call_Observed,
-    [397] = ir_run_Return_Observed,
-    [398] = ir_run_Return_Observed,
-    [399] = ir_run_Return_Observed,
-    [400] = ir_run_Return_Observed,
-    [401] = ir_run_BranchTruth_Observed,
-    [402] = ir_run_BranchTruth_Observed,
-    [403] = ir_run_BranchTruth_Observed,
-    [404] = ir_run_BranchTruth_Observed,
-    [405] = ir_run_BranchTruth_Observed,
-    [406] = ir_run_BranchTruth_Observed,
-    [407] = ir_run_BranchTruth_Observed,
+    [304] = ir_run_Raise_Throw,
+    [305] = ir_run_Reraise_Plain,
+    [306] = ir_run_Reraise_Origin,
+    [307] = ir_run_ExceptEnter_Install,
+    [308] = ir_run_ExceptLeave_Restore,
+    [309] = ir_run_ExceptMatch_Match,
+    [310] = ir_run_ExceptGroupMatch_Split,
+    [311] = ir_run_Function_Make,
+    [312] = ir_run_Intrinsic_Unary,
+    [313] = ir_run_Intrinsic_ImportStar,
+    [314] = ir_run_Intrinsic_StopIteration,
+    [315] = ir_run_IntrinsicPair_Binary,
+    [316] = ir_run_IntrinsicPair_Compare,
+    [317] = ir_run_IntrinsicPair_Attr,
+    [318] = ir_run_GetAttr_Instance,
+    [319] = ir_run_GetAttr_GetSet,
+    [320] = ir_run_GetAttr_Generic,
+    [321] = ir_run_GetAttr_Shape,
+    [322] = ir_run_GetAttr_PolyShape,
+    [323] = ir_run_GetAttr_Module,
+    [324] = ir_run_GetAttr_Hint,
+    [325] = ir_run_GetAttr_ValueSlot,
+    [326] = ir_run_GetAttr_PointerSlot,
+    [327] = ir_run_GetAttr_Class,
+    [328] = ir_run_GetAttr_NonDescriptorValues,
+    [329] = ir_run_GetAttr_NonDescriptorNoDict,
+    [330] = ir_run_GetMethod_MethodValues,
+    [331] = ir_run_GetMethod_Generic,
+    [332] = ir_run_GetMethod_PolyMethod,
+    [333] = ir_run_GetMethod_NoDict,
+    [334] = ir_run_GetMethod_LazyDict,
+    [335] = ir_run_GetMethod_ClassMethod,
+    [336] = ir_run_GetItem_Generic,
+    [337] = ir_run_SetItem_Generic,
+    [338] = ir_run_DelItem_Generic,
+    [339] = ir_run_SliceRead_Generic,
+    [340] = ir_run_SliceWrite_Generic,
+    [341] = ir_run_BuildSlice_Generic,
+    [342] = ir_run_GetItem_ListIndex,
+    [343] = ir_run_GetItem_TupleIndex,
+    [344] = ir_run_GetItem_Ascii,
+    [345] = ir_run_GetItem_UnicodeAsciiChar,
+    [346] = ir_run_GetItem_ListSlice,
+    [347] = ir_run_GetItem_Dict,
+    [348] = ir_run_SetItem_ListIndex,
+    [349] = ir_run_SetItem_Dict,
+    [350] = ir_run_GlobalRead_Generic,
+    [351] = ir_run_GlobalRead_Module,
+    [352] = ir_run_GlobalRead_Builtin,
+    [353] = ir_run_NamespaceRead_Name,
+    [354] = ir_run_NamespaceRead_Locals,
+    [355] = ir_run_NamespaceRead_BuildClass,
+    [356] = ir_run_NamespaceReadFrom_Mapping,
+    [357] = ir_run_NamespaceWrite_Name,
+    [358] = ir_run_NamespaceWrite_Global,
+    [359] = ir_run_SetupAnnotations_Setup,
+    [360] = ir_run_Import_Eager,
+    [361] = ir_run_Import_Policy,
+    [362] = ir_run_Import_Lazy,
+    [363] = ir_run_ImportFrom_From,
+    [364] = ir_run_ImportFrom_FromLast,
+    [365] = ir_run_Truth_Bool,
+    [366] = ir_run_Truth_Int,
+    [367] = ir_run_Truth_List,
+    [368] = ir_run_Truth_None,
+    [369] = ir_run_Truth_Str,
+    [370] = ir_run_Truth_Plain,
+    [371] = ir_run_Truth_Slot,
+    [372] = ir_run_Truth_Generic,
+    [373] = ir_run_BranchTruth_Bool,
+    [374] = ir_run_BranchTruth_Int,
+    [375] = ir_run_BranchTruth_List,
+    [376] = ir_run_BranchTruth_None,
+    [377] = ir_run_BranchTruth_Str,
+    [378] = ir_run_BranchTruth_Plain,
+    [379] = ir_run_BranchTruth_Slot,
+    [380] = ir_run_BranchTruth_Generic,
+    [381] = ir_run_BranchNone_Test,
+    [382] = ir_run_BranchTruth_Observed,
+    [383] = ir_run_BranchNone_Observed,
+    [384] = ir_run_Jump_Direct,
+    [385] = ir_run_Jump_Poll,
+    [386] = ir_run_Jump_Warm,
+    [387] = ir_run_Jump_Observed,
+    [388] = ir_run_Const_Pool,
+    [389] = ir_run_Const_Small,
+    [390] = ir_run_Const_Common,
+    [391] = ir_run_LocalRead_Bound,
+    [392] = ir_run_LocalRead_Checked,
+    [393] = ir_run_LocalWrite_Store,
+    [394] = ir_run_LocalWrite_Restore,
+    [395] = ir_run_SaveLocal_Take,
+    [396] = ir_run_LocalDelete_Checked,
+    [397] = ir_run_Move_Transfer,
+    [398] = ir_run_Move_Retire,
+    [399] = ir_run_Move_Copy,
+    [400] = ir_run_Call_Observed,
+    [401] = ir_run_Call_Observed,
+    [402] = ir_run_Call_Observed,
+    [403] = ir_run_Call_Observed,
+    [404] = ir_run_Return_Observed,
+    [405] = ir_run_Return_Observed,
+    [406] = ir_run_Return_Observed,
+    [407] = ir_run_Return_Observed,
     [408] = ir_run_BranchTruth_Observed,
-    [409] = ir_run_BranchNone_Observed,
-    [410] = ir_run_Jump_Observed,
-    [411] = ir_run_Jump_Observed,
-    [412] = ir_run_Jump_Observed,
-    [413] = ir_run_UNKNOWN_OPCODE,
-    [414] = ir_run_UNKNOWN_OPCODE,
-    [415] = ir_run_UNKNOWN_OPCODE,
-    [416] = ir_run_UNKNOWN_OPCODE,
-    [417] = ir_run_UNKNOWN_OPCODE,
-    [418] = ir_run_UNKNOWN_OPCODE,
-    [419] = ir_run_UNKNOWN_OPCODE,
+    [409] = ir_run_BranchTruth_Observed,
+    [410] = ir_run_BranchTruth_Observed,
+    [411] = ir_run_BranchTruth_Observed,
+    [412] = ir_run_BranchTruth_Observed,
+    [413] = ir_run_BranchTruth_Observed,
+    [414] = ir_run_BranchTruth_Observed,
+    [415] = ir_run_BranchTruth_Observed,
+    [416] = ir_run_BranchNone_Observed,
+    [417] = ir_run_Jump_Observed,
+    [418] = ir_run_Jump_Observed,
+    [419] = ir_run_Jump_Observed,
     [420] = ir_run_UNKNOWN_OPCODE,
     [421] = ir_run_UNKNOWN_OPCODE,
     [422] = ir_run_UNKNOWN_OPCODE,
@@ -11495,12 +11239,6 @@ static const _PyIRForm ir_handler_forms[512] = {
                     DISPATCH();
                 }
             }
-        }
-        TARGET(CHECK_EG_MATCH) {
-            IR_RUN_OUTLINED(ir_run_CHECK_EG_MATCH);
-        }
-        TARGET(CHECK_EXC_MATCH) {
-            IR_RUN_OUTLINED(ir_run_CHECK_EXC_MATCH);
         }
 
         TARGET(CLEANUP_THROW) {
@@ -14103,9 +13841,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             INSTRUCTION_STATS(NOP);
             DISPATCH();
         }
-        TARGET(POP_EXCEPT) {
-            IR_RUN_OUTLINED(ir_run_POP_EXCEPT);
-        }
 
         TARGET(POP_ITER) {
             int opcode = POP_ITER;
@@ -14130,15 +13865,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)(ir_own_A);
             PyValue_XCLOSE(ir_own_A);
             DISPATCH();
-        }
-        TARGET(PUSH_EXC_INFO) {
-            IR_RUN_OUTLINED(ir_run_PUSH_EXC_INFO);
-        }
-        TARGET(RAISE_VARARGS) {
-            IR_RUN_OUTLINED(ir_run_RAISE_VARARGS);
-        }
-        TARGET(RERAISE) {
-            IR_RUN_OUTLINED(ir_run_RERAISE);
         }
 
         TARGET(RESERVED) {

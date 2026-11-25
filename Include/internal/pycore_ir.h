@@ -1081,8 +1081,8 @@ _PyIR_SpanWordLength(int handler, _PyIRWord word)
 /* The spans of a span format: the number of COUNT fields, which are the
  * spans in declaration order, and the direction of each.  A Move has two,
  * its destinations and its sources.  A family with one span reads it when it
- * also has a destination of its own (Build's items) and writes it when it
- * has none (Unpack's destinations). */
+ * also has a destination of its own (Build's items) or no input of its own
+ * (Raise's operands), and writes it otherwise (Unpack's destinations). */
 static inline int
 _PyIR_SpanCountFields(const _PyIRFormat *fmt)
 {
@@ -1091,6 +1091,18 @@ _PyIR_SpanCountFields(const _PyIRFormat *fmt)
         n += fmt->roles[f] == _PyIR_ROLE_COUNT;
     }
     return n;
+}
+
+/* Whether the one span of a single-span format is read */
+static inline int
+_PyIR_SingleSpanReads(const _PyIRFormat *fmt)
+{
+    int has_dst = 0, has_input = 0;
+    for (int f = 0; f < 4; f++) {
+        has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
+        has_input |= fmt->roles[f] >= _PyIR_ROLE_IN0;
+    }
+    return has_dst || !has_input;
 }
 
 static inline int
@@ -1106,9 +1118,8 @@ _PyIR_SpanBounds(const _PyIRWord *head, int handler, int k, int *first,
                  int *is_source)
 {
     const _PyIRFormat *fmt = &_PyIR_Formats[handler];
-    int seen = 0, before = 0, count = 0, has_dst = 0;
+    int seen = 0, before = 0, count = 0;
     for (int f = 0; f < 4; f++) {
-        has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
         if (fmt->roles[f] == _PyIR_ROLE_COUNT) {
             int c = (int)((head[0] >> (16 + 12 * f)) & IR_FIELD_MAX);
             if (seen++ < k) {
@@ -1120,7 +1131,7 @@ _PyIR_SpanBounds(const _PyIRWord *head, int handler, int k, int *first,
         }
     }
     *first = before;
-    *is_source = seen == 2 ? k == 1 : has_dst;
+    *is_source = seen == 2 ? k == 1 : _PyIR_SingleSpanReads(fmt);
     return count;
 }
 

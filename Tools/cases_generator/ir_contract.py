@@ -1143,6 +1143,17 @@ def check_columns(table: dict[str, Row]) -> None:
                      f"not the protocol's, {protocol.name}")
 
 
+def typed_null(ctype: str) -> str:
+    """An unevaluated null argument of C type ctype.  A word is built with
+    the value API: a (PyValue){0} literal names the encoding."""
+    bare = ctype.removeprefix("const ").strip()
+    if bare == "PyValue":
+        return "PyValue_NULL"
+    if bare == "PyValueBorrow":
+        return "PyValue_Borrow(PyValue_NULL)"
+    return f"({ctype}){{0}}"
+
+
 _ROWS: dict[str, Row] = {}
 
 
@@ -1187,7 +1198,7 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
             else:
                 check(f"(({row.struct} *)0)->{row.field}", row.ret, row.name)
         elif row.kind == "PRIMITIVE":
-            call = ", ".join(f"({p}){{0}}" for p in row.params)
+            call = ", ".join(typed_null(p) for p in row.params)
             check(f"{row.name}({call})", row.ret, row.name)
         elif row.kind == "CONSTANT" and row.representation == "OBJECT":
             check(f"&{row.name}", f"{row.ret} *", row.name)

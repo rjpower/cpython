@@ -280,16 +280,24 @@ _PyRop_HasEntryVersion(const _PyFbUnary *fb, PyValueBorrow v)
     return FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) == fb->type_version;
 }
 
+/* A word's call may be to a stub that its code was compiled with, after the
+ * word was adapted to another arm: the entry then holds that arm's type
+ * version, so these guards test the kind of value as well as the version. */
 static inline bool
 _PyRop_NoneOrPlain(const _PyFbUnary *fb, PyValueBorrow v)
 {
-    return PyValue_IsNone(v) || _PyRop_HasEntryVersion(fb, v);
+    if (PyValue_IsNone(v)) {
+        return true;
+    }
+    return _PyRop_HasEntryVersion(fb, v)
+        && PyType_HasFeature(Py_TYPE(PyValue_AsKnownObjectBorrow(v)), Py_TPFLAGS_HEAPTYPE);
 }
 
 static inline bool
 _PyRop_SlotApplies(const _PyFbUnary *fb, PyValueBorrow v)
 {
-    return _PyRop_HasEntryVersion(fb, v);
+    return _PyRop_HasEntryVersion(fb, v) && !PyValue_IsNone(v)
+        && !PyValue_BoolCheck(v);
 }
 
 /* The truth of any value, and of an object whose type's slots decide */

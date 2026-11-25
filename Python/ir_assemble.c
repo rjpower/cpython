@@ -617,10 +617,6 @@ handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
     if (_PyIR_CALL_SHAPED(fmt->operands)) {
         return call_noperands(op);
     }
-    if (op->opcode == LOAD_GLOBAL) {
-        // The NULL bit is only the stack model's: the slot is NULL already
-        return op->oparg & ~1;
-    }
     return op->oparg;
 }
 

@@ -291,7 +291,7 @@ class HomeWriterTests(unittest.TestCase):
             value = dynamic
             return value, current
 
-        self.assertTrue(any(row[0] == "LOAD_GLOBAL"
+        self.assertTrue(any(row[0] == "GlobalRead.Generic"
                             for row in _testinternalcapi.get_ir(read.__code__)))
         for code in routes(read.__code__):
             function = types.FunctionType(code, {"__builtins__": Builtins()})

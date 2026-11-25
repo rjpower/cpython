@@ -1299,6 +1299,29 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, defs[1]);
 }
 
+/* LOAD_GLOBAL is the GlobalRead family (Python/register_ops/names.rop).  The
+ * name is oparg >> 1.  The low bit asks for the NULL that a call takes as its
+ * absent self; it is not a value of the family, so the rule pushes a PUSH_NULL
+ * after the result, as the stack held them.  ElideNull gives it no word. */
+static int
+rule_load_global(_PyRegTr *t, const _PyRegOp *src)
+{
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GlobalRead_Generic,
+                                  NULL, 0, &dst, 1, &op));
+    op->oparg = src->oparg >> 1;
+    RETURN_IF_ERROR(_PyRegTr_Push(t, dst));
+    if (!(src->oparg & 1)) {
+        return SUCCESS;
+    }
+    _PyRegOp null = *src;
+    null.opcode = PUSH_NULL;
+    null.oparg = 0;
+    return _PyRegTr_Legacy(t, &null);
+}
+
 /* BINARY_OP.  Addition is the Add family (Python/register_ops/add.rop): its
  * register instruction is Add.Generic's, with the family's operands in their
  * declared order, x and y in, dst out.  The word starts on that arm, which
@@ -1612,6 +1635,7 @@ static const _PyRegRule rules[256] = {
     [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,
     [SWAP] = rule_swap,
     [LOAD_ATTR] = rule_load_attr,
+    [LOAD_GLOBAL] = rule_load_global,
 };
 
 /* An edge binds the parameters of the positions below depth: one that

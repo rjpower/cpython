@@ -1,0 +1,64 @@
+// 1F1: global lookup (Appendix A, batch GR).  The NULL that a call's
+// LOAD_GLOBAL pushes is the call's absent self, not a value of this
+// family: the translator pushes it as an elided PUSH_NULL.
+
+family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
+  exits(next, raise, redirect) ops(LOAD_GLOBAL);
+
+point GlobalRead.Failed(current, site, pending) keep() spent() defs() held();
+point GlobalRead.Done(current, next_head, clear) keep() spent() defs(dst) held();
+
+// The name in the frame's globals, then its builtins.  A non-dict
+// namespace runs Python (__getitem__), and a lazy import value is reified,
+// so a debugger's jump can move the frame while it runs.
+macro global_at_origin(n:Name)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+{
+  entry():
+    call load_global(frame, n) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+extern helper load_global(f:Frame, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_LoadGlobal as value_or_null
+  evidence(
+    review: "ceval.c: value_load_global; _PyEval_LoadGlobalValue on the frame's globals and builtins.",
+    contract: "Both namespaces are borrowed; the result is owned, or NULL with an exception set (NameError on a miss). A non-dict namespace and a lazy import run Python.");
+
+arm GlobalRead.Generic shared
+  effects(runs_python, raises, releases)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    call global_at_origin(name) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at GlobalRead.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(GlobalRead.Failed, e);
+  Gone(route:Route):
+    exit redirect(route);
+}

@@ -67,8 +67,6 @@ typedef enum {
 #define SPEC_FAIL_CODE_NOT_OPTIMIZED 8
 
 
-#define SPEC_FAIL_LOAD_GLOBAL_NON_DICT 17
-#define SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT 18
 
 /* Super */
 
@@ -2058,117 +2056,6 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
     fb->class_value = _PyValueGuarded_FromBorrow(descriptor);
     specialize(instr, opcode);
     return 1;
-}
-
-static void
-specialize_load_global_lock_held(
-    PyObject *globals, PyObject *builtins,
-    _PyInstr *instr, PyObject *name)
-{
-    assert(ENABLE_SPECIALIZATION);
-    PyValue value = PyValue_NULL;
-    assert(_PyOpcode_Caches[LOAD_GLOBAL] == INLINE_CACHE_ENTRIES_LOAD_GLOBAL);
-    _PyFbGlobal *fb = instr_entry(instr);
-    assert(PyUnicode_CheckExact(name));
-    if (!PyDict_CheckExact(globals)) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
-        goto fail;
-    }
-    PyDictKeysObject * globals_keys = ((PyDictObject *)globals)->ma_keys;
-    if (globals_keys->dk_kind != DICT_KEYS_UNICODE) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
-        goto fail;
-    }
-    Py_ssize_t index = _PyDict_LookupIndexAndOwnedValue((PyDictObject *)globals, name, &value);
-    if (index == DKIX_ERROR) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
-        goto fail;
-    }
-    if (PyValue_IsObject(value) &&
-        PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
-        goto fail;
-    }
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (index != DKIX_EMPTY) {
-        uint32_t keys_version = _PyDict_GetKeysVersionForCurrentState(
-                interp, (PyDictObject*) globals);
-        if (keys_version == 0) {
-            SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
-            goto fail;
-        }
-        PyDict_Watch(MODULE_WATCHER_ID, globals);
-        fb->index = (uint32_t)index;
-        fb->globals_version = keys_version;
-        specialize(instr, LOAD_GLOBAL_MODULE);
-        PyValue_XCLOSE(value);
-        return;
-    }
-    if (!PyDict_CheckExact(builtins)) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
-        goto fail;
-    }
-    PyDictKeysObject * builtin_keys = ((PyDictObject *)builtins)->ma_keys;
-    if (builtin_keys->dk_kind != DICT_KEYS_UNICODE) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
-        goto fail;
-    }
-    assert(PyValue_IsNull(value));
-    index = _PyDict_LookupIndexAndOwnedValue((PyDictObject *)builtins, name, &value);
-    if (index == DKIX_ERROR) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
-        goto fail;
-    }
-    if (PyValue_IsObject(value) &&
-        PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
-        goto fail;
-    }
-    if (index == DKIX_EMPTY) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
-        goto fail;
-    }
-    uint32_t globals_version = _PyDict_GetKeysVersionForCurrentState(
-            interp, (PyDictObject*) globals);
-    if (globals_version == 0) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
-        goto fail;
-    }
-    PyDict_Watch(MODULE_WATCHER_ID, globals);
-    uint32_t builtins_version = _PyDict_GetKeysVersionForCurrentState(
-            interp, (PyDictObject*) builtins);
-    if (builtins_version == 0) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
-        goto fail;
-    }
-    PyDict_Watch(MODULE_WATCHER_ID, builtins);
-    fb->index = (uint32_t)index;
-    fb->globals_version = globals_version;
-    fb->builtins_version = builtins_version;
-    specialize(instr, LOAD_GLOBAL_BUILTIN);
-    PyValue_XCLOSE(value);
-    return;
-fail:
-    PyValue_XCLOSE(value);
-    unspecialize(instr);
-}
-
-Py_NO_INLINE void
-_Py_Specialize_LoadGlobal(
-    PyObject *globals, PyObject *builtins,
-    _PyInstr *instr, PyObject *name)
-{
-#ifdef Py_GIL_DISABLED
-    if (PyMutex_IsLocked(&globals->ob_mutex) || PyMutex_IsLocked(&builtins->ob_mutex)) {
-        // Skip specialization if either dictionary is locked to avoid lock
-        // contention.
-        unspecialize(instr);
-        return;
-    }
-#endif
-    Py_BEGIN_CRITICAL_SECTION2(globals, builtins);
-    specialize_load_global_lock_held(globals, builtins, instr, name);
-    Py_END_CRITICAL_SECTION2();
 }
 
 static FunctionSignature

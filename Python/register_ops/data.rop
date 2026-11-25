@@ -74,9 +74,6 @@ family NamespaceWrite(scope:Enum<NamespaceScope>, name:Name, value:Maybe<Src>,
                       mode:Enum<WriteMode>)
   exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
 
-family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
-  exits(next, raise, miss, again) ops(LOAD_GLOBAL);
-
 family SetupAnnotations()
   exits(next, raise) ops(SETUP_ANNOTATIONS);
 

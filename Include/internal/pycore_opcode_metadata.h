@@ -308,10 +308,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 1;
         case LOAD_GLOBAL:
             return 0;
-        case LOAD_GLOBAL_BUILTIN:
-            return 0;
-        case LOAD_GLOBAL_MODULE:
-            return 0;
         case LOAD_LOCALS:
             return 0;
         case LOAD_NAME:
@@ -738,11 +734,7 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
         case LOAD_FROM_DICT_OR_GLOBALS:
             return 1;
         case LOAD_GLOBAL:
-            return 1 + (oparg & 1);
-        case LOAD_GLOBAL_BUILTIN:
-            return 1 + (oparg & 1);
-        case LOAD_GLOBAL_MODULE:
-            return 1 + (oparg & 1);
+            return 1 + (oparg&1);
         case LOAD_LOCALS:
             return 1;
         case LOAD_NAME:
@@ -1096,9 +1088,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [LOAD_FAST_LOAD_FAST] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [LOAD_FROM_DICT_OR_DEREF] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_FREE_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [LOAD_FROM_DICT_OR_GLOBALS] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_GLOBAL] = { true, INSTR_FMT_IBC000, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_GLOBAL_BUILTIN] = { true, INSTR_FMT_IBC000, HAS_ARG_FLAG | HAS_DEOPT_FLAG },
-    [LOAD_GLOBAL_MODULE] = { true, INSTR_FMT_IBC000, HAS_ARG_FLAG | HAS_DEOPT_FLAG },
+    [LOAD_GLOBAL] = { true, INSTR_FMT_IBC000, HAS_ARG_FLAG | HAS_NAME_FLAG },
     [LOAD_LOCALS] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG },
     [LOAD_NAME] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [LOAD_SMALL_INT] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
@@ -1271,9 +1261,6 @@ _PyOpcode_macro_expansion[256] = {
     [LOAD_DEREF] = { .nuops = 1, .uops = { { _LOAD_DEREF, OPARG_SIMPLE, 0 } } },
     [LOAD_FROM_DICT_OR_DEREF] = { .nuops = 1, .uops = { { _LOAD_FROM_DICT_OR_DEREF, OPARG_SIMPLE, 0 } } },
     [LOAD_FROM_DICT_OR_GLOBALS] = { .nuops = 1, .uops = { { _LOAD_FROM_DICT_OR_GLOBALS, OPARG_SIMPLE, 0 } } },
-    [LOAD_GLOBAL] = { .nuops = 2, .uops = { { _LOAD_GLOBAL, OPARG_SIMPLE, 4 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 4 } } },
-    [LOAD_GLOBAL_BUILTIN] = { .nuops = 4, .uops = { { _GUARD_GLOBALS_VERSION, 1, 1 }, { _LOAD_GLOBAL_BUILTINS, 1, 2 }, { _LOAD_GLOBAL_BUILTINS, OPERAND1_1, 3 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 4 } } },
-    [LOAD_GLOBAL_MODULE] = { .nuops = 3, .uops = { { _LOAD_GLOBAL_MODULE, 1, 1 }, { _LOAD_GLOBAL_MODULE, OPERAND1_1, 3 }, { _NULL_SLOT_CONDITIONAL, OPARG_SIMPLE, 4 } } },
     [LOAD_LOCALS] = { .nuops = 1, .uops = { { _LOAD_LOCALS, OPARG_SIMPLE, 0 } } },
     [LOAD_NAME] = { .nuops = 1, .uops = { { _LOAD_NAME, OPARG_SIMPLE, 0 } } },
     [LOAD_SPECIAL] = { .nuops = 2, .uops = { { _INSERT_NULL, OPARG_SIMPLE, 0 }, { _LOAD_SPECIAL, OPARG_SIMPLE, 0 } } },
@@ -1469,8 +1456,6 @@ const char *_PyOpcode_OpName[267] = {
     [LOAD_FROM_DICT_OR_DEREF] = "LOAD_FROM_DICT_OR_DEREF",
     [LOAD_FROM_DICT_OR_GLOBALS] = "LOAD_FROM_DICT_OR_GLOBALS",
     [LOAD_GLOBAL] = "LOAD_GLOBAL",
-    [LOAD_GLOBAL_BUILTIN] = "LOAD_GLOBAL_BUILTIN",
-    [LOAD_GLOBAL_MODULE] = "LOAD_GLOBAL_MODULE",
     [LOAD_LOCALS] = "LOAD_LOCALS",
     [LOAD_NAME] = "LOAD_NAME",
     [LOAD_SMALL_INT] = "LOAD_SMALL_INT",
@@ -1550,6 +1535,7 @@ PyAPI_DATA(const uint8_t) _PyOpcode_Caches[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Caches[256] = {
     [TO_BOOL] = 3,
+    [LOAD_GLOBAL] = 4,
     [LOAD_ATTR] = 9,
     [POP_JUMP_IF_FALSE] = 1,
     [POP_JUMP_IF_TRUE] = 1,
@@ -1562,7 +1548,6 @@ const uint8_t _PyOpcode_Caches[256] = {
     [FOR_ITER] = 1,
     [UNPACK_SEQUENCE] = 1,
     [STORE_ATTR] = 4,
-    [LOAD_GLOBAL] = 4,
     [LOAD_SUPER_ATTR] = 1,
     [COMPARE_OP] = 1,
     [CONTAINS_OP] = 1,
@@ -1574,7 +1559,7 @@ const uint8_t _PyOpcode_Caches[256] = {
 };
 #endif
 
-#define FB_MAX_FIELDS 3
+#define FB_MAX_FIELDS 2
 struct _PyFbField {
     uint8_t unit;  // in code units from the instruction
     uint8_t size;  // in code units
@@ -1591,8 +1576,6 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
     [BINARY_OP_EXTEND] = { 1, { { 2, 4, offsetof(_PyFb_BINARY_OP, descr) } } },
     [CALL_KW_BOUND_METHOD] = { 1, { { 2, 2, offsetof(_PyFb_CALL_KW, func_version) } } },
     [CALL_KW_PY] = { 1, { { 2, 2, offsetof(_PyFb_CALL_KW, func_version) } } },
-    [LOAD_GLOBAL_BUILTIN] = { 3, { { 2, 1, offsetof(_PyFb_LOAD_GLOBAL, globals_version) }, { 3, 1, offsetof(_PyFb_LOAD_GLOBAL, builtins_version) }, { 4, 1, offsetof(_PyFb_LOAD_GLOBAL, index) } } },
-    [LOAD_GLOBAL_MODULE] = { 2, { { 2, 1, offsetof(_PyFb_LOAD_GLOBAL, globals_version) }, { 4, 1, offsetof(_PyFb_LOAD_GLOBAL, index) } } },
     [STORE_ATTR_INSTANCE_VALUE] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
     [STORE_ATTR_SHAPE] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
     [STORE_ATTR_SHAPE_ADD] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
@@ -1612,6 +1595,8 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [125] = 125,
     [126] = 126,
     [127] = 127,
+    [183] = 183,
+    [184] = 184,
     [185] = 185,
     [186] = 186,
     [187] = 187,
@@ -1791,8 +1776,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [LOAD_FROM_DICT_OR_DEREF] = LOAD_FROM_DICT_OR_DEREF,
     [LOAD_FROM_DICT_OR_GLOBALS] = LOAD_FROM_DICT_OR_GLOBALS,
     [LOAD_GLOBAL] = LOAD_GLOBAL,
-    [LOAD_GLOBAL_BUILTIN] = LOAD_GLOBAL,
-    [LOAD_GLOBAL_MODULE] = LOAD_GLOBAL,
     [LOAD_LOCALS] = LOAD_LOCALS,
     [LOAD_NAME] = LOAD_NAME,
     [LOAD_SMALL_INT] = LOAD_SMALL_INT,
@@ -1873,6 +1856,8 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 125: \
     case 126: \
     case 127: \
+    case 183: \
+    case 184: \
     case 185: \
     case 186: \
     case 187: \

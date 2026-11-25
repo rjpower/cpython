@@ -2260,36 +2260,6 @@ dummy_func(
             ERROR_IF(PyValue_IsNull(v));
         }
 
-        family(LOAD_GLOBAL, INLINE_CACHE_ENTRIES_LOAD_GLOBAL) = {
-            LOAD_GLOBAL_MODULE,
-            LOAD_GLOBAL_BUILTIN,
-        };
-
-        specializing op(_SPECIALIZE_LOAD_GLOBAL, ( -- ))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                next_instr = this_instr;
-                _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        op(_LOAD_GLOBAL, ( -- res[1]: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-            PyValue found = value_load_global(GLOBALS(), BUILTINS(), name);
-            ERROR_IF(PyValue_IsNull(found));
-            IR_WRITE_OUTPUT(res, 0, found);
-        }
-
         // The NULL of a call's window needs no write: the slot is NULL by the
         // NULL invariant, and the assembler clears the bit in the word
         // (register-ir.md G4).  The stack model keeps the output.
@@ -2298,70 +2268,18 @@ dummy_func(
         {
         }
 
-        macro(LOAD_GLOBAL) =
-            unused/1 +
-            _SPECIALIZE_LOAD_GLOBAL +
-            unused/3 +
-            _LOAD_GLOBAL +
-            _NULL_SLOT_CONDITIONAL;
-
-        // Globals are always a dict, and a keys object has one owner and a
-        // version that is never reused, so a match on the keys version
-        // names the dict the specialiser saw.  Builtins can be any object,
-        // so _LOAD_GLOBAL_BUILTINS still checks the type before it reads
-        // the keys.
-        leaf op(_GUARD_GLOBALS_VERSION, (globals_version/1 --))
-            effects(reads) exits(next, deopt) paths(globals: keys_version(globals_version))
+        /* A stack op only: rule_load_global (Python/regcfg.c) lowers it to
+         * GlobalRead (Python/register_ops/names.rop). */
+        tier1 inst(LOAD_GLOBAL,
+                (unused/4 -- res: owned, null[oparg&1]: owned nullable))
+            exits(abort)
         {
-            PyDictObject *dict = (PyDictObject *)GLOBALS();
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
+            /* The name operand keeps dis and the name flag of the opcode */
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        leaf op(_LOAD_GLOBAL_MODULE, (globals_version/1, unused/1, index/1 -- res: owned))
-            effects(reads) exits(next, deopt) paths(globals: keys_version(globals_version))
-        {
-            PyDictObject *dict = (PyDictObject *)GLOBALS();
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-            DEOPT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries),
-                     "the index is past the entries of the keys");
-            PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-            DEOPT_IF(PyValue_IsNull(found));
-            res = PyValue_XDUP(found);
-            STAT_INC(LOAD_GLOBAL, hit);
-        }
-
-        leaf op(_LOAD_GLOBAL_BUILTINS, (builtins_version/1, index/1 -- res: owned))
-            effects(reads) exits(next, deopt) paths(builtins: keys_version(builtins_version))
-        {
-            PyDictObject *dict = (PyDictObject *)BUILTINS();
-            DEOPT_IF(!PyDict_CheckExact(dict));
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-            DEOPT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries),
-                     "the index is past the entries of the keys");
-            PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-            DEOPT_IF(PyValue_IsNull(found));
-            res = PyValue_XDUP(found);
-            STAT_INC(LOAD_GLOBAL, hit);
-        }
-
-        macro(LOAD_GLOBAL_MODULE) =
-            unused/1 + // Skip over the entry distance
-            _LOAD_GLOBAL_MODULE +
-            _NULL_SLOT_CONDITIONAL;
-
-        macro(LOAD_GLOBAL_BUILTIN) =
-            unused/1 + // Skip over the entry distance
-            _GUARD_GLOBALS_VERSION +
-            _LOAD_GLOBAL_BUILTINS +
-            _NULL_SLOT_CONDITIONAL;
 
         outlined inst(MAKE_CELL, (--))
             effects(runs_python) exits(next, raise)

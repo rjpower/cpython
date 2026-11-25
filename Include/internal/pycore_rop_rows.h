@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_ceval.h"         // _PyEval_LoadGlobalValue()
 #include "pycore_code.h"          // _PyBinaryOp_ExtendDescr()
 #include "pycore_feedback.h"      // _PyFbBinary
 #include "pycore_interpframe.h"   // _PyFrame_TakeHome()
@@ -121,6 +122,16 @@ static inline void
 _PyRop_DiscardResult(PyValue z)
 {
     PyValue_XCLOSE(z);
+}
+
+/* GlobalRead: the name in the frame's globals, then its builtins; an owned
+ * value, or PyValue_NULL with an exception set */
+static inline PyValue
+_PyRop_LoadGlobal(_PyInterpreterFrame *frame, PyObject *name)
+{
+    PyValue v = PyValue_NULL;
+    _PyEval_LoadGlobalValue(frame->f_globals, frame->f_builtins, name, &v);
+    return v;
 }
 
 /* Add: floats, text and the extension descriptor */

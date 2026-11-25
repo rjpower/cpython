@@ -425,8 +425,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_ForIter), 
               "_Py_Specialize_ForIter: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_GetIter), void (*)(PyValue, _PyInstr *)),
               "_Py_Specialize_GetIter: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_LoadGlobal), void (*)(PyObject *, PyObject *, _PyInstr *, PyObject *)),
-              "_Py_Specialize_LoadGlobal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_LoadSuperAttr), void (*)(PyValue, PyValue, _PyInstr *, int)),
               "_Py_Specialize_LoadSuperAttr: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_Send), void (*)(PyValue, _PyInstr *)),
@@ -775,6 +773,7 @@ static _PyIRTransfer ir_run_GetMethod_LazyDict(PyThreadState *tstate, _PyInterpr
 static _PyIRTransfer ir_run_GetMethod_MethodValues(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetMethod_NoDict(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetMethod_PolyMethod(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GlobalRead_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IMPORT_FROM(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IMPORT_NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_INSTRUMENTED_CALL_FUNCTION_EX(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -809,9 +808,6 @@ static _PyIRTransfer ir_run_LOAD_COMMON_CONSTANT(PyThreadState *tstate, _PyInter
 static _PyIRTransfer ir_run_LOAD_DEREF(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_LOAD_FROM_DICT_OR_DEREF(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_LOAD_FROM_DICT_OR_GLOBALS(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_LOAD_GLOBAL(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_LOAD_GLOBAL_BUILTIN(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_LOAD_GLOBAL_MODULE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_LOAD_LOCALS(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_LOAD_NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_LOAD_SPECIAL(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -7899,172 +7895,6 @@ ir_run_LOAD_FROM_DICT_OR_GLOBALS(
 
         
 static Py_NO_INLINE _PyIRTransfer
-ir_run_LOAD_GLOBAL(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = LOAD_GLOBAL;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL);
-            _PyIRWord* this_instr = next_instr - 1;
-            (void)this_instr;
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *res;
-            // _SPECIALIZE_LOAD_GLOBAL
-            {
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (_PyFb_CounterTriggers(feedback)) {
-                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                    next_instr = this_instr;
-                    _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-                _PyFb_AdvanceCounter(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _LOAD_GLOBAL
-            {
-                res = &IR_SLOT(IR_A(ir_word));
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                PyValue found = value_load_global(GLOBALS(), BUILTINS(), name);
-                if (PyValue_IsNull(found)) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                _PyFrame_WriteHome(frame, &res[0], found);
-            }
-            // _NULL_SLOT_CONDITIONAL
-            {
-            }
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_LOAD_GLOBAL_BUILTIN(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = LOAD_GLOBAL_BUILTIN;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue res;
-            // _GUARD_GLOBALS_VERSION
-            {
-                uint32_t globals_version = fb->globals_version;
-                PyDictObject *dict = (PyDictObject *)GLOBALS();
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            }
-            // _LOAD_GLOBAL_BUILTINS
-            {
-                uint32_t builtins_version = fb->builtins_version;
-                uint32_t index = fb->index;
-                PyDictObject *dict = (PyDictObject *)BUILTINS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-                PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-                if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-                if (PyValue_IsNull(found)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                res = PyValue_XDUP(found);
-                STAT_INC(LOAD_GLOBAL, hit);
-            }
-            // _NULL_SLOT_CONDITIONAL
-            {
-            }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_LOAD_GLOBAL_MODULE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = LOAD_GLOBAL_MODULE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue res;
-            // _LOAD_GLOBAL_MODULE
-            {
-                uint32_t globals_version = fb->globals_version;
-                uint32_t index = fb->index;
-                PyDictObject *dict = (PyDictObject *)GLOBALS();
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-                PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-                if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-                if (PyValue_IsNull(found)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                res = PyValue_XDUP(found);
-                STAT_INC(LOAD_GLOBAL, hit);
-            }
-            // _NULL_SLOT_CONDITIONAL
-            {
-            }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
 ir_run_LOAD_LOCALS(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
@@ -11589,7 +11419,7 @@ static const _PyIRForm ir_handler_forms[512] = {
     [87] = ir_run_UNKNOWN_OPCODE,
     [88] = ir_run_LOAD_FROM_DICT_OR_DEREF,
     [89] = ir_run_LOAD_FROM_DICT_OR_GLOBALS,
-    [90] = ir_run_LOAD_GLOBAL,
+    [90] = ir_run_UNKNOWN_OPCODE,
     [91] = ir_run_LOAD_NAME,
     [92] = ir_run_UNKNOWN_OPCODE,
     [93] = ir_run_LOAD_SPECIAL,
@@ -11668,22 +11498,22 @@ static const _PyIRForm ir_handler_forms[512] = {
     [166] = ir_run_FOR_ITER_VIRTUAL,
     [167] = ir_run_GET_ITER_SELF,
     [168] = ir_run_GET_ITER_VIRTUAL,
-    [169] = ir_run_LOAD_GLOBAL_BUILTIN,
-    [170] = ir_run_LOAD_GLOBAL_MODULE,
-    [171] = ir_run_LOAD_SUPER_ATTR_ATTR,
-    [172] = ir_run_LOAD_SUPER_ATTR_METHOD,
-    [173] = ir_run_SEND_ASYNC_GEN,
-    [174] = ir_run_SEND_GEN,
-    [175] = ir_run_SEND_VIRTUAL,
-    [176] = ir_run_STORE_ATTR_INSTANCE_VALUE,
-    [177] = ir_run_STORE_ATTR_SHAPE,
-    [178] = ir_run_STORE_ATTR_SHAPE_ADD,
-    [179] = ir_run_STORE_ATTR_SLOT,
-    [180] = ir_run_STORE_ATTR_WITH_HINT,
-    [181] = ir_run_STORE_SUBSCR_DICT,
-    [182] = ir_run_STORE_SUBSCR_LIST_INT,
-    [183] = ir_run_UNPACK_SEQUENCE_LIST,
-    [184] = ir_run_UNPACK_SEQUENCE_TUPLE,
+    [169] = ir_run_LOAD_SUPER_ATTR_ATTR,
+    [170] = ir_run_LOAD_SUPER_ATTR_METHOD,
+    [171] = ir_run_SEND_ASYNC_GEN,
+    [172] = ir_run_SEND_GEN,
+    [173] = ir_run_SEND_VIRTUAL,
+    [174] = ir_run_STORE_ATTR_INSTANCE_VALUE,
+    [175] = ir_run_STORE_ATTR_SHAPE,
+    [176] = ir_run_STORE_ATTR_SHAPE_ADD,
+    [177] = ir_run_STORE_ATTR_SLOT,
+    [178] = ir_run_STORE_ATTR_WITH_HINT,
+    [179] = ir_run_STORE_SUBSCR_DICT,
+    [180] = ir_run_STORE_SUBSCR_LIST_INT,
+    [181] = ir_run_UNPACK_SEQUENCE_LIST,
+    [182] = ir_run_UNPACK_SEQUENCE_TUPLE,
+    [183] = ir_run_UNKNOWN_OPCODE,
+    [184] = ir_run_UNKNOWN_OPCODE,
     [185] = ir_run_UNKNOWN_OPCODE,
     [186] = ir_run_UNKNOWN_OPCODE,
     [187] = ir_run_UNKNOWN_OPCODE,
@@ -11885,50 +11715,50 @@ static const _PyIRForm ir_handler_forms[512] = {
     [383] = ir_run_GetMethod_NoDict,
     [384] = ir_run_GetMethod_LazyDict,
     [385] = ir_run_GetMethod_ClassMethod,
-    [386] = ir_run_Truth_Bool,
-    [387] = ir_run_Truth_Int,
-    [388] = ir_run_Truth_List,
-    [389] = ir_run_Truth_None,
-    [390] = ir_run_Truth_Str,
-    [391] = ir_run_Truth_Plain,
-    [392] = ir_run_Truth_Slot,
-    [393] = ir_run_Truth_Generic,
-    [394] = ir_run_BranchTruth_Bool,
-    [395] = ir_run_BranchTruth_Int,
-    [396] = ir_run_BranchTruth_List,
-    [397] = ir_run_BranchTruth_None,
-    [398] = ir_run_BranchTruth_Str,
-    [399] = ir_run_BranchTruth_Plain,
-    [400] = ir_run_BranchTruth_Slot,
-    [401] = ir_run_BranchTruth_Generic,
-    [402] = ir_run_BranchNone_Test,
-    [403] = ir_run_BranchTruth_Observed,
-    [404] = ir_run_BranchNone_Observed,
-    [405] = ir_run_Jump_Direct,
-    [406] = ir_run_Jump_Poll,
-    [407] = ir_run_Jump_Warm,
-    [408] = ir_run_Jump_Observed,
-    [409] = ir_run_Const_Pool,
-    [410] = ir_run_Const_Small,
-    [411] = ir_run_Const_Common,
-    [412] = ir_run_LocalRead_Bound,
-    [413] = ir_run_LocalRead_Checked,
-    [414] = ir_run_LocalWrite_Store,
-    [415] = ir_run_LocalWrite_Restore,
-    [416] = ir_run_SaveLocal_Take,
-    [417] = ir_run_LocalDelete_Checked,
-    [418] = ir_run_Move_Transfer,
-    [419] = ir_run_Move_Retire,
-    [420] = ir_run_Move_Copy,
-    [421] = ir_run_Call_Observed,
+    [386] = ir_run_GlobalRead_Generic,
+    [387] = ir_run_Truth_Bool,
+    [388] = ir_run_Truth_Int,
+    [389] = ir_run_Truth_List,
+    [390] = ir_run_Truth_None,
+    [391] = ir_run_Truth_Str,
+    [392] = ir_run_Truth_Plain,
+    [393] = ir_run_Truth_Slot,
+    [394] = ir_run_Truth_Generic,
+    [395] = ir_run_BranchTruth_Bool,
+    [396] = ir_run_BranchTruth_Int,
+    [397] = ir_run_BranchTruth_List,
+    [398] = ir_run_BranchTruth_None,
+    [399] = ir_run_BranchTruth_Str,
+    [400] = ir_run_BranchTruth_Plain,
+    [401] = ir_run_BranchTruth_Slot,
+    [402] = ir_run_BranchTruth_Generic,
+    [403] = ir_run_BranchNone_Test,
+    [404] = ir_run_BranchTruth_Observed,
+    [405] = ir_run_BranchNone_Observed,
+    [406] = ir_run_Jump_Direct,
+    [407] = ir_run_Jump_Poll,
+    [408] = ir_run_Jump_Warm,
+    [409] = ir_run_Jump_Observed,
+    [410] = ir_run_Const_Pool,
+    [411] = ir_run_Const_Small,
+    [412] = ir_run_Const_Common,
+    [413] = ir_run_LocalRead_Bound,
+    [414] = ir_run_LocalRead_Checked,
+    [415] = ir_run_LocalWrite_Store,
+    [416] = ir_run_LocalWrite_Restore,
+    [417] = ir_run_SaveLocal_Take,
+    [418] = ir_run_LocalDelete_Checked,
+    [419] = ir_run_Move_Transfer,
+    [420] = ir_run_Move_Retire,
+    [421] = ir_run_Move_Copy,
     [422] = ir_run_Call_Observed,
     [423] = ir_run_Call_Observed,
     [424] = ir_run_Call_Observed,
-    [425] = ir_run_Return_Observed,
+    [425] = ir_run_Call_Observed,
     [426] = ir_run_Return_Observed,
     [427] = ir_run_Return_Observed,
     [428] = ir_run_Return_Observed,
-    [429] = ir_run_BranchTruth_Observed,
+    [429] = ir_run_Return_Observed,
     [430] = ir_run_BranchTruth_Observed,
     [431] = ir_run_BranchTruth_Observed,
     [432] = ir_run_BranchTruth_Observed,
@@ -11936,11 +11766,11 @@ static const _PyIRForm ir_handler_forms[512] = {
     [434] = ir_run_BranchTruth_Observed,
     [435] = ir_run_BranchTruth_Observed,
     [436] = ir_run_BranchTruth_Observed,
-    [437] = ir_run_BranchNone_Observed,
-    [438] = ir_run_Jump_Observed,
+    [437] = ir_run_BranchTruth_Observed,
+    [438] = ir_run_BranchNone_Observed,
     [439] = ir_run_Jump_Observed,
     [440] = ir_run_Jump_Observed,
-    [441] = ir_run_UNKNOWN_OPCODE,
+    [441] = ir_run_Jump_Observed,
     [442] = ir_run_UNKNOWN_OPCODE,
     [443] = ir_run_UNKNOWN_OPCODE,
     [444] = ir_run_UNKNOWN_OPCODE,
@@ -16893,120 +16723,6 @@ static const _PyIRForm ir_handler_forms[512] = {
         }
         TARGET(LOAD_FROM_DICT_OR_GLOBALS) {
             IR_RUN_OUTLINED(ir_run_LOAD_FROM_DICT_OR_GLOBALS);
-        }
-        TARGET(LOAD_GLOBAL) {
-            IR_RUN_OUTLINED(ir_run_LOAD_GLOBAL);
-        }
-
-        TARGET(LOAD_GLOBAL_BUILTIN) {
-            int opcode = LOAD_GLOBAL_BUILTIN;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue res;
-            // _GUARD_GLOBALS_VERSION
-            {
-                uint32_t globals_version = fb->globals_version;
-                PyDictObject *dict = (PyDictObject *)GLOBALS();
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            }
-            // _LOAD_GLOBAL_BUILTINS
-            {
-                uint32_t builtins_version = fb->builtins_version;
-                uint32_t index = fb->index;
-                PyDictObject *dict = (PyDictObject *)BUILTINS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-                PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-                if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-                if (PyValue_IsNull(found)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                res = PyValue_XDUP(found);
-                STAT_INC(LOAD_GLOBAL, hit);
-            }
-            // _NULL_SLOT_CONDITIONAL
-            {
-            }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            DISPATCH();
-        }
-
-        TARGET(LOAD_GLOBAL_MODULE) {
-            int opcode = LOAD_GLOBAL_MODULE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue res;
-            // _LOAD_GLOBAL_MODULE
-            {
-                uint32_t globals_version = fb->globals_version;
-                uint32_t index = fb->index;
-                PyDictObject *dict = (PyDictObject *)GLOBALS();
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-                PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-                if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-                if (PyValue_IsNull(found)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                res = PyValue_XDUP(found);
-                STAT_INC(LOAD_GLOBAL, hit);
-            }
-            // _NULL_SLOT_CONDITIONAL
-            {
-            }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            DISPATCH();
         }
         TARGET(LOAD_LOCALS) {
             IR_RUN_OUTLINED(ir_run_LOAD_LOCALS);

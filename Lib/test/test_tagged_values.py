@@ -787,7 +787,7 @@ class InlineFloatTest(unittest.TestCase):
         names = opnames(f)
         for name in ("Const.Pool", "Add.Float",
                      "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
-                     "BINARY_OP_TRUEDIV_FLOAT", "COMPARE_OP_FLOAT"):
+                     "BINARY_OP_TRUEDIV_FLOAT"):
             self.assertIn(name, names)
         self.assertIn("Add.Float", handler_names(f))
         self.assertNotIn("BINARY_OP_EXTEND", names)

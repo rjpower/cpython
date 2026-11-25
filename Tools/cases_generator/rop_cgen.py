@@ -19,7 +19,7 @@ from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, C
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          Slot, Wrap)
 from rop_check import GraphInfo, Program, is_args
-from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
+from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
                        ScalarType, SchemaType, SchemaVar, SpanLit, Target, Type,
@@ -126,6 +126,9 @@ def c_type(t: Type) -> str | None:
         return "int"
     if t == WrapType(Wrap.Span, HandleType(Handle.O)):
         return "_PyRopOwners"
+    if isinstance(t, EnumType):
+        # A member that a primitive computes from another operand
+        return "uint32_t"
     return None
 
 
@@ -734,10 +737,8 @@ class ArmLowerer:
     def target_value(self, operand: str) -> str:
         """A branch or jump target: the word the signed distance in the
         operand's field or fields leads to, counted from the word after the
-        head (the jump operands of a family have no operand words)"""
+        head, whether or not the family has operand words"""
         p = self.placements[operand]
-        if self.enc.words:
-            raise Unsupported(f"{self.arm.name}: a target in a family with operand words")
         first = p.slots[0]
         assert [s.offset for s in p.slots] == [first.offset + 12 * i for i in range(len(p.slots))]
         sign = 1 << (p.bits - 1)

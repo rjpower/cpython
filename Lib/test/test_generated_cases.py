@@ -3586,10 +3586,7 @@ class TestIRCases(unittest.TestCase):
         real = analyzer.analyze_files([str(actual)])
         formats = ir_generator.compute_formats(real)
         contracts = ir_generator.handler_contracts(real, formats)
-        for name in ("IS_OP_JUMP", "INSTRUMENTED_IS_OP_JUMP",
-                     "COMPARE_OP_JUMP", "COMPARE_OP_JUMP_INT",
-                     "CONTAINS_OP_JUMP",
-                     "POP_ITER", "INSTRUMENTED_POP_ITER"):
+        for name in ("POP_ITER", "INSTRUMENTED_POP_ITER"):
             with self.subTest(handler=name):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
@@ -3998,7 +3995,7 @@ class TestCallMarkers(unittest.TestCase):
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
         # A floor, not a count: ported families delete old handlers
-        self.assertGreater(len(handlers), 150)
+        self.assertGreater(len(handlers), 140)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))

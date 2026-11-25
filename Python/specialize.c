@@ -193,19 +193,6 @@ typedef enum {
 #define SPEC_FAIL_CALL_METACLASS 31
 #define SPEC_FAIL_CALL_INIT_NOT_INLINE_VALUES 32
 
-/* COMPARE_OP */
-#define SPEC_FAIL_COMPARE_OP_DIFFERENT_TYPES 12
-#define SPEC_FAIL_COMPARE_OP_STRING 13
-#define SPEC_FAIL_COMPARE_OP_BIG_INT 14
-#define SPEC_FAIL_COMPARE_OP_BYTES 15
-#define SPEC_FAIL_COMPARE_OP_TUPLE 16
-#define SPEC_FAIL_COMPARE_OP_LIST 17
-#define SPEC_FAIL_COMPARE_OP_SET 18
-#define SPEC_FAIL_COMPARE_OP_BOOL 19
-#define SPEC_FAIL_COMPARE_OP_BASEOBJECT 20
-#define SPEC_FAIL_COMPARE_OP_FLOAT_LONG 21
-#define SPEC_FAIL_COMPARE_OP_LONG_FLOAT 22
-
 /* FOR_ITER and SEND */
 #define SPEC_FAIL_ITER_GENERATOR 10
 #define SPEC_FAIL_ITER_COROUTINE 11
@@ -239,12 +226,6 @@ typedef enum {
 #define SPEC_FAIL_TO_BOOL_MAPPING     13
 #define SPEC_FAIL_TO_BOOL_NUMBER      15
 #define SPEC_FAIL_TO_BOOL_SEQUENCE    16
-
-// CONTAINS_OP
-#define SPEC_FAIL_CONTAINS_OP_STR        9
-#define SPEC_FAIL_CONTAINS_OP_TUPLE      10
-#define SPEC_FAIL_CONTAINS_OP_LIST       11
-#define SPEC_FAIL_CONTAINS_OP_USER_CLASS 12
 
 /* Instruction access.  instr is the instruction being specialised: a word
  * of the executing copy of the current frame's code object. */
@@ -678,34 +659,6 @@ fb_method_poly_set(_PyInstr *instr, _PyFbHeader *h)
     return count >= 2;
 }
 
-/* The specialisation of a fused compare-and-jump that runs the compare's
- * specialised_opcode, for the words whose handler is fused. */
-static inline int
-fused_form(int specialized_opcode)
-{
-    switch (specialized_opcode) {
-        case COMPARE_OP_FLOAT:
-            return COMPARE_OP_JUMP_FLOAT;
-        case COMPARE_OP_INT:
-            return COMPARE_OP_JUMP_INT;
-        case COMPARE_OP_STR:
-            return COMPARE_OP_JUMP_STR;
-        case CONTAINS_OP_DICT:
-            return CONTAINS_OP_JUMP_DICT;
-        case CONTAINS_OP_SET:
-            return CONTAINS_OP_JUMP_SET;
-        default:
-            Py_UNREACHABLE();
-    }
-}
-
-static inline int
-instr_is_fused(_PyInstr *instr)
-{
-    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    return (_PyIR_FormatOf(handler)->flags & _PyIR_FUSED) != 0;
-}
-
 /* The attribute specializer is the analysis behind the evidence rows of
  * GetAttr and GetMethod (classify_getattr and classify_getmethod,
  * Python/register_ops/getattr.rop).  It fills the site's entry and reports
@@ -775,9 +728,7 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
 static inline void
 specialize(_PyInstr *instr, int specialized_opcode)
 {
-    specialize_handler(instr, specialized_opcode,
-                       instr_is_fused(instr) ? fused_form(specialized_opcode)
-                                             : specialized_opcode);
+    specialize_handler(instr, specialized_opcode, specialized_opcode);
 }
 
 static inline void
@@ -3225,96 +3176,6 @@ Py_NO_INLINE void
 
 #ifdef Py_STATS
 static int
-compare_op_fail_kind(PyTypeObject *lhs, PyTypeObject *rhs)
-{
-    if (lhs != rhs) {
-        if (lhs == &PyFloat_Type && rhs == &PyLong_Type) {
-            return SPEC_FAIL_COMPARE_OP_FLOAT_LONG;
-        }
-        if (lhs == &PyLong_Type && rhs == &PyFloat_Type) {
-            return SPEC_FAIL_COMPARE_OP_LONG_FLOAT;
-        }
-        return SPEC_FAIL_COMPARE_OP_DIFFERENT_TYPES;
-    }
-    if (lhs == &PyBytes_Type) {
-        return SPEC_FAIL_COMPARE_OP_BYTES;
-    }
-    if (lhs == &PyTuple_Type) {
-        return SPEC_FAIL_COMPARE_OP_TUPLE;
-    }
-    if (lhs == &PyList_Type) {
-        return SPEC_FAIL_COMPARE_OP_LIST;
-    }
-    if (lhs == &PySet_Type || lhs == &PyFrozenSet_Type) {
-        return SPEC_FAIL_COMPARE_OP_SET;
-    }
-    if (lhs == &PyBool_Type) {
-        return SPEC_FAIL_COMPARE_OP_BOOL;
-    }
-    if (lhs->tp_richcompare == PyBaseObject_Type.tp_richcompare) {
-        return SPEC_FAIL_COMPARE_OP_BASEOBJECT;
-    }
-    return SPEC_FAIL_OTHER;
-}
-#endif   // Py_STATS
-
-Py_NO_INLINE void
-(_Py_Specialize_CompareOp)(PyValueBorrow lhs_st, PyValueBorrow rhs_st, _PyInstr *instr,
-                         int oparg)
-{
-    PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
-    PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
-    uint8_t specialized_op;
-
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[COMPARE_OP] == INLINE_CACHE_ENTRIES_COMPARE_OP);
-    fb_begin_binary(instr, lhs_type, rhs_type);
-    // All of these specializations compute boolean values, so they're all valid
-    // regardless of the fifth-lowest oparg bit.
-    if (lhs_type != rhs_type) {
-        SPECIALIZATION_FAIL(COMPARE_OP, compare_op_fail_kind(lhs_type, rhs_type));
-        goto failure;
-    }
-    if (lhs_type == &PyFloat_Type) {
-        // The guards take inline floats only; a boxed float is a NaN.
-        if (PyValue_IsInlineFloat(lhs_st) && PyValue_IsInlineFloat(rhs_st)) {
-            specialized_op = COMPARE_OP_FLOAT;
-            goto success;
-        }
-        SPECIALIZATION_FAIL(COMPARE_OP, SPEC_FAIL_OTHER);
-        goto failure;
-    }
-    if (lhs_type == &PyLong_Type) {
-        if (PyValue_BothInlineInt(lhs_st, rhs_st)) {
-            specialized_op = COMPARE_OP_INT;
-            goto success;
-        }
-        else {
-            SPECIALIZATION_FAIL(COMPARE_OP, SPEC_FAIL_COMPARE_OP_BIG_INT);
-            goto failure;
-        }
-    }
-    if (lhs_type == &PyUnicode_Type) {
-        int cmp = oparg >> 5;
-        if (cmp != Py_EQ && cmp != Py_NE) {
-            SPECIALIZATION_FAIL(COMPARE_OP, SPEC_FAIL_COMPARE_OP_STRING);
-            goto failure;
-        }
-        else {
-            specialized_op = COMPARE_OP_STR;
-            goto success;
-        }
-    }
-    SPECIALIZATION_FAIL(COMPARE_OP, compare_op_fail_kind(lhs_type, rhs_type));
-failure:
-    unspecialize(instr);
-    return;
-success:
-    specialize(instr, specialized_op);
-}
-
-#ifdef Py_STATS
-static int
 unpack_sequence_fail_kind(PyObject *seq)
 {
     if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(seq))) {
@@ -3657,60 +3518,6 @@ _PyRop_ValidateSlot(_PyFbUnary *fb, PyValueBorrow v)
     assert(version);
     fb->type_version = version;
     return true;
-}
-
-#ifdef Py_STATS
-static int
-containsop_fail_kind(PyObject *value) {
-    if (PyUnicode_CheckExact(value)) {
-        return SPEC_FAIL_CONTAINS_OP_STR;
-    }
-    if (PyList_CheckExact(value)) {
-        return SPEC_FAIL_CONTAINS_OP_LIST;
-    }
-    if (PyTuple_CheckExact(value)) {
-        return SPEC_FAIL_CONTAINS_OP_TUPLE;
-    }
-    if (PyType_Check(value)) {
-        return SPEC_FAIL_CONTAINS_OP_USER_CLASS;
-    }
-    return SPEC_FAIL_OTHER;
-}
-#endif
-
-Py_NO_INLINE void
-(_Py_Specialize_ContainsOp)(PyValueBorrow item_st, PyValueBorrow value_st, _PyInstr *instr)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[CONTAINS_OP] == INLINE_CACHE_ENTRIES_COMPARE_OP);
-    fb_begin_binary(instr, PyValue_TYPE(item_st), PyValue_TYPE(value_st));
-    if (PyValue_IsInline(value_st)) {
-        SPECIALIZATION_FAIL(CONTAINS_OP, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *value = PyValue_AsKnownObjectBorrow(value_st);
-    if (PyAnyDict_CheckExact(value)) {
-        specialize(instr, CONTAINS_OP_DICT);
-        return;
-    }
-    if (PySet_CheckExact(value) || PyFrozenSet_CheckExact(value)) {
-        specialize(instr, CONTAINS_OP_SET);
-        return;
-    }
-    // The scans and the substring search have forms of the fused word only
-    if (instr_is_fused(instr)) {
-        if (PyUnicode_CheckExact(value) || PyTuple_CheckExact(value)
-            || PyList_CheckExact(value))
-        {
-            specialize_handler(instr, CONTAINS_OP, CONTAINS_OP_JUMP_SEQUENCE);
-            return;
-        }
-    }
-
-    SPECIALIZATION_FAIL(CONTAINS_OP, containsop_fail_kind(value));
-    unspecialize(instr);
-    return;
 }
 
 void

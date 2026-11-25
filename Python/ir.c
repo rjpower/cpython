@@ -396,6 +396,14 @@ _PyIR_HandlerName(int handler)
 }
 
 int
+_PyIR_OriginOpcode(PyCodeObject *co, int word)
+{
+    assert(word >= 0 && word < (int)_PyCode_IR(co)->nwords);
+    int offset = (int)_PyCode_IR(co)->pcmap[word];
+    return _PyOpcode_Deopt[_PyCode_CODE(co)[offset].op.code];
+}
+
+int
 _PyIR_BaseOpcode(int handler)
 {
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);

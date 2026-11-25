@@ -1992,6 +1992,9 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     }
     if (prev_line == line) {
         int prev_opcode = word_opcode(frame->ir_words, prev_index);
+        if (_PyIR_OriginOpcode(code, prev_index) == RESUME) {
+            prev_opcode = RESUME;
+        }
         /* RESUME and INSTRUMENTED_RESUME are needed for the operation of
             * instrumentation, so must never be hidden by an INSTRUMENTED_LINE.
             */

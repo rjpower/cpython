@@ -904,6 +904,12 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
+/* The stack opcode that the translator lowered into the word at index
+ * `word` of co: the first stack instruction the word covers, from the
+ * public offset that pcmap records.  Instrumentation and the generator
+ * machinery read a word's origin here, whatever handler the word has. */
+PyAPI_FUNC(int) _PyIR_OriginOpcode(PyCodeObject *co, int word);
+
 /* The opcode that sys.monitoring sees the word as: the base opcode, except
  * for a fused compare-and-jump, which is a conditional jump
  * (POP_JUMP_IF_FALSE, or INSTRUMENTED_ for its twin). */

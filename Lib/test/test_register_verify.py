@@ -1281,7 +1281,10 @@ class PilotTests(unittest.TestCase):
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
-        binary_raise = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5)
+        binary_extended = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5)
+        binary_raise = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5, last=True)
+        append_text = at("numeric.rop", "exit raise(AppendText.Failed, saved);", 5)
+        append_raise = at("numeric.rop", "exit raise(AppendText.OpFailed, saved);", 5)
         # The arms of tests.rop that raise, in order of line: the family, the
         # arm and the operands that its point lists in spent
         tests_raises = [
@@ -1349,10 +1352,20 @@ class PilotTests(unittest.TestCase):
               f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
               "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "
               "spent, but mapping is intact",
+              f"{binary_extended}: Binary.Extended: points: raise at Binary.OpFailed: "
+              "Binary.OpFailed lists x in spent, but x is intact",
+              f"{binary_extended}: Binary.Extended: points: raise at Binary.OpFailed: "
+              "Binary.OpFailed lists y in spent, but y is intact",
               f"{binary_raise}: Binary.Generic: points: raise at Binary.OpFailed: "
               "Binary.OpFailed lists x in spent, but x is intact",
               f"{binary_raise}: Binary.Generic: points: raise at Binary.OpFailed: "
               "Binary.OpFailed lists y in spent, but y is intact",
+              f"{append_text}: AppendText.Text: points: raise at AppendText.Failed: "
+              "AppendText.Failed lists y in spent, but y is intact",
+              f"{append_raise}: AppendText.Generic: points: raise at AppendText.OpFailed: "
+              "AppendText.OpFailed lists x in spent, but x is intact",
+              f"{append_raise}: AppendText.Generic: points: raise at AppendText.OpFailed: "
+              "AppendText.OpFailed lists y in spent, but y is intact",
               *tests_raises,
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",

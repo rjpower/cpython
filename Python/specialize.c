@@ -538,15 +538,6 @@ fb_begin_unary(_PyInstr *instr, PyTypeObject *tp)
     fb->type_version = fb_type_version(tp);
 }
 
-static _PyFbBinary *
-fb_begin_binary(_PyInstr *instr, PyTypeObject *lhs_type, PyTypeObject *rhs_type)
-{
-    _PyFbBinary *fb = (_PyFbBinary *)fb_begin(instr);
-    fb->lhs_version = fb_type_version(lhs_type);
-    fb->rhs_version = fb_type_version(rhs_type);
-    return fb;
-}
-
 static void
 fb_begin_call_ex(_PyInstr *instr, PyTypeObject *callable_type, bool may_allocate)
 {
@@ -769,7 +760,7 @@ static int binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int o
                                              _PyBinaryOpSpecializationDescr **descr);
 
 bool
-_PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
+_PyRop_FindExtension(_PyFbBinary *fb, uint32_t op, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
 {
     fb->descr = NULL;
     if (!PyValue_IsObject(lhs_st) || !PyValue_IsObject(rhs_st)) {
@@ -778,11 +769,22 @@ _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow lhs_st, PyValueBorrow rhs
     _PyBinaryOpSpecializationDescr *descr;
     if (!binary_op_extended_specialization(PyValue_AsKnownObjectBorrow(lhs_st),
                                            PyValue_AsKnownObjectBorrow(rhs_st),
-                                           NB_ADD, &descr)) {
+                                           op, &descr)) {
         return false;
     }
     fb->descr = descr;
     return true;
+}
+
+void
+_PyRop_RecordOperands(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
+{
+    if (is_shared_entry(&fb->h)) {
+        return;
+    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbBinary) - sizeof(_PyFbHeader));
+    fb->lhs_version = fb_type_version(PyValue_TYPE(a));
+    fb->rhs_version = fb_type_version(PyValue_TYPE(b));
 }
 
 int

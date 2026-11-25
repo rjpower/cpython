@@ -830,9 +830,12 @@ OBJECT_READERS = {
     "_PyObject_Shape", "_PyObject_ValueSlot",
     # Operations that read their operands and count what they keep
     "PyErr_GivenExceptionMatches",
+    "PyUnicode_Concat",
 
     "value_exception_group_match",
     "_PyTemplate_Build",
+    # An indirect call through a table of functions that read their operands
+    "action",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set

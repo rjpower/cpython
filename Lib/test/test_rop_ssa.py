@@ -396,7 +396,7 @@ SCENARIOS = {
         [{"x": x, "y": y} for x, y in PAIRS], warm=([1], [2])),
     "Binary": Scenario("Binary", {
         "subtract": "def f(a, b):\n    return a - b\n",
-        "multiply": "def f(a, b):\n    return (a * 1) * (b * 1)\n",
+        "multiply": "def f(a, b):\n    return [a][0] * [b][0]\n",
         "floor_divide": "def f(a, b):\n    return a // b\n",
         "remainder": "def f(a, b):\n    return a % b\n",
         "power": "def f(a, b):\n    return a ** b\n",
@@ -1019,6 +1019,9 @@ NOT_RUN = {
     "CellMapRead.Lookup": "LOAD_FROM_DICT_OR_DEREF occurs in class code",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
+    "AppendText.Text": "no scenario yet: the tracer's view is deferred, and the arm "
+                       "takes the string out of its own destination local",
+    "AppendText.Generic": "no scenario yet: the tracer's view is deferred",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",
     "Import.Lazy": "`lazy import` is a module-level statement",
     # select(jit_on) and select(jit_off): the word is the one the JIT's

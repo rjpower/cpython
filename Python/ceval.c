@@ -2803,6 +2803,25 @@ _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home)
         _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, index));
 }
 
+/* AppendText.Text (numeric.rop): the in-place append of `s += t`.  The
+ * string's owner leaves the local before the append, so PyUnicode_Append sees
+ * the local's reference as the only one and may extend the buffer in place;
+ * that keeps a loop of appends linear.  Failure leaves the local vacant and
+ * the string released, as the old handler did. */
+PyValue
+_PyRop_AppendText(PyValue *home, PyValueBorrow right)
+{
+    PyValue held = *home;
+    assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(held)));
+    *home = PyValue_NULL;
+    PyObject *left = value_unicode_append(PyValue_AsKnownObjectSteal(held),
+                                          PyValue_AsKnownObjectBorrow(right));
+    if (left == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromNonNumberSteal(left);
+}
+
 PyValue
 _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home)
 {

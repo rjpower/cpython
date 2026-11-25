@@ -9,39 +9,252 @@ family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
 family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>)
   exits(next, raise) ops(UNARY_NEGATIVE, UNARY_INVERT);
 
+point Binary.BoxFailed(current, site, pending) keep(x, y) spent() defs();
 point Binary.OpFailed(current, site, pending) keep() spent(y, x) defs();
 point Binary.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
 point Unary.Failed(current, site, pending) keep() spent(value) defs();
 point Unary.Done(current, next_head, clear) keep() spent(value) defs(dst);
 
-// Adaptation (step 3 adds the typed arms): a site never finds an arm yet,
-// so the counter backs off.
-macro adapt_before_use_binary(f:Fb<Binary>)
-  cases(run())
+// Int rows: two inline ints and an operator the pair admits (a zero divisor
+// or a negative shift count goes to the generic arm, which raises)
+
+extern primitive int_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
+  effects()
+  test(inline_int(a), inline_int(b))
+  c _PyRop_IntBinaryApplies as bool
+  evidence(
+    review: "Reviewed BN. pycore_rop_rows.h: both words inline ints, and the operator"
+            "defined for this pair.",
+    contract: "Reads the two words and the operator: no memory, no failure, no"
+              "callback.",
+    lowering: "none: the arms that use it are shared and are not compiled inline",
+    test: "test_rop_binary");
+
+extern helper int_binary(op:Enum<Numeric>, a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, raises)
+  requires(inline_int(a), inline_int(b))
+  ensures(ok.exact<int>(z))
+  c _PyRop_IntBinary as value_or_null
+  evidence(
+    review: "Reviewed BN. pycore_rop_rows.h: the old _BINARY_OP_*_INT uops, on"
+            "scaled values where the sum, difference or product can overflow.",
+    contract: "The pair is admitted (asserted). NULL with MemoryError only if the"
+              "box of a result outside int51 fails. No finalizer, no Python.");
+
+// Float rows: two inline floats, or an inline float and an inline int
+
+extern primitive float_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
+  effects()
+  c _PyRop_FloatBinaryApplies as bool
+  evidence(
+    review: "Reviewed BN. pycore_rop_rows.h: the float operand pair, and an"
+            "operator among add, subtract, multiply and true divide by a nonzero.",
+    contract: "Reads the two words and the operator: no memory, no failure, no"
+              "callback.",
+    lowering: "none: the arm that uses it is shared and is not compiled inline",
+    test: "test_rop_binary");
+
+extern helper float_binary(op:Enum<Numeric>, a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, raises)
+  ensures(ok.exact<float>(z))
+  c _PyRop_FloatBinary as value_or_null
+  evidence(
+    review: "Reviewed BN. pycore_rop_rows.h: PyValue_FloatOperandValues, then"
+            "PyValue_FromDouble, which allocates only for NaN.",
+    contract: "The pair is admitted (asserted). NULL with MemoryError only if the"
+              "NaN box fails. No finalizer, no Python.");
+
+// Text rows: the in-place add of two exact strings
+
+extern primitive text_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
+  effects()
+  test(exact<str>(a), exact<str>(b))
+  c _PyRop_TextBinaryApplies as bool
+  evidence(
+    review: "Reviewed BN. pycore_rop_rows.h: the in-place add, and both words"
+            "objects of exact type str.",
+    contract: "Reads the type words and the operator: no memory, no failure, no"
+              "callback.",
+    lowering: "none: the arm that uses it is shared and is not compiled inline",
+    test: "test_rop_binary");
+
+// Records the operand types of the sampled pair as type versions, and clears
+// the rest of the entry.  Evidence only: every arm guards what it relies on.
+extern helper record_operands(f:Fb<Binary>, a:B, b:B) -> Unit
   effects(reads, writes)
-  feedback(read(entry), write(entry))
+  feedback(write(entry))
+  c _PyRop_RecordOperands as unit
+  evidence(
+    review: "Reviewed BN. specialize.c: the old fb_begin_binary of each binary"
+            "specialization.",
+    contract: "Stores the two operand type versions and zeroes the entry's other"
+              "fields; a shared entry is left alone. No memory, no Python, no failure.");
+
+// Adaptation: the old specializer's order (ints, floats, text, a registered
+// extension), by the sampled operands.
+macro adapt_before_use_binary(f:Fb<Binary>, x:Src, y:Src, op:Enum<Numeric>)
+  cases(run(), changed(t:Ticket<Binary>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
 {
   entry():
     call tick(f) {
       quiet -> Run();
-      due -> NoArm();
+      due -> Sample();
+    }
+  Sample():
+    let _:Unit = record_operands(f, use(x), use(y));
+    branch int_binary_applies(op, use(x), use(y)) -> Chosen(), Other();
+  Chosen():
+    let c:Candidate<Binary> = candidate(Binary.Int);
+    call install(site, f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    branch float_binary_applies(op, use(x), use(y)) -> ChosenFloat(), TryText();
+  ChosenFloat():
+    let cf:Candidate<Binary> = candidate(Binary.Float);
+    call install(site, f, cf) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryText():
+    branch text_binary_applies(op, use(x), use(y)) -> ChosenText(), TryExtended();
+  ChosenText():
+    let ct:Candidate<Binary> = candidate(Binary.Text);
+    call install(site, f, ct) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryExtended():
+    call find_extension(f, op, use(x), use(y)) {
+      hit -> ChosenExtended();
+      absent -> NoArm();
+    }
+  ChosenExtended():
+    let ce:Candidate<Binary> = candidate(Binary.Extended);
+    call install(site, f, ce) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
     }
   NoArm():
     let _:Unit = backoff(f);
     exit run();
+  Changed(t:Ticket<Binary>):
+    exit changed(t);
   Run():
     exit run();
 }
 
-arm Binary.Generic shared
-  effects(runs_python, raises, releases on (dst))
-  feedback(read(entry), write(entry))
-  exits(next, raise, redirect)
+arm Binary.Int shared
+  effects(writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, miss, raise)
+  ensures(next.exact<int>(dst))
 {
   entry():
-    call adapt_before_use_binary(fb) {
-      run -> Run();
+    let l:B = use(x);
+    let r:B = use(y);
+    guard int_binary_applies(op, l, r) else miss;
+    call int_binary(op, l, r) {
+      ok -> Finish();
+      err -> Failed();
     }
+  Failed(e:Err):
+    exit raise(Binary.BoxFailed, e);
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Binary.Done;
+    exit next();
+}
+
+arm Binary.Float shared
+  effects(writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, miss, raise)
+  ensures(next.exact<float>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard float_binary_applies(op, l, r) else miss;
+    call float_binary(op, l, r) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Binary.BoxFailed, e);
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Binary.Done;
+    exit next();
+}
+
+arm Binary.Text shared
+  effects(writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, miss, raise)
+  ensures(next.exact<str>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard text_binary_applies(op, l, r) else miss;
+    call concat_text(l, r) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Binary.BoxFailed, e);
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Binary.Done;
+    exit next();
+}
+
+// The operand types of the entry's registered descriptor
+arm Binary.Extended shared
+  effects(runs_python, writes, allocates, raises, releases on (dst))
+  feedback(read(entry.descr))
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard extension_applies(fb, l, r) else miss;
+    let a:Anchors = anchor_for_call([x, y]);
+    call extension_at_origin(fb, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(y), spent(x), old(dst)] at Binary.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(Binary.OpFailed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm Binary.Generic shared
+  effects(runs_python, raises, releases on (dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_binary(fb, x, y, op) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Binary>):
+    exit again(t);
   Run():
     let a:Anchors = anchor_for_call([x, y]);
     call binary_at_origin(op, a) {
@@ -88,4 +301,150 @@ arm Unary.Generic shared
     exit next();
   Failed(e:Err):
     exit raise(Unary.Failed, e);
+}
+
+// In-place concatenation into a local: `s += t` and `s = s + t`, where the
+// translator folded the store into the add and the left operand is that
+// local.  The word has Binary's operands and starts on this family's Generic
+// arm, which adapts as Binary's does but installs the append for two strings.
+// The append reuses the string's buffer when the local holds its only
+// reference, so a loop of appends stays linear.
+family AppendText(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
+  exits(next, raise, redirect, miss, again) generic(Generic) ops(BINARY_OP);
+
+point AppendText.OpFailed(current, site, pending) keep() spent(y, x) defs();
+point AppendText.Failed(current, site, pending) keep() spent(y, x) defs();
+point AppendText.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
+
+// Takes the string out of x's home, which is dst's, leaving it vacant, and
+// appends r to it.  The result is the grown string, which is the same object
+// when nothing else holds it.  On failure the home stays vacant, as the old
+// handler left it.
+extern helper append_text(x:Src, r:B)
+  cases(ok(z:O), err(e:Err))
+  effects(reads, writes, allocates, raises, runs_python)
+  spends(x)
+  ensures(ok.exact<str>(z))
+  c _PyRop_AppendText as value_or_null
+  evidence(
+    review: "Reviewed BN. ceval.c: the old _BINARY_OP_INPLACE_ADD_UNICODE, whose"
+            "left operand is the local it stores to.",
+    contract: "x is the home of a local that holds an exact str and r is an exact str,"
+              "borrowed (asserted). The owner leaves the home, which is vacant on"
+              "return; the result is a new owner or NULL with an exception set (the"
+              "string is released).");
+
+arm AppendText.Text shared
+  effects(reads, writes, allocates, raises, runs_python, releases on (dst))
+  feedback()
+  exits(next, miss, raise)
+  ensures(next.exact<str>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_exact_str(l, r) else miss;
+    let a:Anchors = anchor_for_call([y]);
+    call append_text(x, arg(a, 0)) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(y), old(dst)] at AppendText.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y], e);
+    exit raise(AppendText.Failed, saved);
+}
+
+// The sum, stored in the local: as Binary.Generic
+arm AppendText.Generic shared
+  effects(runs_python, raises, releases on (dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_append(fb, x, y, op) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Binary>):
+    exit again(t);
+  Run():
+    let a:Anchors = anchor_for_call([x, y]);
+    call binary_at_origin(op, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(y), spent(x), old(dst)] at AppendText.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(AppendText.OpFailed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// Binary's adaptation, with the in-place append for the text case: the
+// word's destination is the local its left operand reads.
+macro adapt_before_use_append(f:Fb<Binary>, x:Src, y:Src, op:Enum<Numeric>)
+  cases(run(), changed(t:Ticket<Binary>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    let _:Unit = record_operands(f, use(x), use(y));
+    branch int_binary_applies(op, use(x), use(y)) -> Chosen(), Other();
+  Chosen():
+    let c:Candidate<Binary> = candidate(Binary.Int);
+    call install(site, f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    branch float_binary_applies(op, use(x), use(y)) -> ChosenFloat(), TryText();
+  ChosenFloat():
+    let cf:Candidate<Binary> = candidate(Binary.Float);
+    call install(site, f, cf) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryText():
+    branch text_binary_applies(op, use(x), use(y)) -> ChosenText(), TryExtended();
+  ChosenText():
+    let ct:Candidate<Binary> = candidate(AppendText.Text);
+    call install(site, f, ct) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryExtended():
+    call find_extension(f, op, use(x), use(y)) {
+      hit -> ChosenExtended();
+      absent -> NoArm();
+    }
+  ChosenExtended():
+    let ce:Candidate<Binary> = candidate(Binary.Extended);
+    call install(site, f, ce) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  NoArm():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Binary>):
+    exit changed(t);
+  Run():
+    exit run();
 }

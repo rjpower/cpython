@@ -443,7 +443,7 @@ static inline int
 is_binary_op_handler(int handler)
 {
     return handler >= _PyIR_BINARY_OP_FIRST
-           && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST;
+           && handler <= _PyIR_BINARY_OP_FIRST + NB_SUBSCR - 1;
 }
 
 int

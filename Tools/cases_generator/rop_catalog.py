@@ -118,7 +118,7 @@ class Schema(enum.Enum):
 SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
     Schema.Binary: ("kind", "descr"),
     Schema.Attr: ("kind", "type_version", "offset", "shape", "keys_version", "index",
-                  "descr", "rows"),
+                  "descr", "rows", "class_value"),
     Schema.Global: ("globals_version", "builtins_version", "index"),
     Schema.Truth: ("kind", "type_version"),
     Schema.Compare: ("kind",),
@@ -147,12 +147,36 @@ class CField:
     or by none yet (member None): a template that reads it is refused"""
     member: str | None
     ctype: str = ""
+    # Other C members that name the same storage for this field, which C
+    # code also reads it by
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CUnion:
+    """Fields that one C union holds: an entry holds the one its installing
+    arm wrote, so an arm reads at most one of them.  `members` are all the
+    union's C members, which the static checks place at one offset; C code
+    spells the storage by any of them."""
+    fields: tuple[str, ...]
+    members: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class CLayout:
     struct: str
     fields: dict[str, CField]
+    unions: tuple[CUnion, ...] = ()
+
+    def union_of(self, field: str) -> CUnion | None:
+        return next((u for u in self.unions if field in u.fields), None)
+
+    def field_of_member(self, member: str) -> str | None:
+        "The schema field that C code reads by this member, if any"
+        for name, f in self.fields.items():
+            if member == f.member or member in f.aliases:
+                return name
+        return None
 
 
 _NONE = CField(None)
@@ -166,16 +190,27 @@ FB_LAYOUT: dict[Schema, CLayout] = {
         "type_version": CField("type_version", _U32),
         "offset": CField("offset", _U32),
         "shape": CField("shape", _U32),
-        "keys_version": CField("dict_version", _U32),
+        "keys_version": CField("dict_version", _U32, aliases=("class_version",)),
         "index": CField("index", _U32),
         "descr": CField("descr", "PyObject *"),
-        "rows": CField("h.poly", _U32)}),
+        "rows": CField("h.poly", _U32),
+        "class_value": CField("class_value", "_PyValueGuarded")},
+        unions=(
+            # A module's keys version, a class's version or a shape index
+            CUnion(("keys_version", "shape"),
+                   ("dict_version", "func_version", "class_version", "shape")),
+            CUnion(("offset", "index"), ("index", "offset", "hint", "dictoffset")),
+            CUnion(("descr",), ("descr", "fget", "getattribute", "shape_to")))),
     Schema.Global: CLayout("_PyFbGlobal", {
         "globals_version": CField("globals_version", _U32),
         "builtins_version": CField("builtins_version", _U32),
         "index": CField("index", _U32)}),
     Schema.Truth: CLayout("_PyFbUnary", {
         "kind": _NONE, "type_version": CField("type_version", _U32)}),
+    # The item sites share the binary entry; their evidence is the type
+    # versions that it records
+    Schema.Item: CLayout("_PyFbBinary", {
+        "kind": _NONE, "type_version": _NONE, "func_version": _NONE}),
     Schema.Call: CLayout("_PyFbCall", {
         "kind": _NONE, "func_version": CField("func_version", _U32),
         "type_version": CField("type_version", _U32),

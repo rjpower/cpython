@@ -562,7 +562,9 @@ def binary_ops() -> list[str]:
     with open(ROOT / "Include/opcode.h") as f:
         for line in f:
             m = re.match(r"#define NB_(\w+)\s+(\d+)", line)
-            if m and m.group(1) != "OPARG_LAST":
+            # NB_SUBSCR is the GetItem family's (register_ops/items.rop), not
+            # a handler of BINARY_OP
+            if m and m.group(1) not in ("OPARG_LAST", "SUBSCR"):
                 ops[int(m.group(2))] = m.group(1)
     assert sorted(ops) == list(range(len(ops))), ops
     return [ops[i] for i in range(len(ops))]
@@ -837,7 +839,6 @@ INPLACE_READERS = {
     "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp",
     "_Py_Specialize_StoreAttr",
-    "_Py_Specialize_StoreSubscr",
 }
 
 
@@ -863,11 +864,8 @@ OBJECT_READERS = {
     # Type tests and accessors
     "Py_TYPE", "PyAnyDict_CheckExact", "PyAnySet_CheckExact",
     "PyCoro_CheckExact", "PyGen_Check",
-    "PyList_CheckExact", "PyModule_CheckExact", "PySlice_Check",
+    "PyList_CheckExact", "PyModule_CheckExact",
     "PyTuple_CheckExact", "PyType_Check", "PyUnicode_CheckExact",
-    "PyList_GET_SIZE", "PyList_GET_VALUE", "PyTuple_GET_SIZE",
-    "PyTuple_GET_VALUE", "PyUnicode_1BYTE_DATA", "PyUnicode_GET_LENGTH",
-    "PyUnicode_IS_COMPACT_ASCII", "PyUnicode_READ_CHAR", "_PyList_ITEMS",
     "_PyObject_GetManagedDict", "_PyObject_InlineValues",
     "_PyObject_Shape", "_PyObject_ValueSlot",
     # They take the index of a value slot, an address inside the object
@@ -880,8 +878,7 @@ OBJECT_READERS = {
     "_PyDict_ContainsValue", "PySet_ContainsValue",
     "PyUnicode_Concat",
 
-    "_PyDict_SetValue", "value_exception_group_match",
-    "_PyList_SliceSubscript",
+    "_PyDict_SetValue_Take2", "_PyDict_SetValue", "value_exception_group_match",
     "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal",
     # The indirect calls of BINARY_OP_EXTEND, through a table of functions
@@ -1302,7 +1299,8 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM",
               "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
               "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
-              "DICT_UPDATE", "DICT_MERGE")
+              "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
+              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -3777,9 +3775,7 @@ class IREmitter(Emitter):
             self.ownership_event("TAKE", dst=index, src=index)
         storage.clear_inputs("before binary provider")
         storage.flush(self.out)
-        self.emit("PyValue ir_binary_result = oparg == NB_SUBSCR\n")
-        self.emit("    ? value_subscript(ir_binary_left, ir_binary_right)\n")
-        self.emit("    : _PyValue_BinaryOps[oparg](PyValue_Borrow(ir_binary_left),\n")
+        self.emit("PyValue ir_binary_result = _PyValue_BinaryOps[oparg](PyValue_Borrow(ir_binary_left),\n")
         self.emit("PyValue_Borrow(ir_binary_right));\n")
         # The error branch has its own snapshot; it cannot leak into normal
         # successor facts. Restore publishes only after its revalidation.
@@ -7106,8 +7102,8 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
         qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
-                                   "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
-                                   "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL",
+                                   "BUILD_MAP", "STORE_SUBSCR",
+                                   "STORE_ATTR_WITH_HINT", "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
                                    "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
                                    "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",

@@ -37,7 +37,7 @@ class PyValueDictVMTests(unittest.TestCase):
         self.assertEqual(_testinternalcapi.dict_vm_storage(mapping), (1, 1, 1))
         for value in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             assign(mapping, 2147483647, value)
-        self.assertIn('STORE_SUBSCR_DICT', handlers(assign))
+        self.assertIn('SetItem.Dict', handlers(assign))
         marker = object()
         assign(mapping, 2147483647, marker)
         self.assertIs(mapping[2147483647], marker)
@@ -92,7 +92,7 @@ class PyValueDictVMTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             assign({}, 1)
-        self.assertIn('STORE_SUBSCR_DICT', handlers(assign))
+        self.assertIn('SetItem.Dict', handlers(assign))
         mapping = {}
         with self.assertRaises(ValueError) as caught:
             assign(mapping, Key())
@@ -137,7 +137,7 @@ class PyValueDictVMTests(unittest.TestCase):
         mapping = {'x': None}
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             assign(mapping, None)
-        self.assertIn('STORE_SUBSCR_DICT', handlers(assign))
+        self.assertIn('SetItem.Dict', handlers(assign))
         ledger.clear()
         mapping['x'] = Old()
         try:
@@ -240,7 +240,7 @@ class PyValueDictVMTests(unittest.TestCase):
         self.assertEqual(read(mapping, 2147483647), -2147483648)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(read(mapping, 2.5), 3.25)
-        self.assertIn('BINARY_OP_SUBSCR_DICT', handlers(read))
+        self.assertIn('GetItem.Dict', handlers(read))
         self.assertIsNone(read(mapping, 'none'))
         large = 1 << 80
         mapping['large'] = large
@@ -263,7 +263,7 @@ class PyValueDictVMTests(unittest.TestCase):
             if not cold:
                 for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
                     read({1: None}, 1)
-                self.assertIn('BINARY_OP_SUBSCR_DICT', handlers(read))
+                self.assertIn('GetItem.Dict', handlers(read))
             ledger.clear()
             with self.assertRaises(KeyError) as caught:
                 read({}, key)

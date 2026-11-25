@@ -6,26 +6,6 @@ enum TextKind(JOIN, INTERPOLATION, TEMPLATE);
 enum ConvertKind(STR, REPR, ASCII);
 enum PatternKind(Mapping, Sequence, Keys, Class);
 
-// 1C: items and slices
-
-family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
-  exits(next, enter, raise, miss, again) ops(BINARY_OP);
-
-family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
-  exits(next, raise, miss, again) ops(STORE_SUBSCR);
-
-family DelItem(obj:Src, key:Src)
-  exits(next, raise) ops(DELETE_SUBSCR);
-
-family SliceRead(dst:Dst, obj:Src, start:Src, stop:Src)
-  exits(next, raise) ops(BINARY_SLICE);
-
-family SliceWrite(obj:Src, start:Src, stop:Src, value:Src)
-  exits(next, raise) ops(STORE_SLICE);
-
-family BuildSlice(dst:Dst, parts:Span<Src>)
-  exits(next, raise) ops(BUILD_SLICE);
-
 // 1E: displays, updates, comprehension insertion, keyword merge, unpack
 
 family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpack>)

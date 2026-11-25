@@ -275,56 +275,6 @@ leaf_probe__BINARY_OP_RSHIFT_INT(_PyInterpreterFrame *frame, PyValue *stack_poin
 }
 
 static int
-leaf_probe__BINARY_OP_SUBSCR_LIST_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue list_st, sub_st, res, ls, ss;
-    sub_st = stack_pointer[-1];
-    list_st = stack_pointer[-2];
-    Py_ssize_t index = PyValue_InlineInt64(sub_st);
-    if (index < 0) { index += PyList_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(list_st)); }
-    if (index < 0 || index >= PyList_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(list_st))) { return LEAF_PROBE_EXIT; }
-    res =PyValue_DUP(PyList_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(list_st), index));
-    STAT_INC(BINARY_OP, hit);
-    ls = list_st;
-    ss = sub_st;
-    stack_pointer[-2] = res;
-    stack_pointer[-1] = ls;
-    stack_pointer[0] = ss;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__BINARY_OP_SUBSCR_TUPLE_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue tuple_st, sub_st, res, ts, ss;
-    sub_st = stack_pointer[-1];
-    tuple_st = stack_pointer[-2];
-    Py_ssize_t index = PyValue_InlineInt64(sub_st);
-    if (index < 0) { return LEAF_PROBE_EXIT; }
-    if (index >= PyTuple_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(tuple_st))) { return LEAF_PROBE_EXIT; }
-    res =PyValue_DUP(PyTuple_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(tuple_st), index));
-    STAT_INC(BINARY_OP, hit);
-    ts = tuple_st;
-    ss = sub_st;
-    stack_pointer[-2] = res;
-    stack_pointer[-1] = ts;
-    stack_pointer[0] = ss;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__BINARY_OP_SUBTRACT_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -550,45 +500,6 @@ leaf_probe__END_SEND(_PyInterpreterFrame *frame, PyValue *stack_pointer, int opa
 }
 
 static int
-leaf_probe__GUARD_ELEMENT_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    value = stack_pointer[-1];
-    if (!PyValue_IsInlineInt(value)) { return LEAF_PROBE_EXIT; }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_ELEMENT_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue container;
-    container = stack_pointer[-2];
-    if (!PyValue_IsObject(container) || !PyList_CheckExact(_PyValue_AsKnownObjectBorrowPointer(container))) { return LEAF_PROBE_EXIT; }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_ELEMENT_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue container;
-    container = stack_pointer[-2];
-    if (!PyValue_IsObject(container) || !PyTuple_CheckExact(_PyValue_AsKnownObjectBorrowPointer(container))) { return LEAF_PROBE_EXIT; }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__GUARD_NOS_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -612,22 +523,6 @@ leaf_probe__GUARD_NOS_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, in
     PyValue left;
     left = stack_pointer[-2];
     if (!PyValue_IsInlineInt(left)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_NOS_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue nos;
-    nos = stack_pointer[-2];
-    PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-    if (!PyList_CheckExact(o)) {
         return LEAF_PROBE_EXIT;
     }
     result->stack_pointer = stack_pointer;
@@ -1329,46 +1224,6 @@ leaf_probe__STORE_ATTR_SLOT(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
 }
 
 static int
-leaf_probe__STORE_SUBSCR_LIST_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, list_st, sub_st, ls, ss;
-    sub_st = stack_pointer[-1];
-    list_st = stack_pointer[-2];
-    value = stack_pointer[-3];
-    PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-    Py_ssize_t index = PyValue_InlineInt64(sub_st);
-    if (!LOCK_OBJECT(list)) {
-        return LEAF_PROBE_DEOPT;
-    }
-    Py_ssize_t len = PyList_GET_SIZE(list);
-    if (index < 0) {
-        index += len;
-    }
-    if (index < 0 || index >= len) {
-        UNLOCK_OBJECT(list);
-        if (true) {
-            return LEAF_PROBE_DEOPT;
-        }
-    }
-    STAT_INC(STORE_SUBSCR, hit);
-    PyValue item =      value ;
-    PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
-    UNLOCK_OBJECT(list);
-    ls = list_st;
-    ss = sub_st;
-    stack_pointer[-3] = ls;
-    stack_pointer[-2] = ss;
-    stack_pointer += -1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    PyValue_CLOSE(old_value);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__SWAP_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1395,8 +1250,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_BINARY_OP_OR_INT", leaf_probe__BINARY_OP_OR_INT, 2},
     {"_BINARY_OP_REMAINDER_INT", leaf_probe__BINARY_OP_REMAINDER_INT, 2},
     {"_BINARY_OP_RSHIFT_INT", leaf_probe__BINARY_OP_RSHIFT_INT, 2},
-    {"_BINARY_OP_SUBSCR_LIST_INT", leaf_probe__BINARY_OP_SUBSCR_LIST_INT, 2},
-    {"_BINARY_OP_SUBSCR_TUPLE_INT", leaf_probe__BINARY_OP_SUBSCR_TUPLE_INT, 2},
     {"_BINARY_OP_SUBTRACT_FLOAT", leaf_probe__BINARY_OP_SUBTRACT_FLOAT, 2},
     {"_BINARY_OP_SUBTRACT_INT", leaf_probe__BINARY_OP_SUBTRACT_INT, 2},
     {"_BINARY_OP_TRUEDIV_FLOAT", leaf_probe__BINARY_OP_TRUEDIV_FLOAT, 2},
@@ -1406,12 +1259,8 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_COMPARE_OP_INT", leaf_probe__COMPARE_OP_INT, 2},
     {"_END_FOR", leaf_probe__END_FOR, 1},
     {"_END_SEND", leaf_probe__END_SEND, 3},
-    {"_GUARD_ELEMENT_INT", leaf_probe__GUARD_ELEMENT_INT, 1},
-    {"_GUARD_ELEMENT_LIST", leaf_probe__GUARD_ELEMENT_LIST, 2},
-    {"_GUARD_ELEMENT_TUPLE", leaf_probe__GUARD_ELEMENT_TUPLE, 2},
     {"_GUARD_NOS_FLOAT", leaf_probe__GUARD_NOS_FLOAT, 2},
     {"_GUARD_NOS_INT", leaf_probe__GUARD_NOS_INT, 2},
-    {"_GUARD_NOS_LIST", leaf_probe__GUARD_NOS_LIST, 2},
     {"_GUARD_NOS_NOT_NULL", leaf_probe__GUARD_NOS_NOT_NULL, 2},
     {"_GUARD_NOS_UNICODE", leaf_probe__GUARD_NOS_UNICODE, 2},
     {"_GUARD_SHAPE", leaf_probe__GUARD_SHAPE, 1},
@@ -1451,7 +1300,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_STORE_ATTR_SHAPE", leaf_probe__STORE_ATTR_SHAPE, 2},
     {"_STORE_ATTR_SHAPE_ADD", leaf_probe__STORE_ATTR_SHAPE_ADD, 2},
     {"_STORE_ATTR_SLOT", leaf_probe__STORE_ATTR_SLOT, 2},
-    {"_STORE_SUBSCR_LIST_INT", leaf_probe__STORE_SUBSCR_LIST_INT, 3},
     {"_SWAP_FAST", leaf_probe__SWAP_FAST, 1},
 {NULL, NULL, 0},
 };

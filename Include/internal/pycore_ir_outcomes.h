@@ -950,25 +950,6 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
         return;
     }
     switch (_PyIR_BaseOpcode(handler)) {
-        case POP_TOP:
-            /* The emitted scalar retirement detaches scratch A before
-             * closing it. A normal continuation keeps other scratch homes. */
-            if (edge || handler != POP_TOP ||
-                fmt->roles[0] != _PyIR_ROLE_IN0 ||
-                fmt->roles[1] != _PyIR_ROLE_NONE ||
-                fmt->roles[2] != _PyIR_ROLE_NONE ||
-                fmt->roles[3] != _PyIR_ROLE_NONE ||
-                (fmt->flags & (_PyIR_WINDOW | _PyIR_JUMPS | _PyIR_FORWARD)) ||
-                (fmt->effects & _PyIR_PUSHES_FRAME) ||
-                fmt->output_kind != _PyIR_OUTPUT_REGISTER_DST ||
-                reads != 1 || writes != 0 || through != 0 ||
-                IR_A(word) < (uint32_t)nl ||
-                _PyIR_Outcome(word, edge).semantic)
-            {
-                return;
-            }
-            p->mode = _PyIR_PHYS_CLEAR_A;
-            return;
         case COPY:
             if (edge || fmt->roles[0] != _PyIR_ROLE_BASE ||
                 fmt->roles[1] != _PyIR_ROLE_IMM || arg != (int)IR_B(word) ||
@@ -999,7 +980,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
             p->mode = _PyIR_PHYS_CLEAR_A;
             return;
         case POP_EXCEPT:
-            /* It detaches scratch A, the saved exception, as POP_TOP does */
+            /* It detaches scratch A, the saved exception */
             if (edge || handler != POP_EXCEPT ||
                 fmt->roles[0] != _PyIR_ROLE_IN0 ||
                 fmt->roles[1] != _PyIR_ROLE_NONE ||

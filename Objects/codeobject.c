@@ -1232,7 +1232,7 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
         /* A certified NULL-safe retirement can close an empty home. This is
          * not permission for completion/observer recovery to read an old
          * retired owner; those existing provenance proofs remain separate. */
-        int accepts_empty = IR_HANDLER(word) == POP_TOP ||
+        int accepts_empty =
             (fmt->transfer_kind == _PyIR_TRANSFER_LOCAL_STORE &&
              (old & (1u << SEM_INITIALIZED)));
         if (_PyIR_ReadsHome(&image->words[pc], arg, home) && !accepts_empty &&

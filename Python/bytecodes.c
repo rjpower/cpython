@@ -289,7 +289,7 @@ dummy_func(
             LOAD_FAST,
         };
 
-        macro(STORE_FAST) = _SWAP_FAST + POP_TOP;
+        macro(STORE_FAST) = _SWAP_FAST + _POP_TOP_ANY;
 
         leaf op(_SWAP_FAST, (value: consumed -- trash: moved(home)))
             effects() exits(next)
@@ -305,7 +305,9 @@ dummy_func(
             STORE_FAST,
         };
 
-        leaf inst(POP_TOP, (value: consumed --))
+        // The release that inherited register instructions end with.  The
+        // POP_TOP stack op itself lowers to a retirement (rule_pop_top).
+        leaf op(_POP_TOP_ANY, (value: consumed --))
             effects(releases) exits(next)
         {
             PyValue_XCLOSE(value);
@@ -455,7 +457,7 @@ dummy_func(
             val = held;
         }
 
-        macro(UNARY_NEGATIVE) = _UNARY_NEGATIVE + POP_TOP;
+        macro(UNARY_NEGATIVE) = _UNARY_NEGATIVE + _POP_TOP_ANY;
 
         // Inline values are negated without a box. Only -Py_INT_MIN leaves
         // the inline range; negating a float that is not NaN gives one that
@@ -547,7 +549,7 @@ dummy_func(
             EXIT_IF(!PyUnicode_CheckExact(value_o));
         }
 
-        macro(UNARY_INVERT) = _UNARY_INVERT + POP_TOP;
+        macro(UNARY_INVERT) = _UNARY_INVERT + _POP_TOP_ANY;
 
         op(_UNARY_INVERT, (value: taken -- res: owned, v: moved(value)))
             effects(runs_python) exits(next, raise)
@@ -1066,7 +1068,7 @@ dummy_func(
         }
 
         macro(BINARY_OP_EXTEND) =
-            unused/1 + _BINARY_OP_EXTEND + POP_TOP + POP_TOP;
+            unused/1 + _BINARY_OP_EXTEND + _POP_TOP_ANY + _POP_TOP_ANY;
 
         macro(BINARY_OP_INPLACE_ADD_UNICODE) =
             _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_INPLACE_ADD_UNICODE;
@@ -1138,7 +1140,7 @@ dummy_func(
         }
 
         macro(BINARY_OP_SUBSCR_LIST_INT) =
-            _GUARD_ELEMENT_INT + _GUARD_ELEMENT_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;
+            _GUARD_ELEMENT_INT + _GUARD_ELEMENT_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + _POP_TOP_ANY;
 
         leaf inline_ok op(_BINARY_OP_SUBSCR_LIST_INT,
                 (list_st: consumed, sub_st: consumed
@@ -1155,7 +1157,7 @@ dummy_func(
         }
 
         macro(BINARY_OP_SUBSCR_LIST_SLICE) =
-            _GUARD_TOS_SLICE + _GUARD_NOS_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_SLICE + POP_TOP + POP_TOP;
+            _GUARD_TOS_SLICE + _GUARD_NOS_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_SLICE + _POP_TOP_ANY + _POP_TOP_ANY;
 
         op(_BINARY_OP_SUBSCR_LIST_SLICE,
                 (list_st: taken object, sub_st: taken object
@@ -1249,7 +1251,7 @@ dummy_func(
             unused/5 +
             _BINARY_OP_SUBSCR_TUPLE_INT +
             _POP_TOP_INT +
-            POP_TOP;
+            _POP_TOP_ANY;
 
         leaf inline_ok op(_BINARY_OP_SUBSCR_TUPLE_INT,
                 (tuple_st: consumed, sub_st: consumed
@@ -1399,10 +1401,10 @@ dummy_func(
 
         macro(STORE_SUBSCR) = unused/1 + _SPECIALIZE_STORE_SUBSCR + _STORE_SUBSCR;
 
-        // The index is released by POP_TOP, which does not read it: the
+        // The index is released by _POP_TOP_ANY, which does not read it: the
         // release of the replaced item before it can run code (S7)
         macro(STORE_SUBSCR_LIST_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + POP_TOP + POP_TOP;
+            _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + _POP_TOP_ANY + _POP_TOP_ANY;
 
         // The index and stored value stay in canonical representation.
         leaf inline_ok op(_STORE_SUBSCR_LIST_INT,
@@ -1481,7 +1483,7 @@ dummy_func(
             DEAD(value);
         }
 
-        outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
+        outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + _POP_TOP_ANY;
 
         outlined inst(CALL_INTRINSIC_2, (value2_st: consumed nullable, value1_st: consumed -- res: owned))
             effects(runs_python) exits(next, raise)
@@ -2559,7 +2561,7 @@ dummy_func(
             DEAD(iterable_st);
         }
 
-        outlined macro(LIST_EXTEND) = _LIST_EXTEND + POP_TOP;
+        outlined macro(LIST_EXTEND) = _LIST_EXTEND + _POP_TOP_ANY;
 
         op(_SET_UPDATE,
                 (set: assumed(object) by BUILD_SET, unused[oparg-1], iterable: taken -- set, unused[oparg-1], i: moved(iterable) object))
@@ -2581,7 +2583,7 @@ dummy_func(
             DEAD(iterable);
         }
 
-        outlined macro(SET_UPDATE) = _SET_UPDATE + POP_TOP;
+        outlined macro(SET_UPDATE) = _SET_UPDATE + _POP_TOP_ANY;
 
         outlined inst(BUILD_SET, (values[oparg]: consumed -- set: owned))
             effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
@@ -2670,7 +2672,7 @@ dummy_func(
             DEAD(update);
         }
 
-        outlined macro(DICT_UPDATE) = _DICT_UPDATE + POP_TOP;
+        outlined macro(DICT_UPDATE) = _DICT_UPDATE + _POP_TOP_ANY;
 
         op(_DICT_MERGE,
                 (callable, unused, unused, dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken
@@ -2697,7 +2699,7 @@ dummy_func(
             DEAD(update);
         }
 
-        outlined macro(DICT_MERGE) = _DICT_MERGE + POP_TOP;
+        outlined macro(DICT_MERGE) = _DICT_MERGE + _POP_TOP_ANY;
 
         inline_ok inst(MAP_ADD,
                 (dict_st: object, unused[oparg - 1], key: consumed, value: consumed
@@ -3265,7 +3267,7 @@ dummy_func(
             // It's always a bool, so we don't care about oparg & 16.
         }
 
-        macro(IS_OP) = _IS_OP + POP_TOP + POP_TOP;
+        macro(IS_OP) = _IS_OP + _POP_TOP_ANY + _POP_TOP_ANY;
 
         // A bit compare: the operands are canonical (see "Value identity"
         // in pycore_value.h).
@@ -3316,7 +3318,7 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        macro(CONTAINS_OP) = unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + POP_TOP + POP_TOP;
+        macro(CONTAINS_OP) = unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + _POP_TOP_ANY + _POP_TOP_ANY;
 
         op(_GUARD_TOS_ANY_SET, (tos: object -- tos: exact(PyAnySet_Type)))
             effects(reads) exits(next, miss)
@@ -3325,7 +3327,7 @@ dummy_func(
             EXIT_IF(!PyAnySet_CheckExact(o));
         }
 
-        macro(CONTAINS_OP_SET) = _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + POP_TOP + POP_TOP;
+        macro(CONTAINS_OP_SET) = _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + _POP_TOP_ANY + _POP_TOP_ANY;
 
         // inline_ok: left is tested as a value, so nothing is boxed.
         inline_ok op(_CONTAINS_OP_SET,
@@ -3348,7 +3350,7 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        macro(CONTAINS_OP_DICT) = _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + POP_TOP + POP_TOP;
+        macro(CONTAINS_OP_DICT) = _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + _POP_TOP_ANY + _POP_TOP_ANY;
 
         op(_CONTAINS_OP_DICT,
                 (left: taken, right: taken object
@@ -3470,24 +3472,24 @@ dummy_func(
         };
 
         macro(CONTAINS_OP_JUMP) =
-            unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + POP_TOP + POP_TOP + _JUMP_IF_COND;
+            unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
 
         macro(CONTAINS_OP_JUMP_SET) =
-            _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + POP_TOP + POP_TOP + _JUMP_IF_COND;
+            _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
 
         macro(CONTAINS_OP_JUMP_DICT) =
-            _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + POP_TOP + POP_TOP + _JUMP_IF_COND;
+            _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
 
         macro(CONTAINS_OP_JUMP_SEQUENCE) =
-            _GUARD_TOS_STR_TUPLE_LIST + unused/1 + _CONTAINS_OP_SEQUENCE + POP_TOP + POP_TOP + _JUMP_IF_COND;
+            _GUARD_TOS_STR_TUPLE_LIST + unused/1 + _CONTAINS_OP_SEQUENCE + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
 
         macro(INSTRUMENTED_CONTAINS_OP_JUMP) =
-            unused/1 + _CONTAINS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
+            unused/1 + _CONTAINS_OP + _POP_TOP_ANY + _POP_TOP_ANY + _INSTRUMENTED_JUMP_IF_COND;
 
-        macro(IS_OP_JUMP) = _IS_OP + POP_TOP + POP_TOP + _JUMP_IF_COND;
+        macro(IS_OP_JUMP) = _IS_OP + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
 
         macro(INSTRUMENTED_IS_OP_JUMP) =
-            _IS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
+            _IS_OP + _POP_TOP_ANY + _POP_TOP_ANY + _INSTRUMENTED_JUMP_IF_COND;
 
         outlined inst(CHECK_EG_MATCH,
                 (exc_value_st: consumed assumed(object) by exception_unwind, match_type_st: consumed
@@ -3773,7 +3775,7 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        outlined macro(MATCH_CLASS) = _MATCH_CLASS + POP_TOP + POP_TOP + POP_TOP;
+        outlined macro(MATCH_CLASS) = _MATCH_CLASS + _POP_TOP_ANY + _POP_TOP_ANY + _POP_TOP_ANY;
 
         outlined inst(MATCH_MAPPING, (subject -- subject, res: owned exact(PyBool_Type)))
             effects(reads) exits(next)
@@ -4748,7 +4750,7 @@ dummy_func(
             func = PyValue_FromObjectSteal((PyObject *)func_obj);
         }
 
-        outlined macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
+        outlined macro(MAKE_FUNCTION) = _MAKE_FUNCTION + _POP_TOP_ANY;
 
         outlined inst(SET_FUNCTION_ATTRIBUTE,
                 (attr_st: consumed assumed(object) by codegen,
@@ -5116,6 +5118,14 @@ dummy_func(
         {
             (void)bottom;
             (void)top;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(POP_TOP, (value: consumed --))
+            effects(releases) exits(abort)
+        {
+            PyValue_XCLOSE(value);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }

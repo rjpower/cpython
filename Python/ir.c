@@ -246,8 +246,11 @@ generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
     {
         return _PyIR_GEN_CONSUMER_STORE_FAST;
     }
-    if (generator_is(words[target], POP_TOP) &&
-        (int)IR_A(words[target]) == home)
+    // The retirement of the home alone: Move.Retire with no destination
+    // and one source, one word
+    if (IR_HANDLER(words[target]) == ROP_SELECT_Move_retire &&
+        IR_A(words[target]) == 0 && IR_B(words[target]) == 1 &&
+        _PyIR_SpanElement(&words[target], ROP_SELECT_Move_retire, 0) == home)
     {
         return _PyIR_GEN_CONSUMER_POP_TOP;
     }

@@ -434,16 +434,8 @@ _PyRegPass_UnpackLocals(_PyRegCfg *cfg)
 }
 
 
-/* POP_TOP of a pure value (pass c).
- *
- * A POP_TOP of a value that a pure op made from locals and constants
- * alone, which cannot fail and runs no other code, goes with its
- * producer: the value never exists.  Pure is the DSL's annotation; the
- * value must have no other reader.  Other POP_TOPs stay, as the CLEAR
- * that releases their value.  If the pair is all there is of its line, a
- * NOP keeps the line's event.  A POP_TOP that copy propagation gave a
- * local, as for the statement "x", does nothing: only the loads that
- * cannot fail fold. */
+/* Neighbours.  The live op before or after op i in a region, and whether
+ * a neighbour holds the line that an op would otherwise give. */
 
 static _PyRegOp *
 live_neighbour(_PyRegCfg *cfg, int start, int end, int i, int step)
@@ -470,151 +462,6 @@ holds_line(const _PyRegOp *neighbour, const _PyRegOp *op)
              neighbour->loc.end_col_offset == op->loc.end_col_offset));
 }
 
-/* Remove the ops prod (if not NULL) and pop, keeping a NOP for the line
- * if nothing else in the region is on it. */
-static void
-remove_with_line(_PyRegCfg *cfg, int start, int end, _PyRegOp *prod,
-                 _PyRegOp *pop)
-{
-    _PyRegOp *first = prod != NULL ? prod : pop;
-    if (prod != NULL && (prod->loc.lineno != pop->loc.lineno ||
-                         prod->except != pop->except))
-    {
-        return;
-    }
-    _PyRegOp *before = live_neighbour(cfg, start, end,
-                                      (int)(first - cfg->ops), -1);
-    _PyRegOp *after = live_neighbour(cfg, start, end,
-                                     (int)(pop - cfg->ops), 1);
-    int keeps_line = holds_line(before, first) || holds_line(after, first);
-    if (prod != NULL) {
-        prod->opcode = _PyReg_DEAD;
-    }
-    if (keeps_line && pop->loc.lineno == first->loc.lineno) {
-        pop->opcode = _PyReg_DEAD;
-    }
-    else {
-        pop->opcode = NOP;
-        pop->oparg = 0;
-        pop->loc = first->loc;
-        pop->flags = (pop->flags & ~_PyReg_SOURCE_ORIGIN) |
-                     (first->flags & _PyReg_SOURCE_ORIGIN);
-        // Its recipe's values stay its implicit inputs
-        pop->in += pop->nread;
-        pop->nread = pop->npop = 0;
-    }
-}
-
-static int
-pop_top_region(_PyRegCfg *cfg, int start, int end)
-{
-    int nl = cfg->nlocalsplus;
-    for (int i = start; i < end; i++) {
-        _PyRegOp *pop = &cfg->ops[i];
-        if (pop->opcode != POP_TOP) {
-            continue;
-        }
-        int v = _PyReg_IN(cfg, pop)[0];
-        if (v < nl) {
-            remove_with_line(cfg, start, end, NULL, pop);
-            continue;
-        }
-        if (!is_fresh(cfg, v)) {
-            continue;
-        }
-        // The producer, and no other reader in between
-        int p = i - 1;
-        int other = 0;
-        for (; p >= start; p--) {
-            _PyRegOp *op = &cfg->ops[p];
-            if (op->opcode == _PyReg_DEAD) {
-                continue;
-            }
-            if (op->nout == 1 && _PyReg_OUT(cfg, op)[0] == v) {
-                break;
-            }
-            other |= reads_count(cfg, op, v) > 0;
-        }
-        if (p < start || other) {
-            continue;
-        }
-        _PyRegOp *prod = &cfg->ops[p];
-        int effects = _PyRegCfg_FormatOf(prod->opcode, prod->oparg)->effects;
-        if (!(effects & _PyIR_PURE) || (effects & (_PyIR_RAISES | _PyIR_ESCAPES))
-            || prod->dst >= 0)
-        {
-            continue;
-        }
-        const int *in = _PyReg_IN(cfg, prod);
-        int locals_only = 1;
-        for (int k = 0; k < prod->nread + prod->nimplicit; k++) {
-            locals_only &= in[k] < nl;
-        }
-        if (!locals_only) {
-            continue;
-        }
-        remove_with_line(cfg, start, end, prod, pop);
-    }
-    return SUCCESS;
-}
-
-int
-_PyRegPass_PopTop(_PyRegCfg *cfg)
-{
-    return for_each_region_backward(cfg, pop_top_region);
-}
-
-
-/* An unread result is a semantic sink, not a register followed by a release
- * instruction. Source lines are retained independently of executable words. */
-
-static int
-discard_region(_PyRegCfg *cfg, int start, int end)
-{
-    for (int i = start; i < end; i++) {
-        _PyRegOp *pop = &cfg->ops[i];
-        if (pop->opcode != POP_TOP) {
-            continue;
-        }
-        int v = _PyReg_IN(cfg, pop)[0];
-        if (!is_fresh(cfg, v)) {
-            continue;
-        }
-        _PyRegOp *prod = NULL;
-        int other_read = 0;
-        for (int j = start; j < end; j++) {
-            _PyRegOp *op = &cfg->ops[j];
-            if (op->opcode == _PyReg_DEAD || op == pop) {
-                continue;
-            }
-            for (int k = 0; k < op->nread + op->nimplicit; k++) {
-                other_read |= _PyReg_IN(cfg, op)[k] == v;
-            }
-            if (j < i && op->nout == 1 && _PyReg_OUT(cfg, op)[0] == v) {
-                prod = op;
-            }
-        }
-        if (other_read || prod == NULL || prod->dst >= 0 ||
-            !(_PyRegCfg_FormatOf(prod->opcode, prod->oparg)->flags & _PyIR_DISCARDS))
-        {
-            continue;
-        }
-        prod->flags |= _PyReg_DISCARD;
-        pop->opcode = NOP;
-        pop->oparg = 0;
-        // Its recipe's values stay its implicit inputs
-        pop->in += pop->nread;
-        pop->nread = pop->npop = pop->nout = 0;
-    }
-    return SUCCESS;
-}
-
-int
-_PyRegPass_Discard(_PyRegCfg *cfg)
-{
-    return for_each_region_backward(cfg, discard_region);
-}
-
 
 /* Truth folding in value context (pass d).
  *
@@ -639,13 +486,15 @@ _PyRegPass_Discard(_PyRegCfg *cfg)
  * and the jump becomes JUMP_IF_FALSE_OR_POP of the first load's value.
  * Either way the producer of v gives the jump a fresh register to take. */
 
-/* The POP_TOP that pops v where jump falls through, on jump's line */
+/* The retirement of v alone where jump falls through, on jump's line: the
+ * Move.Retire that the POP_TOP after the jump became */
 static _PyRegOp *
 fall_through_pop(_PyRegCfg *cfg, int start, int end, _PyRegOp *jump, int v)
 {
     int j = (int)(jump - cfg->ops);
     _PyRegOp *next = live_neighbour(cfg, start, end, j, 1);
-    if (next == NULL || next->opcode != POP_TOP
+    if (next == NULL || next->opcode != ROP_SELECT_Move_retire
+        || next->nread != 1 || next->nout != 0
         || next->loc.lineno != jump->loc.lineno
         || _PyReg_IN(cfg, next)[0] != v)
     {

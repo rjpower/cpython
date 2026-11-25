@@ -1300,7 +1300,8 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
               "INSTRUMENTED_JUMP_IF_FALSE_OR_POP", "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
               "LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
-              "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP")
+              "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP",
+              "POP_TOP")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -8537,8 +8538,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             return "_PyIR_TRANSFER_FRESH"
         return unknown
     close = "{ PyValue_XCLOSE(value); }"
-    if inst.name == "POP_TOP":
-        return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(close) else unknown
     if inst.name == "STORE_FAST":
         store = """{
             PyValue tmp = GETLOCAL(oparg);

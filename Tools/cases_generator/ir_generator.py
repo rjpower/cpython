@@ -1281,7 +1281,7 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
 STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
-              "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "INTERPRETER_EXIT",
+              "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
               "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
               "LOAD_FAST_LOAD_FAST",
               "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",

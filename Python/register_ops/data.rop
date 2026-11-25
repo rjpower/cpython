@@ -37,9 +37,6 @@ family Cell(mode:Enum<CellMode>, cell:Cell, value:Maybe<Src>, dst:Maybe<Dst>,
             frees:Span<Free>)
   exits(next, raise) ops(MAKE_CELL, LOAD_DEREF, STORE_DEREF, DELETE_DEREF, COPY_FREE_VARS, LOAD_FROM_DICT_OR_DEREF);
 
-family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
-  exits(next, raise, miss, again) ops(LOAD_GLOBAL);
-
 // 1G: text
 
 family BuildText(dst:Dst, kind:Enum<TextKind>, parts:Span<Src>, flags:U8)

@@ -171,22 +171,20 @@ extern "C" {
 #define FOR_ITER_VIRTUAL                       166
 #define GET_ITER_SELF                          167
 #define GET_ITER_VIRTUAL                       168
-#define LOAD_GLOBAL_BUILTIN                    169
-#define LOAD_GLOBAL_MODULE                     170
-#define LOAD_SUPER_ATTR_ATTR                   171
-#define LOAD_SUPER_ATTR_METHOD                 172
-#define SEND_ASYNC_GEN                         173
-#define SEND_GEN                               174
-#define SEND_VIRTUAL                           175
-#define STORE_ATTR_INSTANCE_VALUE              176
-#define STORE_ATTR_SHAPE                       177
-#define STORE_ATTR_SHAPE_ADD                   178
-#define STORE_ATTR_SLOT                        179
-#define STORE_ATTR_WITH_HINT                   180
-#define STORE_SUBSCR_DICT                      181
-#define STORE_SUBSCR_LIST_INT                  182
-#define UNPACK_SEQUENCE_LIST                   183
-#define UNPACK_SEQUENCE_TUPLE                  184
+#define LOAD_SUPER_ATTR_ATTR                   169
+#define LOAD_SUPER_ATTR_METHOD                 170
+#define SEND_ASYNC_GEN                         171
+#define SEND_GEN                               172
+#define SEND_VIRTUAL                           173
+#define STORE_ATTR_INSTANCE_VALUE              174
+#define STORE_ATTR_SHAPE                       175
+#define STORE_ATTR_SHAPE_ADD                   176
+#define STORE_ATTR_SLOT                        177
+#define STORE_ATTR_WITH_HINT                   178
+#define STORE_SUBSCR_DICT                      179
+#define STORE_SUBSCR_LIST_INT                  180
+#define UNPACK_SEQUENCE_LIST                   181
+#define UNPACK_SEQUENCE_TUPLE                  182
 #define INSTRUMENTED_END_FOR                   234
 #define INSTRUMENTED_POP_ITER                  235
 #define INSTRUMENTED_END_SEND                  236
@@ -224,8 +222,8 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
-#define IR_NUM_OLD_HANDLERS                    284
-#define IR_NUM_HANDLERS                        404
+#define IR_NUM_OLD_HANDLERS                    282
+#define IR_NUM_HANDLERS                        405
 
 #ifdef __cplusplus
 }

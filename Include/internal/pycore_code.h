@@ -200,8 +200,6 @@ PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValueBorrow owner, _PyInstr *instr,
                                      PyObject *name);
 #define _Py_Specialize_StoreAttr(V0, V1, V2) \
     (_Py_Specialize_StoreAttr)(PyValue_Borrow(V0), V1, V2)
-PyAPI_FUNC(void) _Py_Specialize_LoadGlobal(PyObject *globals, PyObject *builtins,
-                                      _PyInstr *instr, PyObject *name);
 PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(PyValueBorrow container, PyValueBorrow sub,
                                        _PyInstr *instr);
 #define _Py_Specialize_StoreSubscr(V0, V1, V2) \

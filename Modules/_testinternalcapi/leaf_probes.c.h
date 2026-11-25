@@ -589,22 +589,6 @@ leaf_probe__GUARD_ELEMENT_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_point
 }
 
 static int
-leaf_probe__GUARD_GLOBALS_VERSION(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t globals_version = (uint32_t)caches[0];
-    PyDictObject *dict = (PyDictObject *)GLOBALS();
-    PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-    if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
-        return LEAF_PROBE_DEOPT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__GUARD_NOS_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1100,71 +1084,6 @@ leaf_probe__JUMP_IF_COND(_PyInterpreterFrame *frame, PyValue *stack_pointer, int
 }
 
 static int
-leaf_probe__LOAD_GLOBAL_BUILTINS(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t builtins_version = (uint32_t)caches[0];
-    uint32_t index = (uint32_t)caches[1];
-    PyValue res;
-    PyDictObject *dict = (PyDictObject *)BUILTINS();
-    if (!PyDict_CheckExact(dict)) {
-        return LEAF_PROBE_DEOPT;
-    }
-    PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-    if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version) {
-        return LEAF_PROBE_DEOPT;
-    }
-    PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-    if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-        return LEAF_PROBE_DEOPT;
-    }
-    PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-    if (PyValue_IsNull(found)) {
-        return LEAF_PROBE_DEOPT;
-    }
-    res = PyValue_XDUP(found);
-    STAT_INC(LOAD_GLOBAL, hit);
-    stack_pointer[0] = res;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__LOAD_GLOBAL_MODULE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t globals_version = (uint32_t)caches[0];
-    uint32_t index = (uint32_t)caches[1];
-    PyValue res;
-    PyDictObject *dict = (PyDictObject *)GLOBALS();
-    PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-    if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
-        return LEAF_PROBE_DEOPT;
-    }
-    PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-    if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-        return LEAF_PROBE_DEOPT;
-    }
-    PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
-    if (PyValue_IsNull(found)) {
-        return LEAF_PROBE_DEOPT;
-    }
-    res = PyValue_XDUP(found);
-    STAT_INC(LOAD_GLOBAL, hit);
-    stack_pointer[0] = res;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__LOCK_OBJECT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1490,7 +1409,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_GUARD_ELEMENT_INT", leaf_probe__GUARD_ELEMENT_INT, 1},
     {"_GUARD_ELEMENT_LIST", leaf_probe__GUARD_ELEMENT_LIST, 2},
     {"_GUARD_ELEMENT_TUPLE", leaf_probe__GUARD_ELEMENT_TUPLE, 2},
-    {"_GUARD_GLOBALS_VERSION", leaf_probe__GUARD_GLOBALS_VERSION, 0},
     {"_GUARD_NOS_FLOAT", leaf_probe__GUARD_NOS_FLOAT, 2},
     {"_GUARD_NOS_INT", leaf_probe__GUARD_NOS_INT, 2},
     {"_GUARD_NOS_LIST", leaf_probe__GUARD_NOS_LIST, 2},
@@ -1518,8 +1436,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_ITER_NEXT_RANGE", leaf_probe__ITER_NEXT_RANGE, 2},
     {"_ITER_NEXT_TUPLE", leaf_probe__ITER_NEXT_TUPLE, 2},
     {"_JUMP_IF_COND", leaf_probe__JUMP_IF_COND, 1},
-    {"_LOAD_GLOBAL_BUILTINS", leaf_probe__LOAD_GLOBAL_BUILTINS, 0},
-    {"_LOAD_GLOBAL_MODULE", leaf_probe__LOAD_GLOBAL_MODULE, 0},
     {"_LOCK_OBJECT", leaf_probe__LOCK_OBJECT, 1},
     {"_MAKE_HEAP_SAFE", leaf_probe__MAKE_HEAP_SAFE, 1},
     {"_NOP", leaf_probe__NOP, 0},

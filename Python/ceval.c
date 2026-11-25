@@ -2,6 +2,7 @@
 
 #include "ceval.h"
 #include "pycore_attr_recipe.h"   // _PyAttr_AdmittedInstanceSlot()
+#include "pycore_global_recipe.h" // _PyGlobalRecipe
 #include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID

@@ -3259,7 +3259,7 @@ class TestIRCases(unittest.TestCase):
             self.assertNotIn(helper, analyzer.IR_MARKER_EFFECTS)
             self.assertIn(helper, {escape.call.text
                                   for escape in part.properties.escaping_calls.values()})
-        for name in ("_LOAD_GLOBAL", "_INSERT_NULL"):
+        for name in ("_INSERT_NULL",):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
         for name, marker in (("BUILD_TUPLE", "IR_BUILD_TUPLE"),
                              ("BUILD_LIST", "IR_BUILD_LIST")):

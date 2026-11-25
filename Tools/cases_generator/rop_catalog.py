@@ -119,7 +119,7 @@ SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
     Schema.Binary: ("kind", "descr"),
     Schema.Attr: ("kind", "type_version", "offset", "shape", "keys_version", "index",
                   "descr", "rows"),
-    Schema.Global: ("kind", "module_keys_version", "builtin_keys_version", "index"),
+    Schema.Global: ("globals_version", "builtins_version", "index"),
     Schema.Truth: ("kind", "type_version"),
     Schema.Compare: ("kind",),
     Schema.Contains: ("kind", "type_version"),
@@ -171,9 +171,8 @@ FB_LAYOUT: dict[Schema, CLayout] = {
         "descr": CField("descr", "PyObject *"),
         "rows": CField("h.poly", _U32)}),
     Schema.Global: CLayout("_PyFbGlobal", {
-        "kind": _NONE,
-        "module_keys_version": CField("globals_version", _U32),
-        "builtin_keys_version": CField("builtins_version", _U32),
+        "globals_version": CField("globals_version", _U32),
+        "builtins_version": CField("builtins_version", _U32),
         "index": CField("index", _U32)}),
     Schema.Truth: CLayout("_PyFbUnary", {
         "kind": _NONE, "type_version": CField("type_version", _U32)}),
@@ -194,6 +193,10 @@ RECIPE_LAYOUT: dict[Schema, CLayout] = {
         "read_kind": CField("read_kind", _U32),
         "values_layout": CField("values_layout", "bool"),
         "class_value": CField("class_value", "_PyValueGuarded")}),
+    Schema.Global: CLayout("_PyGlobalRecipe", {
+        "globals_version": CField("globals_version", _U32),
+        "builtins_version": CField("builtins_version", _U32),
+        "index": CField("index", _U32)}),
 }
 
 

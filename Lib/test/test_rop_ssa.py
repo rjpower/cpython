@@ -445,6 +445,12 @@ SCENARIOS = {
                         "classmethod": (ClassAttr,), "poly": (Point(), Swapped()),
                         "lazy": (LazyNorm(),)},
         warmups=200, coherent=True),
+    "GlobalRead": Scenario("GlobalRead", {
+        "module": "G = 3\ndef f():\n    return G\n",
+        "builtin": "def f():\n    return len\n",
+        "missing": "def f():\n    return no_such_global\n"},
+        [{}], warm_by_source={"module": ((),), "builtin": ((),), "missing": ((),)},
+        warmups=200, coherent=True),
     "Return": Scenario("Return", {
         "empty": "def f(a):\n    return a\n",
         "monitored": "def f(a):\n    return a\n"},

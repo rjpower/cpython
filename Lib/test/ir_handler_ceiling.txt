@@ -174,7 +174,6 @@ inherited MATERIALIZE_KWARGS
 inherited NOP
 inherited POP_EXCEPT
 inherited POP_ITER
-inherited POP_TOP
 inherited PUSH_EXC_INFO
 inherited RAISE_VARARGS
 inherited RERAISE
@@ -279,6 +278,7 @@ stub POP_JUMP_IF_FALSE
 stub POP_JUMP_IF_NONE
 stub POP_JUMP_IF_NOT_NONE
 stub POP_JUMP_IF_TRUE
+stub POP_TOP
 stub PUSH_NULL
 stub RESERVED
 stub RETURN_VALUE

@@ -5129,7 +5129,7 @@ dummy_func(
         }
 
         tier1 inst(POP_TOP, (value: consumed --))
-            effects(releases) exits(abort)
+            exits(abort)
         {
             PyValue_XCLOSE(value);
             assert(0 && "Executing a stack-only instruction.");

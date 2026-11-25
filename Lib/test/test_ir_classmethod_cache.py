@@ -26,8 +26,8 @@ class TestClassMethodCache(unittest.TestCase):
     def assert_cached(self, invoke):
         names = handlers(invoke)
         self.assertIn("LOAD_ATTR_CLASSMETHOD", names)
-        self.assertIn("CALL_PY_EXACT_ARGS", names)
-        self.assertNotIn("CALL_BOUND_METHOD_EXACT_ARGS", names)
+        self.assertIn("Call.Exact", names)
+        self.assertNotIn("Call.BoundExact", names)
 
     def warm_invoke(self, invoke, cls, value=7):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -170,7 +170,7 @@ class TestClassMethodCache(unittest.TestCase):
         reset_code(invoke)
         warm(invoke, Receiver)
         self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(invoke))
-        self.assertIn("CALL_PY_GENERAL", handlers(invoke))
+        self.assertIn("Call.Generic", handlers(invoke))
         function = Receiver.__dict__["selected"].__func__
         function.__defaults__ = (20,)
         self.assertEqual(invoke(Receiver), (Receiver, 20))

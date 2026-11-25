@@ -14,7 +14,7 @@ from test import support, test_tools
 from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-VARIANTS = ("CALL_PY_EXACT_ARGS+NO_SELF", "CALL_PY_GENERAL+NO_SELF")
+VARIANTS = ("Call.Exact+NO_SELF", "Call.Generic+NO_SELF")
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD + 10
 
 
@@ -301,7 +301,7 @@ class DiscardCompletionTests(unittest.TestCase):
             with self.subTest(function=function):
                 calls = [word for word in
                          _testinternalcapi.get_ir(function.__code__)
-                         if word[0] == "CALL+NO_SELF"]
+                         if word[0] == "Call.Generic+NO_SELF"]
                 self.assertEqual(len(calls), 1)
                 self.assertEqual(calls[0][1], 4095)
 
@@ -319,12 +319,12 @@ class DiscardCompletionGeneratorTests(unittest.TestCase):
         gen.generate_ir([], analysis, output, False)
         generated = output.getvalue()
         # The no-self variants are these handlers with a flag in the word
-        for name in ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL"):
+        for name in ("CALL_KW_PY", "CALL_EX_PY"):
             self.assertIn(f"TARGET({name}) {{", generated)
         self.assertNotIn("IR_POSTCALL_DISCARD", generated)
         self.assertNotIn("CALL_POSTCALL_DISCARD", generated)
-        self.assertNotIn("TARGET(CALL_PY_EXACT_ARGS_DISCARD)", generated)
-        self.assertNotIn("TARGET(CALL_PY_GENERAL_DISCARD)", generated)
+        self.assertNotIn("TARGET(CALL_KW_PY_DISCARD)", generated)
+        self.assertNotIn("TARGET(CALL_EX_PY_DISCARD)", generated)
         self.assertIn("frame->return_slot = (uint16_t)IR_A(ir_word)", generated)
 
 

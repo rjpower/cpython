@@ -2,7 +2,6 @@
 section 1.3 and the value format conversions of section 4."""
 
 import contextvars
-from test.support import ir_dis as dis
 import gc
 import math
 import sys
@@ -837,9 +836,10 @@ class CustomEvaluatorTests(unittest.TestCase):
 @support.requires_specialization
 class InitShimTests(unittest.TestCase):
     def assert_constructor(self, function):
-        self.assertIn('CALL_ALLOC_AND_ENTER_INIT',
-                      {inst.opname for inst in dis.get_instructions(
-                          function, adaptive=True)})
+        names = [row[0] for row in
+                 _testinternalcapi.get_ir(function.__code__, True)]
+        self.assertTrue(any(name.startswith('Call.Init') for name in names),
+                        names)
 
     def test_exact_init_runs_collection(self):
         armed = False

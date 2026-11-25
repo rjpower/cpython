@@ -457,6 +457,10 @@ def opnames(func):
     return {i.opname for i in dis.get_instructions(func, adaptive=True)}
 
 
+def handler_names(func):
+    return [row[0] for row in _testinternalcapi.get_ir(func.__code__, True)]
+
+
 def add3(a, b, c):
     return a + b + c
 
@@ -504,11 +508,11 @@ class InlineIntTest(unittest.TestCase):
         names = opnames(f)
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
-        for name in ("LOAD_SMALL_INT_INLINE",
-                     "BINARY_OP_ADD_INT", "BINARY_OP_SUBTRACT_INT",
+        for name in ("LOAD_SMALL_INT_INLINE", "BINARY_OP_SUBTRACT_INT",
                      "BINARY_OP_MULTIPLY_INT", "FOR_ITER_RANGE"):
             self.assertIn(name, names)
-        self.assertIn("BINARY_OP_ADD_INT", opnames(add3))
+        self.assertIn("Add.Int", handler_names(f))
+        self.assertIn("Add.Int", handler_names(add3))
 
     def test_boxing_leaves_the_local_inline(self):
         # x + k reads x through its field (Python/regcfg_passes.c folds the load)
@@ -779,10 +783,11 @@ class InlineFloatTest(unittest.TestCase):
             return total, total < 1e300
         warm(f, 3)
         names = opnames(f)
-        for name in ("LOAD_CONST_INLINE_FLOAT", "BINARY_OP_ADD_FLOAT",
+        for name in ("LOAD_CONST_INLINE_FLOAT",
                      "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
                      "BINARY_OP_TRUEDIV_FLOAT", "COMPARE_OP_FLOAT"):
             self.assertIn(name, names)
+        self.assertIn("Add.Float", handler_names(f))
         self.assertNotIn("BINARY_OP_EXTEND", names)
         self.assertEqual(f(3), (1.125, True))
 
@@ -1363,7 +1368,7 @@ class InlineCallTest(unittest.TestCase):
         def f(x, cls):
             return isinstance(x, cls)
         warm(f, 1, int)
-        self.assertIn("CALL_ISINSTANCE", opnames(f))
+        self.assertIn("Call.Generic+NO_SELF", handler_names(f))
         for value in (make_inline(70000), make_inline_float(1.5)):
             for cls in (int, float, object, bool, str, (int, float), (str, bytes),
                         (str, numbers.Number), numbers.Number, numbers.Integral,

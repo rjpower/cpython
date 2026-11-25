@@ -14,7 +14,7 @@ _testinternalcapi = import_module("_testinternalcapi")
 
 
 def handlers(fn):
-    # The call handlers carry a role suffix, as CALL_PY_GENERATOR+NO_SELF.
+    # The call handlers carry a role suffix, as Call.Generic+NO_SELF.
     return [name.split("+")[0] for name in ir_handlers(fn)]
 
 
@@ -61,7 +61,7 @@ class TestGeneratorCreation(unittest.TestCase):
             return gen(a, b)
         call = reset_code(call)
         warm(call, 1, 2)
-        self.assertIn("CALL_PY_GENERATOR", handlers(call))
+        self.assertIn("Call.Generic", handlers(call))
         g = call(3, 4)
         self.assertEqual(sys._getframe().f_code.co_name, self.id().split(".")[-1])
         self.assertIsNone(g.gi_frame.f_back)
@@ -114,7 +114,7 @@ class TestGeneratorCreation(unittest.TestCase):
     def test_type_change_rebinds_generator_call(self):
         caller = make_caller()
         self.assertEqual(warm(caller, 1, 2), [1, 2])
-        self.assertIn("CALL_PY_GENERATOR", handlers(caller))
+        self.assertIn("Call.Generic", handlers(caller))
         global gen
         saved = gen
 

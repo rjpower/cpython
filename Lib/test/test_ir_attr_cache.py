@@ -91,7 +91,7 @@ class TestCanonicalMethodCapture(unittest.TestCase):
         for _ in range(4 * _testinternalcapi.SPECIALIZATION_THRESHOLD):
             self.assertEqual(invoke(owner), 42)
         self.assertIn('LOAD_ATTR_METHOD_WITH_VALUES', handlers(invoke))
-        self.assertIn('CALL_PY_EXACT_ARGS', handlers(invoke))
+        self.assertIn('Call.Exact', handlers(invoke))
         self.assertEqual(invoke(owner), 42)
 
     def test_method_replacement_and_instance_shadowing(self):

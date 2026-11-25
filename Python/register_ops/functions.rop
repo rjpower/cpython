@@ -1,12 +1,9 @@
 // 1I: function construction and the finite intrinsic catalog.
 //
-// A function is made by Function.Make, and the compiler installs its fields
-// (defaults, keyword defaults, annotations, closure, annotate) one by one with
-// FunctionSet.SetField.  The fields could be operands of Make (a span), once
-// span words other than Move are supported by the assembler and the outcome
-// readers.
-
-enum FunctionField(DEFAULTS, KWDEFAULTS, ANNOTATIONS, CLOSURE, ANNOTATE);
+// A function is made by Function.Make: the code, and the attributes that the
+// compiler's SET_FUNCTION_ATTRIBUTEs install (defaults, keyword defaults,
+// annotations, closure, annotate), which are a span of sources in the order
+// of their bit in `present`.  Bit k is the compiler's flag 1 << k.
 
 // Include/internal/pycore_intrinsics.h.  The unary members come first, then
 // the binary ones, then the escapes that Python/assemble.c and the compiler
@@ -30,29 +27,28 @@ enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION
                  INTRINSIC_CONTAINS_IN, INTRINSIC_CONTAINS_NOT_IN,
                  INTRINSIC_GETATTR, INTRINSIC_SETATTR);
 
-family Function(dst:Dst, code:Src)
-  exits(next, raise) ops(MAKE_FUNCTION);
+family Function(dst:Dst, code:Src, fields:Span<Src>, present:U8)
+  exits(next, raise) ops(MAKE_FUNCTION, SET_FUNCTION_ATTRIBUTE);
 
-family FunctionSet(fn:Src, value:Src, field:Enum<FunctionField>)
-  exits(next) ops(SET_FUNCTION_ATTRIBUTE);
+point Function.Done(current, next_head, clear) keep() spent(code, fields) defs(dst);
+point Function.Failed(current, site, pending) keep() spent(code, fields) defs();
 
-point Function.Done(current, next_head, clear) keep() spent(code) defs(dst);
-point Function.Failed(current, site, pending) keep() spent(code) defs();
-point FunctionSet.Done(current, next_head, clear) keep(fn) spent(value) defs();
-
-// A new function over the code, with the frame's globals.  The row closes the
-// code owner on both outcomes; on failure the pending exception is set aside
-// around the close.  Watchers can run Python.
-extern helper function_new(f:Frame, code:O)
+// A new function over the code, with the frame's globals, and the attributes
+// of `present` installed in order.  The row closes the code and every
+// attribute on both outcomes; on failure the pending exception is set aside
+// around the closes.  Watchers can run Python.
+extern helper function_make(f:Frame, code:O, fields:Span<Src>, present:U8)
   cases(ok(fn:O), err(e:Err))
-  effects(allocates, releases, runs_python, raises)
-  c _PyRop_FunctionNew as value_or_null
+  effects(allocates, writes, releases, runs_python, raises)
+  spends(fields)
+  c _PyRop_FunctionMake as value_or_null
   evidence(
     review: "Reviewed 1I. bytecodes.c _MAKE_FUNCTION: PyFunction_New of the code and"
-            "the frame's globals, then _PyFunction_SetVersion.",
-    contract: "The code is a code object (the compiler's: the word's source is a"
-              "constant). The result is a new owner; a function watcher may run"
-              "Python and raise.");
+            "the frame's globals, then _PyFunction_SetVersion; then each"
+            "SET_FUNCTION_ATTRIBUTE: _PyFunction_StoreAttribute.",
+    contract: "The code is a code object. Each attribute moves into the function (a"
+              "local's binding gets a count of its own). The result is a new owner;"
+              "a function watcher may run Python and raise.");
 
 arm Function.Make split
   effects(allocates, writes, runs_python, raises, releases on (dst))
@@ -61,7 +57,7 @@ arm Function.Make split
 {
   entry():
     let held:O = acquire(code);
-    call function_new(frame, held) {
+    call function_make(frame, held, fields, present) {
       ok -> Made();
       err -> NewFailed();
     }
@@ -70,27 +66,6 @@ arm Function.Make split
     exit next();
   NewFailed(e:Err):
     exit raise(Function.Failed, e);
-}
-
-// The attribute goes into the slot of its flag; the function stays in its home
-extern helper store_field(fn:B, field:Enum<FunctionField>, attr:O) -> Unit
-  effects(writes)
-  c _PyRop_StoreField as unit
-  evidence(
-    review: "Reviewed 1I. bytecodes.c SET_FUNCTION_ATTRIBUTE: _PyFunction_StoreAttribute.",
-    contract: "No call, no failure, no callback: one store into an empty slot; the"
-              "slot takes the attribute's owner.");
-
-arm FunctionSet.SetField inline
-  effects(reads, writes)
-  feedback()
-  exits(next)
-{
-  entry():
-    let attr:O = acquire(value);
-    let _:Unit = store_field(use(fn), field, attr);
-    publish [] retire [] at FunctionSet.Done;
-    exit next();
 }
 
 // Intrinsic: one typed signature per class of intrinsic ids.  The translator

@@ -475,15 +475,18 @@ SCENARIOS = {
            for v in (1, "s")], warm=([],),
         monitored=("monitored",)),
     "Function": Scenario("Function", {
-        "def": "def f():\n    def g():\n        pass\n    return g\n"},
+        "def": "def f():\n    def g():\n        pass\n    return g\n",
+        "defaults": "def f(a):\n    def g(x=a):\n        pass\n    return g\n",
+        "all": "def f(a, b):\n    def g(x=a, *, k=b) -> int:\n        return a\n"
+               "    return g\n"},
+        # The function keeps the code and the attributes, which the count
+        # check cannot see
         [{"code": code} for code in (identity.__code__, Holder.__init__.__code__)],
-        warm=(), holds=True),
-    "FunctionSet": Scenario("FunctionSet", {
-        "defaults": "def f(a):\n    def g(x=a):\n        pass\n    return g\n"},
-        # The function keeps the value, which the count check cannot see: only
-        # an immortal value is exact
-        [{"fn": FUNCTION, "value": ()}], warm=(1,),
-        before_run=lambda inputs: setattr(inputs["fn"], "__defaults__", None)),
+        warm=(1, 2), holds=True,
+        inputs_by_source={
+            "defaults": [{"code": identity.__code__, "fields": [v]}
+                         for v in ((1,), (), (None, 2))],
+            "all": [{"code": identity.__code__, "fields": [(1,), {"k": 2}, {"k": int}]}]}),
     "Intrinsic": Scenario("Intrinsic", {
         "unary": "def f(a):\n    return +a\n",
         "stopiteration": "def f(a):\n    yield a\n",

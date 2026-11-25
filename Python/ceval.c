@@ -2286,8 +2286,8 @@ static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
 /* The rows of Function and Intrinsic (Python/register_ops/functions.rop) */
-static PyValue _PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue code);
-static void _PyRop_StoreField(PyValueBorrow fn, uint32_t field, PyValue attr);
+static PyValue _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
+                                   const _PyRopSpan *fields, uint32_t present);
 static PyValue _PyRop_IntrinsicUnary(PyThreadState *tstate, uint32_t id,
                                      PyValue x);
 static PyValue _PyRop_IntrinsicImportStar(PyThreadState *tstate, PyValue x);
@@ -8436,33 +8436,37 @@ static inline Py_ALWAYS_INLINE PyValue
 
 /* Function.Make and Intrinsic.*: the rows (functions.rop) */
 
+/* The function over the code, and the attributes of `present`: bit k is
+ * the compiler's flag 1 << k, and the span holds the attributes in the order
+ * of their bits.  The code and every attribute are spent on both outcomes. */
 static PyValue
-_PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue code)
+_PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
+                    const _PyRopSpan *fields, uint32_t present)
 {
+    int n = fields->count;
+    PyValue vals[n + 1];
+    rop_take_items(fields, vals);
     PyObject *codeobj = PyValue_AsKnownObjectBorrow(code);
     PyFunctionObject *func_obj = (PyFunctionObject *)
         PyFunction_New(codeobj, frame->f_globals);
     if (func_obj == NULL) {
-        // Close the code with the exception set aside
+        // Close the owners with the exception set aside
         PyObject *exc = PyErr_GetRaisedException();
         PyValue_XCLOSE(code);
+        rop_close_items(vals, n);
         PyErr_SetRaisedException(exc);
         return PyValue_NULL;
     }
     _PyFunction_SetVersion(
         func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
     PyValue_XCLOSE(code);
+    int i = 0;
+    for (uint32_t bits = present; bits != 0; bits &= bits - 1) {
+        _PyFunction_StoreAttribute(func_obj, bits & -bits,
+                                   PyValue_AsKnownObjectSteal(vals[i++]));
+    }
+    assert(i == n);
     return PyValue_FromObjectSteal((PyObject *)func_obj);
-}
-
-/* field is the member of FunctionField: the compiler's flag is 1 << field */
-static void
-_PyRop_StoreField(PyValueBorrow fn, uint32_t field, PyValue attr)
-{
-    PyObject *func = (PyValue_AsKnownObjectBorrow)(fn);
-    assert(PyFunction_Check(func));
-    _PyFunction_StoreAttribute((PyFunctionObject *)func, 1 << field,
-                               PyValue_AsKnownObjectSteal(attr));
 }
 
 /* The compiler's number of each member of IntrinsicId, in declaration order */

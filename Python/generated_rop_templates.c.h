@@ -11,7 +11,6 @@
 //   Const.Common: Const.Common: the immediate index is not one field of the head
 //   Const.Pool: Const.Pool: the immediate index is not one field of the head
 //   Const.Small: Const.Small: the immediate index is not one field of the head
-//   FunctionSet.SetField: FunctionSet.SetField: store_field has no leaf lowering
 //   GetAttr.Class: GetAttr.Class: admitted_recipe has no leaf lowering
 //   GetAttr.GetSet: GetAttr.GetSet: admitted_recipe has no leaf lowering
 //   GetAttr.Hint: GetAttr.Hint: admitted_recipe has no leaf lowering

@@ -875,7 +875,7 @@ OBJECT_READERS = {
     "PyUnicode_Concat",
 
     "value_exception_group_match",
-    "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
+    "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal",
     # The indirect calls of BINARY_OP_EXTEND, through a table of functions
     # that read their operands

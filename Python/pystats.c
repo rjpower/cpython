@@ -162,9 +162,7 @@ _Py_GetSpecializationStats(void) {
 static const char *
 handler_name(int i)
 {
-    return i < IR_FIRST_ONLY_HANDLER
-        ? _PyOpcode_OpName[i]
-        : _PyIR_OnlyNames[i - IR_FIRST_ONLY_HANDLER];
+    return _PyIR_HandlerName(i);
 }
 
 static void

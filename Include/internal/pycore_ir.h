@@ -23,9 +23,10 @@ extern "C" {
  *     +----------+----------+----------+----------+----------+
  *
  * The handler of an instruction that has an opcode is that opcode.  The
- * handlers of the IR only (IR_JUMP, BINARY_OP_ADD, ...)
- * follow from IR_FIRST_ONLY_HANDLER, after the pseudo-instructions of the
- * compiler, so that opcode.opname names each number once.  A, B, C and D are 12-bit fields,
+ * handlers of the IR only (IR_JUMP, BINARY_OP_ADD, ...) take the numbers
+ * below 256 that no opcode holds, then continue from 256 (a
+ * pseudo-instruction has no handler, so its number is free).
+ * _PyIR_IsOnlyHandler tells them from the opcodes.  A, B, C and D are 12-bit fields,
  * and C and D together form a 24-bit field CD.  A field plays one of these
  * roles, which _PyIR_Formats gives per handler:
  *

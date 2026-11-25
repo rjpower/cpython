@@ -2006,9 +2006,7 @@ get_ir(PyObject *self, PyObject *args)
         if (original >= IR_NUM_OLD_HANDLERS) {
             fixed_left = _PyIR_FormatOf(original)->fixed_words;
         }
-        const char *name = handler < IR_FIRST_ONLY_HANDLER
-            ? _PyOpcode_OpName[handler]
-            : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
+        const char *name = _PyIR_HandlerName(handler);
         /* The canonical flags follow the name, as in dis; the executing
          * copy's slot-class flags are derived and not shown. */
         const char *no_self = (word & IR_F_NO_SELF) ? "+NO_SELF" : "";
@@ -5272,8 +5270,7 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
 static const char *
 handler_name(int h)
 {
-    return h < IR_FIRST_ONLY_HANDLER
-        ? _PyOpcode_OpName[h] : _PyIR_OnlyNames[h - IR_FIRST_ONLY_HANDLER];
+    return _PyIR_HandlerName(h);
 }
 
 /* How the newest unit compiled each head word, as emit_unit() decides:

@@ -101,6 +101,8 @@ def _target(t: Target) -> str:
 def _binding(b: Binding) -> str:
     if not b.vector:
         return f"{b.target} = {expr_text(b.value)}"
+    if b.owners:
+        return f"{b.target}[] = {expr_text(b.value)}"
     if isinstance(b.value, Call):
         (source,) = b.value.args
         return f"{b.target}[] = {b.value.callee}({expr_text(source)}[])"

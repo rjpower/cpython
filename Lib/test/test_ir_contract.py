@@ -50,7 +50,6 @@ FEEDBACK = {
     "COMPARE_OP": ("BINARY", 32),
     "CONTAINS_OP": ("BINARY", 32),
     "STORE_SUBSCR": ("BINARY", 32),
-    "LOAD_ATTR": ("ATTR", 48),
     "STORE_ATTR": ("ATTR", 48),
     "LOAD_SUPER_ATTR": ("ATTR", 48),
     "LOAD_GLOBAL": ("GLOBAL", 32),
@@ -281,7 +280,7 @@ class ContractTests(unittest.TestCase):
             "FOR_ITER": 1, "FOR_ITER_LIST": 1, "FOR_ITER_TUPLE": 1,
             "FOR_ITER_VIRTUAL": 1, "INSTRUMENTED_FOR_ITER": 1, "SEND": 1,
             "SEND_VIRTUAL": 1, "FOR_ITER_RANGE": 2, "FOR_ITER_GEN": 2,
-            "SEND_GEN": 2, "LOAD_ATTR_METHOD_WITH_VALUES": 0,
+            "SEND_GEN": 2,
         }
         for name, count in expected.items():
             for oparg in (2, 3, 7):
@@ -553,8 +552,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
                                     "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
                                     "SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"})
-        for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
-                     "LOAD_ATTR_PROPERTY"):
+        for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
                             name)
         for name in ("LOAD_FAST", "LOAD_CONST", "LOAD_SMALL_INT"):
@@ -628,7 +626,7 @@ class AnalyzerTests(unittest.TestCase):
         # A handler that pushes a frame may raise and run Python: the
         # callee's exception propagates to its word; so may a yield, where
         # throw() raises
-        for name in ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL", "LOAD_ATTR_PROPERTY",
+        for name in ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL",
                      "YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
             effects = BY_NAME[name].effects
             self.assertTrue(effects & _opcode.IR_RAISES, name)

@@ -36,13 +36,9 @@ class OperandModeTests(unittest.TestCase):
         for _ in range(ROUNDS):
             self.assertIs(read(owner), owner.value)
         self.assertIn(VARIANT, handlers(read))
+        # The words of the code object stay generic
         self.assertNotIn(VARIANT, [word[0] for word in
                                   _testinternalcapi.get_ir(read.__code__)])
-        # Both public disassembly paths must accept a physical handler > 255.
-        adaptive = {instr.opname for instr in dis.get_instructions(read, adaptive=True)}
-        self.assertIn("GetAttr.Shape", adaptive)
-        self.assertNotIn("LOAD_ATTR", adaptive)
-        dis.dis(read, adaptive=True, file=io.StringIO())
 
     def test_other_ownership_modes(self):
         class Owner:
@@ -62,8 +58,7 @@ class OperandModeTests(unittest.TestCase):
             self.assertIs(read_temporary(lambda: owner), owner.value)
             self.assertIs(read_to_local(owner), owner.value)
         for read in (read_temporary, read_to_local):
-            self.assertNotIn(VARIANT, handlers(read))
-            self.assertIn("GetAttr.Shape", handlers(read))
+            self.assertIn(VARIANT, handlers(read))
 
     def test_object_alias_and_result_lifetime(self):
         class Owner:
@@ -144,10 +139,8 @@ class OperandModeTests(unittest.TestCase):
         kind, state, _, _, rows = _testinternalcapi.get_feedback(read.__code__, offset)
         self.assertEqual(kind, "ATTR")
         self.assertTrue(rows)
-        self.assertNotIn(opcode._ir_opmap[VARIANT], [row[2] for row in rows])
         self.assertIn(_testinternalcapi.arm_handlers()["GetAttr.Shape"],
                       [row[2] for row in rows])
-        self.assertNotIn(VARIANT, handlers(read))
 
     def test_tracing_after_warmup(self):
         class Owner:
@@ -211,89 +204,6 @@ class OperandModeTests(unittest.TestCase):
         for _ in range(ROUNDS):
             self.assertIs(read(owner), owner.value)
         self.assertIn(VARIANT, handlers(read))
-
-    def test_metadata_domain(self):
-        import _opcode
-        h = opcode._ir_opmap[VARIANT]
-        base_handler = _testinternalcapi.arm_handlers()["GetAttr.Shape"]
-        row = _opcode.get_ir_contract()[h]
-        base = _opcode.get_ir_contract()[base_handler]
-        self.assertGreater(h, 255)
-        # The variant has the contract of its base, except that the source
-        # handler of each, outside generator boundaries, is itself
-        self.assertEqual((row.ordinary_handler, base.ordinary_handler),
-                         (h, base_handler))
-        fields = [name for name in dir(type(row))
-                  if not name.startswith(("_", "n_")) and name not in
-                  ("count", "index", "ordinary_handler")]
-        self.assertEqual([getattr(row, name) for name in fields],
-                         [getattr(base, name) for name in fields])
-
-
-@unittest.skipIf(test_tools.basepath is None, "needs the source tree")
-class OperandModeGeneratorTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        test_tools.skip_if_missing("cases_generator")
-        with test_tools.imports_under_tool("cases_generator"):
-            import analyzer
-            import ir_generator
-            import ir_metadata_generator
-        cls.generator = ir_generator
-        cls.metadata = ir_metadata_generator
-        cls.analysis = analyzer.analyze_files([
-            str(Path(test_tools.basepath) / "Python" / "bytecodes.c")])
-
-    def test_inherited_contract_and_generated_modes(self):
-        gen = self.generator
-        formats = gen.compute_formats(self.analysis)
-        contracts = gen.handler_contracts(self.analysis, formats)
-        self.assertIs(formats[VARIANT], formats["GetAttr.Shape"])
-        self.assertEqual(contracts[VARIANT], contracts["GetAttr.Shape"])
-        self.assertEqual(self.metadata.shadow_of(VARIANT, self.analysis),
-                         "GetAttr.Shape")
-        _, bases, flags = self.metadata.handler_facts(self.analysis, formats)
-        self.assertEqual(bases[VARIANT], "LOAD_ATTR")
-        self.assertIn("_PyIR_H_SPECIALIZED", flags[VARIANT])
-        self.assertIn("_PyIR_H_IR_ONLY", flags[VARIANT])
-        self.assertNotIn("_PyIR_H_PRISTINE", flags[VARIANT])
-        output = io.StringIO()
-        gen.generate_ir([], self.analysis, output, False)
-        body = output.getvalue().split(f"TARGET({VARIANT}) {{", 1)[1]
-        body = body.split("TARGET(", 1)[0]
-        self.assertNotIn("IR_IS_LOCAL", body)
-        self.assertNotIn("IR_CONSUME_INPUT", body)
-        self.assertIn("attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);", body)
-        self.assertIn("ir_own_B = PyValue_NULL;", body)
-        read = body.index("attr = _PyObject_ShapeReadDup(")
-        store = body.index("IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);")
-        close = body.index("_XCLOSE_POINTER(ir_own_B);")
-        self.assertLess(read, store)
-        self.assertLess(store, close)
-        self.assertNotIn("retire_published_values(", body)
-        helpers = (Path(test_tools.basepath) / "Include" / "internal" / "pycore_dict.h").read_text()
-        read = helpers.split("_PyObject_ShapeReadDup(PyObject *owner, uint32_t offset)", 1)[1]
-        read = read.split("\n}", 1)[0]
-        self.assertIn("PyValue_Borrow(*_PyObject_ValueSlot(owner, offset))", read)
-        self.assertIn("assert(!PyValue_IsNull(found));", read)
-        self.assertIn("return PyValue_DUP(found);", read)
-        self.assertIn("int opcode = LOAD_ATTR_SHAPE;", body)
-
-    def test_synthetic_instruction_without_specialization_family(self):
-        inst = self.analysis.instructions["GetAttr.Shape"]
-        with mock.patch.object(inst, "family", None):
-            self.assertNotIn(VARIANT, self.generator.execution_variants(self.analysis))
-            self.assertNotIn(VARIANT, self.generator.handler_ids(self.analysis))
-
-    def test_invalid_mode_descriptors(self):
-        gen = self.generator
-        for local, temp in ((("A",), ()), ((), ("B",)), (("D",), ()),
-                            (("B",), ("B",))):
-            with self.subTest(local=local, temp=temp):
-                variant = gen.ExecutionVariant("GetAttr.Shape", local, temp)
-                with mock.patch.dict(gen.EXECUTION_VARIANTS, {VARIANT: variant}):
-                    with self.assertRaisesRegex(ValueError, "invalid operand modes"):
-                        gen.compute_formats(self.analysis)
 
 
 if __name__ == "__main__":

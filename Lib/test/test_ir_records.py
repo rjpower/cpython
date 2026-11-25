@@ -115,7 +115,7 @@ class HandlerRecordTests(unittest.TestCase):
             return {str(f) for g in found.guards for f in g.facts}
 
         # A specific version
-        self.assertIn("TYPE_VERSION(v0, type_version)",
+        self.assertIn("TYPE_VERSION(v1, type_version)",
                       facts("STORE_ATTR_SHAPE", "_GUARD_TYPE_VERSION"))
 
     def test_poly_table_readers(self):

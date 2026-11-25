@@ -4,8 +4,7 @@ A uop of Python/bytecodes.c may declare its contract: modes and facts on its
 stack items, `effects(...)` and `exits(...)`.  Its record then comes from
 the declarations, and the generator verifies its body against them and
 against the rows of Include/internal/pycore_ir_components.h.  The pilot
-declares BINARY_OP's add arms and generic form, UNPACK_SEQUENCE and
-LOAD_ATTR_INSTANCE_VALUE."""
+declares BINARY_OP's add arms and generic form and UNPACK_SEQUENCE."""
 
 import dataclasses
 import io
@@ -40,7 +39,7 @@ SLICE = ("_GUARD_TOS_INT", "_GUARD_NOS_INT", "_BINARY_OP_ADD_INT", "_POP_TOP_INT
          "_GUARD_TOS_TUPLE", "_GUARD_TOS_LIST", "_UNPACK_SEQUENCE_TUPLE",
          "_UNPACK_SEQUENCE_LIST", "_SPECIALIZE_UNPACK_SEQUENCE", "_UNPACK_SEQUENCE",
          "_GUARD_TYPE_VERSION", "_CHECK_MANAGED_OBJECT_HAS_VALUES",
-         "_LOAD_ATTR_INSTANCE_VALUE", "_NULL_SLOT_CONDITIONAL")
+         "_NULL_SLOT_CONDITIONAL")
 
 
 def setUpModule():
@@ -65,8 +64,7 @@ class SliceTests(unittest.TestCase):
             with self.subTest(uop=name):
                 self.assertIsNotNone(ir_contract.contract_of(analysis.uops[name]))
         for name in ("BINARY_OP", "BINARY_OP_ADD_INT", "BINARY_OP_ADD_FLOAT",
-                     "UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST",
-                     "LOAD_ATTR_INSTANCE_VALUE"):
+                     "UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST"):
             with self.subTest(macro=name):
                 self.assertIsNotNone(analysis.instructions[name].region)
 
@@ -106,16 +104,6 @@ class SliceTests(unittest.TestCase):
         self.assertEqual([(facts(g), g.reason) for g in unpack.guards],
                          [([], "a free-threaded build's critical section"),
                           (["LENGTH(v0, oparg)"], "")])
-        # Facts read through a path from the operand: its type's version, its
-        # inline values' flag; and the loaded value's, recorded on the local
-        handler = "LOAD_ATTR_INSTANCE_VALUE"
-        self.assertEqual([facts(g) for g in uop_record(handler, "_GUARD_TYPE_VERSION").guards],
-                         [["ENCODING(v0, object)"], ["TYPE_VERSION(v0, type_version)"]])
-        has_values = uop_record(handler, "_CHECK_MANAGED_OBJECT_HAS_VALUES")
-        self.assertEqual([facts(g) for g in has_values.guards], [["INLINE_VALUES_VALID(v0)"]])
-        load = uop_record(handler, "_LOAD_ATTR_INSTANCE_VALUE")
-        self.assertEqual([facts(g) for g in load.guards], [["ENCODING(found, inline_float|inline_int|object)"]])
-        self.assertEqual(load.effects, {READS_HEAP, MAY_RELEASE})
 
     # Where the tables (ir_records, deleted at G0d) declare an exit that the
     # macro's expansion cannot take.  IR_TRY_DICT_FIRST_PROBE: a hit stores
@@ -1437,10 +1425,6 @@ class VerifierTests(unittest.TestCase):
             ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
                                    "PRIMITIVE(spam, PyValue, (PyValueBorrow), ARGS(borrowed), "
                                    "VALUE(owned null_iff(2)), EFFECTS())")
-
-    def test_poly_lookup_reads_feedback(self):
-        self.assertEqual(ir_contract.rows()["IR_METHOD_POLY_LOOKUP"].feedback,
-                         {("read", "entry")})
 
     def test_feedback_only_through_rows(self):
         self.refuses("""

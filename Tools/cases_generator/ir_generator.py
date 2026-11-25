@@ -7096,8 +7096,8 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
         qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
-                                   "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
-                                   "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL",
+                                   "BUILD_MAP", "STORE_SUBSCR",
+                                   "STORE_ATTR_WITH_HINT", "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
                                    "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
                                    "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",

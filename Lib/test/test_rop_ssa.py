@@ -401,6 +401,13 @@ SCENARIOS = {
         "or": "def f(a, b):\n    return (a and b) or a\n"},
         [{"srcs": [v]} for v in (1, "s", Plain(), 2**70)], warm=("__x__", 1),
         per_arm=True),
+    "NamespaceRead": Scenario("NamespaceRead", {
+        "build_class": "def f(a):\n    class C:\n        pass\n    return a\n"},
+        [{}], warm=(1,)),
+    "NamespaceWrite": Scenario("NamespaceWrite", {
+        "global": "def f(a):\n    global g\n    g = a\n    return a\n"},
+        [{"value": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,),
+        holds=True),
     "Import": Scenario("Import", {
         "eager": "def f(a):\n    import os\n    return a\n"},
         [{"level": 0, "fromlist": None}], warm=(1,)),
@@ -710,6 +717,12 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
     run = CRun(f, index, slots, mode, handler)
     jump_kind = "jump" if arm.family == "Jump" else "branch"
     exit = classify(run, mode, index, length, jump_kind)
+    if arm.family == "NamespaceWrite" and "value" in inputs and exit == "next":
+        # The value's new owner is the globals dict, which the count of the
+        # homes does not see: the global holds the value itself
+        stored = f.__globals__.get("g")
+        if stored is not inputs["value"]:
+            return Result(False, exit, f"C stored {stored!r} in the global")
     obs = ev.Observation(exit, run.next if mode != STUB else None, run.slots,
                          run.feedback_written, run.handler != handler,
                          (run.extra,) if exit == "return" else None)
@@ -794,11 +807,7 @@ NOT_RUN = {
     "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "
                           "cannot call as a function",
     "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",
-    "NamespaceRead.BuildClass": "LOAD_BUILD_CLASS occurs in class definitions' callers: "
-                                "a class body is not a function the probe warms",
     "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
-    "NamespaceWrite.Global": "the value moves into the globals dict, an owner the probe's "
-                             "home count does not see; a delete shares the arm",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",

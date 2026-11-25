@@ -2285,8 +2285,7 @@ static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
 /* The rows of Function and Intrinsic (Python/register_ops/functions.rop) */
-static PyValue _PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue *code);
-static void _PyRop_RetireFailedFunction(PyValue code);
+static PyValue _PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue code);
 static void _PyRop_StoreField(PyValueBorrow fn, uint32_t field, PyValue attr);
 static PyValue _PyRop_IntrinsicUnary(PyThreadState *tstate, uint32_t id,
                                      PyValue x);
@@ -8004,26 +8003,22 @@ static inline Py_ALWAYS_INLINE PyValue
 /* Function.Make and Intrinsic.*: the rows (functions.rop) */
 
 static PyValue
-_PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue *code)
+_PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue code)
 {
-    // The compiler loads the code object from a constant
-    PyObject *codeobj = PyValue_AsKnownObjectBorrow(*code);
+    PyObject *codeobj = PyValue_AsKnownObjectBorrow(code);
     PyFunctionObject *func_obj = (PyFunctionObject *)
         PyFunction_New(codeobj, frame->f_globals);
     if (func_obj == NULL) {
+        // Close the code with the exception set aside
+        PyObject *exc = PyErr_GetRaisedException();
+        PyValue_XCLOSE(code);
+        PyErr_SetRaisedException(exc);
         return PyValue_NULL;
     }
     _PyFunction_SetVersion(
         func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
-    return PyValue_FromObjectSteal((PyObject *)func_obj);
-}
-
-static void
-_PyRop_RetireFailedFunction(PyValue code)
-{
-    PyObject *exc = PyErr_GetRaisedException();
     PyValue_XCLOSE(code);
-    PyErr_SetRaisedException(exc);
+    return PyValue_FromObjectSteal((PyObject *)func_obj);
 }
 
 /* field is the member of FunctionField: the compiler's flag is 1 << field */

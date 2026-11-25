@@ -2852,6 +2852,31 @@ _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s)
     }
 }
 
+void
+_PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v)
+{
+    // The row that made v returns count(d) items
+    assert(v->count == d->count);
+    for (int i = 0; i < d->count; i++) {
+        int to = _PyIR_SpanElement(d->head, d->handler, d->first + i);
+        PyValue old = _PyFrame_TakeHome(d->frame, &d->frame->base[to]);
+        _PyFrame_WriteHome(d->frame, &d->frame->base[to], v->items[i]);
+        v->items[i] = old;
+    }
+}
+
+void
+_PyRop_CloseOwners(_PyRopOwners *v)
+{
+    // Every home is written before any close runs a finalizer
+    for (Py_ssize_t i = 0; i < v->count; i++) {
+        PyValue_XCLOSE(v->items[i]);
+    }
+    PyMem_Free(v->items);
+    v->items = NULL;
+    v->count = 0;
+}
+
 /* All descriptors are local to this reached cold scope; no successful handler
  * gains an owner record. */
 static Py_NO_INLINE _PyIRErrorResult

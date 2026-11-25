@@ -213,6 +213,41 @@ class StubTests(unittest.TestCase):
         self.assertEqual(text.count("PyValue_XCLOSE(own_x)"), 1)
 
 
+    def test_an_owners_binding_stores_then_closes_the_displaced_owners(self):
+        # d[] = v exchanges each item with the owner its home displaces;
+        # old(d) closes those after every home is written
+        program = rop_check.check([rop_syntax.parse(OWNERS, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertIn("_PyRopOwners v;", p.lowered["F.Split"].decls)
+        text = "\n".join(p.lowered["F.Split"].body)
+        self.assertIn("v = _PyRop_Split(", text)
+        self.assertRegex(text, r"n = \(Py_ssize_t\)IR_\w+\(ir_word\);")
+        order = [text.index(mark) for mark in (
+            "_PyRop_StoreOwners(&(_PyRopSpan){", "IR_STUB_ESCAPE();",
+            "_PyRop_CloseOwners(&v);")]
+        self.assertEqual(order, sorted(order))
+
+
+OWNERS = """\
+family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);
+point F.Done(current, next_head, clear) keep(x) spent() defs(dsts);
+extern helper split(v:B, n:Size) -> Span<O>
+  effects(allocates)
+  c _PyRop_Split as handle
+  evidence(review: "r", contract: "c");
+arm F.Split shared effects(allocates, writes, releases on (dsts), runs_python) feedback()
+  exits(next)
+{
+  entry():
+    let n:Size = count(dsts);
+    let v:Span<O> = split(use(x), n);
+    publish [dsts[] = v] retire [old(dsts)] at F.Done;
+    exit next();
+}
+"""
+
+
 WRAPPED = """\
 extern primitive is_int(v:B) -> Bool
   effects()

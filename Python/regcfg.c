@@ -2303,6 +2303,81 @@ rule_insert(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Pop(t, popped, NULL);
 }
 
+/* The text families (Python/register_ops/text.rop).  BUILD_STRING,
+ * BUILD_INTERPOLATION and BUILD_TEMPLATE are BuildText: the parts are the
+ * top identities, the stack op's operand is the word's flags (a conversion
+ * and a format bit for an interpolation, which says how many parts), and
+ * the arm is the kind of text. */
+static int
+rule_build_text(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n, handler, flags = 0;
+    switch (src->opcode) {
+        case BUILD_STRING:
+            n = src->oparg;
+            handler = ROP_SELECT_BuildText_join;
+            break;
+        case BUILD_INTERPOLATION:
+            n = 2 + (src->oparg & 1);
+            handler = ROP_SELECT_BuildText_interpolation;
+            flags = src->oparg;
+            break;
+        default:
+            assert(src->opcode == BUILD_TEMPLATE);
+            n = 2;
+            handler = ROP_SELECT_BuildText_template;
+            break;
+    }
+    if (n > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - n], n,
+                                  &dst, 1, &op));
+    op->oparg = flags;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* CONVERT_VALUE: one use; its operand is FVC_STR, FVC_REPR or FVC_ASCII,
+ * the family's kind counted from 0 */
+static int
+rule_convert_value(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    assert(src->oparg >= FVC_STR && src->oparg <= FVC_ASCII);
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Convert_Text,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = src->oparg - FVC_STR;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* FORMAT_SIMPLE has the value as its one use, FORMAT_WITH_SPEC the value
+ * and then the specification */
+static int
+rule_format(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->opcode == FORMAT_WITH_SPEC ? 2 : 1;
+    if (n > t->sp) {
+        return stack_underflow(src);
+    }
+    int handler = n == 2 ? ROP_HANDLER_FormatSpec_Value : ROP_HANDLER_Format_Simple;
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - n], n,
+                                  &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
@@ -2365,6 +2440,12 @@ static const _PyRegRule rules[256] = {
     [DICT_UPDATE] = rule_insert,
     [DICT_MERGE] = rule_insert,
     [LOAD_GLOBAL] = rule_load_global,
+    [BUILD_STRING] = rule_build_text,
+    [BUILD_INTERPOLATION] = rule_build_text,
+    [BUILD_TEMPLATE] = rule_build_text,
+    [CONVERT_VALUE] = rule_convert_value,
+    [FORMAT_SIMPLE] = rule_format,
+    [FORMAT_WITH_SPEC] = rule_format,
 };
 
 /* An edge binds the parameters of the positions below depth: one that

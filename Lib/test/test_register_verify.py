@@ -1220,6 +1220,9 @@ class PilotTests(unittest.TestCase):
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
+        convert = at("text.rop", "exit raise(Convert.Failed, saved);", 5)
+        format_ = at("text.rop", "exit raise(Format.Failed, saved);", 5)
+        format_spec = at("text.rop", "exit raise(FormatSpec.Failed, saved);", 5)
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
         branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
@@ -1268,6 +1271,14 @@ class PilotTests(unittest.TestCase):
               f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
               "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "
               "spent, but mapping is intact",
+              f"{convert}: Convert.Text: points: raise at Convert.Failed: "
+              "Convert.Failed lists value in spent, but value is intact",
+              f"{format_}: Format.Simple: points: raise at Format.Failed: "
+              "Format.Failed lists value in spent, but value is intact",
+              f"{format_spec}: FormatSpec.Value: points: raise at FormatSpec.Failed: "
+              "FormatSpec.Failed lists spec in spent, but spec is intact",
+              f"{format_spec}: FormatSpec.Value: points: raise at FormatSpec.Failed: "
+              "FormatSpec.Failed lists value in spent, but value is intact",
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "

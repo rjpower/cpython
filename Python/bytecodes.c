@@ -1959,51 +1959,32 @@ dummy_func(
             }
         }
 
-        outlined inst(BUILD_STRING, (pieces[oparg]: consumed -- str: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: BUILD_STRING is the BuildText family (Python/register_ops/text.rop). */
+        tier1 inst(BUILD_STRING,
+                (pieces[oparg]: consumed -- str: owned))
+            exits(abort)
         {
-            PyObject *str_o = IR_BUILD_STRING(pieces);
-            DEAD(pieces);
-            ERROR_IF(str_o == NULL);
-            str = PyValue_FromObjectSteal(str_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(BUILD_INTERPOLATION,
-                (value: consumed, str: consumed object, format[oparg & 1]: consumed object
+        /* A stack op only: BUILD_INTERPOLATION is the BuildText family (Python/register_ops/text.rop). */
+        tier1 inst(BUILD_INTERPOLATION,
+                (value: consumed, str: consumed, format[oparg & 1]: consumed
                  -- interpolation: owned))
-            effects(runs_python, releases) exits(next, raise)
+            exits(abort)
         {
-            PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
-            int conversion = oparg >> 2;
-            PyObject *format_o;
-            if (oparg & 1) {
-                format_o = PyValue_AsKnownObjectBorrow(format[0]);
-            }
-            else {
-                format_o = &_Py_STR(empty);
-            }
-            // The value may be a number: the interpolation holds its box
-            PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
-            DECREF_INPUTS();
-            ERROR_IF(interpolation_o == NULL);
-            interpolation = PyValue_FromObjectSteal(interpolation_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(BUILD_TEMPLATE,
-                (strings: consumed assumed(object) by BUILD_TUPLE,
-                 interpolations: consumed assumed(object) by BUILD_TUPLE -- template: owned))
-            effects(allocates, raises, releases) exits(next, raise)
+        /* A stack op only: BUILD_TEMPLATE is the BuildText family (Python/register_ops/text.rop). */
+        tier1 inst(BUILD_TEMPLATE,
+                (strings: consumed, interpolations: consumed -- template: owned))
+            exits(abort)
         {
-            // Both are tuples that the compiler built
-            assert(PyValue_IsObject(strings));
-            assert(PyValue_IsObject(interpolations));
-            PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
-            PyObject *interpolations_o = PyValue_AsKnownObjectBorrow(interpolations);
-            PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
-            PyValue_CLOSE(interpolations);
-            PyValue_CLOSE(strings);
-            ERROR_IF(template_o == NULL);
-            template = PyValue_FromObjectSteal(template_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: BUILD_TUPLE is the Build family (Python/register_ops/displays.rop). */
@@ -4119,57 +4100,32 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(CONVERT_VALUE, (value: consumed -- result: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: CONVERT_VALUE is the Convert family (Python/register_ops/text.rop). */
+        tier1 inst(CONVERT_VALUE,
+                (value: consumed -- result: owned))
+            exits(abort)
         {
-            assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
-            PyObject *result_o;
-            if (oparg == FVC_STR) {
-                result_o = _PyValue_Str(value);
-            }
-            else if (oparg == FVC_REPR) {
-                result_o = _PyValue_Repr(value);
-            }
-            else {
-                result_o = _PyValue_ASCII(value);
-            }
-            PyValue_CLOSE(value);
-            ERROR_IF(result_o == NULL);
-            result = PyValue_FromObjectSteal(result_o);
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inline_ok inst(FORMAT_SIMPLE, (value: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: FORMAT_SIMPLE is the Format family (Python/register_ops/text.rop). */
+        tier1 inst(FORMAT_SIMPLE,
+                (value: consumed -- res: owned))
+            exits(abort)
         {
-            /* If value is a unicode object, then we know the result
-             * of format(value) is value itself. An inline int or float
-             * formats as it prints: format(x, "") is str(x). A language
-             * value is an object or inline, so the test is the same as
-             * the inline test and states `object` on the other path. */
-            if (!PyValue_IsObject(value)) {
-                PyObject *res_o = _PyValue_Str(value);
-                PyValue_CLOSE(value);
-                ERROR_IF(res_o == NULL);
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else if (!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-                PyObject *res_o = _PyValue_Format(value, PyValue_NULL);
-                PyValue_CLOSE(value);
-                ERROR_IF(res_o == NULL);
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else {
-                res = TAKE(value);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(FORMAT_WITH_SPEC, (value: consumed, fmt_spec: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: FORMAT_WITH_SPEC is the Format family (Python/register_ops/text.rop). */
+        tier1 inst(FORMAT_WITH_SPEC,
+                (value: consumed, fmt_spec: consumed -- res: owned))
+            exits(abort)
         {
-            PyObject *res_o = _PyValue_Format(value, fmt_spec);
-            DECREF_INPUTS();
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObjectSteal(res_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs))

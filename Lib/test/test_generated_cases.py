@@ -3198,7 +3198,7 @@ class TestIRCases(unittest.TestCase):
     def test_home_helpers_keep_ordinary_escape_publication(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
-        expected = {"BUILD_STRING": "IR_BUILD_STRING", "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+        expected = {"_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
         for name, helper in expected.items():
             part = analysis.uops[name]
             self.assertTrue(ir_generator.home_operation_contract(part))

@@ -389,6 +389,9 @@ class Select(enum.Enum):
     extend = "extend"                      # UpdateContainer: a list takes an iterable
     union = "union"                        # UpdateContainer: a set takes an iterable
     overlay = "overlay"                    # UpdateContainer: a dict takes a mapping
+    join = "join"                          # BuildText: the pieces of an f-string
+    interpolation = "interpolation"        # BuildText: one `{value!c:spec}` of a template
+    template = "template"                  # BuildText: the strings and interpolations of a template
     present = "present"                    # the family's optional operands hold values
     absent = "absent"                      # its optional operands are vacant
 
@@ -411,6 +414,7 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "display": (Select.tuple, Select.list, Select.set, Select.map),
     "element": (Select.append, Select.add),
     "update": (Select.extend, Select.union, Select.overlay),
+    "text": (Select.join, Select.interpolation, Select.template),
     "operand": (Select.present, Select.absent),
 }
 

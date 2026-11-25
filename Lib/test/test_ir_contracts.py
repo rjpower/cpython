@@ -1799,7 +1799,7 @@ class VerifierTests(unittest.TestCase):
                                         r"declared taken")
 
     def test_a_move_joined_with_a_new_owner(self):
-        # _FORMAT_SIMPLE: res is value itself on one path and a new owner on
+        # a format of an exact str: res is value itself on one path and a new owner on
         # the other; their join is owned, and the move discharges value
         source = """
             op(_OP, (value: consumed object -- res: %s)) effects(runs_python)

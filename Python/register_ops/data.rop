@@ -2,7 +2,6 @@
 // matching".  Arms come with their batches.
 
 enum CellMode(MAKE, GET, MAPPING_GET, CELL_SET, CELL_DELETE, COPY_FREE);
-enum TextKind(JOIN, INTERPOLATION, TEMPLATE);
 enum ConvertKind(STR, REPR, ASCII);
 enum PatternKind(Mapping, Sequence, Keys, Class);
 
@@ -16,17 +15,6 @@ family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpa
 family Cell(mode:Enum<CellMode>, cell:Cell, value:Maybe<Src>, dst:Maybe<Dst>,
             frees:Span<Free>)
   exits(next, raise) ops(MAKE_CELL, LOAD_DEREF, STORE_DEREF, DELETE_DEREF, COPY_FREE_VARS, LOAD_FROM_DICT_OR_DEREF);
-
-// 1G: text
-
-family BuildText(dst:Dst, kind:Enum<TextKind>, parts:Span<Src>, flags:U8)
-  exits(next, raise) ops(BUILD_STRING, BUILD_INTERPOLATION, BUILD_TEMPLATE);
-
-family Convert(dst:Dst, value:Src, kind:Enum<ConvertKind>)
-  exits(next, raise) ops(CONVERT_VALUE);
-
-family Format(dst:Dst, value:Src, spec:Maybe<Src>)
-  exits(next, raise) ops(FORMAT_SIMPLE, FORMAT_WITH_SPEC);
 
 // 1H: length and patterns
 

@@ -57,6 +57,10 @@ PyAPI_FUNC(PyValue) _PyRop_BuildTuple(const _PyRopSpan *items);
 PyAPI_FUNC(PyValue) _PyRop_BuildList(const _PyRopSpan *items);
 PyAPI_FUNC(PyValue) _PyRop_BuildSet(const _PyRopSpan *items);
 PyAPI_FUNC(PyValue) _PyRop_BuildMap(const _PyRopSpan *items);
+/* BuildText, in ceval.c */
+PyAPI_FUNC(PyValue) _PyRop_JoinText(const _PyRopSpan *parts);
+PyAPI_FUNC(PyValue) _PyRop_BuildInterpolation(const _PyRopSpan *parts, int flags);
+PyAPI_FUNC(PyValue) _PyRop_BuildTemplate(const _PyRopSpan *parts);
 PyAPI_FUNC(int) _PyRop_ListAppend(PyValue *list, PyValue item);
 PyAPI_FUNC(int) _PyRop_SetAdd(PyValue *set, PyValue item);
 PyAPI_FUNC(int) _PyRop_DictPut(PyValue *dict, PyValue key, PyValue value);

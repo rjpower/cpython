@@ -738,7 +738,7 @@ class DefinitionTests(unittest.TestCase):
         GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement AddEntry
         UpdateContainer MergeKeywords Unpack Cell NamespaceRead NamespaceReadFrom
         NamespaceWrite
-        GlobalRead SetupAnnotations Import ImportFrom BuildText Convert Format Length Pattern
+        GlobalRead SetupAnnotations Import ImportFrom BuildText Convert Format FormatSpec Length Pattern
         Function Intrinsic IntrinsicPair
         Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
         AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
@@ -746,7 +746,7 @@ class DefinitionTests(unittest.TestCase):
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 72)
+        self.assertEqual(len(self.APPENDIX_A), 73)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

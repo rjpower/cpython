@@ -643,7 +643,6 @@ IR_HELPER_CALLEES = {
 }
 
 IR_HELPER_EFFECTS = {
-    "IR_BUILD_STRING": frozenset(("escapes",)),
     "IR_BUILD_MAP": frozenset(("escapes",)),
     "IR_BUILD_SET": frozenset(("escapes",)),
     **{name: frozenset() for name in IR_HELPER_CALLEES},

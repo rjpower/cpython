@@ -875,7 +875,7 @@ OBJECT_READERS = {
     "PyUnicode_Concat",
 
     "value_exception_group_match",
-    "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
+    "value_load_from_dict", "_PySet_Contains",
     "_PyUnicode_Equal",
     # The indirect calls of BINARY_OP_EXTEND, through a table of functions
     # that read their operands
@@ -1296,7 +1296,9 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
               "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
               "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
-              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE")
+              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
+              "BUILD_STRING", "BUILD_INTERPOLATION", "BUILD_TEMPLATE",
+              "CONVERT_VALUE", "FORMAT_SIMPLE", "FORMAT_WITH_SPEC")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -3535,7 +3537,6 @@ class IREmitter(Emitter):
         self._replacers["IR_UNPACK_ITEMS"] = self.unpack_items_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_CLOSE_INPUTS"] = self.close_input_homes
-        self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
         self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
@@ -3676,8 +3677,7 @@ class IREmitter(Emitter):
             expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
                           f"&{local.name}[0], &{local.name}[1])")
         else:
-            helper = {"IR_BUILD_STRING": "_Py_BuildString_ValueSteal",
-                      "IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
+            helper = {"IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
                       "IR_BUILD_SET": "_Py_BuildSet_ValueSteal"}[tkn.text]
             expression = f"{helper}(frame, {local.name}, oparg)"
         self.out.emit_at(expression, tkn)
@@ -6459,7 +6459,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("home drain needs its sole owning array and unconditional handoff", token)
                 index = 0
                 covered.add(id(args[0][0]))
-            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", "IR_BUILD_SET",
+            elif token.text in {"IR_BUILD_MAP", "IR_BUILD_SET",
                                 *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)

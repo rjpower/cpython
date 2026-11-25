@@ -25,7 +25,7 @@ class PyValueDictVMTests(unittest.TestCase):
             result = build(2147483647, -2147483648)
             self.assertEqual(_testinternalcapi.dict_vm_storage(result), (3, 2, 2))
             self.assertEqual(result[2147483647], -2147483648)
-        self.assertIn('BUILD_MAP', handlers(build))
+        self.assertIn('Build.Map', handlers(build))
         self.assertEqual(_testinternalcapi.dict_vm_storage({}), (0, 0, 0))
 
     def test_cold_and_specialized_assignment(self):

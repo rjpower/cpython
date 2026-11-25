@@ -1007,6 +1007,14 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     return err;
 }
 
+/* NOP runs nothing.  It stays a source-only op: the assembler gives it a
+ * position record and its line event, and no word. */
+static int
+rule_nop(_PyRegTr *t, const _PyRegOp *src)
+{
+    return _PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL);
+}
+
 /* SWAP n exchanges the identities at the top and n - 1 below it.  No word
  * runs; a NOP keeps its origin for the source map and line events. */
 static int
@@ -1258,6 +1266,7 @@ static const _PyRegRule rules[256] = {
     [LOAD_FAST_CHECK] = rule_load_fast_check,
     [LOAD_FAST_LOAD_FAST] = rule_load_fast_load_fast,
     [LOAD_SMALL_INT] = rule_load_small_int,
+    [NOP] = rule_nop,
     [RETURN_VALUE] = rule_return_value,
     [STORE_FAST] = rule_store_fast,
     [STORE_FAST_LOAD_FAST] = rule_store_fast_load_fast,
@@ -1265,12 +1274,12 @@ static const _PyRegRule rules[256] = {
     [SWAP] = rule_swap,
 };
 
-/* Every edge leaves from an op or a block's end: a position that holds a
- * binding that may be absent gives its parameter that type */
+/* An edge binds the parameters of the positions below depth: one that
+ * holds a binding that may be absent gives its parameter that type */
 static void
-mark_maybe(_PyRegTr *t)
+mark_maybe(_PyRegTr *t, int depth)
 {
-    for (int k = 0; k < t->sp && k < IR_MAX_SLOTS; k++) {
+    for (int k = 0; k < depth && k < t->sp && k < IR_MAX_SLOTS; k++) {
         if (maybe_absent(t, t->stack[k])) {
             t->maybe_pos[k] = 1;
         }
@@ -1284,7 +1293,13 @@ translate_instr(_PyRegTr *t, const _PyRegOp *instr)
     if (rule == NULL || instr->opcode > 255) {
         rule = _PyRegTr_Legacy;
     }
-    mark_maybe(t);
+    // The edges of instr: its handler's, and its jump's
+    if (instr->except >= 0) {
+        mark_maybe(t, handler_base(t->cfg, instr->except));
+    }
+    if (op_jumps(instr)) {
+        mark_maybe(t, t->sp);
+    }
     return rule(t, instr);
 }
 
@@ -1351,7 +1366,7 @@ translate(_PyRegCfg *cfg)
             // the block, under the handler of its last op
             _PyRegOp edge = {.except = -1, .dst = -1, .target = -1,
                              .reader = -1, .depth = -1, .fb = -1};
-            mark_maybe(&t);
+            mark_maybe(&t, t.sp);
             err = bind_edge(&t, t.sp, end > start ? &cfg->ops[end - 1] : &edge);
         }
         blk->end = t.nops;

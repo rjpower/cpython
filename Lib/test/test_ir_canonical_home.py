@@ -147,12 +147,12 @@ class CanonicalHomeTests(unittest.TestCase):
         self.assertIsNone(references[0]())
 
     def test_real_temporary_and_folded_local_routes(self):
-        temporary = loads(constant_multiply, "LOAD_FAST_BORROW")
+        temporary = loads(constant_multiply, "LocalRead.Bound")
         nl = len(_testinternalcapi.get_co_localskinds(
             constant_multiply.__code__))
         self.assertTrue(any(a >= nl and b == 0 for a, b in temporary))
 
-        local = loads(local_copy, "LOAD_FAST")
+        local = loads(local_copy, "LocalWrite.Store")
         self.assertIn((local_copy.__code__.co_varnames.index("y"), 0), local)
 
     def test_numeric_values_keep_their_value(self):

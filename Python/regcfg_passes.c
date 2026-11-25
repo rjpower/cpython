@@ -693,7 +693,9 @@ truth_fold_region(_PyRegCfg *cfg, int start, int end)
 {
     for (int i = start; i < end; i++) {
         _PyRegOp *copy = &cfg->ops[i];
-        if (copy->opcode == LOAD_FAST && copy->nout == 1 && copy->dst < 0) {
+        if (copy->opcode == ROP_HANDLER_LocalRead_Bound && copy->nout == 1
+            && copy->dst < 0)
+        {
             RETURN_IF_ERROR(fold_local_truth(cfg, start, end, copy));
             continue;
         }

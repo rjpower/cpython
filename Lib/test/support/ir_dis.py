@@ -320,10 +320,20 @@ def _get_code_object(x):
     raise TypeError("don't know how to disassemble %s objects" %
                     type(x).__name__)
 
+# The arms whose stack op is not their family's first: the operation of
+# the stack op is in the arm's choice, not in an operand
+_ARM_OPS = {"Const.Small": "LOAD_SMALL_INT", "Const.Common": "LOAD_COMMON_CONSTANT",
+            "LocalRead.Checked": "LOAD_FAST_CHECK"}
+# The field of the local, for the families whose local is a home operand
+_LOCAL_FIELD = {"LocalRead": 1, "SaveLocal": 1, "LocalWrite": 0, "LocalDelete": 0}
+
 def _deoptop(op):
     """The opcode that handler op stands for, without specialisation"""
     row = _ir_contract[op] if op < len(_ir_contract) else None
-    return op if row is None else row.base
+    if row is None:
+        return op
+    name = _ARM_OPS.get(_all_opname[op])
+    return row.base if name is None else _all_opmap[name]
 
 def _get_code_array(co, adaptive):
     return co._co_code_adaptive if adaptive else co.co_code
@@ -518,8 +528,11 @@ def _decode_word(handler, fields, fbinit=None):
             srcs.append(fields[k])
         elif role == _ROLE_FB:
             fb = _fb_unit(fields[k])
+    local_field = _LOCAL_FIELD.get(_all_opname[handler].partition(".")[0])
     if base not in hasarg:
         arg = None
+    elif local_field is not None:
+        arg = fields[local_field]
     elif imm == _LOC_NONE:
         arg = 0
     elif imm == _LOC_FBARG:

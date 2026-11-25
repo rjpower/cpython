@@ -710,8 +710,6 @@ TEMPLATE_CASES = [
      "POP_JUMP_IF_NOT_NONE", "A", [(x,) for x in ANY]),
     ("def f(a, b):\n    if a is not None:\n        return 1\n    return 0", (None, 0),
      "POP_JUMP_IF_NONE", "A", [(x,) for x in ANY]),
-    ("def f(a, b):\n    a = 5\n    return a", (1, 2), "LOAD_SMALL_INT_INLINE", "A",
-     [(Plain(),), (None,), (big(5),), (3,)]),
     *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
        handler, "ABC", [(Plain(), seq, i) for seq in seqs for i in INDICES])
       for seq_type, handler, seqs in (
@@ -721,17 +719,9 @@ TEMPLATE_CASES = [
     # same value in turn, which releases only inline values
     ("def f(a, b):\n    a[b] = 5\n    return a", ([1, 2, 3], 1), "STORE_SUBSCR_LIST_INT", "ABC",
      [(seq, i, v) for seq in ([1, 2, 3], [], (1, 2)) for i in INDICES for v in (7, 2.5)]),
-    ("def f(a, b):\n    x = 1\n    x = a\n    return x", (1, 2), ("LOAD_FAST", 0),
-     "AB", [(old, v) for old in (Plain(), None, 3) for v in ANY]),
-    ("def f(a, b):\n    return [a, b]", (1, 2), ("LOAD_FAST_BORROW", 0), "B",
-     [(v,) for v in ANY]),
-    ("def f(a, b):\n    a, b = b, a\n    return a", (1, 2), "STORE_FAST", "AB",
-     [(v, old) for v in ANY for old in (Plain(), None, 3)]),
-    ("def f(a, b):\n    return [x for x in a]", ([1], 2), "LOAD_FAST_AND_CLEAR", "B",
-     [(), *[(v,) for v in ANY]]),
-    *[("def f(a, b):\n    x = 'abc'\n    y = 2.5\n    z = 10**9\n    return x, y, z", (1, 2),
-       handler, "A", [(Plain(),), (None,), (3,), ()])
-      for handler in ("LOAD_CONST", "LOAD_CONST_INLINE_FLOAT", "LOAD_CONST_INLINE_INT")],
+    # The local and constant arms (LocalRead, LocalWrite, SaveLocal, Const)
+    # have no templates until the template generator lowers dup and acquire;
+    # their forms run, and the interpreter's tests cover them
     *[(f"def f(a, b):\n    x = 1\n    x = a.{name}\n    return x", (cls(), 1), handler,
        "AB", [(old, o) for old in (Plain(), None) for o in OWNERS])
       for cls, name, handler in ((Shape, "q", "LOAD_ATTR_SHAPE"), (Slots, "q", "LOAD_ATTR_SLOT"),

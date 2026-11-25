@@ -135,6 +135,68 @@ SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
 FEEDBACK_ROOTS = ("counter", "entry", "handler")
 
 
+# The C layout of the schemas: the one place that states which C member and
+# C type hold each field.  The C structs stay hand-written (they are shared
+# with the stack handlers and the specialiser); the generator checks each
+# member's type with a static assert (rop_generator.write_layout_checks), and
+# a reader takes the member's offset from C (`&fb->member`), never from here.
+
+@dataclass(frozen=True, slots=True)
+class CField:
+    """A field held by one C member (a path such as `h.poly`) of one C type,
+    or by none yet (member None): a template that reads it is refused"""
+    member: str | None
+    ctype: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class CLayout:
+    struct: str
+    fields: dict[str, CField]
+
+
+_NONE = CField(None)
+_U32 = "uint32_t"
+
+FB_LAYOUT: dict[Schema, CLayout] = {
+    Schema.Binary: CLayout("_PyFbBinary", {
+        "kind": _NONE, "descr": CField("descr", "const void *")}),
+    Schema.Attr: CLayout("_PyFbAttr", {
+        "kind": CField("read_kind", _U32),
+        "type_version": CField("type_version", _U32),
+        "offset": CField("offset", _U32),
+        "shape": CField("shape", _U32),
+        "keys_version": CField("dict_version", _U32),
+        "index": CField("index", _U32),
+        "descr": CField("descr", "PyObject *"),
+        "rows": CField("h.poly", _U32)}),
+    Schema.Global: CLayout("_PyFbGlobal", {
+        "kind": _NONE,
+        "module_keys_version": CField("globals_version", _U32),
+        "builtin_keys_version": CField("builtins_version", _U32),
+        "index": CField("index", _U32)}),
+    Schema.Truth: CLayout("_PyFbUnary", {
+        "kind": _NONE, "type_version": CField("type_version", _U32)}),
+    Schema.Call: CLayout("_PyFbCall", {
+        "kind": _NONE, "func_version": CField("func_version", _U32),
+        "type_version": CField("type_version", _U32),
+        "argcount": _NONE, "convention": _NONE}),
+}
+
+# A recipe (Recipe<S>): the fields that an admission row copies out of an
+# entry together, as the rows' C struct holds them.  A template keeps a
+# recipe in registers, one value per field.
+RECIPE_LAYOUT: dict[Schema, CLayout] = {
+    Schema.Attr: CLayout("_PyAttrRecipe", {
+        "type_version": CField("type_version", _U32),
+        "aux": CField("aux", _U32),
+        "offset": CField("offset", _U32),
+        "read_kind": CField("read_kind", _U32),
+        "values_layout": CField("values_layout", "bool"),
+        "class_value": CField("class_value", "_PyValueGuarded")}),
+}
+
+
 class AccessMode(enum.Enum):
     read = "read"
     write = "write"

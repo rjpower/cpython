@@ -30,6 +30,7 @@ test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import ir_leaf_eval
     import rop_check
+    import rop_generator
     import rop_ssa
     import rop_ssa_eval as ev
     import rop_syntax
@@ -37,7 +38,7 @@ with test_tools.imports_under_tool("cases_generator"):
     from rop_catalog import FieldKind, Region
 
 ROOT = Path(test_tools.basepath)
-FORM, STUB = 0, 2
+FORM, TEMPLATE, STUB = 0, 1, 2
 STATUS = ((4, "raise"), (16, "again"), (1, "miss"), (32, "redirect"), (8, "branch"))
 
 
@@ -499,11 +500,11 @@ class CRun:
         objects = list({id(o): o for o in slots.values()}.values())
         fb_before = capi.get_ir_raw(code)[-1]
         counts = [sys.getrefcount(o) for o in objects]
-        self.kind, self.extra = "same", None
+        self.kind, self.extra, self.slow = "same", None, False
         if mode is TRANSFER:
             self.kind, nxt, exc, out, self.extra = capi.rop_transfer_run(f, index, slots, handler)
         else:
-            nxt, _, exc, out = capi.jit_template_run(f, index, slots, mode, handler)
+            nxt, self.slow, exc, out = capi.jit_template_run(f, index, slots, mode, handler)
         self.exc_type = type(exc) if exc is not None else None
         del exc
         # Indexing, not zip: zip's reused result tuple would hold a reference
@@ -557,11 +558,20 @@ class Result:
 REPEATS = 3
 
 
-def check(cx, arm_name, scenario, source, inputs):
-    """Run the C arm REPEATS times on one word (its counter moves on between
-    runs, so a generic arm adapts and then runs) and the expansion on the
-    same homes; a Result for each run, None if the arm does not run on the
-    scenario's word"""
+@dataclass
+class Word:
+    "A fresh word of a scenario's source for an arm, and the homes to fill"
+    f: object
+    index: int
+    length: int
+    site: object
+    slots: dict
+    homes: dict
+
+
+def prepare(arm_name, scenario, source, inputs):
+    """A fresh word that the arm runs on, with its homes filled from the
+    inputs, or None if the arm does not run on the scenario's word"""
     arm = PROGRAM.arms[arm_name]
     if arm_name in scenario.skip:
         return None
@@ -600,6 +610,21 @@ def check(cx, arm_name, scenario, source, inputs):
     for slot, operand in homes.items():
         if slot not in slots and operand in ("dst", "callable"):
             slots[slot] = Old()
+    return Word(f, index, length, site, slots, homes)
+
+
+def check(cx, arm_name, scenario, source, inputs):
+    """Run the C arm REPEATS times on one word (its counter moves on between
+    runs, so a generic arm adapts and then runs) and the expansion on the
+    same homes; a Result for each run, None if the arm does not run on the
+    scenario's word"""
+    word = prepare(arm_name, scenario, source, inputs)
+    if word is None:
+        return None
+    arm = PROGRAM.arms[arm_name]
+    f, index, length, site, slots, homes = (word.f, word.index, word.length, word.site,
+                                            word.slots, word.homes)
+    ssa = SSA[arm_name]
     before = {slot: capi.list_value_bits([v], 0) for slot, v in slots.items()}
     constants = [capi.list_value_bits([c], 0) for c in f.__code__.co_consts]
     mode = (STUB if arm.region is Region.shared
@@ -719,6 +744,67 @@ class AgainstCTests(unittest.TestCase):
             self.run_arm(name)
         ran = {n for n, seen in self.exits.items() if seen}
         self.assertEqual(set(SSA) - ran, set(NOT_RUN))
+
+
+def templated_arms():
+    "The arms that have a baseline template"
+    p = rop_generator.lower_all(PROGRAM, rop_generator.number_arms(PROGRAM))
+    made, _ = rop_generator.template_texts(p)
+    return sorted(made)
+
+
+def same_slot(x, y):
+    "The same object, or equal values of one type (a new int or a word)"
+    return x is y or (type(x) is type(y) and x == y)
+
+
+class TemplateTests(unittest.TestCase):
+    """Every arm's template against its form, on every scenario: each runs
+    on a fresh word of its own, from the same homes, and they must agree on
+    the next word, the exception, every slot, each input's count and the
+    feedback and handler writes.  Each template stays on its own code for
+    some input."""
+
+    maxDiff = None
+
+    def run_both(self, name, scenario, source, inputs):
+        handler = capi.arm_handlers()[name]
+        words = [prepare(name, scenario, source, inputs) for _ in (TEMPLATE, FORM)]
+        if None in words:
+            return None
+        # One set of objects for both runs, so that their counts compare.  A
+        # destination temporary is vacant, as the translator leaves it: a
+        # template stores into it without a close
+        nfixed = capi.get_ir_raw(words[0].f.__code__)[2]
+        slots = {slot: v for slot, v in words[0].slots.items()
+                 if not (isinstance(v, Old) and slot >= nfixed)}
+        runs = [CRun(w.f, w.index, slots, mode, handler)
+                for w, mode in zip(words, (TEMPLATE, FORM))]
+        template, form = runs
+        self.assertEqual(template.next, form.next, "next word")
+        self.assertIs(template.exc_type, form.exc_type)
+        self.assertEqual(len(template.slots), len(form.slots))
+        for i, (x, y) in enumerate(zip(form.slots, template.slots)):
+            self.assertTrue(same_slot(x, y), f"slot {i}: {x!r} != {y!r}")
+        self.assertEqual(template.counts, form.counts, "counts")
+        self.assertEqual(template.feedback_written, form.feedback_written, "feedback")
+        self.assertEqual(template.handler, form.handler, "handler")
+        return not template.slow
+
+    def test_templates_against_forms(self):
+        arms = templated_arms()
+        self.assertTrue(arms)
+        for name in arms:
+            scenario = SCENARIOS.get(PROGRAM.arms[name].family)
+            if scenario is None or name in NOT_RUN:
+                continue
+            fast = 0
+            for source in scenario.sources:
+                for inputs in scenario.inputs:
+                    with self.subTest(arm=name, source=source, inputs=inputs):
+                        fast += bool(self.run_both(name, scenario, source, inputs))
+            with self.subTest(arm=name):
+                self.assertGreater(fast, 0, "no input stayed on the template's code")
 
 
 if __name__ == "__main__":

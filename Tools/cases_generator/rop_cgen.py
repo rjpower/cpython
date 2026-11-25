@@ -15,8 +15,8 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, CReturn, CSource, CTest, DebtKind,
-                         Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
+from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
+                         CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          Slot, Wrap)
 from rop_check import GraphInfo, Program, is_args
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
@@ -108,15 +108,14 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
 
 
 # The C entry type of each feedback schema whose arms are lowered
-SCHEMA_C = {Schema.Binary: "_PyFbBinary", Schema.Attr: "_PyFbAttr",
-            Schema.Global: "_PyFbGlobal", Schema.Call: "_PyFbCall",
-            Schema.Truth: "_PyFbUnary"}
+SCHEMA_C = {schema: layout.struct for schema, layout in FB_LAYOUT.items()}
 
 
 def c_type(t: Type) -> str | None:
     """The C type of a graph value, None for one that has no C variable"""
     if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Recipe:
-        return {Schema.Attr: "_PyAttrRecipe"}.get(t.schema)
+        layout = RECIPE_LAYOUT.get(t.schema)
+        return layout.struct if layout is not None else None
     if isinstance(t, ScalarType):
         return SCALAR_C.get(t.scalar)
     if isinstance(t, HandleType):

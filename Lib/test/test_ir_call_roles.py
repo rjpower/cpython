@@ -66,11 +66,11 @@ class CallRoleTests(unittest.TestCase):
         def method(owner, value):
             return owner.method(value)
         no_self, no_kw = _opcode.IR_F_NO_SELF, _opcode.IR_F_NO_KW
-        cases = ((vector, "CALL+NO_SELF", no_self),
+        cases = ((vector, "Call.Generic+NO_SELF", no_self),
                  (keywords, "CALL_KW+NO_SELF", no_self),
                  (ex, "CALL_FUNCTION_EX+NO_KW", no_kw),
                  (ex_kw, "CALL_FUNCTION_EX", 0),
-                 (method, "CALL", 0))
+                 (method, "Call.Generic", 0))
         for function, name, flags in cases:
             for admitted in routes(function.__code__):
                 with self.subTest(function=function.__name__):
@@ -211,7 +211,7 @@ class CallRoleTests(unittest.TestCase):
                 self.assertIs(invoke(first, payload), payload)
             finally:
                 setter(old)
-        self.assertEqual(call_rows(invoke.__code__)[0][0], "CALL+NO_SELF")
+        self.assertEqual(call_rows(invoke.__code__)[0][0], "Call.Generic+NO_SELF")
 
     def test_exact_and_bound_specializations_keep_zero_two_and_many_arguments(self):
         for count in (0, 2, 16):
@@ -220,7 +220,7 @@ class CallRoleTests(unittest.TestCase):
             receiver = object()
             bound = types.MethodType(namespace["method"], receiver)
             for name in ("plain", "bound"):
-                self.assertEqual(call_rows(namespace[name].__code__)[0][0], "CALL+NO_SELF")
+                self.assertEqual(call_rows(namespace[name].__code__)[0][0], "Call.Generic+NO_SELF")
             for _ in range(200):
                 self.assertEqual(namespace["plain"](namespace["target"], values), values)
                 actual = namespace["bound"](bound, values)
@@ -228,9 +228,9 @@ class CallRoleTests(unittest.TestCase):
                 self.assertEqual(actual[1], values)
             if not support.Py_GIL_DISABLED:
                 self.assertEqual(call_rows(namespace["plain"].__code__, True)[0][0],
-                                 "CALL_PY_EXACT_ARGS+NO_SELF")
+                                 "Call.Exact+NO_SELF")
                 self.assertEqual(call_rows(namespace["bound"].__code__, True)[0][0],
-                                 "CALL_BOUND_METHOD_EXACT_ARGS+NO_SELF")
+                                 "Call.BoundExact+NO_SELF")
 
     def test_large_explicit_calls_use_ex_roles(self):
         # The frontend's stack-use limit routes this source through EX,
@@ -348,8 +348,8 @@ class CallRoleTests(unittest.TestCase):
             self.assertEqual(temporary(holder, 2), (receiver, 2))
         self.assertIs(holder.cb.__self__, receiver)
         if not support.Py_GIL_DISABLED:
-            self.assertEqual(self.specialized(local), "CALL_BOUND_METHOD_EXACT_ARGS+NO_SELF")
-            self.assertEqual(self.specialized(temporary), "CALL_BOUND_METHOD_EXACT_ARGS")
+            self.assertEqual(self.specialized(local), "Call.BoundExact+NO_SELF")
+            self.assertEqual(self.specialized(temporary), "Call.BoundExact")
 
     def check_released(self, make, invoke, misses):
         """invoke(m) after specializing on make(): every call in misses
@@ -381,16 +381,16 @@ class CallRoleTests(unittest.TestCase):
         def invoke(m, receiver):
             self.assertEqual(call(m, 1), (receiver, 1))
         def other_function(m, receiver):
-            # _CHECK_METHOD_VERSION: another function
+            # Call.BoundExact's version guard: another function
             other = types.MethodType(lambda self, v: ("other", self, v), receiver)
             self.assertEqual(call(other, 2), ("other", receiver, 2))
         def wrong_arity(m, receiver):
-            # _CHECK_METHOD_VERSION, then the generic call raises: the
+            # The version guard misses, then the generic call raises: the
             # function takes another number of arguments
             with self.assertRaises(TypeError):
                 call(types.MethodType(two, receiver), 3)
         def weakly_referenced(m, receiver):
-            # _CHECK_CALL_BOUND_METHOD_EXACT_ARGS: a method with a weakref
+            # Call.BoundExact: a method with a weakref
             method = types.MethodType(Receiver.method, receiver)
             ref = weakref.ref(method)
             self.assertEqual(call(method, 4), (receiver, 4))
@@ -408,11 +408,11 @@ class CallRoleTests(unittest.TestCase):
         self.check_released(make, invoke, [other_function, wrong_arity,
                                            weakly_referenced, replaced_code])
         if not support.Py_GIL_DISABLED:
-            self.assertIn(self.specialized(call), ("CALL_BOUND_METHOD_EXACT_ARGS+NO_SELF",
-                                                   "CALL+NO_SELF"))
+            self.assertIn(self.specialized(call), ("Call.BoundExact+NO_SELF",
+                                                   "Call.Generic+NO_SELF"))
 
     def test_bound_method_stack_space_and_recursion_limit(self):
-        # _CHECK_METHOD_STACK_SPACE: deep recursion through a bound method
+        # Call.BoundExact's stack-space guard: deep recursion through a bound method
         # with a large frame crosses data stack chunks;
         # _CHECK_RECURSION_REMAINING: the limit raises RecursionError
         names = ", ".join(f"v{i}" for i in range(60))
@@ -442,7 +442,7 @@ class CallRoleTests(unittest.TestCase):
         self.assertEqual([ref() for ref in refs], [None] * len(refs))
 
     def test_class_call_counts_init_and_releases_the_class(self):
-        # CALL_ALLOC_AND_ENTER_INIT: the helper counts the cached __init__,
+        # Call.Init: the helper counts the cached __init__,
         # allocates the instance and releases the class operand after the
         # push; the arguments and the class keep their counts
         class Point:
@@ -462,11 +462,11 @@ class CallRoleTests(unittest.TestCase):
         self.assertEqual((sys.getrefcount(Point), sys.getrefcount(x), sys.getrefcount(y)),
                          counts)
         if not support.Py_GIL_DISABLED:
-            self.assertEqual(self.specialized(make), "CALL_ALLOC_AND_ENTER_INIT+NO_SELF")
+            self.assertEqual(self.specialized(make), "Call.Init+NO_SELF")
 
     def test_class_call_guards_miss_before_any_count(self):
-        # A miss at _CHECK_OBJECT (the class's version) or at
-        # _CHECK_INIT_FUNCTION (a deep __init__ whose frame needs another
+        # A miss at Call.Init's class version guard or its __init__ guard
+        # (a deep __init__ whose frame needs another
         # data stack chunk), or at the recursion check, leaves the class
         # and the arguments as they were: the generic call gives the result
         names = ", ".join(f"v{i}" for i in range(60))
@@ -516,8 +516,8 @@ class CallRoleTests(unittest.TestCase):
         gc.collect()
         self.assertEqual((sys.getrefcount(Deep), sys.getrefcount(arg)), counts)
         if not support.Py_GIL_DISABLED:
-            self.assertIn(self.specialized(make), ("CALL_ALLOC_AND_ENTER_INIT+NO_SELF",
-                                                   "CALL+NO_SELF"))
+            self.assertIn(self.specialized(make), ("Call.Init+NO_SELF",
+                                                   "Call.Generic+NO_SELF"))
         gone = weakref.ref(Deep), weakref.ref(arg)
         del Deep, arg
         gc.collect()
@@ -547,7 +547,7 @@ class CallRoleTests(unittest.TestCase):
         self.assertEqual((sys.getrefcount(Missing), sys.getrefcount(arg)), counts)
         self.assertEqual(len(freed), 300)
         if not support.Py_GIL_DISABLED:
-            self.assertEqual(self.specialized(make), "CALL_ALLOC_AND_ENTER_INIT+NO_SELF")
+            self.assertEqual(self.specialized(make), "Call.Init+NO_SELF")
 
 if __name__ == "__main__":
     unittest.main()

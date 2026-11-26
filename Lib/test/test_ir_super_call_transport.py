@@ -29,7 +29,7 @@ class SuperCallTransportTests(unittest.TestCase):
         instance, method = self.make_method()
         rows = _testinternalcapi.get_ir(method.__code__)
         self.assertTrue(any(row[0] == "SuperAttr.Generic" for row in rows))
-        self.assertTrue(any(row[0] == "CALL_FUNCTION_EX" for row in rows))
+        self.assertTrue(any(row[0] == "CallEx.Generic" for row in rows))
         for code in routes(method.__code__):
             function = types.FunctionType(code, method.__globals__, closure=method.__closure__)
             with self.subTest(code=code):

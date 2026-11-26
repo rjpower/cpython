@@ -823,7 +823,11 @@ sanity_check_instrumentation(PyCodeObject *code)
 static inline int
 specializes_as(PyCodeObject *code, int i, int opcode)
 {
-    return _PyFb_HasEntry(opcode) || _PyFb_HasEntry(_PyCode_InstrHandler(code, i));
+    // opcode is a stack opcode, which has a handler of its own only if it is
+    // not stack-only
+    int handler = _PyIR_OpcodeHandler[opcode];
+    return (handler != _PyIR_NO_HANDLER && _PyFb_HasEntry(handler)) ||
+           _PyFb_HasEntry(_PyCode_InstrHandler(code, i));
 }
 
 /* Restart the specialisation warmup of the instruction at index i, whose

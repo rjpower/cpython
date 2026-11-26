@@ -111,7 +111,7 @@ _PyIR_ObserverOutcome(_PyIRWord word, int edge)
         return _PyIR_OBSERVER_NONE;
     }
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (fmt->twin != 0) {
+    if (fmt->twin != _PyIR_NO_HANDLER) {
         fmt = _PyIR_FormatOf(fmt->twin);
     }
     return fmt->observer_outcome[edge];

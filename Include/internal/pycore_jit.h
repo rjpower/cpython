@@ -153,8 +153,14 @@ static inline int
 _PyJit_CompiledHandler(_PyIRWord w)
 {
     int handler = IR_HANDLER(w);
-    return (_PyIR_HandlerFlags[handler] & _PyIR_H_JIT_EVENT)
-        ? _PyIR_OpcodeHandler[_PyIR_HandlerBase[handler]] : handler;
+    if (!(_PyIR_HandlerFlags[handler] & _PyIR_H_JIT_EVENT)) {
+        return handler;
+    }
+    // The base is a stack opcode (or 512 + a handler with none); the handler
+    // that runs it must exist
+    int base = _PyIR_HandlerBase[handler];
+    assert(base < 256 && _PyIR_OpcodeHandler[base] != _PyIR_NO_HANDLER);
+    return _PyIR_OpcodeHandler[base];
 }
 
 #ifdef _PY_JIT_SUPPORTED

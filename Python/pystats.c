@@ -106,7 +106,7 @@ add_stat_dict(
     int opcode,
     const char *name) {
 
-    SpecializationStats *stats = &src->opcode_stats[opcode].specialization;
+    SpecializationStats *stats = &src->family_stats[opcode];
     PyObject *d = stats_to_dict(stats);
     if (d == NULL) {
         return -1;
@@ -213,6 +213,32 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
     }
 }
 #undef PRINT_STAT
+
+/* The families, which are keyed by stack opcode and print under its name */
+static void
+print_family_stats(FILE *out, SpecializationStats *stats)
+{
+#define PRINT_FAMILY(i, field) \
+    if (stats[i].field) { \
+        fprintf(out, "    opcode[%s].specialization." #field " : %" PRIu64 "\n", \
+                _PyOpcode_OpName[i], stats[i].field); \
+    }
+    for (int i = 0; i < 256; i++) {
+        PRINT_FAMILY(i, success);
+        PRINT_FAMILY(i, failure);
+        PRINT_FAMILY(i, hit);
+        PRINT_FAMILY(i, deferred);
+        PRINT_FAMILY(i, miss);
+        PRINT_FAMILY(i, deopt);
+        for (int j = 0; j < SPECIALIZATION_FAILURE_KINDS; j++) {
+            if (stats[i].failure_kinds[j]) {
+                fprintf(out, "    opcode[%s].specialization.failure_kinds[%d] : %"
+                        PRIu64 "\n", _PyOpcode_OpName[i], j, stats[i].failure_kinds[j]);
+            }
+        }
+    }
+#undef PRINT_FAMILY
+}
 
 
 static void
@@ -352,6 +378,7 @@ static void
 print_stats(FILE *out, PyStats *stats)
 {
     print_spec_stats(out, stats->opcode_stats);
+    print_family_stats(out, stats->family_stats);
     print_call_stats(out, &stats->call_stats);
     print_object_stats(out, &stats->object_stats);
     print_box_stats(out, &stats->object_stats);
@@ -504,6 +531,9 @@ stats_merge_thread(_PyThreadStateImpl *tstate)
 
     // Merge each category of stats using the helper functions.
     merge_opcode_stats_array(dest->opcode_stats, src->opcode_stats);
+    for (int i = 0; i < 256; i++) {
+        merge_specialization_stats(&dest->family_stats[i], &src->family_stats[i]);
+    }
     merge_call_stats(&dest->call_stats, &src->call_stats);
     merge_object_stats(&dest->object_stats, &src->object_stats);
     merge_ft_stats(&dest->ft_stats, &src->ft_stats);
@@ -1371,6 +1401,7 @@ _Py_PrintSpecializationStats(int to_file)
     int is_zero = (
         MEM_IS_ZERO(stats->gc_stats)  // is a pointer
         && MEM_IS_ZERO(&stats->opcode_stats)
+        && MEM_IS_ZERO(&stats->family_stats)
         && MEM_IS_ZERO(&stats->call_stats)
         && MEM_IS_ZERO(&stats->object_stats)
     );

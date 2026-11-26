@@ -510,11 +510,15 @@ typedef struct _PyIRFormat {
                             // one (the middle of SWAP) is not counted.
                             // The other inputs are consumed, and a
                             // temporary that names them is cleared
-    uint16_t shadow;        // the instruction that the handler stands for
+    uint16_t shadow;        // the stack opcode that the handler stands for, or _PyIR_NO_OPCODE
     uint16_t twin;          // the handler that instrumentation runs on the
-                            // word (itself for a twin), or 0
+                            // word (itself for a twin), or _PyIR_NO_HANDLER
     uint32_t events;        // bit e: semantic handler or twin can fire event e
 } _PyIRFormat;
+
+/* "None" for a handler id or a stack opcode: 0 is a valid id of each */
+#define _PyIR_NO_HANDLER 0xffff
+#define _PyIR_NO_OPCODE 0xffff
 
 /* The number of words of the instruction that starts with word: 1, or for
  * a call head 1 + ceil(n / 4).  Every walker over the words, of the code
@@ -574,8 +578,8 @@ _PyIR_MayRunPython(const _PyIRFormat *fmt, int dst_local)
 static inline int
 _PyFb_HasEntry(int opcode)
 {
-    return opcode >= 0 && opcode < IR_NUM_HANDLERS
-           && (_PyIR_Formats[opcode].effects & _PyIR_SPECIALIZES);
+    assert(opcode >= 0 && opcode < IR_NUM_HANDLERS);
+    return (_PyIR_Formats[opcode].effects & _PyIR_SPECIALIZES) != 0;
 }
 
 /* The executing copy of a code object: PyCodeObject._co_exec.  The words of
@@ -1000,8 +1004,8 @@ _PyIR_CanonicalFlagsValid(_PyIRWord word)
 static inline int
 _PyIR_HandlerHasOperands(int handler)
 {
-    return handler >= 0 && handler < IR_NUM_HANDLERS
-           && _PyIR_CALL_SHAPED(_PyIR_Formats[handler].operands);
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
+    return _PyIR_CALL_SHAPED(_PyIR_Formats[handler].operands);
 }
 
 /* The words of the call whose head is word: the head and its operand words.

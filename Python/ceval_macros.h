@@ -435,9 +435,9 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #define UPDATE_MISS_STATS(INSTNAME)                              \
     do {                                                         \
         STAT_INC(opcode, miss);                                  \
-        STAT_INC((INSTNAME), miss);                              \
+        FAMILY_STAT_INC((INSTNAME), miss);                       \
         if (_PyFb_CounterTriggers(_PyIR_FbHeaderOf(frame, this_instr, opcode))) { \
-            STAT_INC((INSTNAME), deopt);                         \
+            FAMILY_STAT_INC((INSTNAME), deopt);                         \
         }                                                        \
     } while (0)
 #else

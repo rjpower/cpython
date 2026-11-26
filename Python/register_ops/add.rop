@@ -1,7 +1,7 @@
 // Add: ordinary addition (Appendix A, batch P2).
 
 family Add(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
-  exits(next, miss, again, raise, redirect) generic(Generic) ops(BINARY_OP);
+  exits(next, miss, again, raise, redirect) generic(Generic);
 
 point Add.BoxFailed(current, site, pending) keep(x, y) spent() defs();
 point Add.OpFailed(current, site, pending) keep() spent(y, x) defs();

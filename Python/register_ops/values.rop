@@ -14,7 +14,7 @@ enum BranchMode(BRANCH_IF_FALSE, BRANCH_IF_TRUE, BRANCH_KEEP_IF_FALSE, BRANCH_KE
 // code's constant `index`; Small, the immediate int `index`; Common, the
 // interpreter root `index`
 family Const(dst:Dst, index:U16)
-  exits(next) ops(LOAD_CONST, LOAD_SMALL_INT, LOAD_COMMON_CONSTANT);
+  exits(next);
 
 point Const.Done(current, next_head, clear) keep() spent() defs(dst);
 
@@ -82,7 +82,7 @@ arm Const.Common inline select(common)
 // A local's binding.  Bound: the compiler proved the local bound.  Checked:
 // it may be unbound, which raises UnboundLocalError.
 family LocalRead(dst:Dst, local:Src)
-  exits(next, raise) ops(LOAD_FAST, LOAD_FAST_CHECK, LOAD_FAST_BORROW);
+  exits(next, raise);
 
 point LocalRead.Unbound(current, site, pending) keep(local) spent() defs();
 point LocalRead.Done(current, next_head, clear) keep(local) spent() defs(dst);
@@ -148,7 +148,7 @@ arm LocalRead.Checked shared select(checked)
 // A store.  Store: the value is present.  Restore: the value is a binding
 // that SaveLocal took, which may be absent.
 family LocalWrite(local:Local, value:Src)
-  exits(next) ops(STORE_FAST);
+  exits(next);
 
 point LocalWrite.Done(current, next_head, clear) keep() spent(value, local) defs(local);
 
@@ -189,7 +189,7 @@ arm LocalWrite.Restore shared select(restore)
 // The comprehension's saved binding: the local's owner, or its absence,
 // goes to dst, and the local is left vacant
 family SaveLocal(dst:Dst, local:Src)
-  exits(next) ops(LOAD_FAST_AND_CLEAR);
+  exits(next);
 
 point SaveLocal.Done(current, next_head, clear) keep() spent(local) defs(dst);
 
@@ -217,7 +217,7 @@ arm SaveLocal.Take shared
 
 // The local is read for its binding and written vacant
 family LocalDelete(local:Local)
-  exits(next, raise) ops(DELETE_FAST);
+  exits(next, raise);
 
 point LocalDelete.Unbound(current, site, pending) keep() spent(local) defs();
 point LocalDelete.Done(current, next_head, clear) keep() spent(local) defs(local);
@@ -258,7 +258,7 @@ arm LocalDelete.Checked shared
 // lowering through its `select`.  Element i of `srcs` goes to element i of
 // `dsts`; `srcs` may be longer, by the sources that Retire closes.
 family Move(dsts:Span<Dst>, srcs:Span<Src>)
-  exits(next) ops(SWAP, COPY, POP_TOP);
+  exits(next);
 
 point Move.Done(current, next_head, clear) keep() spent(srcs) defs(dsts);
 point Move.Copied(current, next_head, clear) keep(srcs) spent() defs(dsts);
@@ -302,25 +302,22 @@ arm Move.Copy shared select(copy)
 // P5: truth, jumps, conditional retention, None branches
 
 family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>)
-  exits(next, raise, miss, again, redirect) generic(Generic) ops(TO_BOOL, UNARY_NOT);
+  exits(next, raise, miss, again, redirect) generic(Generic);
 
 // Covers backward jumps, so its target is far.  The arm says whether it
 // polls: Direct is JUMP_FORWARD and the jumps that must not poll, Poll is
 // JUMP_BACKWARD, Warm is JUMP_BACKWARD with the JIT's warm-up event
 family Jump(target:FarHead)
   exits(jump, raise, redirect, exit)
-  ops(JUMP_FORWARD, JUMP_BACKWARD, JUMP_BACKWARD_NO_INTERRUPT)
   events(JUMP);
 
 // The operands are in the order of the old conditional jump words: the
 // value in A, the entry in B, the mode in C and the target in D
 family BranchTruth(value:Src, fb:Fb<Truth>, mode:Enum<BranchMode>, target:NearHead)
   exits(next, branch, raise, miss, again, redirect) generic(Generic)
-  ops(POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE, JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP)
   events(BRANCH_LEFT, BRANCH_RIGHT);
 
 family BranchNone(value:Src, sense:Bool, target:NearHead)
   exits(next, branch, raise, redirect)
-  ops(POP_JUMP_IF_NONE, POP_JUMP_IF_NOT_NONE)
   events(BRANCH_LEFT, BRANCH_RIGHT);
 

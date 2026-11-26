@@ -3,22 +3,22 @@
 // call-boundary macros.
 
 family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
-  exits(next, raise, redirect, miss, again) generic(Generic) ops(BINARY_OP);
+  exits(next, raise, redirect, miss, again) generic(Generic);
 
 family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
-  exits(next, raise, redirect, miss, again) generic(Generic) ops(STORE_SUBSCR);
+  exits(next, raise, redirect, miss, again) generic(Generic);
 
 family DelItem(obj:Src, key:Src)
-  exits(next, raise, redirect) ops(DELETE_SUBSCR);
+  exits(next, raise, redirect);
 
 family SliceRead(dst:Dst, obj:Src, start:Src, stop:Src)
-  exits(next, raise, redirect) ops(BINARY_SLICE);
+  exits(next, raise, redirect);
 
 family SliceWrite(obj:Src, start:Src, stop:Src, value:Src)
-  exits(next, raise, redirect) ops(STORE_SLICE);
+  exits(next, raise, redirect);
 
 family BuildSlice(dst:Dst, parts:Span<Src>)
-  exits(next, raise) ops(BUILD_SLICE);
+  exits(next, raise);
 
 // The sources close later operand first, as the old handlers' DECREF_INPUTS
 point GetItem.Failed(current, site, pending) keep() spent(key, obj) defs();

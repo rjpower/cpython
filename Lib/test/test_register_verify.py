@@ -28,7 +28,7 @@ def verify_source(src: str, filename: str = "base.rop") -> list[tuple[int, int, 
 VERIFY_BASE = """\
 enum Op(PLUS, MINUS);
 family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
-  exits(next, miss, again, raise, redirect) ops(NOP);
+  exits(next, miss, again, raise, redirect);
 point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
 point F.Kept(current, site, pending) keep(x, y) spent() defs();
 point F.Gone(current, site, pending) keep() spent(y, x) defs();
@@ -207,7 +207,7 @@ arm F.Generic shared
     let now:Route = retire_gone(a, route);
     exit redirect(now);
 }
-family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter) ops(NOP);
+family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter);
 point H.Kept(current, site, pending) keep(x, y) spent() defs();
 point H.Back(caller, next_head, clear) keep() spent(y, x) defs();
 arm H.Cont split
@@ -241,7 +241,7 @@ arm H.Enter split
     publish [] retire [spent(y), spent(x)] at H.Back;
     exit enter(f) resume H.Back;
 }
-family Two(p:Dst, q:Dst, x:Src) exits(next) ops(NOP);
+family Two(p:Dst, q:Dst, x:Src) exits(next);
 point Two.Done(current, next_head, clear) keep() spent(x) defs(p, q);
 arm Two.Both inline
   effects(writes, releases on (p, q))
@@ -385,8 +385,8 @@ VERIFY_CASES = [
          (138, 5, 'F.Slot', 'feedback: call slot_recipe may read entry.kind, which feedback() does not declare'),
      ]),
     ('family exits',
-     'exits(branch, raise, enter) ops(NOP);',
-     'exits(branch, raise, enter) generic(Cont) ops(NOP);', [
+     'exits(branch, raise, enter);',
+     'exits(branch, raise, enter) generic(Cont);', [
          (201, 3, 'H.Enter', 'family: exits enter of H.Enter are not exits of the generic arm H.Cont'),
      ]),
     ('acquire twice',
@@ -485,7 +485,7 @@ LANGUAGE_CASES = [
 extern primitive test_int(v:B) -> Bool effects() test(inline_int(v)) pending;
 extern primitive scaled(v:B) -> Scaled51 effects() requires(inline_int(v)) pending;
 extern helper reenter() -> Unit effects(runs_python) pending;
-family F(x:Src) exits(next, miss) ops(NOP);
+family F(x:Src) exits(next, miss);
 arm F.Bad split effects(runs_python) feedback() exits(next, miss) {
   entry():
     goto Body(x);
@@ -536,7 +536,7 @@ macro bad(s:Span<O>) cases(done()) effects(releases) feedback() {
     ('h04 completion at redirect', """\
 extern helper eat(s:Src) -> Unit effects(writes, releases) spends(s) pending;
 extern helper redirect_status(f:Frame) cases(running(), redirected(r:Route)) effects(reads) pending;
-family F(x:Src) exits(next, redirect) ops(NOP);
+family F(x:Src) exits(next, redirect);
 arm F.Bad split effects(reads, writes, releases) feedback() exits(next, redirect) {
   entry():
     let _:Unit = eat(x);
@@ -556,7 +556,7 @@ arm F.Bad split effects(reads, writes, releases) feedback() exits(next, redirect
     ('h05 span of borrows', """\
 extern helper call_all(s:Span<B>) -> Unit effects(runs_python) pending;
 extern helper call_one(b:B) -> Unit effects(runs_python) pending;
-family F(x:Src) exits(next) ops(NOP);
+family F(x:Src) exits(next);
 arm F.Bad split effects(runs_python) feedback() exits(next) {
   entry():
     let v:B = use(x);
@@ -576,7 +576,7 @@ arm F.Refused split effects(runs_python) feedback() exits(next) {
     ('h06 feedback write writes', """\
 extern helper note(f:Fb<Binary>) -> Unit effects(reads) feedback(write(entry)) pending;
 extern primitive test_int(v:B) -> Bool effects() test(inline_int(v)) pending;
-family F(x:Src, fb:Fb<Binary>) exits(next, miss) ops(NOP);
+family F(x:Src, fb:Fb<Binary>) exits(next, miss);
 arm F.Bad split effects(reads) feedback(write(entry)) exits(next, miss) {
   entry():
     let _:Unit = note(fb);
@@ -588,7 +588,7 @@ arm F.Bad split effects(reads) feedback(write(entry)) exits(next, miss) {
         (4, 17, 'F.Bad', 'a feedback write writes memory: declare writes'),
     ]),
     ('h08 acquire writes', """\
-family F(x:Src) exits(exit) ops(NOP);
+family F(x:Src) exits(exit);
 arm F.Bad split effects() feedback() exits(exit) {
   entry():
     let z:O = acquire(x);
@@ -599,7 +599,7 @@ arm F.Bad split effects() feedback() exits(exit) {
     ]),
     ('h10 feedback through a block parameter', """\
 extern helper write(f:Fb<Binary>) -> Unit effects(writes) feedback(write(entry)) pending;
-family F(fb:Fb<Binary>) exits(next) ops(NOP);
+family F(fb:Fb<Binary>) exits(next);
 arm F.Bad shared effects(writes) feedback() exits(next) {
   entry():
     goto Body(fb);
@@ -622,7 +622,7 @@ macro bad(o:O) cases(done()) effects(releases) feedback() {
     ]),
     ('lead2 feedback through a let', """\
 extern helper write(f:Fb<Binary>) -> Unit effects(writes) feedback(write(entry)) pending;
-family F(fb:Fb<Binary>) exits(next) ops(NOP);
+family F(fb:Fb<Binary>) exits(next);
 arm F.Bad shared effects(writes) feedback() exits(next) {
   entry():
     let other:Fb<Binary> = fb;
@@ -635,7 +635,7 @@ arm F.Bad shared effects(writes) feedback() exits(next) {
     ('lead5 publish binding is a let name', """\
 extern primitive int_scaled(v:B) -> Scaled51 effects() pending;
 extern primitive from_int_scaled(s:Scaled51) -> O effects() pending;
-family F(dst:Dst, x:Src) exits(next) ops(NOP);
+family F(dst:Dst, x:Src) exits(next);
 point F.Done(current, next_head, clear) keep() spent(x) defs(dst);
 arm F.Bad inline effects(writes, releases on (dst)) feedback() exits(next) {
   entry():
@@ -647,7 +647,7 @@ arm F.Bad inline effects(writes, releases on (dst)) feedback() exits(next) {
     ]),
     ('join needs a fresh checkpoint', """\
 extern primitive test(v:B) -> Bool effects() pending;
-family F(dst:Dst, x:Src) exits(next) ops(NOP);
+family F(dst:Dst, x:Src) exits(next);
 point F.A(current, next_head, clear) keep() spent(x) defs(dst);
 point F.B(current, next_head, clear) keep() spent(x) defs(dst);
 arm F.Bad inline effects(writes, releases on (dst)) feedback() exits(next) {
@@ -669,7 +669,7 @@ arm F.Bad inline effects(writes, releases on (dst)) feedback() exits(next) {
     ]),
     ('event row needs instrumented', """\
 extern helper event(at:Site) cases(ok(), err(e:Err)) effects(runs_python, raises) requires(instrumented(at)) pending;
-family F(x:Src) exits(next, raise) ops(NOP);
+family F(x:Src) exits(next, raise);
 point F.Failed(current, site, pending) keep(x) spent() defs();
 arm F.Bad split effects(runs_python, raises) feedback() exits(next, raise) {
   entry():
@@ -694,7 +694,7 @@ macro m(d:Span<Dst>) -> Unit effects() feedback() pending;
     ]),
     ('old of a local runs python', """\
 extern helper take(fr:Frame, x:Local) cases(ok(old:O), err(e:Err)) effects(reads, writes, raises) spends(x) pending;
-family F(local:Local) exits(next, raise) ops(NOP);
+family F(local:Local) exits(next, raise);
 point F.Unbound(current, site, pending) keep() spent(local) defs();
 point F.Done(current, next_head, clear) keep() spent(local) defs(local);
 arm F.Bad shared effects(reads, writes, raises, releases) feedback() exits(next, raise) {
@@ -713,7 +713,7 @@ arm F.Bad shared effects(reads, writes, raises, releases) feedback() exits(next,
         (14, 36, 'F.Bad', "effects: publish at F.Done (old(local) closes a local's binding) may runs_python, which effects(reads, writes, raises, releases) does not declare"),
     ]),
     ('vector binding operands', """\
-family F(dsts:Span<Dst>, srcs:Span<Src>, x:Src) exits(next) ops(NOP);
+family F(dsts:Span<Dst>, srcs:Span<Src>, x:Src) exits(next);
 point F.Done(current, next_head, clear) keep() spent(srcs) defs(dsts);
 arm F.Bad shared effects(writes, releases) feedback() exits(next) {
   entry():
@@ -725,8 +725,8 @@ arm F.Bad shared effects(writes, releases) feedback() exits(next) {
         (5, 36, 'F.Bad', 'old(dsts): a vector binding writes vacant destinations; it displaces no owner'),
     ]),
     ('generic clause', """\
-family F(x:Src) exits(next, miss) generic(Fast) ops(NOP);
-family G(x:Src) exits(next, miss) generic(Absent) ops(NOP);
+family F(x:Src) exits(next, miss) generic(Fast);
+family G(x:Src) exits(next, miss) generic(Absent);
 arm F.Fast inline effects() feedback() exits(next, miss) {
   entry():
     exit next();
@@ -744,7 +744,7 @@ arm G.Fast inline effects() feedback() exits(next, miss) {
     ]),
     ('select gives its fact', """\
 extern primitive peek(v:B) -> B effects() requires(nonnull(v)) pending;
-family F(dst:Dst, local:Src) exits(next) ops(NOP);
+family F(dst:Dst, local:Src) exits(next);
 point F.Done(current, next_head, clear) keep() spent(local) defs(dst);
 arm F.Read inline effects() feedback() exits(next) {
   entry():
@@ -758,7 +758,7 @@ arm F.Read inline effects() feedback() exits(next) {
     ('optional operand', """\
 extern helper eat(s:Src) -> Unit effects(writes, releases) spends(s) pending;
 extern helper present_src(x:Maybe<Src>) -> Bool effects(reads) test(present(x)) pending;
-family F(x:Maybe<Src>) exits(next) ops(NOP);
+family F(x:Maybe<Src>) exits(next);
 point F.Done(current, next_head, clear) keep() spent(x) defs();
 arm F.Bad shared effects(writes, releases) feedback() exits(next) {
   entry():
@@ -775,7 +775,7 @@ arm F.Bad shared effects(writes, releases) feedback() exits(next) {
     ]),
     ('owners binding values', """\
 extern helper split(v:B) -> Span<O> effects(allocates) pending;
-family F(dsts:Span<Dst>, srcs:Span<Src>, x:Src) exits(next) ops(NOP);
+family F(dsts:Span<Dst>, srcs:Span<Src>, x:Src) exits(next);
 point F.Done(current, next_head, clear) keep(x) spent(srcs) defs(dsts);
 arm F.Bad shared effects(allocates, writes, releases) feedback() exits(next) {
   entry():
@@ -789,7 +789,7 @@ arm F.Bad shared effects(allocates, writes, releases) feedback() exits(next) {
         (7, 38, 'F.Bad', 'publish [dsts[] = o]: o is O, expected Span<O>'),
     ]),
     ('count of a span', """\
-family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);
+family F(dsts:Span<Dst>, x:Src) exits(next);
 arm F.Bad inline effects() feedback() exits(next) {
   entry():
     let n:Size = count(x);
@@ -802,7 +802,7 @@ arm F.Bad inline effects() feedback() exits(next) {
     ]),
     ('owners binding retires', """\
 extern helper split(v:B) -> Span<O> effects(allocates) pending;
-family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);
+family F(dsts:Span<Dst>, x:Src) exits(next);
 point F.Done(current, next_head, clear) keep(x) spent() defs(dsts);
 arm F.Unretired shared effects(allocates, writes) feedback() exits(next) {
   entry():
@@ -822,7 +822,7 @@ arm F.Undeclared shared effects(allocates, writes, releases) feedback() exits(ne
         (14, 34, 'F.Undeclared', 'effects: publish at F.Done: old(dsts) releases the binding dsts displaces when it names a local\'s home, which may run Python: declare releases on (dsts)'),
     ]),
     ('presence of no optional operand', """\
-family G(x:Src) exits(next) ops(NOP);
+family G(x:Src) exits(next);
 arm G.Bad inline select(present) effects() feedback() exits(next) {
   entry():
     exit next();
@@ -893,7 +893,7 @@ class LanguageTests(unittest.TestCase):
 # A source acquired from an operand, then a raise: a checkpoint carries no
 # owner, so the acquired owner must be discharged before the raise
 HELD = """\
-family H(x:Src, fb:Fb<Binary>) exits(next, raise) ops(NOP);
+family H(x:Src, fb:Fb<Binary>) exits(next, raise);
 point H.Held(current, site, pending) keep() spent() defs();
 point H.Done(current, next_head, clear) keep() spent(x) defs();
 extern helper keep_o(o:O) cases(ok(), err(e:Err)) effects(raises, releases) pending;
@@ -940,7 +940,7 @@ macro anchored_after_close(a:Anchors) cases(done()) effects(releases, reads) fee
 # Frame transfers: a call that enters its child and resumes at a point, and
 # a return whose arms are selected statically by the kind of frame
 TRANSFERS = """\
-family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);
+family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);
 point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst);
 point K.Early(current, next_head, clear) keep(fn, a) spent() defs(dst);
 extern primitive admits(v:B) -> Bool effects() pending;
@@ -955,7 +955,7 @@ arm K.Exact split
     let c:NewFrame = push(thread, fn, a);
     exit enter(c) resume K.Returned;
 }
-family R(value:Src) exits(return, exit, raise) ops(NOP);
+family R(value:Src) exits(return, exit, raise);
 point R.Delivered(caller, resume_head, clear) keep() spent(value) defs();
 point R.ConsumerFailed(consumer, saved_origin, pending) keep() spent(value) defs();
 extern helper pin_departing() -> Unit effects(writes) pending;
@@ -1015,9 +1015,9 @@ TRANSFER_CASES = [
          (14, 5, 'K.Exact', 'resume K.Returned: the point is (current, next_head); a resume point is (caller, next_head)'),
      ]),
     ('resume two definitions',
-     'family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);\n'
+     'family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);\n'
      'point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst)',
-     'family K(dst:Dst, other:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);\n'
+     'family K(dst:Dst, other:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);\n'
      'point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst, other)', [
          (14, 5, 'K.Exact', "resume K.Returned: the child's value is one definition, not 2"),
      ]),
@@ -1166,7 +1166,7 @@ class VerifyTests(unittest.TestCase):
 # W2's transfers (WR): an exit that unwinds an exception the word already
 # reported
 UNWIND = """\
-family U(exc:Src) exits(unwind, raise) ops(NOP);
+family U(exc:Src) exits(unwind, raise);
 point U.Raised(current, site, pending) keep(exc) spent() defs();
 extern helper restore(t:Thread, e:Src) cases(err(x:Err)) effects(runs_python, raises)
   c RESTORE as raised evidence(review: "r", contract: "c");
@@ -1224,7 +1224,7 @@ class UnwindTests(unittest.TestCase):
 
 
 GROUPS = """\
-family G(item:Dst, pair:IterPair, done:NearHead) exits(next, branch) ops(NOP)
+family G(item:Dst, pair:IterPair, done:NearHead) exits(next, branch)
   vacant(pair.cursor);
 point G.Stepped(current, next_head, clear) keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor);
 point G.Done(current, next_head, clear) keep() spent(pair) defs();
@@ -1248,7 +1248,7 @@ arm G.Step split effects(reads, allocates, writes, releases on (item)) feedback(
     publish [] retire [spent(pair)] at G.Done;
     exit branch(done);
 }
-family W(window:SendWindow) exits(next) ops(NOP);
+family W(window:SendWindow) exits(next);
 point W.Done(current, next_head, clear) keep(window.receiver) spent(window.cursor, window.value) defs();
 arm W.Drop shared effects(writes, releases) feedback() exits(next)
 {
@@ -1256,7 +1256,7 @@ arm W.Drop shared effects(writes, releases) feedback() exits(next)
     publish [] retire [spent(window.value), spent(window.cursor)] at W.Done;
     exit next();
 }
-family O(pair:Out<IterPair>, source:Src) exits(next, raise) ops(NOP);
+family O(pair:Out<IterPair>, source:Src) exits(next, raise);
 point O.Done(current, next_head, clear) keep() spent(source, pair) defs(pair);
 point O.Failed(current, site, pending) keep(pair, source) spent() defs();
 arm O.Open shared effects(reads, writes, releases) feedback() exits(next)
@@ -1332,8 +1332,8 @@ GROUPS_CASES = [
          (1, 1, 'G', 'a vacant home is listed twice'),
      ]),
     ('vacant part of an Out group',
-     'source:Src) exits(next, raise) ops(NOP);',
-     'source:Src) exits(next, raise) ops(NOP) vacant(pair.cursor);', [
+     'source:Src) exits(next, raise);',
+     'source:Src) exits(next, raise) vacant(pair.cursor);', [
          (33, 1, 'O', 'vacant(pair.cursor): pair is defined, not read'),
      ]),
     ('two home groups',
@@ -1380,7 +1380,7 @@ class GroupTests(unittest.TestCase):
 
 
 COMPLETE = """\
-family S(completed:Dst, window:SendWindow, done:NearHead) exits(branch, enter, raise) ops(NOP);
+family S(completed:Dst, window:SendWindow, done:NearHead) exits(branch, enter, raise);
 point S.Yielded(caller, next_head, clear) keep(window.receiver, window.cursor) spent(window.value) defs(window.value);
 point S.Completed(current, next_head, clear) keep() spent(window) defs(completed);
 point S.Failed(current, site, pending) keep(window.receiver, window.cursor) spent(window.value) defs();
@@ -1501,7 +1501,7 @@ class CompletionTests(unittest.TestCase):
 
 
 YIELD = """\
-family Y(value:Src, resume:Dst) exits(yield) ops(NOP);
+family Y(value:Src, resume:Dst) exits(yield);
 point Y.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
 extern helper pin_departing() -> Unit
   effects()

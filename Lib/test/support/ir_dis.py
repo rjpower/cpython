@@ -347,13 +347,13 @@ _ARM_OPS = {"Const.Small": "LOAD_SMALL_INT", "Const.Common": "LOAD_COMMON_CONSTA
 # The field of the local, for the families whose local is a home operand
 _LOCAL_FIELD = {"LocalRead": 1, "SaveLocal": 1, "LocalWrite": 0, "LocalDelete": 0}
 
-# The first stack op of the family of each handler, which the family's ops
-# clause declares
-_family_ops = _testinternalcapi.handler_base_ops()
+# The stack op that each register family is shown as, from the translator's
+# table of what a stack op lowers to
+_family_ops = _testinternalcapi.stack_families()
 
 def _deoptop(op):
     """The opcode that handler op stands for, without specialisation"""
-    base = _family_ops[op] if op < len(_family_ops) else None
+    base = _family_ops.get(_all_opname[op].split(".")[0]) if op < len(_all_opname) else None
     if base is None:
         return op
     name = _ARM_OPS.get(_all_opname[op])

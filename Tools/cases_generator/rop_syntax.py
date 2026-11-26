@@ -271,10 +271,7 @@ class Parser:
             self.expect("(")
             generic = self.ident("an arm name").text
             self.expect(")")
-        ops: tuple[str, ...] = ()
         events: tuple[MonitoringEvent, ...] = ()
-        if self.accept("ops"):
-            ops = self.names()
         if self.accept("events"):
             self.expect("(")
             events = self.comma_list(
@@ -283,7 +280,7 @@ class Parser:
         if self.accept("vacant"):
             vacant = self.names()
         self.expect(";")
-        return Family(name.text, params, exits, ops, events, start.span, generic, vacant)
+        return Family(name.text, params, exits, events, start.span, generic, vacant)
 
     def point(self) -> Point:
         start = self.take()

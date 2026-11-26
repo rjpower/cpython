@@ -6,10 +6,10 @@
 // displacing arm stands for every word, so no handler is made per family.
 
 family Line()
-  exits(dispatch, raise, redirect) ops(INSTRUMENTED_LINE);
+  exits(dispatch, raise, redirect);
 
 family Instruction()
-  exits(dispatch, raise) ops(INSTRUMENTED_INSTRUCTION);
+  exits(dispatch, raise);
 
 // The LINE event of the word (none while the thread traces), and the handler
 // the word displaced.  `prev` is the instruction pointer before the word

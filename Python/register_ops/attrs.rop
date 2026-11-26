@@ -10,7 +10,7 @@ enum Special(ENTER, EXIT, AENTER, AEXIT);
 // compiler writes a deletion as PUSH_NULL and the store, so the word names
 // the NULL temporary and the arm tests the home at run time.
 family AttrWrite(obj:Src, name:Name, value:Maybe<Src>, fb:Fb<Attr>)
-  exits(next, miss, again, raise, redirect) generic(Generic) ops(STORE_ATTR);
+  exits(next, miss, again, raise, redirect) generic(Generic);
 
 point AttrWrite.Done(current, next_head, clear) keep() spent(obj, value) defs();
 point AttrWrite.Failed(current, site, pending) keep() spent(obj, value) defs();
@@ -516,11 +516,11 @@ arm AttrWrite.Slot inline entry(slot)
 // is SuperMethod or SuperMethodExplicit, below.
 family SuperAttr(dst:Dst, parts:Span<Src>, name:Name, fb:Fb<Super>)
   exits(next, miss, again, raise) generic(Generic)
-  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+ events(CALL, C_RETURN, C_RAISE);
 
 family SuperAttrExplicit(dst:Dst, parts:Span<Src>, name:Name, fb:Fb<Super>)
   exits(next, miss, again, raise) generic(Generic)
-  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+ events(CALL, C_RETURN, C_RAISE);
 
 point SuperAttr.Done(current, next_head, clear) keep() spent(parts) defs(dst);
 point SuperAttr.Failed(current, site, pending) keep() spent(parts) defs();
@@ -782,11 +782,11 @@ arm SuperAttrExplicit.Observed split observes
 // receiver as the call's first argument; a bound result has no receiver.
 family SuperMethod(callable:Dst, self_dst:Maybe<Dst>, parts:Span<Src>, name:Name, fb:Fb<Super>)
   exits(next, miss, again, raise) generic(Generic)
-  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+ events(CALL, C_RETURN, C_RAISE);
 
 family SuperMethodExplicit(callable:Dst, self_dst:Maybe<Dst>, parts:Span<Src>, name:Name, fb:Fb<Super>)
   exits(next, miss, again, raise) generic(Generic)
-  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+ events(CALL, C_RETURN, C_RAISE);
 
 point SuperMethod.Done(current, next_head, clear) keep() spent(parts) defs(callable, self_dst);
 point SuperMethod.Failed(current, site, pending) keep() spent(parts) defs();
@@ -1029,7 +1029,7 @@ arm SuperMethodExplicit.Observed split observes
 // `with` and `async with` (enter and exit).  An unbound method comes with
 // the receiver as its first argument; a bound one with no receiver.
 family SpecialLookup(fn:Dst, self_dst:Maybe<Dst>, obj:Src, which:Enum<Special>)
-  exits(next, raise, redirect) ops(LOAD_SPECIAL);
+  exits(next, raise, redirect);
 
 point SpecialLookup.Done(current, next_head, clear) keep() spent(obj) defs(fn, self_dst);
 point SpecialLookup.Failed(current, site, pending) keep() spent(obj) defs();

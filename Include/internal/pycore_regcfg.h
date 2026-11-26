@@ -37,6 +37,25 @@ typedef struct {
                             // their slots with their values
 } _PyStackFormat;
 
+/* What the translator lowers a stack op to: the register family (an
+ * IR_FAMILY_* number) and, for an op that has no arm to choose from, the
+ * handler of the family's one displacing arm.  Generated beside the formats
+ * (pycore_regcfg_metadata.h). */
+typedef struct {
+    uint16_t family;
+    uint16_t handler;
+    uint8_t canonical;      // the op that stands for its family in a disassembly
+} _PyStackLowering;
+
+#define _PyStack_NO_FAMILY 0xffff
+
+/* A family that no stack op lowers to by itself: a translator rule picks it
+ * for `op`, by an oparg or by the words around it */
+typedef struct {
+    uint16_t family;
+    uint16_t op;
+} _PyStackRuleFamily;
+
 /* _PyStackFormat.flags of the translator's own, in bits that _PyIRFormat's
  * flags leave free (pycore_ir.h) */
 #define _PyStack_WINDOW     0x2     // window style

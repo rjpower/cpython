@@ -10209,7 +10209,7 @@ enum {
     VALUE_WRAPPER_RICHCMP,
     VALUE_WRAPPER_REPR,
     VALUE_WRAPPER_CONCAT,
-    VALUE_WRAPPER_CALL,
+    VALUE_WRAPPER_CALLABLE,
     VALUE_WRAPPER_INIT,
     VALUE_WRAPPER_SUBSCRIPT,
     VALUE_WRAPPER_ITEM,
@@ -14155,7 +14155,7 @@ slotdef_value_wrapper(const pytype_slotdef *p, int family)
     case VALUE_WRAPPER_CONCAT:
         assert(w == wrap_binaryfunc);
         return wrap_concatvalue;
-    case VALUE_WRAPPER_CALL:
+    case VALUE_WRAPPER_CALLABLE:
         assert(w == _Py_FUNC_CAST(wrapperfunc, wrap_call));
         return wrap_callvalue;
     case VALUE_WRAPPER_INIT:

@@ -103,7 +103,7 @@ class ExpansionTests(unittest.TestCase):
         # d[] = v: count(d) is read from the word; the items of v go to the
         # homes of d, whose displaced owners old(d) closes after the checkpoint
         src = """\
-family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);
+family F(dsts:Span<Dst>, x:Src) exits(next);
 point F.Done(current, next_head, clear) keep(x) spent() defs(dsts);
 extern helper split(v:B, n:Size) -> Span<O> effects(allocates) pending;
 arm F.Split shared effects(allocates, writes, releases on (dsts), runs_python) feedback()

@@ -94,7 +94,7 @@ class AddIntTemplateTests(unittest.TestCase):
 
 
 SHARED = """\
-family F(dst:Dst, x:Src) exits(next, miss) ops(NOP);
+family F(dst:Dst, x:Src) exits(next, miss);
 point F.Done(current, next_head, clear) keep() spent(x) defs(dst);
 extern primitive is_int(v:B) -> Bool
   effects()
@@ -116,7 +116,7 @@ arm F.Copy shared effects(writes, releases) feedback() exits(next, miss)
 # An arm rop_check accepts and rop_verify refuses: the owner it acquires
 # leaks and no publish names a point (RV's g01)
 UNVERIFIED = """\
-family Leak(x:Src) exits(next) ops(NOP);
+family Leak(x:Src) exits(next);
 arm Leak.Owner split effects(reads, writes) feedback() exits(next) {
   entry():
     let o:O = acquire(x);
@@ -302,7 +302,7 @@ class StubTests(unittest.TestCase):
 
 
 UNWIND = """\
-family U(exc:Src) exits(unwind) ops(NOP);
+family U(exc:Src) exits(unwind);
 point U.Raised(current, site, pending) keep(exc) spent() defs();
 extern helper restore(t:Thread, e:Src) cases(err(x:Err)) effects(runs_python, raises)
   c RESTORE as raised
@@ -318,7 +318,7 @@ arm U.Restore split effects(runs_python, raises) feedback() exits(unwind)
 
 
 OWNERS = """\
-family F(dsts:Span<Dst>, x:Src) exits(next) ops(NOP);
+family F(dsts:Span<Dst>, x:Src) exits(next);
 point F.Done(current, next_head, clear) keep(x) spent() defs(dsts);
 extern helper split(v:B, n:Size) -> Span<O>
   effects(allocates)
@@ -342,9 +342,9 @@ extern primitive is_int(v:B) -> Bool
   test(inline_int(v))
   c PyValue_IsInlineInt as bool
   evidence(review: "r", contract: "c", lowering: "l", test: "t");
-family F(dst:Dst, x:Src, fb:Fb<Call>) exits(next, miss) ops(CALL)
+family F(dst:Dst, x:Src, fb:Fb<Call>) exits(next, miss)
   events(CALL, C_RETURN);
-family G(dst:Dst, x:Src) exits(next, miss) ops(NOP);
+family G(dst:Dst, x:Src) exits(next, miss);
 arm F.A shared effects() feedback() exits(next, miss)
 {
   entry():
@@ -483,7 +483,6 @@ class ArmRowTests(unittest.TestCase):
         self.assertEqual(fa.events, ("CALL", "C_RETURN"))
         self.assertEqual(fa_twin.events, fa.events)
         self.assertEqual(ga.events, ())
-        self.assertEqual({e.base for e in entries if e.dotted.startswith("F.")}, {"CALL"})
         self.assertFalse(any(e.emitted for e in entries))
 
     def test_the_handler_ids_of_the_twins_are_defined(self):
@@ -501,7 +500,6 @@ class ArmRowTests(unittest.TestCase):
         entries = rop_generator.arm_entries(products())
         add_int = next(e for e in entries if e.dotted == "Add.Int")
         fmt = add_int.format
-        self.assertEqual(add_int.base, "BINARY_OP")
         self.assertEqual(fmt.roles, ("_PyIR_ROLE_DST", "_PyIR_ROLE_SRC + 0",
                                      "_PyIR_ROLE_SRC + 1", "_PyIR_ROLE_FB"))
         self.assertEqual((fmt.fb, fmt.fb_schema), ("_PyIR_LOC_D", "Binary"))
@@ -566,7 +564,7 @@ class ArmRowTests(unittest.TestCase):
 
 
 ENVIRONMENT = """\
-family F(dst:Dst, x:Src) exits(next, miss) ops(NOP);
+family F(dst:Dst, x:Src) exits(next, miss);
 extern helper probe(t:Thread, f:Frame, s:Site, h:Head) -> Bool
   effects(reads)
   c probe_c as bool
@@ -600,7 +598,7 @@ class EnvironmentTests(unittest.TestCase):
 
 
 INDEXED = """\
-family F(dst:Dst, x:Src, fb:Fb<Attr>) exits(next, miss) ops(LOAD_ATTR);
+family F(dst:Dst, x:Src, fb:Fb<Attr>) exits(next, miss);
 extern helper classify(v:B, f:Fb<Attr>)
   cases(first(r:Recipe<Attr>), second(), none())
   effects(reads)

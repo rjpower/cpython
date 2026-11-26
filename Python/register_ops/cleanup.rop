@@ -15,7 +15,7 @@
 // may find the cursor vacant (a receiver with no index), and the sent value
 // too (an entered receiver took it into its frame).
 family CleanupThrow(completed:Dst, send:SendWindow, exc:Src, done:NearHead)
-  exits(jump, unwind) ops(CLEANUP_THROW) vacant(send.cursor, send.value);
+  exits(jump, unwind) vacant(send.cursor, send.value);
 
 // The delegation ended with the StopIteration's value; the operands are
 // retired
@@ -65,7 +65,7 @@ arm CleanupThrow.Generic split
 // `send` here is the SEND of the loop, which the word names for the BRANCH_RIGHT
 // event and never goes to.
 family EndAsyncFor(iter:Src, exc:Src, send:NearHead)
-  exits(next, unwind, raise, redirect) ops(END_ASYNC_FOR)
+  exits(next, unwind, raise, redirect)
   events(BRANCH_RIGHT);
 
 // The loop ended: both operands are retired
@@ -151,7 +151,7 @@ arm EndAsyncFor.Observed split observes
 // exception.  The result is the word's `dst`.  The operands stay: the
 // handler's code uses them after the call.
 family WithExit(dst:Dst, exit_fn:Src, self:Maybe<Src>, exc:Src)
-  exits(next, raise) ops(WITH_EXCEPT_START);
+  exits(next, raise);
 
 point WithExit.Done(current, next_head, handled) keep(exit_fn, self, exc) spent() defs(dst);
 point WithExit.Failed(current, site, pending) keep(exit_fn, self, exc) spent() defs();

@@ -11,7 +11,7 @@ enum ResumeKind(FUNC_START, AFTER_YIELD, AFTER_YIELD_FROM, AFTER_AWAIT, GEN_EXPR
 // The kind and the exception-depth flag are the oparg of RESUME: the kind
 // in bits 0-2 and the depth flag in bit 3
 family Resume(kind:Enum<ResumeKind>, depth1:Bool)
-  exits(next, jump, raise, redirect) ops(RESUME)
+  exits(next, jump, raise, redirect)
   events(PY_START, PY_RESUME);
 
 point Resume.PollFailed(current, site, pending) keep() spent() defs();

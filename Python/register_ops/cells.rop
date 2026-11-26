@@ -11,7 +11,7 @@
 // MAKE_CELL: the binding in a local (an argument, or vacant) moves into a
 // new cell, and the cell takes the local's place
 family CellMake(local:Local)
-  exits(next, raise) ops(MAKE_CELL);
+  exits(next, raise);
 
 point CellMake.Failed(current, site, pending) keep() spent(local) defs();
 point CellMake.Done(current, next_head, clear) keep() spent(local) defs(local);
@@ -66,7 +66,7 @@ extern helper unbound_cell(fr:Frame, c:Cell)
 
 // LOAD_DEREF
 family CellRead(dst:Dst, cell:Cell)
-  exits(next, raise) ops(LOAD_DEREF);
+  exits(next, raise);
 
 point CellRead.Unbound(current, site, pending) keep(cell) spent() defs();
 point CellRead.Done(current, next_head, clear) keep(cell) spent() defs(dst);
@@ -96,7 +96,7 @@ arm CellRead.Get inline
 // lookup is NS's load_from_dict with the cell's name, which is in
 // co_localsplusnames at the home's index, not in co_names.
 family CellMapRead(dst:Dst, mapping:Src, cell:Cell)
-  exits(next, raise) ops(LOAD_FROM_DICT_OR_DEREF);
+  exits(next, raise);
 
 point CellMapRead.Failed(current, site, pending) keep(cell) spent(mapping) defs();
 point CellMapRead.Done(current, next_head, clear) keep(cell) spent(mapping) defs(dst);
@@ -140,7 +140,7 @@ arm CellMapRead.Lookup shared
 
 // STORE_DEREF: the new value is in the cell before the old one is closed
 family CellStore(cell:Cell, value:Src)
-  exits(next) ops(STORE_DEREF);
+  exits(next);
 
 point CellStore.Done(current, next_head, clear) keep(cell) spent(value) defs();
 
@@ -174,7 +174,7 @@ arm CellStore.Set inline
 
 // DELETE_DEREF: the cell is emptied, then the old contents are closed
 family CellDelete(cell:Cell)
-  exits(next, raise) ops(DELETE_DEREF);
+  exits(next, raise);
 
 point CellDelete.Unbound(current, site, pending) keep(cell) spent() defs();
 point CellDelete.Done(current, next_head, clear) keep(cell) spent() defs();

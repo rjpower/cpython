@@ -29,6 +29,7 @@
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_ir_source.h"     // _PyIR_POSITION_RECORD
+#include "pycore_regcfg_metadata.h" // _PyStack_Lowering
 #include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
 #include "pycore_rop_metadata.h"  // _PyRop_Arms
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
@@ -2111,30 +2112,44 @@ arm_handlers(PyObject *self, PyObject *Py_UNUSED(ignored))
     return result;
 }
 
-/* handler_base_ops() -> a list with, for each handler id, the first stack op
- * of its family's ops(...) clause, or None for a handler of no family that
- * lowers from a stack op.  The disassembler shows a word as that op. */
+/* stack_families() -> {family name: its first stack op}: the families that the
+ * translator lowers a stack op to, and those a translator rule picks.  The
+ * disassembler shows a word of a family as that op. */
 static PyObject *
-handler_base_ops(PyObject *self, PyObject *Py_UNUSED(ignored))
+stack_families(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
-    PyObject *result = PyList_New(IR_NUM_HANDLERS);
+    PyObject *result = PyDict_New();
     if (result == NULL) {
         return NULL;
     }
-    for (int h = 0; h < IR_NUM_HANDLERS; h++) {
-        const char *name = _PyIR_FamilyNames[_PyIR_HandlerFamily[h]];
-        PyObject *op = Py_NewRef(Py_None);
-        for (int f = 0; f < ROP_NUM_FAMILIES; f++) {
-            if (strcmp(_PyRop_Families[f].name, name) == 0) {
-                Py_SETREF(op, PyLong_FromLong(_PyRop_Families[f].ops[0]));
-                break;
-            }
+    for (int op = 255; op >= 0; op--) {
+        if (_PyStack_Lowering[op].family == _PyStack_NO_FAMILY ||
+            !_PyStack_Lowering[op].canonical)
+        {
+            continue;
         }
-        if (op == NULL) {
+        const char *name = _PyIR_FamilyNames[_PyStack_Lowering[op].family];
+        PyObject *number = PyLong_FromLong(op);
+        if (number == NULL || PyDict_SetItemString(result, name, number) < 0) {
+            Py_XDECREF(number);
             Py_DECREF(result);
             return NULL;
         }
-        PyList_SET_ITEM(result, h, op);
+        Py_DECREF(number);
+    }
+    for (size_t k = 0; k < Py_ARRAY_LENGTH(_PyStack_RuleFamilies); k++) {
+        PyObject *key = PyUnicode_FromString(
+            _PyIR_FamilyNames[_PyStack_RuleFamilies[k].family]);
+        PyObject *number = PyLong_FromLong(_PyStack_RuleFamilies[k].op);
+        /* The first op of a rule family stands for it */
+        int err = key == NULL || number == NULL ||
+                  PyDict_SetDefaultRef(result, key, number, NULL) < 0;
+        Py_XDECREF(key);
+        Py_XDECREF(number);
+        if (err) {
+            Py_DECREF(result);
+            return NULL;
+        }
     }
     return result;
 }
@@ -2146,11 +2161,19 @@ word_stack_op(PyCodeObject *code, int offset)
     return _PyOpcode_Deopt[_PyCode_CODE(code)[offset / 2].op.code];
 }
 
+/* Whether the stack op `op` lowers to `family`, by the table or by a rule */
 static int
 family_has_op(const _PyRopFamily *family, int op)
 {
-    for (int k = 0; k < family->nops; k++) {
-        if (family->ops[k] == op) {
+    if (_PyStack_Lowering[op].family != _PyStack_NO_FAMILY &&
+        strcmp(_PyIR_FamilyNames[_PyStack_Lowering[op].family], family->name) == 0)
+    {
+        return 1;
+    }
+    for (size_t k = 0; k < Py_ARRAY_LENGTH(_PyStack_RuleFamilies); k++) {
+        if (_PyStack_RuleFamilies[k].op == op &&
+            strcmp(_PyIR_FamilyNames[_PyStack_RuleFamilies[k].family], family->name) == 0)
+        {
             return 1;
         }
     }
@@ -5697,7 +5720,7 @@ static PyMethodDef module_functions[] = {
     {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
-    {"handler_base_ops", handler_base_ops, METH_NOARGS, NULL},
+    {"stack_families", stack_families, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
     {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},
     {"ir_edge_homes", ir_edge_homes, METH_VARARGS, NULL},

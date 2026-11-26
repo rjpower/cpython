@@ -41,7 +41,7 @@ def parse_error(src: str) -> RopError:
 
 
 MINIMAL = """\
-family F(dst:Dst, x:Src) exits(next, miss) ops(NOP);
+family F(dst:Dst, x:Src) exits(next, miss);
 arm F.A inline effects() feedback() exits(next, miss)
 {
   entry():
@@ -141,9 +141,8 @@ arm F.A shared effects() feedback() exits(next) {
         self.assertEqual(rop_syntax.parse(printed, "t.rop"), rop_syntax.parse(text, "t.rop"))
 
     def test_family_clause(self):
-        text = "family F(x:Src) exits(next) ops(BINARY_OP, COMPARE_OP) events(CALL, C_RETURN);"
+        text = "family F(x:Src) exits(next) events(CALL, C_RETURN);"
         (family,) = rop_syntax.parse(text, "t.rop").decls
-        self.assertEqual(family.ops, ("BINARY_OP", "COMPARE_OP"))
         self.assertEqual([e.value for e in family.events], ["CALL", "C_RETURN"])
         self.assertEqual(rop_print.print_file(rop_syntax.parse(text, "t.rop")).split(),
                          text.split())
@@ -209,7 +208,7 @@ arm F.A shared effects() feedback() exits(next) {
 CHECK_BASE = """\
 enum Op(PLUS, MINUS);
 family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
-  exits(next, miss, again, raise) ops(BINARY_OP);
+  exits(next, miss, again, raise);
 point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
 point F.Failed(current, site, pending) keep(x, y) spent() defs();
 extern primitive test2(a:B, b:B) -> Bool effects() test(inline_int(a), inline_int(b)) pending;
@@ -402,14 +401,7 @@ CHECK_CASES = [
      'exits(next, miss, raise, again)', [
          (23, 16, 'declared exit again is not reached'),
      ]),
-    ('noops', ' ops(BINARY_OP)', '', [
-         (2, 1, 'a family with arms names the stack ops that lower to it: '
-                'ops(NAME, ...)'),
-     ]),
-    ('twoops', 'ops(BINARY_OP)', 'ops(BINARY_OP, BINARY_OP)', [
-         (2, 1, 'a stack op is listed twice'),
-     ]),
-    ('twoevents', 'ops(BINARY_OP)', 'ops(BINARY_OP) events(CALL, CALL)', [
+    ('twoevents', 'exits(next, miss, again, raise)', 'exits(next, miss, again, raise) events(CALL, CALL)', [
          (2, 1, 'an event is listed twice'),
      ]),
     ('notfamily', 'exits(next, again)\n',
@@ -551,7 +543,7 @@ def check_source(src: str) -> list[tuple[int, str]]:
 
 
 DISPLACING_BASE = """\
-family F() exits(dispatch) ops(X);
+family F() exits(dispatch);
 arm F.A split displacing effects() feedback() exits(dispatch)
 {
   entry():
@@ -591,13 +583,13 @@ class DisplacingTests(unittest.TestCase):
                       "trailing nor adaptive", self.messages(src))
 
     def test_prev_head_needs_displacing(self):
-        src = ("family F() exits(next) ops(X);\n"
+        src = ("family F() exits(next);\n"
                "arm F.A inline effects() feedback() exits(next)\n"
                "{ entry(): let p:Head = prev_head; exit next(); }\n")
         self.assertTrue(any("prev_head" in m for m in self.messages(src)))
 
     def test_trailing_is_not_observed(self):
-        src = ("family F() exits(next) ops(X);\n"
+        src = ("family F() exits(next);\n"
                "arm F.A inline observes trailing effects() feedback() exits(next)\n"
                "{ entry(): exit next(); }\n")
         self.assertTrue(any(m.startswith("a trailing arm belongs to the instruction "
@@ -626,11 +618,11 @@ class CheckTests(unittest.TestCase):
         ("family F(a:Src, b:Src, c:Src, u:FarHead) exits(next);",
          [(1, 31, "operand u:FarHead needs 24 bits; field D and the next field of its "
            "word cannot hold it")]),
-        ("family F(t:NearHead, u:FarHead) exits(branch, jump) ops(NOP);\n"
+        ("family F(t:NearHead, u:FarHead) exits(branch, jump);\n"
          "arm F.A inline effects() feedback() exits(branch, jump)\n"
          "{ entry(): branch true -> N(), J(); N(): exit branch(t); J(): exit jump(u); }",
          []),
-        ("family F(t:NearHead) exits(branch) ops(NOP);\n"
+        ("family F(t:NearHead) exits(branch);\n"
          "arm F.A inline effects() feedback() exits(branch)\n"
          "{ entry(): let h:NearHead = t; exit branch(h); }",
          [(3, 29, "t is Head, expected NearHead"),
@@ -644,14 +636,14 @@ class CheckTests(unittest.TestCase):
          "pending;", []),
         # An optional owner may bind any destination: its absence leaves the
         # home vacant
-        ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next) ops(NOP);\n"
+        ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next);\n"
          "point F.Done(current, next_head, clear) keep() spent(x) defs(d, e);\n"
          "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
          "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
          "{ entry(): let m:Maybe<O> = h(use(x));\n"
          "  publish [e = m] retire [spent(x), old(e)] at F.Done; exit next(); }",
          []),
-        ("family F(d:Dst, x:Src) exits(next) ops(NOP);\n"
+        ("family F(d:Dst, x:Src) exits(next);\n"
          "point F.Done(current, next_head, clear) keep() spent(x) defs(d);\n"
          "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
          "arm F.A inline effects(writes, releases) feedback() exits(next)\n"

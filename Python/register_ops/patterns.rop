@@ -7,7 +7,7 @@
 // Length: len(value), which stays
 
 family Length(dst:Dst, value:Src)
-  exits(next, raise, redirect) ops(GET_LEN);
+  exits(next, raise, redirect);
 
 point Length.Failed(current, site, pending) keep(value) spent() defs();
 point Length.Done(current, next_head, clear) keep(value) spent() defs(dst);
@@ -73,7 +73,7 @@ arm Length.Size shared
 // subject stays.
 
 family Pattern(dst:Dst, subject:Src, kind:Enum<PatternKind>)
-  exits(next) ops(MATCH_MAPPING, MATCH_SEQUENCE);
+  exits(next);
 
 point Pattern.Done(current, next_head, clear) keep(subject) spent() defs(dst);
 
@@ -105,7 +105,7 @@ arm Pattern.Flag inline
 
 // The sources are a span of three: the subject, the class and the names
 family PatternClass(dst:Dst, parts:Span<Src>, count:U16)
-  exits(next, raise, redirect) ops(MATCH_CLASS);
+  exits(next, raise, redirect);
 
 point PatternClass.Failed(current, site, pending) keep() spent(parts) defs();
 point PatternClass.Done(current, next_head, clear) keep() spent(parts) defs(dst);
@@ -182,7 +182,7 @@ arm PatternClass.Match shared
 // The subject and the keys stay.
 
 family PatternKeys(dst:Dst, subject:Src, keys:Src)
-  exits(next, raise, redirect) ops(MATCH_KEYS);
+  exits(next, raise, redirect);
 
 point PatternKeys.Failed(current, site, pending) keep(subject, keys) spent() defs();
 point PatternKeys.Done(current, next_head, clear) keep(subject, keys) spent() defs(dst);

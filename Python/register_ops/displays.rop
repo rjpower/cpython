@@ -7,7 +7,7 @@
 // and retire the source on success.
 
 family Build(dst:Dst, items:Span<Src>)
-  exits(next, raise) ops(BUILD_TUPLE, BUILD_LIST, BUILD_SET, BUILD_MAP);
+  exits(next, raise);
 
 point Build.Failed(current, site, pending) keep() spent(items) defs();
 point Build.Done(current, next_head, clear) keep() spent(items) defs(dst);
@@ -125,7 +125,7 @@ arm Build.Map shared select(map)
 }
 
 family AddElement(container:Src, item:Src)
-  exits(next, raise) ops(LIST_APPEND, SET_ADD);
+  exits(next, raise);
 
 point AddElement.Failed(current, site, pending) keep(container) spent(item) defs();
 point AddElement.Done(current, next_head, clear) keep(container) spent(item) defs();
@@ -183,7 +183,7 @@ arm AddElement.Add shared select(add)
 }
 
 family AddEntry(container:Src, key:Src, value:Src)
-  exits(next, raise) ops(MAP_ADD);
+  exits(next, raise);
 
 point AddEntry.Failed(current, site, pending) keep(container) spent(key, value) defs();
 point AddEntry.Done(current, next_head, clear) keep(container) spent(key, value) defs();
@@ -216,7 +216,7 @@ arm AddEntry.Put shared
 }
 
 family UpdateContainer(container:Src, source:Src)
-  exits(next, raise) ops(LIST_EXTEND, SET_UPDATE, DICT_UPDATE);
+  exits(next, raise);
 
 point UpdateContainer.Failed(current, site, pending) keep(container, source) spent() defs();
 point UpdateContainer.Done(current, next_head, clear) keep(container) spent(source) defs();
@@ -298,7 +298,7 @@ arm UpdateContainer.Overlay shared select(overlay)
 
 // The operands are in operand order: the callable, the dict, then the mapping
 family MergeKeywords(fn:Src, dict:Src, source:Src)
-  exits(next, raise) ops(DICT_MERGE);
+  exits(next, raise);
 
 point MergeKeywords.Failed(current, site, pending) keep(fn, dict, source) spent() defs();
 point MergeKeywords.Done(current, next_head, clear) keep(fn, dict) spent(source) defs();
@@ -333,7 +333,7 @@ arm MergeKeywords.Merge shared
 // publish moves them in, closing what the homes held.
 
 family Unpack(dsts:Span<Dst>, source:Src, fb:Fb<Unpack>)
-  exits(next, raise, miss, again) generic(Generic) ops(UNPACK_SEQUENCE);
+  exits(next, raise, miss, again) generic(Generic);
 
 point Unpack.Failed(current, site, pending) keep(source) spent() defs();
 point Unpack.Done(current, next_head, clear) keep() spent(source) defs(dsts);
@@ -495,7 +495,7 @@ arm Unpack.List shared entry(list)
 // star, and in the next byte the count after it.
 
 family UnpackStar(dsts:Span<Dst>, source:Src, shape:U16)
-  exits(next, raise) ops(UNPACK_EX);
+  exits(next, raise);
 
 point UnpackStar.Failed(current, site, pending) keep(source) spent() defs();
 point UnpackStar.Done(current, next_head, clear) keep() spent(source) defs(dsts);

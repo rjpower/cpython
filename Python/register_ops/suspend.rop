@@ -5,7 +5,7 @@ enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
 // GET_AWAITABLE: the iterator that `await source` drives.  The origin says
 // which diagnostic a source that cannot be awaited gets.
 family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>)
-  exits(next, raise) ops(GET_AWAITABLE);
+  exits(next, raise);
 
 point Awaitable.Done(current, next_head, clear) keep() spent(source) defs(dst);
 point Awaitable.Failed(current, site, pending) keep() spent(source) defs();
@@ -56,7 +56,7 @@ arm Awaitable.Await shared
 
 // GET_AITER: the asynchronous iterator of the source, which is consumed
 family AsyncIterOpen(dst:Dst, source:Src)
-  exits(next, raise) ops(GET_AITER);
+  exits(next, raise);
 
 point AsyncIterOpen.Done(current, next_head, clear) keep() spent(source) defs(dst);
 point AsyncIterOpen.Failed(current, site, pending) keep() spent(source) defs();
@@ -90,7 +90,7 @@ arm AsyncIterOpen.Open shared
 
 // GET_ANEXT: the awaitable of the next item; the iterator stays where it is
 family AsyncIterNext(dst:Dst, aiter:Src)
-  exits(next, raise) ops(GET_ANEXT);
+  exits(next, raise);
 
 point AsyncIterNext.Done(current, next_head, clear) keep(aiter) spent() defs(dst);
 point AsyncIterNext.Failed(current, site, pending) keep(aiter) spent() defs();
@@ -129,10 +129,10 @@ arm AsyncIterNext.Next shared
 // home.
 
 family Yield(value:Src, resume:Dst)
-  exits(yield, raise, redirect) ops(YIELD_VALUE) events(PY_YIELD);
+  exits(yield, raise, redirect) events(PY_YIELD);
 
 family YieldFrom(value:Src, resume:Dst)
-  exits(yield, raise, redirect) ops(YIELD_VALUE) events(PY_YIELD);
+  exits(yield, raise, redirect) events(PY_YIELD);
 
 // The generator goes on here when it is resumed: the value sent in is resume
 point Yield.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
@@ -229,7 +229,7 @@ arm YieldFrom.Observed split observes
 // followed it has no word.  A generator or coroutine receiver is entered in
 // place; when its frame returns, the completion arm runs in this frame.
 family Send(completed:Dst, send:SendWindow, fb:Fb<Iter>, done:NearHead)
-  exits(next, branch, enter, raise, redirect, miss, again) generic(Generic) ops(SEND)
+  exits(next, branch, enter, raise, redirect, miss, again) generic(Generic)
   events(STOP_ITERATION, BRANCH_LEFT) vacant(send.cursor);
 
 // The receiver, entered in place, has yielded: the sent value moved into its

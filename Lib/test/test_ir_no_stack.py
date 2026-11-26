@@ -8,6 +8,7 @@ that matches no line is stale and fails, so the list shrinks as the
 references go.  The translator and the public co_code, dis and pcmap
 transport are allowed by file."""
 
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -65,21 +66,12 @@ class Allowed:
 
 
 ALLOWED: tuple[Allowed, ...] = (
-    Allowed("Include/internal/pycore_ir_metadata.h", None, r"_PyIR_OpcodeHandler",
-            "the translator's map from a stack op to its handler; the generated "
-            "table of stack_ops.py replaces it with item 6"),
-    Allowed("Include/internal/pycore_rop_metadata.h", None, r"_PyRop_Ops_\w+",
-            "the translator's table from a family to the stack ops that lower to it"),
-    Allowed("Python/register_ops/*.rop", None, r"\bops\(",
-            "the ops clause names the stack ops of a family; it moves to stack_ops.py"),
-    Allowed("Python/register_ops/*.rop", None, r"^(?!.*\bops\()",
-            "61 lines of review and contract prose that name the stack op an "
+    Allowed("Python/register_ops/*.rop", None, r'^\s*(?:"|review:|contract:)',
+            "58 lines of review and contract prose that name the stack op an "
             "arm replaced; the rewording is on the freeze list"),
     Allowed("Python/register_ops/*.rop", None, r"\bevents\(",
             "sys.monitoring event names: CALL and RERAISE are events as well as stack ops"),
     # Names that collide with a stack op
-    Allowed("Include/internal/pycore_value_slots.h", None, r"VECTORCALL, CALL|\bSEND\b",
-            "slot kinds named CALL and SEND, which are no stack ops"),
     Allowed("Python/instrumentation.c", ("get_tools_for_instruction",), r'"(?:CALL|RERAISE)"',
             "the sys.monitoring event names, which collide with the stack ops"),
     # Public co_code transport, which is stack bytecode by contract
@@ -149,6 +141,17 @@ def allowed_by(rel: str, function: str, line: str) -> list[Allowed]:
 
 
 class NoStackTests(unittest.TestCase):
+    def test_every_family_is_reached_by_a_stack_op_or_declared(self):
+        with test_tools.imports_under_tool("cases_generator"):
+            import regcfg_metadata_generator
+            import rop_generator
+        arms = rop_generator.load_arm_entries()
+        self.assertEqual(regcfg_metadata_generator.check_families(arms), [])
+        # A family that nothing reaches is refused
+        stray = [dataclasses.replace(arms[0], dotted="Stray.Arm")]
+        self.assertIn("Stray: no stack op lowers to it and it is not a rule family",
+                      regcfg_metadata_generator.check_families(arms + stray))
+
     def test_scanned_sources_exist(self):
         self.assertGreater(len(scanned_files()), 100)
         for pattern in SCANNED:

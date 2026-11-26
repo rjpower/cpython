@@ -4,10 +4,10 @@
 enum UnaryOp(NEGATIVE, POSITIVE, INVERT);
 
 family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
-  exits(next, raise, redirect, miss, again) generic(Generic) ops(BINARY_OP);
+  exits(next, raise, redirect, miss, again) generic(Generic);
 
 family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>)
-  exits(next, raise) ops(UNARY_NEGATIVE, UNARY_INVERT);
+  exits(next, raise);
 
 point Binary.BoxFailed(current, site, pending) keep(x, y) spent() defs();
 point Binary.OpFailed(current, site, pending) keep() spent(y, x) defs();
@@ -310,7 +310,7 @@ arm Unary.Generic shared
 // The append reuses the string's buffer when the local holds its only
 // reference, so a loop of appends stays linear.
 family AppendText(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
-  exits(next, raise, redirect, miss, again) generic(Generic) ops(BINARY_OP);
+  exits(next, raise, redirect, miss, again) generic(Generic);
 
 point AppendText.OpFailed(current, site, pending) keep() spent(y, x) defs();
 point AppendText.Failed(current, site, pending) keep() spent(y, x) defs();

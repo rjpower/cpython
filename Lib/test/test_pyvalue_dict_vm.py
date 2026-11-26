@@ -166,7 +166,7 @@ class PyValueDictVMTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             assign(owner, None)
-        self.assertIn('STORE_ATTR_WITH_HINT', handlers(assign))
+        self.assertIn('AttrWrite.Hint', handlers(assign))
         ledger.clear()
 
         class Old:
@@ -184,7 +184,7 @@ class PyValueDictVMTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             assign(owner, 2147483647)
-        self.assertIn('STORE_ATTR_WITH_HINT', handlers(assign))
+        self.assertIn('AttrWrite.Hint', handlers(assign))
 
         # The watcher error is reported before mutation. Its unraisable
         # hook may reenter; dictionary callbacks themselves must not mutate.
@@ -227,7 +227,7 @@ class PyValueDictVMTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             assign(create)
-        self.assertIn('STORE_ATTR_WITH_HINT', handlers(assign))
+        self.assertIn('AttrWrite.Hint', handlers(assign))
         ledger.clear()
         assign(lambda: create(True))
         self.assertEqual(ledger, [2147483647])
@@ -603,8 +603,8 @@ class PyValueDictVMTests(unittest.TestCase):
                     else threshold)
             for _ in range(warm):
                 put(make, None)
-            expected = ('STORE_ATTR_INSTANCE_VALUE' if instance or not support.Py_SHAPES
-                        else 'STORE_ATTR_SHAPE')
+            expected = ('AttrWrite.Instance' if instance or not support.Py_SHAPES
+                        else 'AttrWrite.Shape')
             self.assertIn(expected, handlers(put))
             observe = True
             for value in (2147483647, 3.25, None):
@@ -633,7 +633,7 @@ class PyValueDictVMTests(unittest.TestCase):
 
             for _ in range(threshold):
                 added(Owner, None)
-            self.assertIn('STORE_ATTR_SHAPE_ADD', handlers(added))
+            self.assertIn('AttrWrite.ShapeAdd', handlers(added))
             observe = True
             try:
                 for value in (2147483647, 3.25, None):

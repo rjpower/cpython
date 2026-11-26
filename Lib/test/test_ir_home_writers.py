@@ -351,7 +351,7 @@ class HomeWriterTests(unittest.TestCase):
                 pass
             return current
 
-        self.assertTrue(any(row[0] == "LOAD_SPECIAL"
+        self.assertTrue(any(row[0].startswith("SpecialLookup.")
                             for row in _testinternalcapi.get_ir(invoke.__code__)))
         for code in routes(invoke.__code__):
             function = types.FunctionType(code, globals())

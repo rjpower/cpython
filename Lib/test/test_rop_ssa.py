@@ -14,6 +14,7 @@ path of the expansion must agree with C:
 The path must also balance its own owners.  For C, each input object's count
 must change by exactly the number of homes that hold it afterwards."""
 
+import builtins
 import functools
 import sys
 import types
@@ -265,6 +266,70 @@ def materialised():
     o = Point()
     o.__dict__["z"] = 1
     return o
+
+
+class Shadowed:
+    "A class attribute that the store shadows: kept apart from ClassAttr, whose\n    GetAttr arm a shadowing instance would refuse"
+    x = 5
+
+
+class RaisesSetAttr:
+    def __setattr__(self, name, value):
+        raise ZeroDivisionError("setattr")
+
+
+class SA:
+    x = 5
+
+    def m(self):
+        return 1
+
+
+class SB(SA):
+    def attr(self):
+        return super().x
+
+    def method(self):
+        return super().m()
+
+    def explicit(self):
+        return super(SB, self).x
+
+    def explicit_method(self):
+        return super(SB, self).m()
+
+
+# A module that names `super` makes the compiler keep `super()` calls; the
+# builtin is found by attribute so that SB's methods use LOAD_SUPER_ATTR
+SUPER = getattr(builtins, "super")
+
+
+def fake_super(*args):
+    return SA()
+
+
+class Manager:
+    def __enter__(self):
+        return 1
+
+    def __exit__(self, *exc):
+        return False
+
+
+class AsyncManager:
+    async def __aenter__(self):
+        return 1
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def method_of(name):
+    "A source that makes a function of SB's method, with a code object of its own"
+    return ("import types\nfrom test.test_rop_ssa import SB\n"
+            f"fn = SB.__dict__[{name!r}]\n"
+            "f = types.FunctionType(fn.__code__.replace(), globals(), None, None, "
+            "fn.__closure__)\n")
 
 
 TRUTHS = [True, False, 0, 1, -1, 2**50, 2**60, 0.0, 1.5, None, "", "a", [], [1], (), {1: 2},
@@ -675,6 +740,43 @@ SCENARIOS = {
             # TYPEVAR_WITH_BOUND (a name, the bound's evaluator): the new
             # typevar holds the evaluator, so it is immortal
             "binary": [{"x": x, "y": None} for x in ("T", "U")]}),
+    "AttrWrite": Scenario("AttrWrite", {
+        "store": "def f(a, v):\n    a.x = v\n",
+        "delete": "def f(a):\n    del a.x\n"},
+        # The stored value is held by its object, which the count check cannot see
+        [{"obj": Point(), "value": 1}], warm=(Point(), 1), holds=True,
+        inputs_by_source={
+            "store": [{"obj": o, "value": v}
+                      for o in (Point(), WithSlots(), Plain(), Shadowed(), 1, Many(),
+                                RaisesSetAttr(), materialised())
+                      for v in (1, "s", None, Plain(), 2**70)],
+            "delete": [{"obj": o} for o in (Point(), Plain(), WithSlots(), 1, Many(),
+                                            RaisesSetAttr(), materialised())]}),
+    "SuperAttr": Scenario("SuperAttr", {
+        "attr": method_of("attr"),
+        "method": method_of("method"),
+        "monitored": method_of("attr")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SuperAttrExplicit": Scenario("SuperAttrExplicit", {
+        "attr": method_of("explicit"),
+        "method": method_of("explicit_method"),
+        "monitored": method_of("explicit")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SpecialLookup": Scenario("SpecialLookup", {
+        "with": "def f(a):\n    with a:\n        pass\n",
+        "async": "async def f(a):\n    async with a:\n        pass\n"},
+        [{"obj": v} for v in (Manager(), AsyncManager(), 3, Plain())],
+        warm=(Manager(),)),
     "Compare": Scenario("Compare", {
         "rich": "def f(a, b):\n    return a < b\n",
         "equal": "def f(a, b):\n    return a == b\n",
@@ -1020,6 +1122,13 @@ def cx():
 UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
               "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
+    "AttrWrite.Instance": "needs a warmed recipe in the entry; scenarios are not extended in the interpreter-first batch",
+    "AttrWrite.Shape": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.ShapeAdd": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.Hint": "needs a warmed hint recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.Slot": "needs a warmed slot recipe in the entry; as AttrWrite.Instance",
+    "SuperAttr.Builtin": "installed only by adaptation; as AttrWrite.Instance",
+    "SuperAttrExplicit.Builtin": "installed only by adaptation; as AttrWrite.Instance",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
@@ -1054,7 +1163,8 @@ NOT_RUN = {
 
 
 def evaluated_arms():
-    return [n for n in SSA if PROGRAM.arms[n].family in SCENARIOS]
+    return [n for n in SSA
+            if PROGRAM.arms[n].family in SCENARIOS and n not in NOT_RUN]
 
 
 class AgainstCTests(unittest.TestCase):

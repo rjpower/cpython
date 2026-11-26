@@ -167,6 +167,11 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
  * keep them by keeping the flags (_PyIRFormat.word_flags). */
 #define IR_F_NO_SELF    (1 << 13)
 #define IR_F_NO_KW      (1 << 14)
+/* IR_F_UNINTERRUPTED, on CALL: the call does not poll for signals and
+ * collection when it returns.  The translator sets it on the call that
+ * follows a special-method lookup, so that `with` enters its body before a
+ * pending event runs (the Interrupt operand of the Call family). */
+#define IR_F_UNINTERRUPTED (1 << 15)
 #define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_NO_KW)
 
 /* What a native call owes, on the head of a call-family word, which the

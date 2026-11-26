@@ -10,8 +10,8 @@ from cwriter import CWriter
 from collections.abc import Sequence
 
 import ir_arms
-from stack_ops import (HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE, OLD_HANDLERS,
-                       OLD_ONLY_HANDLERS, PSEUDOS, STACK_OPS)
+from handler_table import WORD_KINDS
+from stack_ops import HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE, PSEUDOS, STACK_OPS
 from typing import TextIO
 
 
@@ -38,15 +38,13 @@ def generate_opmap(out: CWriter) -> None:
 
 def generate_ir_opmap(out: CWriter,
                       arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
-    """The register IR's handlers by name and id: the ones that bytecodes.c
-    defines, then the register instruction arms by their dotted names.  The
+    """The register IR's handlers by name and id: the word kinds, then the register instruction arms by their dotted names.  The
     ids are no opcodes; the translator-only ops are no handlers"""
     out.emit("_ir_handlers = frozendict(\n")
-    ids = {name: number for number, name in enumerate(OLD_HANDLERS)}
-    only = set(OLD_ONLY_HANDLERS)
-    for name, handler in sorted(ids.items(), key=lambda item: item[1]):
+    ids = {name: number for number, name in enumerate(WORD_KINDS)}
+    for name, handler in ids.items():
         out.emit(f"{name}={handler},\n")
-    first = len(OLD_HANDLERS)
+    first = len(WORD_KINDS)
     if arms:
         out.emit(") | frozendict({\n")
         for arm in arms:
@@ -59,35 +57,11 @@ def generate_ir_opmap(out: CWriter,
                      key=lambda op: op.opcode):
         out.emit(f"{op.name}={op.opcode},\n")
     out.emit(")\n\n")
-    numbers = sorted([ids[name] for name in only]
-                     + [first + arm.index for arm in arms])
+    numbers = sorted([*ids.values(), *(first + arm.index for arm in arms)])
     out.emit("_ir_only_handlers = frozenset((\n")
     for number in numbers:
         out.emit(f"{number},\n")
     out.emit("))\n\n")
-
-
-def classify_handlers() -> tuple[list[str], list[str]]:
-    """The handlers that bytecodes.c still defines, as (inherited register
-    instructions, stack-only stubs).  A stub is a stack op that has no
-    handler of its own or whose body
-    only aborts: the register instructions its lowering emits run instead.  The arms are not in either list."""
-    stubs = {op.name for op in STACK_OPS if op.stack_only or op.abort_stub}
-    stubs.update(OLD_ONLY_HANDLERS)
-    inherited = set(OLD_HANDLERS) | {op.name for op in STACK_OPS if op.translator_only}
-    return sorted(inherited - stubs), sorted(stubs)
-
-
-def generate_handler_classes(out: CWriter) -> None:
-    """The handlers outside the families, which only shrink as the families
-    port (Lib/test/test_ir_ceiling.py checks them against a ceiling)"""
-    inherited, stubs = classify_handlers()
-    for table, names in (("_ir_inherited_handlers", inherited),
-                         ("_ir_stack_stubs", stubs)):
-        out.emit(f"{table} = (\n")
-        for name in names:
-            out.emit(f'    "{name}",\n')
-        out.emit(")\n\n")
 
 
 def generate_py_metadata(
@@ -100,7 +74,6 @@ def generate_py_metadata(
     generate_specialized_opmap(out)
     generate_opmap(out)
     generate_ir_opmap(out, arms)
-    generate_handler_classes(out)
     out.emit(f"HAVE_ARGUMENT = {HAVE_ARGUMENT}\n")
     out.emit(f"MIN_INSTRUMENTED_OPCODE = {MIN_INSTRUMENTED_OPCODE}\n")
 

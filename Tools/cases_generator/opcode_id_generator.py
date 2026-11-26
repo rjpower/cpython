@@ -10,7 +10,7 @@ import ir_arms
 
 from generators_common import ROOT, write_header
 from cwriter import CWriter
-from handler_table import handler_ids, num_handlers, num_old_handlers
+from handler_table import first_arm, handler_ids, num_handlers
 from stack_opcode_pins import (
     HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE, MIN_SPECIALIZED_OPCODE,
     PINNED_OPCODES, PINNED_PSEUDOS,
@@ -50,8 +50,8 @@ def generate_handler_ids_header(
     arms: Sequence[ir_arms.ArmEntry] = ()
 ) -> None:
     """The register handler ids.  They are dense, computed at each build and
-    independent of the stack opcodes: IR_H_<name> for every handler that
-    bytecodes.c defines, then the counts.  The numbers of the translator-only
+    independent of the stack opcodes: IR_H_<name> for every word kind, then the
+    first arm and the counts.  The numbers of the translator-only
     ops follow: they are CFG numbers in the gap that no stack opcode holds,
     and no word has them as a handler."""
     write_header(__file__, filenames, outfile)
@@ -61,7 +61,7 @@ def generate_handler_ids_header(
         for name, number in handler_ids().items():
             out.emit(f"#define IR_H_{name:<36} {number:>3}\n")
         out.emit("\n")
-        out.emit(f"#define {'IR_NUM_OLD_HANDLERS':<38} {num_old_handlers():>3}\n")
+        out.emit(f"#define {'IR_FIRST_ARM':<38} {first_arm():>3}\n")
         out.emit(f"#define {'IR_NUM_HANDLERS':<38} {num_handlers(arms):>3}\n")
         out.emit("\n/* What _PyIR_HandlerBase holds for a handler that is no stack op: "
                  "a number\n * past every stack opcode and pseudo-instruction */\n")

@@ -64,14 +64,6 @@ class Pseudo:
 HAVE_ARGUMENT = 41
 MIN_INSTRUMENTED_OPCODE = 233
 
-# The handlers that Python/bytecodes.c still defines, in id order: dense ids
-# from 0, which the arms follow.  They go with LO's ports and step 4.
-OLD_HANDLERS = ('CACHE', 'RESERVED', 'COPY_FREE_VARS', 'DELETE_DEREF', 'LOAD_DEREF', 'LOAD_FROM_DICT_OR_DEREF', 'MAKE_CELL', 'STORE_DEREF', 'IR_OPERANDS')
-
-# Of them, the ones that are no stack op: a word kind, not an instruction
-OLD_ONLY_HANDLERS = ('IR_OPERANDS',)
-
-
 def _f(*args):
     return StackFormat(*args)
 

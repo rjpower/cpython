@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `cc66f6c8da6` (pushed) holds:
+`pyjit/rir90` at `73f88fa1cdb` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -54,19 +54,30 @@ interpreter hold no reference to the stack at step D, and tests check it.
 - W2: keyword and expanded calls (KC), iteration (FI), exceptions (EX),
   resume and polls (RS), send, yield, awaitables and async iteration (SY),
   throw completion, async-for end and context exit (TC);
+- LO, the last inherited handlers:
+  - IR_JUMP becomes `Jump.Trailing`, an arm declared to belong to the
+    instruction before it;
+  - a word that is never emitted, such as NOP, takes no handler;
+  - line and instruction events are `displacing` arms with a `dispatch`
+    exit, which the checker refuses in any other arm;
 - the known failures fixed once: settrace jumps refused by design and raw
   value bits gone (KF), tests that deletions cannot break, with STACK_ONLY
   derived (TS);
-- PS: stack opcode numbers pinned to upstream's table, so ports no longer
-  bump the pyc magic number (64451); register handler ids dense and
-  independent of stack numbers (305 handlers, under the 512 limit), with
-  generated maps between the two spaces.
+- PS:
+  - stack opcode numbers are pinned to upstream's table, so ports no longer
+    bump the pyc magic number (64451);
+  - register handler ids are dense and independent of stack numbers (302
+    handlers), with generated maps between the two spaces and range asserts;
+  - an assert build with every id shifted (`PYJIT_IR_ID_BASE`) runs the smoke
+    set at integration points;
+- D's first steps: the stack-op schema is a Python table (`stack_ops.py`)
+  that the opcode generators read instead of `bytecodes.c`, and the `.rop`
+  externs are the one declaration of each C row.
 
-Six inherited handlers remain: NOP, LOAD_COMMON_CONSTANT, STORE_FAST,
-IR_JUMP, INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION. The last merge check
-passed the smoke set on release and assert, and the verifier reports no error
-over 109,625 code objects. Ports keep the old handlers' object locks and turn
-every old specialization into an arm.
+No word runs an inherited handler. The last merge check passed the smoke set
+on release and assert, and the verifier reports no error over 109,658 code
+objects. Ports keep the old handlers' object locks and turn every old
+specialization into an arm.
 
 Interpreter first (user, 2026-11-25): port every op, reach test parity, then
 interpreter performance parity with golden87 (within 5% on the timed
@@ -74,14 +85,13 @@ geomean, JIT off); only then the JIT. Units run the tests their branch
 touches; root runs the smoke set at each merge and full suites at the wave
 join.
 
-Running:
-- LO ports the six. Four already have families. Line and instruction events
-  become displacing handlers, with a `dispatch` exit legal only in arms
-  declared `displacing`.
-- PS step 3 fixes the review's findings on handler/opcode mixing and adds an
-  assert build with permuted, gapped ids, so a mixed comparison fails in the
-  ordinary suites.
-- D plans the deletion of the stack-semantic generator.
+Running, for the end condition that the IR and the interpreter hold no
+reference to the stack:
+- D deletes the stack-semantic generator, `bytecodes.c` and their tests
+  (about 21,000 lines of Python), then restates instrumentation by handler.
+- WF (Opus) replaces the stack-shaped word format with home operands and
+  declared per-edge states. Its migration check found three classes of wrong
+  answers in the old f_lineno planner, which the new format fixes.
 
 Then full suites and approximate timing.
 

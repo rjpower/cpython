@@ -1067,6 +1067,21 @@ arm Jump.Direct inline select(uninterrupted)
     exit jump(target);
 }
 
+// The two jumps that the assembler adds after a relaxed loop step, send or
+// conditional branch (Python/ir_assemble.c): the first jumps over the second,
+// the second goes to the target.  They belong to the instruction before them,
+// as its operand words do: they fire no event and leave the instruction
+// pointer at that instruction, which the events after them see as the
+// instruction before.
+arm Jump.Trailing inline trailing
+  effects()
+  feedback()
+  exits(jump)
+{
+  entry():
+    exit jump(target);
+}
+
 arm Jump.Poll inline select(interruptible, jit_off)
   effects(runs_python, polls, raises)
   feedback()

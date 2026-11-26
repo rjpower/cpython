@@ -1126,7 +1126,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # the code object's
             runs = int.from_bytes(code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
                                   sys.byteorder) & _HANDLER_MASK
-            # A handler of the IR only, such as IR_JUMP,
+            # A handler of the IR only, such as Jump.Trailing,
             # shows as the instruction that it runs; a specialisation shows
             # as itself
             if runs in _ir_only_handlers:

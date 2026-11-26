@@ -824,6 +824,9 @@ def check_arm(c: Checker, a: Arm) -> None:
         c.report(a.span, a.name, f"arm {a.name} does not name a family's arm "
                  "(Family.Arm)")
         return
+    if a.trailing and (a.observes or a.select or a.entry is not None):
+        c.report(a.span, a.name, "a trailing arm belongs to the instruction before "
+                 "it: it is not selected, observed or adaptive, and fires no event")
     edges = {n: () for n in a.contract.exits}
     check_contract(c, a.contract, a.name, fam.params, edges, True)
     for n in a.contract.exits:
@@ -944,9 +947,11 @@ def select_dimension(m: Select) -> str:
 
 def check_selection(c: Checker, fam: Family) -> None:
     """Arms chosen by static evidence: every combination of the dimensions
-    the family's arms name is admitted by exactly one arm."""
+    the family's arms name is admitted by exactly one arm.  A trailing arm
+    is the assembler's, and no lowering selects it."""
     arms = [a for a in c.arms.values()
-            if a.name.split(".")[0] == fam.name and not a.observes]
+            if a.name.split(".")[0] == fam.name and not a.observes
+            and not a.trailing]
     if not any(a.select for a in arms):
         return
     if "miss" in fam.exits:

@@ -141,8 +141,7 @@ int opcode = {handler};
 (void)opcode;
 _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
-frame->instr_ptr = next_instr;
-IR_HOLD_NEXT();
+{save_ip}IR_HOLD_NEXT();
 next_instr += {advance};
 INSTRUCTION_STATS({handler});"""
 
@@ -154,7 +153,9 @@ def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
         # A span instruction's length depends on its counts
         assert low.payload is None, arm.name
         advance = "_PyIR_SpanWordLength(opcode, ir_word)"
-    lines += PROLOGUE.format(handler=handler(arm.name), advance=advance).splitlines()
+    lines += PROLOGUE.format(
+        handler=handler(arm.name), advance=advance,
+        save_ip="" if arm.trailing else "frame->instr_ptr = next_instr;\n").splitlines()
     lines += low.decls
     lines += low.body
     return [indent + line if line else line for line in lines]
@@ -625,7 +626,7 @@ def wrapped_arms(program: Program) -> list[str]:
     """The arms that have a twin: those of a family that declares events,
     but for the family's observed wrapper"""
     return [name for name, arm in program.arms.items()
-            if program.families[arm.family].events
+            if program.families[arm.family].events and not arm.trailing
             and name != observer(program, arm.family)]
 
 
@@ -651,9 +652,11 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
             c_name(name), p.numbers[name], region, declares_escape(arm),
             stub_name(name) if name in shared else None,
             stub_name(generic) if generic and generic in shared else None,
-            name, fam.ops[0], tuple(e.value for e in fam.events),
+            name, fam.ops[0],
+            () if arm.trailing else tuple(e.value for e in fam.events),
             "again" in fam.exits, is_generic(p.program, arm),
-            arm_format(p.program, arm), twin_index.get(name), None, emitted))
+            arm_format(p.program, arm), twin_index.get(name), None, emitted,
+            arm.trailing))
     for name in wrapped:
         base = entries[p.numbers[name]]
         runs = observer(p.program, p.program.arms[name].family)

@@ -474,6 +474,11 @@ class Arm:
     # A completion arm (`completion(P)`): no word of its own; it runs in the
     # consumer's frame, from P's homes, when a generator child returns
     completion: str | None = None
+    # A trailing arm (`trailing`): its word belongs to the instruction before
+    # it, as a CACHE belongs to its head upstream (the jumps that the
+    # assembler adds after a relaxed head).  It has no observed twin, fires
+    # no event and leaves the instruction pointer at that instruction.
+    trailing: bool = False
 
     @property
     def family(self) -> str:

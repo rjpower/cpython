@@ -468,7 +468,7 @@ class SemanticCompletionTests(unittest.TestCase):
                     _testinternalcapi.set_ir_max_forward(old)
                 ir = dis.IRCode(func.__code__)
                 helpers = {word for word, row in enumerate(rows)
-                           if row[0] == 'IR_JUMP'}
+                           if row[0] == 'Jump.Trailing'}
                 self.assertTrue(helpers)
                 valid = {i.offset for i in stack_dis.get_instructions(func)}
                 observed = []

@@ -229,13 +229,17 @@ def twin_by_tools(analysis: Analysis, arm: ir_arms.ArmEntry) -> bool:
 def arm_flags(analysis: Analysis, arm: ir_arms.ArmEntry) -> str:
     parts = ["_PyIR_H_METADATA"]
     if arm.emitted:
-        parts += ["_PyIR_H_DISPATCH", "_PyIR_H_SAVES_IP"]
+        parts.append("_PyIR_H_DISPATCH")
+        if not arm.trailing:
+            parts.append("_PyIR_H_SAVES_IP")
     if arm.adaptive and not arm.is_generic:
         parts.append("_PyIR_H_SPECIALIZED")
     if arm.observes is not None:
         parts.append("_PyIR_H_INSTRUMENTED")
     if twin_by_tools(analysis, arm):
         parts.append("_PyIR_H_TWIN_BY_TOOLS")
+    if arm.trailing:
+        parts.append("_PyIR_H_TRAILING")
     parts.append("_PyIR_H_IR_ONLY")
     return " | ".join(parts)
 
@@ -362,7 +366,7 @@ def generate_ir_metadata(
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
                           ("SAVES_IP", 1024), ("JIT_EVENT", 2048),
-                          ("TWIN_BY_TOOLS", 4096)):
+                          ("TWIN_BY_TOOLS", 4096), ("TRAILING", 8192)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
         for ctype, table, values in (

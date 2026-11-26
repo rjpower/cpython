@@ -18,7 +18,8 @@ infers, extends or grants an effect, fact, exit or permission.
 
 `verify(program)` returns the diagnostics; `load(paths)` parses, runs the
 structural checks and then this checker over the definitions that passed
-them.  The rules and their fixtures are in R/f1/checker.md.
+them, and records the point in force at each arm's normal edges
+(`Program.exit_points`).  The rules and their fixtures are in R/f1/checker.md.
 """
 
 import argparse
@@ -38,7 +39,7 @@ from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branc
                        FactUse, Family, Goto, Guard, HandleType, Let, Macro, Name, Nat,
                        Null, Param, Point, Publish, Returns, SchemaType, SpanLit, SrcSpan,
                        Target, Type, WrapType, DISCARD, ENTRY)
-from rop_print import effect_text, expr_text
+from rop_print import effect_text, expr_text, type_text
 
 
 class Rule(enum.Enum):
@@ -238,6 +239,9 @@ class Walk:
     origin: dict[str, str] = field(default_factory=dict)
     # The exit blocks of transfer rows' edges: the callee performs the exit
     transfers: frozenset[str] = frozenset()
+    # (edge, point) at each normal exit: EDGE_NEXT or EDGE_TAKEN, and the
+    # point whose homes the word leaves there (None: no publish)
+    exit_points: set[tuple[int, str | None]] = field(default_factory=set)
 
     def report(self, span: SrcSpan, rule: Rule, message: str) -> None:
         key = (span, f"{span.line}:{span.column}:{rule.value}: {message}")
@@ -307,9 +311,18 @@ def feedback_covered(declared: Iterable[tuple[AccessMode, str]], mode: AccessMod
 
 # Entry
 
-def verify(program: Program) -> tuple[Diagnostic, ...]:
+# The normal edges of a word: the fall-through (next, and the resumption of
+# enter and yield) and the taken edge (branch, jump)
+EDGE_NEXT, EDGE_TAKEN = 0, 1
+EDGE_OF_EXIT = {"next": EDGE_NEXT, "enter": EDGE_NEXT, "yield": EDGE_NEXT,
+                "branch": EDGE_TAKEN, "jump": EDGE_TAKEN}
+
+
+def verify(program: Program, exit_points: dict[str, frozenset[tuple[int, str | None]]]
+           | None = None) -> tuple[Diagnostic, ...]:
     """The checker's diagnostics for every arm and macro graph whose
-    definition passed the structural checks."""
+    definition passed the structural checks; `exit_points` receives each
+    arm's (edge, point) pairs."""
     broken = {d.definition for d in program.diagnostics}
     out: list[Diagnostic] = []
     for name, macro in program.macros.items():
@@ -317,7 +330,7 @@ def verify(program: Program) -> tuple[Diagnostic, ...]:
             out += check_graph(program, name, None, macro)
     for name, arm in [*program.arms.items(), *program.completions.items()]:
         if name not in broken and name in program.graphs:
-            out += check_graph(program, name, arm, None)
+            out += check_graph(program, name, arm, None, exit_points)
     out += check_families(program, broken)
     return tuple(sorted(out, key=rop_check.diagnostic_order))
 
@@ -325,9 +338,11 @@ def verify(program: Program) -> tuple[Diagnostic, ...]:
 def load(paths: Iterable[Path]) -> Program:
     """Parse, check structure, then verify."""
     program = rop_check.load(paths)
-    found = verify(program)
+    exit_points: dict[str, frozenset[tuple[int, str | None]]] = {}
+    found = verify(program, exit_points)
     return replace(program, diagnostics=tuple(sorted(
-        program.diagnostics + found, key=rop_check.diagnostic_order)))
+        program.diagnostics + found, key=rop_check.diagnostic_order)),
+        exit_points=exit_points)
 
 
 def generic_arms(program: Program, family: str) -> list[Arm]:
@@ -373,7 +388,8 @@ def check_families(program: Program, broken: set[str]) -> list[Diagnostic]:
     return out
 
 
-def check_graph(program: Program, name: str, arm: Arm | None, macro: Macro | None
+def check_graph(program: Program, name: str, arm: Arm | None, macro: Macro | None,
+                exit_points: dict[str, frozenset[tuple[int, str | None]]] | None = None
                 ) -> list[Diagnostic]:
     info = program.graphs[name]
     if arm is not None:
@@ -404,6 +420,8 @@ def check_graph(program: Program, name: str, arm: Arm | None, macro: Macro | Non
                      f"{FactT(f.fact, f.type_arg, f.subjects).text()}, which nothing "
                      "before the arm's dispatch establishes")
     check_coverage(w)
+    if arm is not None and exit_points is not None:
+        exit_points[name] = frozenset(w.exit_points)
     return list(w.diags.values())
 
 
@@ -700,11 +718,21 @@ def check_alive(w: Walk, st: State, name: str, span: SrcSpan) -> None:
                  "vacated it")
 
 
+def check_not_out(w: Walk, name: str, span: SrcSpan) -> None:
+    """An Out<G> group is defined by the word, never read: its projections
+    hold nothing the word may use"""
+    group = name.split(".")[0]
+    if w.family is not None and rop_check.is_out(w.operands.get(group)):
+        w.report(span, Rule.ownership, f"{name} is read, but {group} is "
+                 f"{type_text(w.operands[group])}: the word defines it")
+
+
 def value(w: Walk, st: State, e: Expr, want: Type | None = None,
           name: str | None = None) -> str | None:
     """Evaluate e: its value identity, or None for a literal."""
     if isinstance(e, Name):
         check_alive(w, st, e.name, e.span)
+        check_not_out(w, e.name, e.span)
         return e.name
     if isinstance(e, (Nat, BoolLit)):
         return None
@@ -1315,6 +1343,7 @@ def do_exit(w: Walk, st: State, t: Exit, transfer: bool = False) -> None:
     leaves = transfer and kind in ("redirect", "exit")
     if kind in ("next", "branch", "jump", "redirect", "exit") and not leaves:
         check_completion(w, st, t, what, accounted)
+    record_edge(w, st, t)
     if kind in DEPARTING_EXITS:
         check_pinned(w, st, t.span, what)
     for n, tok in sorted(st.live.items()):
@@ -1325,6 +1354,32 @@ def do_exit(w: Walk, st: State, t: Exit, transfer: bool = False) -> None:
     for ef in w.contract.ensures:
         if ef.edge == kind:
             check_fact(w, st, ef.fact, {}, t.span, f"{what} ensures")
+
+
+def record_edge(w: Walk, st: State, t: Exit) -> None:
+    """The point in force on a normal edge: the last one published (one,
+    since check_completion refuses a join of two), or the resume point of an
+    enter or yield.  An Out<G> group is defined on every normal edge."""
+    edge = EDGE_OF_EXIT.get(t.kind)
+    if edge is None:
+        return
+    if t.kind in ("enter", "yield"):
+        names: list[str | None] = [t.resume] if t.resume else []
+    else:
+        names = list(sorted(st.points)) or [None]
+    assert w.family is not None
+    for name in names:
+        w.exit_points.add((edge, name))
+        point = w.program.points.get(name or "")
+        defs = set() if point is None else {
+            h for n in point.defs for h in rop_check.expand_group(n, w.operands)}
+        for group in rop_check.out_groups(w.family.params):
+            missing = [h for h in rop_check.expand_group(group, w.operands)
+                       if h not in defs]
+            if missing:
+                at = f"point {name}" if name else "no publish"
+                w.report(t.span, Rule.points, f"exit {t.kind}: {group} is Out, but "
+                         f"{at} leaves {', '.join(missing)} undefined")
 
 
 def check_restart_homes(w: Walk, st: State, span: SrcSpan, what: str) -> None:

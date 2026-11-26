@@ -1307,7 +1307,7 @@ static const _PyRopOperand _PyRop_Operands_IterClose[] = {
 };
 static const uint16_t _PyRop_Ops_IterClose[] = {POP_ITER};
 static const _PyRopOperand _PyRop_Operands_IterOpen[] = {
-    {"pair", ROP_FIELD_HOME, ROP_ROLE_ITERPAIR, 0, 12, 16, IR_F_LOCAL_A},  /* IterPair */
+    {"pair", ROP_FIELD_HOME, ROP_ROLE_ITERPAIR, 0, 12, 16, IR_F_LOCAL_A},  /* Out<IterPair> */
     {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Fb<Iter> */
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 52, 0},  /* Enum<IterMode> */

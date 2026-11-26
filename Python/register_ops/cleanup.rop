@@ -11,9 +11,11 @@
 // place, and `exc` the exception that the receiver raised.  A StopIteration
 // is the end of the delegation: its value is the word's `completed`, the
 // operands are spent and the word goes to `done`, where the END_SEND that
-// followed it has no word.  Any other exception is raised again.
+// followed it has no word.  Any other exception is raised again.  The throw
+// may find the cursor vacant (a receiver with no index), and the sent value
+// too (an entered receiver took it into its frame).
 family CleanupThrow(completed:Dst, send:SendWindow, exc:Src, done:NearHead)
-  exits(jump, unwind) ops(CLEANUP_THROW);
+  exits(jump, unwind) ops(CLEANUP_THROW) vacant(send.cursor, send.value);
 
 // The delegation ended with the StopIteration's value; the operands are
 // retired

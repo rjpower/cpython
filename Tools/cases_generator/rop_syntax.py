@@ -279,8 +279,11 @@ class Parser:
             self.expect("(")
             events = self.comma_list(
                 ")", lambda: self.enum_word(MonitoringEvent, "a monitoring event")[0])
+        vacant: tuple[str, ...] = ()
+        if self.accept("vacant"):
+            vacant = self.names()
         self.expect(";")
-        return Family(name.text, params, exits, ops, events, start.span, generic)
+        return Family(name.text, params, exits, ops, events, start.span, generic, vacant)
 
     def point(self) -> Point:
         start = self.take()

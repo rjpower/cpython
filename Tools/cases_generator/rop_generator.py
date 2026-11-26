@@ -2,7 +2,7 @@
 
 From the checked `Program` of Python/register_ops/*.rop:
 
-- the interpreter cases (one computed-goto case per arm),
+- the interpreter cases (one tail-calling function per arm),
 - the function forms, with the same signature and completion contract as
   the old `ir_run_*` forms,
 - the completion stubs of the shared arms, with the plan table of the arms,

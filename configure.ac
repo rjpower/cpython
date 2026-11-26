@@ -7925,6 +7925,43 @@ case "$ac_cv_computed_gotos" in yes*)
   [Define if the C compiler supports computed gotos.])
 esac
 
+# The interpreter is a set of tail-calling functions (Python/ceval_tail.h):
+# every handler ends in a guaranteed (musttail) call of the next one, under
+# the calling convention that the header picks.
+AC_CACHE_CHECK([whether $CC supports musttail calls], [ac_cv_musttail],
+[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+/* The calling convention of Python/ceval_tail.h */
+#if defined(__clang__) && __has_attribute(preserve_none)
+#  define CC __attribute__((preserve_none))
+#elif !defined(__clang__) && defined(__x86_64__) && __has_attribute(no_callee_saved_registers)
+#  define CC __attribute__((no_callee_saved_registers))
+#else
+#  define CC
+#endif
+#if !defined(__has_attribute) || !__has_attribute(musttail)
+#  error "no musttail"
+#endif
+static CC int g(int x);
+static CC int f(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return g(x - 1);
+}
+static CC int g(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return f(x - 1);
+}
+]], [[return f(4);]])],
+[ac_cv_musttail=yes],
+[ac_cv_musttail=no])])
+AS_VAR_IF([ac_cv_musttail], [yes], [],
+  [AC_MSG_ERROR([the interpreter needs a C compiler with the musttail attribute (GCC 15 or Clang): $CC lacks it])])
+
 # The interpreter runs code objects as the register IR of
 # Include/internal/pycore_ir.h; the macro tells extensions and sysconfig.
 AC_DEFINE([Py_IR_INTERP], [1],

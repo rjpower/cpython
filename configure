@@ -34805,6 +34805,73 @@ printf "%s\n" "#define HAVE_COMPUTED_GOTOS 1" >>confdefs.h
 
 esac
 
+# The interpreter is a set of tail-calling functions (Python/ceval_tail.h):
+# every handler ends in a guaranteed (musttail) call of the next one, under
+# the calling convention that the header picks.
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether $CC supports musttail calls" >&5
+printf %s "checking whether $CC supports musttail calls... " >&6; }
+if test ${ac_cv_musttail+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* The calling convention of Python/ceval_tail.h */
+#if defined(__clang__) && __has_attribute(preserve_none)
+#  define CC __attribute__((preserve_none))
+#elif !defined(__clang__) && defined(__x86_64__) && __has_attribute(no_callee_saved_registers)
+#  define CC __attribute__((no_callee_saved_registers))
+#else
+#  define CC
+#endif
+#if !defined(__has_attribute) || !__has_attribute(musttail)
+#  error "no musttail"
+#endif
+static CC int g(int x);
+static CC int f(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return g(x - 1);
+}
+static CC int g(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return f(x - 1);
+}
+
+int
+main (void)
+{
+return f(4);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ac_cv_musttail=yes
+else case e in #(
+  e) ac_cv_musttail=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_musttail" >&5
+printf "%s\n" "$ac_cv_musttail" >&6; }
+if test "x$ac_cv_musttail" = xyes
+then :
+
+else case e in #(
+  e) as_fn_error $? "the interpreter needs a C compiler with the musttail attribute (GCC 15 or Clang): $CC lacks it" "$LINENO" 5 ;;
+esac
+fi
+
 # The interpreter runs code objects as the register IR of
 # Include/internal/pycore_ir.h; the macro tells extensions and sysconfig.
 

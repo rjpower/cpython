@@ -44,8 +44,6 @@
 #undef IR_GEN_RETURN
 #pragma push_macro("IR_ROUTINE")
 #undef IR_ROUTINE
-#pragma push_macro("IR_HOT_ROUTINE")
-#undef IR_HOT_ROUTINE
 #pragma push_macro("IR_ROUTINE_OPERAND")
 #undef IR_ROUTINE_OPERAND
 #pragma push_macro("GEN_DISPATCH")
@@ -138,7 +136,6 @@ ir_frame_observed(_PyInterpreterFrame *frame)
     static Py_NO_INLINE _PyIRTransfer \
     ir_##NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, \
               _PyInstr *next_instr, _PyIRWord ir_word)
-#define IR_HOT_ROUTINE IR_ROUTINE
 #define IR_ROUTINE_OPERAND(NAME) (IR_ACTIVATION()->NAME)
 #define GEN_DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
@@ -288,7 +285,7 @@ const void *const _PyEval_JitRaiseExit = (const void *)jit_raise_exit;
 #endif
 
 /* The LINE or INSTRUCTION event before a word moved the frame (status 1) or
- * raised (-1), as LABEL_observe_word (Python/ceval_evaluator.h) resolves it */
+ * raised (-1), as observe_word (Python/ceval_evaluator.h) resolves it */
 static _PyIRTransfer
 ir_location_exit(PyThreadState *tstate, _PyInterpreterFrame *frame, int status)
 {
@@ -362,7 +359,6 @@ _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int thro
 #pragma pop_macro("IR_REPORT_EDGE")
 #pragma pop_macro("IR_GEN_RETURN")
 #pragma pop_macro("IR_ROUTINE")
-#pragma pop_macro("IR_HOT_ROUTINE")
 #pragma pop_macro("IR_ROUTINE_OPERAND")
 #pragma pop_macro("GEN_DISPATCH")
 #pragma pop_macro("GEN_STEP_JUMP")

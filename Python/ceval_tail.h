@@ -8,9 +8,9 @@
  * function through the compilation's table, ir_tail_table, so every arm has
  * its own register allocation and no dispatch grows the C stack.  The
  * bodies are the generated arms (Python/generated_rop_cases.c.h), the labels
- * (Python/ceval_labels.h) and the routines (Python/ceval_routines.h); this
- * file rebinds the macros through which they leave (Python/ceval_macros.h
- * has the bindings that the bodies share with the function forms):
+ * (Python/ceval_labels.h) and the routines (Python/ceval_routines.h); the
+ * macros through which they leave are bound in Python/ceval_macros.h
+ * (Python/ceval_forms.c rebinds them for the function forms):
  *
  *   dispatch, a deoptimisation, a frame entry, an error, a routine, a switch
  *   to the other evaluator
@@ -87,91 +87,9 @@ extern Py_IR_TAIL_CC PyValue _PyEval_EnterObserving(Py_IR_TAIL_PARAMS);
 
 /* The evaluator's switch where an error routine resumes frame at
  * next_instr: to the other evaluator if the frame goes on there */
-#undef IR_ERROR_SWITCH
 #define IR_ERROR_SWITCH() \
     do { \
         if (_PyEval_SwitchesLoop(frame, IR_OBSERVING)) { \
             Py_MUSTTAIL return IR_OTHER_EVALUATOR(tstate, frame, next_instr, ir_word); \
         } \
     } while (0)
-
-#undef TARGET
-#define TARGET(op) IR_TAIL_FN(op)
-
-#undef DISPATCH_GOTO
-#define DISPATCH_GOTO() \
-    do { \
-        Py_MUSTTAIL return ir_tail_table[opcode](tstate, frame, next_instr, ir_word); \
-    } while (0)
-
-#undef JUMP_TO_LABEL
-#define JUMP_TO_LABEL(name) IR_TAIL_GOTO(name)
-
-#undef JUMP_TO_PREDICTED
-#define JUMP_TO_PREDICTED(name) \
-    do { \
-        Py_MUSTTAIL return IR_TAIL_ID(name)(tstate, frame, this_instr, ir_word); \
-    } while (0)
-
-#undef PROCESS_ERROR_AT
-#define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
-    do { \
-        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
-        ir_exit->exit_next = (origin); \
-        ir_exit->exit_entry = \
-            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
-        IR_TAIL_GOTO(process_error); \
-    } while (0)
-
-/* A called function returned frame and next word, or no word for an error
- * that the activation describes */
-#undef IR_STEP_DONE
-#define IR_STEP_DONE(STEP) \
-    do { \
-        _PyIRTransfer ir_t = (STEP); \
-        frame = ir_t.frame; \
-        next_instr = ir_t.next; \
-        if (next_instr == NULL) { \
-            IR_TAIL_GOTO(process_error); \
-        } \
-        int opcode; \
-        DISPATCH(); \
-    } while (0)
-
-#undef IR_RUN_OUTLINED
-#define IR_RUN_OUTLINED(FN) IR_STEP_DONE(FN(tstate, frame, next_instr, ir_word))
-
-#undef IR_OBSERVE_EDGE
-#define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
-    IR_STEP_DONE(_PyEval_ir_event_edge(tstate, frame, this_instr, \
-                                       (SOURCE), (NEXT), (EVENT), (EDGE)))
-
-#undef IR_GEN_RETURN
-#define IR_GEN_RETURN(V, DYING, EMPTY) \
-    do { \
-        _PyEvalActivation *ir_gen = IR_ACTIVATION(); \
-        ir_gen->gen_value = (V); \
-        ir_gen->gen_dying = (DYING); \
-        ir_gen->gen_empty = (EMPTY); \
-        IR_TAIL_GOTO(gen_return); \
-    } while (0)
-
-#undef IR_ROUTINE
-#define IR_ROUTINE(NAME) IR_TAIL_FN(NAME)
-#undef IR_HOT_ROUTINE
-#define IR_HOT_ROUTINE(NAME) IR_TAIL_FN(NAME)
-#undef IR_ROUTINE_OPERAND
-#define IR_ROUTINE_OPERAND(NAME) (IR_ACTIVATION()->NAME)
-
-#undef GEN_DISPATCH
-#define GEN_DISPATCH() \
-    do { \
-        int opcode; \
-        DISPATCH(); \
-    } while (0)
-#undef GEN_STEP_JUMP
-#define GEN_STEP_JUMP(NAME, F, IP, V) \
-    IR_STEP_DONE(_PyEval_ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)))
-/* The completion arm reported the error in the activation */
-#undef GEN_RAISED
-#define GEN_RAISED() IR_TAIL_GOTO(process_error)

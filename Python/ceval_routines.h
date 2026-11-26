@@ -2,16 +2,15 @@
  * handler's transfer enters, the error routine and the plain generator
  * transfers (rule 13 keeps the others in the steps of
  * Python/ceval_generator.h).  Each routine is one definition with two
- * bindings.  This file is included in ir_evaluate(), where IR_ROUTINE() and
- * IR_HOT_ROUTINE() open a label and the routine's operands,
- * IR_ROUTINE_OPERAND(NAME), are the evaluator's locals of the same names,
- * which the handlers' transfer macros set (Python/ceval_macros.h); and at
- * file scope, where they open the routine's function form, ir_NAME(tstate,
- * frame, next_instr, ir_word), of the one type of every function of the
- * interpreter (a tail call needs caller and callee of one type), whose
- * operands are the fields of the same names of the activation, which the
- * transfer that enters the routine writes.  A routine leaves only through
- * the macros that its binding defines:
+ * bindings, the evaluator's (Python/ceval_macros.h) and the function
+ * forms' (Python/ceval_forms.c).  IR_ROUTINE() opens the routine's
+ * function, of the one type of every function of the interpreter or the
+ * forms (a tail call needs caller and callee of one type): the
+ * interpreter's IR_TAIL_FN(NAME), the form ir_NAME.  The
+ * routine's operands, IR_ROUTINE_OPERAND(NAME), are the fields of the same
+ * names of the activation, which the transfer that enters the routine
+ * writes.  A routine leaves only through the macros that its binding
+ * defines:
  *
  *   GEN_DISPATCH()               run the word at next_instr in frame;
  *   GEN_STEP_JUMP(NAME, F, IP, V)
@@ -38,7 +37,7 @@
  * completed value and the head to go on at, or raises or redirects.  A
  * finalizer that runs during the retirement can redirect the resumer; a
  * changed pc or control generation is taken as a redirect. */
-IR_HOT_ROUTINE(gen_return)
+IR_ROUTINE(gen_return)
 {
     _PyInterpreterFrame *dying = IR_ROUTINE_OPERAND(gen_dying);
     PyValue value = IR_ROUTINE_OPERAND(gen_value);

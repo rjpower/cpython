@@ -183,7 +183,7 @@ arm F.A shared effects() feedback() exits(next) {
          "a macro's exits are its cases: no 'exits' clause"),
         ("point F.P(current, here, clear) keep() spent() defs();", 1, 20,
          "'here' is not a pc role (one of: site, next_head, target, resume_head, "
-         "saved_origin)"),
+         "saved_origin, left)"),
         ("extern helper h() -> Unit effects() c h as value evidence();", 1, 59,
          "expected at least one item"),
         ("arm F.A inline effects() feedback() exits() requires(exact<long>(x)) "

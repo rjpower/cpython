@@ -297,7 +297,10 @@ class WalkerTests(unittest.TestCase):
                 self.assertEqual(new, old)
         heads = [new for old, new in zip(before, instrumented)
                  if old[0] != "IR_OPERANDS"]
-        self.assertTrue(any("INSTRUMENTED" in row[0] for row in heads))
+        # The words that monitoring put in place of heads are the
+        # displacing arms
+        self.assertTrue(any(row[0] in ("Line.Hook", "Instruction.Hook")
+                            for row in heads))
         (i, head, operands), = calls(code)
         # A wrapper replaces the handler of the head and keeps its fields
         self.assertEqual(instrumented[i][1:], before[i][1:])

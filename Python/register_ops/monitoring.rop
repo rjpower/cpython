@@ -36,7 +36,9 @@ extern helper instruction_event(t:Thread, f:Frame, at:Site)
             "ORIGINAL_HANDLER, PAUSE_ADAPTIVE_COUNTER.",
     contract: "The callbacks may raise. Writes the displaced word's counter state.");
 
-point Line.Failed(current, site, pending) keep() spent() defs();
+// A callback may have moved the frame and then raised: the error is the
+// target's
+point Line.Failed(current, left, pending) keep() spent() defs();
 point Instruction.Failed(current, site, pending) keep() spent() defs();
 
 arm Line.Hook split displacing

@@ -327,6 +327,9 @@ class PcRole(enum.Enum):
     target = "target"
     resume_head = "resume_head"
     saved_origin = "saved_origin"
+    # Where a monitoring hook left the frame's instruction pointer (a callback
+    # may have moved it): the error is raised from there
+    left = "left"
 
 
 class ExcRole(enum.Enum):

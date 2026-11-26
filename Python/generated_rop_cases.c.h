@@ -8985,7 +8985,7 @@
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
             rop_Line_Hook_Failed:
-            PROCESS_ERROR_AT(RAISE, 123, this_instr);
+            PROCESS_ERROR_AT(RAISE, 123, frame->instr_ptr);
             rop_Line_Hook_Moved:
             IR_REDIRECT();
         }

@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `1814fcead66` (pushed) holds:
+`pyjit/rir90` at `c2071606f67` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -120,9 +120,25 @@ interpreter hold no reference to the stack at step D, and tests check it.
 D is closed: the register IR and the interpreter hold no reference to the
 stack, which is transport only.
 
+Interpreter-performance wave 1 is merged:
+- DBG: the Py_DEBUG and Py_STATS builds run again.  A home store is checked
+  by the declared type of the part it writes, so a loop cursor's tagged
+  index no longer aborts the debug build at bootstrap, and a nested
+  activation starts with a defined handler for the statistics;
+- TB: the generator emits tighter arm bodies.  A guard's facts hold for
+  the rest of its block, so a value a guard proves inline or immortal is
+  not closed; the poll tests its flag inline; the integer and float arms
+  decode each operand once; call anchors are scalar locals;
+- INL: `ceval.c` holds the interpreter, the function forms and stubs
+  compile in their own unit, and the hot helpers are declared always
+  inline, with no global compiler flag.
+
+A refleak run (`-R 3:3`, 16 modules) finds no reference leak, and the same
+memory-block growth before and after TB (a backlog item).
+
 No word runs an inherited handler. The last merge check passed the smoke set
 on release and assert, and the verifier reports no error over 108,949 code
-objects (108,925 at the last merge). The full suites at `0a81f42d9bf` (release and assert, JIT off)
+objects (108,927 at the last merge). The full suites at `0a81f42d9bf` (release and assert, JIT off)
 failed only the three stale specialization tests PAR then fixed, and the
 id-shifted guard build passes at `d8cb2109192`. Ports keep the old handlers' object locks and turn every old
 specialization into an arm.
@@ -161,17 +177,20 @@ in the handler bodies.  The causes, by expected gain:
 
 First-call lowering costs nothing in steady state.
 
-Running, interpreter performance wave 1 (timing recorded, never gated):
-- TB: the generator emits tight arm bodies (cause 2, less mode operands);
-- INL: `ceval.c` holds the interpreter, and hot helpers are declared
-  always-inline, with no global compiler flags (cause 1);
-- DBG: the Py_DEBUG build aborts at bootstrap, because the generator
-  checks every home store as a value though an iteration cursor home holds
-  a tagged index; the check follows the declared type, and the Py_STATS
-  build's nested-activation crash is fixed;
+Interpreter timing after wave 1 (`c2071606f67`, measure.py, both JIT off,
+all-29, two rounds, CPU 15): **1.340 of golden87's time**, from 1.559.
+nbody 3.18 to 1.85, chaos 1.86 to 1.37, float 1.79 to 1.34; unpack_sequence
+(2.96) and generators (1.82) wait for wave 2.
 
-Wave 2, after these merge: one arm per operator and branch sense, unpack
-and moves placed at lowering, and the missing arms.
+Running, interpreter performance wave 2 (timing recorded, never gated):
+- AR: a mode operand selects its arm (one arm per operator of the integer
+  and float families, one per branch sense), from a declared enum;
+- PL: unpack writes its items straight into homes fixed at lowering, and
+  the generator emits span geometry as constants;
+- MV: no parallel move is solved at run time; a generator return runs no
+  solver;
+- SP: the specializations that have no arm yet (`Call.PyGeneral`,
+  `ForIter.Gen`), and a list of the arm that covers each of golden87's.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

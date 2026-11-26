@@ -31,6 +31,7 @@ if not hasattr(capi, "jit_template_run"):
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import ir_leaf_eval
+    import rop_primitives
     import rop_check
     import rop_generator
     import rop_ssa
@@ -1168,13 +1169,17 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
 
 
 def cx():
-    return ir_leaf_eval.Context(ir_leaf_eval.Layout.from_c(capi), ir_leaf_eval.RealMemory())
+    return rop_primitives.Context(rop_primitives.Layout.from_c(capi), ir_leaf_eval.RealMemory())
 
 
 # The arms no scenario runs, and why.  Each expands.
 UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
               "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
+    # Monitoring: a displacing arm runs another handler, which the evaluator
+    # does not model; test_monitoring and test_sys_settrace run them
+    "Line.Hook": "covered by test_monitoring and test_sys_settrace",
+    "Instruction.Hook": "covered by test_monitoring and test_sys_settrace",
     # Iteration (rir90 FI): the arms are checked by test_rop_iter
     "IterOpen.Generic": "covered by test_rop_iter",
     "ForIter.Generic": "covered by test_rop_iter",

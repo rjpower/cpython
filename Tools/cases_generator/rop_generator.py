@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import TextIO
 
 import ir_arms
-import jit_template_generator
+import jit_backend
 import rop_check
 import rop_leaf
 import rop_verify
@@ -142,7 +142,7 @@ int opcode = {handler};
 (void)opcode;
 _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
-{save_ip}IR_HOLD_NEXT();
+{prev}{save_ip}IR_HOLD_NEXT();
 next_instr += {advance};
 INSTRUCTION_STATS({handler});"""
 
@@ -156,6 +156,8 @@ def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
         advance = "_PyIR_SpanWordLength(opcode, ir_word)"
     lines += PROLOGUE.format(
         handler=handler(arm.name), advance=advance,
+        prev=("_PyIRWord *const prev_instr = frame->instr_ptr;\n(void)prev_instr;\n"
+              if arm.displacing else ""),
         save_ip="" if arm.trailing else "frame->instr_ptr = next_instr;\n").splitlines()
     lines += low.decls
     lines += low.body
@@ -566,6 +568,9 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         flags += ["_PyIR_STORE_DST", "_PyIR_DISCARDS"]
     if "_PyIR_RUNS_PYTHON" in effects:
         flags.append("_PyIR_RUNS_CODE")
+    if arm.displacing:
+        # It runs another handler on the same fields
+        flags.append("_PyIR_TRANSPARENT")
     if has_target:
         flags.append("_PyIR_FORWARD")
         if not exits & {"next", "branch"}:
@@ -593,7 +598,6 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         committed=sum(1 << e for e, o in enumerate((observers[0], observers[1] or observers[0]))
                       if o != "_PyIR_OBSERVER_NONE"),
         **homes)
-
 
 
 # The exits that end the word abnormally: they carry no normal-edge contract
@@ -780,7 +784,7 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
             () if arm.trailing else tuple(e.value for e in fam.events),
             "again" in fam.exits, is_generic(p.program, arm),
             arm_format(p.program, arm), twin_index.get(name), None, emitted,
-            arm.trailing))
+            arm.trailing, arm.displacing))
     for name in wrapped:
         base = entries[p.numbers[name]]
         runs = observer(p.program, p.program.arms[name].family)
@@ -817,7 +821,7 @@ def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
         try:
             leaf = rop_leaf.leaf_of_arm(p.program, arm)
             lines = rop_leaf.template_of_arm(p.program, arm, c_name(name), leaf)
-        except (Unsupported, SsaError, jit_template_generator.Refused) as e:
+        except (Unsupported, SsaError, jit_backend.Refused) as e:
             refused[name] = str(e)
             continue
         made[name] = ["// The leaf graph of " + name + ":"] + [

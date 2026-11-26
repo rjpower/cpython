@@ -1610,15 +1610,4 @@ _PyIR_HomesAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limit)
             return _PyIR_ABSENCE_UNKNOWN;
     }
 }
-
-static inline int
-_PyIR_CompletionWindow(int opcode)
-{
-    switch (opcode) {
-        case FOR_ITER: return 2;
-        case SEND: return 3;
-        case CLEANUP_THROW: return 4;
-        default: return 0;
-    }
-}
 #endif

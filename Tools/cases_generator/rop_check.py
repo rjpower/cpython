@@ -38,9 +38,7 @@ from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branc
                        SchemaRef, SchemaType, SchemaVar, SourceFile, SpanLit, SrcSpan,
                        Target, Term, Type, WrapType, DISCARD, ENTRY, NOWHERE)
 from rop_print import expr_text, type_text
-import rop_header
 import rop_syntax
-from ir_contract import Row
 
 ROOT = Path(__file__).resolve().parents[2]
 ROP_DIR = ROOT / "Python" / "register_ops"
@@ -73,6 +71,7 @@ EXIT_PAYLOAD: dict[ExitKind, tuple[Type | None, ...]] = {
     ExitKind.yield_: (O,),
     ExitKind.exit: (O,),
     ExitKind.redirect: (T(Handle.Route),),
+    ExitKind.dispatch: (T(Handle.Handler),),
 }
 EXIT_NAMES = {e.value: e for e in ExitKind}
 
@@ -477,21 +476,16 @@ def diagnostic_order(d: Diagnostic) -> tuple[str, int, int]:
     return (d.span.filename, d.span.line, d.span.column)
 
 
-def load(paths: Iterable[Path], header: Mapping[str, Row] | None = None) -> Program:
-    """Parse and check, and hold the externs to the header's rows (`header`,
-    by default pycore_ir_components.h's).  A syntax error is the one
-    diagnostic of an empty program."""
+def load(paths: Iterable[Path]) -> Program:
+    """Parse and check.  A syntax error is the one diagnostic of an empty
+    program."""
     files = []
     for path in paths:
         try:
             files.append(rop_syntax.parse_file(path))
         except RopError as e:
             return Program((), {}, {}, {}, {}, {}, {}, {}, {}, (e.diagnostic,))
-    program = check(files)
-    rows = rop_header.header_rows() if header is None else header
-    extra = rop_header.disagreements(program.externs, rows)
-    return replace(program, diagnostics=tuple(sorted(
-        program.diagnostics + tuple(extra), key=diagnostic_order)))
+    return check(files)
 
 
 def collect(c: Checker) -> None:
@@ -891,6 +885,14 @@ def check_arm(c: Checker, a: Arm) -> None:
         c.report(a.span, a.name, f"arm {a.name} does not name a family's arm "
                  "(Family.Arm)")
         return
+    if a.displacing and (a.observes or a.select or a.trailing or a.entry is not None
+                         or a.region is not Region.split):
+        c.report(a.span, a.name, "a displacing arm is split, and neither selected, "
+                 "observed, trailing nor adaptive")
+    if "dispatch" in a.contract.exits and not a.displacing:
+        c.report(a.contract.span, a.name, "only a displacing arm has the exit dispatch")
+    if a.displacing and "dispatch" not in a.contract.exits:
+        c.report(a.contract.span, a.name, "a displacing arm exits by dispatch")
     if a.trailing and (a.observes or a.select or a.entry is not None):
         c.report(a.span, a.name, "a trailing arm belongs to the instruction before "
                  "it: it is not selected, observed or adaptive, and fires no event")
@@ -1097,8 +1099,11 @@ def check_graph(c: Checker, definition: str, graph: Graph, operands: tuple[Param
                      "entry(v:O), the child's final value")
     elif first.label != ENTRY or first.params:
         c.report(first.span, definition, "the first block is entry()")
-    types: dict[str, Type] = dict(ENVIRONMENT_TYPES)
-    defs: dict[str, tuple[str, int]] = {n: ("", OPERAND) for n in ENVIRONMENT}
+    # The instruction pointer before the word is the displacing arm's alone
+    names = [n for n in ENVIRONMENT
+             if n != "prev_head" or (family is not None and c.arm(definition).displacing)]
+    types: dict[str, Type] = {n: ENVIRONMENT_TYPES[n] for n in names}
+    defs: dict[str, tuple[str, int]] = {n: ("", OPERAND) for n in names}
     for p in operands + home_params(operands):
         types[p.name] = operand_value_type(p.type)
         defs[p.name] = ("", OPERAND)

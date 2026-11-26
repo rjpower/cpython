@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
-                         Slot, Wrap)
+                         PcRole, Slot, Wrap)
 from rop_check import GraphInfo, Program, expand_debts, expand_group, group_parts, is_args
 from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
@@ -49,6 +49,7 @@ HANDLE_C = {
     Handle.NewFrame: "_PyInterpreterFrame *",
     Handle.DeadFrame: "_PyInterpreterFrame *",
     Handle.Head: "_PyInstr *",
+    Handle.Handler: "int",
     # An argument descriptor is the instruction's head: a row reads its
     # count, self role and homes from the head and the operand words
     Handle.Args: "const _PyIRWord *",
@@ -65,7 +66,7 @@ ESCAPING_CALL = ESCAPING | {Effect.releases}
 # Names the handler's C scope owns
 RESERVED = frozenset({
     "frame", "tstate", "next_instr", "ir_word", "opcode", "this_instr",
-    "ir_old",
+    "ir_old", "prev_instr",
 })
 
 
@@ -1178,6 +1179,13 @@ class ArmLowerer:
             (target,) = t.args
             assert isinstance(target, Name)
             self.emit(f"IR_BRANCH({self.operand_value(target.name)});")
+        elif t.kind == "dispatch":
+            # The word goes on under the handler the arm computed, with the
+            # fields it has
+            self.emit("next_instr = this_instr;")
+            self.emit(f"opcode = {self.expr(t.args[0])};")
+            self.emit("PRE_DISPATCH_GOTO();")
+            self.emit("DISPATCH_GOTO();")
         elif t.kind == "again":
             # The word runs again, under the handler it now names
             self.emit("next_instr = this_instr;")
@@ -1186,7 +1194,10 @@ class ArmLowerer:
             point = t.args[0]
             assert isinstance(point, Name)
             ingress = t.kind.upper()
-            self.emit(f"PROCESS_ERROR_AT({ingress}, {self.points[point.name]}, this_instr);")
+            origin = ("frame->instr_ptr"
+                      if self.program.points[point.name].pc is PcRole.left
+                      else "this_instr")
+            self.emit(f"PROCESS_ERROR_AT({ingress}, {self.points[point.name]}, {origin});")
         elif t.kind == "enter":
             self.emit(f"ROP_ENTER({self.expr(t.args[0])}, {self.resume_slot(t)});")
         elif t.kind == "yield":

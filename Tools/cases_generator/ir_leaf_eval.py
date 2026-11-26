@@ -5,40 +5,36 @@ running interpreter (numbers from C), memory, the frame and the helpers'
 models.  Memory reads go to the process's real memory through ctypes; writes
 go to an overlay and never reach real memory, so the evaluator can run a
 uop on live objects and report what the uop would change, which a test then
-compares with what the C uop changed.
-"""
+compares with what the C uop changed."""
 
 import ctypes
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from rop_primitives import (
+    Context,
+    FIELDS,
+    PRIMITIVES,
+    VALUE,
+    VALUE_CONSTANTS,
+    bits_of,
+    is_pointer,
+    is_signed,
+    wrap,
+)
 
-import ir_leaf
 
-
-@dataclass(frozen=True)
-class Layout:
-    "The numbers that the specs name: ir_leaf.CONSTANTS, FIELDS, SIZES, SYMBOLS"
-    constants: dict[str, int]
-    offsets: dict[str, int]
-    sizes: dict[str, int]
-    symbols: dict[str, int]
-
-    @classmethod
-    def from_c(cls, capi) -> "Layout":
-        "The layout of the running interpreter, from _testinternalcapi"
-        return cls(*capi.leaf_layout())
 
 
 _CTYPES = {
     "bool": ctypes.c_bool, "i8": ctypes.c_int8, "u8": ctypes.c_uint8,
     "i16": ctypes.c_int16, "u16": ctypes.c_uint16, "i32": ctypes.c_int32,
     "u32": ctypes.c_uint32, "i64": ctypes.c_int64, "u64": ctypes.c_uint64,
-    "f64": ctypes.c_double, ir_leaf.VALUE: ctypes.c_uint64,
+    "f64": ctypes.c_double, VALUE: ctypes.c_uint64,
 }
 
 
 def _ctype(t: str):
-    return ctypes.c_uint64 if ir_leaf.is_pointer(t) else _CTYPES[t]
+    return ctypes.c_uint64 if is_pointer(t) else _CTYPES[t]
 
 
 class RealMemory:
@@ -81,92 +77,8 @@ class Overlay:
                 for addr, (t, x) in sorted(self.cells.items())]
 
 
-class Box(int):
-    """A value that a helper made: a new object, which has no address the
-    evaluator knows.  Its word is a fake address in pointer space, owned and
-    mortal, so that the tag tests see an object; any load through it fails.
-    type and value say what object it is."""
-
-    _next = 0x1000
-
-    def __new__(cls, type: str, value):
-        Box._next += 0x10
-        self = super().__new__(cls, Box._next)
-        self.type = type
-        self.value = value
-        return self
-
-    def __repr__(self) -> str:
-        return f"Box({self.type}, {self.value!r})"
 
 
-def _box_int64(cx, i):
-    return Box("int", i)
-
-
-def _box_double(cx, d):
-    return Box("float", d)
-
-
-def _multiply_int64(cx, a, b):
-    return Box("int", a * b)
-
-
-def _lshift_int64(cx, v, n):
-    return Box("int", v << n)
-
-
-# The language result of each helper, which is all a test of a uop can
-# compare: a box's address is the allocator's.  A release is recorded.
-HELPER_MODELS = {
-    "_PyValue_BoxInt64": _box_int64,
-    "_PyValue_BoxDouble": _box_double,
-    "_PyValue_MultiplyInt64": _multiply_int64,
-    "_PyValue_LshiftInt64": _lshift_int64,
-    # The tests run it with no event pending, or with one that raises nothing
-    "_Py_HandlePending": lambda cx: 0,
-}
-
-
-@dataclass
-class Context:
-    "What a spec reads: the layout, memory, the frame and the helpers"
-    layout: Layout
-    mem: object
-    frame: int = 0
-    tstate: int = 0
-    calls: list = field(default_factory=list)
-
-    def k(self, name: str) -> int:
-        return self.layout.constants[name]
-
-    def off(self, name: str) -> int:
-        return self.layout.offsets[name]
-
-    def size(self, name: str) -> int:
-        return self.layout.sizes[name]
-
-    def addr(self, name: str) -> int:
-        return self.layout.symbols[name]
-
-    def load(self, addr: int, t: str):
-        if isinstance(addr, Box):
-            raise MemoryError(f"load through {addr!r}")
-        return self.mem.load(addr, t)
-
-    def store(self, addr: int, t: str, x) -> None:
-        if isinstance(addr, Box):
-            raise MemoryError(f"store through {addr!r}")
-        self.mem.store(addr, t, x)
-
-    def call(self, name: str, *args):
-        self.calls.append((name, args))
-        model = HELPER_MODELS.get(name)
-        return model(self, *args) if model is not None else None
-
-
-# ---------------------------------------------------------------------------
-# The evaluator of leaf IR (ir_leaf.LeafBody)
 
 # The outcomes of a uop; leaf_probe() in _testinternalcapi numbers them so
 OUTCOMES = ("NEXT", "EXIT", "DEOPT", "RAISE", "COMPLETE")
@@ -187,18 +99,18 @@ class Result:
 
 def _signed_check(t: str, x: int) -> int:
     "x, a mathematical result, as a value of signed type t; UB if it does not fit"
-    n = ir_leaf.bits_of(t)
+    n = bits_of(t)
     if not -(1 << (n - 1)) <= x < (1 << (n - 1)):
         raise UndefinedBehavior(f"{t} overflow: {x}")
     return x
 
 
 def _int_result(t: str, x: int) -> int:
-    return _signed_check(t, x) if ir_leaf.is_signed(t) else ir_leaf.wrap(t, x)
+    return _signed_check(t, x) if is_signed(t) else wrap(t, x)
 
 
 def _unsigned(t: str, x: int) -> int:
-    return x & ((1 << ir_leaf.bits_of(t)) - 1)
+    return x & ((1 << bits_of(t)) - 1)
 
 
 def _trunc_div(a: int, b: int) -> int:
@@ -218,8 +130,8 @@ _FCMP = {"oeq": lambda a, b: a == b, "olt": lambda a, b: a < b,
 
 
 def _const(cx: Context, t: str, x):
-    if t == ir_leaf.VALUE and isinstance(x, str):
-        symbol, tag = ir_leaf.VALUE_CONSTANTS[x]
+    if t == VALUE and isinstance(x, str):
+        symbol, tag = VALUE_CONSTANTS[x]
         return 0 if symbol is None else cx.addr(symbol) | tag
     if isinstance(x, str) and x.startswith("&"):
         return cx.addr(x[1:])
@@ -248,7 +160,7 @@ def evaluate(body, cx: Context, inputs: dict[str, int], caches: dict[str, int],
                 r = inputs[op.attr]
             elif k == "cache":
                 x = caches[op.attr]
-                r = ir_leaf.wrap(t, x) if t not in (ir_leaf.VALUE, "ptr") else x
+                r = wrap(t, x) if t not in (VALUE, "ptr") else x
             elif k == "oparg":
                 r = oparg
             elif k == "imm":
@@ -257,7 +169,7 @@ def evaluate(body, cx: Context, inputs: dict[str, int], caches: dict[str, int],
                 r = _const(cx, t, op.attr)
             elif k == "prim":
                 name = op.attr[0] if isinstance(op.attr, tuple) else op.attr
-                prim = ir_leaf.PRIMITIVES[name]
+                prim = PRIMITIVES[name]
                 if isinstance(op.attr, tuple):        # CLOSE_SPECIALIZED
                     r = prim.spec(cx, *a, op.attr[1])
                 else:
@@ -265,14 +177,14 @@ def evaluate(body, cx: Context, inputs: dict[str, int], caches: dict[str, int],
             elif k == "call":
                 r = cx.call(op.attr, *a)
             elif k == "load":
-                field_type = (ir_leaf.FIELDS[op.attr].type if op.attr in ir_leaf.FIELDS
+                field_type = (FIELDS[op.attr].type if op.attr in FIELDS
                               else op.attr)
-                addr = a[0] + (cx.off(op.attr) if op.attr in ir_leaf.FIELDS else 0)
+                addr = a[0] + (cx.off(op.attr) if op.attr in FIELDS else 0)
                 r = cx.load(addr, field_type)
             elif k == "store":
-                field_type = (ir_leaf.FIELDS[op.attr].type if op.attr in ir_leaf.FIELDS
+                field_type = (FIELDS[op.attr].type if op.attr in FIELDS
                               else op.attr)
-                addr = a[0] + (cx.off(op.attr) if op.attr in ir_leaf.FIELDS else 0)
+                addr = a[0] + (cx.off(op.attr) if op.attr in FIELDS else 0)
                 cx.store(addr, field_type, a[1])
                 r = None
             elif k == "fieldaddr":
@@ -293,13 +205,13 @@ def evaluate(body, cx: Context, inputs: dict[str, int], caches: dict[str, int],
                 r = _int_result(t, q if k.endswith("div") else a[0] - q * a[1])
             elif k in ("and", "or", "xor"):
                 x = {"and": a[0] & a[1], "or": a[0] | a[1], "xor": a[0] ^ a[1]}[k]
-                r = ir_leaf.wrap(t, x)
+                r = wrap(t, x)
             elif k in ("shl", "ashr", "lshr"):
-                n = ir_leaf.bits_of(t)
+                n = bits_of(t)
                 if not 0 <= a[1] < n:
                     raise UndefinedBehavior(f"shift by {a[1]} of a {t}")
                 if k == "shl":
-                    if ir_leaf.is_signed(t) and a[0] < 0:
+                    if is_signed(t) and a[0] < 0:
                         raise UndefinedBehavior("left shift of a negative value")
                     r = _int_result(t, a[0] << a[1])
                 elif k == "ashr":
@@ -309,7 +221,7 @@ def evaluate(body, cx: Context, inputs: dict[str, int], caches: dict[str, int],
             elif k == "neg":
                 r = _int_result(t, -a[0])
             elif k == "not":
-                r = ir_leaf.wrap(t, ~a[0])
+                r = wrap(t, ~a[0])
             elif k == "lnot":
                 r = int(not a[0])
             elif k in ("fadd", "fsub", "fmul", "fdiv"):
@@ -326,8 +238,8 @@ def evaluate(body, cx: Context, inputs: dict[str, int], caches: dict[str, int],
                 x = {"add_ovf": a[0] + a[1], "sub_ovf": a[0] - a[1],
                      "mul_ovf": a[0] * a[1]}[k]
                 rt = types[op.results[0]]
-                values[op.results[0]] = ir_leaf.wrap(rt, x)
-                values[op.results[1]] = int(ir_leaf.wrap(rt, x) != x)
+                values[op.results[0]] = wrap(rt, x)
+                values[op.results[1]] = int(wrap(rt, x) != x)
                 continue
             elif k == "conv":
                 r = _convert(types[op.args[0]], t, a[0])
@@ -395,9 +307,9 @@ def _convert(src: str, to: str, x):
     if src == "f64":
         if x != x or math.isinf(x):
             raise UndefinedBehavior(f"conversion of {x} to {to}")
-        return _int_result(to, int(x)) if ir_leaf.is_signed(to) else ir_leaf.wrap(to, int(x))
+        return _int_result(to, int(x)) if is_signed(to) else wrap(to, int(x))
     if to == "bool":
         return int(x != 0)
     if src == "ptr" or to == "ptr":
         return x
-    return ir_leaf.wrap(to, x)
+    return wrap(to, x)

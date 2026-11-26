@@ -49,6 +49,7 @@ from ir_generator import (
     num_old_handlers,
     uses_feedback,
 )
+from stack_ops import STACK_OPS, StackOp
 from typing import TextIO
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
@@ -200,6 +201,41 @@ def format_initializer(fmt: IRFormat, shadow: str,
     )
 
 
+def extent_row(extent: tuple[int, str]) -> str:
+    k, form = extent
+    return f"{{ {k}, _PyIR_EXT_{form} }}"
+
+
+def stack_format_row(op: StackOp) -> str:
+    """The row of a stack op that has no handler: the translator's format
+    (stack_ops.StackFormat) in the layout of _PyIRFormat"""
+    fmt = op.format
+    assert fmt is not None, op.name
+    roles = ", ".join("_PyIR_ROLE_" + role.replace("+", " + ") for role in fmt.roles)
+    dst = "_PyIR_NO_DST" if fmt.dst is None else str(fmt.dst)
+    return (
+        f"{{ .flags = {bits(['_PyIR_' + f for f in fmt.flags])}, "
+        f".effects = {bits(['_PyIR_' + e for e in fmt.effects])}, "
+        f".roles = {{ {roles} }}, .imm = _PyIR_LOC_{fmt.imm}, "
+        f".fb = _PyIR_LOC_NONE, .ninputs = {fmt.ninputs}, .dst = {dst}, "
+        f".borrow_mask = {fmt.borrow_mask:#x}, "
+        f".fb_kind = 0, .fb_size = 0, "
+        f".result_phase = _PyIR_RESULT_PHASE_NONE, "
+        f".output_kind = _PyIR_OUTPUT_{fmt.output_kind}, "
+        f".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
+        f".owner_program = 0, .owner_events = 0, "
+        f".word_flags = 0, .error_routes = 0, "
+        f".operands = _PyIR_OPERANDS_{fmt.operands}, "
+        f".observer_outcome = {{ {', '.join('_PyIR_OBSERVER_' + o for o in fmt.observer)} }}, "
+        f".reads = {extent_row(fmt.reads)}, "
+        f".writes = {extent_row(fmt.writes)}, "
+        f".through = {extent_row(fmt.through)}, "
+        f".shadow = {op.name}, "
+        f".twin = _PyIR_NO_HANDLER, "
+        f".events = 0 }}"
+    )
+
+
 def arm_id(analysis: Analysis, arm: ir_arms.ArmEntry) -> int:
     return num_old_handlers(analysis) + arm.index
 
@@ -234,7 +270,7 @@ def arm_flags(analysis: Analysis, arm: ir_arms.ArmEntry) -> str:
             parts.append("_PyIR_H_SAVES_IP")
     if arm.adaptive and not arm.is_generic:
         parts.append("_PyIR_H_SPECIALIZED")
-    if arm.observes is not None:
+    if arm.observes is not None or arm.displacing:
         parts.append("_PyIR_H_INSTRUMENTED")
     if twin_by_tools(analysis, arm):
         parts.append("_PyIR_H_TWIN_BY_TOOLS")
@@ -433,9 +469,9 @@ def generate_ir_metadata(
         out.emit("PyAPI_DATA(const _PyIRFormat) _PyIR_StackOnlyFormats[256];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit("const _PyIRFormat _PyIR_StackOnlyFormats[256] = {\n")
-        for name in sorted(stack_only, key=lambda name: numbers.get(name, 0)):
-            if name in stack_ops and name not in ids:
-                out.emit(f"[{numbers[name]}] = {row(name)},  /* {name} */\n")
+        for op in sorted(STACK_OPS, key=lambda op: op.opcode):
+            if op.stack_only and op.name not in ids:
+                out.emit(f"[{op.opcode}] = {stack_format_row(op)},  /* {op.name} */\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
 
@@ -467,6 +503,12 @@ def generate_ir_metadata(
         for number in range(256):
             handler = next((ids[name] for name, inst in analysis.instructions.items()
                             if inst.opcode == number and name in ids), None)
+            if handler is None:
+                # A displacing arm is the handler of its family's one op, the
+                # instrumented opcode that monitoring puts in a word
+                handler = next((arm_id(analysis, arm) for arm in arms
+                                if arm.displacing and numbers.get(arm.base) == number),
+                               None)
             out.emit(f"[{number}] = {none if handler is None else handler},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

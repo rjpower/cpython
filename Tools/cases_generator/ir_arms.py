@@ -81,3 +81,4 @@ class ArmEntry:
     observes: int | None = None  # for a wrapper: the index of its arm
     emitted: bool = True      # the interpreter has a case for it
     trailing: bool = False  # a jump of the assembler: no twin, keeps the IP
+    displacing: bool = False  # the word that monitoring puts over another

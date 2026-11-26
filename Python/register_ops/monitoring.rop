@@ -1,0 +1,77 @@
+// The words that monitoring puts in place of another word: the LINE event and
+// the INSTRUCTION event of sys.monitoring and sys.settrace.  The code
+// object's own word keeps the handler it had; the executing copy's word has
+// the handler of the arm below, which reports the event and then runs the
+// handler that the word displaced, on the same fields.  A family of one
+// displacing arm stands for every word, so no handler is made per family.
+
+family Line()
+  exits(dispatch, raise, redirect) ops(INSTRUMENTED_LINE);
+
+family Instruction()
+  exits(dispatch, raise) ops(INSTRUMENTED_INSTRUCTION);
+
+// The LINE event of the word (none while the thread traces), and the handler
+// the word displaced.  `prev` is the instruction pointer before the word
+// saved it.  A callback may raise, or move the frame, whose return_pc then
+// names the word to run.  The handler's feedback counter is paused, so that
+// the displaced word does not specialise over the instrumentation.
+extern helper line_event(t:Thread, f:Frame, at:Site, prev:Head)
+  cases(ok(h:Handler), moved(r:Route), err(e:Err))
+  effects(runs_python, raises, writes)
+  c _PyRop_LineEvent as out_redirect
+  evidence(
+    review: "bytecodes.c INSTRUMENTED_LINE: _Py_call_instrumentation_line, or the"
+            "lines table while tracing; ORIGINAL_HANDLER; PAUSE_ADAPTIVE_COUNTER.",
+    contract: "The callbacks may raise, or move the frame. Writes the displaced"
+              "word's counter state; the handler is the code object's.");
+
+// The INSTRUCTION event of the word, and the handler the word displaced
+extern helper instruction_event(t:Thread, f:Frame, at:Site)
+  cases(ok(h:Handler), err(e:Err))
+  effects(runs_python, raises, writes)
+  c _PyRop_InstructionEvent as out_or_raised
+  evidence(
+    review: "bytecodes.c INSTRUMENTED_INSTRUCTION: _Py_call_instrumentation_instruction,"
+            "ORIGINAL_HANDLER, PAUSE_ADAPTIVE_COUNTER.",
+    contract: "The callbacks may raise. Writes the displaced word's counter state.");
+
+// A callback may have moved the frame and then raised: the error is the
+// target's
+point Line.Failed(current, left, pending) keep() spent() defs();
+point Instruction.Failed(current, site, pending) keep() spent() defs();
+
+arm Line.Hook split displacing
+  effects(runs_python, raises, writes)
+  feedback()
+  exits(dispatch, raise, redirect)
+{
+  entry():
+    call line_event(thread, frame, site, prev_head) {
+      ok -> Go();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Go(h:Handler):
+    exit dispatch(h);
+  Moved(r:Route):
+    exit redirect(r);
+  Failed(e:Err):
+    exit raise(Line.Failed, e);
+}
+
+arm Instruction.Hook split displacing
+  effects(runs_python, raises, writes)
+  feedback()
+  exits(dispatch, raise)
+{
+  entry():
+    call instruction_event(thread, frame, site) {
+      ok -> Go();
+      err -> Failed();
+    }
+  Go(h:Handler):
+    exit dispatch(h);
+  Failed(e:Err):
+    exit raise(Instruction.Failed, e);
+}

@@ -148,9 +148,12 @@ dummy_func(
     switch (opcode) {
 
 // BEGIN BYTECODES //
-        pure inst(NOP, (--))
-            effects() exits(next)
+        /* A stack op only: a NOP has no word. */
+        tier1 inst(NOP, (--))
+            exits(abort)
         {
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: the pseudo op that PrepareKwargs puts before a read of
@@ -1624,53 +1627,20 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inst(INSTRUMENTED_LINE, ( -- ))
-            effects(runs_python) exits(next, jump, raise) feedback(write(counter))
+        /* Stack ops only: INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION are the Line and
+         * Instruction families (Python/register_ops/monitoring.rop). */
+        tier1 inst(INSTRUMENTED_LINE, ( -- ))
+            exits(abort)
         {
-            int original_opcode = 0;
-            if (tstate->tracing) {
-                PyCodeObject *code = _PyFrame_GetCode(frame);
-                int index = INSTR_OFFSET_OF(this_instr);
-                original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
-                next_instr = this_instr;
-            } else {
-                original_opcode = _Py_call_instrumentation_line(
-                        tstate, frame, this_instr, prev_instr);
-                RELOAD_STACK();
-                if (original_opcode < 0) {
-                    next_instr = frame->instr_ptr+1;
-                    goto error;
-                }
-                next_instr = frame->instr_ptr;
-                if (next_instr != this_instr) {
-                    DISPATCH();
-                }
-            }
-            /* The handler decides: a stack-only opcode such as LOAD_ATTR has
-             * no entry itself, its word runs a family's generic arm. */
-            opcode = ORIGINAL_HANDLER(original_opcode);
-            if (_PyFb_HasEntry(opcode)) {
-                /* Prevent the underlying instruction from specializing
-                * and overwriting the instrumentation. */
-                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, opcode));
-            }
-            PRE_DISPATCH_GOTO();
-            DISPATCH_GOTO();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inst(INSTRUMENTED_INSTRUCTION, ( -- ))
-            effects(runs_python) exits(jump, raise) feedback(write(counter))
+        tier1 inst(INSTRUMENTED_INSTRUCTION, ( -- ))
+            exits(abort)
         {
-            int next_opcode = _Py_call_instrumentation_instruction(
-                tstate, frame, this_instr);
-            ERROR_IF(next_opcode < 0);
-            next_instr = this_instr;
-            assert(next_opcode > 0 && next_opcode < 256);
-            opcode = ORIGINAL_HANDLER(next_opcode);
-            if (_PyFb_HasEntry(opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, opcode));
-            }
-            DISPATCH_GOTO();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* The instrumented forms of the stack ops that the Truth, BranchTruth,

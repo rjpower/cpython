@@ -24,10 +24,11 @@ if not hasattr(capi, "jit_lower"):
     raise unittest.SkipTest("the JIT is not supported on this platform")
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
-    import ir_contract
-    import ir_leaf
+    import jit_row_facts
+    import rop_primitives
     import jit_template_generator
 
+    import jit_backend
 RECORDS = jit_template_generator.load_records()[1]
 
 from test.test_ir_leaf import (
@@ -102,7 +103,7 @@ def variants(name, rng, count=2):
     with its arguments live after it"""
     nres, nargs, *_, kinds, _ = lowerings()[name]
     out = [(ops, False) for ops in assignments(kinds, nres, nargs, rng, count)]
-    if jit_template_generator.LOWERINGS[name].calls:
+    if jit_backend.LOWERINGS[name].calls:
         out += [(ops, True) for ops in
                 assignments(kinds, nres, nargs, rng, count, alias=False)]
     return out
@@ -149,7 +150,7 @@ class LoweringTests(unittest.TestCase):
         nres, nargs, ntemps, nxtemps, kinds, _ = lowerings()[name]
         written = {(kinds[i], ops[i]) for i in range(nres)}
         written |= {(kinds[i], ops[i]) for i in range(nres + nargs, len(kinds))}
-        if jit_template_generator.LOWERINGS[name].calls and not args_live:
+        if jit_backend.LOWERINGS[name].calls and not args_live:
             written |= {(kinds[i], ops[i]) for i in range(nres, nres + nargs)}
         for kind, regs_before, regs_after in (("g", before[0], after[0]),
                                               ("x", before[1], after[1])):
@@ -162,16 +163,16 @@ class LoweringTests(unittest.TestCase):
                                  f"{name} wrote {kind}{reg} with ops {ops}")
 
     def test_every_lowering_is_tabled(self):
-        self.assertEqual(set(lowerings()), set(jit_template_generator.LOWERINGS))
+        self.assertEqual(set(lowerings()), set(jit_backend.LOWERINGS))
         for name, (nres, nargs, ntemps, nxtemps, kinds, predicate) in lowerings().items():
-            prim = ir_leaf.PRIMITIVES[name]
-            lowering = jit_template_generator.LOWERINGS[name]
-            self.assertEqual(kinds, jit_template_generator.operand_kinds(prim, lowering))
-            self.assertEqual(predicate, jit_template_generator.is_predicate(prim))
+            prim = rop_primitives.PRIMITIVES[name]
+            lowering = jit_backend.LOWERINGS[name]
+            self.assertEqual(kinds, jit_backend.operand_kinds(prim, lowering))
+            self.assertEqual(predicate, jit_backend.is_predicate(prim))
 
     def check_against_c(self, name, args, rng):
         nres, nargs, ntemps, nxtemps, kinds, predicate = lowerings()[name]
-        prim = ir_leaf.PRIMITIVES[name]
+        prim = rop_primitives.PRIMITIVES[name]
         if prim.pre is not None and not prim.pre(context(), *args):
             return
         expected = capi.leaf_primitive(name, *args)
@@ -190,7 +191,7 @@ class LoweringTests(unittest.TestCase):
                     if cond:
                         self.assertTrue(same(tuple(results), expected[1:]),
                                         (results, expected))
-                if predicate and jit_template_generator.LOWERINGS[name].exits:
+                if predicate and jit_backend.LOWERINGS[name].exits:
                     # With an exit, the lowering leaves by it where the predicate is false
                     holds = expected if not nres else expected[0]
                     cond, results, before, after = run(name, ops, args, rng, "exit")
@@ -205,7 +206,7 @@ class LoweringTests(unittest.TestCase):
         for name in lowerings():
             if name in APART:
                 continue
-            prim = ir_leaf.PRIMITIVES[name]
+            prim = rop_primitives.PRIMITIVES[name]
             for args in [()] if not prim.params else cases(prim):
                 self.check_against_c(name, args, rng)
 
@@ -216,7 +217,7 @@ class LoweringTests(unittest.TestCase):
         nres, nargs, ntemps, nxtemps, kinds, predicate = lowerings()[name]
         self.assertEqual((nres, nargs, ntemps, kinds), (1, 2, 2, "ggggg"))
         rng = random.Random(90)
-        for args in cases(ir_leaf.PRIMITIVES[name]):
+        for args in cases(rop_primitives.PRIMITIVES[name]):
             overflowed, out = capi.leaf_primitive(name, *args)
             assignments_ = assignments(kinds, nres, nargs, rng, count=2)
             # Both arguments in one register
@@ -802,28 +803,25 @@ def graph_of(handler):
     "The template graph of a handler, simplified as the generator emits it"
     record = RECORDS[handler]
     graph = jit_template_generator.Builder(record).build()
-    jit_template_generator.simplify(graph)
+    jit_backend.simplify(graph)
     return graph
 
 
 def prims_of(graph):
-    return [jit_template_generator.prim_name(op) for block in graph.blocks.values()
+    return [jit_backend.prim_name(op) for block in graph.blocks.values()
             for op in block.ops if op.kind == "prim"]
 
 
 @contextlib.contextmanager
 def declared(name, **changes):
-    """The component row `name` with columns changed, for the generator that
-    reads ir_contract.rows(): a declaration withdrawn or altered"""
-    table = ir_contract.rows()
-    saved = table[name]
-    if "result" in changes:
-        changes["result"] = dataclasses.replace(saved.result, **changes["result"])
-    table[name] = dataclasses.replace(saved, **changes)
+    """The optimizer's facts of `name` with fields changed: a declaration
+    withdrawn or altered"""
+    saved = jit_row_facts.ROW_FACTS[name]
+    jit_row_facts.ROW_FACTS[name] = dataclasses.replace(saved, **changes)
     try:
         yield
     finally:
-        table[name] = saved
+        jit_row_facts.ROW_FACTS[name] = saved
 
 
 def prim_graph(*steps):
@@ -831,10 +829,10 @@ def prim_graph(*steps):
     block that tests v (`test` is the primitive, whose false side leaves by
     a deopt) or, with test None, ends in the primitive on v.  Returns the
     graph and its ops by step"""
-    g = jit_template_generator.Graph()
-    TOp = jit_template_generator.TOp
+    g = jit_backend.Graph()
+    TOp = jit_backend.TOp
     block = g.blocks[g.entry]
-    v = g.value(ir_leaf.VALUE)
+    v = g.value(rop_primitives.VALUE)
     block.ops.append(TOp("view", [v], [], "B"))
     deopt = g.new_block()
     deopt.term = ("deopt",)
@@ -859,21 +857,25 @@ def prim_graph(*steps):
 class TemplateGraphTests(unittest.TestCase):
     "What the generator reads from the component rows, and the graphs it builds with it"
 
+    def test_every_fact_names_a_primitive_or_helper(self):
+        declared_names = set(rop_primitives.PRIMITIVES) | set(rop_primitives.HELPERS)
+        self.assertEqual(set(jit_row_facts.ROW_FACTS) - declared_names, set())
+
     def test_tests_for_null(self):
-        found = {name for name in ir_contract.rows() if jit_template_generator.is_null_test(name)}
+        found = {name for name in jit_row_facts.ROW_FACTS if jit_backend.is_null_test(name)}
         self.assertEqual(found, {"PyValue_IsNull"})
 
     def test_tests_of_both(self):
-        self.assertEqual(jit_template_generator.both_test("PyValue_IsInlineInt"),
+        self.assertEqual(jit_backend.both_test("PyValue_IsInlineInt"),
                          "PyValue_BothInlineInt")
-        found = {name for name in ir_contract.rows()
-                 if jit_template_generator.both_test(name) is not None}
+        found = {name for name in jit_row_facts.ROW_FACTS
+                 if jit_backend.both_test(name) is not None}
         self.assertEqual(found, {"PyValue_IsInlineInt"})
         with declared("PyValue_BothInlineInt", conjoins=""):
-            self.assertIsNone(jit_template_generator.both_test("PyValue_IsInlineInt"))
+            self.assertIsNone(jit_backend.both_test("PyValue_IsInlineInt"))
 
     def test_what_a_test_shows(self):
-        facts = jit_template_generator.test_facts
+        facts = jit_backend.test_facts
         self.assertEqual(facts("PyValue_IsNull"), (False, True))
         self.assertEqual(facts("PyValue_IsObject"), (True, False))
         self.assertEqual(facts("PyValue_IsInlineInt"), (True, False))
@@ -886,29 +888,29 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(facts("no_such_primitive"), (False, False))
 
     def test_results_that_are_never_null(self):
-        found = {name for name in ir_contract.rows() if jit_template_generator.never_null(name)}
-        scalar = {name for name in found if name in ir_leaf.PRIMITIVES
-                  and all(p not in (ir_leaf.VALUE, "PyObject*")
-                          for p in ir_leaf.PRIMITIVES[name].params)}
+        found = {name for name in jit_row_facts.ROW_FACTS if jit_backend.never_null(name)}
+        scalar = {name for name in found if name in rop_primitives.PRIMITIVES
+                  and all(p not in (rop_primitives.VALUE, "PyObject*")
+                          for p in rop_primitives.PRIMITIVES[name].params)}
         self.assertLessEqual({"_PyValue_FromIntScaled", "PyValue_FromInlineInt",
                               "PyValue_TagIndex", "PyValue_DUP"}, found)
         # The declaration against the C definition on its domain
         for name in scalar:
-            prim = ir_leaf.PRIMITIVES[name]
+            prim = rop_primitives.PRIMITIVES[name]
             for args in cases(prim):
                 if prim.pre is None or prim.pre(context(), *args):
                     self.assertNotEqual(capi.leaf_primitive(name, *args), 0, (name, args))
-        with declared("_PyValue_FromIntScaled", result={"shape": "VALUE_OR_NULL"}):
-            self.assertFalse(jit_template_generator.never_null("_PyValue_FromIntScaled"))
+        with declared("_PyValue_FromIntScaled", never_null=False):
+            self.assertFalse(jit_backend.never_null("_PyValue_FromIntScaled"))
 
     def test_primitives_for_a_word_that_is_not_null(self):
-        given = {name: jit_template_generator.given_not_null(name) for name in ir_contract.rows()}
+        given = {name: jit_backend.given_not_null(name) for name in jit_row_facts.ROW_FACTS}
         self.assertEqual({k: v for k, v in given.items() if v},
                          {"PyValue_XDUP": "PyValue_DUP"})
 
     def test_results_that_fail_only_in_their_slow_path(self):
-        found = {name for name in ir_contract.rows()
-                 if jit_template_generator.null_only_from_slow(name)}
+        found = {name for name in jit_row_facts.ROW_FACTS
+                 if jit_backend.null_only_from_slow(name)}
         self.assertEqual(found, {"PyValue_FromInt64", "PyValue_FromDouble"})
 
     def graph_names(self, handler):
@@ -934,7 +936,7 @@ class TemplateGraphTests(unittest.TestCase):
             with contextlib.ExitStack() as stack:
                 if declare:
                     stack.enter_context(declared("PyValue_DUP", nonnull_form=""))
-                jit_template_generator.fold_nulls(g)
+                jit_backend.fold_nulls(g)
             self.assertEqual(dup.attr, "PyValue_XDUP" if declare else "PyValue_DUP")
 
     def test_without_slow_the_box_keeps_its_test_and_has_no_exit(self):
@@ -943,10 +945,10 @@ class TemplateGraphTests(unittest.TestCase):
                 def box():
                     graph = graph_of(handler)
                     return [op for b in graph.blocks.values() for op in b.ops
-                            if jit_template_generator.prim_name(op) == name], graph
+                            if jit_backend.prim_name(op) == name], graph
                 (op,), graph = box()
                 self.assertIsNotNone(op.exit)
-                with declared(name, slow=""):
+                with declared(name, slow=False):
                     (op,), graph = box()
                 self.assertIsNone(op.exit)
                 self.assertIn("PyValue_IsNull", prims_of(graph))
@@ -954,46 +956,46 @@ class TemplateGraphTests(unittest.TestCase):
     def test_without_the_declared_test_for_null_nothing_is_dropped(self):
         # After a test of IsNull that leaves where it holds, a second one is dropped
         g, (first, second) = prim_graph(("PyValue_IsNull", "leave"), ("PyValue_IsNull", "leave"))
-        jit_template_generator.fold_nulls(g)
+        jit_backend.fold_nulls(g)
         self.assertEqual(second.kind, "const")
-        with declared("PyValue_IsNull", result={"tests": ((frozenset(), frozenset()),)}):
+        with declared("PyValue_IsNull", test=None):
             g, (first, second) = prim_graph(("PyValue_IsNull", "leave"),
                                             ("PyValue_IsNull", "leave"))
-            jit_template_generator.fold_nulls(g)
+            jit_backend.fold_nulls(g)
             self.assertEqual(second.kind, "prim")
 
     def test_a_declared_true_side_shows_the_word_not_null(self):
         g, (first, second) = prim_graph(("PyValue_IsInlineInt", "continue"),
                                         ("PyValue_IsNull", "leave"))
-        jit_template_generator.fold_nulls(g)
+        jit_backend.fold_nulls(g)
         self.assertEqual(second.kind, "const")
-        with declared("PyValue_IsInlineInt", result={"tests": ((frozenset(), frozenset()),)}):
+        with declared("PyValue_IsInlineInt", test=None):
             g, (first, second) = prim_graph(("PyValue_IsInlineInt", "continue"),
                                             ("PyValue_IsNull", "leave"))
-            jit_template_generator.fold_nulls(g)
+            jit_backend.fold_nulls(g)
             self.assertEqual(second.kind, "prim")
 
     def cse_loads(self, middle):
         """A graph that loads a field of one object, runs the ops in middle
         (TOp makers given the object and a value) and loads it again; the
         number of loads of the field after CSE"""
-        g = jit_template_generator.Graph()
+        g = jit_backend.Graph()
         entry = g.blocks[g.entry]
-        obj = g.value(ir_leaf.VALUE)
-        entry.ops.append(jit_template_generator.TOp("view", [obj], [], "B"))
+        obj = g.value(rop_primitives.VALUE)
+        entry.ops.append(jit_backend.TOp("view", [obj], [], "B"))
         first = g.value("i64")
-        entry.ops.append(jit_template_generator.TOp("load", [first], [obj], "_PyRangeIterObject.len"))
+        entry.ops.append(jit_backend.TOp("load", [first], [obj], "_PyRangeIterObject.len"))
         for make in middle:
             entry.ops.append(make(g, obj, first))
         second = g.value("i64")
-        entry.ops.append(jit_template_generator.TOp("load", [second], [obj], "_PyRangeIterObject.len"))
-        entry.ops.append(jit_template_generator.TOp("store", [], [obj, second], "_PyRangeIterObject.len"))
+        entry.ops.append(jit_backend.TOp("load", [second], [obj], "_PyRangeIterObject.len"))
+        entry.ops.append(jit_backend.TOp("store", [], [obj, second], "_PyRangeIterObject.len"))
         entry.term = ("end", None)
-        jit_template_generator.cse(g)
+        jit_backend.cse(g)
         return sum(op.kind == "load" for op in entry.ops)
 
     def test_a_read_is_reused_until_a_write_may_change_it(self):
-        TOp = jit_template_generator.TOp
+        TOp = jit_backend.TOp
         store = lambda field: lambda g, o, v: TOp("store", [], [o, v], field)
         self.assertEqual(self.cse_loads([]), 1)
         # Another field, or a count that is not this field's, leaves it
@@ -1006,34 +1008,34 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(self.cse_loads([lambda g, o, v: TOp("prim", [], [o], "PyValue_CLOSE")]), 2)
         self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [], [], "_Py_HandlePending")]), 2)
         # Boxing allocates new objects and changes none
-        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [g.value(ir_leaf.VALUE)],
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [g.value(rop_primitives.VALUE)],
                                                              [v], "_PyValue_BoxInt64")]), 1)
 
     def cse_home_loads(self, middle):
         """A graph that loads a frame home (GETLOCAL), runs the ops in middle
         (TOp makers given the loaded value) and loads it again; the number
         of home loads after CSE"""
-        TOp = jit_template_generator.TOp
-        g = jit_template_generator.Graph()
+        TOp = jit_backend.TOp
+        g = jit_backend.Graph()
         entry = g.blocks[g.entry]
         index = g.value("i32")
         entry.ops.append(TOp("const", [index], [], 3))
-        first = g.value(ir_leaf.VALUE)
+        first = g.value(rop_primitives.VALUE)
         entry.ops.append(TOp("prim", [first], [index], "GETLOCAL"))
         for make in middle:
             entry.ops.append(make(g, first))
-        second = g.value(ir_leaf.VALUE)
+        second = g.value(rop_primitives.VALUE)
         entry.ops.append(TOp("prim", [second], [index], "GETLOCAL"))
         entry.term = ("end", second)
-        jit_template_generator.cse(g)
+        jit_backend.cse(g)
         return sum(op.kind == "prim" and op.attr == "GETLOCAL" for op in entry.ops)
 
     def test_home_loads_are_their_own_location(self):
         # A home is not the heap (HOME): a heap store leaves a home load;
         # a home write, a release and Python change it
-        TOp = jit_template_generator.TOp
-        self.assertTrue(jit_template_generator.home_load("GETLOCAL"))
-        self.assertFalse(jit_template_generator.home_load("IR_SLOTS"))
+        TOp = jit_backend.TOp
+        self.assertTrue(jit_backend.home_load("GETLOCAL"))
+        self.assertFalse(jit_backend.home_load("IR_SLOTS"))
         self.assertEqual(self.cse_home_loads([]), 1)
         self.assertEqual(self.cse_home_loads(
             [lambda g, v: TOp("store", [], [v, v], "_PyRangeIterObject.len")]), 1)
@@ -1055,13 +1057,13 @@ class TemplateGraphTests(unittest.TestCase):
                 continue
             try:
                 graph = graph_of(handler)
-            except jit_template_generator.Refused:
+            except jit_backend.Refused:
                 continue
             with self.subTest(handler=handler):
-                self.assertFalse(jit_template_generator.fold_nulls(graph))
-                self.assertFalse(jit_template_generator.fuse_guards(graph))
-                self.assertFalse(jit_template_generator.thread_tests(graph))
-                self.assertFalse(jit_template_generator.thread_branches(graph))
+                self.assertFalse(jit_backend.fold_nulls(graph))
+                self.assertFalse(jit_backend.fuse_guards(graph))
+                self.assertFalse(jit_backend.thread_tests(graph))
+                self.assertFalse(jit_backend.thread_branches(graph))
 
     def test_an_assumption_is_checked_only_with_assertions(self):
         # F7: an `assume` op becomes a check that traps, under #ifndef NDEBUG;
@@ -1084,7 +1086,7 @@ class TemplateGraphTests(unittest.TestCase):
         arg = next(op for op in entry.ops if op.kind == "arg")
         ops = list(entry.ops)
         ops.insert(ops.index(arg) + 1,
-                   ir_leaf.Op("assume", (), arg.results, ("exact", "PyUnicode_Type")))
+                   rop_primitives.Op("assume", (), arg.results, ("exact", "PyUnicode_Type")))
         leaf.blocks[0] = dataclasses.replace(entry, ops=ops)
         uops[i] = dataclasses.replace(u, leaf=leaf)
         planted = jit_template_generator.template_of(

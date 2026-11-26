@@ -29,6 +29,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_contract
     import ir_error_effects
     import ir_leaf
+    import rop_primitives
     import ir_records
 
 BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
@@ -1478,20 +1479,20 @@ class VerifierTests(unittest.TestCase):
 
     def test_modelled_primitive_needs_a_lowering(self):
         # V11 against the tree: every modelled PRIMITIVE row is lowered
-        ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())
+        ir_contract.check_primitives(rop_primitives.PRIMITIVES, ir_contract.lowerings())
         lowered = ir_contract.lowerings("LOWERING(PyValue_IsNull)\n"
                                         "CHECK_EXACT(PyList_CheckExact, PyList_Type)\n")
         self.assertEqual(lowered, {"PyValue_IsNull", "PyList_CheckExact"})
         with self.assertRaisesRegex(ValueError, r"PyValue_IsInlineInt: a PRIMITIVE with a "
                                                 r"model in ir_leaf.py but no lowering"):
-            ir_contract.check_primitives(ir_leaf.PRIMITIVES, lowered)
+            ir_contract.check_primitives(rop_primitives.PRIMITIVES, lowered)
         # A PRIMITIVE row without a model is refused: it is a HELPER or an INTRINSIC
-        self.assertNotIn("PyValue_TYPE", ir_leaf.PRIMITIVES)
+        self.assertNotIn("PyValue_TYPE", rop_primitives.PRIMITIVES)
         row = dataclasses.replace(self.table["PyValue_IsNull"], name="PyValue_TYPE")
         with self.assertRaisesRegex(ValueError, r"PyValue_TYPE: a PRIMITIVE with no model"):
-            ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings(),
+            ir_contract.check_primitives(rop_primitives.PRIMITIVES, ir_contract.lowerings(),
                                          {"PyValue_TYPE": row})
-        ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings(),
+        ir_contract.check_primitives(rop_primitives.PRIMITIVES, ir_contract.lowerings(),
                                      {"PyValue_TYPE": self.table["PyValue_TYPE"]})
 
     def test_view_columns(self):
@@ -3915,7 +3916,7 @@ class ColumnTests(unittest.TestCase):
         table = column_rows()
         for row in table.values():
             if row.conjoins:
-                one = ir_leaf.PRIMITIVES[row.conjoins]
+                one = rop_primitives.PRIMITIVES[row.conjoins]
                 words = [w for (w,) in leaf.cases(one)]
                 for a in words:
                     for b in words:
@@ -3924,7 +3925,7 @@ class ColumnTests(unittest.TestCase):
                                              bool(capi.leaf_primitive(one.name, a))
                                              and bool(capi.leaf_primitive(one.name, b)))
             if row.nonnull_form:
-                general = ir_leaf.PRIMITIVES[row.nonnull_form]
+                general = rop_primitives.PRIMITIVES[row.nonnull_form]
                 for (w,) in leaf.cases(general):
                     if w == 0:
                         continue
@@ -3937,7 +3938,7 @@ class ColumnTests(unittest.TestCase):
             if row.slow:
                 # The model's slow path is the declared helper, and on values
                 # whose allocation succeeds the result is not NULL
-                self.assertEqual(ir_leaf.PRIMITIVES[row.name].slow, row.slow)
+                self.assertEqual(rop_primitives.PRIMITIVES[row.name].slow, row.slow)
                 for i in leaf.WIDE_INTS:
                     with self.subTest(row=row.name, i=i):
                         w = capi.leaf_primitive(row.name, i)

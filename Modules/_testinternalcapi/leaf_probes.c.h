@@ -2,17 +2,6 @@
 // from:
 //   Python/bytecodes.c
 // Do not edit!
-static int
-leaf_probe__NOP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
 static const struct leaf_probe LEAF_PROBES[] = {
-    {"_NOP", leaf_probe__NOP, 0},
 {NULL, NULL, 0},
 };

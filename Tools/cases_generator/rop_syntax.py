@@ -325,10 +325,11 @@ class Parser:
             self.expect(")")
         observes = self.accept("observes") is not None
         trailing = self.accept("trailing") is not None
+        displacing = self.accept("displacing") is not None
         contract = self.contract(exits=True)
         graph = self.graph()
         return Arm(name.text, region, contract, graph, start.span, select, entry, observes,
-                   completion, trailing)
+                   completion, trailing, displacing)
 
     def macro(self) -> Macro:
         start = self.take()

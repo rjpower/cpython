@@ -9,10 +9,8 @@ from test import test_tools
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
-    import ir_contract
     import lexer
     import rop_check
-    import rop_header
     import rop_print
     import rop_syntax
     import stack_opcode_pins
@@ -183,7 +181,7 @@ arm F.A shared effects() feedback() exits(next) {
          "a macro's exits are its cases: no 'exits' clause"),
         ("point F.P(current, here, clear) keep() spent() defs();", 1, 20,
          "'here' is not a pc role (one of: site, next_head, target, resume_head, "
-         "saved_origin)"),
+         "saved_origin, left)"),
         ("extern helper h() -> Unit effects() c h as value evidence();", 1, 59,
          "expected at least one item"),
         ("arm F.A inline effects() feedback() exits() requires(exact<long>(x)) "
@@ -551,6 +549,60 @@ def check_source(src: str) -> list[tuple[int, str]]:
     return [(d.span.line, d.span.column, d.message) for d in program.diagnostics]
 
 
+DISPLACING_BASE = """\
+family F() exits(dispatch) ops(X);
+arm F.A split displacing effects() feedback() exits(dispatch)
+{
+  entry():
+    exit dispatch(h);
+}
+"""
+
+
+class DisplacingTests(unittest.TestCase):
+    """Only a displacing arm names another handler to run (`dispatch`) and
+    the instruction pointer before the word (`prev_head`); a trailing arm is
+    neither selected nor observed."""
+
+    def messages(self, src: str) -> list[str]:
+        return [message for _, _, message in check_source(src)]
+
+    def test_displacing_arm_is_clean(self):
+        src = ('extern primitive hook(p:Head) -> Handler effects() c hook as value '
+               'evidence(review: "r", contract: "c", lowering: "none", test: "t");\n'
+               + DISPLACING_BASE.replace(
+                   "exit dispatch(h);",
+                   "let h:Handler = hook(prev_head);\n    exit dispatch(h);"))
+        self.assertEqual(self.messages(src), [])
+
+    def test_dispatch_needs_displacing(self):
+        src = DISPLACING_BASE.replace("split displacing", "split")
+        self.assertIn("only a displacing arm has the exit dispatch",
+                      self.messages(src))
+
+    def test_displacing_needs_dispatch(self):
+        src = DISPLACING_BASE.replace("exits(dispatch)\n{", "exits(next)\n{", 1)
+        self.assertIn("a displacing arm exits by dispatch", self.messages(src))
+
+    def test_displacing_is_split(self):
+        src = DISPLACING_BASE.replace("split displacing", "inline displacing")
+        self.assertIn("a displacing arm is split, and neither selected, observed, "
+                      "trailing nor adaptive", self.messages(src))
+
+    def test_prev_head_needs_displacing(self):
+        src = ("family F() exits(next) ops(X);\n"
+               "arm F.A inline effects() feedback() exits(next)\n"
+               "{ entry(): let p:Head = prev_head; exit next(); }\n")
+        self.assertTrue(any("prev_head" in m for m in self.messages(src)))
+
+    def test_trailing_is_not_observed(self):
+        src = ("family F() exits(next) ops(X);\n"
+               "arm F.A inline observes trailing effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n")
+        self.assertTrue(any(m.startswith("a trailing arm belongs to the instruction "
+                                         "before it") for m in self.messages(src)))
+
+
 class CheckTests(unittest.TestCase):
     def test_base_is_clean(self):
         self.assertEqual(check_source(CHECK_BASE), [])
@@ -716,21 +768,6 @@ class DefinitionTests(unittest.TestCase):
         for x in self.program.externs.values():
             if x.c is not None:
                 self.assertNotIn(x.name, pending)
-
-    def test_header_agreement(self):
-        rows = rop_header.header_rows()
-        self.assertEqual(rop_header.disagreements(self.program.externs, rows), [])
-        box = self.program.externs["box_i64"]
-        changed = {box.c.symbol: ir_contract.Row(
-            "HELPER", box.c.symbol, effects=frozenset({"allocates"}),
-            exits=frozenset({"miss"}))}
-        found = [d.message for d in rop_header.disagreements(self.program.externs, changed)]
-        self.assertEqual(found, [
-            "c _PyValue_BoxInt64: effects (allocates, raises) disagree with header "
-            "row HELPER(_PyValue_BoxInt64)'s (allocates)",
-            "c _PyValue_BoxInt64: exits () disagree with header row "
-            "HELPER(_PyValue_BoxInt64)'s (miss)",
-        ])
 
     def test_every_family_has_an_encoding(self):
         self.assertTrue(self.program.families)

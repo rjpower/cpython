@@ -482,6 +482,10 @@ class Arm:
     # assembler adds after a relaxed head).  It has no observed twin, fires
     # no event and leaves the instruction pointer at that instruction.
     trailing: bool = False
+    # A displacing arm (`displacing`): the word that monitoring put in place of
+    # another one, whose handler it runs once its hook has returned.  Only
+    # such an arm has the `dispatch` exit and the name `prev_head`.
+    displacing: bool = False
 
     @property
     def family(self) -> str:

@@ -917,39 +917,6 @@ PyAPI_FUNC(int) _PyCode_InstrOparg(PyCodeObject *co, int i);
 /* The feedback index of the instruction at index i, or -1 if it has none. */
 PyAPI_FUNC(int) _PyCode_InstrFbIndex(PyCodeObject *co, int i);
 
-/* The number of inputs of the instruction at index i that its fields read
- * from locals: the loads folded into it, which have no words and push
- * nothing that the frame sees before the instruction runs. */
-PyAPI_FUNC(int) _PyCode_InstrFoldedInputs(PyCodeObject *co, int i);
-/* The local that the dst field of word i names, into which a STORE_FAST of
- * its result is folded, or -1. */
-PyAPI_FUNC(int) _PyCode_InstrStoredLocal(PyCodeObject *co, int i);
-
-/* The number of temporaries that the frame holds before the word at index i
- * runs, as its fields prove it, -1 if they name no temporary, or
- * _PyCode_DEPTH_UNKNOWN if they name some but do not fix the depth.  The
- * temporaries are a prefix of the slots, so a word that names slot
- * co_nlocalsplus + d as its highest input, or the end of its window, or
- * the slot it pushes to, has d entries beneath.  A PUSH_NULL has no word:
- * its entry is a NULL slot that only the first word naming a higher slot
- * shows (Objects/frameobject.c:mark_stacks).  *floor is the depth once the
- * word has consumed its inputs. */
-#define _PyCode_DEPTH_UNKNOWN (-2)
-PyAPI_FUNC(int) _PyCode_InstrDepthBefore(PyCodeObject *co, int i, int *floor);
-
-/* The depths of the entries that the loads folded into the word at index i
- * would have pushed, or none if the word names no temporary.  Returns their
- * number. */
-PyAPI_FUNC(int) _PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4]);
-
-/* Whether the call at index i releases its result (its dst is IR_NO_DST):
- * the POP_TOP of the stack form is folded into it. */
-PyAPI_FUNC(int) _PyCode_InstrDiscards(PyCodeObject *co, int i);
-
-/* The number of elements that the unpack at index i stores to locals (its
- * dst names a run of them), where its stack instruction pushed them; 0 if
- * its elements stay in the window or it is no unpack. */
-
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */
 PyAPI_FUNC(int) _PyCode_InstrTarget(PyCodeObject *co, int i);

@@ -687,6 +687,7 @@ void _PyRop_Backoff(_PyFbHeader *fb);
 int _PyRop_Install(_PyInstr *site, _PyFbHeader *fb, int handler);
 void _PyRop_BeginTruth(_PyFbUnary *fb, PyValueBorrow v);
 bool _PyRop_ValidatePlain(_PyFbUnary *fb, PyValueBorrow v);
+bool _PyRop_ValidateGenMethod(PyValueBorrow v);
 bool _PyRop_ValidateSlot(_PyFbUnary *fb, PyValueBorrow v);
 int _PyRop_ClassifyGetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k);
 int _PyRop_ClassifySetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k);

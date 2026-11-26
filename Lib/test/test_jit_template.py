@@ -719,7 +719,7 @@ TEMPLATE_CASES = [
     # (GlobalRead.Module and .Builtin have no template yet: their rows read a
     # recipe from the feedback entry, which the leaf IR cannot express.)
     # (Jump.Poll has no template yet: its poll row has no lowering.)
-    # (ForIter.List, .Tuple and .Range return in FI step 3)
+    # (ForIter.List, .Tuple and .Range are arms: templates come from the arm graphs)
 ]
 
 
@@ -1185,9 +1185,10 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(self.cse_home_loads(
             [lambda g, v: TOp("prim", [], [v], "PyValue_CLOSE")]), 2)
 
-    @unittest.skip("ForIter.Range returns in FI step 3")
+    @unittest.skip("ForIter.Range is an arm: its template comes from the arm graph, "
+                   "which RECORDS does not hold (the JIT's step)")
     def test_range_iterator_reads_its_length_once(self):
-        graph = graph_of("FOR_ITER_RANGE")
+        graph = graph_of("ForIter.Range")
         loads = [op.attr for b in graph.blocks.values() for op in b.ops if op.kind == "load"]
         self.assertEqual(loads.count("_PyRangeIterObject.len"), 1)
 

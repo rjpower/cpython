@@ -512,7 +512,7 @@ class InlineIntTest(unittest.TestCase):
         # loads them.
         for name in ("Const.Small",
                      "Add.Int", "BINARY_OP_SUBTRACT_INT",
-                     "BINARY_OP_MULTIPLY_INT"):
+                     "BINARY_OP_MULTIPLY_INT", "ForIter.Range"):
             self.assertIn(name, names)
         self.assertIn("Add.Int", opnames(add3))
 

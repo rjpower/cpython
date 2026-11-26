@@ -127,7 +127,6 @@ class TestGeneratorCreation(unittest.TestCase):
             gen = saved
 
 
-@unittest.skip("IterOpen.GenMethod returns in FI step 3")
 @cpython_only
 @requires_specialization
 class TestGetIterGenerator(unittest.TestCase):

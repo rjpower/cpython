@@ -5,6 +5,8 @@ import sys
 import types
 import unittest
 
+from test.support import cpython_only, requires_specialization
+
 
 class Log:
     """Records the order of finalizers"""
@@ -333,6 +335,112 @@ class MonitoringTests(unittest.TestCase):
         loop()
         sys.monitoring.set_events(self.tool, 0)
         self.assertEqual(seen, ["value"])
+
+
+def loop(source):
+    seen = []
+    for x in source:
+        seen.append(x)
+    return seen
+
+
+class Counting:
+    def __init__(self, n):
+        self.n = n
+
+    def __iter__(self):
+        for i in range(self.n):
+            yield i
+
+
+class User:
+    def __init__(self, n):
+        self.n = n
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.n == 0:
+            raise StopIteration
+        self.n -= 1
+        return self.n
+
+
+# (a source, the arms of the open and of the step once the site is warm)
+ARMS = {
+    "list": (lambda: [1, 2, 3], "IterOpen.Indexed", "ForIter.List"),
+    "tuple": (lambda: (1, 2, 3), "IterOpen.Indexed", "ForIter.Tuple"),
+    "range": (lambda: range(3), "IterOpen.Generic", "ForIter.Range"),
+    "str": (lambda: "abc", "IterOpen.Indexed", "ForIter.Indexed"),
+    "iterator": (lambda: iter([1, 2, 3]), "IterOpen.Self", "ForIter.Slot"),
+    "user": (lambda: User(3), "IterOpen.Generic", "ForIter.Slot"),
+    "generator method": (lambda: Counting(3), "IterOpen.GenMethod", "ForIter.Slot"),
+}
+
+
+def fresh_loop():
+    code = loop.__code__.replace()
+    return types.FunctionType(code, globals())
+
+
+class SpecializedTests(unittest.TestCase):
+    @cpython_only
+    @requires_specialization
+    def test_each_source_reaches_its_arms(self):
+        import _testinternalcapi
+        for name, (make, opener, stepper) in ARMS.items():
+            with self.subTest(source=name):
+                f = fresh_loop()
+                expected = f(make())
+                for _ in range(100):
+                    self.assertEqual(f(make()), expected)
+                words = [w[0] for w in _testinternalcapi.get_ir(f.__code__, True)]
+                self.assertIn(opener, words)
+                self.assertIn(stepper, words)
+
+    def test_a_site_that_changes_its_source_type(self):
+        # A warmed arm misses and the generic arm takes over, and the site
+        # adapts again, with every item seen once and in order
+        f = fresh_loop()
+        order = [name for name in ARMS for _ in range(3)] * 20
+        for name in order:
+            make = ARMS[name][0]
+            self.assertEqual(f(make()), loop(make()), name)
+
+    def test_early_exit_and_exhaustion_under_each_arm(self):
+        def stop_early(source):
+            for x in source:
+                if x == 1:
+                    break
+            return x
+
+        for name, (make, _, _) in ARMS.items():
+            with self.subTest(source=name):
+                expected = stop_early(make())
+                for _ in range(50):
+                    self.assertEqual(stop_early(make()), expected)
+
+    def test_range_of_big_ints(self):
+        n = 2**62
+        self.assertEqual(loop(range(n, n + 3)), [n, n + 1, n + 2])
+        for _ in range(50):
+            loop(range(n, n + 3))
+        self.assertEqual(loop(range(n, n + 3)), [n, n + 1, n + 2])
+        self.assertEqual(loop(range(0)), [])
+
+    def test_mutation_during_a_warmed_list_loop(self):
+        f = fresh_loop()
+        for _ in range(100):
+            f([1, 2, 3])
+        items = [1, 2, 3]
+        seen = []
+        for x in items:
+            seen.append(x)
+            if x == 1:
+                items.append(4)
+        self.assertEqual(seen, [1, 2, 3, 4])
+        self.assertEqual(f(items), [1, 2, 3, 4])
 
 
 if __name__ == "__main__":

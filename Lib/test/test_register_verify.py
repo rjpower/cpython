@@ -1506,6 +1506,7 @@ class PilotTests(unittest.TestCase):
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
         iter_open = at("iteration.rop", "exit raise(IterOpen.Failed, saved);", 5)
+        iter_gen_method = at("iteration.rop", "exit raise(IterOpen.Failed, saved);", 5, last=True)
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
         # The arms of tests.rop that raise, in order of line: the family, the
         # arm and the operands that its point lists in spent
@@ -1572,6 +1573,8 @@ class PilotTests(unittest.TestCase):
               "GetMethod.Failed lists obj in spent, but obj is intact",
               *item_diagnostics,
               f"{iter_open}: IterOpen.Generic: points: raise at IterOpen.Failed: "
+              "IterOpen.Failed lists source in spent, but source is intact",
+              f"{iter_gen_method}: IterOpen.GenMethod: points: raise at IterOpen.Failed: "
               "IterOpen.Failed lists source in spent, but source is intact",
               f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
               "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "

@@ -733,7 +733,7 @@ class TestRacesDoNotCrash(TestBase):
         opname = "GetItem.ListIndex"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
-    @unittest.skip("the specialized iteration arms return in FI step 3")
+    @unittest.skip("ForIter.Generator returns with SY's runtime switch")
     @requires_specialization
     def test_for_iter_gen(self):
         def get_items():
@@ -766,7 +766,6 @@ class TestRacesDoNotCrash(TestBase):
         opname = "ForIter.Generator"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
-    @unittest.skip("the specialized iteration arms return in FI step 3")
     @requires_specialization
     def test_for_iter_list(self):
         def get_items():
@@ -2218,7 +2217,6 @@ class TestSpecializer(TestBase):
         self.assert_no_opcode(compare_op_str, "Compare.Generic")
 
 
-    @unittest.skip("the specialized iteration arms return in FI step 3")
     @cpython_only
     @requires_specialization
     def test_for_iter(self):
@@ -2259,15 +2257,8 @@ class TestSpecializer(TestBase):
             self.assert_specialized(for_iter_range, "ForIter.Range")
             self.assert_no_opcode(for_iter_range, "ForIter.Generic")
 
-        def for_iter_generator():
-            for i in (i for i in range(10)):
-                i + 1
+        # ForIter.Generator returns with SY's runtime switch
 
-        for_iter_generator()
-        self.assert_specialized(for_iter_generator, "ForIter.Generator")
-        self.assert_no_opcode(for_iter_generator, "ForIter.Generic")
-
-    @unittest.skip("the specialized iteration arms return in FI step 3")
     @cpython_only
     @requires_specialization
     def test_get_iter(self):

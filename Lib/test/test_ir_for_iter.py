@@ -96,12 +96,12 @@ def failing(it):
 # Each source builds a fresh iterable of COUNT new Values; the case names the
 # handler that the warmed loop must reach
 SOURCES = {
-    "list": (lambda vs: list(vs), "ForIter.Generic"),
-    "tuple": (lambda vs: tuple(vs), "ForIter.Generic"),
-    "map": (lambda vs: map(lambda v: v, vs), "ForIter.Generic"),
-    "iter_list": (lambda vs: iter(list(vs)), "ForIter.Generic"),
-    "zip": (lambda vs: (v for v, in zip(vs)), "ForIter.Generic"),
-    "user": (lambda vs: UserIter(vs), "ForIter.Generic"),
+    "list": (lambda vs: list(vs), "ForIter.List"),
+    "tuple": (lambda vs: tuple(vs), "ForIter.Tuple"),
+    "map": (lambda vs: map(lambda v: v, vs), "ForIter.Slot"),
+    "iter_list": (lambda vs: iter(list(vs)), "ForIter.Slot"),
+    "zip": (lambda vs: (v for v, in zip(vs)), "ForIter.Slot"),
+    "user": (lambda vs: UserIter(vs), "ForIter.Slot"),
 }
 
 

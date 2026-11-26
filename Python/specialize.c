@@ -3369,6 +3369,45 @@ _PyRop_BeginTruth(_PyFbUnary *fb, PyValueBorrow v)
     fb->type_version = fb_type_version(PyValue_TYPE(v));
 }
 
+/* Whether the type of v defines __iter__ as a generator function of the one
+ * argument: the type then caches the function under its version, which
+ * PyType_Modified() invalidates, and IterOpen.GenMethod makes the generator
+ * at once, with no call of the function. */
+bool
+_PyRop_ValidateGenMethod(PyValueBorrow v)
+{
+    PyTypeObject *tp = PyValue_TYPE(v);
+    if (!(tp->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
+        tp->tp_iter != _PyType_SlotIter ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return false;
+    }
+    PyValue descriptor = PyValue_NULL;
+    unsigned int tp_version = 0;
+    bool cached = false;
+    if (_PyType_TryLookupValueNoAlloc(tp, &_Py_ID(__iter__), &descriptor,
+                                      &tp_version) == 1 &&
+        PyValue_IsObject(descriptor) &&
+        PyFunction_Check(PyValue_AsKnownObjectBorrow(descriptor)))
+    {
+        PyObject *iter = PyValue_AsKnownObjectBorrow(descriptor);
+        PyFunctionObject *func = (PyFunctionObject *)iter;
+        PyCodeObject *code = (PyCodeObject *)func->func_code;
+        // An async generator or coroutine is no iterator, and GET_ITER
+        // reports it
+        cached = func->vectorcall == _PyFunction_Vectorcall &&
+            (code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR))
+                == CO_GENERATOR &&
+            function_signature(code) == SIMPLE_SIGNATURE &&
+            code->co_argcount == 1 && prepare_function_exec(code) &&
+            _PyType_CacheIterForSpecialization((PyHeapTypeObject *)tp, iter,
+                                               tp_version);
+    }
+    PyValue_XCLOSE(descriptor);
+    return cached;
+}
+
 bool
 _PyRop_ValidatePlain(_PyFbUnary *fb, PyValueBorrow v)
 {

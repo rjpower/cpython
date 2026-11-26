@@ -202,7 +202,7 @@ extern "C" {
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
 #define IR_NUM_OLD_HANDLERS                    256
-#define IR_NUM_HANDLERS                        428
+#define IR_NUM_HANDLERS                        441
 
 #ifdef __cplusplus
 }

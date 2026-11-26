@@ -1341,7 +1341,7 @@ class RelaxationTest(unittest.TestCase):
         index, jumps = self.relaxed(f, "ForIter.Generic")
         self.assertEqual(jumps, ["IR_JUMP"] * 2)
         # The loop exits by distance 1, to the second jump
-        self.assertEqual(handlers(f)[index], "ForIter.Generic")
+        self.assertTrue(handlers(f)[index].startswith("ForIter."))
         AssemblerTest.check_offsets(self, f)
 
         # A generator returns to the second jump

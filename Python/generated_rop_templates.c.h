@@ -83,6 +83,9 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 //   CellRead.Get: CellRead.Get: home has no leaf lowering
 //   CellStore.Set: CellStore.Set: home has no leaf lowering
 //   Const.Common: Const.Common: common_constant has no leaf lowering
+//   ForIter.List: ForIter.List: list_step has no leaf lowering
+//   ForIter.Range: ForIter.Range: exact_range_iter has no leaf lowering
+//   ForIter.Tuple: ForIter.Tuple: exact_tuple has no leaf lowering
 //   GetAttr.GetSet: GetAttr.GetSet: home has no leaf lowering
 //   GetAttr.Hint: GetAttr.Hint: hinted_entry has no leaf lowering
 //   GetAttr.PointerSlot: GetAttr.PointerSlot: borrow_pointer_slot has no leaf lowering
@@ -94,6 +97,8 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 //   GetItem.UnicodeAsciiChar: GetItem.UnicodeAsciiChar: str_in_bounds has no leaf lowering
 //   GetMethod.ClassMethod: GetMethod.ClassMethod: builtin_metaclass has no leaf lowering
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: poly_method has no leaf lowering
+//   IterOpen.Indexed: IterOpen.Indexed: iter_by_index has no leaf lowering
+//   IterOpen.Self: IterOpen.Self: iter_self has no leaf lowering
 //   SetItem.Dict: SetItem.Dict: dict_assign_slot has no leaf lowering
 //   SetItem.ListIndex: SetItem.ListIndex: list_in_bounds has no leaf lowering
 

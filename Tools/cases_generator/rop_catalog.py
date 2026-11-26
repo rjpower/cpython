@@ -793,6 +793,11 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (_VAL, CSource.out), False),
           COutcome(CTest.zero, _RES, (_VAL,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # _PyStatusValue: status 1 an item (the next cursor written through the last
+    # parameter), 0 the end; neither raises
+    _conv("step_pair", CReturn.status_value,
+          COutcome(CTest.positive, _RES, (_VAL, CSource.out), False),
+          COutcome(CTest.zero, _RES, (_VAL,), False)),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,
           COutcome(CTest.zero, _RES, (_VAL,), False),

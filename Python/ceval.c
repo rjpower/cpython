@@ -2369,6 +2369,163 @@ _PyRop_ForIterStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return (_PyStatusValue){1, step.value};
 }
 
+/* The tests and steps of the specialised IterOpen and ForIter arms */
+static inline bool
+_PyRop_IterByIndex(PyValueBorrow v)
+{
+    return _PyType_IteratesByIndex(PyValue_TYPE(v));
+}
+
+static inline bool
+_PyRop_IterSelf(PyValueBorrow v)
+{
+    return PyValue_TYPE(v)->tp_iter == PyObject_SelfIter;
+}
+
+static inline bool
+_PyRop_ExactRangeIter(PyValueBorrow v)
+{
+    return PyValue_IsObject(v)
+        && Py_TYPE(PyValue_AsKnownObjectBorrow(v)) == &PyRangeIter_Type;
+}
+
+static inline bool
+_PyRop_CursorIsIndex(PyValueBorrow c)
+{
+    return PyValue_IsTaggedIndex(c);
+}
+
+static inline bool
+_PyRop_CursorIsVacant(PyValueBorrow c)
+{
+    return PyValue_IsNull(c);
+}
+
+static inline bool
+_PyRop_HasIternextValue(PyValueBorrow v)
+{
+    return PyValue_IsObject(v)
+        && _PyType_VALUE_SLOT(Py_TYPE(PyValue_AsKnownObjectBorrow(v)), iternext) != NULL;
+}
+
+/* IterOpen.GenMethod's guard: the type's cached __iter__ function, a
+ * generator function of one argument, is at the version the cache holds */
+static inline bool
+_PyRop_IterGenMethod(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)) {
+        return false;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
+    if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
+        return false;
+    }
+    PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
+    PyObject *iter_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.iter);
+    if (iter_o == NULL) {
+        return false;
+    }
+    assert(PyFunction_Check(iter_o));
+    return ((PyFunctionObject *)iter_o)->func_version ==
+           FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.iter_version);
+}
+
+/* One step of an exact list at its tagged cursor: 1 an item (the next cursor
+ * in *next), 0 the end, whose value is None */
+static inline _PyStatusValue
+_PyRop_ListStep(PyValueBorrow it, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *list_o = PyValue_AsKnownObjectBorrow(it);
+    assert(PyList_CheckExact(list_o));
+    intptr_t i = PyValue_UntagIndex(cursor);
+    if ((size_t)i >= (size_t)PyList_GET_SIZE(list_o)) {
+        return (_PyStatusValue){0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(i + 1);
+    return (_PyStatusValue){1, PyValue_DUP(_PyValue_PublishedItem(
+        PyList_GET_VALUE(list_o, i)))};
+}
+
+static inline _PyStatusValue
+_PyRop_TupleStep(PyValueBorrow it, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *tuple_o = PyValue_AsKnownObjectBorrow(it);
+    assert(PyTuple_CheckExact(tuple_o));
+    intptr_t i = PyValue_UntagIndex(cursor);
+    if ((size_t)i >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+        return (_PyStatusValue){0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(i + 1);
+    return (_PyStatusValue){1, PyValue_DUP(_PyValue_PublishedItem(
+        PyTuple_GET_VALUE(tuple_o, i)))};
+}
+
+/* A range iterator's step: status 0 the int, 1 the end (None), -1 raised.
+ * start and len change before the int is made. */
+static inline _PyStatusValue
+_PyRop_RangeStep(PyValueBorrow it)
+{
+    _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(it);
+    assert(Py_TYPE(r) == &PyRangeIter_Type);
+    if (r->len <= 0) {
+        return (_PyStatusValue){1, PyValue_None};
+    }
+    long value = r->start;
+    r->start = value + r->step;
+    r->len--;
+    PyValue next = PyValue_FromInt64(value);
+    if (PyValue_IsNull(next)) {
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    return (_PyStatusValue){0, next};
+}
+
+/* The tagged branch of the generic step: 1 an item (the next cursor in
+ * *next), 0 the end, -1 raised */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_IndexedStep(PyValueBorrow iter, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+    intptr_t i = PyValue_UntagIndex(cursor);
+    assert(i >= 0);
+    _PyValueIndexPair step = Py_TYPE(iter_o)->_tp_iteritem(iter_o, i);
+    if (PyValue_IsNull(step.value)) {
+        return (_PyStatusValue){step.index < 0 ? -1 : 0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(step.index);
+    return (_PyStatusValue){1, step.value};
+}
+
+/* The value-slot branch of the generic step: status 0 the item, 1 the
+ * completion value, -1 raised; a StopIteration is the end */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_SlotStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                PyValueBorrow iter)
+{
+    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+    PyTypeObject *iter_type = Py_TYPE(iter_o);
+    _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(iter_type, iternext);
+    _PyStatusValue step;
+    if (next_value != NULL) {
+        _PyType_CHECK_VALUE_ROW(iter_type, _Py_VALUE_SLOT_INDEX_iternext);
+        step = next_value(iter_o);
+    }
+    else {
+        step = _PyValue_IterStep(iter_o);
+    }
+    if (step.status == PYGEN_NEXT) {
+        return (_PyStatusValue){0, step.value};
+    }
+    if (step.status == PYGEN_RETURN) {
+        return (_PyStatusValue){1, PyValue_IsNull(step.value) ? PyValue_None
+                                                              : step.value};
+    }
+    if (_PyForIter_StopIsExhaustion(tstate, frame)) {
+        return (_PyStatusValue){1, PyValue_None};
+    }
+    return (_PyStatusValue){-1, PyValue_NULL};
+}
+
 /* ForIter.Observed's STOP_ITERATION: the event of the completion value,
  * reported before the loop's pair is retired.  The exit is where the word
  * goes on exhaustion.  The value is closed on every path. */
@@ -2570,6 +2727,31 @@ gen_prologue(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
         return 0;
     }
     return gen_prologue_run(tstate, gen, code);
+}
+
+/* The generator of the iterable's cached __iter__ function, made at once
+ * with the iterable (a new owner of it) as its argument.  NULL, with the
+ * exception set, if the generator or its prologue failed; the iterable is
+ * not touched. */
+static Py_NO_INLINE PyValue
+_PyRop_NewIterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        PyValueBorrow iterable)
+{
+    PyHeapTypeObject *ht =
+        (PyHeapTypeObject *)Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
+    PyFunctionObject *func = (PyFunctionObject *)ht->_spec_cache.iter;
+    PyGenObject *gen = _PyGen_NewCall(
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
+        NULL, (PyCodeObject *)func->func_code, frame);
+    if (gen == NULL) {
+        return PyValue_NULL;
+    }
+    gen->gi_iframe.base[0] = PyValue_DUP(iterable);
+    if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
+        _PyGen_DiscardCall(gen);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal((PyObject *)gen);
 }
 
 /* The generator that the call at head creates, when the callee is a generator

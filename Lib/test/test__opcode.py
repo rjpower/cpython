@@ -43,7 +43,8 @@ class OpListTests(unittest.TestCase):
             return self.assertEqual(opcode.opname[map[name]], name)
 
         check_roundtrip('BINARY_OP', opcode.opmap)
-        check_roundtrip('BINARY_OP_ADD_INT', opcode._specialized_opmap)
+        for name in opcode._specialized_opmap:
+            check_roundtrip(name, opcode._specialized_opmap)
 
     def test_oplists(self):
         def check_function(self, func, expected):
@@ -122,21 +123,22 @@ class SpecializationStatsTests(unittest.TestCase):
             for op in opcode._specializations
             if opcode._inline_cache_entries.get(op, 0)
         ]
-        self.assertIn('binary_op', specialized_opcodes)
+        self.assertTrue(specialized_opcodes)
+        name = specialized_opcodes[0]
 
         stats = _opcode.get_specialization_stats()
         if stats is not None:
             self.assertIsInstance(stats, dict)
             self.assertCountEqual(stats.keys(), specialized_opcodes)
             self.assertCountEqual(
-                stats['binary_op'].keys(),
+                stats[name].keys(),
                 stat_names + ['failure_kinds'])
             for sn in stat_names:
-                self.assertIsInstance(stats['binary_op'][sn], int)
+                self.assertIsInstance(stats[name][sn], int)
             self.assertIsInstance(
-                stats['binary_op']['failure_kinds'],
+                stats[name]['failure_kinds'],
                 tuple)
-            for v in stats['binary_op']['failure_kinds']:
+            for v in stats[name]['failure_kinds']:
                 self.assertIsInstance(v, int)
 
 

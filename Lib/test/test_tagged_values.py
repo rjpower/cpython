@@ -459,6 +459,14 @@ def opnames(func):
     return names | {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
 
 
+def existing(*names):
+    """The names of old handlers that this build still has, and every arm
+    name (it has a dot).  A port deletes the old handlers of its family."""
+    return [name for name in names
+            if "." in name or name in dis._ir_opmap
+            or name in dis._specialized_opmap or name in dis.opmap]
+
+
 def handler_names(func):
     return [row[0] for row in _testinternalcapi.get_ir(func.__code__, True)]
 
@@ -510,8 +518,8 @@ class InlineIntTest(unittest.TestCase):
         names = opnames(f)
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
-        for name in ("Const.Small",
-                     "Add.Int", "Binary.Int", "FOR_ITER_RANGE"):
+        for name in existing("Const.Small",
+                             "Add.Int", "Binary.Int", "FOR_ITER_RANGE"):
             self.assertIn(name, names)
         self.assertIn("Add.Int", opnames(add3))
 
@@ -784,7 +792,7 @@ class InlineFloatTest(unittest.TestCase):
             return total, total < 1e300
         warm(f, 3)
         names = opnames(f)
-        for name in ("Const.Pool", "Add.Float", "Binary.Float"):
+        for name in existing("Const.Pool", "Add.Float", "Binary.Float"):
             self.assertIn(name, names)
         self.assertIn("Add.Float", handler_names(f))
         self.assertNotIn("Binary.Extended", names)

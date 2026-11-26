@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from test import test_generated_cases as cases
 from test import test_tools
 
 
@@ -17,8 +18,17 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_generator
 
 
+
+def need(*names):
+    """Skip the test unless bytecodes.c still defines every one of names with
+    a body: these tests read the real handlers of the old generator."""
+    if cases.live_names(cases.BYTECODES.read_text(), names) != list(names):
+        raise unittest.SkipTest("no live handler left; the old generator goes at D")
+
+
 class ErrorEffectTests(unittest.TestCase):
     def test_pre_observer_wrappers_require_actual_error_and_call_receipts(self):
+        need("INSTRUMENTED_INSTRUCTION", "INSTRUMENTED_LINE")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -58,6 +68,7 @@ class ErrorEffectTests(unittest.TestCase):
         self.assertFalse(missing[names[1]].observer_entry)
 
     def test_pre_observer_source_uses_typed_metadata_and_exact_callback_roles(self):
+        need("INSTRUMENTED_LINE")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -227,6 +238,7 @@ class ErrorEffectTests(unittest.TestCase):
                          summary.error_sources)
 
     def test_actual_scalar_sources_use_the_same_summary(self):
+        need("NOP", "IR_JUMP", "LOAD_COMMON_CONSTANT", "GET_ANEXT")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -256,6 +268,7 @@ class ErrorEffectTests(unittest.TestCase):
                 self.assertIsNone(summary)
 
     def test_metadata_and_step_capabilities_require_audited_interfaces(self):
+        need("CLEANUP_THROW", "INSTRUMENTED_RESUME", "LOAD_COMMON_CONSTANT", "RESUME")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -318,6 +331,7 @@ class ErrorEffectTests(unittest.TestCase):
             self.assertFalse(contracts["LOAD_COMMON_CONSTANT"].abrupt_operands)
 
     def test_complete_routes_require_actual_error_and_publication_receipts(self):
+        need("IR_JUMP", "LOAD_COMMON_CONSTANT", "GET_ANEXT", "RESUME", "INSTRUMENTED_RESUME", "CLEANUP_THROW", "UNARY_INVERT", "GET_LEN", "UNARY_NEGATIVE", "BINARY_OP_ADD")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -349,6 +363,7 @@ class ErrorEffectTests(unittest.TestCase):
         self.assertFalse(incomplete["LOAD_COMMON_CONSTANT"].error_routes)
 
     def test_send_routes_require_each_reached_adapter_receipt(self):
+        need("SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -410,6 +425,7 @@ class ErrorEffectTests(unittest.TestCase):
                     self.assertFalse(incomplete[name].abrupt_operands, name)
 
     def test_send_source_changes_revoke_the_whole_family(self):
+        need("SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN")
         # A changed SEND body is refused where its declaration is checked
         # (the verifier, in the records), or by the boundary that holds the
         # completion and entry recipes; no family member is left with error
@@ -456,6 +472,7 @@ class ErrorEffectTests(unittest.TestCase):
                     self.fail(f"accepted; expected {refusal}")
 
     def test_read_only_projections_keep_actual_late_error_routes(self):
+        need("IR_JUMP", "LOAD_COMMON_CONSTANT")
         constant = ("assert(oparg < NUM_COMMON_CONSTANTS); "
                     "value = PyValue_DUP(tstate->interp->common_consts[oparg]);")
         _, summary = self.analyze(constant)

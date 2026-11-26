@@ -257,13 +257,12 @@ class ConstantSlotOperandTests(unittest.TestCase):
         "The constants that the last call of the code reads, in order"
         slots = self.const_slots(code)
         call = [i for i in dis.get_instructions(code)
-                if i.opname.startswith("CALL")][-1]
+                if i.family.startswith("Call")][-1]
         return [slots[s] for s in call.srcs if s in slots]
 
     def loads(self, code):
-        return [i.opname for i in dis.get_instructions(code)
-                if i.opname.startswith(("LOAD_SMALL_INT", "LOAD_CONST",
-                                        "LOAD_COMMON_CONSTANT"))]
+        return [i.arm for i in dis.get_instructions(code)
+                if i.family == "Const"]
 
     def check(self, function, expected, *args):
         for result in run(function, *args):
@@ -308,7 +307,7 @@ class ConstantSlotOperandTests(unittest.TestCase):
         # In order of static use; the ninth keeps its load
         self.assertEqual(self.call_sources(f.__code__), list(range(1, 9)))
         self.assertEqual(len(self.const_slots(f.__code__)), 8)
-        self.assertEqual(self.loads(f.__code__), ["LOAD_SMALL_INT"])
+        self.assertEqual(self.loads(f.__code__), ["Const.Small"])
 
     def test_repeated_constant_shares_a_slot(self):
         def f(g):

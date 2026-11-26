@@ -26,7 +26,7 @@ ROOT = Path(test_tools.basepath)
 SCANNED = (
     "Python/*.c", "Python/*.h", "Objects/*.c", "Objects/*.h",
     "Include/internal/*.h", "Python/generated_rop_*.c.h",
-    "Python/register_ops/*.rop",
+    "Python/register_ops/*.rop", "Lib/test/support/ir_dis.py",
 )
 
 EXCLUDED = {
@@ -56,6 +56,12 @@ SHAPED = (
 )
 
 
+# The disassembler of the register IR reads the stack bytecode only through
+# the stack disassembler, in the one function that the allowance names
+DISASSEMBLER = "Lib/test/support/ir_dis.py"
+DISASSEMBLER_SHAPED = (r"\bimport dis\b", r"\bfrom dis\b")
+
+
 @dataclass(frozen=True)
 class Allowed:
     files: str                      # a glob, relative to the source root
@@ -82,6 +88,10 @@ ALLOWED: tuple[Allowed, ...] = (
                   "the public API takes and returns"),
     Allowed("Python/instrumentation.c", ("event_offset",), r".",
             "sys.monitoring offsets are co_code offsets, which cross CACHE entries"),
+    # The disassembler of the register IR names no stack instruction, except
+    # to answer which one a word came from
+    Allowed(DISASSEMBLER, ("origin_opcode",), r".",
+            "the one function that reads co_code at a word's origin offset"),
     Allowed("Python/specialize.c", None, r"\b(?:EXIT_INIT_CHECK|RETURN_VALUE)\b",
             "the static init-cleanup code object holds co_code_adaptive"),
 )
@@ -99,13 +109,16 @@ def stack_names() -> set[str]:
     return {op.name for op in stack_ops.STACK_OPS}
 
 
-def hit_pattern() -> re.Pattern:
+def hit_pattern(rel: str) -> re.Pattern:
     names = sorted(stack_names(), key=len, reverse=True)
-    return re.compile(r"\b(" + "|".join(names) + r")\b|" + "|".join(SHAPED))
+    shaped = SHAPED + (DISASSEMBLER_SHAPED if rel == DISASSEMBLER else ())
+    return re.compile(r"\b(" + "|".join(names) + r")\b|" + "|".join(shaped))
 
 
-def strip_comments(text: str, rop: bool) -> str:
-    if not rop:
+def strip_comments(text: str, rel: str) -> str:
+    if rel.endswith(".py"):
+        return re.sub(r"#[^\n]*", "", text)
+    if not rel.endswith(".rop"):
         text = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"),
                       text, flags=re.S)
     return re.sub(r"//[^\n]*", "", text)
@@ -125,11 +138,11 @@ FUNCTION = re.compile(r"^(?:[A-Za-z_][\w \*]*?[ \*])?(\w+)\([^;]*$")
 
 def hits() -> list[tuple[str, str, int, str]]:
     """(file, enclosing top-level function, line number, line)"""
-    pattern = hit_pattern()
     found = []
     for path in scanned_files():
         rel = path.relative_to(ROOT).as_posix()
-        text = strip_comments(path.read_text(errors="replace"), rel.endswith(".rop"))
+        pattern = hit_pattern(rel)
+        text = strip_comments(path.read_text(errors="replace"), rel)
         function = ""
         for number, line in enumerate(text.split("\n"), 1):
             match = FUNCTION.match(line)

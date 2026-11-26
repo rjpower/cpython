@@ -3,7 +3,7 @@
 import ast
 import marshal
 import math
-from test.support import ir_dis as opcode
+import opcode
 import unittest
 import weakref
 

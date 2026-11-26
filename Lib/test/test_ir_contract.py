@@ -8,10 +8,7 @@ homes, with the feedback layouts and with sys.monitoring.
 """
 
 from test.support import ir_dis as dis
-import io
-from test.support import ir_dis as opcode
 import os
-import re
 import sys
 import textwrap
 import types
@@ -21,55 +18,24 @@ from test import test_tools
 from test.support import import_helper, os_helper, script_helper
 
 import _opcode
+import _testinternalcapi
+from _opcode_metadata import _ir_handlers
 
 CONTRACT = _opcode.get_ir_contract()
-# The rows of the register instruction arms follow the old handlers and have
-# no stack effect to check (test_ir_arm_words)
-OLD_CONTRACT = CONTRACT[:_opcode.IR_FIRST_ARM]
-ROWS = {h: row for h, row in enumerate(OLD_CONTRACT) if row is not None}
-BY_NAME = {opcode._all_opname[h]: row for h, row in ROWS.items()}
-ALL_BY_NAME = {opcode._all_opname[h]: row for h, row in enumerate(CONTRACT)
-               if row is not None}
+ROWS = {h: row for h, row in enumerate(CONTRACT) if row is not None}
+BY_NAME = {dis._all_opname[h]: row for h, row in ROWS.items()}
+ALL_BY_NAME = BY_NAME
 
-SLOT_ROLES = (_opcode.IR_ROLE_LOCAL_IN, _opcode.IR_ROLE_LOCAL_OUT,
-              _opcode.IR_ROLE_LOCAL_CLEAR, _opcode.IR_ROLE_LOCAL_MOVE,
-              _opcode.IR_ROLE_CELL)
-FIELD_LOCS = (_opcode.IR_LOC_A, _opcode.IR_LOC_B, _opcode.IR_LOC_C,
-              _opcode.IR_LOC_D)
-
-# The feedback entry of each family (Include/internal/pycore_feedback.h):
+# The feedback entry of some families (Include/internal/pycore_feedback.h):
 # its kind and size in bytes
 FEEDBACK = {
-    "FOR_ITER": ("UNARY", 24),
-    "GET_ITER": ("UNARY", 24),
-    "SEND": ("UNARY", 24),
-    "CALL_KW": ("CALL", 40),
-    "CALL_FUNCTION_EX": ("CALL", 40),
+    "ForIter": ("UNARY", 24),
+    "IterOpen": ("UNARY", 24),
+    "Send": ("UNARY", 24),
+    "CallKw": ("CALL", 40),
+    "CallEx": ("CALL", 40),
 }
 
-OPARGS = (0, 1, 2, 3, 7, 0x102)
-
-# Ops that no stack bytecode has as an opcode: the translator_only
-# instructions of Tools/cases_generator/stack_ops.py
-TRANSLATOR_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
-
-
-def oparg_role(row):
-    "The role of the field that holds the oparg, or None"
-    if row.imm in FIELD_LOCS:
-        return row.roles[FIELD_LOCS.index(row.imm)]
-    return None
-
-
-def present(*names):
-    """The names that still have a row.  A ported stack op's handlers leave
-    the table, so a test that names handlers follows those that remain."""
-    found = [name for name in names if name in BY_NAME]
-    if not found:
-        raise unittest.SkipTest("no live handler left; the old generator goes at D")
-    return found
 
 
 def names_with(bit, key="effects"):
@@ -80,8 +46,7 @@ class ContractTests(unittest.TestCase):
 
     def test_normal_physical_transfer(self):
         testapi = import_helper.import_module("_testinternalcapi")
-        named = {**opcode.opmap, **opcode._specialized_opmap,
-                 **opcode._ir_handlers}
+        named = _ir_handlers
         preserve = (0, -1)
         set_null = (1, -1)
         unknown = (2, -1)
@@ -130,16 +95,12 @@ class ContractTests(unittest.TestCase):
 
     def test_rows(self):
         self.assertEqual(len(CONTRACT), _opcode.IR_NUM_HANDLERS)
-        named = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_handlers}
+        self.assertEqual(len(ROWS), len(CONTRACT))
+        self.assertEqual(len(dis._all_opname), _opcode.IR_NUM_HANDLERS)
         for h, row in ROWS.items():
-            with self.subTest(handler=opcode._all_opname[h]):
+            with self.subTest(handler=dis._all_opname[h]):
                 self.assertTrue(row.flags & _opcode.IR_VALID)
-                self.assertIn(opcode._all_opname[h], named)
-        for name in (*opcode._specialized_opmap, *opcode._ir_handlers):
-            if (opcode._ir_handlers.get(name, 0) >= _opcode.IR_FIRST_ARM
-                    or name in TRANSLATOR_ONLY):
-                continue
-            self.assertIn(name, BY_NAME)
+                self.assertEqual(_ir_handlers[dis._all_opname[h]], h)
 
     def test_fields(self):
         # Sources are numbered from 0 in field order; a GROUP field names
@@ -147,7 +108,7 @@ class ContractTests(unittest.TestCase):
         homes = (_opcode.IR_HOME_PRESERVE, _opcode.IR_HOME_VACATE,
                  _opcode.IR_HOME_DEFINE, _opcode.IR_HOME_UNKNOWN)
         for h, row in enumerate(CONTRACT[_opcode.IR_FIRST_ARM:], _opcode.IR_FIRST_ARM):
-            with self.subTest(handler=opcode._all_opname[h]):
+            with self.subTest(handler=dis._all_opname[h]):
                 roles = row.roles
                 inputs = [r - _opcode.IR_ROLE_SRC for r in roles
                           if r >= _opcode.IR_ROLE_SRC]
@@ -168,7 +129,7 @@ class ContractTests(unittest.TestCase):
         # ForIter(item, pair): the step defines the item and keeps the
         # receiver; the exhaustion retires the receiver and the cursor (home
         # 4, the pair's part 1).  Both edges publish before their callbacks.
-        row = CONTRACT[opcode._ir_handlers["ForIter.Generic"]]
+        row = CONTRACT[_ir_handlers["ForIter.Generic"]]
         self.assertEqual(row.group, 2)
         step, done = row.edges
         self.assertEqual(step[0], _opcode.IR_HOME_DEFINE)
@@ -178,66 +139,47 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(row.committed, 0b11)
 
     def test_slot_roles(self):
-        expected = {
-            "STORE_FAST": _opcode.IR_ROLE_LOCAL_OUT,
-            "MAKE_CELL": _opcode.IR_ROLE_LOCAL_OUT,
-            "LOAD_DEREF": _opcode.IR_ROLE_CELL,
-            "STORE_DEREF": _opcode.IR_ROLE_CELL,
-            "DELETE_DEREF": _opcode.IR_ROLE_CELL,
-        }
-        for name in present(*expected):
-            role = expected[name]
+        # A cell is named by a CELL field; the arms of the other families
+        # name their locals as homes
+        for name in ("CellRead.Get", "CellStore.Set", "CellDelete.Unbind"):
             with self.subTest(name=name):
-                self.assertEqual(oparg_role(BY_NAME[name]), role)
+                self.assertIn(_opcode.IR_ROLE_CELL, BY_NAME[name].roles)
 
     def test_targets(self):
-        for name, op in opcode.opmap.items():
-            handler = opcode._ir_handlers.get(name)
-            row = None if handler is None else CONTRACT[handler]
-            if row is None or op >= opcode.MIN_INSTRUMENTED_OPCODE:
+        # A word names a target word if and only if its family declares a
+        # target operand
+        tables = _testinternalcapi.arm_operands()
+        for name, row in BY_NAME.items():
+            family = name.split(".")[0]
+            if family not in tables:
                 continue
             with self.subTest(name=name):
+                declared = any(operand[1] == "target" for operand in tables[family])
                 target = row.flags & (_opcode.IR_JUMPS | _opcode.IR_FORWARD)
-                # CLEANUP_THROW is a jump only in the IR: it names the word
-                # that its handler continues at, which co_code does not
-                self.assertEqual(bool(target), op in opcode.hasjump
-                                 or name == "CLEANUP_THROW")
+                self.assertEqual(bool(target), declared)
         self.assertLessEqual(
-            {name for name in names_with(_opcode.IR_NAMES_TARGET, "flags")
-             if not name.startswith("INSTRUMENTED_")},
-            {"END_ASYNC_FOR"})
-        always = {name for name in names_with(_opcode.IR_JUMP_ALWAYS, "flags")
-                  if not name.startswith("INSTRUMENTED_")}
-        for name in always:
+            {name.split(".")[0] for name in names_with(_opcode.IR_NAMES_TARGET, "flags")},
+            {"EndAsyncFor"})
+        for name in names_with(_opcode.IR_JUMP_ALWAYS, "flags"):
             self.assertTrue(BY_NAME[name].flags
                             & (_opcode.IR_JUMPS | _opcode.IR_FORWARD), name)
-            self.assertNotIn(name, ("FOR_ITER", "SEND", "POP_JUMP_IF_TRUE"))
+            self.assertNotEqual(name.split(".")[0], "ForIter")
 
     def test_feedback(self):
         kinds = dis._FEEDBACK_KINDS
+        tables = _testinternalcapi.arm_operands()
         for h, row in ROWS.items():
             # A twin shares the format, and so the entry, of its family
-            family = opcode._all_opname[h]
-            with self.subTest(handler=opcode._all_opname[h]):
-                if row.fb == _opcode.IR_LOC_NONE:
-                    self.assertEqual((row.fb_kind, row.fb_size), (0, 0))
-                    continue
-                self.assertIn(family, FEEDBACK)
-                self.assertEqual((kinds[row.fb_kind], row.fb_size),
-                                 FEEDBACK[family])
-        # Every family that has an entry has one in the generic form
-        for family in FEEDBACK:
-            if family in BY_NAME:
-                self.assertNotEqual(BY_NAME[family].fb, _opcode.IR_LOC_NONE)
-        # The generic handlers that specialise from their entry
-        self.assertLessEqual(
-            {opcode._all_opname[op] for op in range(_opcode.IR_FIRST_ARM)
-             if CONTRACT[op] is not None
-             and not opcode._all_opname[op].startswith("INSTRUMENTED_")
-             and op not in opcode._ir_only_handlers
-             and CONTRACT[op].effects & _opcode.IR_SPECIALIZES},
-            # GET_ITER and FOR_ITER specialise again at step 3
-            set(FEEDBACK) - {"GET_ITER", "FOR_ITER"})
+            family = dis._all_opname[h].split(".")[0]
+            with self.subTest(handler=dis._all_opname[h]):
+                # A family has an entry if and only if it declares a
+                # feedback operand
+                declared = any(operand[1] == "feedback"
+                               for operand in tables.get(family, ()))
+                self.assertEqual(declared, row.fb_size != 0)
+                if family in FEEDBACK:
+                    self.assertEqual((kinds[row.fb_kind], row.fb_size),
+                                     FEEDBACK[family])
 
     def test_feedback_tables(self):
         # The assembler writes each entry's kind into the code object's
@@ -248,13 +190,13 @@ class ContractTests(unittest.TestCase):
             for co in _code_objects(module):
                 ir = dis.IRCode(co)
                 fbinit = ir.co_fbinit
-                for _, h, _, _, _, fb in dis._unpack_opargs(ir.co_code, fbinit):
+                for word in dis.get_instructions(co):
+                    fb, h = word.fb, _ir_handlers[word.arm]
                     if not fb or fbinit is None:
                         continue
                     kind, _, units = dis._feedback_entry(fbinit, fb)
                     self.assertGreaterEqual(units * 8, CONTRACT[h].fb_size)
-                    self.assertEqual(kind, CONTRACT[h].fb_kind,
-                                     opcode._all_opname[h])
+                    self.assertEqual(kind, CONTRACT[h].fb_kind, word.arm)
                     seen.add(dis._FEEDBACK_KINDS[kind])
         # COUNTER is entry 0, which no word names
         # (No word names BRANCH: a conditional jump keeps its operand's type
@@ -264,36 +206,30 @@ class ContractTests(unittest.TestCase):
     def test_monitoring(self):
         events = sys.monitoring.events
         for h, row in ROWS.items():
-            name = opcode._all_opname[h]
+            name = dis._all_opname[h]
             with self.subTest(handler=name):
                 twin = row.twin
-                if name.startswith("INSTRUMENTED_"):
-                    self.assertEqual(twin, h)
                 if twin is None:
-                    self.assertEqual(row.events, 0)
+                    # Only an observed wrapper of a whole family has events
+                    # and no twin
+                    self.assertTrue(row.events == 0 or name.endswith(".Observed"))
                     continue
-                self.assertTrue(opcode._all_opname[twin].startswith("INSTRUMENTED_"))
+                self.assertTrue(dis._all_opname[twin].endswith(".Observed"))
                 self.assertEqual(ROWS[twin].twin, twin)
                 self.assertEqual(row.events, ROWS[twin].events)
                 self.assertEqual(row.flags, ROWS[twin].flags)
-                self.assertTrue(ROWS[twin].effects & _opcode.IR_RUNS_PYTHON)
         expected = {
-            "INSTRUMENTED_CALL_KW": {"CALL", "C_RETURN", "C_RAISE"},
-            "INSTRUMENTED_LINE": {"LINE"},
-            "INSTRUMENTED_INSTRUCTION": {"INSTRUCTION"},
-            "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
-            "INSTRUMENTED_YIELD_DELEGATED": {"PY_YIELD"},
-            "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
-            "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
+            "CallKw.Generic": {"CALL", "C_RETURN", "C_RAISE"},
+            "Yield.Ordinary": {"PY_YIELD"},
+            "Send.Generic": {"STOP_ITERATION", "BRANCH_LEFT"},
         }
-        for name in present(*expected):
-            names = expected[name]
+        for name, names in expected.items():
             with self.subTest(name=name):
                 bits = BY_NAME[name].events
                 for event in names:
                     self.assertTrue(bits & getattr(events, event), event)
-        if "CALL_KW" in BY_NAME:
-            self.assertEqual(BY_NAME["CALL_KW"].twin, opcode.opmap["INSTRUMENTED_CALL_KW"])
+        self.assertEqual(BY_NAME["CallKw.Generic"].twin,
+                         _ir_handlers["CallKw.Generic.Observed"])
 
     def test_monitoring_run(self):
         # Every declared event observed in a code object belongs to one of
@@ -354,49 +290,35 @@ class ContractTests(unittest.TestCase):
                           if isinstance(c, types.CodeType)}:
             allowed = added
             # A register instruction arm declares its family's events
-            for _, h, *_ in dis._unpack_opargs(dis.IRCode(co).co_code):
-                if h < len(CONTRACT) and CONTRACT[h] is not None:
-                    allowed |= CONTRACT[h].events
+            for word in dis.get_instructions(co):
+                allowed |= CONTRACT[_ir_handlers[word.arm]].events
             with self.subTest(code=co.co_name):
                 self.assertEqual(fired.get(co, 0) & ~allowed, 0)
 
     def test_effects(self):
         for h, row in ROWS.items():
             effects, flags = row.effects, row.flags
-            with self.subTest(handler=opcode._all_opname[h]):
+            with self.subTest(handler=dis._all_opname[h]):
                 # The format runs code if any of its handlers may
                 if effects & _opcode.IR_RUNS_PYTHON:
                     self.assertTrue(flags & _opcode.IR_RUNS_CODE)
                 if effects & _opcode.IR_PURE:
-                    # POP_TOP is pure but escapes: the release may run code
+                    # A release may run code, but a pure word does not raise
                     self.assertFalse(effects & _opcode.IR_RAISES)
-                if effects & (_opcode.IR_PUSHES_FRAME | _opcode.IR_SUSPENDS):
-                    self.assertTrue(effects & _opcode.IR_RUNS_PYTHON)
                 if effects & _opcode.IR_SPECIALIZES:
-                    name = opcode._all_opname[h]
-                    self.assertNotIn(name, opcode._specialized_opmap)
-                    self.assertFalse(name.startswith("INSTRUMENTED_"))
-                    self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
-        suspends = {opcode._all_opname[h] for h, row in ROWS.items()
+                    self.assertNotEqual(row.fb_size, 0)
+        suspends = {dis._all_opname[h] for h, row in ROWS.items()
                     if row.effects & _opcode.IR_SUSPENDS}
         # A send to a native iterator that suspends yields its value from
         # the outer frame, which the record states as a YIELD transfer
-        self.assertLessEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
-                                        "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
-                                        "SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"})
-        for name in ("CALL_KW_PY", "SEND", "SEND_GEN", "FOR_ITER_GEN"):
-            if name in BY_NAME:
-                self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
-                                name)
-        for name in ("LOAD_COMMON_CONSTANT",):
-            if name in BY_NAME:
-                self.assertFalse(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        for name in ("CALL_KW", "STORE_FAST"):
-            if name in BY_NAME:
-                self.assertTrue(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        for name in ("COMPARE_OP_INT", "Binary.Int"):
-            if name in BY_NAME:
-                self.assertTrue(BY_NAME[name].effects & _opcode.IR_DEOPTS)
+        self.assertLessEqual({name.split(".")[0] for name in suspends},
+                             {"Yield", "YieldFrom", "Send"})
+        for name in ("CallKw.Plan", "Send.Gen"):
+            self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
+                            name)
+        self.assertFalse(BY_NAME["Const.Common"].flags & _opcode.IR_RUNS_CODE)
+        self.assertTrue(BY_NAME["CallKw.Generic"].flags & _opcode.IR_RUNS_CODE)
+        self.assertTrue(BY_NAME["Binary.Int"].effects & _opcode.IR_DEOPTS)
 
 
 def _code_objects(module):

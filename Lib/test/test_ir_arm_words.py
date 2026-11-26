@@ -313,7 +313,7 @@ class ForceArmTests(unittest.TestCase):
 
     def test_ir_dis_output_names_a_forced_arm_word(self):
         capi.force_arm(self.code, self.offset, "Add.Int")
-        handlers = [i.handler for i in
+        handlers = [i.arm for i in
                     ir_dis.get_instructions(self.code, adaptive=True)]
         self.assertIn("Add.Int", handlers)
 

@@ -139,5 +139,52 @@ class SpecializationStatsTests(unittest.TestCase):
                 self.assertIsInstance(v, int)
 
 
+class IRMetadataTests(unittest.TestCase):
+    """The declared facts that the disassembler of the register IR reads"""
+
+    def test_handler_names(self):
+        names = _opcode.get_ir_handler_names()
+        self.assertEqual(len(names), _opcode.IR_NUM_HANDLERS)
+        self.assertEqual(len(set(names)), len(names))
+        self.assertEqual(names[_opcode.IR_OPERANDS], "IR_OPERANDS")
+        for name in names[_opcode.IR_FIRST_ARM:]:
+            self.assertIn(".", name)
+
+    def test_contract_operands(self):
+        names = _opcode.get_ir_handler_names()
+        contract = _opcode.get_ir_contract()
+        shapes = {name: contract[names.index(name)]
+                  for name in ("Add.Int", "Call.Generic", "CallKw.Generic",
+                               "CallEx.Generic", "Build.List", "Move.Copy")}
+        self.assertEqual(shapes["Add.Int"].operands, _opcode.IR_OPERANDS_NONE)
+        self.assertEqual(shapes["Call.Generic"].operands, _opcode.IR_OPERANDS_CALL)
+        self.assertEqual(shapes["CallKw.Generic"].operands, _opcode.IR_OPERANDS_KW)
+        self.assertEqual(shapes["CallEx.Generic"].operands, _opcode.IR_OPERANDS_EX)
+        for name in ("Build.List", "Move.Copy"):
+            self.assertEqual(shapes[name].operands, _opcode.IR_OPERANDS_SPANS)
+            self.assertIn(_opcode.IR_ROLE_COUNT, shapes[name].roles)
+        self.assertIn(_opcode.IR_ROLE_ELEMENT, shapes["Build.List"].roles)
+
+    def test_arm_operands(self):
+        testinternalcapi = import_module("_testinternalcapi")
+        operands = testinternalcapi.arm_operands()
+        names = {name for name, *_ in operands["GetAttr"]}
+        self.assertEqual(names, {"dst", "obj", "name", "fb"})
+        # (name, kind, role, optional, bits, offset): the head's fields sit
+        # at bit 16 and every 12 bits after it
+        self.assertEqual(operands["GetAttr"][0], ("dst", "home", "dst", 0, 12, 16))
+        self.assertEqual(operands["Jump"], (("target", "target", "none", 0, 24, 16),))
+        kinds = {kind for family in operands.values()
+                 for _, kind, *_ in family}
+        self.assertEqual(kinds, {"home", "imm", "name", "feedback", "target",
+                                 "vector", "flag"})
+
+    def test_feedback_names(self):
+        testinternalcapi = import_module("_testinternalcapi")
+        kinds, states = testinternalcapi.get_feedback_names()
+        self.assertEqual(kinds[0], "COUNTER")
+        self.assertEqual(states[:2], ("COLD", "MONO"))
+
+
 if __name__ == "__main__":
     unittest.main()

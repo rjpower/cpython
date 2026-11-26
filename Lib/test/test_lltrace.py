@@ -53,9 +53,9 @@ class TestLLTrace(unittest.TestCase):
             del __lltrace__
             dont_trace_2()
         """)
-        self.assertIn("GET_ITER", stdout)
-        self.assertIn("FOR_ITER", stdout)
-        self.assertIn("CALL_INTRINSIC_1", stdout)
+        self.assertIn("IterOpen.", stdout)
+        self.assertIn("ForIter.", stdout)
+        self.assertIn("Intrinsic.", stdout)
         # Register IR discards the result into the discard slot, the last
         # local of the frame (before any free variables, which trace_me has
         # none of).  The first trace shows the frame's locals.
@@ -65,9 +65,9 @@ class TestLLTrace(unittest.TestCase):
         discard = match.group(1).count(",")
         self.assertRegex(
             stdout,
-            rf"(?m)^    ir CALL_INTRINSIC_1 {discard} [0-9]+ [0-9]+ [0-9]+$")
-        self.assertNotIn("BINARY_OP", stdout)
-        self.assertNotIn("UNARY_NEGATIVE", stdout)
+            rf"(?m)^    ir Intrinsic\.\w+ {discard} [0-9]+ [0-9]+ [0-9]+$")
+        self.assertNotIn("Binary.", stdout)
+        self.assertNotIn("Unary.", stdout)
 
         self.assertIn("'trace_me' in module '__main__'", stdout)
         self.assertNotIn("dont_trace_1", stdout)
@@ -80,26 +80,18 @@ class TestLLTrace(unittest.TestCase):
             test_lltrace.example()
         """)
         self.assertIn("'example' in module 'test.test_lltrace'", stdout)
-        self.assertIn('LOAD_CONST', stdout)
-        self.assertIn('FOR_ITER', stdout)
+        self.assertIn('Const.', stdout)
+        self.assertIn('ForIter.', stdout)
         self.assertIn('this is an example', stdout)
 
-        # check that offsets match the output of dis.dis()
+        # check that the arms at the word indices match the disassembly of
+        # the register IR
         instr_map = {i.offset: i for i in dis.get_instructions(example, adaptive=True)}
         for line in stdout.splitlines():
-            offset, colon, opname_oparg = line.partition(":")
+            offset, colon, arm = line.partition(":")
             if not colon:
                 continue
-            offset = int(offset)
-            opname_oparg = opname_oparg.split()
-            if len(opname_oparg) == 2:
-                opname, oparg = opname_oparg
-                oparg = int(oparg)
-            else:
-                (opname,) = opname_oparg
-                oparg = None
-            self.assertEqual(instr_map[offset].opname, opname)
-            self.assertEqual(instr_map[offset].arg, oparg)
+            self.assertEqual(instr_map[int(offset)].arm, arm.strip())
 
     def test_lltrace_does_not_crash_on_subscript_operator(self):
         # If this test fails, it will reproduce a crash reported as

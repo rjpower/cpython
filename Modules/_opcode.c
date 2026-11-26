@@ -11,6 +11,7 @@
 #include "pycore_compile.h"
 #include "pycore_intrinsics.h"
 #include "pycore_ir.h"              // _PyIR_Formats
+#include "pycore_ir_metadata.h"     // _PyIR_OnlyNames
 #include "pycore_ir_exception.h"    // shared semantic container decoder
 #include "pycore_list.h"            // PyList_GET_VALUE()
 #include "pycore_opcode_metadata.h" // IS_STACK_OPCODE, OPCODE_HAS_*, etc
@@ -409,6 +410,8 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"twin", "the handler that instrumentation runs, or None"},
     {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
     {"word_flags", "the canonical word flags the handler admits (IR_F_NO_SELF, IR_F_NO_KW)"},
+    {"operands", "the words after the head: an IR_OPERANDS_* constant"},
+    {"fixed_words", "the operand words after the head before a span's elements"},
     {NULL}
 };
 
@@ -463,6 +466,8 @@ ir_contract_row(PyTypeObject *type, int h)
         handler_or_none(fmt->twin),
         PyLong_FromUnsignedLong(fmt->events),
         PyLong_FromLong(fmt->word_flags),
+        PyLong_FromLong(fmt->operands),
+        PyLong_FromLong(fmt->fixed_words),
     };
     static_assert(Py_ARRAY_LENGTH(items)
                   == Py_ARRAY_LENGTH(ir_contract_fields) - 1,
@@ -629,6 +634,26 @@ _opcode_get_ir_word_length(PyObject *module, PyObject *arg)
     return PyLong_FromLong(_PyIR_WordLength((_PyIRWord)word));
 }
 
+/* The name of each handler id: `Family.Arm` (with `.Observed` for a wrapper),
+ * or IR_OPERANDS for the word kind that holds operands. */
+static PyObject *
+_opcode_get_ir_handler_names(PyObject *module, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *names = PyList_New(IR_NUM_HANDLERS);
+    if (names == NULL) {
+        return NULL;
+    }
+    for (int h = 0; h < IR_NUM_HANDLERS; h++) {
+        PyObject *name = PyUnicode_FromString(_PyIR_HandlerName(h));
+        if (name == NULL) {
+            Py_DECREF(names);
+            return NULL;
+        }
+        PyList_SET_VALUE(names, h, PyValue_PrepareOwned(name));
+    }
+    return names;
+}
+
 static PyMethodDef
 opcode_functions[] =  {
     _OPCODE_STACK_EFFECT_METHODDEF
@@ -648,6 +673,9 @@ opcode_functions[] =  {
     _OPCODE_GET_IR_CONTRACT_METHODDEF
     _OPCODE_GET_EXCEPTION_ENTRIES_METHODDEF
     _OPCODE_GET_RECOVERY_ENTRIES_METHODDEF
+    {"get_ir_handler_names", _opcode_get_ir_handler_names, METH_NOARGS,
+     "get_ir_handler_names()\n--\n\n"
+     "Return the name of each handler id, in id order."},
     {"get_ir_word_length", _opcode_get_ir_word_length, METH_O,
      "get_ir_word_length(word, /)\n--\n\n"
      "Return the number of words of the instruction whose first word is word."},
@@ -691,7 +719,14 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_ROLE_LOCAL_CLEAR", _PyIR_ROLE_LOCAL_CLEAR);
     ADD_IR_CONSTANT("IR_ROLE_LOCAL_MOVE", _PyIR_ROLE_LOCAL_MOVE);
     ADD_IR_CONSTANT("IR_ROLE_CELL", _PyIR_ROLE_CELL);
+    ADD_IR_CONSTANT("IR_ROLE_COUNT", _PyIR_ROLE_COUNT);
+    ADD_IR_CONSTANT("IR_ROLE_ELEMENT", _PyIR_ROLE_ELEMENT);
     ADD_IR_CONSTANT("IR_ROLE_SRC", _PyIR_ROLE_SRC);
+    ADD_IR_CONSTANT("IR_OPERANDS_NONE", _PyIR_OPERANDS_NONE);
+    ADD_IR_CONSTANT("IR_OPERANDS_CALL", _PyIR_OPERANDS_CALL);
+    ADD_IR_CONSTANT("IR_OPERANDS_KW", _PyIR_OPERANDS_KW);
+    ADD_IR_CONSTANT("IR_OPERANDS_EX", _PyIR_OPERANDS_EX);
+    ADD_IR_CONSTANT("IR_OPERANDS_SPANS", _PyIR_OPERANDS_SPANS);
     ADD_IR_CONSTANT("IR_LOC_NONE", _PyIR_LOC_NONE);
     ADD_IR_CONSTANT("IR_LOC_A", _PyIR_LOC_A);
     ADD_IR_CONSTANT("IR_LOC_B", _PyIR_LOC_B);

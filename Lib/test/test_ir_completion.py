@@ -3,7 +3,6 @@
 import dis as stack_dis
 from test.support import ir_dis as dis
 import gc
-import struct
 import sys
 import unittest
 
@@ -12,8 +11,13 @@ from test.support import import_helper
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
 
-def code_names(func):
-    return [instruction.opname for instruction in dis.get_instructions(func)]
+def arms(func):
+    return [word.arm for word in dis.get_instructions(func)]
+
+
+def origins(func):
+    # The stack instruction that each word was lowered from
+    return [dis.origin_opcode(func, word) for word in dis.get_instructions(func)]
 
 
 class SemanticCompletionTests(unittest.TestCase):
@@ -39,19 +43,15 @@ class SemanticCompletionTests(unittest.TestCase):
             return left, right
 
         instructions = list(dis.get_instructions(outer))
-        throws = [i for i in instructions if i.opname == 'CLEANUP_THROW']
+        throws = [i for i in instructions if i.family == 'CleanupThrow']
         self.assertEqual(len(throws), 2)
         offsets = {i.offset for i in instructions}
-        ir_code = dis.IRCode(outer.__code__).co_code
-        words = struct.unpack(f'<{len(ir_code) // 8}Q', ir_code)
         for instruction in throws:
-            # The word names its target, a word of the code: the signed
-            # distance of field D, from the word after it
-            distance = words[instruction.offset] >> 52
-            if distance >= 1 << 11:
-                distance -= 1 << 12
-            self.assertIn(instruction.offset + 1 + distance, offsets)
-        self.assertNotIn('END_SEND', [i.opname for i in instructions])
+            # The word names its target, a word of the code
+            [edge] = instruction.edges
+            self.assertEqual(edge.kind, 'done')
+            self.assertIn(edge.target, offsets)
+        self.assertNotIn('END_SEND', origins(outer))
         generator = outer()
         self.assertEqual(next(generator), 'ready')
         self.assertEqual(generator.throw(ValueError()), 'ready')
@@ -75,8 +75,8 @@ class SemanticCompletionTests(unittest.TestCase):
             self.assertEqual(consume(gen()), 23)
             self.assertEqual(consume([11, 23]), 23)
             self.assertEqual(consume(()), 'empty')
-        self.assertNotIn('END_FOR', code_names(consume))
-        self.assertNotIn('POP_ITER', code_names(consume))
+        self.assertNotIn('END_FOR', origins(consume))
+        self.assertNotIn('POP_ITER', origins(consume))
 
     def test_send_and_throw_share_completed_recipient(self):
         def inner():
@@ -98,8 +98,8 @@ class SemanticCompletionTests(unittest.TestCase):
                 self.assertEqual(actual, expected)
                 with self.assertRaises(StopIteration):
                     next(iterator)
-        self.assertNotIn('END_SEND', code_names(outer))
-        self.assertIn('CLEANUP_THROW', code_names(outer))
+        self.assertNotIn('END_SEND', origins(outer))
+        self.assertIn('CleanupThrow.Generic', arms(outer))
 
     def test_unused_resume_values_have_no_release_word(self):
         def gen():
@@ -121,9 +121,9 @@ class SemanticCompletionTests(unittest.TestCase):
         iterator.close()
         gc.collect()
         self.assertEqual(released, ['released', 'released'])
-        self.assertNotIn('Move.Retire', code_names(gen))
+        self.assertNotIn('Move.Retire', arms(gen))
         recipients = [i.dst for i in dis.get_instructions(gen)
-                      if i.opname == 'YIELD_VALUE']
+                      if i.family == 'Yield']
         self.assertEqual(recipients, [None])
 
     def test_completion_events_disable_independently(self):

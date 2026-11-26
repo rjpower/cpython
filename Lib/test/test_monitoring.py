@@ -13,7 +13,6 @@ import unittest
 
 import test.support
 from test.support import import_helper, ir_dis, requires_specialization, script_helper
-from test.support.ir_dis import IRCode
 
 PAIR = (0,1)
 
@@ -1252,10 +1251,9 @@ class TestLineAndInstructionEvents(CheckEvents):
             expected_lines = lines[:]
             # An INSTRUCTION event is per instruction of the register IR, at
             # the offset of the stack instruction it stands for
-            offsets = IRCode(func.__code__).stack_offsets
             self.assertEqual(expected_instructions, [
-                offsets[inst.offset] for inst in ir_dis.get_instructions(func)
-                if inst.opname != "RESUME"
+                inst.origin for inst in ir_dis.get_instructions(func)
+                if inst.family != "Resume"
             ])
             self.assertTrue(expected_lines)
             disable = True

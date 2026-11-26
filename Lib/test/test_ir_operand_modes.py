@@ -3,7 +3,6 @@
 from test.support import ir_dis as dis
 import gc
 import io
-from test.support import ir_dis as opcode
 from pathlib import Path
 import sys
 import unittest
@@ -135,7 +134,7 @@ class OperandModeTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN * 3):
             self.assertIs(read(other), other.value)
         offset = next(instr.offset for instr in dis.get_instructions(read)
-                      if instr.opname == "LOAD_ATTR")
+                      if instr.family in ("GetAttr", "GetMethod"))
         kind, state, _, _, rows = _testinternalcapi.get_feedback(read.__code__, offset)
         self.assertEqual(kind, "ATTR")
         self.assertTrue(rows)

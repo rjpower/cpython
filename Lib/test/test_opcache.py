@@ -39,17 +39,10 @@ def have_dict_key_versions():
 
 
 def adaptive_names(f):
-    """The names of f's adaptive words.  A stack instruction that lowers to a
-    register instruction arm (BINARY_OP's addition: Add.Int, Add.Float,
-    Add.Text, Add.Extended, Add.Generic; CALL: Call.Exact, Call.Init, ...)
-    is named by its arm."""
-    instructions = dis.get_instructions(f, adaptive=True)
-    names = {instruction.opname for instruction in instructions}
-    arms = {w[0].partition("+")[0]
-            for w in _testinternalcapi.get_ir(f.__code__, True)}
-    arms &= ARMS.keys()
-    names -= {dis.opname[dis._deoptop(ARMS[arm])] for arm in arms}
-    return names | arms
+    """The arms that the words of f run: the addition of a BINARY_OP is
+    Add.Int, Add.Float, Add.Text, Add.Extended or Add.Generic; a CALL is
+    Call.Exact, Call.Init, ..."""
+    return {word.arm for word in dis.get_instructions(f, adaptive=True)}
 
 
 class TestBase(unittest.TestCase):
@@ -1419,7 +1412,6 @@ class TestSpecializer(TestBase):
         binary_op_add_int()
         if int_producers:
             self.assert_specialized(binary_op_add_int, "Add.Int")
-            self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
 
         def binary_op_int_wide_inline():
             # Outside int32 but inside the inline int51 range, so the int
@@ -1464,7 +1456,6 @@ class TestSpecializer(TestBase):
 
         binary_op_add_unicode()
         self.assert_specialized(binary_op_add_unicode, "Add.Text")
-        self.assert_no_opcode(binary_op_add_unicode, "BINARY_OP")
 
         def binary_op_add_extend():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1515,7 +1506,6 @@ class TestSpecializer(TestBase):
         if int_producers:
             for opname in ("Add.Float", "Binary.Float"):
                 self.assert_specialized(binary_op_add_extend, opname)
-            self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
         self.assert_no_opcode(binary_op_add_extend, "Binary.Extended")
 
         def binary_op_add_extend_sequences():
@@ -1531,7 +1521,6 @@ class TestSpecializer(TestBase):
 
         binary_op_add_extend_sequences()
         self.assert_specialized(binary_op_add_extend_sequences, "Add.Extended")
-        self.assert_no_opcode(binary_op_add_extend_sequences, "BINARY_OP")
 
         def binary_op_zero_division():
             def compactlong_lhs(arg):
@@ -1606,7 +1595,6 @@ class TestSpecializer(TestBase):
         if int_producers:
             for opname in ("Binary.Int",):
                 self.assert_specialized(binary_op_bitwise_extend, opname)
-            self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
         self.assert_no_opcode(binary_op_bitwise_extend, "Binary.Extended")
 
         def binary_op_int_division_and_shifts():
@@ -1621,7 +1609,6 @@ class TestSpecializer(TestBase):
         if int_producers:
             for opname in ("Binary.Int",):
                 self.assert_specialized(binary_op_int_division_and_shifts, opname)
-            self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
 
     @cpython_only
     @requires_specialization
@@ -1639,7 +1626,6 @@ class TestSpecializer(TestBase):
         # `super().__init__()` is the method form
         self.assert_specialized(A.__init__, "SuperAttr.Builtin")
         self.assert_specialized(A.__init__, "SuperMethod.Builtin")
-        self.assert_no_opcode(A.__init__, "LOAD_SUPER_ATTR")
 
         # Temporarily replace super() with something else.
         real_super = super
@@ -1764,7 +1750,6 @@ class TestSpecializer(TestBase):
         set_slot(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
         self.assert_specialized(set_slot, "AttrWrite.Slot")
-        self.assert_no_opcode(set_slot, "STORE_ATTR")
 
         # Adding a property for 'x' must make the stores reach its setter.
         # The arm stays installed and misses to Generic until the site is
@@ -1789,7 +1774,6 @@ class TestSpecializer(TestBase):
         set_value(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
         self.assert_specialized(set_value, STORE_ATTR_INSTANCE)
-        self.assert_no_opcode(set_value, "STORE_ATTR")
 
         # Adding a property for 'x' must make the stores reach its setter.
         calls = []
@@ -1815,7 +1799,6 @@ class TestSpecializer(TestBase):
         set_value(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
         self.assert_specialized(set_value, "AttrWrite.Hint")
-        self.assert_no_opcode(set_value, "STORE_ATTR")
 
         # Adding a property for 'x' must make the stores reach its setter.
         calls = []
@@ -1847,11 +1830,9 @@ class TestSpecializer(TestBase):
         n = _testinternalcapi.SPECIALIZATION_THRESHOLD
         get_value(n)
         self.assert_specialized(get_value, "GetAttr.Instance")
-        self.assert_no_opcode(get_value, "LOAD_ATTR")
 
         set_value(n)
         self.assert_specialized(set_value, "AttrWrite.Hint")
-        self.assert_no_opcode(set_value, "STORE_ATTR")
         self.assertTrue(_testinternalcapi.has_inline_values(c))
         self.assertIs(vars(c), d)
         self.assertEqual(d, {"x": n - 1})
@@ -1995,7 +1976,6 @@ class TestSpecializer(TestBase):
         binary_subscr_list_int()
         self.assert_specialized(binary_subscr_list_int,
                                 "GetItem.ListIndex")
-        self.assert_no_opcode(binary_subscr_list_int, "BINARY_OP")
 
         def binary_subscr_tuple_int():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2006,7 +1986,6 @@ class TestSpecializer(TestBase):
         binary_subscr_tuple_int()
         self.assert_specialized(binary_subscr_tuple_int,
                                 "GetItem.TupleIndex")
-        self.assert_no_opcode(binary_subscr_tuple_int, "BINARY_OP")
 
         def binary_subscr_dict():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2016,7 +1995,6 @@ class TestSpecializer(TestBase):
 
         binary_subscr_dict()
         self.assert_specialized(binary_subscr_dict, "GetItem.Dict")
-        self.assert_no_opcode(binary_subscr_dict, "BINARY_OP")
 
         def binary_subscr_frozen_dict():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2026,7 +2004,6 @@ class TestSpecializer(TestBase):
 
         binary_subscr_frozen_dict()
         self.assert_specialized(binary_subscr_frozen_dict, "GetItem.Dict")
-        self.assert_no_opcode(binary_subscr_frozen_dict, "BINARY_OP")
 
         def binary_subscr_frozen_dict_subclass():
             class MyFrozenDict(frozendict):
@@ -2038,7 +2015,6 @@ class TestSpecializer(TestBase):
 
         binary_subscr_frozen_dict_subclass()
         self.assert_specialized(binary_subscr_frozen_dict_subclass, "GetItem.Dict")
-        self.assert_no_opcode(binary_subscr_frozen_dict_subclass, "BINARY_OP")
 
         def binary_subscr_defaultdict():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2049,7 +2025,6 @@ class TestSpecializer(TestBase):
 
         binary_subscr_defaultdict()
         self.assert_specialized(binary_subscr_defaultdict, "GetItem.Dict")
-        self.assert_no_opcode(binary_subscr_defaultdict, "BINARY_OP")
 
         def binary_subscr_counter():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2060,7 +2035,6 @@ class TestSpecializer(TestBase):
 
         binary_subscr_counter()
         self.assert_specialized(binary_subscr_counter, "GetItem.Dict")
-        self.assert_no_opcode(binary_subscr_counter, "BINARY_OP")
 
         def binary_subscr_dict_subclass_override():
             class MyDict(dict):
@@ -2083,7 +2057,6 @@ class TestSpecializer(TestBase):
 
         binary_subscr_str_int()
         self.assert_specialized(binary_subscr_str_int, "GetItem.Ascii")
-        self.assert_no_opcode(binary_subscr_str_int, "BINARY_OP")
 
         def binary_subscr_str_int_non_compact():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2316,7 +2289,6 @@ class TestSpecializer(TestBase):
                 self.assertEqual(load_module_attr_present(), "foo")
 
             self.assert_specialized(load_module_attr_present, "GetAttr.Module")
-            self.assert_no_opcode(load_module_attr_present, "LOAD_ATTR")
 
             def load_module_attr_missing():
                 import test_module_with_getattr
@@ -2394,21 +2366,22 @@ class TestSpecializer(TestBase):
 class TestFeedback(TestBase):
     """The typed feedback entries of Include/internal/pycore_feedback.h."""
 
+    # The feedback kind of the words of each family
     KINDS = {
-        "RESUME": "COUNTER", "JUMP_BACKWARD": "COUNTER",
-        "TO_BOOL": "UNARY", "UNPACK_SEQUENCE": "UNARY", "FOR_ITER": "UNARY",
-        "GET_ITER": "UNARY", "SEND": "UNARY",
-        "BINARY_OP": "BINARY", "COMPARE_OP": "COMPARE",
-        "CONTAINS_OP": "CONTAINS", "STORE_SUBSCR": "BINARY",
-        "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "UNARY",
-        "LOAD_GLOBAL": "GLOBAL",
-        "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
-        "POP_JUMP": "UNARY",
+        "Resume": "COUNTER", "Jump": "COUNTER",
+        "Truth": "UNARY", "Unpack": "UNARY", "ForIter": "UNARY",
+        "IterOpen": "UNARY", "Send": "UNARY",
+        "Add": "BINARY", "Compare": "COMPARE",
+        "Contains": "CONTAINS", "SetItem": "BINARY",
+        "GetAttr": "ATTR", "AttrWrite": "ATTR", "SuperAttr": "UNARY",
+        "GlobalRead": "GLOBAL",
+        "Call": "CALL", "CallKw": "CALL", "CallEx": "CALL",
+        "BranchTruth": "UNARY",
     }
 
-    def feedback(self, func, opname):
+    def feedback(self, func, *families):
         return [_testinternalcapi.get_feedback(func.__code__, i.offset)
-                for i in dis.get_instructions(func) if i.opname == opname]
+                for i in dis.get_instructions(func) if i.family in families]
 
     def test_kinds(self):
         class C:
@@ -2433,29 +2406,25 @@ class TestFeedback(TestBase):
             for instr in dis.get_instructions(func):
                 entry = _testinternalcapi.get_feedback(func.__code__,
                                                        instr.offset)
-                name = instr.opname
-                if name.startswith(("POP_JUMP", "JUMP_IF_")):
-                    # A branch keeps the type version of its operand in a
-                    # unary entry, as TO_BOOL does (BranchTruth's Fb<Truth>)
-                    name = "POP_JUMP"
-                if (name == "POP_JUMP" and entry is not None
-                        and entry[0] in ("COMPARE", "CONTAINS")):
-                    # A branch that tests a compare or a contains has the
-                    # feedback of the test (TestBranch)
+                name = instr.family
+                # A branch keeps the type version of its operand in a
+                # unary entry, as TO_BOOL does (BranchTruth's Fb<Truth>),
+                # and one that tests a compare or a contains has the
+                # feedback of the test (TestBranch)
+                if name == "TestBranch":
                     continue
-                if name in ("COMPARE_OP", "CONTAINS_OP"):
-                    # The stack op has no entry of its own: its register
-                    # instruction has one, unless a TestBranch took the test
+                if name in ("Compare", "Contains"):
+                    # The word has an entry, unless a TestBranch took the test
                     if entry is not None:
                         self.assertEqual(entry[0], self.KINDS[name])
                         seen.add(name)
                     continue
                 if instr.fb is None or name in no_entry:
-                    self.assertIsNone(entry, instr.opname)
+                    self.assertIsNone(entry, instr.arm)
                     continue
                 kind, state, *_ = entry
-                self.assertEqual(kind, self.KINDS[name], instr.opname)
-                self.assertEqual(state, "COLD", instr.opname)
+                self.assertEqual(kind, self.KINDS[name], instr.arm)
+                self.assertEqual(state, "COLD", instr.arm)
                 seen.add(name)
         self.assertEqual(seen, set(self.KINDS) - no_entry)
 
@@ -2480,14 +2449,14 @@ class TestFeedback(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             f(objects[0])
         self.assert_specialized(f, LOAD_ATTR_INSTANCE)
-        [(kind, state, type_version, _, rows)] = self.feedback(f, "LOAD_ATTR")
+        [(kind, state, type_version, _, rows)] = self.feedback(f, "GetAttr", "GetMethod")
         self.assertEqual((kind, state, rows), ("ATTR", "MONO", []))
         self.assertEqual(type_version, _testcapi.type_get_version(classes[0]))
 
         for n in range(1, len(classes)):
             for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
                 f(objects[n])
-            [(_, state, type_version, _, rows)] = self.feedback(f, "LOAD_ATTR")
+            [(_, state, type_version, _, rows)] = self.feedback(f, "GetAttr", "GetMethod")
             self.assertEqual(type_version,
                              _testcapi.type_get_version(classes[n]))
             expected = [(_testcapi.type_get_version(cls), aux, handler)
@@ -2517,11 +2486,11 @@ class TestFeedback(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             mul(2.5, 3)
             call(g)
-        [(kind, state, lhs, rhs, _)] = self.feedback(mul, "BINARY_OP")
+        [(kind, state, lhs, rhs, _)] = self.feedback(mul, "Add", "Binary")
         self.assertEqual((kind, state), ("BINARY", "MONO"))
         self.assertEqual(lhs, _testcapi.type_get_version(float))
         self.assertEqual(rhs, _testcapi.type_get_version(int))
-        [(kind, state, func_version, callable_type, _)] = self.feedback(call, "CALL")
+        [(kind, state, func_version, callable_type, _)] = self.feedback(call, "Call")
         self.assertEqual((kind, state), ("CALL", "MONO"))
         self.assertNotEqual(func_version, 0)
         self.assertEqual(callable_type,

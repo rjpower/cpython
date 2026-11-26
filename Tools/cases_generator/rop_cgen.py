@@ -400,6 +400,31 @@ def edges_of(program: Program, blocks, block):
             yield edge.target, extra
 
 
+def acquired_on_entry(program: Program, blocks) -> dict[str, frozenset[str]]:
+    """The operands whose owner an acquire() took before each block, on
+    every path into it; paths that disagree cannot be lowered"""
+    taken = {
+        label: frozenset(
+            s.value.args[0].name for s in block.stmts
+            if isinstance(s, Let) and isinstance(s.value, Call) and s.value.callee == "acquire")
+        for label, block in blocks.items()}
+    entry = next(iter(blocks))
+    result: dict[str, frozenset[str]] = {entry: frozenset()}
+    work = [entry]
+    while work:
+        label = work.pop()
+        out = result[label] | taken[label]
+        for target, _ in edges_of(program, blocks, blocks[label]):
+            key = target if isinstance(target, str) else target.label
+            known = result.get(key)
+            if known is None:
+                result[key] = out
+                work.append(key)
+            elif known != out:
+                raise Unsupported(f"acquire() on some paths into {key} only")
+    return {label: result.get(label, frozenset()) for label in blocks}
+
+
 def is_transfer(program: Program, callee: str) -> bool:
     x = program.externs.get(callee)
     return (x is not None and x.c is not None
@@ -511,6 +536,7 @@ class ArmLowerer:
         self.targeted: set[str] = set()      # blocks reached by a goto
         self.next_label: str | None = None
         self.acquired: set[str] = set()      # operands whose owner acquire() took
+        self.acquired_in: dict[str, frozenset[str]] = {}  # ... on every path into a block
 
     # Names
 
@@ -819,6 +845,7 @@ class ArmLowerer:
             e.target.label for b in self.blocks.values()
             if isinstance(b.term, CallTerm) and is_transfer(self.program, b.term.callee)
             for e in b.term.edges}
+        self.acquired_in = acquired_on_entry(self.program, self.blocks)
         order = [label for label in self.layout() if label not in self.transfer_blocks]
         for i, label in enumerate(order):
             self.next_label = order[i + 1] if i + 1 < len(order) else None
@@ -886,6 +913,8 @@ class ArmLowerer:
         if label != "entry":
             self.emit(f"{self.label(label)}:")
         self.current_facts = self.facts_in[label]
+        # An acquire() takes the owner on its own path only
+        self.acquired = set(self.acquired_in[label])
         for s in block.stmts:
             self.lower_stmt(s)
         self.lower_term(block, label)

@@ -96,7 +96,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
     def test_guarded_operand_rejects_wrong_feedback_type(self):
         with self.assertRaisesRegex(SyntaxError, "names no field of _PyFbUnary"):
             self.generate("""
-            inst(SEND, (class_value/4, owner: consumed -- attr: owned))
+            inst(UNPACK_SEQUENCE, (class_value/4, owner: consumed -- attr: owned))
                 effects(releases) exits(next)
             {
                 attr = PyValue_DUP(owner);

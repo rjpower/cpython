@@ -53,6 +53,12 @@ def program():
 PROGRAM = program()
 SSA, FAILED = rop_ssa.expand_all(PROGRAM)
 
+
+def arm_of(name):
+    "A word arm or a completion arm"
+    return PROGRAM.arms[name] if name in PROGRAM.arms else PROGRAM.completions[name]
+
+
 class ExpansionTests(unittest.TestCase):
     def test_every_arm_expands(self):
         self.assertEqual({n: d.message for n, d in FAILED.items()}, {})
@@ -60,7 +66,7 @@ class ExpansionTests(unittest.TestCase):
 
     def test_exits_are_declared_and_name_their_frame_state(self):
         for name, arm in SSA.items():
-            declared = set(PROGRAM.arms[name].contract.exits)
+            declared = set(arm_of(name).contract.exits)
             for t in arm.exits():
                 with self.subTest(arm=name, exit=t.kind):
                     self.assertIn(t.kind, declared)
@@ -1195,6 +1201,8 @@ NOT_RUN = {
     # The tracer's view of the keyword and expanded calls is deferred while the
     # interpreter ports finish (rir90 interpreter-first rule)
     "CallKw.Plan": "deferred: binds keywords by a site's plan",
+    "Call.Generator": "creates a generator from a generator function, which its guards "
+                      "trust the specialization to supply; the scenario's is ordinary",
     "CallKw.Generator": "deferred: creates the generator from a site's plan",
     "CallKw.BoundMethod": "deferred: the generic binding of an expanded bound method",
     "CallKw.NonPy": "deferred: the native call of a callable that is no function",
@@ -1230,6 +1238,20 @@ NOT_RUN = {
                            "synthetic caller cannot hold",
     "YieldFrom.Observed": "suspends a generator frame, which rop_transfer_run's "
                           "synthetic caller cannot hold",
+    "Send.Generic": "enters or steps a receiver in a generator frame, which "
+                    "rop_transfer_run's synthetic caller cannot hold",
+    "Send.Gen": "enters or steps a receiver in a generator frame, which "
+                "rop_transfer_run's synthetic caller cannot hold",
+    "Send.Virtual": "enters or steps a receiver in a generator frame, which "
+                    "rop_transfer_run's synthetic caller cannot hold",
+    "Send.AsyncGen": "enters or steps a receiver in a generator frame, which "
+                     "rop_transfer_run's synthetic caller cannot hold",
+    "Send.Complete": "enters or steps a receiver in a generator frame, which "
+                     "rop_transfer_run's synthetic caller cannot hold",
+    "Send.Observed": "enters or steps a receiver in a generator frame, which "
+                     "rop_transfer_run's synthetic caller cannot hold",
+    "Send.CompleteObserved": "enters or steps a receiver in a generator frame, which "
+                             "rop_transfer_run's synthetic caller cannot hold",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
                         "synthetic caller cannot hold",
     "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "
@@ -1270,7 +1292,7 @@ NOT_RUN = {
 
 def evaluated_arms():
     return [n for n in SSA
-            if PROGRAM.arms[n].family in SCENARIOS and n not in NOT_RUN]
+            if arm_of(n).family in SCENARIOS and n not in NOT_RUN]
 
 
 class AgainstCTests(unittest.TestCase):

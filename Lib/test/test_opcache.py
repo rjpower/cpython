@@ -2397,7 +2397,7 @@ class TestFeedback(TestBase):
     KINDS = {
         "RESUME": "COUNTER", "JUMP_BACKWARD": "COUNTER",
         "TO_BOOL": "UNARY", "UNPACK_SEQUENCE": "UNARY", "FOR_ITER": "UNARY",
-        "GET_ITER": "UNARY",
+        "GET_ITER": "UNARY", "SEND": "UNARY",
         "BINARY_OP": "BINARY", "COMPARE_OP": "COMPARE",
         "CONTAINS_OP": "CONTAINS", "STORE_SUBSCR": "BINARY",
         "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "UNARY",

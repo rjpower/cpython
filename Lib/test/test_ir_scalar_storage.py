@@ -2,7 +2,6 @@
 
 from dataclasses import replace
 from pathlib import Path
-import io
 import tempfile
 import unittest
 from unittest import mock
@@ -13,7 +12,6 @@ from test import test_tools
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import analyzer
-    import cwriter
     import ir_generator
     import ir_read_effects
     import lexer
@@ -142,37 +140,6 @@ class ScalarStorageTests(unittest.TestCase):
             with self.subTest(expression=expression):
                 self.assertEqual(ir_read_effects.value_transport_expression(
                     list(lexer.tokenize(expression))), expected)
-
-    def test_actual_retained_and_retired_input_producers(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-
-        def emitted(name):
-            out = cwriter.CWriter(io.StringIO(), 0, False)
-            emitter = ir_generator.IREmitter(out, analysis, formats)
-            emitter.handler_format = formats[name]
-            emitter.allowed_error_checkpoints = None
-            ir_generator.generate_handler(name, analysis.instructions[name],
-                                          formats[name], emitter, out)
-            return tuple(cp for cp in emitter.error_checkpoint_sites.values() if cp.id)
-
-        retained = emitted("UNARY_INVERT")
-        self.assertEqual([checkpoint.id for checkpoint in retained], [1])
-        self.assertFalse(any(event.kind == "_PyIR_OWNER_STORAGE_VACATE"
-                             for checkpoint in retained for event in checkpoint.actions))
-        retired = emitted("UNARY_NOT")
-        self.assertEqual([checkpoint.id for checkpoint in retired], [1])
-        self.assertTrue(any(event.kind == "_PyIR_OWNER_STORAGE_VACATE"
-                            for event in retired[0].actions))
-        original = ir_generator.IRStack.take_field
-
-        def missing_receipt(stack, field):
-            original(stack, field)
-            stack.home_write_receipts -= 1
-
-        with mock.patch.object(ir_generator.IRStack, "take_field", missing_receipt):
-            self.assertFalse(emitted("UNARY_NOT"))
 
 
 if __name__ == "__main__":

@@ -43,6 +43,31 @@ class SendTransferTests(unittest.TestCase):
             self.assertEqual(list(generator), [])
             self.assertEqual(seen, [17, 17])
 
+    def test_completed_send_leaves_its_sent_value_slot_empty(self):
+        # A send that completes retires its whole window.  The window of an
+        # inner async for reuses the slots of the outer one, and a stale sent
+        # value in the inner cursor slot is read as a cursor.
+        async def count(n):
+            for i in range(n):
+                yield i
+
+        async def nested(outer, inner):
+            seen = []
+            async for x in count(outer):
+                async for y in count(inner):
+                    seen.append((x, y))
+            return seen
+
+        def run(coroutine):
+            try:
+                while True:
+                    coroutine.send(None)
+            except StopIteration as stop:
+                return stop.value
+
+        self.assertEqual(run(nested(2, 2)), [(0, 0), (0, 1), (1, 0), (1, 1)])
+        self.assertEqual(run(nested(1, 0)), [])
+
 
 if __name__ == "__main__":
     unittest.main()

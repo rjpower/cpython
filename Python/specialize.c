@@ -2576,7 +2576,13 @@ _PyRop_ClassifySetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
  * arguments; every other callable is "other", which runs in
  * Call.Generic. */
 enum { CALL_CASE_EXACT, CALL_CASE_BOUND_EXACT, CALL_CASE_INIT,
-       CALL_CASE_GENERATOR, CALL_CASE_PLAN, CALL_CASE_OTHER };
+       CALL_CASE_GENERATOR, CALL_CASE_PLAN,
+       CALL_CASE_TYPE_1, CALL_CASE_STR_1, CALL_CASE_TUPLE_1,
+       CALL_CASE_BUILTIN_CLASS, CALL_CASE_BUILTIN_O, CALL_CASE_BUILTIN_FAST,
+       CALL_CASE_BUILTIN_FAST_KEYWORDS, CALL_CASE_LEN, CALL_CASE_ISINSTANCE,
+       CALL_CASE_LIST_APPEND, CALL_CASE_DESCRIPTOR_O, CALL_CASE_DESCRIPTOR_FAST,
+       CALL_CASE_DESCRIPTOR_FAST_KEYWORDS, CALL_CASE_DESCRIPTOR_NOARGS,
+       CALL_CASE_OTHER };
 
 static bool
 call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs,
@@ -2626,6 +2632,98 @@ call_classify_plan(_PyFbCall *fb, PyFunctionObject *func, int nargs, int skip)
     return true;
 }
 
+/* The old specialize_c_call: a builtin function by its call flags.  nargs
+ * counts the arguments that the callee receives, oparg those the word gives
+ * without its self slot. */
+static int
+call_classify_c_function(PyObject *callable, int nargs, int oparg)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (PyCFunction_GET_FUNCTION(callable) == NULL) {
+        return CALL_CASE_OTHER;
+    }
+    switch (PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS) {
+        case METH_O:
+            if (nargs != 1) {
+                return CALL_CASE_OTHER;
+            }
+            return callable == interp->callable_cache.len && oparg == 1
+                ? CALL_CASE_LEN : CALL_CASE_BUILTIN_O;
+        case METH_FASTCALL:
+            return nargs == 2 && callable == interp->callable_cache.isinstance &&
+                   oparg == 2 ? CALL_CASE_ISINSTANCE : CALL_CASE_BUILTIN_FAST;
+        case METH_FASTCALL | METH_KEYWORDS:
+        case METH_VALUE | METH_KEYWORDS:
+            return CALL_CASE_BUILTIN_FAST_KEYWORDS;
+        case METH_VALUE:
+        case METH_VALUE | METH_NOARGS:
+        case METH_VALUE | METH_O:
+            // len() and isinstance() are METH_VALUE since core Clinic emits
+            // values; every other value builtin calls the value vectorcall
+            if (nargs == 1 && oparg == 1 && callable == interp->callable_cache.len) {
+                return CALL_CASE_LEN;
+            }
+            if (nargs == 2 && oparg == 2 &&
+                callable == interp->callable_cache.isinstance) {
+                return CALL_CASE_ISINSTANCE;
+            }
+            return CALL_CASE_BUILTIN_FAST;
+        default:
+            return CALL_CASE_OTHER;
+    }
+}
+
+/* The old specialize_method_descriptor */
+static int
+call_classify_descriptor(PyMethodDescrObject *descr, PyValue self, int nargs,
+                         int oparg)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    switch (descr->d_method->ml_flags & _Py_METH_CALL_FLAGS) {
+        case METH_NOARGS:
+            return nargs == 1 ? CALL_CASE_DESCRIPTOR_NOARGS : CALL_CASE_OTHER;
+        case METH_O:
+            if (nargs != 2) {
+                return CALL_CASE_OTHER;
+            }
+            return (PyObject *)descr == interp->callable_cache.list_append &&
+                   oparg == 1 && PyValue_TYPE(self) == &PyList_Type
+                ? CALL_CASE_LIST_APPEND : CALL_CASE_DESCRIPTOR_O;
+        case METH_VALUE:
+        case METH_VALUE | METH_NOARGS:
+        case METH_VALUE | METH_O:
+            return (PyObject *)descr == interp->callable_cache.list_append &&
+                   oparg == 1 && nargs == 2 && PyValue_TYPE(self) == &PyList_Type
+                ? CALL_CASE_LIST_APPEND : CALL_CASE_DESCRIPTOR_FAST;
+        case METH_FASTCALL:
+            return CALL_CASE_DESCRIPTOR_FAST;
+        case METH_FASTCALL | METH_KEYWORDS:
+        case METH_VALUE | METH_KEYWORDS:
+            return CALL_CASE_DESCRIPTOR_FAST_KEYWORDS;
+        default:
+            return CALL_CASE_OTHER;
+    }
+}
+
+/* The old specialize_class_call's builtin types: the three types with a
+ * handler of one argument, else any type with a vectorcall */
+static int
+call_classify_builtin_class(PyTypeObject *tp, int nargs, int oparg)
+{
+    if (nargs == 1 && oparg == 1) {
+        if (tp == &PyUnicode_Type) {
+            return CALL_CASE_STR_1;
+        }
+        if (tp == &PyType_Type) {
+            return CALL_CASE_TYPE_1;
+        }
+        if (tp == &PyTuple_Type) {
+            return CALL_CASE_TUPLE_1;
+        }
+    }
+    return tp->tp_vectorcall != NULL ? CALL_CASE_BUILTIN_CLASS : CALL_CASE_OTHER;
+}
+
 static bool
 call_classify_class(_PyFbCall *fb, PyTypeObject *tp)
 {
@@ -2673,6 +2771,17 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
         return call_classify_plan(fb, func, nargs, self_slot && !self_present)
             ? CALL_CASE_PLAN : CALL_CASE_OTHER;
     }
+    int oparg = (int)IR_C(word) - _PyIR_CallHasSelf(word);
+    if (PyCFunction_CheckExact(callable)) {
+        return call_classify_c_function(callable, nargs, oparg);
+    }
+    if (Py_IS_TYPE(callable, &PyMethodDescr_Type)) {
+        return call_classify_descriptor(
+            (PyMethodDescrObject *)callable,
+            self_present ? _PyFrame_Slots(current_frame())[_PyIR_CallOperand(head, 0)]
+                         : PyValue_NULL,
+            nargs, oparg);
+    }
     if (self_present) {
         return CALL_CASE_OTHER;
     }
@@ -2683,8 +2792,11 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
             ? CALL_CASE_BOUND_EXACT : CALL_CASE_OTHER;
     }
     if (PyType_Check(callable)) {
-        return call_classify_class(fb, (PyTypeObject *)callable)
-            ? CALL_CASE_INIT : CALL_CASE_OTHER;
+        PyTypeObject *tp = (PyTypeObject *)callable;
+        if (tp->tp_flags & Py_TPFLAGS_IMMUTABLETYPE) {
+            return call_classify_builtin_class(tp, nargs, oparg);
+        }
+        return call_classify_class(fb, tp) ? CALL_CASE_INIT : CALL_CASE_OTHER;
     }
     return CALL_CASE_OTHER;
 }

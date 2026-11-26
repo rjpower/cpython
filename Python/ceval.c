@@ -1966,6 +1966,18 @@ native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return pending;
 }
 
+/* Call.BuiltinO's native call: the argument stays in its home and is read
+ * in place; the call's next word is the publication's */
+PyValue
+_PyRop_CallBuiltinO(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValue *fn, const _PyIRWord *head)
+{
+    PyValue *arg = &_PyFrame_Slots(frame)[
+        _PyIR_CallOperand(head, rop_call_first(frame, head))];
+    return native_call_builtin_o(tstate, frame, (_PyInstr *)head + _PyIR_WordLength(head[0]),
+                                 *fn, arg);
+}
+
 static void clear_error_frame(PyThreadState *, _PyInterpreterFrame *);
 /* Release the slots from first up, from the top, each taken (NULL) before it
  * is closed, so that a finalizer finds the slots not yet reached intact and

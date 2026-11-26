@@ -3079,6 +3079,355 @@ _PyRop_CallNative(PyThreadState *tstate, _PyInterpreterFrame *frame,
                             rop_call_keywords(head));
 }
 
+/* The rows of the native specializations of Call (Python/register_ops/calls.rop,
+ * Call.Type1 to Call.DescriptorNoargs), the guards and calls of golden87's
+ * CALL_TYPE_1 to CALL_METHOD_DESCRIPTOR_FAST.  A native arm runs where the
+ * call's operands stand: an operand is read through its home, and the arm's
+ * publication releases the temporaries. */
+
+/* The first operand that the callee receives (IR_CALL_FIRST) */
+static inline int
+rop_call_first(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    return rop_call_self_state(frame, head) ? 0 : _PyIR_CallHasSelf(head[0]);
+}
+
+/* The operand that the callee receives as its argument k */
+static inline PyValue
+rop_call_arg(_PyInterpreterFrame *frame, const _PyIRWord *head, int k)
+{
+    return _PyFrame_Slots(frame)[_PyIR_CallOperand(head, rop_call_first(frame, head) + k)];
+}
+
+/* The arguments that the call gives, as golden87's oparg counted them: the
+ * operands, less a self slot */
+static inline int
+rop_call_oparg(const _PyIRWord *head)
+{
+    return (int)IR_C(head[0]) - _PyIR_CallHasSelf(head[0]);
+}
+
+static inline bool
+_PyRop_SelfPresent(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    return rop_call_self_state(frame, head) != 0;
+}
+
+static inline bool
+_PyRop_RecursionClear(PyThreadState *tstate)
+{
+    return !_Py_ReachedRecursionLimit(tstate);
+}
+
+static inline bool
+_PyRop_CalleeIsType(PyValueBorrow fn)
+{
+    return _PyValue_NamesObject(fn, (PyObject *)&PyType_Type);
+}
+
+static inline bool
+_PyRop_CalleeIsStr(PyValueBorrow fn)
+{
+    return _PyValue_NamesObject(fn, (PyObject *)&PyUnicode_Type);
+}
+
+static inline bool
+_PyRop_CalleeIsTuple(PyValueBorrow fn)
+{
+    return _PyValue_NamesObject(fn, (PyObject *)&PyTuple_Type);
+}
+
+static inline bool
+_PyRop_CalleeIsLen(PyThreadState *tstate, PyValueBorrow fn)
+{
+    return _PyValue_NamesObject(fn, tstate->interp->callable_cache.len);
+}
+
+static inline bool
+_PyRop_CalleeIsIsinstance(PyThreadState *tstate, PyValueBorrow fn)
+{
+    return _PyValue_NamesObject(fn, tstate->interp->callable_cache.isinstance);
+}
+
+static inline bool
+_PyRop_CalleeIsListAppend(PyThreadState *tstate, PyValueBorrow fn)
+{
+    return _PyValue_NamesObject(fn, tstate->interp->callable_cache.list_append);
+}
+
+static inline bool
+_PyRop_BuiltinClass(PyValueBorrow fn)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    return PyType_Check(callable) &&
+        ((PyTypeObject *)callable)->tp_vectorcall != NULL;
+}
+
+static inline bool
+_PyRop_BuiltinOCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
+                        const _PyIRWord *head)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    return PyCFunction_CheckExact(callable) &&
+        (PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS) == METH_O &&
+        rop_call_argcount(frame, head) == 1;
+}
+
+static inline bool
+_PyRop_BuiltinFastCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
+                           const _PyIRWord *head)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    if (!PyCFunction_CheckExact(callable)) {
+        return false;
+    }
+    int flags = PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS;
+    // A METH_VALUE function (alone or with METH_NOARGS or METH_O) reaches the
+    // same value vectorcall as METH_FASTCALL; with METH_KEYWORDS it takes
+    // Call.BuiltinFastKeywords
+    if (flags != METH_FASTCALL && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+        return false;
+    }
+    int n = (int)IR_C(head[0]) - rop_call_first(frame, head);
+    return !((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0));
+}
+
+static inline bool
+_PyRop_BuiltinFastKeywordsCallable(PyValueBorrow fn)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    if (!PyCFunction_CheckExact(callable)) {
+        return false;
+    }
+    int flags = PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS;
+    return flags == (METH_FASTCALL | METH_KEYWORDS) ||
+           flags == (METH_VALUE | METH_KEYWORDS);
+}
+
+/* The descriptor's receiver is an exact instance of its type */
+static inline bool
+rop_descriptor_receiver(_PyInterpreterFrame *frame, const _PyIRWord *head,
+                        PyMethodDescrObject *method)
+{
+    return PyValue_TYPE(rop_call_arg(frame, head, 0)) == method->d_common.d_type;
+}
+
+static inline bool
+_PyRop_DescriptorOCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
+                           const _PyIRWord *head)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyMethodDescrObject *method =
+        (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(fn);
+    return Py_IS_TYPE(method, &PyMethodDescr_Type) &&
+        (method->d_method->ml_flags & _Py_METH_CALL_FLAGS) == METH_O &&
+        rop_call_argcount(frame, head) == 2 &&
+        rop_descriptor_receiver(frame, head, method);
+}
+
+static inline bool
+_PyRop_DescriptorNoargsCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
+                                const _PyIRWord *head)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyMethodDescrObject *method =
+        (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(fn);
+    return Py_IS_TYPE(method, &PyMethodDescr_Type) &&
+        (method->d_method->ml_flags & _Py_METH_CALL_FLAGS) == METH_NOARGS &&
+        rop_call_argcount(frame, head) == 1 &&
+        rop_descriptor_receiver(frame, head, method);
+}
+
+static inline bool
+_PyRop_DescriptorFastCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
+                              const _PyIRWord *head)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyMethodDescrObject *method =
+        (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(fn);
+    if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+        return false;
+    }
+    int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
+    if (flags != METH_FASTCALL && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+        return false;
+    }
+    int n = (int)IR_C(head[0]) - rop_call_first(frame, head);
+    // The call has a receiver, and the value form's fixed arity fits
+    if (n == 0 ||
+        ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 2 : 1))) {
+        return false;
+    }
+    return rop_descriptor_receiver(frame, head, method);
+}
+
+static inline bool
+_PyRop_DescriptorFastKeywordsCallable(_PyInterpreterFrame *frame,
+                                      PyValueBorrow fn, const _PyIRWord *head)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyMethodDescrObject *method =
+        (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(fn);
+    if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+        return false;
+    }
+    int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
+    if (flags != (METH_FASTCALL | METH_KEYWORDS) &&
+        flags != (METH_VALUE | METH_KEYWORDS)) {
+        return false;
+    }
+    return (int)IR_C(head[0]) - rop_call_first(frame, head) != 0 &&
+        rop_descriptor_receiver(frame, head, method);
+}
+
+/* list.append(x): the receiver is operand 0, an exact list */
+static inline bool
+_PyRop_ListReceiver(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    PyValue self = _PyFrame_Slots(frame)[_PyIR_CallOperand(head, 0)];
+    if (!PyValue_IsObject(self) ||
+        !PyList_CheckExact(PyValue_AsKnownObjectBorrow(self))) {
+        return false;
+    }
+    return true;
+}
+
+static inline PyValue
+_PyRop_CallType1(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    PyValue arg = rop_call_arg(frame, head, 0);
+    // A type is never an exact int or float, so it has no inline form
+    return PyValue_DUP(_PyValue_PointerBorrow((PyObject *)PyValue_TYPE(arg)));
+}
+
+static inline PyValue
+_PyRop_CallStr1(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    PyObject *result = _PyValue_Str(rop_call_arg(frame, head, 0));
+    return result == NULL ? PyValue_NULL : PyValue_FromObjectSteal(result);
+}
+
+static inline PyValue
+_PyRop_CallTuple1(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    PyObject *result = _PyValue_SequenceTuple(rop_call_arg(frame, head, 0));
+    return result == NULL ? PyValue_NULL : PyValue_FromObjectSteal(result);
+}
+
+static inline PyValue
+_PyRop_CallLen(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    Py_ssize_t length = _PyValue_Size(rop_call_arg(frame, head, 0));
+    if (length < 0) {
+        return PyValue_NULL;
+    }
+    // The length is inline when it fits in int51
+    return PyValue_FromInt64(length);
+}
+
+static inline PyValue
+_PyRop_CallIsinstance(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    PyValue instance = rop_call_arg(frame, head, 0);
+    PyValue cls = rop_call_arg(frame, head, 1);
+    // An instance of cls itself is the common answer
+    int retval = 1;
+    if (!_PyValue_NamesObject(cls, (PyObject *)PyValue_TYPE(instance))) {
+        retval = _PyValue_IsInstance(instance, cls);
+    }
+    if (retval < 0) {
+        return PyValue_NULL;
+    }
+    return retval ? PyValue_True : PyValue_False;
+}
+
+static inline PyValue
+_PyRop_CallListAppend(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    PyObject *self_o = PyValue_AsKnownObjectBorrow(
+        _PyFrame_Slots(frame)[_PyIR_CallOperand(head, 0)]);
+    // The list takes a count of its own; the operand stays the frame's until
+    // the call publishes its result
+    PyValue item = PyValue_DUP(_PyFrame_Slots(frame)[_PyIR_CallOperand(head, 1)]);
+    int err;
+    // The list's lock is free in the GIL build
+    Py_BEGIN_CRITICAL_SECTION(self_o);
+    err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
+    Py_END_CRITICAL_SECTION();
+    return err ? PyValue_NULL : PyValue_None;
+}
+
+Py_NO_INLINE PyValue
+_PyRop_CallBuiltinO(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValue *fn, const _PyIRWord *head);
+
+static inline PyValue
+_PyRop_CallBuiltinValues(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         PyValue *fn, const _PyIRWord *head)
+{
+    return call_builtin_values(tstate, frame, head, head[0], *fn,
+                               rop_call_first(frame, head));
+}
+
+static inline PyValue
+_PyRop_CallClassValues(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       PyValue *fn, const _PyIRWord *head)
+{
+    return call_class_values(tstate, frame, head, head[0], *fn,
+                             rop_call_first(frame, head));
+}
+
+static inline PyValue
+_PyRop_CallDescriptorValues(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                            PyValue *fn, const _PyIRWord *head)
+{
+    return call_descriptor_values(tstate, frame, head, head[0], *fn,
+                                  rop_call_first(frame, head));
+}
+
+static inline PyValue
+_PyRop_CallDescriptorO(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       PyValue *fn, const _PyIRWord *head)
+{
+    PyMethodDescrObject *method =
+        (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(*fn);
+    // ml_meth takes objects: the helper boxes numbers.  The receiver and the
+    // argument are operands 0 and 1.
+    return _PyEval_CallMethodDescriptorO(
+        tstate, method->d_method->ml_meth, rop_call_arg(frame, head, 0),
+        rop_call_arg(frame, head, 1));
+}
+
+static inline PyValue
+_PyRop_CallDescriptorNoargs(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                            PyValue *fn, const _PyIRWord *head)
+{
+    PyMethodDescrObject *method =
+        (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(*fn);
+    return _PyEval_CallMethodDescriptorNoArgs(
+        tstate, method->d_method->ml_meth, rop_call_arg(frame, head, 0));
+}
+
 /* The rows of CallKw.Plan (Python/register_ops/calls.rop): a call of a
  * function whose keyword names the site's plan places.  plan_fits is every
  * test that call_bind_core makes before it changes anything, so that

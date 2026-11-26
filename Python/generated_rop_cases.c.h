@@ -634,19 +634,47 @@
             int ret2;
             int adapt_before_use_call1_ce;
             int ret3;
-            int adapt_before_use_call1_cp;
+            int adapt_before_use_call1_cdescriptor_noargs;
             int ret4;
-            int adapt_before_use_call1_cg;
+            int adapt_before_use_call1_cdescriptor_fast_keywords;
             int ret5;
-            int adapt_before_use_call1_ci;
+            int adapt_before_use_call1_cdescriptor_fast;
             int ret6;
-            int adapt_before_use_call1_cb;
+            int adapt_before_use_call1_cdescriptor_o;
             int ret7;
-            PyValue ret8;
+            int adapt_before_use_call1_clist_append;
+            int ret8;
+            int adapt_before_use_call1_cisinstance;
+            int ret9;
+            int adapt_before_use_call1_clen;
+            int ret10;
+            int adapt_before_use_call1_cbuiltin_fast_keywords;
+            int ret11;
+            int adapt_before_use_call1_cbuiltin_fast;
+            int ret12;
+            int adapt_before_use_call1_cbuiltin_o;
+            int ret13;
+            int adapt_before_use_call1_cbuiltin_class;
+            int ret14;
+            int adapt_before_use_call1_ctuple_1;
+            int ret15;
+            int adapt_before_use_call1_cstr_1;
+            int ret16;
+            int adapt_before_use_call1_ctype_1;
+            int ret17;
+            int adapt_before_use_call1_cp;
+            int ret18;
+            int adapt_before_use_call1_cg;
+            int ret19;
+            int adapt_before_use_call1_ci;
+            int ret20;
+            int adapt_before_use_call1_cb;
+            int ret21;
+            PyValue ret22;
             PyValue own_fn = PyValue_NULL;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-            int ret9;
+            int ret23;
             _PyInterpreterFrame * c;
             PyValue z;
             if (!_PyFb_TickQuiet(&((_PyFbCall *)IR_FB(IR_D(ir_word)))->h)) {
@@ -681,6 +709,48 @@
                 goto rop_Call_Generic_adapt_before_use_call1_Planned;
             }
             if (ret2 == 5) {
+                goto rop_Call_Generic_adapt_before_use_call1_NType1;
+            }
+            if (ret2 == 6) {
+                goto rop_Call_Generic_adapt_before_use_call1_NStr1;
+            }
+            if (ret2 == 7) {
+                goto rop_Call_Generic_adapt_before_use_call1_NTuple1;
+            }
+            if (ret2 == 8) {
+                goto rop_Call_Generic_adapt_before_use_call1_NBuiltinClass;
+            }
+            if (ret2 == 9) {
+                goto rop_Call_Generic_adapt_before_use_call1_NBuiltinO;
+            }
+            if (ret2 == 10) {
+                goto rop_Call_Generic_adapt_before_use_call1_NBuiltinFast;
+            }
+            if (ret2 == 11) {
+                goto rop_Call_Generic_adapt_before_use_call1_NBuiltinFastKeywords;
+            }
+            if (ret2 == 12) {
+                goto rop_Call_Generic_adapt_before_use_call1_NLen;
+            }
+            if (ret2 == 13) {
+                goto rop_Call_Generic_adapt_before_use_call1_NIsinstance;
+            }
+            if (ret2 == 14) {
+                goto rop_Call_Generic_adapt_before_use_call1_NListAppend;
+            }
+            if (ret2 == 15) {
+                goto rop_Call_Generic_adapt_before_use_call1_NDescriptorO;
+            }
+            if (ret2 == 16) {
+                goto rop_Call_Generic_adapt_before_use_call1_NDescriptorFast;
+            }
+            if (ret2 == 17) {
+                goto rop_Call_Generic_adapt_before_use_call1_NDescriptorFastKeywords;
+            }
+            if (ret2 == 18) {
+                goto rop_Call_Generic_adapt_before_use_call1_NDescriptorNoargs;
+            }
+            if (ret2 == 19) {
                 goto rop_Call_Generic_adapt_before_use_call1_Other;
             }
             adapt_before_use_call1_ce = ROP_HANDLER_Call_Exact;
@@ -697,9 +767,9 @@
             rop_Call_Generic_adapt_before_use_call1_Other:
             _PyRop_Backoff(&((_PyFbCall *)IR_FB(IR_D(ir_word)))->h);
             goto rop_Call_Generic_Run;
-            rop_Call_Generic_adapt_before_use_call1_Planned:
-            adapt_before_use_call1_cp = ROP_HANDLER_Call_PyGeneral;
-            ret4 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cp);
+            rop_Call_Generic_adapt_before_use_call1_NDescriptorNoargs:
+            adapt_before_use_call1_cdescriptor_noargs = ROP_HANDLER_Call_DescriptorNoargs;
+            ret4 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cdescriptor_noargs);
             if (ret4 > 0) {
                 goto rop_Call_Generic_adapt_before_use_call1_Changed;
             }
@@ -707,9 +777,9 @@
                 goto rop_Call_Generic_adapt_before_use_call1_Run;
             }
             goto rop_Call_Generic_adapt_before_use_call1_Run;
-            rop_Call_Generic_adapt_before_use_call1_Generator:
-            adapt_before_use_call1_cg = ROP_HANDLER_Call_Generator;
-            ret5 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cg);
+            rop_Call_Generic_adapt_before_use_call1_NDescriptorFastKeywords:
+            adapt_before_use_call1_cdescriptor_fast_keywords = ROP_HANDLER_Call_DescriptorFastKeywords;
+            ret5 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cdescriptor_fast_keywords);
             if (ret5 > 0) {
                 goto rop_Call_Generic_adapt_before_use_call1_Changed;
             }
@@ -717,9 +787,9 @@
                 goto rop_Call_Generic_adapt_before_use_call1_Run;
             }
             goto rop_Call_Generic_adapt_before_use_call1_Run;
-            rop_Call_Generic_adapt_before_use_call1_Init:
-            adapt_before_use_call1_ci = ROP_HANDLER_Call_Init;
-            ret6 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_ci);
+            rop_Call_Generic_adapt_before_use_call1_NDescriptorFast:
+            adapt_before_use_call1_cdescriptor_fast = ROP_HANDLER_Call_DescriptorFast;
+            ret6 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cdescriptor_fast);
             if (ret6 > 0) {
                 goto rop_Call_Generic_adapt_before_use_call1_Changed;
             }
@@ -727,9 +797,9 @@
                 goto rop_Call_Generic_adapt_before_use_call1_Run;
             }
             goto rop_Call_Generic_adapt_before_use_call1_Run;
-            rop_Call_Generic_adapt_before_use_call1_Bound:
-            adapt_before_use_call1_cb = ROP_HANDLER_Call_BoundExact;
-            ret7 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cb);
+            rop_Call_Generic_adapt_before_use_call1_NDescriptorO:
+            adapt_before_use_call1_cdescriptor_o = ROP_HANDLER_Call_DescriptorO;
+            ret7 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cdescriptor_o);
             if (ret7 > 0) {
                 goto rop_Call_Generic_adapt_before_use_call1_Changed;
             }
@@ -737,13 +807,153 @@
                 goto rop_Call_Generic_adapt_before_use_call1_Run;
             }
             goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NListAppend:
+            adapt_before_use_call1_clist_append = ROP_HANDLER_Call_ListAppend;
+            ret8 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_clist_append);
+            if (ret8 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret8 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NIsinstance:
+            adapt_before_use_call1_cisinstance = ROP_HANDLER_Call_Isinstance;
+            ret9 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cisinstance);
+            if (ret9 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret9 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NLen:
+            adapt_before_use_call1_clen = ROP_HANDLER_Call_Len;
+            ret10 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_clen);
+            if (ret10 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret10 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NBuiltinFastKeywords:
+            adapt_before_use_call1_cbuiltin_fast_keywords = ROP_HANDLER_Call_BuiltinFastKeywords;
+            ret11 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cbuiltin_fast_keywords);
+            if (ret11 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret11 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NBuiltinFast:
+            adapt_before_use_call1_cbuiltin_fast = ROP_HANDLER_Call_BuiltinFast;
+            ret12 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cbuiltin_fast);
+            if (ret12 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret12 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NBuiltinO:
+            adapt_before_use_call1_cbuiltin_o = ROP_HANDLER_Call_BuiltinO;
+            ret13 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cbuiltin_o);
+            if (ret13 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret13 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NBuiltinClass:
+            adapt_before_use_call1_cbuiltin_class = ROP_HANDLER_Call_BuiltinClass;
+            ret14 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cbuiltin_class);
+            if (ret14 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret14 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NTuple1:
+            adapt_before_use_call1_ctuple_1 = ROP_HANDLER_Call_Tuple1;
+            ret15 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_ctuple_1);
+            if (ret15 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret15 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NStr1:
+            adapt_before_use_call1_cstr_1 = ROP_HANDLER_Call_Str1;
+            ret16 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cstr_1);
+            if (ret16 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret16 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_NType1:
+            adapt_before_use_call1_ctype_1 = ROP_HANDLER_Call_Type1;
+            ret17 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_ctype_1);
+            if (ret17 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret17 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_Planned:
+            adapt_before_use_call1_cp = ROP_HANDLER_Call_PyGeneral;
+            ret18 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cp);
+            if (ret18 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret18 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_Generator:
+            adapt_before_use_call1_cg = ROP_HANDLER_Call_Generator;
+            ret19 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cg);
+            if (ret19 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret19 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_Init:
+            adapt_before_use_call1_ci = ROP_HANDLER_Call_Init;
+            ret20 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_ci);
+            if (ret20 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret20 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
+            rop_Call_Generic_adapt_before_use_call1_Bound:
+            adapt_before_use_call1_cb = ROP_HANDLER_Call_BoundExact;
+            ret21 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call1_cb);
+            if (ret21 > 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Changed;
+            }
+            if (ret21 == 0) {
+                goto rop_Call_Generic_adapt_before_use_call1_Run;
+            }
+            goto rop_Call_Generic_adapt_before_use_call1_Run;
             rop_Call_Generic_Native:
             IR_STUB_ESCAPE();
-            ret8 = _PyRop_CallNative(tstate, frame, home_fn, this_instr);
-            if (PyValue_IsNull(ret8)) {
+            ret22 = _PyRop_CallNative(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret22)) {
                 goto rop_Call_Generic_NativeFailed;
             }
-            z = ret8;
+            z = ret22;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 own_fn = _PyFrame_TakeHome(frame, home_fn);
             }
@@ -759,8 +969,8 @@
             goto rop_Call_Generic_Next;
             rop_Call_Generic_Poll:
             IR_STUB_ESCAPE();
-            ret9 = _PyRop_EndPoll(tstate, frame);
-            if (ret9 < 0) {
+            ret23 = _PyRop_EndPoll(tstate, frame);
+            if (ret23 < 0) {
                 goto rop_Call_Generic_PollFailed;
             }
             rop_Call_Generic_Next:
@@ -5471,6 +5681,754 @@
             }
             rop_Call_PyGeneral_Failed:
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
+        }
+
+        TARGET(Call_Type1) {
+            // Call.Type1 (split)
+            int opcode = ROP_HANDLER_Call_Type1;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_Type1);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue z;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            if (!_PyRop_SelfAbsent(frame, this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_CalleeIsType(PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            z = _PyRop_CallType1(frame, this_instr);
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(Call_Str1) {
+            // Call.Str1 (split)
+            int opcode = ROP_HANDLER_Call_Str1;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_Str1);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_SelfAbsent(frame, this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_CalleeIsStr(PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallStr1(frame, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_Str1_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_Str1_Poll;
+            }
+            goto rop_Call_Str1_Next;
+            rop_Call_Str1_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_Str1_PollFailed;
+            }
+            rop_Call_Str1_Next:
+            DISPATCH();
+            rop_Call_Str1_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_Str1_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_Tuple1) {
+            // Call.Tuple1 (split)
+            int opcode = ROP_HANDLER_Call_Tuple1;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_Tuple1);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_SelfAbsent(frame, this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_CalleeIsTuple(PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallTuple1(frame, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_Tuple1_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_Tuple1_Poll;
+            }
+            goto rop_Call_Tuple1_Next;
+            rop_Call_Tuple1_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_Tuple1_PollFailed;
+            }
+            rop_Call_Tuple1_Next:
+            DISPATCH();
+            rop_Call_Tuple1_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_Tuple1_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_BuiltinClass) {
+            // Call.BuiltinClass (split)
+            int opcode = ROP_HANDLER_Call_BuiltinClass;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_BuiltinClass);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_BuiltinClass(PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_RecursionClear(tstate)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallClassValues(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_BuiltinClass_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_BuiltinClass_Poll;
+            }
+            goto rop_Call_BuiltinClass_Next;
+            rop_Call_BuiltinClass_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_BuiltinClass_PollFailed;
+            }
+            rop_Call_BuiltinClass_Next:
+            DISPATCH();
+            rop_Call_BuiltinClass_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_BuiltinClass_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_BuiltinO) {
+            // Call.BuiltinO (split)
+            int opcode = ROP_HANDLER_Call_BuiltinO;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_BuiltinO);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_BuiltinOCallable(frame, PyValue_Borrow(*home_fn), this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_RecursionClear(tstate)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallBuiltinO(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_BuiltinO_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_BuiltinO_Poll;
+            }
+            goto rop_Call_BuiltinO_Next;
+            rop_Call_BuiltinO_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_BuiltinO_PollFailed;
+            }
+            rop_Call_BuiltinO_Next:
+            DISPATCH();
+            rop_Call_BuiltinO_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_BuiltinO_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_BuiltinFast) {
+            // Call.BuiltinFast (split)
+            int opcode = ROP_HANDLER_Call_BuiltinFast;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_BuiltinFast);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_BuiltinFastCallable(frame, PyValue_Borrow(*home_fn), this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_RecursionClear(tstate)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallBuiltinValues(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_BuiltinFast_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_BuiltinFast_Poll;
+            }
+            goto rop_Call_BuiltinFast_Next;
+            rop_Call_BuiltinFast_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_BuiltinFast_PollFailed;
+            }
+            rop_Call_BuiltinFast_Next:
+            DISPATCH();
+            rop_Call_BuiltinFast_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_BuiltinFast_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_BuiltinFastKeywords) {
+            // Call.BuiltinFastKeywords (split)
+            int opcode = ROP_HANDLER_Call_BuiltinFastKeywords;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_BuiltinFastKeywords);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_BuiltinFastKeywordsCallable(PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_RecursionClear(tstate)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallBuiltinValues(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_BuiltinFastKeywords_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_BuiltinFastKeywords_Poll;
+            }
+            goto rop_Call_BuiltinFastKeywords_Next;
+            rop_Call_BuiltinFastKeywords_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_BuiltinFastKeywords_PollFailed;
+            }
+            rop_Call_BuiltinFastKeywords_Next:
+            DISPATCH();
+            rop_Call_BuiltinFastKeywords_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_BuiltinFastKeywords_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_Len) {
+            // Call.Len (split)
+            int opcode = ROP_HANDLER_Call_Len;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_Len);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            if (!_PyRop_SelfAbsent(frame, this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_CalleeIsLen(tstate, PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallLen(frame, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_Len_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Call_Len_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+        }
+
+        TARGET(Call_Isinstance) {
+            // Call.Isinstance (split)
+            int opcode = ROP_HANDLER_Call_Isinstance;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_Isinstance);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            if (!_PyRop_SelfAbsent(frame, this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_CalleeIsIsinstance(tstate, PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallIsinstance(frame, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_Isinstance_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Call_Isinstance_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+        }
+
+        TARGET(Call_ListAppend) {
+            // Call.ListAppend (split)
+            int opcode = ROP_HANDLER_Call_ListAppend;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_ListAppend);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            if (!_PyRop_SelfPresent(frame, this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_CalleeIsListAppend(tstate, PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_ListReceiver(frame, this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            ret1 = _PyRop_CallListAppend(frame, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_ListAppend_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Call_ListAppend_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+        }
+
+        TARGET(Call_DescriptorO) {
+            // Call.DescriptorO (split)
+            int opcode = ROP_HANDLER_Call_DescriptorO;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_DescriptorO);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_DescriptorOCallable(frame, PyValue_Borrow(*home_fn), this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_RecursionClear(tstate)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallDescriptorO(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_DescriptorO_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_DescriptorO_Poll;
+            }
+            goto rop_Call_DescriptorO_Next;
+            rop_Call_DescriptorO_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_DescriptorO_PollFailed;
+            }
+            rop_Call_DescriptorO_Next:
+            DISPATCH();
+            rop_Call_DescriptorO_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_DescriptorO_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_DescriptorFast) {
+            // Call.DescriptorFast (split)
+            int opcode = ROP_HANDLER_Call_DescriptorFast;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_DescriptorFast);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_DescriptorFastCallable(frame, PyValue_Borrow(*home_fn), this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_RecursionClear(tstate)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallDescriptorValues(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_DescriptorFast_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_DescriptorFast_Poll;
+            }
+            goto rop_Call_DescriptorFast_Next;
+            rop_Call_DescriptorFast_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_DescriptorFast_PollFailed;
+            }
+            rop_Call_DescriptorFast_Next:
+            DISPATCH();
+            rop_Call_DescriptorFast_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_DescriptorFast_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_DescriptorFastKeywords) {
+            // Call.DescriptorFastKeywords (split)
+            int opcode = ROP_HANDLER_Call_DescriptorFastKeywords;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_DescriptorFastKeywords);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_DescriptorFastKeywordsCallable(frame, PyValue_Borrow(*home_fn), this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_RecursionClear(tstate)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallDescriptorValues(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_DescriptorFastKeywords_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_DescriptorFastKeywords_Poll;
+            }
+            goto rop_Call_DescriptorFastKeywords_Next;
+            rop_Call_DescriptorFastKeywords_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_DescriptorFastKeywords_PollFailed;
+            }
+            rop_Call_DescriptorFastKeywords_Next:
+            DISPATCH();
+            rop_Call_DescriptorFastKeywords_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_DescriptorFastKeywords_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
+        }
+
+        TARGET(Call_DescriptorNoargs) {
+            // Call.DescriptorNoargs (split)
+            int opcode = ROP_HANDLER_Call_DescriptorNoargs;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_Call_DescriptorNoargs);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_DescriptorNoargsCallable(frame, PyValue_Borrow(*home_fn), this_instr)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            if (!_PyRop_RecursionClear(tstate)) {
+                JUMP_TO_PREDICTED(Call_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallDescriptorNoargs(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Call_DescriptorNoargs_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            if (_PyRop_Polls((((uint32_t)(ir_word) >> 15) & 1u))) {
+                goto rop_Call_DescriptorNoargs_Poll;
+            }
+            goto rop_Call_DescriptorNoargs_Next;
+            rop_Call_DescriptorNoargs_Poll:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_Call_DescriptorNoargs_PollFailed;
+            }
+            rop_Call_DescriptorNoargs_Next:
+            DISPATCH();
+            rop_Call_DescriptorNoargs_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_Call_DescriptorNoargs_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
         }
 
         TARGET(CallKw_Generator) {

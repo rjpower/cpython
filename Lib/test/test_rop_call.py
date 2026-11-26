@@ -575,12 +575,12 @@ class CallGenericTests(unittest.TestCase):
         self.assertIn("Call.BoundExact", word_names(f.__code__))
         self.assertEqual(f(C().m), 4)
 
-    def test_native_stays_generic(self):
+    def test_native_adapts_to_its_arm(self):
         def f(x):
             return len(x)
         force(f, "CALL", "Call.Generic")
         warm(f, "ab")
-        self.assertIn("Call.Generic", word_names(f.__code__))
+        self.assertIn("Call.Len", word_names(f.__code__))
 
     def test_exact_misses_after_redefinition(self):
         def g(a):
@@ -788,7 +788,7 @@ class ObservationTests(unittest.TestCase):
         warm(sample)
         names = word_names(sample.__code__)
         for arm in ("Call.Exact", "Call.BoundExact", "Call.Init",
-                    "Call.Generic", "Return.Empty"):
+                    "Call.Len", "Return.Empty"):
             self.assertIn(arm, names)
         self.assertIn("Return.Generator", word_names(generator.__code__))
         monitor = Monitor(self)

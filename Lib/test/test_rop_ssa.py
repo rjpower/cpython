@@ -992,8 +992,14 @@ def classify(run, mode, index, length, jump_kind):
 
 
 def transfers(arm):
-    "An arm that may leave the frame: it runs under rop_transfer_run"
-    return bool({"enter", "return"} & set(arm.contract.exits))
+    """An arm that may leave the frame, itself or by missing into its family's
+    generic arm: it runs under rop_transfer_run"""
+    leaving = {"enter", "return"}
+    if leaving & set(arm.contract.exits):
+        return True
+    return "miss" in arm.contract.exits and any(
+        leaving & set(g.contract.exits) for g in PROGRAM.arms_of(arm.family)
+        if is_generic(g))
 
 
 def is_generic(arm):

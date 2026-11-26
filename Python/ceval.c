@@ -5647,6 +5647,10 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     activation.observer_context = NULL;
     activation.jit_pin = NULL;
     activation.jit_unit = NULL;
+#ifdef Py_STATS
+    /* Handler 0 is no pair predecessor (INSTRUCTION_STATS()) */
+    activation.last_handler = 0;
+#endif
     tstate_impl->eval_activation = &activation;
 #if _Py_STACK_GROWS_DOWN
     assert(_Py_get_machine_stack_pointer() <= (uintptr_t)&activation);

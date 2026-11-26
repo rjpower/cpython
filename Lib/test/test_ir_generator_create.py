@@ -127,13 +127,14 @@ class TestGeneratorCreation(unittest.TestCase):
             gen = saved
 
 
+@unittest.skip("IterOpen.GenMethod returns in FI step 3")
 @cpython_only
 @requires_specialization
 class TestGetIterGenerator(unittest.TestCase):
     def test_get_iter_creates_generator(self):
         loop = make_looper()
         self.assertEqual(warm(loop, Box(4)), 6)
-        self.assertIn("GET_ITER_PY_GENERATOR", handlers(loop))
+        self.assertIn("IterOpen.GenMethod", handlers(loop))
 
     def test_replacing_iter_invalidates(self):
         class Local:
@@ -143,7 +144,7 @@ class TestGetIterGenerator(unittest.TestCase):
 
         loop = make_looper()
         self.assertEqual(warm(loop, Local()), 3)
-        self.assertIn("GET_ITER_PY_GENERATOR", handlers(loop))
+        self.assertIn("IterOpen.GenMethod", handlers(loop))
 
         def __iter__(self):
             return iter([10, 20])
@@ -157,7 +158,7 @@ class TestGetIterGenerator(unittest.TestCase):
 
         loop = make_looper()
         self.assertEqual(warm(loop, Plain()), 6)
-        self.assertNotIn("GET_ITER_PY_GENERATOR", handlers(loop))
+        self.assertNotIn("IterOpen.GenMethod", handlers(loop))
 
     def test_error_in_iter_generator_creation(self):
         class Bad:

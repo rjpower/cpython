@@ -2,7 +2,6 @@
 // and observation".  Arms come with their batches.  Observation is a
 // generated wrapper bound to a family and arm, not a family.
 
-enum IterMode(ORDINARY_ITER, YIELD_FROM_ITER);
 enum ExceptMode(ENTER_HANDLER, LEAVE_HANDLER);
 enum MatchMode(ORDINARY_MATCH, GROUP_MATCH);
 enum ResumeKind(FUNC_START, AFTER_YIELD, AFTER_YIELD_FROM, AFTER_AWAIT, GEN_EXPR_START);
@@ -738,17 +737,6 @@ family CallEx(dst:Dst, fn:Src, star:Src, kwargs:Maybe<Src>, fb:Fb<Call>)
 
 family MaterializeKwargs(local:Local)
   exits(next, raise) ops(MATERIALIZE_KWARGS);
-
-// 2B: iteration
-
-family IterOpen(pair:IterPair, source:Src, mode:Enum<IterMode>, fb:Fb<Iter>)
-  exits(next, raise, miss, again) ops(GET_ITER);
-
-// `body` is the loop's backward target (far), `done` its exit (near);
-// `second` receives the value of a dict-items pair delivery
-family ForIter(item:Dst, pair:IterPair, body:FarHead, done:NearHead, fb:Fb<Iter>,
-               second:Maybe<Dst>)
-  exits(next, branch, jump, enter, raise, redirect, miss, again) ops(FOR_ITER);
 
 // 2C: async iteration, await, send, yield
 

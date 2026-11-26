@@ -1,0 +1,232 @@
+// 2B: iteration.  GET_ITER, FOR_ITER and the early-exit POP_ITER (the
+// exhaustion edge's END_FOR and POP_ITER are the completion of ForIter and
+// have no word).  The receiver and the cursor of one loop are an IterPair:
+// two adjacent temporaries for the life of the loop.  The cursor holds a
+// tagged index (an index-protocol receiver) or nothing; closing it is a
+// no-op.
+
+// The oparg of GET_ITER: 0, or for `yield from` the code's flags settle
+// whether a coroutine is allowed (Objects/codeobject.c)
+enum IterMode(ORDINARY_ITER, DELEGATE_COROUTINE_OK, DELEGATE_NO_COROUTINE);
+
+family IterOpen(pair:IterPair, source:Src, fb:Fb<Iter>, mode:Enum<IterMode>)
+  exits(next, raise) ops(GET_ITER);
+
+family ForIter(item:Dst, pair:IterPair, fb:Fb<Iter>, done:NearHead)
+  exits(next, branch, raise, redirect) ops(FOR_ITER)
+  events(BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION);
+
+family IterClose(pair:IterPair)
+  exits(next, raise, redirect) ops(POP_ITER)
+  events(BRANCH_RIGHT);
+
+// The iterator and its cursor are published; the source is gone
+point IterOpen.Done(current, next_head, clear) keep() spent(source, pair) defs(pair);
+// The source was closed by the failed open
+point IterOpen.Failed(current, site, pending) keep(pair) spent(source) defs();
+
+// A step delivers the item and the next cursor
+point ForIter.Stepped(current, next_head, clear)
+  keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor);
+// The iterator is exhausted: the pair is retired and the loop goes to its exit
+point ForIter.Exhausted(current, target, clear) keep() spent(pair) defs();
+// The step raised: the iterator stays in its home for the unwinder
+point ForIter.Failed(current, site, pending) keep(pair) spent() defs();
+// A callback of the observed word raised after the item was delivered
+point ForIter.StepEvent(current, site, pending) keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor);
+// The completion value was closed before a failed or redirecting
+// STOP_ITERATION callback; the pair stays
+point ForIter.Closed(current, site, pending) keep(pair) spent() defs();
+// A callback of the exhausted loop raised after the pair was retired
+point ForIter.ExitEvent(current, site, pending) keep() spent(pair) defs();
+
+point IterClose.Done(current, next_head, clear) keep() spent(pair) defs();
+point IterClose.Event(current, site, pending) keep() spent(pair) defs();
+
+// GET_ITER's open: the iterator of the source, and whether it is indexed
+// (a tagged cursor) or not (no cursor).  The source is borrowed, from the
+// anchor of the call; the iterator is a new owner, which for a source that
+// is its own iterator, or is indexed, is a second owner of the source.
+extern helper open_iter(f:Frame, s:B, mode:Enum<IterMode>)
+  cases(plain(r:O), indexed(r:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_OpenIter as status_value
+  evidence(
+    review: "FI. ceval.c: the body of _PyEval_GetIter, which GET_ITER ran and the"
+            "generator prologue still runs.",
+    contract: "The source is borrowed and left as it is, on every path, including the"
+              "failed ones (the coroutine refusal, a type with no __iter__). The"
+              "iterator is a new owner. plain: no cursor; indexed: a tagged 0.");
+
+// The cursor of a receiver that iterates by index starts at the first item
+extern helper tagged_zero() -> O
+  effects()
+  c _PyRop_TaggedZero as value
+  evidence(
+    review: "FI. pycore_value.h: PyValue_TagIndex(0), an inline value.",
+    contract: "No memory, no owner: closing it is a no-op.");
+
+// One step of the iterator: an item and the cursor that follows it, the
+// completion value (None or a generator's return value), or an error.  A
+// StopIteration is the end (and is reported to monitoring as RAISE).  The
+// cursor is read, not taken: it stays in its home until the arm publishes
+// the next one.
+extern helper generic_step(t:Thread, f:Frame, it:B, c:B)
+  cases(item(v:O, next:O), end(v:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_ForIterStep as step_out
+  evidence(
+    review: "FI. ceval.c: _PyForIter_VirtualIteratorNextInline and"
+            "_PyForIter_StopIsExhaustion, as _FOR_ITER used them.",
+    contract: "item: a new owner of the item and the next cursor (a tagged index"
+              "or NULL), the iterator unchanged in its home. end: a new owner of"
+              "the completion value. err: the exception is set.");
+
+// The STOP_ITERATION event of a generator or coroutine receiver, before the
+// loop is retired.  A receiver of another kind reports nothing.
+extern helper stop_iteration_event(t:Thread, f:Frame, at:Site, receiver:B, v:O)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises, releases)
+  requires(instrumented(at))
+  c _PyRop_StopIterationEvent as int_redirect
+  evidence(
+    review: "FI. instrumentation.c _PyIR_ObserveStep phase 0: the StopIteration"
+            "of the completion value, delivered to the tools of the site.",
+    contract: "The value is taken and closed on every path. A callback may raise, or"
+              "move the frame, whose return_pc then names the word to run.");
+
+arm IterOpen.Generic split
+  effects(allocates, runs_python, raises, writes, releases)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let a:Anchors = anchor_for_call([source]);
+    call open_iter(frame, arg(a, 0), mode) {
+      plain -> Plain();
+      indexed -> Indexed();
+      err -> Failed();
+    }
+  Plain(pr:O):
+    publish [pair.receiver = pr, pair.cursor = null] retire [roots(a), spent(source), old(pair.receiver), old(pair.cursor)] at IterOpen.Done;
+    exit next();
+  Indexed(ir:O):
+    let z:O = tagged_zero();
+    publish [pair.receiver = ir, pair.cursor = z] retire [roots(a), spent(source), old(pair.receiver), old(pair.cursor)] at IterOpen.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [source], e);
+    exit raise(IterOpen.Failed, saved);
+}
+
+arm ForIter.Generic split
+  effects(reads, writes, allocates, runs_python, raises, releases on (item))
+  feedback()
+  exits(next, branch, raise)
+{
+  entry():
+    let a:Anchors = anchor_for_call([pair.receiver, pair.cursor]);
+    call generic_step(thread, frame, arg(a, 0), arg(a, 1)) {
+      item -> Item();
+      end -> Exhausted();
+      err -> Failed();
+    }
+  Item(iv:O, nc:O):
+    publish [item = iv, pair.cursor = nc] retire [roots(a), old(item), old(pair.cursor)] at ForIter.Stepped;
+    exit next();
+  Exhausted(ev:O):
+    publish [] retire [roots(a), spent(pair), owned(ev)] at ForIter.Exhausted;
+    exit branch(done);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(ForIter.Failed, saved);
+}
+
+// The observed wrapper of every ForIter arm: the step as Generic makes it,
+// BRANCH_LEFT after an item is delivered, and at the end STOP_ITERATION
+// before the pair is retired and BRANCH_RIGHT after.
+arm ForIter.Observed split observes
+  effects(reads, writes, allocates, runs_python, raises, releases on (item))
+  feedback()
+  exits(next, branch, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([pair.receiver, pair.cursor]);
+    call generic_step(thread, frame, arg(a, 0), arg(a, 1)) {
+      item -> Item();
+      end -> Exhausted();
+      err -> Failed();
+    }
+  Item(iv:O, nc:O):
+    publish [item = iv, pair.cursor = nc] retire [roots(a), old(item), old(pair.cursor)] at ForIter.Stepped;
+    call branch_event(thread, frame, site, false) {
+      ok -> Next();
+      moved -> Moved();
+      err -> StepEventFailed();
+    }
+  Next():
+    exit next();
+  Moved(mr:Route):
+    exit redirect(mr);
+  StepEventFailed(se:Err):
+    exit raise(ForIter.StepEvent, se);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(ForIter.Failed, saved);
+  Exhausted(ev:O):
+    call stop_iteration_event(thread, frame, site, arg(a, 0), ev) {
+      ok -> Retire();
+      moved -> StopMoved();
+      err -> StopFailed();
+    }
+  Retire():
+    publish [] retire [roots(a), spent(pair)] at ForIter.Exhausted;
+    call branch_event(thread, frame, site, true) {
+      ok -> Exit();
+      moved -> ExitMoved();
+      err -> ExitEventFailed();
+    }
+  Exit():
+    exit branch(done);
+  ExitMoved(xr:Route):
+    exit redirect(xr);
+  ExitEventFailed(xe:Err):
+    exit raise(ForIter.ExitEvent, xe);
+  StopMoved(sr:Route):
+    publish [] retire [roots(a)] at ForIter.Closed;
+    exit redirect(sr);
+  StopFailed(sf:Err):
+    publish [] retire [roots(a)] at ForIter.Closed;
+    exit raise(ForIter.Closed, sf);
+}
+
+arm IterClose.Retire split
+  effects(writes, releases, runs_python)
+  feedback()
+  exits(next)
+{
+  entry():
+    publish [] retire [spent(pair)] at IterClose.Done;
+    exit next();
+}
+
+// The BRANCH_RIGHT event of the early exit, after the iterator is retired
+arm IterClose.Observed split observes
+  effects(writes, releases, runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    publish [] retire [spent(pair)] at IterClose.Done;
+    call branch_event(thread, frame, site, true) {
+      ok -> Next();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Next():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  Failed(e:Err):
+    exit raise(IterClose.Event, e);
+}

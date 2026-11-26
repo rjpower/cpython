@@ -273,10 +273,10 @@ def arm_row(analysis: Analysis, arm: ir_arms.ArmEntry,
         f".transfer_kind = {fmt.transfer}, .owner_program = {program[0]}, "
         f".owner_events = {program[1]}, .word_flags = {word_flags}, .error_routes = 0, "
         f".operands = {fmt.operands}, {fixed}"
-        f".observer_outcome = {{ {fmt.observer}, {fmt.observer} }}, "
-        f".reads = {{ {fmt.ninputs}, _PyIR_EXT_FIXED }}, "
+        f".observer_outcome = {{ {fmt.observer}, {fmt.observer_taken or fmt.observer} }}, "
+        f".reads = {{ {fmt.ninputs if fmt.reads is None else fmt.reads}, _PyIR_EXT_FIXED }}, "
         f".writes = {{ {fmt.writes}, _PyIR_EXT_FIXED }}, "
-        f".through = {{ 0, _PyIR_EXT_FIXED }}, .shadow = {shadow}, "
+        f".through = {{ {fmt.through}, _PyIR_EXT_FIXED }}, .shadow = {shadow}, "
         f".twin = {twin}, .events = {events} }}")
 
 

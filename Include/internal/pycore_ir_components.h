@@ -1833,19 +1833,6 @@
      * the callee. */ \
     HELPER(_Py_Specialize_CallKw, void, (PyValue, PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the iterator's type and \
-     * iteration slots, and classifies the failure \
-     * (_PySpecialization_ClassifyIterator). 
-     * The iterator is taken as an object without a test (PyValue_AsKnownObjectBorrow; GET_ITER always leaves one): the row requires `object`. */ \
-    HELPER(_Py_Specialize_ForIter, void, (PyValue, PyValue, _PyInstr *, int), \
-        ARGS(borrowed object, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the iterable's type and \
-     * iteration slots (_PyType_IteratesByIndex, tp_iter); \
-     * specialize_iter_generator looks up __iter__ without allocating \
-     * (_PyType_TryLookupValueNoAlloc) and lowers a generator function's code \
-     * (prepare_function_exec). */ \
-    HELPER(_Py_Specialize_GetIter, void, (PyValue, _PyInstr *), \
-        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Compares the global `super` \
      * with PySuper_Type by address and tests the class's type flag; no lookup and \
      * no lowering. */ \

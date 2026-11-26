@@ -2319,6 +2319,76 @@ _PyRop_BranchEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                   : PY_MONITORING_EVENT_BRANCH_LEFT);
 }
 
+/* The rows of IterOpen and ForIter (iteration.rop) */
+
+/* IterOpen's open: 0 plain (an iterator, no cursor), 1 indexed (a second
+ * owner of the source with a tagged cursor), -1 raised.  The source is
+ * borrowed. */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_OpenIter(_PyInterpreterFrame *frame, PyValueBorrow source, uint32_t mode)
+{
+    (void)frame;
+    static const int oparg_of_mode[] = {
+        [ITER_ORDINARY] = 0,
+        [ITER_DELEGATE_COROUTINE_OK] = GET_ITER_YIELD_FROM_NO_CHECK,
+        [ITER_DELEGATE_NO_COROUTINE] = GET_ITER_YIELD_FROM_CORO_CHECK,
+    };
+    assert(mode <= ITER_DELEGATE_NO_COROUTINE);
+    bool indexed = _PyType_IteratesByIndex(PyValue_TYPE(source));
+    _PyValuePair got = _PyEval_GetIter(PyValue_DUP(source), oparg_of_mode[mode]);
+    if (PyValue_IsNull(got.first)) {
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    return (_PyStatusValue){indexed ? 1 : 0, got.first};
+}
+
+static inline PyValue
+_PyRop_TaggedZero(void)
+{
+    return PyValue_TagIndex(0);
+}
+
+/* One step: 1 an item (its cursor in *next), 0 the end, -1 raised */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_ForIterStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   PyValueBorrow iter, PyValueBorrow cursor, PyValue *next)
+{
+    // The cursor is a tagged index or nothing: it owns no memory
+    PyValue position = PyValue_IsNull(cursor)
+        ? PyValue_NULL : PyValue_TagIndex(PyValue_UntagIndex(cursor));
+    _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(
+        tstate, frame, iter, position);
+    if (step.status < 0) {
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    if (step.status == 0) {
+        return (_PyStatusValue){0, PyValue_IsNull(step.value) ? PyValue_None
+                                                              : step.value};
+    }
+    *next = step.cursor;
+    return (_PyStatusValue){1, step.value};
+}
+
+/* ForIter.Observed's STOP_ITERATION: the event of the completion value,
+ * reported before the loop's pair is retired.  The exit is where the word
+ * goes on exhaustion.  The value is closed on every path. */
+static Py_NO_INLINE int
+_PyRop_StopIterationEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                          _PyInstr *site, PyValueBorrow receiver,
+                          PyValue value)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
+    frame->return_pc = dest;
+    int status = _PyIR_ObserveStopIteration(tstate, frame, site, dest,
+                                            receiver, PyValue_Borrow(value));
+    PyValue_CLOSE(value);
+    if (status > 0) {
+        frame->return_pc = frame->instr_ptr;
+    }
+    return status;
+}
+
 /* The row of Jump.Observed: the JUMP event of the word's one edge */
 static Py_NO_INLINE int
 _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
@@ -2493,19 +2563,17 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
          * the language requires, and the code takes any iterable as its
          * argument.  Its errors are those of the call. */
         PyValue *stack = frame->base + exec->nfixed;
-        PyValue iterable = PyValue_DUP(frame->base[0]);
         if (IR_HANDLER(exec->words[1]) == ROP_HANDLER_AsyncIterOpen_Open) {
             // The register instruction reads the argument itself
             assert(IR_A(exec->words[1]) == exec->nfixed);
-            stack[0] = _PyEval_GetAIter(tstate, iterable);
+            stack[0] = _PyEval_GetAIter(tstate, PyValue_DUP(frame->base[0]));
         }
         else {
-            assert(IR_HANDLER(exec->words[1]) == ROP_HANDLER_LocalRead_Bound);
-            assert(_PyIR_BaseOpcode(IR_HANDLER(exec->words[2])) == GET_ITER);
-            assert(IR_A(exec->words[2]) == exec->nfixed);
-            _PyValuePair got = _PyEval_GetIter(iterable, 0);
-            stack[0] = got.first;
-            stack[1] = got.second;
+            // The row of IterOpen.Generic
+            _PyStatusValue opened = _PyRop_OpenIter(
+                frame, PyValue_Borrow(frame->base[0]), ITER_ORDINARY);
+            stack[0] = opened.value;
+            stack[1] = opened.status == 1 ? _PyRop_TaggedZero() : PyValue_NULL;
         }
         if (PyValue_IsNull(stack[0])) {
             return -1;

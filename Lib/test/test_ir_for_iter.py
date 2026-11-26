@@ -1,7 +1,6 @@
-"""FOR_ITER and its specializations step the cursor by value.
+"""ForIter steps the cursor by value.
 
-_FOR_ITER, _FOR_ITER_VIRTUAL, _ITER_NEXT_LIST and _ITER_NEXT_TUPLE take the
-cursor as `index` and give the next one as `next_index`.  The cursor is a
+The step takes the cursor and gives the next one.  The cursor is a
 tagged index for an index-protocol iterator and NULL for an object-protocol
 one.  Each case warms a loop until its handler runs, then checks that every
 item the loop yields is released exactly once and that a break, an iterator's
@@ -97,12 +96,12 @@ def failing(it):
 # Each source builds a fresh iterable of COUNT new Values; the case names the
 # handler that the warmed loop must reach
 SOURCES = {
-    "list": (lambda vs: list(vs), "FOR_ITER_LIST"),
-    "tuple": (lambda vs: tuple(vs), "FOR_ITER_TUPLE"),
-    "map": (lambda vs: map(lambda v: v, vs), "FOR_ITER_VIRTUAL"),
-    "iter_list": (lambda vs: iter(list(vs)), "FOR_ITER_VIRTUAL"),
-    "zip": (lambda vs: (v for v, in zip(vs)), "FOR_ITER_VIRTUAL"),
-    "user": (lambda vs: UserIter(vs), "FOR_ITER_VIRTUAL"),
+    "list": (lambda vs: list(vs), "ForIter.Generic"),
+    "tuple": (lambda vs: tuple(vs), "ForIter.Generic"),
+    "map": (lambda vs: map(lambda v: v, vs), "ForIter.Generic"),
+    "iter_list": (lambda vs: iter(list(vs)), "ForIter.Generic"),
+    "zip": (lambda vs: (v for v, in zip(vs)), "ForIter.Generic"),
+    "user": (lambda vs: UserIter(vs), "ForIter.Generic"),
 }
 
 

@@ -741,13 +741,13 @@ class DefinitionTests(unittest.TestCase):
         NamespaceWrite
         GlobalRead SetupAnnotations Import ImportFrom BuildText Convert Format Length Pattern
         Function Intrinsic IntrinsicPair
-        Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
+        Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter IterClose
         AsyncIterNext AsyncIterOpen Awaitable Send Yield YieldFrom Raise Reraise ExceptState ExceptMatch
         CleanupThrow EndAsyncFor WithExit Resume Poll
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 78)
+        self.assertEqual(len(self.APPENDIX_A), 79)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

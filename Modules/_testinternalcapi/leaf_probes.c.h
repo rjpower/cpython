@@ -526,38 +526,6 @@ leaf_probe__GUARD_TOS_IS_NONE(_PyInterpreterFrame *frame, PyValue *stack_pointer
 }
 
 static int
-leaf_probe__GUARD_TOS_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue tos;
-    tos = stack_pointer[-1];
-    PyObject *o = PyValue_AsKnownObjectBorrow(tos);
-    if (!PyList_CheckExact(o)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_TOS_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue tos;
-    tos = stack_pointer[-1];
-    PyObject *o = PyValue_AsKnownObjectBorrow(tos);
-    if (!PyTuple_CheckExact(o)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__GUARD_TOS_UNICODE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -955,8 +923,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_GUARD_NOS_UNICODE", leaf_probe__GUARD_NOS_UNICODE, 2},
     {"_GUARD_TOS_INT", leaf_probe__GUARD_TOS_INT, 1},
     {"_GUARD_TOS_IS_NONE", leaf_probe__GUARD_TOS_IS_NONE, 1},
-    {"_GUARD_TOS_LIST", leaf_probe__GUARD_TOS_LIST, 1},
-    {"_GUARD_TOS_TUPLE", leaf_probe__GUARD_TOS_TUPLE, 1},
     {"_GUARD_TOS_UNICODE", leaf_probe__GUARD_TOS_UNICODE, 1},
     {"_IR_JUMP", leaf_probe__IR_JUMP, 0},
     {"_ITER_CHECK_LIST", leaf_probe__ITER_CHECK_LIST, 2},

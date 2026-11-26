@@ -1670,95 +1670,23 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        family(UNPACK_SEQUENCE, INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE) = {
-            UNPACK_SEQUENCE_TUPLE,
-            UNPACK_SEQUENCE_LIST,
-        };
-
-        specializing op(_SPECIALIZE_UNPACK_SEQUENCE, (seq -- seq))
-            effects(runs_python) exits(next, jump)
-            feedback(read(entry), write(entry), write(handler))
+        /* A stack op only: UNPACK_SEQUENCE is the Unpack family (Python/register_ops/displays.rop). */
+        tier1 inst(UNPACK_SEQUENCE,
+                (unused/1, seq: consumed -- unused[oparg], top[0]: owned))
+            exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-            (void)seq;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        window op(_UNPACK_SEQUENCE, (seq: consumed -- unused[oparg], top[0]: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            // A number is not iterable
-            if (!PyValue_IsObject(seq)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "cannot unpack non-iterable %.200s object",
-                              PyValue_TYPE(seq)->tp_name);
-                DEAD(seq);
-                ERROR_IF(true);
-            }
-            PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
-            int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
-            ERROR_IF(res == 0);
-        }
-
-        macro(UNPACK_SEQUENCE) region(shared) = unused/1 + _SPECIALIZE_UNPACK_SEQUENCE + _UNPACK_SEQUENCE;
-
-        macro(UNPACK_SEQUENCE_TUPLE) region(shared) =
-            _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TUPLE;
-
-        op(_UNPACK_SEQUENCE_TUPLE, (seq: consumed exact(PyTuple_Type) -- values[oparg]: owned))
-            effects(reads, releases) exits(next, miss)
-        {
-            PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
-            assert(PyTuple_CheckExact(seq_o));
-            EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
-            STAT_INC(UNPACK_SEQUENCE, hit);
-            IR_UNPACK_ITEMS(values, _PyTuple_ITEMS(seq_o), oparg);
-            DECREF_INPUTS();
-        }
-
-        macro(UNPACK_SEQUENCE_LIST) region(shared) =
-            _GUARD_TOS_LIST + unused/1 + _UNPACK_SEQUENCE_LIST;
-
-        op(_UNPACK_SEQUENCE_LIST, (seq: consumed exact(PyList_Type) -- values[oparg]: owned))
-            effects(reads, releases) exits(next, deopt)
-        {
-            PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
-            assert(PyList_CheckExact(seq_o));
-            DEOPT_IF(!LOCK_OBJECT(seq_o));
-            if (PyList_GET_SIZE(seq_o) != oparg) {
-                UNLOCK_OBJECT(seq_o);
-                DEOPT_IF(true);
-            }
-            STAT_INC(UNPACK_SEQUENCE, hit);
-            IR_UNPACK_ITEMS(values, _PyList_ITEMS(seq_o), oparg);
-            UNLOCK_OBJECT(seq_o);
-            DECREF_INPUTS();
-        }
-
-        outlined window inst(UNPACK_EX,
+        /* A stack op only: UNPACK_EX is the UnpackStar family (Python/register_ops/displays.rop). */
+        tier1 inst(UNPACK_EX,
                 (seq: consumed
                  -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0]: owned))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
-            // A number is not iterable
-            if (!PyValue_IsObject(seq)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "cannot unpack non-iterable %.200s object",
-                              PyValue_TYPE(seq)->tp_name);
-                DEAD(seq);
-                ERROR_IF(true);
-            }
-            PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
-            int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
-            ERROR_IF(res == 0);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: its rule in Python/regcfg.c lowers it to the register

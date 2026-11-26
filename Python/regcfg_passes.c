@@ -250,7 +250,7 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
 static int
 touches_local(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
 {
-    if (_PyRegOp_WritesLocal(op, z) || written_local(op) == z) {
+    if (_PyRegOp_WritesLocal(cfg, op, z) || written_local(op) == z) {
         return 1;
     }
     // A handler that reads the slot its oparg names
@@ -281,6 +281,16 @@ store_producer(_PyRegCfg *cfg, int region_start, int s)
         const int *out = _PyReg_OUT(cfg, op);
         if (op->nout > 0 && out[op->nout - 1] == value) {
             return op;
+        }
+        // An unpack's outputs are all its targets', in any order
+        if (op->nout > 1
+            && _PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg)))
+        {
+            for (int j = 0; j < op->nout; j++) {
+                if (out[j] == value) {
+                    return op;
+                }
+            }
         }
         // An op that writes a local releases its old value, which may run
         // other code, as STORE_FAST does
@@ -321,6 +331,27 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 continue;
             }
             const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode, p->oparg);
+            if (_PyIR_IsDstSpanFormat(fmt)) {
+                // The store of one of an unpack's outputs names that output
+                // the local: the publish writes it and closes its old
+                // binding with the others', after every target is written
+                int *outs = _PyReg_OUT(cfg, p);
+                int k = 0;
+                while (k < p->nout && outs[k] != _PyReg_IN(cfg, op)[0]) {
+                    k++;
+                }
+                int twice = 0;
+                for (int j = 0; j < p->nout; j++) {
+                    twice |= outs[j] == op->oparg;
+                }
+                if (k == p->nout || twice) {
+                    continue;
+                }
+                outs[k] = op->oparg;
+                op->opcode = _PyReg_DEAD;
+                op->flags |= _PyReg_STORE_FOLDED;
+                continue;
+            }
             if (!(fmt->flags & _PyIR_STORE_DST) || fmt->dst == _PyIR_NO_DST) {
                 continue;
             }
@@ -341,96 +372,6 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
         }
     }
     return SUCCESS;
-}
-
-
-/* Unpacks to locals (pass b2).
- *
- * An UNPACK_SEQUENCE or UNPACK_EX whose n live successors are STORE_FASTs
- * of its outputs on its own line, in element order, into n consecutive
- * locals t, t+1, ..., becomes a word whose dst field is t: the handler
- * stores the element i to local t+i and the STORE_FASTs die.  Any other
- * targets keep the stores. */
-
-static _PyRegOp *live_neighbour(_PyRegCfg *cfg, int start, int end, int i,
-                                int step);
-
-enum {
-    UNPACK_OK, UNPACK_NOT_STORE_FAST, UNPACK_OTHER_LINE, UNPACK_WRONG_ORDER,
-    UNPACK_NOT_CONSECUTIVE
-};
-
-static int
-unpack_locals_site(_PyRegCfg *cfg, int start, int end, _PyRegOp *op,
-                   _PyRegOp **stores)
-{
-    int n = op->nout;
-    const int *out = _PyReg_OUT(cfg, op);
-    _PyRegOp *prev = op;
-    int first = -1;
-    for (int k = 0; k < n; k++) {
-        _PyRegOp *s = live_neighbour(cfg, start, end, (int)(prev - cfg->ops), 1);
-        if (s == NULL || s->opcode != ROP_HANDLER_LocalWrite_Store) {
-            return UNPACK_NOT_STORE_FAST;
-        }
-        if (s->loc.lineno != op->loc.lineno) {
-            return UNPACK_OTHER_LINE;
-        }
-        if (_PyReg_IN(cfg, s)[0] != out[n - 1 - k]) {
-            return UNPACK_WRONG_ORDER;
-        }
-        if (k == 0) {
-            first = s->oparg;
-        }
-        else if (s->oparg != first + k) {
-            return UNPACK_NOT_CONSECUTIVE;
-        }
-        stores[k] = s;
-        prev = s;
-    }
-    return UNPACK_OK;
-}
-
-static int
-unpack_locals_region(_PyRegCfg *cfg, int start, int end)
-{
-    _PyRegOp **stores = NULL;
-    int astores = 0;
-    for (int i = start; i < end; i++) {
-        _PyRegOp *op = &cfg->ops[i];
-        if ((op->opcode != UNPACK_SEQUENCE && op->opcode != UNPACK_EX)
-            || op->dst >= 0 || op->nout < 1)
-        {
-            continue;
-        }
-        if (op->nout > astores) {
-            PyMem_Free(stores);
-            astores = op->nout;
-            stores = PyMem_Malloc(astores * sizeof(_PyRegOp *));
-            if (stores == NULL) {
-                PyErr_NoMemory();
-                return ERROR;
-            }
-        }
-        int why = unpack_locals_site(cfg, start, end, op, stores);
-        if (why != UNPACK_OK) {
-            continue;
-        }
-        op->dst = stores[0]->oparg;
-        op->flags |= _PyReg_UNPACK_LOCALS;
-        for (int k = 0; k < op->nout; k++) {
-            stores[k]->opcode = _PyReg_DEAD;
-            stores[k]->flags |= _PyReg_STORE_FOLDED;
-        }
-    }
-    PyMem_Free(stores);
-    return SUCCESS;
-}
-
-int
-_PyRegPass_UnpackLocals(_PyRegCfg *cfg)
-{
-    return for_each_region_backward(cfg, unpack_locals_region);
 }
 
 

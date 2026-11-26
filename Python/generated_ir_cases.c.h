@@ -11,53 +11,53 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyBool_Type), PyTypeObjec
               "PyBool_Type: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyNone_Type), PyTypeObject *),
               "_PyNone_Type: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsNull((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsNull(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsNull: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInlineInt((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInlineInt(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsInlineInt: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsObject((PyValueBorrow){0})), int),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsObject(PyValue_Borrow(PyValue_NULL))), int),
               "PyValue_IsObject: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsPointerSpace((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsPointerSpace(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsPointerSpace: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInline((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInline(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsInline: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInlineFloat((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInlineFloat(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsInlineFloat: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsTaggedIndex((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsTaggedIndex(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsTaggedIndex: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_BothInlineInt((PyValueBorrow){0}, (PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_BothInlineInt(PyValue_Borrow(PyValue_NULL), PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_BothInlineInt: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_Is((PyValueBorrow){0}, (PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_Is(PyValue_Borrow(PyValue_NULL), PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_Is: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_NamesObject((PyValueBorrow){0}, (PyObject *){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_NamesObject(PyValue_Borrow(PyValue_NULL), (PyObject *){0})), bool),
               "_PyValue_NamesObject: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsTrue((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsTrue(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsTrue: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsFalse((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsFalse(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsFalse: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsNone((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsNone(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_IsNone: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_BoolCheck((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_BoolCheck(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_BoolCheck: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_LongCheckExact((PyValueBorrow){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_LongCheckExact(PyValue_Borrow(PyValue_NULL))), bool),
               "PyValue_LongCheckExact: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_IntScaled((PyValueBorrow){0})), int64_t),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_IntScaled(PyValue_Borrow(PyValue_NULL))), int64_t),
               "_PyValue_IntScaled: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_InlineInt64((PyValueBorrow){0})), int64_t),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_InlineInt64(PyValue_Borrow(PyValue_NULL))), int64_t),
               "PyValue_InlineInt64: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_FromIntScaled((int64_t){0})), PyValue),
               "_PyValue_FromIntScaled: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FromInlineInt((int64_t){0})), PyValue),
               "PyValue_FromInlineInt: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_InlineFloat((PyValueBorrow){0})), double),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_InlineFloat(PyValue_Borrow(PyValue_NULL))), double),
               "PyValue_InlineFloat: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FromDoubleNotNaN((double){0})), PyValue),
               "PyValue_FromDoubleNotNaN: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_TagIndex((intptr_t){0})), PyValue),
               "PyValue_TagIndex: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_UntagIndex((PyValueBorrow){0})), intptr_t),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_UntagIndex(PyValue_Borrow(PyValue_NULL))), intptr_t),
               "PyValue_UntagIndex: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IncrementTaggedIndexNoOverflow((PyValue){0})), PyValue),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IncrementTaggedIndexNoOverflow(PyValue_NULL)), PyValue),
               "PyValue_IncrementTaggedIndexNoOverflow: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_DropCursor), void (*)(PyValue)),
               "_PyValue_DropCursor: its C type differs from pycore_ir_components.h");
@@ -65,7 +65,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FromInt64((int64_t
               "PyValue_FromInt64: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_BoxInt64), PyValue (*)(int64_t)),
               "_PyValue_BoxInt64: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FloatOperandValues((PyValueBorrow){0}, (PyValueBorrow){0}, (double *){0}, (double *){0})), bool),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FloatOperandValues(PyValue_Borrow(PyValue_NULL), PyValue_Borrow(PyValue_NULL), (double *){0}, (double *){0})), bool),
               "PyValue_FloatOperandValues: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_BoxDouble), PyValue (*)(double)),
               "_PyValue_BoxDouble: its C type differs from pycore_ir_components.h");
@@ -73,7 +73,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FromDouble((double
               "PyValue_FromDouble: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_MultiplyInt64), PyValue (*)(int64_t, int64_t)),
               "_PyValue_MultiplyInt64: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_CLOSE_SPECIALIZED((PyValue){0}, (destructor){0})), void),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_CLOSE_SPECIALIZED(PyValue_NULL, (destructor){0})), void),
               "PyValue_CLOSE_SPECIALIZED: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyLong_ExactDealloc), void (*)(PyObject *)),
               "_PyLong_ExactDealloc: its C type differs from pycore_ir_components.h");
@@ -147,23 +147,23 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_Size), Py_ssize_
               "_PyValue_Size: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_Str), PyObject * (*)(PyValueBorrow)),
               "_PyValue_Str: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_AsKnownObjectBorrow((PyValueBorrow){0})), PyObject *),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_AsKnownObjectBorrow(PyValue_Borrow(PyValue_NULL))), PyObject *),
               "PyValue_AsKnownObjectBorrow: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_AsKnownObjectBorrowPointer((PyValueBorrow){0})), PyObject *),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_AsKnownObjectBorrowPointer(PyValue_Borrow(PyValue_NULL))), PyObject *),
               "_PyValue_AsKnownObjectBorrowPointer: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValueGuarded_Load((_PyValueGuarded){0})), PyValueBorrow),
               "_PyValueGuarded_Load: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValueGuarded_LoadObject), PyValueBorrow (*)(_PyValueGuarded)),
               "_PyValueGuarded_LoadObject: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CodeConstant((PyValueBorrow){0})), PyValueBorrow),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CodeConstant(PyValue_Borrow(PyValue_NULL))), PyValueBorrow),
               "_PyValue_CodeConstant: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_BoundLocal((PyValueBorrow){0})), PyValueBorrow),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_BoundLocal(PyValue_Borrow(PyValue_NULL))), PyValueBorrow),
               "_PyValue_BoundLocal: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CellLocal((PyValueBorrow){0})), PyValueBorrow),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CellLocal(PyValue_Borrow(PyValue_NULL))), PyValueBorrow),
               "_PyValue_CellLocal: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CommonConstant((PyValueBorrow){0})), PyValueBorrow),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CommonConstant(PyValue_Borrow(PyValue_NULL))), PyValueBorrow),
               "_PyValue_CommonConstant: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_PublishedItem((PyValueBorrow){0})), PyValueBorrow),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_PublishedItem(PyValue_Borrow(PyValue_NULL))), PyValueBorrow),
               "_PyValue_PublishedItem: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_AsKnownObjectSteal), PyObject * (*)(PyValue)),
               "PyValue_AsKnownObjectSteal: its C type differs from pycore_ir_components.h");
@@ -191,11 +191,11 @@ static_assert(__builtin_types_compatible_p(__typeof__(((PyDictValues *)0)->valid
               "PyDictValues.valid: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_ValueSlot((PyObject *){0}, (size_t){0})), PyValue *),
               "_PyObject_ValueSlot: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_Exchange((PyValue *){0}, (PyValue){0})), PyValue),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_Exchange((PyValue *){0}, PyValue_NULL)), PyValue),
               "_PyValueSlot_Exchange: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_ExchangeFilled((PyValue *){0}, (PyValue){0})), PyValue),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_ExchangeFilled((PyValue *){0}, PyValue_NULL)), PyValue),
               "_PyValueSlot_ExchangeFilled: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_Fill((PyValue *){0}, (PyValue){0})), void),
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_Fill((PyValue *){0}, PyValue_NULL)), void),
               "_PyValueSlot_Fill: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_Shape((PyObject *){0})), uint32_t),
               "_PyObject_Shape: its C type differs from pycore_ir_components.h");
@@ -205,13 +205,13 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyDictValues_AddToInserti
               "_PyDictValues_AddToInsertionOrder: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyDictValues_SetShape((PyDictValues *){0}, (uint8_t){0})), void),
               "_PyDictValues_SetShape: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_XDUP((PyValueBorrow){0})), PyValue),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_XDUP(PyValue_Borrow(PyValue_NULL))), PyValue),
               "PyValue_XDUP: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_DUP((PyValueBorrow){0})), PyValue),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_DUP(PyValue_Borrow(PyValue_NULL))), PyValue),
               "PyValue_DUP: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_XCLOSE((PyValue){0})), void),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_XCLOSE(PyValue_NULL)), void),
               "PyValue_XCLOSE: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_CLOSE((PyValue){0})), void),
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_CLOSE(PyValue_NULL)), void),
               "PyValue_CLOSE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_Format), PyObject * (*)(PyThreadState *, PyObject *, const char *, ...)),
               "_PyErr_Format: its C type differs from pycore_ir_components.h");
@@ -349,8 +349,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyList_ITEMS((PyObject *)
               "_PyList_ITEMS: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyTuple_ITEMS((PyObject *){0})), PyValue *),
               "_PyTuple_ITEMS: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_UnpackIterableValue), int (*)(PyThreadState *, PyObject *, int, int, PyValue *)),
-              "_PyEval_UnpackIterableValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&GETITEM), PyObject * (*)(PyObject *, Py_ssize_t)),
               "GETITEM: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_New), PyObject * (*)(void)),
@@ -407,8 +405,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_Py_HandlePending), int (
               "_Py_HandlePending: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_BinaryOp), void (*)(PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *)),
               "_Py_Specialize_BinaryOp: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_UnpackSequence), void (*)(PyValue, _PyInstr *, int)),
-              "_Py_Specialize_UnpackSequence: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyFb_HasEntry), int (*)(int)),
               "_PyFb_HasEntry: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_CallFunctionEx), void (*)(PyValue, PyValue, _PyInstr *)),
@@ -879,10 +875,10 @@ static _PyIRTransfer ir_run_Truth_Str(PyThreadState *tstate, _PyInterpreterFrame
 static _PyIRTransfer ir_run_UNARY_INVERT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNARY_NEGATIVE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNKNOWN_OPCODE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_UNPACK_EX(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_UNPACK_SEQUENCE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_UNPACK_SEQUENCE_LIST(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_UNPACK_SEQUENCE_TUPLE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_UnpackStar_Iterable(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Unpack_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Unpack_List(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Unpack_Tuple(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UpdateContainer_Extend(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UpdateContainer_Overlay(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UpdateContainer_Union(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -6315,239 +6311,6 @@ ir_run_UNARY_NEGATIVE(
 
         
 static Py_NO_INLINE _PyIRTransfer
-ir_run_UNPACK_EX(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = UNPACK_EX;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_EX);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue seq;
-            PyValue *top;
-            seq = window[0];
-            top = &window[1 + (oparg & 0xFF) + (oparg >> 8)];
-            if (!PyValue_IsObject(seq)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "cannot unpack non-iterable %.200s object",
-                              PyValue_TYPE(seq)->tp_name);
-                window[0] = PyValue_NULL;
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
-            window[0] = PyValue_NULL;
-            int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
-            if (res == 0) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, B)) {
-                if (IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_B(ir_word)), window, ((oparg & 0xFF) + 1 + (oparg >> 8)))) { IR_CLOSE_WINDOW(window, ((oparg & 0xFF) + 1 + (oparg >> 8))); }
-            }
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_UNPACK_SEQUENCE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = UNPACK_SEQUENCE;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_SEQUENCE);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_C(ir_word));
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue seq;
-            PyValue *top;
-            // _SPECIALIZE_UNPACK_SEQUENCE
-            {
-                IR_STUB_ESCAPE();
-                seq = window[0];
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (_PyFb_CounterTriggers(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
-                _PyFb_AdvanceCounter(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-                (void)seq;
-            }
-            // _UNPACK_SEQUENCE
-            {
-                IR_STUB_ESCAPE();
-                top = &window[oparg];
-                if (!PyValue_IsObject(seq)) {
-                    _PyErr_Format(tstate, PyExc_TypeError,
-                              "cannot unpack non-iterable %.200s object",
-                              PyValue_TYPE(seq)->tp_name);
-                    window[0] = PyValue_NULL;
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
-                window[0] = PyValue_NULL;
-                int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
-                if (res == 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                if (IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, oparg)) { IR_CLOSE_WINDOW(window, oparg); }
-            }
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_UNPACK_SEQUENCE_LIST(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = UNPACK_SEQUENCE_LIST;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_SEQUENCE_LIST);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            bool ir_unpack_owned = false;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue *values;
-            // _GUARD_TOS_LIST
-            {
-                tos = window[0];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
-                if (!PyList_CheckExact(o)) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-            }
-            // _UNPACK_SEQUENCE_LIST
-            {
-                seq = tos;
-                values = &window[0];
-                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
-                assert(PyList_CheckExact(seq_o));
-                if (!LOCK_OBJECT(seq_o)) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                if (PyList_GET_SIZE(seq_o) != oparg) {
-                    UNLOCK_OBJECT(seq_o);
-                    if (true) {
-                        UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                        assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                        JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                    }
-                }
-                STAT_INC(UNPACK_SEQUENCE, hit);
-                if (IR_IS_LOCAL_FIELD(ir_word, D)) { ir_unpack_owned = _PyIR_UnpackItemsToLocals(&IR_SLOT(IR_D(ir_word)), values, _PyList_ITEMS(seq_o), oparg); } else { _PyIR_UnpackItemsToWindow(frame, values, _PyList_ITEMS(seq_o), oparg); };
-                UNLOCK_OBJECT(seq_o);
-                IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
-                _PyValue_CLOSE_POINTER(seq);
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
-            }
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
-ir_run_UNPACK_SEQUENCE_TUPLE(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-            int opcode = UNPACK_SEQUENCE_TUPLE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_SEQUENCE_TUPLE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            bool ir_unpack_owned = false;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue *values;
-            // _GUARD_TOS_TUPLE
-            {
-                tos = window[0];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
-                if (!PyTuple_CheckExact(o)) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-            }
-            // _UNPACK_SEQUENCE_TUPLE
-            {
-                seq = tos;
-                values = &window[0];
-                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
-                assert(PyTuple_CheckExact(seq_o));
-                if (PyTuple_GET_SIZE(seq_o) != oparg) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                STAT_INC(UNPACK_SEQUENCE, hit);
-                if (IR_IS_LOCAL_FIELD(ir_word, D)) { ir_unpack_owned = _PyIR_UnpackItemsToLocals(&IR_SLOT(IR_D(ir_word)), values, _PyTuple_ITEMS(seq_o), oparg); } else { _PyIR_UnpackItemsToWindow(frame, values, _PyTuple_ITEMS(seq_o), oparg); };
-                IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
-                _PyValue_CLOSE_POINTER(seq);
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
-            }
-            DISPATCH();
-        }
-
-        
-static Py_NO_INLINE _PyIRTransfer
 ir_run_WITH_EXCEPT_START(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
@@ -6916,8 +6679,8 @@ static const _PyIRForm ir_handler_forms[512] = {
     [114] = ir_run_UNKNOWN_OPCODE,
     [115] = ir_run_UNKNOWN_OPCODE,
     [116] = ir_run_UNKNOWN_OPCODE,
-    [117] = ir_run_UNPACK_EX,
-    [118] = ir_run_UNPACK_SEQUENCE,
+    [117] = ir_run_UNKNOWN_OPCODE,
+    [118] = ir_run_UNKNOWN_OPCODE,
     [119] = ir_run_YIELD_VALUE,
     [120] = ir_run_FOR_ITER_DICT_ITEMS,
     [121] = ir_run_GET_ITER_PY_GENERATOR,
@@ -6959,72 +6722,72 @@ static const _PyIRForm ir_handler_forms[512] = {
     [157] = ir_run_SEND_ASYNC_GEN,
     [158] = ir_run_SEND_GEN,
     [159] = ir_run_SEND_VIRTUAL,
-    [160] = ir_run_UNPACK_SEQUENCE_LIST,
-    [161] = ir_run_UNPACK_SEQUENCE_TUPLE,
-    [162] = ir_run_BINARY_OP_ADD,
-    [163] = ir_run_BINARY_OP_AND,
-    [164] = ir_run_BINARY_OP_FLOOR_DIVIDE,
-    [165] = ir_run_BINARY_OP_LSHIFT,
-    [166] = ir_run_BINARY_OP_MATRIX_MULTIPLY,
-    [167] = ir_run_BINARY_OP_MULTIPLY,
-    [168] = ir_run_BINARY_OP_REMAINDER,
-    [169] = ir_run_BINARY_OP_OR,
-    [170] = ir_run_BINARY_OP_POWER,
-    [171] = ir_run_BINARY_OP_RSHIFT,
-    [172] = ir_run_BINARY_OP_SUBTRACT,
-    [173] = ir_run_BINARY_OP_TRUE_DIVIDE,
-    [174] = ir_run_BINARY_OP_XOR,
-    [175] = ir_run_BINARY_OP_INPLACE_ADD,
-    [176] = ir_run_BINARY_OP_INPLACE_AND,
-    [177] = ir_run_BINARY_OP_INPLACE_FLOOR_DIVIDE,
-    [178] = ir_run_BINARY_OP_INPLACE_LSHIFT,
-    [179] = ir_run_BINARY_OP_INPLACE_MATRIX_MULTIPLY,
-    [180] = ir_run_BINARY_OP_INPLACE_MULTIPLY,
-    [181] = ir_run_BINARY_OP_INPLACE_REMAINDER,
-    [182] = ir_run_BINARY_OP_INPLACE_OR,
-    [183] = ir_run_BINARY_OP_INPLACE_POWER,
-    [184] = ir_run_BINARY_OP_INPLACE_RSHIFT,
-    [185] = ir_run_BINARY_OP_INPLACE_SUBTRACT,
-    [186] = ir_run_BINARY_OP_INPLACE_TRUE_DIVIDE,
-    [187] = ir_run_BINARY_OP_INPLACE_XOR,
+    [160] = ir_run_BINARY_OP_ADD,
+    [161] = ir_run_BINARY_OP_AND,
+    [162] = ir_run_BINARY_OP_FLOOR_DIVIDE,
+    [163] = ir_run_BINARY_OP_LSHIFT,
+    [164] = ir_run_BINARY_OP_MATRIX_MULTIPLY,
+    [165] = ir_run_BINARY_OP_MULTIPLY,
+    [166] = ir_run_BINARY_OP_REMAINDER,
+    [167] = ir_run_BINARY_OP_OR,
+    [168] = ir_run_BINARY_OP_POWER,
+    [169] = ir_run_BINARY_OP_RSHIFT,
+    [170] = ir_run_BINARY_OP_SUBTRACT,
+    [171] = ir_run_BINARY_OP_TRUE_DIVIDE,
+    [172] = ir_run_BINARY_OP_XOR,
+    [173] = ir_run_BINARY_OP_INPLACE_ADD,
+    [174] = ir_run_BINARY_OP_INPLACE_AND,
+    [175] = ir_run_BINARY_OP_INPLACE_FLOOR_DIVIDE,
+    [176] = ir_run_BINARY_OP_INPLACE_LSHIFT,
+    [177] = ir_run_BINARY_OP_INPLACE_MATRIX_MULTIPLY,
+    [178] = ir_run_BINARY_OP_INPLACE_MULTIPLY,
+    [179] = ir_run_BINARY_OP_INPLACE_REMAINDER,
+    [180] = ir_run_BINARY_OP_INPLACE_OR,
+    [181] = ir_run_BINARY_OP_INPLACE_POWER,
+    [182] = ir_run_BINARY_OP_INPLACE_RSHIFT,
+    [183] = ir_run_BINARY_OP_INPLACE_SUBTRACT,
+    [184] = ir_run_BINARY_OP_INPLACE_TRUE_DIVIDE,
+    [185] = ir_run_BINARY_OP_INPLACE_XOR,
+    [186] = ir_run_CLEANUP_THROW_XFER_DISCARD,
+    [187] = ir_run_CLEANUP_THROW_XFER_DISCARD,
     [188] = ir_run_CLEANUP_THROW_XFER_DISCARD,
     [189] = ir_run_CLEANUP_THROW_XFER_DISCARD,
     [190] = ir_run_CLEANUP_THROW_XFER_DISCARD,
     [191] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [192] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [193] = ir_run_CLEANUP_THROW_XFER_DISCARD,
-    [194] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
-    [195] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
-    [196] = ir_run_INSTRUMENTED_YIELD_VALUE,
-    [197] = ir_run_INSTRUMENTED_YIELD_VALUE,
+    [192] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
+    [193] = ir_run_INSTRUMENTED_YIELD_DELEGATED,
+    [194] = ir_run_INSTRUMENTED_YIELD_VALUE,
+    [195] = ir_run_INSTRUMENTED_YIELD_VALUE,
+    [196] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
+    [197] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
     [198] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
     [199] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
     [200] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
     [201] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
-    [202] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
-    [203] = ir_run_SEND_ASYNC_GEN_XFER_DISCARD,
+    [202] = ir_run_SEND_GEN_XFER_DISCARD,
+    [203] = ir_run_SEND_GEN_XFER_DISCARD,
     [204] = ir_run_SEND_GEN_XFER_DISCARD,
     [205] = ir_run_SEND_GEN_XFER_DISCARD,
     [206] = ir_run_SEND_GEN_XFER_DISCARD,
     [207] = ir_run_SEND_GEN_XFER_DISCARD,
-    [208] = ir_run_SEND_GEN_XFER_DISCARD,
-    [209] = ir_run_SEND_GEN_XFER_DISCARD,
+    [208] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
+    [209] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
     [210] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
     [211] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
     [212] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
     [213] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
-    [214] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
-    [215] = ir_run_SEND_VIRTUAL_XFER_DISCARD,
+    [214] = ir_run_SEND_XFER_DISCARD,
+    [215] = ir_run_SEND_XFER_DISCARD,
     [216] = ir_run_SEND_XFER_DISCARD,
     [217] = ir_run_SEND_XFER_DISCARD,
     [218] = ir_run_SEND_XFER_DISCARD,
     [219] = ir_run_SEND_XFER_DISCARD,
-    [220] = ir_run_SEND_XFER_DISCARD,
-    [221] = ir_run_SEND_XFER_DISCARD,
-    [222] = ir_run_YIELD_DELEGATED,
-    [223] = ir_run_YIELD_DELEGATED,
-    [224] = ir_run_YIELD_VALUE,
-    [225] = ir_run_YIELD_VALUE,
+    [220] = ir_run_YIELD_DELEGATED,
+    [221] = ir_run_YIELD_DELEGATED,
+    [222] = ir_run_YIELD_VALUE,
+    [223] = ir_run_YIELD_VALUE,
+    [224] = ir_run_UNKNOWN_OPCODE,
+    [225] = ir_run_UNKNOWN_OPCODE,
     [226] = ir_run_UNKNOWN_OPCODE,
     [227] = ir_run_UNKNOWN_OPCODE,
     [228] = ir_run_UNKNOWN_OPCODE,
@@ -7100,147 +6863,147 @@ static const _PyIRForm ir_handler_forms[512] = {
     [298] = ir_run_UpdateContainer_Union,
     [299] = ir_run_UpdateContainer_Overlay,
     [300] = ir_run_MergeKeywords_Merge,
-    [301] = ir_run_Function_Make,
-    [302] = ir_run_Intrinsic_Unary,
-    [303] = ir_run_Intrinsic_ImportStar,
-    [304] = ir_run_Intrinsic_StopIteration,
-    [305] = ir_run_IntrinsicPair_Binary,
-    [306] = ir_run_IntrinsicPair_Attr,
-    [307] = ir_run_GetAttr_Instance,
-    [308] = ir_run_GetAttr_GetSet,
-    [309] = ir_run_GetAttr_Generic,
-    [310] = ir_run_GetAttr_Shape,
-    [311] = ir_run_GetAttr_PolyShape,
-    [312] = ir_run_GetAttr_Module,
-    [313] = ir_run_GetAttr_Hint,
-    [314] = ir_run_GetAttr_ValueSlot,
-    [315] = ir_run_GetAttr_PointerSlot,
-    [316] = ir_run_GetAttr_Class,
-    [317] = ir_run_GetAttr_NonDescriptorValues,
-    [318] = ir_run_GetAttr_NonDescriptorNoDict,
-    [319] = ir_run_GetMethod_MethodValues,
-    [320] = ir_run_GetMethod_Generic,
-    [321] = ir_run_GetMethod_PolyMethod,
-    [322] = ir_run_GetMethod_NoDict,
-    [323] = ir_run_GetMethod_LazyDict,
-    [324] = ir_run_GetMethod_ClassMethod,
-    [325] = ir_run_GetItem_Generic,
-    [326] = ir_run_SetItem_Generic,
-    [327] = ir_run_DelItem_Generic,
-    [328] = ir_run_SliceRead_Generic,
-    [329] = ir_run_SliceWrite_Generic,
-    [330] = ir_run_BuildSlice_Generic,
-    [331] = ir_run_GetItem_ListIndex,
-    [332] = ir_run_GetItem_TupleIndex,
-    [333] = ir_run_GetItem_Ascii,
-    [334] = ir_run_GetItem_UnicodeAsciiChar,
-    [335] = ir_run_GetItem_ListSlice,
-    [336] = ir_run_GetItem_Dict,
-    [337] = ir_run_SetItem_ListIndex,
-    [338] = ir_run_SetItem_Dict,
-    [339] = ir_run_GlobalRead_Generic,
-    [340] = ir_run_GlobalRead_Module,
-    [341] = ir_run_GlobalRead_Builtin,
-    [342] = ir_run_NamespaceRead_Name,
-    [343] = ir_run_NamespaceRead_Locals,
-    [344] = ir_run_NamespaceRead_BuildClass,
-    [345] = ir_run_NamespaceReadFrom_Mapping,
-    [346] = ir_run_NamespaceWrite_Name,
-    [347] = ir_run_NamespaceWrite_Global,
-    [348] = ir_run_SetupAnnotations_Setup,
-    [349] = ir_run_Import_Eager,
-    [350] = ir_run_Import_Policy,
-    [351] = ir_run_Import_Lazy,
-    [352] = ir_run_ImportFrom_From,
-    [353] = ir_run_ImportFrom_FromLast,
-    [354] = ir_run_Compare_Int,
-    [355] = ir_run_Compare_Float,
-    [356] = ir_run_Compare_Str,
-    [357] = ir_run_Compare_Generic,
-    [358] = ir_run_Identity_Test,
-    [359] = ir_run_Contains_Set,
-    [360] = ir_run_Contains_Dict,
-    [361] = ir_run_Contains_Generic,
-    [362] = ir_run_TestBranch_Identity,
-    [363] = ir_run_TestBranch_Int,
-    [364] = ir_run_TestBranch_Float,
-    [365] = ir_run_TestBranch_Str,
-    [366] = ir_run_TestBranch_Set,
-    [367] = ir_run_TestBranch_Dict,
-    [368] = ir_run_TestBranch_Sequence,
-    [369] = ir_run_TestBranch_Generic,
-    [370] = ir_run_TestBranch_Observed,
-    [371] = ir_run_Truth_Bool,
-    [372] = ir_run_Truth_Int,
-    [373] = ir_run_Truth_List,
-    [374] = ir_run_Truth_None,
-    [375] = ir_run_Truth_Str,
-    [376] = ir_run_Truth_Plain,
-    [377] = ir_run_Truth_Slot,
-    [378] = ir_run_Truth_Generic,
-    [379] = ir_run_BranchTruth_Bool,
-    [380] = ir_run_BranchTruth_Int,
-    [381] = ir_run_BranchTruth_List,
-    [382] = ir_run_BranchTruth_None,
-    [383] = ir_run_BranchTruth_Str,
-    [384] = ir_run_BranchTruth_Plain,
-    [385] = ir_run_BranchTruth_Slot,
-    [386] = ir_run_BranchTruth_Generic,
-    [387] = ir_run_BranchNone_Test,
-    [388] = ir_run_BranchTruth_Observed,
-    [389] = ir_run_BranchNone_Observed,
-    [390] = ir_run_Jump_Direct,
-    [391] = ir_run_Jump_Poll,
-    [392] = ir_run_Jump_Warm,
-    [393] = ir_run_Jump_Observed,
-    [394] = ir_run_Const_Pool,
-    [395] = ir_run_Const_Small,
-    [396] = ir_run_Const_Common,
-    [397] = ir_run_LocalRead_Bound,
-    [398] = ir_run_LocalRead_Checked,
-    [399] = ir_run_LocalWrite_Store,
-    [400] = ir_run_LocalWrite_Restore,
-    [401] = ir_run_SaveLocal_Take,
-    [402] = ir_run_LocalDelete_Checked,
-    [403] = ir_run_Move_Transfer,
-    [404] = ir_run_Move_Retire,
-    [405] = ir_run_Move_Copy,
-    [406] = ir_run_SuperAttr_Observed,
-    [407] = ir_run_SuperAttr_Observed,
-    [408] = ir_run_SuperAttrExplicit_Observed,
-    [409] = ir_run_SuperAttrExplicit_Observed,
-    [410] = ir_run_Call_Observed,
-    [411] = ir_run_Call_Observed,
-    [412] = ir_run_Call_Observed,
-    [413] = ir_run_Call_Observed,
-    [414] = ir_run_Return_Observed,
-    [415] = ir_run_Return_Observed,
-    [416] = ir_run_Return_Observed,
-    [417] = ir_run_Return_Observed,
-    [418] = ir_run_TestBranch_Observed,
-    [419] = ir_run_TestBranch_Observed,
-    [420] = ir_run_TestBranch_Observed,
-    [421] = ir_run_TestBranch_Observed,
+    [301] = ir_run_Unpack_Generic,
+    [302] = ir_run_Unpack_Tuple,
+    [303] = ir_run_Unpack_List,
+    [304] = ir_run_UnpackStar_Iterable,
+    [305] = ir_run_Function_Make,
+    [306] = ir_run_Intrinsic_Unary,
+    [307] = ir_run_Intrinsic_ImportStar,
+    [308] = ir_run_Intrinsic_StopIteration,
+    [309] = ir_run_IntrinsicPair_Binary,
+    [310] = ir_run_IntrinsicPair_Attr,
+    [311] = ir_run_GetAttr_Instance,
+    [312] = ir_run_GetAttr_GetSet,
+    [313] = ir_run_GetAttr_Generic,
+    [314] = ir_run_GetAttr_Shape,
+    [315] = ir_run_GetAttr_PolyShape,
+    [316] = ir_run_GetAttr_Module,
+    [317] = ir_run_GetAttr_Hint,
+    [318] = ir_run_GetAttr_ValueSlot,
+    [319] = ir_run_GetAttr_PointerSlot,
+    [320] = ir_run_GetAttr_Class,
+    [321] = ir_run_GetAttr_NonDescriptorValues,
+    [322] = ir_run_GetAttr_NonDescriptorNoDict,
+    [323] = ir_run_GetMethod_MethodValues,
+    [324] = ir_run_GetMethod_Generic,
+    [325] = ir_run_GetMethod_PolyMethod,
+    [326] = ir_run_GetMethod_NoDict,
+    [327] = ir_run_GetMethod_LazyDict,
+    [328] = ir_run_GetMethod_ClassMethod,
+    [329] = ir_run_GetItem_Generic,
+    [330] = ir_run_SetItem_Generic,
+    [331] = ir_run_DelItem_Generic,
+    [332] = ir_run_SliceRead_Generic,
+    [333] = ir_run_SliceWrite_Generic,
+    [334] = ir_run_BuildSlice_Generic,
+    [335] = ir_run_GetItem_ListIndex,
+    [336] = ir_run_GetItem_TupleIndex,
+    [337] = ir_run_GetItem_Ascii,
+    [338] = ir_run_GetItem_UnicodeAsciiChar,
+    [339] = ir_run_GetItem_ListSlice,
+    [340] = ir_run_GetItem_Dict,
+    [341] = ir_run_SetItem_ListIndex,
+    [342] = ir_run_SetItem_Dict,
+    [343] = ir_run_GlobalRead_Generic,
+    [344] = ir_run_GlobalRead_Module,
+    [345] = ir_run_GlobalRead_Builtin,
+    [346] = ir_run_NamespaceRead_Name,
+    [347] = ir_run_NamespaceRead_Locals,
+    [348] = ir_run_NamespaceRead_BuildClass,
+    [349] = ir_run_NamespaceReadFrom_Mapping,
+    [350] = ir_run_NamespaceWrite_Name,
+    [351] = ir_run_NamespaceWrite_Global,
+    [352] = ir_run_SetupAnnotations_Setup,
+    [353] = ir_run_Import_Eager,
+    [354] = ir_run_Import_Policy,
+    [355] = ir_run_Import_Lazy,
+    [356] = ir_run_ImportFrom_From,
+    [357] = ir_run_ImportFrom_FromLast,
+    [358] = ir_run_Compare_Int,
+    [359] = ir_run_Compare_Float,
+    [360] = ir_run_Compare_Str,
+    [361] = ir_run_Compare_Generic,
+    [362] = ir_run_Identity_Test,
+    [363] = ir_run_Contains_Set,
+    [364] = ir_run_Contains_Dict,
+    [365] = ir_run_Contains_Generic,
+    [366] = ir_run_TestBranch_Identity,
+    [367] = ir_run_TestBranch_Int,
+    [368] = ir_run_TestBranch_Float,
+    [369] = ir_run_TestBranch_Str,
+    [370] = ir_run_TestBranch_Set,
+    [371] = ir_run_TestBranch_Dict,
+    [372] = ir_run_TestBranch_Sequence,
+    [373] = ir_run_TestBranch_Generic,
+    [374] = ir_run_TestBranch_Observed,
+    [375] = ir_run_Truth_Bool,
+    [376] = ir_run_Truth_Int,
+    [377] = ir_run_Truth_List,
+    [378] = ir_run_Truth_None,
+    [379] = ir_run_Truth_Str,
+    [380] = ir_run_Truth_Plain,
+    [381] = ir_run_Truth_Slot,
+    [382] = ir_run_Truth_Generic,
+    [383] = ir_run_BranchTruth_Bool,
+    [384] = ir_run_BranchTruth_Int,
+    [385] = ir_run_BranchTruth_List,
+    [386] = ir_run_BranchTruth_None,
+    [387] = ir_run_BranchTruth_Str,
+    [388] = ir_run_BranchTruth_Plain,
+    [389] = ir_run_BranchTruth_Slot,
+    [390] = ir_run_BranchTruth_Generic,
+    [391] = ir_run_BranchNone_Test,
+    [392] = ir_run_BranchTruth_Observed,
+    [393] = ir_run_BranchNone_Observed,
+    [394] = ir_run_Jump_Direct,
+    [395] = ir_run_Jump_Poll,
+    [396] = ir_run_Jump_Warm,
+    [397] = ir_run_Jump_Observed,
+    [398] = ir_run_Const_Pool,
+    [399] = ir_run_Const_Small,
+    [400] = ir_run_Const_Common,
+    [401] = ir_run_LocalRead_Bound,
+    [402] = ir_run_LocalRead_Checked,
+    [403] = ir_run_LocalWrite_Store,
+    [404] = ir_run_LocalWrite_Restore,
+    [405] = ir_run_SaveLocal_Take,
+    [406] = ir_run_LocalDelete_Checked,
+    [407] = ir_run_Move_Transfer,
+    [408] = ir_run_Move_Retire,
+    [409] = ir_run_Move_Copy,
+    [410] = ir_run_SuperAttr_Observed,
+    [411] = ir_run_SuperAttr_Observed,
+    [412] = ir_run_SuperAttrExplicit_Observed,
+    [413] = ir_run_SuperAttrExplicit_Observed,
+    [414] = ir_run_Call_Observed,
+    [415] = ir_run_Call_Observed,
+    [416] = ir_run_Call_Observed,
+    [417] = ir_run_Call_Observed,
+    [418] = ir_run_Return_Observed,
+    [419] = ir_run_Return_Observed,
+    [420] = ir_run_Return_Observed,
+    [421] = ir_run_Return_Observed,
     [422] = ir_run_TestBranch_Observed,
     [423] = ir_run_TestBranch_Observed,
     [424] = ir_run_TestBranch_Observed,
     [425] = ir_run_TestBranch_Observed,
-    [426] = ir_run_BranchTruth_Observed,
-    [427] = ir_run_BranchTruth_Observed,
-    [428] = ir_run_BranchTruth_Observed,
-    [429] = ir_run_BranchTruth_Observed,
+    [426] = ir_run_TestBranch_Observed,
+    [427] = ir_run_TestBranch_Observed,
+    [428] = ir_run_TestBranch_Observed,
+    [429] = ir_run_TestBranch_Observed,
     [430] = ir_run_BranchTruth_Observed,
     [431] = ir_run_BranchTruth_Observed,
     [432] = ir_run_BranchTruth_Observed,
     [433] = ir_run_BranchTruth_Observed,
-    [434] = ir_run_BranchNone_Observed,
-    [435] = ir_run_Jump_Observed,
-    [436] = ir_run_Jump_Observed,
-    [437] = ir_run_Jump_Observed,
-    [438] = ir_run_UNKNOWN_OPCODE,
-    [439] = ir_run_UNKNOWN_OPCODE,
-    [440] = ir_run_UNKNOWN_OPCODE,
-    [441] = ir_run_UNKNOWN_OPCODE,
+    [434] = ir_run_BranchTruth_Observed,
+    [435] = ir_run_BranchTruth_Observed,
+    [436] = ir_run_BranchTruth_Observed,
+    [437] = ir_run_BranchTruth_Observed,
+    [438] = ir_run_BranchNone_Observed,
+    [439] = ir_run_Jump_Observed,
+    [440] = ir_run_Jump_Observed,
+    [441] = ir_run_Jump_Observed,
     [442] = ir_run_UNKNOWN_OPCODE,
     [443] = ir_run_UNKNOWN_OPCODE,
     [444] = ir_run_UNKNOWN_OPCODE,
@@ -11189,133 +10952,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             IR_STORE_DST(ir_word, A, res);
             PyValue_XCLOSE(ir_own_B);
             PyValue_XCLOSE(ir_old);
-            DISPATCH();
-        }
-        TARGET(UNPACK_EX) {
-            IR_RUN_OUTLINED(ir_run_UNPACK_EX);
-        }
-        TARGET(UNPACK_SEQUENCE) {
-            IR_RUN_OUTLINED(ir_run_UNPACK_SEQUENCE);
-        }
-
-        TARGET(UNPACK_SEQUENCE_LIST) {
-            int opcode = UNPACK_SEQUENCE_LIST;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_SEQUENCE_LIST);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            bool ir_unpack_owned = false;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue *values;
-            // _GUARD_TOS_LIST
-            {
-                tos = window[0];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
-                if (!PyList_CheckExact(o)) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-            }
-            // _UNPACK_SEQUENCE_LIST
-            {
-                seq = tos;
-                values = &window[0];
-                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
-                assert(PyList_CheckExact(seq_o));
-                if (!LOCK_OBJECT(seq_o)) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                if (PyList_GET_SIZE(seq_o) != oparg) {
-                    UNLOCK_OBJECT(seq_o);
-                    if (true) {
-                        UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                        assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                        JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                    }
-                }
-                STAT_INC(UNPACK_SEQUENCE, hit);
-                if (IR_IS_LOCAL_FIELD(ir_word, D)) { ir_unpack_owned = _PyIR_UnpackItemsToLocals(&IR_SLOT(IR_D(ir_word)), values, _PyList_ITEMS(seq_o), oparg); } else { _PyIR_UnpackItemsToWindow(frame, values, _PyList_ITEMS(seq_o), oparg); };
-                UNLOCK_OBJECT(seq_o);
-                IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
-                _PyValue_CLOSE_POINTER(seq);
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
-            }
-            DISPATCH();
-        }
-
-        TARGET(UNPACK_SEQUENCE_TUPLE) {
-            int opcode = UNPACK_SEQUENCE_TUPLE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_SEQUENCE_TUPLE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            bool ir_unpack_owned = false;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue *values;
-            // _GUARD_TOS_TUPLE
-            {
-                tos = window[0];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
-                if (!PyTuple_CheckExact(o)) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-            }
-            // _UNPACK_SEQUENCE_TUPLE
-            {
-                seq = tos;
-                values = &window[0];
-                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
-                assert(PyTuple_CheckExact(seq_o));
-                if (PyTuple_GET_SIZE(seq_o) != oparg) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                STAT_INC(UNPACK_SEQUENCE, hit);
-                if (IR_IS_LOCAL_FIELD(ir_word, D)) { ir_unpack_owned = _PyIR_UnpackItemsToLocals(&IR_SLOT(IR_D(ir_word)), values, _PyTuple_ITEMS(seq_o), oparg); } else { _PyIR_UnpackItemsToWindow(frame, values, _PyTuple_ITEMS(seq_o), oparg); };
-                IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
-                _PyValue_CLOSE_POINTER(seq);
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
-            }
             DISPATCH();
         }
         TARGET(WITH_EXCEPT_START) {

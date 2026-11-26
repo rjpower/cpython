@@ -736,7 +736,7 @@ class DefinitionTests(unittest.TestCase):
         BranchTruth BranchNone Binary Unary Compare Identity Contains TestBranch
         GetAttr GetMethod AttrWrite SuperAttr SuperAttrExplicit SpecialLookup
         GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement AddEntry
-        UpdateContainer MergeKeywords Unpack
+        UpdateContainer MergeKeywords Unpack UnpackStar
         CellMake CellRead CellMapRead CellStore CellDelete NamespaceRead NamespaceReadFrom
         NamespaceWrite
         GlobalRead SetupAnnotations Import ImportFrom BuildText Convert Format Length Pattern

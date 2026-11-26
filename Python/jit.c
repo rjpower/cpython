@@ -647,7 +647,14 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
     if (status & _PyIR_REDIRECT) {
         return (resolved_status){frame, frame->instr_ptr};
     }
-    _PyIRWord *next = (status & _PyIR_AGAIN) ? site : site + _PyIR_WordLength(*site);
+    /* The length is that of the word as compiled: a stub that ran Python may
+     * have enabled monitoring, which replaces the head's handler by an
+     * INSTRUMENTED_ one that keeps its other fields, and a span word's length
+     * depends on its format */
+    _PyIRWord as_compiled = (*site & ~(_PyIRWord)COMPILED_HANDLER_BITS)
+                            | (compiled & COMPILED_HANDLER_BITS);
+    _PyIRWord *next = (status & _PyIR_AGAIN) ? site
+                                             : site + _PyIR_WordLength(as_compiled);
     if (status & _PyIR_BRANCH) {
         /* The word completed at its static target (a conditional branch
          * arm: BranchTruth's shared arms) */

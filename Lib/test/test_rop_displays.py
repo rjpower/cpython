@@ -302,5 +302,94 @@ class Observation(unittest.TestCase):
 
 
 
+class Unpack(unittest.TestCase):
+    """Unpack and UnpackStar: the generic arm, the arms an entry selects,
+    and the failures of each"""
+
+    def arms(self, f):
+        "The words as they are now, with the arms the entries installed"
+        return {w[0] for w in capi.get_ir(f.__code__, True)}
+
+    def test_adaptive_arms_install(self):
+        for source, arm in (((1, 2), "Unpack.Tuple"), ([1, 2], "Unpack.List")):
+            def g(p):
+                a, b = p
+                return b
+            for _ in range(300):
+                self.assertEqual(g(source), 2)
+            self.assertIn(arm, self.arms(g))
+
+    def test_a_miss_goes_the_generic_way(self):
+        def f(p):
+            a, b = p
+            return a, b
+        for _ in range(300):
+            f((1, 2))
+        self.assertIn("Unpack.Tuple", self.arms(f))
+        for source in ([3, 4], "ab", iter((5, 6)), {7: 0, 8: 0}):
+            self.assertEqual(f(source), tuple(source) if not hasattr(source, "__next__")
+                             else (5, 6))
+        for _ in range(300):
+            f([1, 2])
+        self.assertEqual(f((9, 10)), (9, 10))
+
+    def test_errors(self):
+        def f(p):
+            a, b = p
+            return a
+        for _ in range(300):
+            f((1, 2))
+        with self.assertRaisesRegex(ValueError, "too many values to unpack"):
+            f((1, 2, 3))
+        with self.assertRaisesRegex(ValueError, "not enough values to unpack"):
+            f([1])
+        with self.assertRaisesRegex(TypeError, "cannot unpack non-iterable int"):
+            f(5)
+
+    def test_star(self):
+        def f(p):
+            a, *b, c = p
+            return a, b, c
+        self.assertEqual(f(range(5)), (0, [1, 2, 3], 4))
+        self.assertEqual(f((1, 2)), (1, [], 2))
+        with self.assertRaisesRegex(ValueError, "not enough values to unpack"):
+            f((1,))
+
+    def test_old_values_are_closed_after_the_stores(self):
+        seen = []
+
+        class Old:
+            def __del__(self):
+                seen.append(a)
+
+        def f(p):
+            global a
+            a = None
+            x, y = Old(), Old()
+            x, y = p
+            return x, y
+        for _ in range(100):
+            seen.clear()
+            self.assertEqual(f((1, 2)), (1, 2))
+            self.assertEqual(len(seen), 2)
+
+    def test_no_leaks_of_the_items(self):
+        class Item:
+            pass
+
+        def f(p):
+            a, b = p
+            return a
+        items = (Item(), Item())
+        for _ in range(300):
+            f(items)
+        import sys
+        before = sys.getrefcount(items[0])
+        for _ in range(100):
+            f(items)
+            f(list(items))
+        self.assertEqual(sys.getrefcount(items[0]), before)
+
+
 if __name__ == "__main__":
     unittest.main()

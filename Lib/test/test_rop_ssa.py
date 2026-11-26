@@ -1079,6 +1079,8 @@ def cx():
 
 
 # The arms no scenario runs, and why.  Each expands.
+UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
+              "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
     "AttrWrite.Instance": "needs a warmed recipe in the entry; scenarios are not extended in the interpreter-first batch",
     "AttrWrite.Shape": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",
@@ -1098,6 +1100,10 @@ NOT_RUN = {
     "CellMapRead.Lookup": "LOAD_FROM_DICT_OR_DEREF occurs in class code",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
+    "Unpack.Generic": UNPACK_WHY,
+    "Unpack.Tuple": UNPACK_WHY,
+    "Unpack.List": UNPACK_WHY,
+    "UnpackStar.Iterable": UNPACK_WHY,
     "Import.Policy": "a function's imports are eager; the policy applies to module code",
     "Import.Lazy": "`lazy import` is a module-level statement",
     # select(jit_on) and select(jit_off): the word is the one the JIT's

@@ -3369,10 +3369,6 @@ class TestIRCases(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, "published twice"):
             check("IR_WRITE_OUTPUT(out, 0, PyValue_NULL); IR_WRITE_OUTPUT(out, 0, PyValue_NULL);",
                   outputs="out[2]")
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST"):
-            self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
 
     def test_steal_success_handoff_requires_terminal_ownership_sequence(self):
         body = """{

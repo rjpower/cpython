@@ -39,7 +39,6 @@ FIELD_LOCS = (_opcode.IR_LOC_A, _opcode.IR_LOC_B, _opcode.IR_LOC_C,
 # The feedback entry of each family (Include/internal/pycore_feedback.h):
 # its kind and size in bytes
 FEEDBACK = {
-    "UNPACK_SEQUENCE": ("UNARY", 24),
     "FOR_ITER": ("UNARY", 24),
     "GET_ITER": ("UNARY", 24),
     "SEND": ("UNARY", 24),

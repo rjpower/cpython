@@ -67,7 +67,6 @@ extern "C" {
 #define _PyReg_ELIDED_NOP       32  // ... but a NOP stands for it, because it
                                     // alone holds its line
 
-#define _PyReg_UNPACK_LOCALS    128 // an unpack whose elements go to the run
                                     // of locals from dst; out[] stay as the
                                     // window's scratch registers
 #define _PyReg_KWNAMES         4096 // an elided LOAD_CONST of the names of
@@ -213,18 +212,26 @@ _PyRegOp_CallBorrows(const _PyRegOp *op, int k)
     return k != 1 && !(op->opcode == CALL_KW && k == op->nread - 1);
 }
 
-/* Whether op writes local z through its dst (a run of nout locals for an
- * unpack) */
+const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
+
+/* Whether op writes local z through its dst, or, for a word whose outputs
+ * are a destination span (Unpack), as one of its outputs */
 static inline int
-_PyRegOp_WritesLocal(const _PyRegOp *op, int z)
+_PyRegOp_WritesLocal(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
 {
-    if (op->dst < 0) {
+    if (op->dst >= 0) {
+        return z == op->dst;
+    }
+    if (op->nout == 0 || !_PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg))) {
         return 0;
     }
-    if (op->flags & _PyReg_UNPACK_LOCALS) {
-        return z >= op->dst && z < op->dst + op->nout;
+    const int *out = _PyReg_OUT(cfg, op);
+    for (int j = 0; j < op->nout; j++) {
+        if (out[j] == z) {
+            return 1;
+        }
     }
-    return z == op->dst;
+    return 0;
 }
 
 /* Building: blocks in layout order, each with its stack instructions,
@@ -325,7 +332,6 @@ void _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
 /* The format of the stack instruction of an op: the generic handler's,
  * which its family shares. */
 struct _PyIRFormat;
-const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
 
 /* Internal to Python/regcfg.c and Python/regcfg_passes.c */
 
@@ -347,7 +353,6 @@ int _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical);
 /* The passes, in the order the driver runs them */
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
-int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);
 int _PyRegPass_KwNames(_PyRegCfg *cfg);
 int _PyRegPass_ElideNull(_PyRegCfg *cfg);
 int _PyRegPass_CallRoles(_PyRegCfg *cfg);

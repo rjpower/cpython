@@ -1248,7 +1248,7 @@ class TestRacesDoNotCrash(TestBase):
                 item.clear()
                 item.append(None)
 
-        opname = "UNPACK_SEQUENCE_LIST"
+        opname = "Unpack.List"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
 class C:
@@ -1988,8 +1988,8 @@ class TestSpecializer(TestBase):
 
         unpack_sequence_two_tuple()
         self.assert_specialized(unpack_sequence_two_tuple,
-                                "UNPACK_SEQUENCE_TUPLE")
-        self.assert_no_opcode(unpack_sequence_two_tuple, "UNPACK_SEQUENCE")
+                                "Unpack.Tuple")
+        self.assert_no_opcode(unpack_sequence_two_tuple, "Unpack.Generic")
 
         def unpack_sequence_tuple():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2000,8 +2000,8 @@ class TestSpecializer(TestBase):
                 self.assertEqual(d, 4)
 
         unpack_sequence_tuple()
-        self.assert_specialized(unpack_sequence_tuple, "UNPACK_SEQUENCE_TUPLE")
-        self.assert_no_opcode(unpack_sequence_tuple, "UNPACK_SEQUENCE")
+        self.assert_specialized(unpack_sequence_tuple, "Unpack.Tuple")
+        self.assert_no_opcode(unpack_sequence_tuple, "Unpack.Generic")
 
         def unpack_sequence_list():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2010,8 +2010,8 @@ class TestSpecializer(TestBase):
                 self.assertEqual(b, 2)
 
         unpack_sequence_list()
-        self.assert_specialized(unpack_sequence_list, "UNPACK_SEQUENCE_LIST")
-        self.assert_no_opcode(unpack_sequence_list, "UNPACK_SEQUENCE")
+        self.assert_specialized(unpack_sequence_list, "Unpack.List")
+        self.assert_no_opcode(unpack_sequence_list, "Unpack.Generic")
 
     @cpython_only
     @requires_specialization

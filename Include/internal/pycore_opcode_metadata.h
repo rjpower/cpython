@@ -402,10 +402,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 1;
         case UNPACK_SEQUENCE:
             return 1;
-        case UNPACK_SEQUENCE_LIST:
-            return 1;
-        case UNPACK_SEQUENCE_TUPLE:
-            return 1;
         case WITH_EXCEPT_START:
             return 5;
         case YIELD_VALUE:
@@ -787,10 +783,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 1 + (oparg & 0xFF) + (oparg >> 8);
         case UNPACK_SEQUENCE:
             return oparg;
-        case UNPACK_SEQUENCE_LIST:
-            return oparg;
-        case UNPACK_SEQUENCE_TUPLE:
-            return oparg;
         case WITH_EXCEPT_START:
             return 6;
         case YIELD_VALUE:
@@ -1044,10 +1036,8 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [UNARY_INVERT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [UNARY_NEGATIVE] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [UNARY_NOT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_EX] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_SEQUENCE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_SEQUENCE_LIST] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_SEQUENCE_TUPLE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
+    [UNPACK_EX] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [UNPACK_SEQUENCE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [WITH_EXCEPT_START] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [ANNOTATIONS_PLACEHOLDER] = { true, -1, HAS_PURE_FLAG },
@@ -1142,10 +1132,6 @@ _PyOpcode_macro_expansion[256] = {
     [UNARY_INVERT] = { .nuops = 2, .uops = { { _UNARY_INVERT, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 } } },
     [UNARY_NEGATIVE] = { .nuops = 2, .uops = { { _UNARY_NEGATIVE, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 } } },
     [UNARY_NOT] = { .nuops = 1, .uops = { { _UNARY_NOT, OPARG_SIMPLE, 0 } } },
-    [UNPACK_EX] = { .nuops = 1, .uops = { { _UNPACK_EX, OPARG_SIMPLE, 0 } } },
-    [UNPACK_SEQUENCE] = { .nuops = 1, .uops = { { _UNPACK_SEQUENCE, OPARG_SIMPLE, 1 } } },
-    [UNPACK_SEQUENCE_LIST] = { .nuops = 2, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _UNPACK_SEQUENCE_LIST, OPARG_SIMPLE, 1 } } },
-    [UNPACK_SEQUENCE_TUPLE] = { .nuops = 2, .uops = { { _GUARD_TOS_TUPLE, OPARG_SIMPLE, 0 }, { _UNPACK_SEQUENCE_TUPLE, OPARG_SIMPLE, 1 } } },
     [WITH_EXCEPT_START] = { .nuops = 1, .uops = { { _WITH_EXCEPT_START, OPARG_SIMPLE, 0 } } },
     [YIELD_VALUE] = { .nuops = 2, .uops = { { _MAKE_HEAP_SAFE, OPARG_SIMPLE, 0 }, { _YIELD_VALUE, OPARG_SIMPLE, 0 } } },
 };
@@ -1337,8 +1323,6 @@ const char *_PyOpcode_OpName[267] = {
     [UNARY_NOT] = "UNARY_NOT",
     [UNPACK_EX] = "UNPACK_EX",
     [UNPACK_SEQUENCE] = "UNPACK_SEQUENCE",
-    [UNPACK_SEQUENCE_LIST] = "UNPACK_SEQUENCE_LIST",
-    [UNPACK_SEQUENCE_TUPLE] = "UNPACK_SEQUENCE_TUPLE",
     [WITH_EXCEPT_START] = "WITH_EXCEPT_START",
     [YIELD_VALUE] = "YIELD_VALUE",
 };
@@ -1349,6 +1333,7 @@ PyAPI_DATA(const uint8_t) _PyOpcode_Caches[256];
 const uint8_t _PyOpcode_Caches[256] = {
     [TO_BOOL] = 3,
     [STORE_SUBSCR] = 1,
+    [UNPACK_SEQUENCE] = 1,
     [STORE_ATTR] = 4,
     [LOAD_GLOBAL] = 4,
     [LOAD_SUPER_ATTR] = 1,
@@ -1363,7 +1348,6 @@ const uint8_t _PyOpcode_Caches[256] = {
     [RESUME] = 1,
     [SEND] = 1,
     [FOR_ITER] = 1,
-    [UNPACK_SEQUENCE] = 1,
     [JUMP_BACKWARD] = 1,
     [GET_ITER] = 1,
     [CALL_KW] = 3,
@@ -1403,6 +1387,8 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [125] = 125,
     [126] = 126,
     [127] = 127,
+    [160] = 160,
+    [161] = 161,
     [162] = 162,
     [163] = 163,
     [164] = 164,
@@ -1647,8 +1633,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [UNARY_NOT] = UNARY_NOT,
     [UNPACK_EX] = UNPACK_EX,
     [UNPACK_SEQUENCE] = UNPACK_SEQUENCE,
-    [UNPACK_SEQUENCE_LIST] = UNPACK_SEQUENCE,
-    [UNPACK_SEQUENCE_TUPLE] = UNPACK_SEQUENCE,
     [WITH_EXCEPT_START] = WITH_EXCEPT_START,
     [YIELD_VALUE] = YIELD_VALUE,
 };
@@ -1664,6 +1648,8 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 125: \
     case 126: \
     case 127: \
+    case 160: \
+    case 161: \
     case 162: \
     case 163: \
     case 164: \

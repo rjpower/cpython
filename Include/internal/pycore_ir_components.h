@@ -1520,20 +1520,6 @@
      * (jit_lower.c), V11 */ \
     PRIMITIVE(_PyTuple_ITEMS, PyValue *, (PyObject *), \
               ARGS(object), SCALAR, EFFECTS(reads)) \
-    /* The elements of a sequence into the arm's own outputs, the \
-     * destination homes (publication, not an effect); the homes' displaced \
-     * values are closed by the skeleton after the uop (IR_CLOSE_WINDOW) */ \
-    MACRO(IR_UNPACK_ITEMS, ARGS(out, scalar, scalar), NONE, EFFECTS(reads), \
-          EXITS()) \
-    /* The generic unpack (Python/ceval.c): _PyValue_GetIter and the \
-     * iterator's __next__ run Python.  It releases v on every return (Done: \
-     * Py_DECREF(v)); it returns 0 with an exception set, having closed the \
-     * values it wrote below sp (Error:), else 1 with argcnt values (and the \
-     * list for argcntafter >= 0) written below sp */ \
-    HELPER(_PyEval_UnpackIterableValue, int, \
-           (PyThreadState *, PyObject *, int, int, PyValue *), \
-           ARGS(tstate, consumed, scalar, scalar, out), STATUS(ZERO), \
-           EFFECTS(runs_python, raises)) \
     /* Evidence (G0d3), pycore_critical_section.h: a free-threaded build's \
      * critical section.  With the GIL, LOCK_OBJECT(op) is the constant 1 and \
      * UNLOCK_OBJECT(op) nothing; the operand is not evaluated.  Reclassified \
@@ -1595,7 +1581,7 @@
      * dict or mapping b merged into dict a; for a non-dict b it calls \
      * b.keys() and b[key], hashes and compares keys, and resizes a \
      * (arbitrary Python).  Failure: -1 with an exception set (AttributeError \
-     * when b has no keys(), which _DICT_UPDATE rewrites); both arguments are \
+     * when b has no keys(), which _PyRop_DictOverlay rewrites); both arguments are \
      * borrowed on every path.  Result 0 or -1 */ \
     HELPER(PyDict_Update, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python, raises)) \
@@ -1653,7 +1639,7 @@
      * list or tuple is copied, anything else is iterated (__iter__, \
      * __next__, __length_hint__: Python).  Returns a new reference to None \
      * (immortal) or NULL with an exception set (a TypeError when the \
-     * iterable is not iterable, which _LIST_EXTEND rewrites).  Arguments \
+     * iterable is not iterable, which _PyRop_ListExtend rewrites).  Arguments \
      * are borrowed */ \
     HELPER(_PyList_Extend, PyObject *, (PyListObject *, PyObject *), \
         ARGS(scalar, object), SCALAR, EFFECTS(runs_python, raises)) \
@@ -1790,11 +1776,6 @@
            (PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *), \
            ARGS(borrowed, borrowed, scalar, scalar, scalar), NONE, \
            EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the sequence's type and \
-     * size (tuple, list); an inline operand is refused before any object access. */ \
-    HELPER(_Py_Specialize_UnpackSequence, void, (PyValue, _PyInstr *, int), \
-           ARGS(borrowed, scalar, scalar), NONE, EFFECTS(runs_python), \
-           FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): the generator's expansion `_PyIR_FbHeaderOf(frame, instr, handler)` \
      * (ceval_macros.h:1163): `_PyIR_InstrFeedback(code, exec, instr)`, which indexes the \
      * code's feedback-index table and the executing copy's entry array (ir.c:705) and \

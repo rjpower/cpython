@@ -758,6 +758,22 @@ PyValue_RefcountOnObject(PyValueBorrow ref)
 }
 #define PyValue_RefcountOnObject(V0) (PyValue_RefcountOnObject)(PyValue_Borrow(V0))
 
+/* A value as the payload word of a generator transfer, and back. The word
+   carries the value's count: the conversion moves it and takes none. */
+static inline uint64_t
+_PyValue_ToTransferWord(PyValueBorrow ref)
+{
+    return ref.bits;
+}
+#define _PyValue_ToTransferWord(V0) (_PyValue_ToTransferWord)(PyValue_Borrow(V0))
+
+static inline PyValue
+_PyValue_FromTransferWord(uint64_t word)
+{
+    PyValue owner = {word};
+    return owner;
+}
+
 /* PyValue_RefcountOnObject() of a ref that is not PyValue_NULL, which
    needs one test fewer. */
 static inline int

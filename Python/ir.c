@@ -655,27 +655,6 @@ _PyCode_InstrDiscards(PyCodeObject *co, int i)
 }
 
 int
-_PyCode_InstrUnpackedLocals(PyCodeObject *co, int i)
-{
-    assert(i >= 0 && i < _PyCode_IRSize(co));
-    _PyIRWord word = _PyCode_IRWords(co)[i];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (!(fmt->flags & _PyIR_UNPACKS)) {
-        return 0;
-    }
-    for (int r = 0; r < 4; r++) {
-        if (fmt->roles[r] == _PyIR_ROLE_DST) {
-            int dst = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
-            if (dst >= _PyCode_IRFixed(co)) {
-                return 0;
-            }
-            return _PyIR_Extent(fmt->writes, _PyCode_InstrOparg(co, i));
-        }
-    }
-    return 0;
-}
-
-int
 _PyCode_InstrFbIndex(PyCodeObject *co, int i)
 {
     assert(i >= 0 && i < _PyCode_IRSize(co));

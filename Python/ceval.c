@@ -3530,6 +3530,139 @@ done:
     return res;
 }
 
+/* Unpack and UnpackStar (Python/register_ops/displays.rop): the values of
+ * the iterable as owners the publish moves into the homes of the targets,
+ * which are in stack order (the first target is the last element).  The source stays in its home and is held across the call. */
+static int
+rop_unpack(PyValue *source_home, int before, int after, Py_ssize_t count,
+           _PyRopOwners *out)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue seq = PyValue_DUP(PyValue_Borrow(*source_home));
+    int ok = 0;
+    // A number is not iterable
+    if (!PyValue_IsObject(PyValue_Borrow(seq))) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "cannot unpack non-iterable %.200s object",
+                      PyValue_TYPE(PyValue_Borrow(seq))->tp_name);
+        goto done;
+    }
+    PyValue *items = count ? PyMem_Malloc(count * sizeof(PyValue)) : NULL;
+    if (count && items == NULL) {
+        _PyErr_NoMemory(tstate);
+        goto done;
+    }
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(seq));
+    if (!_PyEval_UnpackIterableValue(tstate, seq_o, before, after, items)) {
+        PyMem_Free(items);
+        goto done;
+    }
+    // The outputs are in stack order, bottom first: the first target is last
+    for (Py_ssize_t i = 0, j = count - 1; i < j; i++, j--) {
+        PyValue tmp = items[i];
+        items[i] = items[j];
+        items[j] = tmp;
+    }
+    out->items = items;
+    out->count = count;
+    ok = 1;
+done:
+    PyValue_CLOSE(seq);
+    return ok ? 0 : -1;
+}
+
+int
+_PyRop_UnpackIterable(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    return rop_unpack(source_home, (int)n, -1, n, out);
+}
+
+int
+_PyRop_UnpackStar(PyValue *source_home, Py_ssize_t shape, _PyRopOwners *out)
+{
+    int before = shape & 0xFF, after = shape >> 8;
+    return rop_unpack(source_home, before, after, before + 1 + after, out);
+}
+
+/* The specialized arms: the items of an exact tuple or list of n items,
+ * duplicated, in stack order.  The guard has checked the type and length; the
+ * list's length is checked again under its lock, and a list that changed goes
+ * the generic way. */
+int
+_PyRop_UnpackTuple(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyTuple_CheckExact(seq_o) && PyTuple_GET_SIZE(seq_o) == n);
+    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
+    if (n && items == NULL) {
+        _PyErr_NoMemory(_PyThreadState_GET());
+        return -1;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyTuple_ITEMS(seq_o)[i]));
+    }
+    out->items = items;
+    out->count = n;
+    return 0;
+}
+
+int
+_PyRop_UnpackList(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyList_CheckExact(seq_o));
+    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
+    if (n && items == NULL) {
+        _PyErr_NoMemory(_PyThreadState_GET());
+        return -1;
+    }
+    int same = 1;
+    Py_BEGIN_CRITICAL_SECTION(seq_o);
+    if (PyList_GET_SIZE(seq_o) != n) {
+        same = 0;
+    }
+    else {
+        for (Py_ssize_t i = 0; i < n; i++) {
+            items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyList_ITEMS(seq_o)[i]));
+        }
+    }
+    Py_END_CRITICAL_SECTION();
+    if (!same) {
+        PyMem_Free(items);
+        return _PyRop_UnpackIterable(source_home, n, out);
+    }
+    out->items = items;
+    out->count = n;
+    return 0;
+}
+
+bool
+_PyRop_TupleHasLength(PyValueBorrow v, Py_ssize_t n)
+{
+    return (PyValue_IsObject)(v)
+           && PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(v))
+           && PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) == n;
+}
+
+bool
+_PyRop_ListHasLength(PyValueBorrow v, Py_ssize_t n)
+{
+    return (PyValue_IsObject)(v)
+           && PyList_CheckExact(PyValue_AsKnownObjectBorrow(v))
+           && PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) == n;
+}
+
+/* The case of classify_unpack: 0 an exact tuple of n items, 1 an exact list
+ * of n items, 2 any other */
+int
+_PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n)
+{
+    if (_PyRop_TupleHasLength(v, n)) {
+        return 0;
+    }
+    return _PyRop_ListHasLength(v, n) ? 1 : 2;
+}
+
 void
 _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v)
 {
@@ -3678,7 +3811,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline PyValue
 generator_payload(_PyIRWord payload)
 {
-    return (PyValue){.bits = payload};
+    return _PyValue_FromTransferWord(payload);
 }
 
 static inline uint64_t
@@ -3962,11 +4095,11 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define GEN_DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
-        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), (V).bits); \
+        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
     } while (0)
 #define GEN_STEP_EFFECT(REMAINING, IP, V) \
     do { \
-        Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
+        Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), _PyValue_ToTransferWord(V), \
                                                   (REMAINING)); \
     } while (0)
 /* Compiled code runs the forms: it is in its unit already, and leaves it
@@ -6348,8 +6481,8 @@ call_bind_dict_kwargs(const _CallDict *items)
     int count = 0;
     for (int i = 0; i < items->count; i++) {
         if (items->dests[i] == _Py_CALL_BIND_TO_KWARGS) {
-            keys[count] = (PyValue){items->keys[i].bits};
-            values[count] = (PyValue){items->values[i].bits};
+            keys[count] = _PyIR_AdoptTemp(items->keys[i]);
+            values[count] = _PyIR_AdoptTemp(items->values[i]);
             count++;
         }
     }
@@ -7476,16 +7609,18 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
     return 0;
 }
 
-/* Consume v, iterate argcnt times and store the results via decreasing sp.
-   Return 1 for success, 0 if error.
+/* Iterate v (borrowed) argcnt times and store the results in out[0], out[1],
+   ... in the order they come.  Return 1 for success, 0 if error: the values
+   already stored are closed.
 
    If argcntafter == -1, do a simple unpack. If it is >= 0, do an unpack
-   with a variable target.
+   with a variable target, whose list is stored after the argcnt values,
+   followed by the argcntafter values that end the iterable.
 */
 
 Py_NO_INLINE int
 _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
-                       int argcnt, int argcntafter, PyValue *sp)
+                       int argcnt, int argcntafter, PyValue *out)
 {
     int i = 0, j = 0;
     Py_ssize_t ll = 0;
@@ -7494,12 +7629,6 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     PyObject *l = NULL; /* variable list */
     assert(v != NULL);
     assert(argcnt >= 0 && argcntafter >= -1);
-#ifndef NDEBUG
-    int capacity = argcnt + (argcntafter < 0 ? 0 : argcntafter + 1);
-    _PyInterpreterFrame *frame = tstate->current_frame;
-    assert(sp - frame->base >= capacity);
-    assert(sp <= frame->base + _PyFrame_NumSlots(frame));
-#endif
     int result = 0;
 
     it = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
@@ -7534,8 +7663,8 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
             }
             goto Error;
         }
-        *--sp = step.value;
-        _PyValue_CheckTemp(*sp);
+        out[i] = step.value;
+        _PyValue_CheckTemp(out[i]);
     }
 
     if (argcntafter == -1) {
@@ -7568,8 +7697,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     l = _PyValue_SequenceList(PyValue_FromObjectBorrow(it));
     if (l == NULL)
         goto Error;
-    *--sp = PyValue_FromObjectSteal(l);
-    i++;
+    out[i++] = PyValue_FromObjectSteal(l);
 
     ll = PyList_GET_SIZE(l);
     if (ll < argcntafter) {
@@ -7581,7 +7709,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
 
     /* Pop the "after-variable" args off the list. */
     for (j = argcntafter; j > 0; j--, i++) {
-        *--sp = _PyList_ITEMS(l)[ll - j];
+        out[i] = _PyList_ITEMS(l)[ll - j];
         _PyList_ITEMS(l)[ll - j] = PyValue_NULL;
     }
     /* Resize the list. */
@@ -7590,17 +7718,11 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     goto Done;
 
 Error:
-    /* The slots that the values went to are temporaries, which hold NULL
-       unless live */
-    for (; i > 0; i--, sp++) {
-        // a move: cleared below
-        PyValue ref = *sp;
-        *sp = PyValue_NULL;
-        PyValue_CLOSE(ref);
+    while (i > 0) {
+        PyValue_CLOSE(out[--i]);
     }
 Done:
     Py_XDECREF(it);
-    Py_DECREF(v);
     return result;
 }
 

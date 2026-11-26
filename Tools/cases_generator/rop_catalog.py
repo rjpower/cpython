@@ -228,6 +228,7 @@ FB_LAYOUT: dict[Schema, CLayout] = {
     Schema.Contains: CLayout("_PyFbContains", {
         "kind": CField("kind", _U32),
         "type_version": CField("type_version", _U32)}),
+    Schema.Unpack: CLayout("_PyFbUnary", {"kind": _NONE, "length": _NONE}),
     # The item sites share the binary entry; their evidence is the type
     # versions that it records
     Schema.Item: CLayout("_PyFbBinary", {
@@ -754,6 +755,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     # A status int: 0 is success, negative raised
     _conv("int_zero_ok", CReturn.int_status,
           COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # ok(vals): zero, the owners the row made written through the last
+    # parameter (a Span<O>, in storage from PyMem_Malloc); err(e): negative,
+    # the exception set and nothing written
+    _conv("owners_or_raised", CReturn.int_status,
+          COutcome(CTest.zero, _RES, (CSource.out,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
     # A truth int: 1 true, 0 false, negative raised
     _conv("int_truth", CReturn.int_status,

@@ -80,6 +80,13 @@ typedef struct {
     Py_ssize_t count;
 } _PyRopOwners;
 
+PyAPI_FUNC(int) _PyRop_UnpackIterable(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
+PyAPI_FUNC(int) _PyRop_UnpackStar(PyValue *source, Py_ssize_t shape, _PyRopOwners *out);
+PyAPI_FUNC(int) _PyRop_UnpackTuple(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
+PyAPI_FUNC(int) _PyRop_UnpackList(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
+PyAPI_FUNC(int) _PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n);
+PyAPI_FUNC(bool) _PyRop_TupleHasLength(PyValueBorrow v, Py_ssize_t n);
+PyAPI_FUNC(bool) _PyRop_ListHasLength(PyValueBorrow v, Py_ssize_t n);
 PyAPI_FUNC(void) _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v);
 PyAPI_FUNC(void) _PyRop_CloseOwners(_PyRopOwners *v);
 

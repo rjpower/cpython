@@ -948,7 +948,6 @@ PyAPI_FUNC(int) _PyCode_InstrDiscards(PyCodeObject *co, int i);
 /* The number of elements that the unpack at index i stores to locals (its
  * dst names a run of them), where its stack instruction pushed them; 0 if
  * its elements stay in the window or it is no unpack. */
-PyAPI_FUNC(int) _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */
@@ -1081,6 +1080,22 @@ _PyIR_SpanCountFields(const _PyIRFormat *fmt)
         n += fmt->roles[f] == _PyIR_ROLE_COUNT;
     }
     return n;
+}
+
+/* A span format whose one span is destinations (Unpack's): it has no DST
+ * role of its own and the span is not counted twice as Move's are */
+static inline int
+_PyIR_IsDstSpanFormat(const _PyIRFormat *fmt)
+{
+    if (fmt->operands != _PyIR_OPERANDS_SPANS || _PyIR_SpanCountFields(fmt) != 1) {
+        return 0;
+    }
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static inline int

@@ -162,8 +162,6 @@ extern "C" {
 #define SEND_ASYNC_GEN                         157
 #define SEND_GEN                               158
 #define SEND_VIRTUAL                           159
-#define UNPACK_SEQUENCE_LIST                   160
-#define UNPACK_SEQUENCE_TUPLE                  161
 #define INSTRUMENTED_END_FOR                   234
 #define INSTRUMENTED_POP_ITER                  235
 #define INSTRUMENTED_END_SEND                  236
@@ -202,7 +200,7 @@ extern "C" {
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
 #define IR_NUM_OLD_HANDLERS                    256
-#define IR_NUM_HANDLERS                        438
+#define IR_NUM_HANDLERS                        442
 
 #ifdef __cplusplus
 }

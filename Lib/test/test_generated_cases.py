@@ -1185,7 +1185,7 @@ class TestIRCases(unittest.TestCase):
         output = io.StringIO()
         ir_generator.generate_ir(
             [self.temp_input_filename], analysis, output, False)
-        for name in ("PUSH_EXC_INFO", "LOAD_SUPER_ATTR_METHOD"):
+        for name in ("LOAD_SUPER_ATTR_METHOD",):
             with self.subTest(name=name):
                 self.assertEqual(contracts[name].output_kind, "_PyIR_OUTPUT_WINDOW")
                 handler = self.handler(output.getvalue(), name)
@@ -1211,7 +1211,8 @@ class TestIRCases(unittest.TestCase):
                                return_value=ir_generator.STORE_LEAVE):
             with self.assertRaisesRegex(SyntaxError, "unclassified window output"):
                 ir_generator.handler_output_kind(
-                    analysis.instructions["PUSH_EXC_INFO"], formats["PUSH_EXC_INFO"])
+                    analysis.instructions["LOAD_SUPER_ATTR_METHOD"],
+                    formats["LOAD_SUPER_ATTR_METHOD"])
 
     def test_generator_resume_commits_before_input_disposal(self):
         source = (Path(__file__).resolve().parents[2] /

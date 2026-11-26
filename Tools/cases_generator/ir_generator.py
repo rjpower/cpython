@@ -867,14 +867,10 @@ OBJECT_READERS = {
     "PyTuple_CheckExact", "PyUnicode_CheckExact",
     "_PyObject_GetManagedDict", "_PyObject_InlineValues",
     "_PyObject_Shape", "_PyObject_ValueSlot",
-    # Operations that read their operands and count what they keep
-    "PyErr_GivenExceptionMatches",
     # The value-form container calls (they read the container object and
     # the key as a value)
     "_PyDict_ContainsValue",
     "PyUnicode_Concat",
-
-    "value_exception_group_match",
     "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal",
     # The indirect calls of BINARY_OP_EXTEND, through a table of functions

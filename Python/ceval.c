@@ -4492,20 +4492,88 @@ _PyRop_DictFirstProbe(PyValueBorrow v, PyValueBorrow k, PyValue *out)
     return true;
 }
 
-/* The lock is held for the exchange only.  The guard proved the index, and
- * this build has the GIL. */
-static inline PyValue
-_PyRop_ListExchange(PyValueBorrow v, PyValueBorrow k, PyValue x)
+/* The old STORE_ATTR_INSTANCE_VALUE: lock the owner, check the type version
+   and the inline values again, store.  true with the previous owner, which
+   is NULL when the store added the attribute. */
+static inline bool
+_PyRop_StoreInstanceLocked(PyValueBorrow owner, _PyAttrRecipe r,
+                            PyValueBorrow x, PyValue *old)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    if (!LOCK_OBJECT(o)) {
+        return false;
+    }
+    if (!_PyAttr_InstanceVersion(o, r) || !_PyAttr_StoreValuesReady(o, r)) {
+        UNLOCK_OBJECT(o);
+        return false;
+    }
+    *old = PyValue_NULL;
+    _PyAttr_StoreInstanceValue(owner, r, PyValue_DUP(x), old);
+    UNLOCK_OBJECT(o);
+    return true;
+}
+
+/* The old STORE_ATTR_SLOT: lock the owner, check the type version again,
+   store.  true with the previous owner, which is NULL for a vacant slot. */
+static inline bool
+_PyRop_StoreMemberLocked(PyValueBorrow owner, _PyAttrRecipe r,
+                          PyValueBorrow x, PyValue *old)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    if (!LOCK_OBJECT(o)) {
+        return false;
+    }
+    if (!_PyAttr_InstanceVersion(o, r)) {
+        UNLOCK_OBJECT(o);
+        return false;
+    }
+    _PyAttr_StoreMemberSlot(owner, r, PyValue_DUP(x), old);
+    UNLOCK_OBJECT(o);
+    return true;
+}
+
+/* The old STORE_ATTR_WITH_HINT: lock the managed dictionary, check the
+   hinted entry again, store.  true with the previous owner, never NULL. */
+static inline bool
+_PyRop_StoreHintedLocked(PyValueBorrow owner, PyObject *name,
+                          _PyAttrRecipe r, PyValueBorrow x, PyValue *old)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    PyDictObject *dict = _PyObject_GetManagedDict(o);
+    if (dict == NULL || !LOCK_OBJECT(dict)) {
+        return false;
+    }
+    if (!_PyAttr_InstanceVersion(o, r) || !_PyAttr_HintStoreReady(o, name, r)) {
+        UNLOCK_OBJECT(dict);
+        return false;
+    }
+    *old = _PyAttr_StoreHinted(owner, r, x);
+    UNLOCK_OBJECT(dict);
+    return true;
+}
+
+/* The old _STORE_SUBSCR_LIST_INT: lock the list, check the bounds again,
+ * exchange the item, unlock.  true with the displaced owner, which is never
+ * NULL; false, having changed nothing and not counted x, when the lock is not
+ * taken or the index is out of bounds under it.  The guard before the row
+ * only keeps a word that cannot hit from taking the lock. */
+static inline bool
+_PyRop_ListExchangeLocked(PyValueBorrow v, PyValueBorrow k, PyValueBorrow x,
+                          PyValue *old)
 {
     PyObject *list = PyValue_AsKnownObjectBorrow(v);
-    int locked = LOCK_OBJECT(list);
-    assert(locked);
-    (void)locked;
+    if (!LOCK_OBJECT(list)) {
+        return false;
+    }
     Py_ssize_t index = _PyRop_ListIndex(list, k);
-    assert(0 <= index && index < PyList_GET_SIZE(list));
-    PyValue old = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, x);
+    if (index < 0 || index >= PyList_GET_SIZE(list)) {
+        UNLOCK_OBJECT(list);
+        return false;
+    }
+    *old = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index,
+                                       PyValue_DUP(x));
     UNLOCK_OBJECT(list);
-    return old;
+    return true;
 }
 
 static inline PyValue

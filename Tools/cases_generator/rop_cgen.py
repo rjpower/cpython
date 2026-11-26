@@ -80,11 +80,13 @@ RETURN_C = {
 def test_text(test: CTest, returns: CReturn, ret: str) -> str:
     """The C condition under which an outcome's test holds of the result"""
     subject = f"{ret}.status" if returns is CReturn.status_value else ret
-    null = f"PyValue_IsNull({ret})" if returns in (CReturn.value, CReturn.borrow) \
-        else f"{ret} == NULL"
+    if returns in (CReturn.value, CReturn.borrow):
+        null, nonnull = f"PyValue_IsNull({ret})", f"!PyValue_IsNull({ret})"
+    else:
+        null, nonnull = f"{ret} == NULL", f"{ret} != NULL"
     return {
         CTest.true: ret, CTest.false: f"!{ret}",
-        CTest.nonnull: f"!{null}", CTest.null: null,
+        CTest.nonnull: nonnull, CTest.null: null,
         CTest.zero: f"{subject} == 0", CTest.nonzero: f"{subject} != 0",
         CTest.negative: f"{subject} < 0", CTest.positive: f"{subject} > 0",
         CTest.nonnegative: f"{subject} >= 0",

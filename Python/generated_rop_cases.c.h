@@ -5417,7 +5417,7 @@
             rop_CallKw_Plan_General:
             IR_STUB_ESCAPE();
             ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
-            if (!ret2 == NULL) {
+            if (ret2 != NULL) {
                 c = ret2;
                 goto rop_CallKw_Plan_Enter;
             }
@@ -5464,7 +5464,7 @@
             rop_Call_PyGeneral_General:
             IR_STUB_ESCAPE();
             ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
-            if (!ret2 == NULL) {
+            if (ret2 != NULL) {
                 c = ret2;
                 goto rop_Call_PyGeneral_Enter;
             }

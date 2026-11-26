@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `29f34da48fb` (pushed; OB and JX merged, below) holds:
+`pyjit/rir90` at `605de9c1891` (pushed; OB, JX and TI merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -275,17 +275,27 @@ native call in the middle of straight-line code reaches the running frame
 at its next switch point, not at the next instruction (`674dc7aff6b`
 states it in `test_pyvalue_release`).
 
-**TI, the tail-calling interpreter, measured 2026-11-26** (user approval;
-gcc 15 or clang required): each generated arm is its own function and
-dispatch is a guaranteed tail call through the table, so each arm gets its
-own register allocation in place of one computed-goto function with a
-6,920-byte frame that spilled hot values.  On the all-29 timing (CPU 15,
-JIT off) the prototype (`954c8715770`) runs **1.114 of golden87's time**
-against the computed-goto evaluator's 1.191; spectral_norm 1.42 to 0.98,
-unpack_sequence 1.85 to 1.54, raytrace 1.28 to 1.08; coroutines lost
-(1.02 to 1.08).  Clang was no better.  The landing deletes the
-computed-goto evaluator and makes the observing mode a second table of
-tail functions.
+**TI, merged at `605de9c1891`, 2026-11-26** (user approval; gcc 15 or
+clang required): the interpreter is tail-calling.  Each generated arm is
+its own function and dispatch is a guaranteed tail call through the
+table, so each arm gets its own register allocation in place of one
+computed-goto function with a 6,920-byte frame that spilled hot values.
+The normal and the observing evaluator are two tables of tail functions
+from one template (`Python/ceval_evaluator.h`).  The computed-goto
+evaluator is deleted, and configure refuses a compiler without `musttail`.
+GCC's tail functions save no callee-saved register; frame pointers are
+kept for profilers.
+
+Interpreter timing with OB, JX and TI (`605de9c1891`, all-29, CPU 15, JIT
+off): **1.126 of golden87's time**, from 1.191 after wave 2.  Five
+benchmarks are within 5% and thirteen within 10%.  Generators (1.39 to
+1.20), nbody (1.37 to 1.12), raytrace (1.28 to 1.07) and coroutines (0.98)
+gained most; unpack_sequence (1.57), logging_simple (1.27) and the
+deepcopy family (1.10 to 1.21) are furthest.  spectral_norm and the
+logging benchmarks move by up to 20% between builds that run the same
+instructions: code layout, which comes last as one rule.  On seven kernels
+the interpreter runs 1.23 times golden87's instructions, so the next work
+is the instructions the arms run (LR, below).
 
 **JX, merged at `29f34da48fb`**: SP's `edb30efc8e3` left
 `GetItem.ListSlice` planned for the JIT with no generic stub to miss to,
@@ -295,7 +305,12 @@ miss with no generic stub.  `test_rop_ssa` judges a declared jump by its
 target, which removes a JIT-always failure that predated SP.
 
 Running:
-- TI's landing on rir90 with OB.
+- LR: lowering rules for the arms' fast paths.  An accounting of the
+  instructions each arm runs against golden87's cost for the same work,
+  then generator rules applied to every arm they fit: exits off the fast
+  path as cold tail functions (no frame in a hot arm), fixed small spans
+  straight-line, results in registers rather than out-parameters, guards
+  that test only what their declared facts need.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

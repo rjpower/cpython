@@ -264,6 +264,17 @@ Running:
   not change.  A per-frame table pointer was refused (about 3-10% more
   instructions, or a pinned register), and so was a single writable table
   (every function pays while any tool is active).
+- TI (user approval, 2026-11-26): a tail-calling interpreter.  The
+  remaining gap is mostly the shape of `ir_evaluate`, one computed-goto
+  function holding every arm: under gcc 15 `-O3` it is 190 KB to
+  golden87's 89 KB, with a 6,920-byte stack frame to 152 and 5,794
+  stack-memory operands to 1,257.  Hot arms spill on their fast path
+  (Add.Int nine stack operations to golden87's none, Move.Copy twelve,
+  ForIter.Range fourteen), while the same arm compiled as its own function
+  form has none.  TI compiles the generated arms as functions that dispatch
+  by guaranteed tail call, so each arm gets its own register allocation,
+  and measures gcc and clang (`preserve_none`), computed-goto and
+  tail-call, against golden87.  The JIT's function forms do not change.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

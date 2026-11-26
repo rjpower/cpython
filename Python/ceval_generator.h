@@ -12,7 +12,7 @@
 #define GENERATOR_DISPATCH() DISPATCH()
 #define GEN_STEP(NAME) \
     Py_NO_INLINE _PyIRTransfer \
-    ir_##NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, \
+    _PyEval_ir_##NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, \
               _PyInstr *next_instr, _PyIRWord ir_word)
 
 GEN_STEP(GEN_REDIRECT_EFFECT);

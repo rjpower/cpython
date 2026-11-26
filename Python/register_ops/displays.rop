@@ -19,7 +19,7 @@ extern helper build_tuple(items:Span<Src>)
   ensures(ok.exact<tuple>(z))
   c _PyRop_BuildTuple as value_or_null
   evidence(
-    review: "ceval.c _PyRop_BuildTuple: each item's owner is taken out of its home (a local's gets a count of its own), then Ceval.c rop_take_items, _PyTuple_FromValueStealOnSuccess.",
+    review: "ceval.c _PyRop_BuildTuple: each item's owner is taken out of its home (a local's gets a count of its own), then Ceval.c _PyEval_rop_take_items, _PyTuple_FromValueStealOnSuccess.",
     contract: "Every item is spent on every outcome: it moves into the new object or, on failure, is closed (which may run a finalizer). NULL with an exception set on failure.");
 
 arm Build.Tuple shared select(tuple)

@@ -2475,7 +2475,7 @@ class JumpTestCase(unittest.TestCase):
         with tracecontext(output, 4):
             output.append(5)
 
-    @async_jump_test(2, 4, [1, 2, 3, -2, 4, 5, -4], refusal=incoming_owner_error)
+    @async_jump_test(2, 4, [1, 4, 5, -4])
     async def test_jump_across_async_with(output):
         output.append(1)
         async with asynctracecontext(output, 2):

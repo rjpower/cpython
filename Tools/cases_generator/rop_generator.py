@@ -527,6 +527,11 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         effects.add("_PyIR_DEOPTS")
     if "enter" in exits:
         effects.add("_PyIR_PUSHES_FRAME")
+    if "yield" in exits:
+        # A yield suspends this frame; unlike a call it leaves no child
+        # frame in the scratch tail above its window, so the jump analysis
+        # must not treat that tail as overwritten
+        effects.discard("_PyIR_PUSHES_FRAME")
     if is_generic(program, arm) and "again" in fam.exits:
         effects.add("_PyIR_SPECIALIZES")
     flags = ["_PyIR_VALID"]

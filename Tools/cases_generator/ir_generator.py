@@ -375,7 +375,6 @@ class IRFormat:
     names_target: bool = False      # see names_target_only()
     fb_layout: str | None = None    # the entry type, see FEEDBACK_LAYOUTS
     fb_kind: str | None = None      # its _PyFbKind
-    metadata_inputs: frozenset[int] = frozenset()
     operands: str = "_PyIR_OPERANDS_NONE"   # a call: see OPERAND_CALLS
 
     def field_of(self, role: str) -> str | None:
@@ -1264,52 +1263,6 @@ def place_fields(slots: list[str], has_fb: bool, imm_kind: str | None,
     return fields, imm, fb
 
 
-def metadata_only_passthroughs(inst: Instruction) -> frozenset[int]:
-    """An unread unchanged cursor whose dependency stays in the compiler."""
-    markers = [token for token in uop_token_list(inst)
-               if token.text == "IR_METADATA_PASSTHROUGH"]
-    if not markers:
-        return frozenset()
-    inputs, outputs = external_io(inst)
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    expected = """{
-        IR_METADATA_PASSTHROUGH(1);
-        PyValue outgoing = TAKE(retval);
-        IR_SUSPEND_DELEGATED(outgoing);
-    }"""
-    shape = lambda items: [(item.name, item.peek, item.size) for item in items]
-    incoming = [("receiver", True, ""), ("unused_cursor", True, ""),
-                ("retval", False, "")]
-    outgoing = [("receiver", True, ""), ("unused_cursor", True, ""),
-                ("value", False, "")]
-    producer = parts[-1]
-    observer = """{
-        int err = _Py_call_instrumentation_arg(
-            tstate, PY_MONITORING_EVENT_PY_YIELD, frame, this_instr, val);
-        if (err) { RELOAD_STACK(); ERROR_NO_POP(); }
-        if (frame->instr_ptr != this_instr) {
-            RELOAD_STACK(); DISPATCH_REDIRECT();
-        }
-    }"""
-    if (len(markers) != 1 or len(inputs) != 3 or len(outputs) != 3
-            or len(parts) != len(inst.parts)
-            or shape(producer.stack.inputs) != incoming
-            or shape(producer.stack.outputs) != outgoing
-            or outputs[0].external != 0 or outputs[1].external != 1
-            or any(item.is_array() for item in inputs)
-            or len(parts) > 2
-            or any(statement_shape(part.body) != statement_shape(
-                Parser(observer, "<delegated yield observer contract>").block())
-                   for part in parts[:-1])
-            or statement_shape(producer.body) != statement_shape(
-                Parser(expected, "<delegated transport contract>").block())
-            or any(token.text == "unused_cursor" for part in parts[:-1]
-                   for token in part.body.tokens())):
-        raise analysis_error("metadata passthrough requires the unchanged unread delegated cursor",
-                             markers[0])
-    return frozenset({1})
-
-
 def operand_metadata(fmt: IRFormat) -> IRFormat:
     """The shape of a call family's words in the metadata: A is the dst, B
     the callable (an input), C the number of operands and D the feedback
@@ -1333,9 +1286,6 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     deepest = max(members, key=lambda m: len(io[m.name][0]))
     inputs = io[deepest.name][0]
     n_inputs = len(inputs)
-    metadata_inputs = metadata_only_passthroughs(head)
-    if any(metadata_only_passthroughs(member) != metadata_inputs for member in members):
-        raise analysis_error("metadata passthroughs must match the complete family", head.where)
     # Members that pass their first outputs through write later slots, which
     # follow dst. Members that push a frame and no outputs write none, and
     # members that return write theirs to the caller's frame.
@@ -1370,12 +1320,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         e.aliased for m in members for e in io[m.name][1])
 
     placed = None
-    if metadata_inputs:
-        # The cursor is an unchanged compiler dependency, not a physical
-        # input window. Receiver and outgoing homes remain independent.
-        placed = ([ROLE_DST, f"{ROLE_IN0} + 2", ROLE_NONE, f"{ROLE_IN0} + 0"],
-                  LOC_NONE, LOC_NONE)
-    elif not array_inputs:
+    if not array_inputs:
         slots = [ROLE_DST] if dst_offset is not None else []
         order = list(range(n_inputs))
         if group in STORES and dst_offset is None and n_inputs > 1:
@@ -1410,7 +1355,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         if role is not None and roles[k] == ROLE_IMM:
             roles = roles[:k] + [role] + roles[k + 1:]
     for m, m_dst in zip(members, new_outputs):
-        if (not window and not metadata_inputs and m_dst is not None and m.properties.switches_frame
+        if (not window and m_dst is not None and m.properties.switches_frame
                 and not m.properties.returns):
             # Outputs that follow the switch belong to another frame
             raise analysis_error(
@@ -1456,12 +1401,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
                 continue
             if uses[first + k] in ("object", "raw"):
                 borrow_mask |= 1 << k
-    if metadata_inputs:
-        # The finite suspension certificate retains scratch-role identities
-        # across the monitoring callback. Neither input may borrow a mutable
-        # binding, even when its individual C uses would permit a view.
-        borrow_mask = 0
-    store_dst = bool(metadata_inputs) or stores_to_dst(members, io, dst_offset, window)
+    store_dst = stores_to_dst(members, io, dst_offset, window)
     fb_layout = fb_kind = None
     if has_fb:
         if group not in FEEDBACK_LAYOUTS:
@@ -1483,7 +1423,6 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
         fb_layout=fb_layout, fb_kind=fb_kind,
-        metadata_inputs=metadata_inputs,
         operands=OPERAND_CALLS.get(group, "_PyIR_OPERANDS_NONE"),
     )
 
@@ -3169,7 +3108,6 @@ class IREmitter(Emitter):
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         self._replacers["IR_BINARY_READER"] = self.binary_reader
-        self._replacers["IR_METADATA_PASSTHROUGH"] = self.metadata_passthrough
         self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
         self._replacers["IR_UNPACK_ITEMS"] = self.unpack_items_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
@@ -3336,14 +3274,6 @@ class IREmitter(Emitter):
         self.out.emit_at(f"_PyFrame_CloseHomeRange(frame, {local.name}, oparg)", tkn)
         self.out.last_token = end
         local.kill()
-        return True
-
-    def metadata_passthrough(self, tkn, tkn_iter, uop, storage, inst):
-        args, _ = self.instruction_macro_args(tkn, tkn_iter)
-        assert next(tkn_iter).kind == "SEMI"
-        if (len(args) != 1 or [token.text for token in args[0]] != ["1"]
-                or inst is None or metadata_only_passthroughs(inst) != frozenset({1})):
-            raise analysis_error("uncertified metadata-only passthrough", tkn)
         return True
 
     def binary_reader(self, tkn, tkn_iter, uop, storage, inst):
@@ -5422,8 +5352,7 @@ def record_layout(inst: Instruction, fmt: IRFormat, mode: str | None,
     if fmt.transparent:
         return SlotLayout.empty()
     in_fields = {int(o.detail.split()[1]) - fmt.n_inputs: o.field for o in operands
-                 if o.kind == SLOT and o.detail.startswith("input ")
-                 and int(o.detail.split()[1]) not in fmt.metadata_inputs}
+                 if o.kind == SLOT and o.detail.startswith("input ")}
     borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
                            if fmt.borrow_mask & (1 << k))
     if fmt.window:

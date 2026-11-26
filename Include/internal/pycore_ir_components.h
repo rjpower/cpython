@@ -2836,9 +2836,6 @@
      * local C struct that is neither heap nor a home; no failure, no \
      * callback.  Per-form macros cannot be one function */ \
     MACRO(IR_REPORT_EDGE, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
-    /* Evidence (G0c8): ir_generator.py:3626: a marker that emits no code; it is accepted \
-     * only when the word's metadata-only passthrough is certified (argument 1). */ \
-    MACRO(IR_METADATA_PASSTHROUGH, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): ir_generator.py:4198: emits `call_state |= CALL_EFFECTS`, a write of the \
      * call handler's register local (the `call_state` STATE row, which the uop names in \
      * its state(...) clause).  No heap access. */ \

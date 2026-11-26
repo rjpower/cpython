@@ -3612,7 +3612,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline PyValue
 generator_payload(_PyIRWord payload)
 {
-    return (PyValue){.bits = payload};
+    return _PyValue_FromTransferWord(payload);
 }
 
 static inline uint64_t
@@ -3896,11 +3896,11 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define GEN_DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
-        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), (V).bits); \
+        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
     } while (0)
 #define GEN_STEP_EFFECT(REMAINING, IP, V) \
     do { \
-        Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
+        Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), _PyValue_ToTransferWord(V), \
                                                   (REMAINING)); \
     } while (0)
 /* Compiled code runs the forms: it is in its unit already, and leaves it
@@ -6282,8 +6282,8 @@ call_bind_dict_kwargs(const _CallDict *items)
     int count = 0;
     for (int i = 0; i < items->count; i++) {
         if (items->dests[i] == _Py_CALL_BIND_TO_KWARGS) {
-            keys[count] = (PyValue){items->keys[i].bits};
-            values[count] = (PyValue){items->values[i].bits};
+            keys[count] = _PyIR_AdoptTemp(items->keys[i]);
+            values[count] = _PyIR_AdoptTemp(items->values[i]);
             count++;
         }
     }

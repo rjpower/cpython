@@ -107,7 +107,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
             self.assertEqual(function(value), value)
         if not support.Py_GIL_DISABLED:
             # These module-attribute sites retain the runtime self-or-NULL slot.
-            self.assertIn("Call.Generic", executing_handlers(function))
+            self.assertIn("Call.BuiltinO", executing_handlers(function))
 
     def test_cold_and_warmed_o(self):
         def call(value):
@@ -145,7 +145,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(invoke(ordinary), 2147483647)
         if not support.Py_GIL_DISABLED:
-            self.assertIn("Call.Generic", executing_handlers(invoke))
+            self.assertIn("Call.BuiltinO", executing_handlers(invoke))
         ledger = []
 
         def make_argument():
@@ -175,7 +175,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(outer(callback), 1234567)
         if not support.Py_GIL_DISABLED:
-            self.assertIn("Call.Generic", executing_handlers(outer))
+            self.assertIn("Call.BuiltinO", executing_handlers(outer))
 
         def fail(value):
             return _testinternalcapi.native_scope_raise(value)
@@ -184,7 +184,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "expected failure"):
                 fail("expected failure")
         if not support.Py_GIL_DISABLED:
-            self.assertIn("Call.Generic", executing_handlers(fail))
+            self.assertIn("Call.BuiltinO", executing_handlers(fail))
 
     def test_temporary_argument_before_local_replacement(self):
         # The call stores its result in the local, then releases the
@@ -258,7 +258,7 @@ class NativeScopeDispatchTests(unittest.TestCase):
         if not support.Py_GIL_DISABLED:
             call_handlers = [name for name in executing_handlers(replace)
                              if name.startswith("Call")]
-            self.assertEqual(call_handlers[-1], "Call.Generic+NO_SELF")
+            self.assertEqual(call_handlers[-1], "Call.BuiltinO+NO_SELF")
         events.clear()
         calls = []
         reenter = True
@@ -529,7 +529,7 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
                 (star_site, native, None, 'CallEx.NonPy+NO_KW'),
                 # The warm-up's pending calls to int() do nothing visible.
                 (single_site, _testinternalcapi.simple_pending_call, int,
-                 'Call.Generic+NO_SELF')):
+                 'Call.BuiltinO+NO_SELF')):
             self.warm(site, target, first)
             self.assertIn(handler, executing_handlers(site))
             self.check_site(site, handler)
@@ -590,12 +590,15 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
         self.addCleanup(monitoring.free_tool_id, tool)
         monitoring.register_callback(tool, monitoring.events.CALL,
                                      lambda *args: None)
-        for site, handler in ((positional_site, 'Call.Generic.Observed+NO_SELF'),
-                              (star_site, 'CallEx.Generic.Observed+NO_KW')):
+        # Observed code keeps its words and runs each family's observer in
+        # the observing evaluator
+        for site, handler in ((positional_site, 'Call.Generic+NO_SELF'),
+                              (star_site, 'CallEx.Generic+NO_KW')):
             support.reset_code(site)
             monitoring.set_local_events(tool, site.__code__,
                                         monitoring.events.CALL)
             try:
+                self.assertTrue(_testinternalcapi.code_is_observed(site.__code__))
                 self.check_site(site, handler)
             finally:
                 monitoring.set_local_events(tool, site.__code__, 0)

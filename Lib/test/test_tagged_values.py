@@ -1375,7 +1375,7 @@ class InlineCallTest(unittest.TestCase):
         def f(x, cls):
             return isinstance(x, cls)
         warm(f, 1, int)
-        self.assertIn("Call.Generic+NO_SELF", handler_names(f))
+        self.assertIn("Call.Isinstance+NO_SELF", handler_names(f))
         for value in (make_inline(70000), make_inline_float(1.5)):
             for cls in (int, float, object, bool, str, (int, float), (str, bytes),
                         (str, numbers.Number), numbers.Number, numbers.Integral,

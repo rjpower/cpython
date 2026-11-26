@@ -3,7 +3,7 @@
 // call-boundary macros.
 
 family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
-  exits(next, raise, redirect, miss, again) generic(Generic);
+  exits(next, enter, raise, redirect, miss, again) generic(Generic);
 
 family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
   exits(next, raise, redirect, miss, again) generic(Generic);
@@ -23,6 +23,8 @@ family BuildSlice(dst:Dst, parts:Span<Src>)
 // The sources close later operand first, as the old handlers' DECREF_INPUTS
 point GetItem.Failed(current, site, pending) keep() spent(key, obj) defs();
 point GetItem.Done(current, next_head, clear) keep() spent(key, obj) defs(dst);
+// The __getitem__ frame, entered in place, has returned: its value takes the destination
+point GetItem.Returned(caller, next_head, clear) keep() spent(key, obj) defs(dst);
 point SetItem.Failed(current, site, pending) keep() spent(key, obj, value) defs();
 point SetItem.Done(current, next_head, clear) keep() spent(key, obj, value) defs();
 point DelItem.Failed(current, site, pending) keep() spent(key, obj) defs();
@@ -218,10 +220,48 @@ macro store_slice_at_origin(a:Anchors)
     exit err(e);
 }
 
-arm GetItem.Generic shared
-  effects(runs_python, raises, releases on (dst))
+// A heap type whose __getitem__ is a simple Python function of two arguments,
+// which the type caches under its version (BINARY_OP_SUBSCR_GETITEM): the
+// function runs in a frame of the subscripting activation
+extern helper getitem_frame_ready(t:Thread, o:B) -> Bool
+  effects(reads)
+  c _PyRop_GetItemFrameReady as bool
+  evidence(
+    review: "bytecodes.c _BINARY_OP_SUBSCR_CHECK_FUNC: a heap type whose cached __getitem__ has the cached version, and the thread has frame space for its frame.",
+    contract: "Reads the container's type, the function and its code; no memory, no failure.");
+
+extern helper getitem_frame_claimable(t:Thread, o:B) -> Bool
+  effects(reads)
+  c _PyRop_GetItemFrameClaimable as bool
+  evidence(
+    review: "bytecodes.c: _CHECK_PEP_523, _BINARY_OP_SUBSCR_CHECK_FUNC and the recursion budget, as GetItem.Getitem guards.",
+    contract: "Reads the container's type, the function and its code; no memory, no failure.");
+
+extern helper push_getitem(t:Thread, f:Frame, at:Site, o:Src, k:Src) -> NewFrame
+  effects(reads, writes, releases)
+  spends(o, k)
+  c _PyRop_PushGetItem as pointer
+  evidence(
+    review: "bytecodes.c _BINARY_OP_SUBSCR_INIT_CALL: the frame of the cached __getitem__, with the container and the subscript moved into its first two slots.",
+    contract: "Infallible after the guards. A local operand is counted.");
+
+arm GetItem.Getitem split
+  effects(runs_python, reads, writes, releases, switches_frame)
+  feedback()
+  exits(enter, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard getitem_frame_ready(thread, use(obj)) else miss;
+    guard recursion_budget(thread) else miss;
+    let c:NewFrame = push_getitem(thread, frame, site, obj, key);
+    exit enter(c) resume GetItem.Returned;
+}
+
+arm GetItem.Generic split
+  effects(runs_python, reads, writes, raises, releases on (dst), switches_frame)
   feedback(read(entry), write(entry), write(handler))
-  exits(next, again, raise, redirect)
+  exits(next, again, enter, raise, redirect)
 {
   entry():
     call adapt_before_use_getitem(fb, obj, key) {
@@ -231,6 +271,11 @@ arm GetItem.Generic shared
   Retry(t:Ticket<Item>):
     exit again(t);
   Run():
+    branch getitem_frame_claimable(thread, use(obj)) -> Framed(), Lookup();
+  Framed():
+    let c:NewFrame = push_getitem(thread, frame, site, obj, key);
+    exit enter(c) resume GetItem.Returned;
+  Lookup():
     let a:Anchors = anchor_for_call([obj, key]);
     call getitem_at_origin(a) {
       ok -> Result();
@@ -599,7 +644,7 @@ macro dict_store_at_origin(a:Anchors)
 // Adaptation (specialize.c): the evidence is the old nomination, collected
 extern helper classify_getitem(f:Fb<Item>, v:B, k:B)
   cases(list_index(), tuple_index(), ascii(), unicode_char(), dict(), list_slice(),
-        none())
+        getitem(), none())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
   c _PyRop_ClassifyGetItem as case_index
@@ -637,7 +682,15 @@ macro adapt_before_use_getitem(f:Fb<Item>, o:Src, k:Src)
       unicode_char -> UnicodeChar();
       dict -> Dict();
       list_slice -> ListSlice();
+      getitem -> Getitem();
       none -> Other();
+    }
+  Getitem():
+    let cgi:Candidate<Item> = candidate(GetItem.Getitem);
+    call install(site, f, cgi) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
     }
   ListIndex():
     let c1:Candidate<Item> = candidate(GetItem.ListIndex);

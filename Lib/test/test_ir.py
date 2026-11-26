@@ -356,9 +356,7 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
             self.assertEqual(f(P()), "caught")
         if SPECIALIZES:
-            # A property stays on the generic arm until the frame-pushing
-            # arm of P3b
-            self.assertIn("GetAttr.Generic", handlers(f))
+            self.assertIn("GetAttr.Property", handlers(f))
 
     def test_line_events(self):
         def f(o):

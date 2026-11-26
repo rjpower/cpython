@@ -1025,8 +1025,14 @@ def classify(run, mode, index, length, jump_kind):
 
 
 def transfers(arm):
-    "An arm that may leave the frame: it runs under rop_transfer_run"
-    return bool({"enter", "return"} & set(arm.contract.exits))
+    """An arm that may leave the frame, itself or by missing into its family's
+    generic arm: it runs under rop_transfer_run"""
+    leaving = {"enter", "return"}
+    if leaving & set(arm.contract.exits):
+        return True
+    return "miss" in arm.contract.exits and any(
+        leaving & set(g.contract.exits) for g in PROGRAM.arms_of(arm.family)
+        if is_generic(g))
 
 
 def is_generic(arm):
@@ -1145,7 +1151,7 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
     obs = ev.Observation(exit, run.next if mode != STUB else None, run.slots,
                          run.feedback_written, run.handler != handler,
                          (run.extra,) if exit == "return" else None)
-    if exit == "enter":
+    if exit == "enter" and arm.family == "Call":
         # The child runs the callee (a class's __init__, after the new
         # self), with the arguments in its first slots
         fn, child = run.extra
@@ -1238,6 +1244,14 @@ NOT_RUN = {
     "PatternKeys.Match": "no scenario yet; test_rop_patterns runs it",
     # The tracer's view of the keyword and expanded calls is deferred while the
     # interpreter ports finish (rir90 interpreter-first rule)
+    # The frame of a property getter, a __getattribute__ or a __getitem__, which
+    # the arm enters in the loading activation; the synthetic caller of
+    # rop_transfer_run runs no callee, and test_rop_frame_loads
+    # run them
+    "GetAttr.Property": "enters the getter's frame; covered by test_rop_frame_loads",
+    "GetAttr.GetattributeOverridden": "enters the __getattribute__ frame; covered by "
+                                      "test_rop_frame_loads",
+    "GetItem.Getitem": "enters the __getitem__ frame; covered by test_rop_frame_loads",
     "CallKw.Plan": "deferred: binds keywords by a site's plan",
     "Call.Generator": "creates a generator from a generator function, which its guards "
                       "trust the specialization to supply; the scenario's is ordinary",

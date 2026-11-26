@@ -375,17 +375,138 @@ class CallPyGeneralTests(unittest.TestCase):
             with self.assertRaises(RecursionError):
                 g(0)
 
-    def test_a_bound_method_with_defaults_is_generic(self):
+    def test_a_generator_function_takes_the_plan(self):
+        def g(a, b=2, *rest):
+            yield (a, b, rest)
+
+        def f():
+            return list(g(1)), list(g(1, 5, 6))
+        warm(f)
+        self.assertIn("Call.PlanGenerator", word_names(f.__code__))
+        self.assertEqual(f(), ([(1, 2, ())], [(1, 5, (6,))]))
+
+    def test_a_generator_plan_rebinds_after_the_defaults_change(self):
+        def g(a, b=2):
+            yield a + b
+
+        def f():
+            return list(g(1))
+        warm(f)
+        self.assertIn("Call.PlanGenerator", word_names(f.__code__))
+        g.__defaults__ = (10,)
+        self.assertEqual(f(), [11])
+        g.__defaults__ = ()
+        with self.assertRaises(TypeError):
+            f()
+
+    def test_the_generator_owns_the_operands(self):
+        Tracker.deaths.clear()
+
+        def g(a, b=None):
+            yield a
+
+        def f():
+            return g(Tracker("arg"))
+        warm(f)
+        Tracker.deaths.clear()
+        generator = f()
+        self.assertEqual(Tracker.deaths, [])
+        del generator
+        self.assertEqual(Tracker.deaths, ["arg"])
+
+
+@cpython_only
+class CallBoundGeneralTests(unittest.TestCase):
+    """Call.BoundGeneral takes a bound method that Call.BoundExact does not:
+    one whose function needs a general binding, or creates a generator"""
+
+    def test_a_method_with_defaults_enters(self):
+        class C:
+            def m(self, a, b=2, *rest):
+                return (self, a, b, rest)
+
+        c = C()
+        m = c.m
+
+        def f():
+            return m(1), m(1, 5, 6)
+        warm(f)
+        self.assertIn("Call.BoundGeneral", word_names(f.__code__))
+        self.assertEqual(f(), ((c, 1, 2, ()), (c, 1, 5, (6,))))
+
+    def test_a_generator_method_creates_the_generator(self):
+        class C:
+            def m(self, a):
+                yield (self, a)
+
+        c = C()
+        m = c.m
+
+        def f():
+            return list(m(4))
+        warm(f)
+        self.assertIn("Call.BoundGeneral", word_names(f.__code__))
+        self.assertEqual(f(), [(c, 4)])
+
+    def test_a_generator_method_with_defaults(self):
+        class C:
+            def m(self, a, b=3):
+                yield a + b
+
+        m = C().m
+
+        def f():
+            return list(m(4))
+        warm(f)
+        self.assertIn("Call.BoundGeneral", word_names(f.__code__))
+        self.assertEqual(f(), [7])
+
+    def test_a_binding_error_raises(self):
+        class C:
+            def m(self, a, b=2, *, c):
+                return a
+
+        m = C().m
+
+        def f():
+            return m(1)
+        for _ in range(100):
+            with self.assertRaises(TypeError):
+                f()
+
+    def test_another_method_misses(self):
         class C:
             def m(self, a, b=2):
-                return (self, a, b)
+                return a + b
+
+            def n(self, a, b=5):
+                return a * b
 
         c = C()
 
+        def f(m):
+            return m(3)
+        warm(f, c.m)
+        self.assertEqual(f(c.m), 5)
+        self.assertEqual(f(c.n), 15)
+        self.assertEqual(f(c.m), 5)
+
+    def test_the_operands_are_released(self):
+        Tracker.deaths.clear()
+
+        class C:
+            def m(self, a, b=None):
+                return a
+
+        m = C().m
+
         def f():
-            return c.m(1)
+            return m(Tracker("arg"))
         warm(f)
-        self.assertEqual(f(), (c, 1, 2))
+        Tracker.deaths.clear()
+        result = f()
+        del result
+        self.assertEqual(Tracker.deaths, ["arg"])
 
 
 class Point:
@@ -575,12 +696,12 @@ class CallGenericTests(unittest.TestCase):
         self.assertIn("Call.BoundExact", word_names(f.__code__))
         self.assertEqual(f(C().m), 4)
 
-    def test_native_stays_generic(self):
+    def test_native_adapts_to_its_arm(self):
         def f(x):
             return len(x)
         force(f, "CALL", "Call.Generic")
         warm(f, "ab")
-        self.assertIn("Call.Generic", word_names(f.__code__))
+        self.assertIn("Call.Len", word_names(f.__code__))
 
     def test_exact_misses_after_redefinition(self):
         def g(a):
@@ -791,7 +912,7 @@ class ObservationTests(unittest.TestCase):
         warm(sample)
         names = word_names(sample.__code__)
         for arm in ("Call.Exact", "Call.BoundExact", "Call.Init",
-                    "Call.Generic", "Return.Empty"):
+                    "Call.Len", "Return.Empty"):
             self.assertIn(arm, names)
         self.assertIn("Return.Generator", word_names(generator.__code__))
         monitor = Monitor(self)

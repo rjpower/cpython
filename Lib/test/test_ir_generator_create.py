@@ -114,7 +114,7 @@ class TestGeneratorCreation(unittest.TestCase):
     def test_type_change_rebinds_generator_call(self):
         caller = make_caller()
         self.assertEqual(warm(caller, 1, 2), [1, 2])
-        self.assertIn("Call.Generic", handlers(caller))
+        self.assertIn("Call.BuiltinClass", handlers(caller))
         global gen
         saved = gen
 

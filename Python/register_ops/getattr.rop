@@ -7,6 +7,8 @@ family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>)
 
 point GetAttr.Failed(current, site, pending) keep() spent(obj) defs();
 point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst);
+// The getter, entered in place, has returned: its value takes the destination
+point GetAttr.Returned(caller, next_head, clear) keep() spent(obj) defs(dst);
 
 // Instance-slot evidence: a recipe for this name on the observed type, read
 // coherently from the site's entry.  Declared ahead of its C body (F2).
@@ -123,7 +125,8 @@ extern helper classify_getattr(v:B, at:Site, f:Fb<Attr>, n:Name)
   cases(instance(r:Recipe<Attr>), shape(r:Recipe<Attr>), module(r:Recipe<Attr>),
         hint(r:Recipe<Attr>), value_slot(r:Recipe<Attr>), pointer_slot(r:Recipe<Attr>),
         class_(r:Recipe<Attr>), nondescriptor_values(r:Recipe<Attr>),
-        nondescriptor_no_dict(r:Recipe<Attr>), getset(r:Recipe<Attr>), none())
+        nondescriptor_no_dict(r:Recipe<Attr>), getset(r:Recipe<Attr>),
+        property(r:Recipe<Attr>), getattribute_overridden(r:Recipe<Attr>), none())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
   c _PyAttr_ClassifyGetAttr as case_index
@@ -163,6 +166,8 @@ macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
       nondescriptor_values -> LNonDescriptorValues();
       nondescriptor_no_dict -> LNonDescriptorNoDict();
       getset -> LGetSet();
+      property -> LProperty();
+      getattribute_overridden -> LGetattribute();
       none -> Other();
     }
   Instance(ri:Recipe<Attr>):
@@ -240,6 +245,20 @@ macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
   LGetSet(rGetSet:Recipe<Attr>):
     let cLGetSet:Candidate<Attr> = candidate(GetAttr.GetSet, rGetSet);
     call install(site, f, cLGetSet) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LProperty(rProperty:Recipe<Attr>):
+    let cLProperty:Candidate<Attr> = candidate(GetAttr.Property, rProperty);
+    call install(site, f, cLProperty) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LGetattribute(rGetattribute:Recipe<Attr>):
+    let cLGetattribute:Candidate<Attr> = candidate(GetAttr.GetattributeOverridden, rGetattribute);
+    call install(site, f, cLGetattribute) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();
@@ -323,10 +342,104 @@ arm GetAttr.GetSet inline entry(getset)
     exit miss();
 }
 
-arm GetAttr.Generic shared
-  effects(runs_python, raises, releases on (dst))
+// The getter of a property or an overridden __getattribute__ runs in a frame
+// of the loading activation, as golden87's LOAD_ATTR_PROPERTY and
+// LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN pushed it.  The recipe holds the type
+// version, the function's version and the function itself.
+extern helper attr_frame_ready(t:Thread, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  c _PyAttr_FrameReady as bool
+  evidence(
+    review: "bytecodes.c _LOAD_ATTR_PROPERTY_FRAME and _LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME: the function's version is the recipe's and the thread has frame space for its frame.",
+    contract: "Reads the function and its code; no memory, no failure.");
+
+extern helper push_property(t:Thread, f:Frame, at:Site, o:Src, r:Recipe<Attr>) -> NewFrame
+  effects(reads, writes, releases)
+  spends(o)
+  c _PyAttr_PushProperty as pointer
+  evidence(
+    review: "bytecodes.c _LOAD_ATTR_PROPERTY_FRAME: the getter's frame, with the owner moved into its first slot.",
+    contract: "Infallible: the guards checked the version and the frame space. A local owner is counted.");
+
+extern helper push_getattribute(t:Thread, f:Frame, at:Site, o:Src, n:Name, r:Recipe<Attr>) -> NewFrame
+  effects(reads, writes, releases)
+  spends(o)
+  c _PyAttr_PushGetattribute as pointer
+  evidence(
+    review: "bytecodes.c _LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME: the frame of __getattribute__, with the owner and the name as its arguments.",
+    contract: "Infallible: the guards checked the version and the frame space. A local owner is counted.");
+
+arm GetAttr.Property split entry(property)
+  effects(runs_python, reads, writes, releases, switches_frame)
+  feedback(read(entry))
+  exits(enter, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard default_eval_frame(thread) else miss;
+    guard attr_frame_ready(thread, r) else miss;
+    guard recursion_budget(thread) else miss;
+    let c:NewFrame = push_property(thread, frame, site, obj, r);
+    exit enter(c) resume GetAttr.Returned;
+  Miss():
+    exit miss();
+}
+
+arm GetAttr.GetattributeOverridden split entry(getattribute_overridden)
+  effects(runs_python, reads, writes, releases, switches_frame)
+  feedback(read(entry))
+  exits(enter, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard default_eval_frame(thread) else miss;
+    guard attr_frame_ready(thread, r) else miss;
+    guard recursion_budget(thread) else miss;
+    let c:NewFrame = push_getattribute(thread, frame, site, obj, name, r);
+    exit enter(c) resume GetAttr.Returned;
+  Miss():
+    exit miss();
+}
+
+// What Generic runs in a frame of this activation: the owner's type has a
+// property with a Python getter or a Python __getattribute__ that
+// the specializer would take (the guards of the two arms above, found by the
+// lookup of the specializer's)
+extern helper attr_frame_claimable(t:Thread, o:B, n:Name) -> Bool
+  effects(reads)
+  c _PyAttr_FrameClaimable as bool
+  evidence(
+    review: "specialize.c: analyze_descriptor_load names a property or an overridden __getattribute__ whose function takes exactly its arguments; PEP 523 is not hooked, the thread has recursion and frame space.",
+    contract: "Reads the owner's type and the function; no memory, no failure. The answer holds until Python runs.");
+
+extern helper push_attr_frame(t:Thread, f:Frame, at:Site, o:Src, n:Name) -> NewFrame
+  effects(reads, writes, releases)
+  spends(o)
+  c _PyAttr_PushFrame as pointer
+  evidence(
+    review: "specialize.c: the function of attr_frame_claimable, entered as the two arms above enter theirs.",
+    contract: "Infallible after attr_frame_claimable with no Python run between. A local owner is counted.");
+
+arm GetAttr.Generic split
+  effects(runs_python, reads, writes, raises, releases on (dst), switches_frame)
   feedback(read(entry), write(entry), write(handler))
-  exits(next, again, raise, redirect)
+  exits(next, again, enter, raise, redirect)
 {
   entry():
     call adapt_before_use_getattr(fb, obj, name) {
@@ -336,6 +449,11 @@ arm GetAttr.Generic shared
   Retry(t:Ticket<Attr>):
     exit again(t);
   Run():
+    branch attr_frame_claimable(thread, use(obj), name) -> Framed(), Lookup();
+  Framed():
+    let c:NewFrame = push_attr_frame(thread, frame, site, obj, name);
+    exit enter(c) resume GetAttr.Returned;
+  Lookup():
     let a:Anchors = anchor_for_call([obj]);
     call getattr_at_origin(name, a) {
       ok -> Result();

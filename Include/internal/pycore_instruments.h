@@ -101,11 +101,14 @@ PyAPI_DATA(PyObject) _PyInstrumentation_DISABLE;
 /* Private observer phase: never a registered monitoring event or tool index. */
 #define _PY_DEBUGGER_ENTRY_EVENT _PY_MONITORING_EVENTS
 
-/* Tables of which tools are active for each monitored event. */
+/* What a source edge record forces at a word while LINE is observed
+ * (_PyCoMonitoringData.source_forced): the branch's observer, which reports
+ * the edge (1); the LINE event at the landing (2); the INSTRUCTION event,
+ * which records an ingress PC that nothing else saves (4). */
 enum {
-    _PyIR_SOURCE_BRANCH_WRAPPER = 1,
-    _PyIR_SOURCE_LINE_WRAPPER = 2,
-    _PyIR_SOURCE_INGRESS_WRAPPER = 4,
+    _PyIR_SOURCE_FORCE_BRANCH = 1,
+    _PyIR_SOURCE_FORCE_LINE = 2,
+    _PyIR_SOURCE_FORCE_INGRESS = 4,
 };
 
 typedef struct _Py_LocalMonitors {
@@ -151,8 +154,7 @@ typedef struct _PyCoMonitoringData {
     uint8_t *line_tools;
     uint8_t *source_line_tools;  /* per source-only edge record */
     uint64_t line_epoch;        /* invalidates pending observed LINE landings */
-    /* Observer-only wrappers: branch twin (1), landing LINE (2), or
-     * INSTRUCTION wrapper recording otherwise unsaved ingress PC (4). */
+    /* What source edges force at each word (_PyIR_SOURCE_FORCE_*) */
     uint8_t *source_forced;
     /* The tools that are to be notified for instruction events for the matching code unit */
     uint8_t *per_instruction_tools;

@@ -329,8 +329,8 @@ static inline int
 instr_is_specialized(_PyInstr *instr)
 {
     _PyInterpreterFrame *frame = current_frame();
-    int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
-                                         _PyFrame_InstrOffset(frame, instr));
+    int generic = _PyCode_InstrHandler(_PyFrame_GetCode(frame),
+                                       _PyFrame_InstrOffset(frame, instr));
     return IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)) != generic;
 }
 
@@ -700,8 +700,8 @@ unspecialize(_PyInstr *instr)
     FAMILY_STAT_INC(instr_family(instr), failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
-    int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
-                                         _PyFrame_InstrOffset(frame, instr));
+    int generic = _PyCode_InstrHandler(_PyFrame_GetCode(frame),
+                                       _PyFrame_InstrOffset(frame, instr));
     if (!set_opcode(instr, generic)) {
         SPECIALIZATION_FAIL(instr_family(instr), SPEC_FAIL_OTHER);
         return;

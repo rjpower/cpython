@@ -206,13 +206,6 @@ _PyIR_InstrFeedback(PyCodeObject *co, const _PyCodeExec *exec,
     return _PyIR_FbEntry(exec->words, (uint32_t)fb);
 }
 
-
-int
-_PyCode_GenericHandler(PyCodeObject *co, int i)
-{
-    return _PyCode_InstrHandler(co, i);
-}
-
 int
 _PyCode_IsTrailing(PyCodeObject *co, int i)
 {

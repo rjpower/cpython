@@ -1990,8 +1990,7 @@ error:
     return NULL;
 }
 
-/* Whether CODE is observed: it runs in the observing evaluator, whose table
- * sends the words of the families with events to their observers
+/* Whether CODE is observed: it runs in the observing evaluator
  * (_PyCode_OBSERVED_MARK) */
 static PyObject *
 code_is_observed(PyObject *self, PyObject *code)
@@ -2373,7 +2372,7 @@ plant_arm_words(PyObject *self, PyObject *args)
     }
     int generic = _PyCode_InstrHandler(code, i);
     if (same_family(_PyIR_FamilyNames[_PyIR_HandlerFamily[generic]], family->name)) {
-        /* The lowered words too: instrumentation restores a word to its
+        /* The lowered words too: deoptimisation restores a word to its
          * canonical handler, which must be the arm to keep its operand words. */
         _PyIRWord *canonical = (_PyIRWord *)_PyCode_IRWords(code);
         _PyJit_Retire(exec);

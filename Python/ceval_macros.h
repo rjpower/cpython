@@ -89,9 +89,9 @@
  * take values and return a value, a status or a {frame, next} pair; none
  * jumps into the evaluator.
  *
- * A handler that runs another on the same word, as INSTRUMENTED_LINE does
- * and a specialisation that deoptimises to its family head, jumps to it with
- * ir_word unchanged, so the other handler finds the same fields.
+ * A handler that runs another on the same word, as a specialisation that
+ * deoptimises to its family head does, jumps to it with ir_word unchanged,
+ * so the other handler finds the same fields.
  *
  * Every handler also has a function form, ir_run_X(tstate, frame,
  * next_instr, ir_word), which returns a _PyIRTransfer (tiers87, C2).  The

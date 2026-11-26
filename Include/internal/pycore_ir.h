@@ -134,12 +134,11 @@ static_assert(IR_NUM_HANDLERS <= IR_H_SWITCH,
  * the family reads them from its word, so specialisation and instrumentation
  * keep them by keeping the flags (_PyIRFormat.word_flags). */
 #define IR_F_NO_SELF    (1 << 13)
-/* The kind of a CALL_KW or CALL_FUNCTION_EX word, which its handler id does
- * not tell: INSTRUMENTED_LINE runs the word's own handler with the id of the
- * line handler in head[0].  IR_F_KW marks CALL_KW, whose last operand is the
- * names.  IR_F_EX marks CALL_FUNCTION_EX, which has no self operand: both
- * bits 14 and 15, which no other word carries together.  On an EX word, bit
- * 13 is IR_F_NO_KW.
+/* The kind of a CALL_KW or CALL_FUNCTION_EX word, for the readers that
+ * decode a call word without its handler.  IR_F_KW marks CALL_KW, whose
+ * last operand is the names.  IR_F_EX marks CALL_FUNCTION_EX, which has no
+ * self operand: both bits 14 and 15, which no other word carries together.
+ * On an EX word, bit 13 is IR_F_NO_KW.
  *
  * IR_F_UNINTERRUPTED, on CALL: the call does not poll for signals and
  * collection when it returns.  The translator sets it on the call that
@@ -714,12 +713,13 @@ PyAPI_DATA(int) _PyIR_MaxSlots;
 
 /* Decoding the words of a code object (its IR), by word index.  These
  * read the code object only, never its executing copy, whose handler ids
- * specialisation and instrumentation rewrite and whose slot-class flags
- * the copy derives, but whose fields are the same. */
+ * specialisation rewrites and whose slot-class flags the copy derives, but
+ * whose fields are the same.  Monitoring rewrites no word of either. */
 
 /* The generic handler of the instruction at index i: the head of its
  * family, the handler of a BINARY_OP operation, or an inline constant form,
- * as the assembler chose it. */
+ * as the assembler chose it.  The executing copy starts with it, and
+ * deoptimisation restores it. */
 static inline int
 _PyCode_InstrHandler(PyCodeObject *co, int i)
 {
@@ -734,11 +734,6 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
 {
     return _PyIR_WordLength(_PyCode_IRWords(co)[i]);
 }
-
-/* The handler that the executing copy of co starts with at index i: the
- * generic handler.
- * Deoptimisation and de-instrumentation restore it. */
-PyAPI_FUNC(int) _PyCode_GenericHandler(PyCodeObject *co, int i);
 
 /* The oparg of word, whose format keeps it in a field or has none. */
 PyAPI_FUNC(int) _PyIR_FieldOparg(_PyIRWord word);
@@ -809,9 +804,8 @@ _PyIR_HandlerHasOperands(int handler)
 }
 
 /* The words of the call whose head is word: the head and its operand words.
- * The head's handler is not consulted, so it is right for a head that an
- * INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION word has replaced in the
- * executing copy (which keeps every other field). */
+ * The head's handler is not consulted, so it is right for any arm of the
+ * call families, which keep every other field. */
 static inline int
 _PyIR_CallWordLength(_PyIRWord word)
 {

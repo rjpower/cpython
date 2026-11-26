@@ -161,9 +161,9 @@ ir_frame_observed(_PyInterpreterFrame *frame)
         } \
     } while (0)
 
-/* The event of an instrumented branch, jump or loop step, after the effect
- * (rule 12).  It is out of the evaluator, where the instrumented handlers
- * only call it.  Its result is the word to run (the callbacks can redirect
+/* The event of an observed branch, jump or loop step, after the effect
+ * (rule 12).  It is out of the evaluator, where the observers only call
+ * it.  Its result is the word to run (the callbacks can redirect
  * it) or no word for an error. */
 Py_NO_INLINE _PyIRTransfer
 _PyEval_ir_event_edge(PyThreadState *tstate, _PyInterpreterFrame *frame,

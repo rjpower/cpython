@@ -399,9 +399,9 @@ get_awaited_coro_address(
         return -1;
     }
     /* Every canonical delegated site passed positive role admission.
-     * The reached marker and the matched word of the executing copy (an
-     * instrumented variant maps to its ordinary handler below) retain that
-     * finite certificate; the words' contents are never inferred from homes. */
+     * The reached marker and the matched word of the executing copy, which
+     * monitoring never rewrites, retain that finite certificate; the words'
+     * contents are never inferred from homes. */
     uintptr_t word_addr = pc - sizeof(_PyIRWord);
     if (word_addr >= Py_PTR_LIMIT) {
         PyErr_SetString(PyExc_RuntimeError, "Invalid awaited instruction address");

@@ -648,9 +648,8 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
         return (resolved_status){frame, frame->instr_ptr};
     }
     /* The length is that of the word as compiled: a stub that ran Python may
-     * have enabled monitoring, which replaces the head's handler by an
-     * INSTRUMENTED_ one that keeps its other fields, and a span word's length
-     * depends on its format */
+     * have specialised the word elsewhere, which keeps its other fields, and
+     * a span word's length depends on its format */
     _PyIRWord as_compiled = (*site & ~(_PyIRWord)COMPILED_HANDLER_BITS)
                             | (compiled & COMPILED_HANDLER_BITS);
     _PyIRWord *next = (status & _PyIR_AGAIN) ? site

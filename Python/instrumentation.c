@@ -643,7 +643,7 @@ sanity_check_instrumentation(PyCodeObject *code)
             CHECK(data->line_tools);
             CHECK(line_starts(data->lines, i) ||
                   (data->source_forced &&
-                   (data->source_forced[i] & _PyIR_SOURCE_LINE_WRAPPER)));
+                   (data->source_forced[i] & _PyIR_SOURCE_FORCE_LINE)));
             CHECK(i >= _PyCode_FirstTraceable(code));
             CHECK(_PyIR_HandlerFamily[base] != IR_FAMILY_Resume);
         }
@@ -702,7 +702,7 @@ instrument_line(PyCodeObject *code, int i)
     /* Entry instrumentation must refresh the code before any observer. */
     assert(_PyIR_HandlerFamily[base_handler(code, i)] != IR_FAMILY_Resume);
     CHECK(get_line_delta(monitoring->lines, i) > NO_LINE ||
-          (monitoring->source_forced && (monitoring->source_forced[i] & _PyIR_SOURCE_LINE_WRAPPER)));
+          (monitoring->source_forced && (monitoring->source_forced[i] & _PyIR_SOURCE_FORCE_LINE)));
     set_observed(code, i, _PyIR_OBSERVE_LINE, true);
 }
 
@@ -729,14 +729,14 @@ location_has_tools(PyCodeObject *code, int i)
 
 /* Whether word i runs its family's observer in the observing evaluator: a
  * tool listens there for an event of its family, or a LINE source edge
- * leaves the branch (_PyIR_SOURCE_BRANCH_WRAPPER) */
+ * leaves the branch (_PyIR_SOURCE_FORCE_BRANCH) */
 static void
 refresh_events_bit(PyCodeObject *code, int i)
 {
     _PyCoMonitoringData *m = code->_co_monitoring;
     bool events = word_has_events(code, i) &&
         (location_observed(m, i) ||
-         (m->source_forced && (m->source_forced[i] & _PyIR_SOURCE_BRANCH_WRAPPER)));
+         (m->source_forced && (m->source_forced[i] & _PyIR_SOURCE_FORCE_BRANCH)));
     set_observed(code, i, _PyIR_OBSERVE_EVENTS, events);
 }
 
@@ -832,7 +832,7 @@ remove_line_tools(PyCodeObject * code, int offset, int tools)
     assert(monitoring && monitoring->line_tools);
     monitoring->line_tools[offset] &= ~tools;
     if (monitoring->line_tools[offset] == 0 &&
-        !(monitoring->source_forced && (monitoring->source_forced[offset] & _PyIR_SOURCE_LINE_WRAPPER)))
+        !(monitoring->source_forced && (monitoring->source_forced[offset] & _PyIR_SOURCE_FORCE_LINE)))
     {
         de_instrument_line(code, offset);
     }
@@ -894,7 +894,7 @@ remove_per_instruction_tools(PyCodeObject * code, int offset, int tools)
     assert(monitoring && monitoring->per_instruction_tools);
     monitoring->per_instruction_tools[offset] &= ~tools;
     if (monitoring->per_instruction_tools[offset] == 0 &&
-        !(monitoring->source_forced && (monitoring->source_forced[offset] & _PyIR_SOURCE_INGRESS_WRAPPER)))
+        !(monitoring->source_forced && (monitoring->source_forced[offset] & _PyIR_SOURCE_FORCE_INGRESS)))
     {
         de_instrument_per_instruction(code, offset);
     }
@@ -1269,7 +1269,7 @@ typedef struct {
 
 /* Whether the LINE events of the source edge from word `from` to word `to`
  * are observed: a source edge leaves the branch
- * (_PyIR_SOURCE_BRANCH_WRAPPER), or a tool listens to the LINE event of the
+ * (_PyIR_SOURCE_FORCE_BRANCH), or a tool listens to the LINE event of the
  * landing.  Otherwise a branch's observer computes no line. */
 static bool
 source_edge_observed(PyCodeObject *code, int from, int to)
@@ -1278,7 +1278,7 @@ source_edge_observed(PyCodeObject *code, int from, int to)
     if (!m->active_monitors.tools[PY_MONITORING_EVENT_LINE] || m->lines == NULL) {
         return false;
     }
-    return (m->source_forced && (m->source_forced[from] & _PyIR_SOURCE_BRANCH_WRAPPER)) ||
+    return (m->source_forced && (m->source_forced[from] & _PyIR_SOURCE_FORCE_BRANCH)) ||
            (m->line_tools && to >= 0 && to < (int)_PyCode_IRSize(code) &&
             m->line_tools[to] && is_observed_as(code, to, _PyIR_OBSERVE_LINE));
 }
@@ -1391,8 +1391,7 @@ error:
 }
 
 /* Ordinary dispatch neither loads the source map nor updates a source cursor.
- * Only a completed provider grants SOURCE_POST authority. Legacy inline hooks
- * still deliver the same source events while masking unfinished owner state. */
+ * Only a completed provider grants SOURCE_POST authority. */
 static int
 source_edge_events(PyThreadState *tstate, _PyInterpreterFrame *frame,
                    int from, int to, int edge, _PyInstr *physical_next,
@@ -1740,12 +1739,10 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     bool branch = (prev_format->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
                   !(prev_format->flags & _PyIR_NAMES_TARGET);
     bool source_branch_wrapper = branch && monitoring->source_forced &&
-                                 (monitoring->source_forced[prev_index] & _PyIR_SOURCE_BRANCH_WRAPPER);
+                                 (monitoring->source_forced[prev_index] & _PyIR_SOURCE_FORCE_BRANCH);
     if (!source_branch_wrapper && !source_advanced) {
-        /* Handlers with no instrumented opcode, and noninterrupting jumps, have no
-         * instrumentation twin.
-         * Their actual landing identifies the observed outcome; do not
-         * install opcode zero beneath a transparent LINE wrapper. */
+        /* Handlers with no events, and noninterrupting jumps, have no
+         * observer: their actual landing identifies the observed outcome. */
         int edge = branch &&
                    ((prev_format->flags & _PyIR_JUMP_ALWAYS) ||
                     i == jump_dest(code, prev_index))
@@ -1772,8 +1769,8 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
         goto done;
     }
     if (prev_line == line) {
-        /* A Resume is needed for the operation of instrumentation, so it
-         * must never be hidden by a LINE wrapper. */
+        /* The word after a Resume reports its line even on the Resume's
+         * line, as upstream's, where RESUME never carries the LINE event */
         if (_PyIR_HandlerFamily[base_handler(code, prev_index)] != IR_FAMILY_Resume) {
             goto done;
         }
@@ -2223,7 +2220,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     if (exec == NULL) {
         return -1;
     }
-    /* Source edges borrow branch wrappers only while LINE observation is
+    /* Source edges force branch observers only while LINE observation is
      * enabled. Remove that private forcing before updating ordinary tools. */
     _PyCoMonitoringData *old = code->_co_monitoring;
     uintptr_t code_version = code->_co_instrumentation_version & ~_PyCode_OBSERVED_MARK;
@@ -2257,7 +2254,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     }
     if (old && old->source_forced) {
         for (int i = 0; i < code_len; i++) {
-            if ((old->source_forced[i] & _PyIR_SOURCE_INGRESS_WRAPPER) &&
+            if ((old->source_forced[i] & _PyIR_SOURCE_FORCE_INGRESS) &&
                 (!old->per_instruction_tools || !old->per_instruction_tools[i]))
             {
                 de_instrument_per_instruction(code, i);
@@ -2293,7 +2290,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     }
     /* Insert instrumentation */
     for (int i = _PyCode_FirstTraceable(code), length; i < code_len; i += length) {
-        /* Read before the body: a wrapper that it installs has no operand words */
         length = instr_length(code, i);
         int base = base_handler(code, i);
         if (has_events(base)) {
@@ -2348,7 +2344,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     }
     if (removed_per_instruction_tools) {
         for (int i = _PyCode_FirstTraceable(code), length; i < code_len; i += length) {
-            /* Read before the body: a wrapper that it installs has no operand words */
             length = _PyCode_InstrLength(code, i);
             if (_PyIR_HandlerFamily[base_handler(code, i)] == IR_FAMILY_Resume) {
                 continue;
@@ -2375,7 +2370,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     }
     if (new_per_instruction_tools) {
         for (int i = _PyCode_FirstTraceable(code), length; i < code_len; i += length) {
-            /* Read before the body: a wrapper that it installs has no operand words */
             length = _PyCode_InstrLength(code, i);
             if (_PyIR_HandlerFamily[base_handler(code, i)] == IR_FAMILY_Resume) {
                 continue;
@@ -2410,18 +2404,18 @@ done:;
                     !(fmt->flags & _PyIR_NAMES_TARGET) &&
                     word_has_events(code, from))
                 {
-                    monitoring->source_forced[from] |= _PyIR_SOURCE_BRANCH_WRAPPER;
+                    monitoring->source_forced[from] |= _PyIR_SOURCE_FORCE_BRANCH;
                 }
                 else if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
                          !(fmt->flags & _PyIR_NAMES_TARGET) &&
                          !(_PyIR_HandlerFlags[_PyCode_InstrHandler(code, from)] & _PyIR_H_SAVES_IP))
                 {
-                    monitoring->source_forced[from] |= _PyIR_SOURCE_INGRESS_WRAPPER;
+                    monitoring->source_forced[from] |= _PyIR_SOURCE_FORCE_INGRESS;
                     instrument_per_instruction(code, from);
                 }
             }
             int to = event.to;
-            monitoring->source_forced[to] |= _PyIR_SOURCE_LINE_WRAPPER;
+            monitoring->source_forced[to] |= _PyIR_SOURCE_FORCE_LINE;
             add_line_tools(code, to, line_tools);
         }
     }

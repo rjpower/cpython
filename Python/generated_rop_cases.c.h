@@ -1914,7 +1914,7 @@
             _PyFrame_WriteHome(frame, home_pair_receiver, ir);
             _PyValue_CheckHome(*home_pair_receiver);
             _PyFrame_WriteHome(frame, home_pair_cursor, z);
-            _PyValue_CheckHome(*home_pair_cursor);
+            _PyValue_CheckTemp(*home_pair_cursor);
             _PyRop_CloseAnchors(&a);
             PyValue_XCLOSE(own_source);
             PyValue_XCLOSE(old_pair_receiver);
@@ -1988,7 +1988,7 @@
             _PyFrame_WriteHome(frame, home_item, iv);
             _PyValue_CheckHome(*home_item);
             _PyFrame_WriteHome(frame, home_pair_cursor, nc);
-            _PyValue_CheckHome(*home_pair_cursor);
+            _PyValue_CheckTemp(*home_pair_cursor);
             _PyRop_CloseAnchors(&a);
             PyValue_XCLOSE(old_item);
             PyValue_XCLOSE(old_pair_cursor);
@@ -2599,7 +2599,7 @@
             old_send_cursor = *home_send_cursor;
             old_send_value = *home_send_value;
             _PyFrame_WriteHome(frame, home_send_cursor, nc);
-            _PyValue_CheckHome(*home_send_cursor);
+            _PyValue_CheckTemp(*home_send_cursor);
             _PyFrame_WriteHome(frame, home_send_value, y);
             _PyValue_CheckHome(*home_send_value);
             _PyRop_CloseAnchors(&a);
@@ -8449,7 +8449,7 @@
             _PyFrame_WriteHome(frame, home_pair_receiver, moved);
             _PyValue_CheckHome(*home_pair_receiver);
             _PyFrame_WriteHome(frame, home_pair_cursor, z);
-            _PyValue_CheckHome(*home_pair_cursor);
+            _PyValue_CheckTemp(*home_pair_cursor);
             PyValue_XCLOSE(old_pair_receiver);
             PyValue_XCLOSE(old_pair_cursor);
             DISPATCH();
@@ -8551,7 +8551,7 @@
             _PyFrame_WriteHome(frame, home_item, iv);
             _PyValue_CheckHome(*home_item);
             _PyFrame_WriteHome(frame, home_pair_cursor, nc);
-            _PyValue_CheckHome(*home_pair_cursor);
+            _PyValue_CheckTemp(*home_pair_cursor);
             PyValue_XCLOSE(old_item);
             PyValue_XCLOSE(old_pair_cursor);
             DISPATCH();
@@ -8607,7 +8607,7 @@
             _PyFrame_WriteHome(frame, home_item, iv);
             _PyValue_CheckHome(*home_item);
             _PyFrame_WriteHome(frame, home_pair_cursor, nc);
-            _PyValue_CheckHome(*home_pair_cursor);
+            _PyValue_CheckTemp(*home_pair_cursor);
             PyValue_XCLOSE(old_item);
             PyValue_XCLOSE(old_pair_cursor);
             DISPATCH();
@@ -8719,7 +8719,7 @@
             _PyFrame_WriteHome(frame, home_item, iv);
             _PyValue_CheckHome(*home_item);
             _PyFrame_WriteHome(frame, home_pair_cursor, nc);
-            _PyValue_CheckHome(*home_pair_cursor);
+            _PyValue_CheckTemp(*home_pair_cursor);
             _PyRop_CloseAnchors(&a);
             PyValue_XCLOSE(old_item);
             PyValue_XCLOSE(old_pair_cursor);
@@ -8845,7 +8845,7 @@
             _PyFrame_WriteHome(frame, home_item, iv);
             _PyValue_CheckHome(*home_item);
             _PyFrame_WriteHome(frame, home_pair_cursor, nc);
-            _PyValue_CheckHome(*home_pair_cursor);
+            _PyValue_CheckTemp(*home_pair_cursor);
             _PyRop_CloseAnchors(&a);
             PyValue_XCLOSE(old_item);
             PyValue_XCLOSE(old_pair_cursor);
@@ -10398,7 +10398,7 @@
             old_send_cursor = *home_send_cursor;
             old_send_value = *home_send_value;
             _PyFrame_WriteHome(frame, home_send_cursor, nc);
-            _PyValue_CheckHome(*home_send_cursor);
+            _PyValue_CheckTemp(*home_send_cursor);
             _PyFrame_WriteHome(frame, home_send_value, y);
             _PyValue_CheckHome(*home_send_value);
             _PyRop_CloseAnchors(&a);
@@ -10472,7 +10472,7 @@
             old_send_cursor = *home_send_cursor;
             old_send_value = *home_send_value;
             _PyFrame_WriteHome(frame, home_send_cursor, nc);
-            _PyValue_CheckHome(*home_send_cursor);
+            _PyValue_CheckTemp(*home_send_cursor);
             _PyFrame_WriteHome(frame, home_send_value, y);
             _PyValue_CheckHome(*home_send_value);
             _PyRop_CloseAnchors(&a);
@@ -10561,7 +10561,7 @@
             old_send_cursor = *home_send_cursor;
             old_send_value = *home_send_value;
             _PyFrame_WriteHome(frame, home_send_cursor, nc);
-            _PyValue_CheckHome(*home_send_cursor);
+            _PyValue_CheckTemp(*home_send_cursor);
             _PyFrame_WriteHome(frame, home_send_value, y);
             _PyValue_CheckHome(*home_send_value);
             _PyRop_CloseAnchors(&a);

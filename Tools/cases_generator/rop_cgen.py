@@ -16,9 +16,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
-                         CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
+                         CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, INDEX_PARTS, Scalar, Schema, SchemaCtor,
                          PcRole, Slot, Wrap)
-from rop_check import GraphInfo, Program, expand_debts, expand_group, group_parts, is_args
+from rop_check import GraphInfo, Program, expand_debts, expand_group, group_handle, group_parts, is_args
 from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
@@ -523,6 +523,10 @@ class ArmLowerer:
         self.parts: dict[str, tuple[str, int]] = {
             f"{p.name}.{q}": (p.name, i)
             for p in self.family.params for i, q in enumerate(group_parts(p.type))}
+        # The projections whose declared type admits a tagged index
+        self.index_parts: set[str] = {
+            f"{p.name}.{q}" for p in self.family.params for q in group_parts(p.type)
+            if (group_handle(p.type), q) in INDEX_PARTS}
         self.points = points
         self.generic = generic
         self.prefix = "rop_" + arm.name.replace(".", "_")
@@ -1020,7 +1024,8 @@ class ArmLowerer:
                 self.emit(f"_PyFrame_WriteHome(frame, {home}, PyValue_NULL);")
                 continue
             self.emit(f"_PyFrame_WriteHome(frame, {home}, {self.expr(b.value)});")
-            self.emit(f"_PyValue_CheckHome(*{home});")
+            check = "Temp" if b.target in self.index_parts else "Home"
+            self.emit(f"_PyValue_Check{check}(*{home});")
         scalar = [b for b in s.bindings if not b.vector]
         kept = self.home(scalar[0].target) if len(s.bindings) == 1 and scalar else "NULL"
         for d in s.debts:

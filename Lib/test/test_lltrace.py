@@ -55,7 +55,7 @@ class TestLLTrace(unittest.TestCase):
         """)
         self.assertIn("IterOpen.", stdout)
         self.assertIn("ForIter.", stdout)
-        self.assertIn("Intrinsic.", stdout)
+        self.assertIn("Unary.", stdout)
         # Register IR discards the result into the discard slot, the last
         # local of the frame (before any free variables, which trace_me has
         # none of).  The first trace shows the frame's locals.
@@ -65,9 +65,10 @@ class TestLLTrace(unittest.TestCase):
         discard = match.group(1).count(",")
         self.assertRegex(
             stdout,
-            rf"(?m)^    ir Intrinsic\.\w+ {discard} [0-9]+ [0-9]+ [0-9]+$")
+            rf"(?m)^    ir Unary\.\w+ {discard} [0-9]+ [0-9]+ [0-9]+$")
+        # trace_me's own unary is traced; dont_trace_2's is not, which the
+        # frame check below settles
         self.assertNotIn("Binary.", stdout)
-        self.assertNotIn("Unary.", stdout)
 
         self.assertIn("'trace_me' in module '__main__'", stdout)
         self.assertNotIn("dont_trace_1", stdout)

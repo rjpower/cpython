@@ -525,23 +525,13 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
         code = textwrap.dedent(f"""\
             from test.support import ir_dis as dis
             import importlib._bootstrap
-            import opcode
             import test.test_dis
             import test.support
 
+            # Specialization is an arm of a register family other than
+            # the family's generic arm; the stack bytecode never specializes.
             def is_specialized(f):
-                for instruction in dis.get_instructions(f, adaptive=True):
-                    opname = instruction.opname
-                    if (
-                        opname in opcode._specialized_opmap
-                        # Exclude superinstructions:
-                        and "__" not in opname
-                        # LOAD_CONST_IMMORTAL is "specialized", but is
-                        # inserted during quickening.
-                        and opname != "LOAD_CONST_IMMORTAL"
-                    ):
-                        return True
-                return False
+                return bool(dis.specialized_arms(f.__code__))
 
             func = importlib._bootstrap._handle_fromlist
 

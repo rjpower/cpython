@@ -79,14 +79,16 @@
 #define HOT_LABEL(name) LABEL_##name: __attribute__((hot));
 
 /* The evaluator's binding of the VM routines (Python/ceval_routines.h): a
- * routine is a label, its operands are locals of ir_evaluate() of the same
- * names, and its exits share the dispatch blocks gen_dispatch and
- * gen_stepped, so that the evaluator has one dispatch for them.  The plain
+ * routine is a label, its operands (IR_ROUTINE_OPERAND) are locals of
+ * ir_evaluate() of the same names, and its exits share the dispatch blocks
+ * gen_dispatch and gen_stepped, so that the evaluator has one dispatch for
+ * them.  The plain
  * generator transfers are hot labels (HOT_LABEL); the error routine is not,
  * since the profile estimate that a hot label gives every error path that
  * reaches it would optimise the handlers' fast paths for size. */
-#define IR_ROUTINE(NAME, ...) LABEL_##NAME:
-#define IR_HOT_ROUTINE(NAME, ...) HOT_LABEL(NAME)
+#define IR_ROUTINE(NAME) LABEL_##NAME:
+#define IR_HOT_ROUTINE(NAME) HOT_LABEL(NAME)
+#define IR_ROUTINE_OPERAND(NAME) (NAME)
 #define GEN_DISPATCH() goto LABEL_gen_dispatch
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
@@ -97,8 +99,8 @@
 #define GEN_RAISED() \
     do { \
         _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
-        process_error_origin = ir_exit->exit_next; \
-        process_error_entry = ir_exit->exit_entry; \
+        exit_next = ir_exit->exit_next; \
+        exit_entry = ir_exit->exit_entry; \
         goto LABEL_process_error; \
     } while (0)
 
@@ -240,8 +242,8 @@
  * or leaves the evaluator. */
 #define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
     do { \
-        process_error_origin = (origin); \
-        process_error_entry = _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
+        exit_next = (origin); \
+        exit_entry = _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
         goto LABEL_process_error; \
     } while (0)
 /* The activation ends with the value V (INTERPRETER_EXIT, or an error that no

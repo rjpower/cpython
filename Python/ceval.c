@@ -3213,8 +3213,8 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     /* The operands of the shared bodies that the labels below read: the
      * VM routines' (Python/ceval_routines.h), which the transfer macros set.
      * None is live across a dispatch. */
-    _PyInstr *process_error_origin;
-    uint32_t process_error_entry;
+    _PyInstr *exit_next;
+    uint32_t exit_entry;
     PyValue gen_value;
     _PyInterpreterFrame *gen_dying;
     int gen_empty;
@@ -3238,8 +3238,8 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     {
         _PyEvalActivation *activation = IR_ACTIVATION();
         assert(activation->exit_kind == _PyIR_EXIT_RAISE);
-        process_error_origin = activation->exit_next;
-        process_error_entry = activation->exit_entry;
+        exit_next = activation->exit_next;
+        exit_entry = activation->exit_entry;
         goto LABEL_process_error;
     }
 

@@ -14,7 +14,7 @@
 #  define IR_ENTRY_BEGIN(name) \
     static Py_NO_INLINE _PyIRTransfer \
     ir_##name(PyThreadState *tstate, _PyInterpreterFrame *frame, \
-              _PyInstr *next_instr) {
+              _PyInstr *next_instr, _PyIRWord ir_word) {
 #  define IR_END }
 #else
 #  define IR_HANDLER_BEGIN(name) TARGET_##name: {

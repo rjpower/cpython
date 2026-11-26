@@ -381,7 +381,11 @@ is_instrumented(int opcode)
 {
     assert(opcode != 0);
     assert(opcode != RESERVED);
-    return opcode >= MIN_INSTRUMENTED_OPCODE;
+    // The two keeping jumps have no stack opcode: their instrumented forms
+    // are register handler ids below MIN_INSTRUMENTED_OPCODE.
+    return opcode >= MIN_INSTRUMENTED_OPCODE ||
+           opcode == INSTRUMENTED_JUMP_IF_FALSE_OR_POP ||
+           opcode == INSTRUMENTED_JUMP_IF_TRUE_OR_POP;
 }
 
 #ifndef NDEBUG

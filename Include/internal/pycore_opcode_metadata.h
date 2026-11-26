@@ -695,7 +695,7 @@ enum InstructionFormat {
      (_PyOpcode_opcode_metadata[(OP)].valid_entry))
 
 #define IS_STACK_OPCODE(OP) \
-    (IS_VALID_OPCODE(OP) && (OP) != JUMP_IF_FALSE_OR_POP && (OP) != JUMP_IF_TRUE_OR_POP && (OP) != INSTRUMENTED_JUMP_IF_FALSE_OR_POP && (OP) != INSTRUMENTED_JUMP_IF_TRUE_OR_POP)
+    (IS_VALID_OPCODE(OP) && (OP) != MATERIALIZE_KWARGS && (OP) != JUMP_IF_FALSE_OR_POP && (OP) != JUMP_IF_TRUE_OR_POP && (OP) != INSTRUMENTED_JUMP_IF_FALSE_OR_POP && (OP) != INSTRUMENTED_JUMP_IF_TRUE_OR_POP)
 
 #define HAS_ARG_FLAG (1)
 #define HAS_CONST_FLAG (2)
@@ -803,7 +803,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [INSTRUMENTED_INSTRUCTION] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [INSTRUMENTED_JUMP_BACKWARD] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
     [INSTRUMENTED_JUMP_FORWARD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
-    [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IX, HAS_ARG_FLAG },
     [INSTRUMENTED_JUMP_IF_TRUE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [INSTRUMENTED_LINE] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INSTRUMENTED_LOAD_SUPER_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG },
@@ -850,7 +850,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [MATCH_KEYS] = { true, INSTR_FMT_IX, 0 },
     [MATCH_MAPPING] = { true, INSTR_FMT_IX, 0 },
     [MATCH_SEQUENCE] = { true, INSTR_FMT_IX, 0 },
-    [MATERIALIZE_KWARGS] = { true, INSTR_FMT_IX, 0 },
+    [MATERIALIZE_KWARGS] = { true, INSTR_FMT_IB, 0 },
     [NOP] = { true, INSTR_FMT_IX, HAS_PURE_FLAG },
     [NOT_TAKEN] = { true, INSTR_FMT_IX, 0 },
     [POP_EXCEPT] = { true, INSTR_FMT_IX, 0 },
@@ -892,7 +892,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [UNARY_NOT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [UNPACK_EX] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [UNPACK_SEQUENCE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
-    [WITH_EXCEPT_START] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [WITH_EXCEPT_START] = { true, INSTR_FMT_IB, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [ANNOTATIONS_PLACEHOLDER] = { true, -1, HAS_PURE_FLAG },
     [JUMP] = { true, -1, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EVAL_BREAK_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
@@ -1159,8 +1159,6 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
-    [119] = 119,
-    [120] = 120,
     [121] = 121,
     [122] = 122,
     [123] = 123,
@@ -1168,6 +1166,9 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [125] = 125,
     [126] = 126,
     [127] = 127,
+    [129] = 129,
+    [130] = 130,
+    [131] = 131,
     [132] = 132,
     [133] = 133,
     [134] = 134,
@@ -1238,9 +1239,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [199] = 199,
     [200] = 200,
     [201] = 201,
-    [202] = 202,
-    [203] = 203,
-    [204] = 204,
     [205] = 205,
     [206] = 206,
     [207] = 207,
@@ -1269,7 +1267,9 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [230] = 230,
     [231] = 231,
     [232] = 232,
-    [233] = 233,
+    [239] = 239,
+    [254] = 254,
+    [255] = 255,
     [BINARY_OP] = BINARY_OP,
     [BINARY_SLICE] = BINARY_SLICE,
     [BUILD_INTERPOLATION] = BUILD_INTERPOLATION,
@@ -1420,8 +1420,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
-    case 119: \
-    case 120: \
     case 121: \
     case 122: \
     case 123: \
@@ -1429,6 +1427,9 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 125: \
     case 126: \
     case 127: \
+    case 129: \
+    case 130: \
+    case 131: \
     case 132: \
     case 133: \
     case 134: \
@@ -1499,9 +1500,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 199: \
     case 200: \
     case 201: \
-    case 202: \
-    case 203: \
-    case 204: \
     case 205: \
     case 206: \
     case 207: \
@@ -1530,7 +1528,9 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 230: \
     case 231: \
     case 232: \
-    case 233: \
+    case 239: \
+    case 254: \
+    case 255: \
         ;
 struct pseudo_targets {
     uint8_t as_sequence;

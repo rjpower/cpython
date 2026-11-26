@@ -237,6 +237,7 @@ annotations = {
     "window",
     "no_fold",
     "ir_only",
+    "translator_only",
     "outlined",
     "eval_break",
 }

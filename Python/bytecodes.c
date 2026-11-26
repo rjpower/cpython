@@ -155,7 +155,7 @@ dummy_func(
 
         /* A stack op only: the pseudo op that PrepareKwargs puts before a read of
          * a lazy **kwargs local is the MaterializeKwargs family. */
-        tier1 inst(MATERIALIZE_KWARGS, (--))
+        translator_only tier1 inst(MATERIALIZE_KWARGS, (--))
             exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
@@ -1526,7 +1526,7 @@ dummy_func(
         /* The keeping jumps of "x and y" and "x or y" are BranchTruth words
          * (the keep modes); these names remain for the family's ops and the
          * event tables of Python/instrumentation.c, with no handler. */
-        inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+        translator_only inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
             effects(runs_python) exits(next, branch, raise)
         {
             PyValue held = TAKE(cond);
@@ -1545,7 +1545,7 @@ dummy_func(
             }
         }
 
-        inst(JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+        translator_only inst(JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
             effects(runs_python) exits(next, branch, raise)
         {
             PyValue held = TAKE(cond);
@@ -1564,7 +1564,7 @@ dummy_func(
             }
         }
 
-        tier1 inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
+        translator_only tier1 inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
             exits(abort)
         {
             (void)oparg;
@@ -1572,7 +1572,7 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
+        translator_only tier1 inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
             exits(abort)
         {
             (void)oparg;

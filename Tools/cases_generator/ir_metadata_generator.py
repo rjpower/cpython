@@ -26,7 +26,7 @@ import argparse
 from collections.abc import Sequence
 
 import ir_arms
-from analyzer import Analysis, Uop, analyze_files
+from analyzer import Analysis, Uop, analyze_files, stack_ops_of
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
@@ -77,8 +77,8 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
                   ) -> tuple[dict[str, int], dict[str, str], dict[str, list[str]]]:
     """The named IR domain, its canonical bases and generated properties."""
     # A pseudo-instruction has no handler: its number may name one.
-    ids = {name: number for name, number in analysis.opmap.items()
-           if name not in analysis.pseudos} | handler_ids(analysis)
+    ids = {name: inst.opcode
+           for name, inst in stack_ops_of(analysis).items()} | handler_ids(analysis)
     dispatch = handler_ids(analysis)
     insts = handler_instructions(analysis)
     boundaries = generator_boundaries(analysis)
@@ -86,7 +86,7 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
     flags = {}
     for name in ids:
         ordinary = boundaries[name].base if name in boundaries else name
-        inst = insts.get(name) or analysis.instructions.get(ordinary)
+        inst = insts.get(name) or stack_ops_of(analysis).get(ordinary)
         base = inst.family.name if inst is not None and inst.family else ordinary
         if ordinary.startswith("INSTRUMENTED_") and base == ordinary:
             original = ordinary[len("INSTRUMENTED_"):]
@@ -404,9 +404,10 @@ def generate_ir_metadata(
         rows = dict(contracts)
         # The STACK_ONLY opcodes have a format, which the CFG reads
         stack_only = stack_only_names(analysis)
+        stack_ops = stack_ops_of(analysis)
         for name in stack_only:
-            if name in analysis.instructions:
-                indices[name] = analysis.instructions[name].opcode
+            if name in stack_ops:
+                indices[name] = stack_ops[name].opcode
         for name in sorted(indices, key=lambda name: indices[name]):
             twin = rows[name].twin
             # Semantic completion can report events without a separate

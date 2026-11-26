@@ -35,6 +35,7 @@ skip_if_different_mount_drives()
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import analyzer
+    import stack_opcode_pins
     from analyzer import StackItem
     from cwriter import CWriter
     import ir_contract
@@ -3763,9 +3764,9 @@ class TestIRCases(unittest.TestCase):
         }
     """
         analysis = self.analyze(input)
-        self.assertEqual(analysis.pseudos["JUMP"].opcode, 256)
-        self.assertNotIn(256, analysis.free_ids)
-        self.assertNotIn(analysis.opmap["GO"], analysis.free_ids)
+        self.assertEqual(analysis.pseudos["JUMP"].opcode, 257)
+        self.assertNotIn(257, analysis.free_ids)
+        self.assertNotIn(analysis.instructions["GO"].opcode, analysis.free_ids)
         self.assertEqual(ir_generator.handler_ids(analysis)["IR_BACON"],
                          analysis.free_ids[0])
 
@@ -4014,6 +4015,56 @@ class TestCallMarkers(unittest.TestCase):
         self.assertEqual([site.split(": ")[-1] for site in sites["OP"]],
                          ["&receiver", "&attr", "&retire_failed",
                           "&ir_own_B", "&attr"])
+
+
+class TestPinnedOpcodes(unittest.TestCase):
+    """Stack opcode numbers are declared in stack_opcode_pins, not
+    inferred from the bodies of bytecodes.c"""
+
+    PINS = {**stack_opcode_pins.PINNED_OPCODES,
+            **stack_opcode_pins.PINNED_PSEUDOS}
+
+    def test_opmaps_are_the_pinned_table(self):
+        import opcode
+        for name, number in {**opcode.opmap, **opcode._specialized_opmap}.items():
+            with self.subTest(name=name):
+                self.assertEqual(self.PINS.get(name), number)
+
+    def test_bytecodes_c_is_pinned(self):
+        source = Path(test_tools.toolsdir) / ".." / "Python" / "bytecodes.c"
+        analysis = analyzer.analyze_files([str(source)])
+        analyzer.check_pinned(analysis)
+        for name, number in analysis.opmap.items():
+            with self.subTest(name=name):
+                self.assertEqual(self.PINS[name], number)
+        self.assertEqual(analysis.have_arg, stack_opcode_pins.HAVE_ARGUMENT)
+        self.assertEqual(analysis.min_instrumented,
+                         stack_opcode_pins.MIN_INSTRUMENTED_OPCODE)
+        # Translator-only ops and handler ids are not stack opcodes
+        for name in analysis.translator_only:
+            self.assertNotIn(name, analysis.opmap)
+            self.assertNotIn(analysis.translator_only[name].opcode,
+                             analysis.opmap.values())
+
+    def test_unpinned_instruction_is_an_error(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        filename = str(Path(directory.name) / "source.c")
+        with open(filename, "w") as f:
+            f.write(f"{parser.BEGIN_MARKER}\n")
+            f.write("inst(NOT_UPSTREAMS, ( -- )) { }\n")
+            f.write(f"{parser.END_MARKER}\n")
+        analysis = analyzer.analyze_files([filename])
+        self.assertNotIn("NOT_UPSTREAMS", analysis.opmap)
+        with self.assertRaisesRegex(SyntaxError, "NOT_UPSTREAMS"):
+            analyzer.check_pinned(analysis)
+
+    def test_handler_ids_avoid_defined_opcodes(self):
+        # A hole holds no stack opcode, so a handler id may take its number
+        analysis = analyzer.analyze_files(
+            [str(Path(test_tools.toolsdir) / ".." / "Python" / "bytecodes.c")])
+        self.assertTrue(
+            set(analysis.free_ids).isdisjoint(analysis.opmap.values()))
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ import argparse
 from dataclasses import dataclass, replace
 
 import ir_generator
-import ir_leaf
+import rop_primitives
 import ir_contract
 import ir_arms
 from analyzer import analyze_files
@@ -34,7 +34,7 @@ DEFAULT_TEMPLATES = ROOT / "Python/jit_templates.c.h"
 # The lowerings: for each primitive that Python/jit_lower.c lowers, the
 # temporaries it needs and whether it may call (its slow path, or a count in
 # a Py_REF_DEBUG build).  The operands follow from the primitive's signature
-# in ir_leaf.PRIMITIVES; pycore_jit_lower.h gives their order.
+# in rop_primitives.PRIMITIVES; pycore_jit_lower.h gives their order.
 
 @dataclass(frozen=True)
 class Lowering:
@@ -129,16 +129,16 @@ LOWERINGS = {
 }
 
 
-def is_predicate(prim: ir_leaf.Primitive) -> bool:
+def is_predicate(prim: rop_primitives.Primitive) -> bool:
     "Its first result is a bool, which a lowering returns as a condition"
     return bool(prim.results) and prim.results[0] == "bool"
 
 
-def register_results(prim: ir_leaf.Primitive) -> tuple[str, ...]:
+def register_results(prim: rop_primitives.Primitive) -> tuple[str, ...]:
     return prim.results[1:] if is_predicate(prim) else prim.results
 
 
-def operand_kinds(prim: ir_leaf.Primitive, lowering: Lowering) -> str:
+def operand_kinds(prim: rop_primitives.Primitive, lowering: Lowering) -> str:
     "'g' or 'x' per operand of the lowering, in the order of pycore_jit_lower.h"
     types = [*register_results(prim), *prim.params]
     if prim.name == "PyValue_CLOSE_SPECIALIZED":
@@ -160,7 +160,7 @@ def write_lowerings(out) -> None:
     out.write("\n#ifdef _PY_JIT_LOWERINGS_TABLE\n")
     out.write("const _PyJitLoweringInfo _PyJit_Lowerings[] = {\n")
     for name, lowering in LOWERINGS.items():
-        prim = ir_leaf.PRIMITIVES[name]
+        prim = rop_primitives.PRIMITIVES[name]
         kinds = operand_kinds(prim, lowering)
         nres = len(register_results(prim))
         nargs = len(kinds) - nres - lowering.temps - lowering.xtemps
@@ -173,12 +173,10 @@ def write_lowerings(out) -> None:
     out.write("#endif\n")
 
 
-
-
 # ---------------------------------------------------------------------------
 # The template graph: the uops' leaf IR joined into one SSA graph of blocks
 # with parameters, with the skeleton's operations added.  Ops are those of
-# ir_leaf.Op plus:
+# rop_primitives.Op plus:
 #   view F          the word in the slot that field F names (an input)
 #   detach F        the slot that field F names becomes NULL (its input's
 #                   owner moved to the handler)
@@ -416,7 +414,7 @@ class Builder:
                 if v.array:
                     raise Refused("an array input")
                 operand = input_operand(r, v.external)
-                gv = g.value(ir_leaf.VALUE)
+                gv = g.value(rop_primitives.VALUE)
                 self.add(cur, "view", [gv], [], operand.field)
                 self.env[v.id] = gv
                 self.views[gv] = operand
@@ -447,7 +445,7 @@ class Builder:
                 lmap[p] = gp
         outputs = [o for o in u.outputs if not unused_output(o)]
         out_types = [g.types[self.env[o.value]] if o.value in self.env and o.ownership == "THROUGH"
-                     else ir_leaf.VALUE for o in outputs]
+                     else rop_primitives.VALUE for o in outputs]
         merge = g.new_block(out_types + ["bool"])
         inputs = {i.name: i for i in u.inputs}
         # The implicit object guards, which the forms put before the body
@@ -611,7 +609,7 @@ class Builder:
             self.add(cur, "slot_store", [], [v], slot)
             return
         dst = next(o for o in r.operands if o.kind == "SLOT" and o.field == r.layout.move_dst_args.split(", ")[1])
-        o = self.g.value(ir_leaf.VALUE)
+        o = self.g.value(rop_primitives.VALUE)
         self.add(cur, "slot_load", [o], [], dst.field, local_test(dst))
         self.add(cur, "slot_store", [], [v], dst.field, local_test(dst))
         self.add(cur, "slot_store", [], [v], slot, f"!{local_test(dst)}")
@@ -645,7 +643,7 @@ class Builder:
                 if src.may_name != TEMP_ONLY:
                     self.add(cur, "take", [], [v], None, local_test(src))
             if may_be_local:
-                o = self.g.value(ir_leaf.VALUE)
+                o = self.g.value(rop_primitives.VALUE)
                 self.add(cur, "slot_load", [o], [], field, local_test(operand))
                 old.append((o, operand))
             self.add(cur, "slot_store", [], [v], field)
@@ -829,7 +827,7 @@ def fold(g: Graph) -> bool:
                 changed = True
             elif k == "conv" and const_of(defs, a[0]) is not None and \
                     g.types[op.results[0]] != "f64" and g.types[a[0]] != "f64":
-                op.kind, op.args, op.attr = "const", [], ir_leaf.wrap(
+                op.kind, op.args, op.attr = "const", [], rop_primitives.wrap(
                     g.types[op.results[0]], const_of(defs, a[0]))
                 changed = True
             elif k == "prim" and op.attr == "PyValue_IsTrue":
@@ -938,12 +936,12 @@ def thread_bool_phis(g: Graph) -> bool:
                 n = g.value("bool")
                 extra.append(TOp("xorb", [n], [c], "1"))
                 mapping[p] = n
-            elif g.types[p] == ir_leaf.VALUE and defs.get(x) is not None and \
+            elif g.types[p] == rop_primitives.VALUE and defs.get(x) is not None and \
                     defs.get(y) is not None and defs[x].kind == "const" and \
                     defs[y].kind == "const" and isinstance(defs[x].attr, str) and \
                     isinstance(defs[y].attr, str):
                 # c ? K1 : K2 of two word constants
-                kx, ky, n = g.value(ir_leaf.VALUE), g.value(ir_leaf.VALUE), g.value(ir_leaf.VALUE)
+                kx, ky, n = g.value(rop_primitives.VALUE), g.value(rop_primitives.VALUE), g.value(rop_primitives.VALUE)
                 extra += [TOp("const", [kx], [], defs[x].attr), TOp("const", [ky], [], defs[y].attr),
                           TOp("select", [n], [c, kx, ky])]
                 mapping[p] = n
@@ -1110,7 +1108,7 @@ def changes(op: TOp):
     nothing"""
     if op.kind == "store":
         # A store through a type, not a field, may be to any field of it
-        return {op.attr, None} if op.attr in ir_leaf.FIELDS else ALL
+        return {op.attr, None} if op.attr in rop_primitives.FIELDS else ALL
     if op.kind in ("slot_store", "detach"):
         # A home is not the heap, but a primitive may read one
         return {None, HOME}
@@ -1172,7 +1170,7 @@ def cse(g: Graph) -> bool:
                 # A load through a type, not a field, may read what any store wrote
                 seen = {k: v for k, v in seen.items()
                         if not is_read(k) or (gone != ALL and (
-                            (k[0] == "load" and k[1] in ir_leaf.FIELDS and k[1] not in gone)
+                            (k[0] == "load" and k[1] in rop_primitives.FIELDS and k[1] not in gone)
                             or (is_home(k) and HOME not in gone)
                             or (k[0] == "prim" and not is_home(k) and None not in gone)))}
             keep.append(op)
@@ -1217,8 +1215,8 @@ def never_null_result(g: Graph, op: TOp) -> bool:
         return False
     if op.kind == "prim":
         return isinstance(op.attr, str) and never_null(op.attr)
-    if op.kind == "const" and isinstance(op.attr, str) and g.types[op.results[0]] == ir_leaf.VALUE:
-        return ir_leaf.VALUE_CONSTANTS[op.attr][0] is not None
+    if op.kind == "const" and isinstance(op.attr, str) and g.types[op.results[0]] == rop_primitives.VALUE:
+        return rop_primitives.VALUE_CONSTANTS[op.attr][0] is not None
     return False
 
 
@@ -1344,7 +1342,7 @@ def exit_on_false(g: Graph) -> bool:
         name = prim_name(op)
         if (op.kind != "prim" or op.when or not isinstance(op.attr, str) or op.exit is not None
                 or name not in LOWERINGS or not LOWERINGS[name].exits
-                or not is_predicate(ir_leaf.PRIMITIVES[name]) or op.results[0] != b.term[1]):
+                or not is_predicate(rop_primitives.PRIMITIVES[name]) or op.results[0] != b.term[1]):
             continue
         cont, exit_ = b.term[2], b.term[3]
         if g.blocks[exit_].params or g.blocks[exit_].term[0] not in ("deopt", "raise") \
@@ -1504,7 +1502,7 @@ def flag_producer(g: Graph, op: TOp) -> bool:
     if op.kind == "prim":
         name = op.attr[0] if isinstance(op.attr, tuple) else op.attr
         return (op.exit is None and name in LOWERINGS
-                and is_predicate(ir_leaf.PRIMITIVES[name]))
+                and is_predicate(rop_primitives.PRIMITIVES[name]))
     return op.kind in ("cmp", "fcmp", "cmpmask", "xorb", "lnot", "add_ovf", "sub_ovf",
                        "mul_ovf")
 
@@ -1729,36 +1727,36 @@ class Allocation:
 
 
 def c_int(x: int) -> str:
-    x = ir_leaf.s64(x)
+    x = rop_primitives.s64(x)
     if -2**31 <= x < 2**31:
         return str(x)
-    return f"(int64_t){ir_leaf.u64(x):#x}ULL"
+    return f"(int64_t){rop_primitives.u64(x):#x}ULL"
 
 
 def const_expr(t: str, x) -> str:
-    if t == ir_leaf.VALUE and isinstance(x, str):
-        symbol, tag = ir_leaf.VALUE_CONSTANTS[x]
+    if t == rop_primitives.VALUE and isinstance(x, str):
+        symbol, tag = rop_primitives.VALUE_CONSTANTS[x]
         return "0" if symbol is None else f"(int64_t)((uintptr_t)&{symbol} | {tag})"
     if isinstance(x, str) and x.startswith("&"):
         return f"(int64_t)(uintptr_t){x}"
     if isinstance(x, str):
         return f"(int64_t)({x})"
     if isinstance(x, float):
-        return c_int(ir_leaf.f64_bits(x))
+        return c_int(rop_primitives.f64_bits(x))
     return c_int(x)
 
 
 def mem_size(t: str) -> tuple[int, bool]:
     "bytes and signedness of a memory access of type t"
-    if t in (ir_leaf.VALUE, "f64") or ir_leaf.is_pointer(t) or t in ("i64", "u64"):
+    if t in (rop_primitives.VALUE, "f64") or rop_primitives.is_pointer(t) or t in ("i64", "u64"):
         return 8, False
-    return ir_leaf.bits_of(t) // 8, ir_leaf.is_signed(t)
+    return rop_primitives.bits_of(t) // 8, rop_primitives.is_signed(t)
 
 
 def field_offset(attr) -> tuple[str, str]:
     "The C offset and the type of a load or store"
-    if attr in ir_leaf.FIELDS:
-        f = ir_leaf.FIELDS[attr]
+    if attr in rop_primitives.FIELDS:
+        f = rop_primitives.FIELDS[attr]
         return f"offsetof({f.struct}, {f.name})", f.type
     return "0", attr
 
@@ -1985,13 +1983,13 @@ class Emitter:
     def extend(self, v: int) -> None:
         "Make a C function's narrow integer result canonical in its register"
         t = self.g.types[v]
-        if is_xmm(t) or t in ("i64", "u64") or ir_leaf.is_pointer(t) or t == ir_leaf.VALUE:
+        if is_xmm(t) or t in ("i64", "u64") or rop_primitives.is_pointer(t) or t == rop_primitives.VALUE:
             return
         if t == "bool":
             self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_AND, {self.R(v)}, 0xFF);")
             return
-        n = 64 - ir_leaf.bits_of(t)
-        sh = "SAR" if ir_leaf.is_signed(t) else "SHR"
+        n = 64 - rop_primitives.bits_of(t)
+        sh = "SAR" if rop_primitives.is_signed(t) else "SHR"
         self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_SHL, {self.R(v)}, {n});")
         self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_{sh}, {self.R(v)}, {n});")
 
@@ -1999,7 +1997,7 @@ class Emitter:
         "Zero-extend an unsigned narrow result"
         t = self.g.types[v]
         if t in ("u32", "u16", "u8"):
-            n = 64 - ir_leaf.bits_of(t)
+            n = 64 - rop_primitives.bits_of(t)
             self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_SHL, {self.R(v)}, {n});")
             self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_SHR, {self.R(v)}, {n});")
 
@@ -2154,7 +2152,7 @@ class Emitter:
             name = op.attr[0] if isinstance(op.attr, tuple) else op.attr
             if name not in LOWERINGS:
                 raise Refused(f"{name} unfused")
-            prim = ir_leaf.PRIMITIVES[name]
+            prim = rop_primitives.PRIMITIVES[name]
             regs = [r for r in res if not (is_predicate(prim) and r == res[0]
                                            and op.exit is None)]
             argv = args
@@ -2166,7 +2164,7 @@ class Emitter:
                 aux = f"(const void *)(intptr_t)({self.label(op.exit)} + 1)"
             self.lower(i, k, op, name, regs, argv, aux)
         elif kd == "call":
-            helper = ir_leaf.HELPERS[op.attr]
+            helper = rop_primitives.HELPERS[op.attr]
             gm, xm = self.live_masks(i, k, op)
             self.w(f"cx->live = {gm:#x}; cx->live_xmm = {xm:#x};")
             argv = [f"_PyJitArg_{'XMM' if self.alloc.kind(x) == 'x' else 'GPR'}({self.R(x)})"
@@ -2280,22 +2278,22 @@ class Emitter:
             self.setcc(op, "_PyJitCond_NE")
         else:
             self.mov(r, a)
-            if src == "bool" or dst in ("i64", "u64") or ir_leaf.is_pointer(dst) or \
-                    ir_leaf.is_pointer(src):
+            if src == "bool" or dst in ("i64", "u64") or rop_primitives.is_pointer(dst) or \
+                    rop_primitives.is_pointer(src):
                 return
-            if ir_leaf.bits_of(dst) >= ir_leaf.bits_of(src) and \
-                    ir_leaf.is_signed(dst) == ir_leaf.is_signed(src):
+            if rop_primitives.bits_of(dst) >= rop_primitives.bits_of(src) and \
+                    rop_primitives.is_signed(dst) == rop_primitives.is_signed(src):
                 return
-            if ir_leaf.bits_of(dst) > ir_leaf.bits_of(src) and not ir_leaf.is_signed(src):
+            if rop_primitives.bits_of(dst) > rop_primitives.bits_of(src) and not rop_primitives.is_signed(src):
                 return      # a zero-extended value is canonical in a wider type
-            n = 64 - ir_leaf.bits_of(dst)
-            sh = "SAR" if ir_leaf.is_signed(dst) else "SHR"
+            n = 64 - rop_primitives.bits_of(dst)
+            sh = "SAR" if rop_primitives.is_signed(dst) else "SHR"
             self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_SHL, {self.R(r)}, {n});")
             self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_{sh}, {self.R(r)}, {n});")
 
     def lower(self, i, k, op, name, regs, argv, aux="NULL", written=frozenset()) -> None:
         lowering = LOWERINGS[name]
-        prim = ir_leaf.PRIMITIVES[name]
+        prim = rop_primitives.PRIMITIVES[name]
         temps = self.temps(i, k, op, lowering.temps, "g")
         xtemps = self.temps(i, k, op, lowering.xtemps, "x")
         ops = [self.R(r) for r in regs] + [self.R(x) for x in argv] + \

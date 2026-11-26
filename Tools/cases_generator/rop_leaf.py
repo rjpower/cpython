@@ -8,9 +8,9 @@ graph the tracer uses and test_rop_ssa runs against C: one graph for both.
 - a home read is an `arg`, an immediate operand is folded where it is used
   (`jconst`), a feedback-entry field is a `cache` read typed by the schema's
   C layout (rop_catalog.FB_LAYOUT), a recipe is a record of leaf values;
-- a row is its leaf lowering: the primitive of ir_leaf.PRIMITIVES that its C
+- a row is its leaf lowering: the primitive of rop_primitives.PRIMITIVES that its C
   symbol names, a lowering in ROW_LOWERINGS, or a call of a helper of
-  ir_leaf.HELPERS;
+  rop_primitives.HELPERS;
 - a row with cases branches on the test that its C convention gives each
   case (`outcome_test`, over rop_catalog.CONVENTIONS);
 - a guard leaves for the miss; `publish` (take, old, store, checkpoint,
@@ -25,7 +25,7 @@ that uses anything else keeps the call of its form; `Unsupported` says why.
 from dataclasses import dataclass
 from typing import Callable
 
-import ir_leaf
+import rop_primitives
 import jit_template_generator as jt
 from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLayout,
                          CSource, CTest, DebtKind, Fact, FieldKind, Handle, Scalar,
@@ -42,7 +42,7 @@ LEAF_SCALAR = {
     Scalar.U64: "u64", Scalar.I32: "i32", Scalar.I64: "i64", Scalar.F64: "f64",
     Scalar.I51: "i64", Scalar.Scaled51: "i64", Scalar.Size: "u64",
 }
-LEAF_HANDLE = {Handle.B: ir_leaf.VALUE, Handle.O: ir_leaf.VALUE,
+LEAF_HANDLE = {Handle.B: rop_primitives.VALUE, Handle.O: rop_primitives.VALUE,
                Handle.Obj: "PyObject*"}
 
 EXIT = "EXIT"
@@ -63,11 +63,11 @@ def leaf_type(t: Type) -> str | None:
 def ctype_leaf(ctype: str) -> str | None:
     "The leaf type of a C type of a layout field"
     if ctype == "_PyValueGuarded":
-        return ir_leaf.VALUE
+        return rop_primitives.VALUE
     if ctype.endswith("*"):
         target = ctype.rstrip("* ")
-        return f"{target}*" if target in ir_leaf.POINTER_TARGETS else None
-    return ir_leaf.C_TYPES.get(ctype)
+        return f"{target}*" if target in rop_primitives.POINTER_TARGETS else None
+    return rop_primitives.C_TYPES.get(ctype)
 
 
 # What the leaf graph holds for a value of the expansion that is no leaf value
@@ -155,7 +155,7 @@ class PublishPlan:
 
 @dataclass
 class ArmLeaf:
-    body: ir_leaf.LeafBody
+    body: rop_primitives.LeafBody
     plan: PublishPlan | None
     # Home operands the body reads, in order of first use
     inputs: tuple[str, ...]
@@ -209,7 +209,7 @@ class LeafBuilder:
         self.inputs: list[str] = []
         self.plan: PublishPlan | None = None
         self.count = 0
-        self.block_list: list[ir_leaf.Block] = []
+        self.block_list: list[rop_primitives.Block] = []
         self.effects: set[str] = set()
         self.helpers: list[str] = []
         self.entry: str | None = None
@@ -220,7 +220,7 @@ class LeafBuilder:
         self.acquired: list[str] = []
         # Whether the path to the current op has acquired an owner
         self.holding = False
-        self.cur: ir_leaf.Block
+        self.cur: rop_primitives.Block
         # The publish ops of the current block so far, and the home whose
         # owner each take or old gives
         self.steps: list[Step] = []
@@ -236,15 +236,15 @@ class LeafBuilder:
         self.count += 1
         return self.count - 1
 
-    def new_block(self) -> ir_leaf.Block:
-        b = ir_leaf.Block(len(self.block_list))
+    def new_block(self) -> rop_primitives.Block:
+        b = rop_primitives.Block(len(self.block_list))
         self.block_list.append(b)
         return b
 
     def emit(self, kind: str, types: tuple[str, ...], args: tuple[int, ...] = (),
              attr=None) -> tuple[int, ...]:
         results = tuple(self.value(t) for t in types)
-        self.cur.ops.append(ir_leaf.Op(kind, results, args, attr))
+        self.cur.ops.append(rop_primitives.Op(kind, results, args, attr))
         return results
 
     def emit1(self, kind: str, t: str, args: tuple[int, ...] = (), attr=None) -> int:
@@ -262,7 +262,7 @@ class LeafBuilder:
         return self.emit1("const", t, (), x)
 
     def prim(self, name: str, *args: int) -> tuple[int, ...]:
-        p = ir_leaf.PRIMITIVES[name]
+        p = rop_primitives.PRIMITIVES[name]
         return self.emit("prim", p.results, args, name)
 
     def prim1(self, name: str, *args: int) -> int:
@@ -273,8 +273,8 @@ class LeafBuilder:
         return self.emit1("cmp", "bool", (a, b), pred)
 
     def load(self, field: str, ptr: int) -> int:
-        "A field of ir_leaf.FIELDS, or a leaf type read through the pointer"
-        t = ir_leaf.FIELDS[field].type if field in ir_leaf.FIELDS else field
+        "A field of rop_primitives.FIELDS, or a leaf type read through the pointer"
+        t = rop_primitives.FIELDS[field].type if field in rop_primitives.FIELDS else field
         return self.emit1("load", t, (ptr,), field)
 
     def choose(self, test: int, t: str, yes: Callable[[], int], no: Callable[[], int]) -> int:
@@ -373,7 +373,7 @@ class LeafBuilder:
                 self.op(op)
             self.term(b.term)
         outputs = tuple(s.home for s in self.plan.steps if s.op == "store") if self.plan else ()
-        body = ir_leaf.LeafBody(
+        body = rop_primitives.LeafBody(
             self.arm.name, self.block_list, self.types, tuple(self.inputs), outputs,
             frozenset(self.effects), tuple(self.helpers))
         return ArmLeaf(body, self.plan, tuple(self.inputs), self.inline(),
@@ -404,7 +404,7 @@ class LeafBuilder:
                 self.refuse(f"a read of the span {op.attr}")
             if op.attr not in self.inputs:
                 self.inputs.append(op.attr)
-            self.env[op.result] = self.emit1("arg", ir_leaf.VALUE, (), op.attr)
+            self.env[op.result] = self.emit1("arg", rop_primitives.VALUE, (), op.attr)
         elif k is OpKind.operand:
             self.env[op.result] = self.operand(op.attr)
         elif k is OpKind.env:
@@ -425,7 +425,7 @@ class LeafBuilder:
                 self.inputs.append(op.attr)
             self.acquired.append(op.attr)
             self.holding = True
-            self.env[op.result] = self.emit1("arg", ir_leaf.VALUE, (), op.attr)
+            self.env[op.result] = self.emit1("arg", rop_primitives.VALUE, (), op.attr)
         elif k is OpKind.unwrap:
             self.env[op.result] = args[0]
         elif k is OpKind.guard:
@@ -478,10 +478,10 @@ class LeafBuilder:
                 return ROW_LOWERINGS[symbol](self, *args)
             finally:
                 self.lowering = None
-        if symbol in ir_leaf.PRIMITIVES:
+        if symbol in rop_primitives.PRIMITIVES:
             return self.prim(symbol, *(self.leaf(a) for a in args))
-        if symbol in ir_leaf.HELPERS:
-            h = ir_leaf.HELPERS[symbol]
+        if symbol in rop_primitives.HELPERS:
+            h = rop_primitives.HELPERS[symbol]
             self.helpers.append(symbol)
             self.effects |= set(h.effects)
             return self.emit("call", h.results, tuple(self.leaf(a) for a in args), symbol)
@@ -676,7 +676,7 @@ def _recipe(b, schema: Schema, **values) -> Record:
     for name, t in record_fields(schema):
         v = values.get(name)
         if v is None:
-            v = b.const(t, "PyValue_NULL" if t == ir_leaf.VALUE else 0)
+            v = b.const(t, "PyValue_NULL" if t == rop_primitives.VALUE else 0)
         fields.append((name, v))
     return Record(schema, tuple(fields))
 
@@ -686,7 +686,7 @@ def _attr_recipe(b, **values) -> Record:
 
 
 def _null(b) -> int:
-    return b.const(ir_leaf.VALUE, "PyValue_NULL")
+    return b.const(rop_primitives.VALUE, "PyValue_NULL")
 
 
 def _admitted_recipe(b, fb, name):
@@ -727,7 +727,7 @@ def _keys_entry(b, keys: int, index: int) -> int:
         e = b.emit1("ptradd", "PyDictUnicodeEntry*", (entries, index), "PyDictUnicodeEntry")
         return b.load("PyDictUnicodeEntry.me_value", e)
     in_range = b.cmp("ult", index, b.load("PyDictKeysObject.dk_nentries", keys))
-    return b.choose(in_range, ir_leaf.VALUE, entry, lambda: _null(b))
+    return b.choose(in_range, rop_primitives.VALUE, entry, lambda: _null(b))
 
 
 def _dict_keys(b, d: int) -> int:
@@ -742,7 +742,7 @@ def _module_entry(b, o, r):
     """_PyAttr_ModuleEntry: the module's entry at the recipe's index while
     its keys have the recipe's version, else NULL"""
     keys = _dict_keys(b, b.load("PyModuleObject.md_dict", b.leaf(o)))
-    return (b.choose(_keys_current(b, keys, r["aux"]), ir_leaf.VALUE,
+    return (b.choose(_keys_current(b, keys, r["aux"]), rop_primitives.VALUE,
                      lambda: _keys_entry(b, keys, r["offset"]), lambda: _null(b)),)
 
 
@@ -855,7 +855,7 @@ def _shape_current(b, o, r):
 def _borrow_value_slot(b, o, r):
     "_PyAttr_BorrowValueSlot, _PyAttr_BorrowValueSlotFilled: the word at the offset"
     slot = b.prim1("_PyObject_ValueSlot", b.leaf(o), b.zext("u64", r["offset"]))
-    return (b.load(ir_leaf.VALUE, slot),)
+    return (b.load(rop_primitives.VALUE, slot),)
 
 
 def _small_int(b, i):
@@ -940,8 +940,8 @@ def _truth_object(b, test, invert):
         differs = b.emit1("xorb", "bool", (b.leaf(test),), invert.expr)
     else:
         differs = b.emit1("xor", "bool", (b.leaf(test), b.leaf(invert)))
-    return (b.emit1("select", ir_leaf.VALUE, (differs, b.const(ir_leaf.VALUE, "PyValue_True"),
-                                             b.const(ir_leaf.VALUE, "PyValue_False"))),)
+    return (b.emit1("select", rop_primitives.VALUE, (differs, b.const(rop_primitives.VALUE, "PyValue_True"),
+                                             b.const(rop_primitives.VALUE, "PyValue_False"))),)
 
 
 ROW_LOWERINGS: dict[str, LoweringFn] = {
@@ -995,7 +995,7 @@ def _poll(b: LeafBuilder, args, edges) -> None:
     if not b.raise_block(edges["err"].target):
         b.refuse("the error edge of poll is not a raise")
     b.helpers.append("_Py_HandlePending")
-    b.effects |= set(ir_leaf.HELPERS["_Py_HandlePending"].effects)
+    b.effects |= set(rop_primitives.HELPERS["_Py_HandlePending"].effects)
     events = b.prim1("_Py_EvalBreakerHasEvents")
     here = b.cur
     handle = b.new_block()
@@ -1061,7 +1061,7 @@ class TemplateBuilder:
         for name in self.leaf.inputs:
             if name not in self.homes:
                 raise jt.Refused(f"{name} is not a home of the head")
-            views[name] = g.value(ir_leaf.VALUE)
+            views[name] = g.value(rop_primitives.VALUE)
             entry.ops.append(jt.TOp("view", [views[name]], [], self.homes[name].field))
         lmap: dict[int, int] = {}
         bmap = {}
@@ -1076,7 +1076,7 @@ class TemplateBuilder:
         branches = any(b.term[0] == "branch" for b in body.blocks)
         if any(b.term[0] == "jump" for b in body.blocks) and self.leaf.plan is not None:
             raise jt.Refused("a jump after a publication")
-        merge = g.new_block([ir_leaf.VALUE for _ in outs]
+        merge = g.new_block([rop_primitives.VALUE for _ in outs]
                             + (["bool"] if branches else []))
         for b in body.blocks:
             gb = bmap[b.id]
@@ -1171,7 +1171,7 @@ class TemplateBuilder:
                 # never read is loaded before its home is detached
                 v = views.get(name)
                 if v is None:
-                    v = g.value(ir_leaf.VALUE)
+                    v = g.value(rop_primitives.VALUE)
                     merge.ops.append(jt.TOp("slot_load", [v], [], home.field,
                                             jt.temp_test(home)))
                 owners[name] = v
@@ -1181,7 +1181,7 @@ class TemplateBuilder:
         for s in plan.steps:
             if s.op == "old":
                 dst = self.homes[s.home]
-                olds[s.home] = g.value(ir_leaf.VALUE)
+                olds[s.home] = g.value(rop_primitives.VALUE)
                 merge.ops.append(jt.TOp("slot_load", [olds[s.home]], [], dst.field,
                                         jt.local_test(dst)))
             elif s.op == "store":

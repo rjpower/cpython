@@ -14,7 +14,7 @@ from test.support import os_helper
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import ir_generator
-    import ir_leaf
+    import rop_primitives
     import ir_leaf_eval
     import rop_catalog
     import rop_check
@@ -65,13 +65,13 @@ class AddIntLeafTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         capi = support.import_helper.import_module("_testinternalcapi")
-        cls.cx = ir_leaf_eval.Context(
-            ir_leaf_eval.Layout.from_c(capi), ir_leaf_eval.RealMemory())
+        cls.cx = rop_primitives.Context(
+            rop_primitives.Layout.from_c(capi), ir_leaf_eval.RealMemory())
         prog = products().program
         cls.leaf = rop_leaf.leaf_of_arm(prog, prog.arms["Add.Int"])
 
     def word(self, i):
-        return ir_leaf.PRIMITIVES["PyValue_FromInlineInt"].spec(self.cx, i)
+        return rop_primitives.PRIMITIVES["PyValue_FromInlineInt"].spec(self.cx, i)
 
     def run_add(self, x, y):
         return ir_leaf_eval.evaluate(self.leaf.body, self.cx, {"x": x, "y": y}, {})
@@ -89,7 +89,7 @@ class AddIntLeafTests(unittest.TestCase):
                     if lo <= x + y <= hi:
                         self.assertEqual(z, self.word(x + y))
                     else:
-                        self.assertIsInstance(z, ir_leaf_eval.Box)
+                        self.assertIsInstance(z, rop_primitives.Box)
                         self.assertEqual((z.type, z.value), ("int", x + y))
 
     def test_a_word_that_is_no_inline_int_misses(self):

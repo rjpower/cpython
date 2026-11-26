@@ -25,7 +25,7 @@ if not hasattr(capi, "jit_lower"):
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import ir_contract
-    import ir_leaf
+    import rop_primitives
     import jit_template_generator
 
 RECORDS = jit_template_generator.load_records()[1]
@@ -164,14 +164,14 @@ class LoweringTests(unittest.TestCase):
     def test_every_lowering_is_tabled(self):
         self.assertEqual(set(lowerings()), set(jit_template_generator.LOWERINGS))
         for name, (nres, nargs, ntemps, nxtemps, kinds, predicate) in lowerings().items():
-            prim = ir_leaf.PRIMITIVES[name]
+            prim = rop_primitives.PRIMITIVES[name]
             lowering = jit_template_generator.LOWERINGS[name]
             self.assertEqual(kinds, jit_template_generator.operand_kinds(prim, lowering))
             self.assertEqual(predicate, jit_template_generator.is_predicate(prim))
 
     def check_against_c(self, name, args, rng):
         nres, nargs, ntemps, nxtemps, kinds, predicate = lowerings()[name]
-        prim = ir_leaf.PRIMITIVES[name]
+        prim = rop_primitives.PRIMITIVES[name]
         if prim.pre is not None and not prim.pre(context(), *args):
             return
         expected = capi.leaf_primitive(name, *args)
@@ -205,7 +205,7 @@ class LoweringTests(unittest.TestCase):
         for name in lowerings():
             if name in APART:
                 continue
-            prim = ir_leaf.PRIMITIVES[name]
+            prim = rop_primitives.PRIMITIVES[name]
             for args in [()] if not prim.params else cases(prim):
                 self.check_against_c(name, args, rng)
 
@@ -216,7 +216,7 @@ class LoweringTests(unittest.TestCase):
         nres, nargs, ntemps, nxtemps, kinds, predicate = lowerings()[name]
         self.assertEqual((nres, nargs, ntemps, kinds), (1, 2, 2, "ggggg"))
         rng = random.Random(90)
-        for args in cases(ir_leaf.PRIMITIVES[name]):
+        for args in cases(rop_primitives.PRIMITIVES[name]):
             overflowed, out = capi.leaf_primitive(name, *args)
             assignments_ = assignments(kinds, nres, nargs, rng, count=2)
             # Both arguments in one register
@@ -834,7 +834,7 @@ def prim_graph(*steps):
     g = jit_template_generator.Graph()
     TOp = jit_template_generator.TOp
     block = g.blocks[g.entry]
-    v = g.value(ir_leaf.VALUE)
+    v = g.value(rop_primitives.VALUE)
     block.ops.append(TOp("view", [v], [], "B"))
     deopt = g.new_block()
     deopt.term = ("deopt",)
@@ -887,14 +887,14 @@ class TemplateGraphTests(unittest.TestCase):
 
     def test_results_that_are_never_null(self):
         found = {name for name in ir_contract.rows() if jit_template_generator.never_null(name)}
-        scalar = {name for name in found if name in ir_leaf.PRIMITIVES
-                  and all(p not in (ir_leaf.VALUE, "PyObject*")
-                          for p in ir_leaf.PRIMITIVES[name].params)}
+        scalar = {name for name in found if name in rop_primitives.PRIMITIVES
+                  and all(p not in (rop_primitives.VALUE, "PyObject*")
+                          for p in rop_primitives.PRIMITIVES[name].params)}
         self.assertLessEqual({"_PyValue_FromIntScaled", "PyValue_FromInlineInt",
                               "PyValue_TagIndex", "PyValue_DUP"}, found)
         # The declaration against the C definition on its domain
         for name in scalar:
-            prim = ir_leaf.PRIMITIVES[name]
+            prim = rop_primitives.PRIMITIVES[name]
             for args in cases(prim):
                 if prim.pre is None or prim.pre(context(), *args):
                     self.assertNotEqual(capi.leaf_primitive(name, *args), 0, (name, args))
@@ -979,7 +979,7 @@ class TemplateGraphTests(unittest.TestCase):
         number of loads of the field after CSE"""
         g = jit_template_generator.Graph()
         entry = g.blocks[g.entry]
-        obj = g.value(ir_leaf.VALUE)
+        obj = g.value(rop_primitives.VALUE)
         entry.ops.append(jit_template_generator.TOp("view", [obj], [], "B"))
         first = g.value("i64")
         entry.ops.append(jit_template_generator.TOp("load", [first], [obj], "_PyRangeIterObject.len"))
@@ -1006,7 +1006,7 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(self.cse_loads([lambda g, o, v: TOp("prim", [], [o], "PyValue_CLOSE")]), 2)
         self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [], [], "_Py_HandlePending")]), 2)
         # Boxing allocates new objects and changes none
-        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [g.value(ir_leaf.VALUE)],
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [g.value(rop_primitives.VALUE)],
                                                              [v], "_PyValue_BoxInt64")]), 1)
 
     def cse_home_loads(self, middle):
@@ -1018,11 +1018,11 @@ class TemplateGraphTests(unittest.TestCase):
         entry = g.blocks[g.entry]
         index = g.value("i32")
         entry.ops.append(TOp("const", [index], [], 3))
-        first = g.value(ir_leaf.VALUE)
+        first = g.value(rop_primitives.VALUE)
         entry.ops.append(TOp("prim", [first], [index], "GETLOCAL"))
         for make in middle:
             entry.ops.append(make(g, first))
-        second = g.value(ir_leaf.VALUE)
+        second = g.value(rop_primitives.VALUE)
         entry.ops.append(TOp("prim", [second], [index], "GETLOCAL"))
         entry.term = ("end", second)
         jit_template_generator.cse(g)
@@ -1084,7 +1084,7 @@ class TemplateGraphTests(unittest.TestCase):
         arg = next(op for op in entry.ops if op.kind == "arg")
         ops = list(entry.ops)
         ops.insert(ops.index(arg) + 1,
-                   ir_leaf.Op("assume", (), arg.results, ("exact", "PyUnicode_Type")))
+                   rop_primitives.Op("assume", (), arg.results, ("exact", "PyUnicode_Type")))
         leaf.blocks[0] = dataclasses.replace(entry, ops=ops)
         uops[i] = dataclasses.replace(u, leaf=leaf)
         planted = jit_template_generator.template_of(

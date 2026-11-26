@@ -18,10 +18,11 @@ capi = import_helper.import_module("_testinternalcapi")
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import ir_leaf
+    import rop_primitives
     import ir_contract
     import ir_leaf_eval
 
-LAYOUT = ir_leaf_eval.Layout.from_c(capi)
+LAYOUT = rop_primitives.Layout.from_c(capi)
 K = LAYOUT.constants
 TAG = K["Py_TAG_REFCNT"]
 
@@ -29,7 +30,7 @@ TAG = K["Py_TAG_REFCNT"]
 def context(mem=None, frame=0):
     if mem is None:
         mem = ir_leaf_eval.Overlay(ir_leaf_eval.RealMemory())
-    return ir_leaf_eval.Context(LAYOUT, mem, frame, capi.leaf_thread())
+    return rop_primitives.Context(LAYOUT, mem, frame, capi.leaf_thread())
 
 
 def word(obj):
@@ -99,7 +100,7 @@ def objects_of(*types_):
 
 # The arguments of each primitive: an iterable of tuples.  Primitives not
 # named take the pools of their parameter types.
-TYPE_POOLS = {ir_leaf.VALUE: LIVE_WORDS, "i64": WIDE_INTS, "f64": FLOATS + [NAN],
+TYPE_POOLS = {rop_primitives.VALUE: LIVE_WORDS, "i64": WIDE_INTS, "f64": FLOATS + [NAN],
               "PyObject*": [id(o) for o in OBJECTS]}
 CASES = {
     "PyValue_IsNull": [(w,) for w in ANY_WORDS],
@@ -191,30 +192,30 @@ def run_spec(prim, args, cx=None):
 
 class LayoutTests(unittest.TestCase):
     def test_the_list_is_closed(self):
-        self.assertEqual(set(ir_leaf.PRIMITIVES), set(capi.leaf_primitive_names()))
+        self.assertEqual(set(rop_primitives.PRIMITIVES), set(capi.leaf_primitive_names()))
 
     def test_layout_names_every_number(self):
         self.assertEqual(set(LAYOUT.constants), set(ir_leaf.CONSTANTS))
-        self.assertEqual(set(LAYOUT.offsets), set(ir_leaf.FIELDS))
+        self.assertEqual(set(LAYOUT.offsets), set(rop_primitives.FIELDS))
         self.assertEqual(set(LAYOUT.sizes), set(ir_leaf.SIZES))
-        self.assertEqual(set(LAYOUT.symbols), set(ir_leaf.SYMBOLS))
+        self.assertEqual(set(LAYOUT.symbols), set(rop_primitives.SYMBOLS))
 
     def test_signatures_use_subset_types(self):
-        known = set(ir_leaf.SCALARS) | {ir_leaf.VALUE, "destructor"}
-        for prim in ir_leaf.PRIMITIVES.values():
+        known = set(ir_leaf.SCALARS) | {rop_primitives.VALUE, "destructor"}
+        for prim in rop_primitives.PRIMITIVES.values():
             for t in prim.params + prim.results:
                 with self.subTest(primitive=prim.name, type=t):
-                    if ir_leaf.is_pointer(t):
-                        self.assertIn(t[:-1], ir_leaf.POINTER_TARGETS + ("PyDictValues",))
+                    if rop_primitives.is_pointer(t):
+                        self.assertIn(t[:-1], rop_primitives.POINTER_TARGETS + ("PyDictValues",))
                     else:
                         self.assertIn(t, known)
             if prim.slow:
-                self.assertIn(prim.slow, ir_leaf.HELPERS)
+                self.assertIn(prim.slow, rop_primitives.HELPERS)
 
 
 class PrimitiveTests(unittest.TestCase):
     def test_pure_and_reading_primitives(self):
-        for prim in ir_leaf.PRIMITIVES.values():
+        for prim in rop_primitives.PRIMITIVES.values():
             if prim.name in SEPARATE:
                 continue
             checked = 0
@@ -232,12 +233,12 @@ class PrimitiveTests(unittest.TestCase):
     def test_constructors_with_a_slow_path(self):
         for name, args, kind in [("PyValue_FromInt64", WIDE_INTS, int),
                                  ("PyValue_FromDouble", FLOATS + [NAN], float)]:
-            prim = ir_leaf.PRIMITIVES[name]
+            prim = rop_primitives.PRIMITIVES[name]
             for x in args:
                 with self.subTest(primitive=name, arg=x):
                     expected, cx = run_spec(prim, (x,))
                     got = capi.leaf_primitive(name, x)
-                    if isinstance(expected, ir_leaf_eval.Box):
+                    if isinstance(expected, rop_primitives.Box):
                         # The slow path: a new object of the same value
                         self.assertIs(type(got), kind)
                         self.assertTrue(same(got, expected.value))
@@ -252,15 +253,15 @@ class PrimitiveTests(unittest.TestCase):
         for name in ("GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "IR_SLOTS",
                      "FRAME_CODE_INSTRUMENTATION_VERSION"):
             with self.subTest(primitive=name):
-                expected = ir_leaf.PRIMITIVES[name].spec(context(frame=frame))
+                expected = rop_primitives.PRIMITIVES[name].spec(context(frame=frame))
                 self.assertEqual(capi.leaf_primitive(name), expected)
-        self.assertEqual(ir_leaf.PRIMITIVES["GLOBALS"].spec(context(frame=frame)), id(globals()))
-        expected = ir_leaf.PRIMITIVES["GETLOCAL"].spec(context(frame=frame), 0)
+        self.assertEqual(rop_primitives.PRIMITIVES["GLOBALS"].spec(context(frame=frame)), id(globals()))
+        expected = rop_primitives.PRIMITIVES["GETLOCAL"].spec(context(frame=frame), 0)
         self.assertEqual(capi.leaf_primitive("GETLOCAL", 0), expected)
         self.assertEqual(expected & ~TAG, id(self))
 
     def test_thread_primitives(self):
-        prim = ir_leaf.PRIMITIVES["_Py_EvalBreakerHasEvents"]
+        prim = rop_primitives.PRIMITIVES["_Py_EvalBreakerHasEvents"]
         self.assertEqual(capi.leaf_primitive(prim.name), prim.spec(context()))
         # An event bit, written to the overlay only
         cx = context()
@@ -268,12 +269,12 @@ class PrimitiveTests(unittest.TestCase):
         for bits, expected in ((1 << 4, True), (K["_PY_EVAL_EVENTS_MASK"] + 1, False)):
             cx.store(breaker, "u64", cx.load(breaker, "u64") & ~K["_PY_EVAL_EVENTS_MASK"] | bits)
             self.assertIs(prim.spec(cx), expected)
-        breaker = ir_leaf.PRIMITIVES["_Py_EvalBreaker"]
+        breaker = rop_primitives.PRIMITIVES["_Py_EvalBreaker"]
         self.assertEqual(capi.leaf_primitive(breaker.name), breaker.spec(context()))
 
     def check_count_change(self, name, obj, *extra):
         "The spec's write of obj's count against the change C makes"
-        prim = ir_leaf.PRIMITIVES[name]
+        prim = rop_primitives.PRIMITIVES[name]
         w = word(obj)
         expected, cx = run_spec(prim, (w, *extra))
         delta = {addr: after - before for addr, t, before, after in cx.mem.writes()}
@@ -303,7 +304,7 @@ class PrimitiveTests(unittest.TestCase):
         for word_ in [0, *INLINE_WORDS[:5], *INDEX_WORDS]:
             for name in ("PyValue_XDUP", "PyValue_XCLOSE"):
                 with self.subTest(primitive=name, word=word_):
-                    expected, cx = run_spec(ir_leaf.PRIMITIVES[name], (word_,))
+                    expected, cx = run_spec(rop_primitives.PRIMITIVES[name], (word_,))
                     self.assertEqual(cx.mem.writes(), [])
                     capi.leaf_primitive(name, word_)
 
@@ -313,7 +314,7 @@ class PrimitiveTests(unittest.TestCase):
         first = values + LAYOUT.offsets["PyDictValues.values"] - id(holder)
         for k, attr in enumerate(("a", "b")):
             offset = first + k * LAYOUT.sizes["PyValue"]
-            expected, cx = run_spec(ir_leaf.PRIMITIVES["_PyObject_ShapeReadDup"], (id(holder), offset))
+            expected, cx = run_spec(rop_primitives.PRIMITIVES["_PyObject_ShapeReadDup"], (id(holder), offset))
             got = capi.leaf_primitive("_PyObject_ShapeReadDup", id(holder), offset)
             self.assertEqual(got, expected)
             obj = getattr(holder, attr)
@@ -333,34 +334,34 @@ class PrimitiveTests(unittest.TestCase):
                            ("_PyValueSlot_Fill", 0)):
             with self.subTest(primitive=name, held=held):
                 slot[0] = held
-                expected, cx = run_spec(ir_leaf.PRIMITIVES[name], (address, new))
+                expected, cx = run_spec(rop_primitives.PRIMITIVES[name], (address, new))
                 self.assertEqual([(a, after) for a, _, _, after in cx.mem.writes()],
                                  [(address, new)])
                 self.assertEqual(slot[0], held)
                 got = capi.leaf_primitive(name, address, new)
                 self.assertEqual(slot[0], new)
-                if ir_leaf.PRIMITIVES[name].results:
+                if rop_primitives.PRIMITIVES[name].results:
                     self.assertEqual(expected, held)
                     self.assertEqual(got, held)
         # The preconditions: the filled form needs a word in the slot, the fill a NULL
         slot[0] = 0
-        self.assertIsNone(run_spec(ir_leaf.PRIMITIVES["_PyValueSlot_ExchangeFilled"],
+        self.assertIsNone(run_spec(rop_primitives.PRIMITIVES["_PyValueSlot_ExchangeFilled"],
                                    (address, new))[0])
         slot[0] = new
-        self.assertIsNone(run_spec(ir_leaf.PRIMITIVES["_PyValueSlot_Fill"], (address, new))[0])
+        self.assertIsNone(run_spec(rop_primitives.PRIMITIVES["_PyValueSlot_Fill"], (address, new))[0])
 
     def test_dict_values_writes(self):
         holder = Holder()
         values = capi.leaf_primitive("_PyObject_InlineValues", id(holder))
         shape = capi.leaf_primitive("_PyObject_Shape", id(holder))
         # Writing the current shape changes nothing; the spec says where
-        _, cx = run_spec(ir_leaf.PRIMITIVES["_PyDictValues_SetShape"], (values, shape))
+        _, cx = run_spec(rop_primitives.PRIMITIVES["_PyDictValues_SetShape"], (values, shape))
         capi.leaf_primitive("_PyDictValues_SetShape", values, shape)
         self.assertEqual([(a, after) for a, _, _, after in cx.mem.writes()],
                          [(values + LAYOUT.offsets["PyDictValues.shape"], shape)])
         self.assertEqual(capi.leaf_primitive("_PyObject_Shape", id(holder)), shape)
         # An insertion: compare, then restore the two bytes it wrote
-        _, cx = run_spec(ir_leaf.PRIMITIVES["_PyDictValues_AddToInsertionOrder"], (values, 1))
+        _, cx = run_spec(rop_primitives.PRIMITIVES["_PyDictValues_AddToInsertionOrder"], (values, 1))
         writes = cx.mem.writes()
         saved = [(addr, ctypes.c_uint8.from_address(addr).value) for addr, *_ in writes]
         try:
@@ -569,7 +570,7 @@ class RecordTests(unittest.TestCase):
         for uop in self.record_uops():
             if uop.leaf is not None:
                 for name in uop.leaf.helpers:
-                    self.assertIn(name, ir_leaf.HELPERS, uop.name)
+                    self.assertIn(name, rop_primitives.HELPERS, uop.name)
 
     def test_record_dump_prints_the_leaf(self):
         with test_tools.imports_under_tool("cases_generator"):
@@ -608,7 +609,7 @@ INDEX_OPARGS = range(0, 3)
 
 
 def owns_count(w):
-    return ir_leaf._owns_count(context(), w)
+    return rop_primitives._owns_count(context(), w)
 
 
 def object_at(w):
@@ -681,7 +682,7 @@ class LeafUopTests(unittest.TestCase):
         for guard in uop.guards:
             if guard.site is None:
                 w = next(env[i.value] for i in uop.inputs if i.name == guard.input)
-                if not ir_leaf.PRIMITIVES["PyValue_IsObject"].spec(context(), w):
+                if not rop_primitives.PRIMITIVES["PyValue_IsObject"].spec(context(), w):
                     return "EXIT"
         words = [env[i.value] for i in uop.inputs]
         consumed = [w for i, w in zip(uop.inputs, words)
@@ -723,7 +724,7 @@ class LeafUopTests(unittest.TestCase):
                 continue
             got_word = outputs[positions[out.name]]
             want = expected.outputs[out.name]
-            if isinstance(want, ir_leaf_eval.Box):
+            if isinstance(want, rop_primitives.Box):
                 obj = object_at(got_word)
                 self.assertEqual(type(obj).__name__, want.type, where)
                 self.assertTrue(same(obj, want.value), (where, obj, want.value))

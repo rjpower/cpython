@@ -433,6 +433,14 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     imm = fb = "_PyIR_LOC_NONE"
     fb_schema = None
     ninputs = writes = 0
+    # A loop's pair of homes (the iterator, then its cursor): the family's
+    # points say how the word treats it.  A word that defines it writes two
+    # homes at the field; one that keeps the receiver steps it in place, as
+    # a window of the legacy op; else the word spends both
+    reads = None
+    through = 0
+    pair_writes = 0
+    window = False
     has_target = has_args = has_span = False
     target = "_PyIR_LOC_NONE"
     for slot in enc.elements:
@@ -467,6 +475,19 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                 writes += 1
             elif kind in ("CELL", "FREE"):
                 role = "_PyIR_ROLE_CELL"
+            elif kind == "ITERPAIR":
+                pair = pl.operand
+                if pair in defined:
+                    role = "_PyIR_ROLE_DST"
+                    pair_writes = 2
+                elif any(f"{pair}.receiver" in pt.keep
+                         for pt in program.points.values()
+                         if pt.family == arm.family):
+                    role = "_PyIR_ROLE_BASE"
+                    window = True
+                else:
+                    role = f"_PyIR_ROLE_IN0 + {ninputs}"
+                    ninputs += 2
             else:
                 role = "_PyIR_ROLE_NONE"
         elif pl.kind is FieldKind.feedback:
@@ -478,6 +499,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
             elif fb_schema == "Item":
                 # The item families keep the entry of BINARY_OP and STORE_SUBSCR
                 fb_schema = "Binary"
+            elif fb_schema == "Iter":
+                fb_schema = "Unary"
         elif pl.kind is FieldKind.target:
             has_target = True
             target = "_PyIR_LOC_AB" if len(pl.slots) == 2 else LOC_NAMES[pl.slots[0]]
@@ -509,6 +532,12 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     if is_generic(program, arm) and "again" in fam.exits:
         effects.add("_PyIR_SPECIALIZES")
     flags = ["_PyIR_VALID"]
+    if window:
+        # FOR_ITER's shape: the pair is read and rewritten in place, the
+        # item goes two homes above it, and the receiver passes through
+        flags.append("_PyIR_WINDOW")
+        reads, through = 2, 1
+        writes = 3
     if writes:
         # A result that nothing reads goes to the frame's discard slot
         flags += ["_PyIR_STORE_DST", "_PyIR_DISCARDS"]
@@ -520,12 +549,18 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
             flags.append("_PyIR_JUMP_ALWAYS")
     return ir_arms.ArmFormat(
         tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
-        imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
+        imm, fb, ninputs,
+        2 if window else -ninputs if writes or pair_writes else None,
+        (1 << ninputs) - 1,
         fb_schema, (ARGS_OPERANDS.get(fam.ops[0], "_PyIR_OPERANDS_CALL") if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
-        0 if has_args else enc.words, writes, arm_transfer(exits, ninputs, arm.family, writes or bool(
+        0 if has_args else enc.words, writes + pair_writes, arm_transfer(exits, ninputs, arm.family, writes or pair_writes > 0 or bool(
             {e.name for e in arm.contract.effect_set} & HOME_EFFECTS)), target,
-        "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE")
+        ("_PyIR_OBSERVER_FOR_BODY" if window else
+         "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE"),
+        # A loop step's item is the body's input; its exhaustion completes
+        "_PyIR_OBSERVER_COMPLETION" if window else None,
+        reads, through)
 
 
 

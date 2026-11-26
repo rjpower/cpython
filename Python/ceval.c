@@ -2637,6 +2637,258 @@ _PyRop_BranchEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                   : PY_MONITORING_EVENT_BRANCH_LEFT);
 }
 
+/* The rows of IterOpen and ForIter (iteration.rop) */
+
+/* IterOpen's open: 0 plain (an iterator, no cursor), 1 indexed (a second
+ * owner of the source with a tagged cursor), -1 raised.  The source is
+ * borrowed. */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_OpenIter(_PyInterpreterFrame *frame, PyValueBorrow source, uint32_t mode)
+{
+    (void)frame;
+    static const int oparg_of_mode[] = {
+        [ITER_ORDINARY] = 0,
+        [ITER_DELEGATE_COROUTINE_OK] = GET_ITER_YIELD_FROM_NO_CHECK,
+        [ITER_DELEGATE_NO_COROUTINE] = GET_ITER_YIELD_FROM_CORO_CHECK,
+    };
+    assert(mode <= ITER_DELEGATE_NO_COROUTINE);
+    bool indexed = _PyType_IteratesByIndex(PyValue_TYPE(source));
+    _PyValuePair got = _PyEval_GetIter(PyValue_DUP(source), oparg_of_mode[mode]);
+    if (PyValue_IsNull(got.first)) {
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    return (_PyStatusValue){indexed ? 1 : 0, got.first};
+}
+
+static inline PyValue
+_PyRop_TaggedZero(void)
+{
+    return PyValue_TagIndex(0);
+}
+
+/* One step: 1 an item (its cursor in *next), 0 the end, -1 raised */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_ForIterStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   PyValueBorrow iter, PyValueBorrow cursor, PyValue *next)
+{
+    // The cursor is a tagged index or nothing: it owns no memory
+    PyValue position = PyValue_IsNull(cursor)
+        ? PyValue_NULL : PyValue_TagIndex(PyValue_UntagIndex(cursor));
+    _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(
+        tstate, frame, iter, position);
+    if (step.status < 0) {
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    if (step.status == 0) {
+        return (_PyStatusValue){0, PyValue_IsNull(step.value) ? PyValue_None
+                                                              : step.value};
+    }
+    *next = step.cursor;
+    return (_PyStatusValue){1, step.value};
+}
+
+/* The tests and steps of the specialised IterOpen and ForIter arms */
+static inline bool
+_PyRop_IterByIndex(PyValueBorrow v)
+{
+    return _PyType_IteratesByIndex(PyValue_TYPE(v));
+}
+
+static inline bool
+_PyRop_IterSelf(PyValueBorrow v)
+{
+    return PyValue_TYPE(v)->tp_iter == PyObject_SelfIter;
+}
+
+static inline bool
+_PyRop_ExactRangeIter(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)
+        || Py_TYPE(PyValue_AsKnownObjectBorrow(v)) != &PyRangeIter_Type) {
+        return false;
+    }
+#ifdef Py_GIL_DISABLED
+    // Only a range iterator that nothing else references: this thread alone
+    // steps it
+    return _PyObject_IsUniquelyReferenced(PyValue_AsKnownObjectBorrow(v));
+#else
+    return true;
+#endif
+}
+
+static inline bool
+_PyRop_ExactListIter(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)
+        || !PyList_CheckExact(PyValue_AsKnownObjectBorrow(v))) {
+        return false;
+    }
+#ifdef Py_GIL_DISABLED
+    // A list another thread owns, and that is not shared, is not stepped here
+    PyObject *list_o = PyValue_AsKnownObjectBorrow(v);
+    return _Py_IsOwnedByCurrentThread(list_o) || _PyObject_GC_IS_SHARED(list_o);
+#else
+    return true;
+#endif
+}
+
+static inline bool
+_PyRop_CursorIsIndex(PyValueBorrow c)
+{
+    return PyValue_IsTaggedIndex(c);
+}
+
+static inline bool
+_PyRop_CursorIsVacant(PyValueBorrow c)
+{
+    return PyValue_IsNull(c);
+}
+
+static inline bool
+_PyRop_HasIternextValue(PyValueBorrow v)
+{
+    return PyValue_IsObject(v)
+        && _PyType_VALUE_SLOT(Py_TYPE(PyValue_AsKnownObjectBorrow(v)), iternext) != NULL;
+}
+
+/* IterOpen.GenMethod's guard: the type's cached __iter__ function, a
+ * generator function of one argument, is at the version the cache holds */
+static inline bool
+_PyRop_IterGenMethod(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)) {
+        return false;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
+    if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
+        return false;
+    }
+    PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
+    PyObject *iter_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.iter);
+    if (iter_o == NULL) {
+        return false;
+    }
+    assert(PyFunction_Check(iter_o));
+    return ((PyFunctionObject *)iter_o)->func_version ==
+           FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.iter_version);
+}
+
+/* One step of an exact list at its tagged cursor: 1 an item (the next cursor
+ * in *next), 0 the end, whose value is None */
+static inline _PyStatusValue
+_PyRop_ListStep(PyValueBorrow it, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *list_o = PyValue_AsKnownObjectBorrow(it);
+    assert(PyList_CheckExact(list_o));
+    intptr_t i = PyValue_UntagIndex(cursor);
+    if ((size_t)i >= (size_t)PyList_GET_SIZE(list_o)) {
+        return (_PyStatusValue){0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(i + 1);
+    return (_PyStatusValue){1, PyValue_DUP(_PyValue_PublishedItem(
+        PyList_GET_VALUE(list_o, i)))};
+}
+
+static inline _PyStatusValue
+_PyRop_TupleStep(PyValueBorrow it, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *tuple_o = PyValue_AsKnownObjectBorrow(it);
+    assert(PyTuple_CheckExact(tuple_o));
+    intptr_t i = PyValue_UntagIndex(cursor);
+    if ((size_t)i >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+        return (_PyStatusValue){0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(i + 1);
+    return (_PyStatusValue){1, PyValue_DUP(_PyValue_PublishedItem(
+        PyTuple_GET_VALUE(tuple_o, i)))};
+}
+
+/* A range iterator's step: status 0 the int, 1 the end (None), -1 raised.
+ * start and len change before the int is made. */
+static inline _PyStatusValue
+_PyRop_RangeStep(PyValueBorrow it)
+{
+    _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(it);
+    assert(Py_TYPE(r) == &PyRangeIter_Type);
+    if (r->len <= 0) {
+        return (_PyStatusValue){1, PyValue_None};
+    }
+    long value = r->start;
+    r->start = value + r->step;
+    r->len--;
+    PyValue next = PyValue_FromInt64(value);
+    if (PyValue_IsNull(next)) {
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    return (_PyStatusValue){0, next};
+}
+
+/* The tagged branch of the generic step: 1 an item (the next cursor in
+ * *next), 0 the end, -1 raised */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_IndexedStep(PyValueBorrow iter, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+    intptr_t i = PyValue_UntagIndex(cursor);
+    assert(i >= 0);
+    _PyValueIndexPair step = Py_TYPE(iter_o)->_tp_iteritem(iter_o, i);
+    if (PyValue_IsNull(step.value)) {
+        return (_PyStatusValue){step.index < 0 ? -1 : 0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(step.index);
+    return (_PyStatusValue){1, step.value};
+}
+
+/* The value-slot branch of the generic step: status 0 the item, 1 the
+ * completion value, -1 raised; a StopIteration is the end */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_SlotStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                PyValueBorrow iter)
+{
+    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+    PyTypeObject *iter_type = Py_TYPE(iter_o);
+    _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(iter_type, iternext);
+    _PyStatusValue step;
+    if (next_value != NULL) {
+        _PyType_CHECK_VALUE_ROW(iter_type, _Py_VALUE_SLOT_INDEX_iternext);
+        step = next_value(iter_o);
+    }
+    else {
+        step = _PyValue_IterStep(iter_o);
+    }
+    if (step.status == PYGEN_NEXT) {
+        return (_PyStatusValue){0, step.value};
+    }
+    if (step.status == PYGEN_RETURN) {
+        return (_PyStatusValue){1, PyValue_IsNull(step.value) ? PyValue_None
+                                                              : step.value};
+    }
+    if (_PyForIter_StopIsExhaustion(tstate, frame)) {
+        return (_PyStatusValue){1, PyValue_None};
+    }
+    return (_PyStatusValue){-1, PyValue_NULL};
+}
+
+/* ForIter.Observed's STOP_ITERATION: the event of the completion value,
+ * reported before the loop's pair is retired.  The exit is where the word
+ * goes on exhaustion.  The value is closed on every path. */
+static Py_NO_INLINE int
+_PyRop_StopIterationEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                          _PyInstr *site, PyValueBorrow receiver,
+                          PyValue value)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
+    frame->return_pc = dest;
+    int status = _PyIR_ObserveStopIteration(tstate, frame, site, dest,
+                                            receiver, PyValue_Borrow(value));
+    PyValue_CLOSE(value);
+    if (status > 0) {
+        frame->return_pc = frame->instr_ptr;
+    }
+    return status;
+}
+
 /* The row of Jump.Observed: the JUMP event of the word's one edge */
 static Py_NO_INLINE int
 _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
@@ -2849,25 +3101,29 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
     _PyCodeExec *exec = code->_co_exec;
     if (exec->first_traceable > 1) {
         /* A generator expression: its code begins with RESUME, a bound
-         * LocalRead of the argument and GET_ITER or GET_AITER, before its
-         * RETURN_GENERATOR, and nothing executes them.  The iterator, and for GET_ITER the
+         * IterOpen of the argument, or a bound LocalRead and GET_AITER,
+         * before its RETURN_GENERATOR, and nothing executes them.  The
+         * iterator, and for IterOpen the
          * index, are the first two slots of the stack, where the loop reads
          * them: iter() of the outermost iterable runs here, at creation, as
          * the language requires, and the code takes any iterable as its
          * argument.  Its errors are those of the call. */
-        int handler = _PyIR_BaseOpcode(IR_HANDLER(exec->words[2]));
-        assert(IR_HANDLER(exec->words[1]) == ROP_HANDLER_LocalRead_Bound);
-        assert(handler == GET_ITER || handler == GET_AITER);
-        assert(IR_A(exec->words[2]) == exec->nfixed);
         PyValue *stack = frame->base + exec->nfixed;
-        PyValue iterable = PyValue_DUP(frame->base[0]);
-        if (handler == GET_AITER) {
-            stack[0] = _PyEval_GetAIter(tstate, iterable);
+        if (IR_HANDLER(exec->words[1]) == ROP_HANDLER_LocalRead_Bound) {
+            assert(_PyIR_BaseOpcode(IR_HANDLER(exec->words[2])) == GET_AITER);
+            assert(IR_A(exec->words[2]) == exec->nfixed);
+            stack[0] = _PyEval_GetAIter(tstate, PyValue_DUP(frame->base[0]));
         }
         else {
-            _PyValuePair got = _PyEval_GetIter(iterable, 0);
-            stack[0] = got.first;
-            stack[1] = got.second;
+            // A word of IterOpen, whichever arm the site has adapted to: the
+            // argument is its source and its pair is the first two slots of
+            // the stack
+            assert(IR_A(exec->words[1]) == exec->nfixed);
+            assert(IR_B(exec->words[1]) == 0);
+            _PyStatusValue opened = _PyRop_OpenIter(
+                frame, PyValue_Borrow(frame->base[0]), ITER_ORDINARY);
+            stack[0] = opened.value;
+            stack[1] = opened.status == 1 ? _PyRop_TaggedZero() : PyValue_NULL;
         }
         if (PyValue_IsNull(stack[0])) {
             return -1;
@@ -2886,6 +3142,31 @@ gen_prologue(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
         return 0;
     }
     return gen_prologue_run(tstate, gen, code);
+}
+
+/* The generator of the iterable's cached __iter__ function, made at once
+ * with the iterable (a new owner of it) as its argument.  NULL, with the
+ * exception set, if the generator or its prologue failed; the iterable is
+ * not touched. */
+static Py_NO_INLINE PyValue
+_PyRop_NewIterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        PyValueBorrow iterable)
+{
+    PyHeapTypeObject *ht =
+        (PyHeapTypeObject *)Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
+    PyFunctionObject *func = (PyFunctionObject *)ht->_spec_cache.iter;
+    PyGenObject *gen = _PyGen_NewCall(
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
+        NULL, (PyCodeObject *)func->func_code, frame);
+    if (gen == NULL) {
+        return PyValue_NULL;
+    }
+    gen->gi_iframe.base[0] = PyValue_DUP(iterable);
+    if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
+        _PyGen_DiscardCall(gen);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal((PyObject *)gen);
 }
 
 /* The generator that the call at head creates, when the callee is a generator

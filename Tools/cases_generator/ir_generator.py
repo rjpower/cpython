@@ -1219,7 +1219,10 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 STACK_ONLY_WITH_BODY = (
     "PUSH_NULL", "TO_BOOL", "UNARY_NOT", "POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
     "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE", "JUMP_FORWARD", "JUMP_BACKWARD",
-    "JUMP_BACKWARD_NO_INTERRUPT", "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP")
+    "JUMP_BACKWARD_NO_INTERRUPT", "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
+    # The loop stubs keep the bodies that name their exits (FOR_ITER is a jump)
+    "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER", "INSTRUMENTED_FOR_ITER",
+    "INSTRUMENTED_END_FOR", "INSTRUMENTED_POP_ITER")
 
 # Abort stubs that still have a handler and an id (the cell ops that CE
 # ported were left out of the old list; IR_OPERANDS is a word, not an op).

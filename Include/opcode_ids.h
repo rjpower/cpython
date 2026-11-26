@@ -130,16 +130,9 @@ extern "C" {
 #define UNPACK_SEQUENCE                        117
 #define YIELD_VALUE                            118
 #define RESUME                                 128
-#define FOR_ITER_GEN                           129
-#define FOR_ITER_LIST                          130
-#define FOR_ITER_RANGE                         131
-#define FOR_ITER_TUPLE                         132
-#define FOR_ITER_VIRTUAL                       133
-#define GET_ITER_SELF                          134
-#define GET_ITER_VIRTUAL                       135
-#define SEND_ASYNC_GEN                         136
-#define SEND_GEN                               137
-#define SEND_VIRTUAL                           138
+#define SEND_ASYNC_GEN                         129
+#define SEND_GEN                               130
+#define SEND_VIRTUAL                           131
 #define INSTRUMENTED_RESUME                    234
 #define INSTRUMENTED_END_FOR                   235
 #define INSTRUMENTED_POP_ITER                  236
@@ -178,7 +171,7 @@ extern "C" {
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
 #define IR_NUM_OLD_HANDLERS                    256
-#define IR_NUM_HANDLERS                        481
+#define IR_NUM_HANDLERS                        501
 
 #ifdef __cplusplus
 }

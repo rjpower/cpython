@@ -1575,6 +1575,8 @@ class PilotTests(unittest.TestCase):
                     f"items.rop:{number}:5: {arm}: points: raise at {family}.Failed: "
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
+        iter_open = at("iteration.rop", "exit raise(IterOpen.Failed, saved);", 5)
+        iter_gen_method = at("iteration.rop", "exit raise(IterOpen.Failed, saved);", 5, last=True)
         # Every arm of attrs.rop that raises through retire_failed_call: the
         # generic store and delete, the stores that fall back to the generic
         # store, the special lookup; the super arms spend their parts in the
@@ -1665,6 +1667,10 @@ class PilotTests(unittest.TestCase):
               f"{raise_method}: GetMethod.Generic: points: raise at GetMethod.Failed: "
               "GetMethod.Failed lists obj in spent, but obj is intact",
               *item_diagnostics,
+              f"{iter_open}: IterOpen.Generic: points: raise at IterOpen.Failed: "
+              "IterOpen.Failed lists source in spent, but source is intact",
+              f"{iter_gen_method}: IterOpen.GenMethod: points: raise at IterOpen.Failed: "
+              "IterOpen.Failed lists source in spent, but source is intact",
               f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
               "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "
               "spent, but mapping is intact",

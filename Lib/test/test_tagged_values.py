@@ -519,7 +519,7 @@ class InlineIntTest(unittest.TestCase):
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
         for name in existing("Const.Small",
-                             "Add.Int", "Binary.Int", "FOR_ITER_RANGE"):
+                             "Add.Int", "Binary.Int", "ForIter.Range"):
             self.assertIn(name, names)
         self.assertIn("Add.Int", opnames(add3))
 

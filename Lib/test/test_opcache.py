@@ -735,6 +735,7 @@ class TestRacesDoNotCrash(TestBase):
         opname = "GetItem.ListIndex"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
+    @unittest.skip("ForIter.Generator returns with SY's runtime switch")
     @requires_specialization
     def test_for_iter_gen(self):
         def get_items():
@@ -764,7 +765,7 @@ class TestRacesDoNotCrash(TestBase):
                 except ValueError:
                     pass
 
-        opname = "FOR_ITER_GEN"
+        opname = "ForIter.Generator"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -786,7 +787,7 @@ class TestRacesDoNotCrash(TestBase):
                 item.clear()
                 item.append(None)
 
-        opname = "FOR_ITER_LIST"
+        opname = "ForIter.List"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -2274,8 +2275,8 @@ class TestSpecializer(TestBase):
                 self.assertIn(i, L)
 
         for_iter_list()
-        self.assert_specialized(for_iter_list, "FOR_ITER_LIST")
-        self.assert_no_opcode(for_iter_list, "FOR_ITER")
+        self.assert_specialized(for_iter_list, "ForIter.List")
+        self.assert_no_opcode(for_iter_list, "ForIter.Generic")
 
         t = tuple(range(10))
         def for_iter_tuple():
@@ -2283,8 +2284,8 @@ class TestSpecializer(TestBase):
                 self.assertIn(i, t)
 
         for_iter_tuple()
-        self.assert_specialized(for_iter_tuple, "FOR_ITER_TUPLE")
-        self.assert_no_opcode(for_iter_tuple, "FOR_ITER")
+        self.assert_specialized(for_iter_tuple, "ForIter.Tuple")
+        self.assert_no_opcode(for_iter_tuple, "ForIter.Generic")
 
         s = "abcdefghij"
         def for_iter_str():
@@ -2292,8 +2293,8 @@ class TestSpecializer(TestBase):
                 self.assertIn(i, s)
 
         for_iter_str()
-        self.assert_specialized(for_iter_str, "FOR_ITER_VIRTUAL")
-        self.assert_no_opcode(for_iter_str, "FOR_ITER")
+        self.assert_specialized(for_iter_str, "ForIter.Indexed")
+        self.assert_no_opcode(for_iter_str, "ForIter.Generic")
 
         r = range(10)
         def for_iter_range():
@@ -2302,16 +2303,10 @@ class TestSpecializer(TestBase):
 
         for_iter_range()
         if int_producers:
-            self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
-            self.assert_no_opcode(for_iter_range, "FOR_ITER")
+            self.assert_specialized(for_iter_range, "ForIter.Range")
+            self.assert_no_opcode(for_iter_range, "ForIter.Generic")
 
-        def for_iter_generator():
-            for i in (i for i in range(10)):
-                i + 1
-
-        for_iter_generator()
-        self.assert_specialized(for_iter_generator, "FOR_ITER_GEN")
-        self.assert_no_opcode(for_iter_generator, "FOR_ITER")
+        # ForIter.Generator returns with SY's runtime switch
 
     @cpython_only
     @requires_specialization
@@ -2324,8 +2319,8 @@ class TestSpecializer(TestBase):
                 for i in L:
                     break
         get_iter_list()
-        self.assert_specialized(get_iter_list, "GET_ITER_VIRTUAL")
-        self.assert_no_opcode(get_iter_list, "GET_ITER")
+        self.assert_specialized(get_iter_list, "IterOpen.Indexed")
+        self.assert_no_opcode(get_iter_list, "IterOpen.Generic")
 
         def get_iter_gen():
             n = 10
@@ -2334,8 +2329,8 @@ class TestSpecializer(TestBase):
                 for i in (i for i in range(10)):
                     break
         get_iter_gen()
-        self.assert_specialized(get_iter_gen, "GET_ITER_SELF")
-        self.assert_no_opcode(get_iter_gen, "GET_ITER")
+        self.assert_specialized(get_iter_gen, "IterOpen.Self")
+        self.assert_no_opcode(get_iter_gen, "IterOpen.Generic")
 
     @cpython_only
     @requires_specialization

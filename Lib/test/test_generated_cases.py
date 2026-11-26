@@ -956,9 +956,6 @@ class TestIRCases(unittest.TestCase):
             return output.getvalue()
 
         entries = {
-            "FOR_ITER": "ForIter", "INSTRUMENTED_FOR_ITER": "ForIter",
-            "FOR_ITER_LIST": "ForIter", "FOR_ITER_TUPLE": "ForIter",
-            "FOR_ITER_RANGE": "ForIter", "FOR_ITER_VIRTUAL": "ForIter",
             "SEND": "Send", "SEND_VIRTUAL": "Send",
             "SEND_ASYNC_GEN": "Send", "CLEANUP_THROW": "SendThrow",
         }
@@ -1082,13 +1079,13 @@ class TestIRCases(unittest.TestCase):
         self.assertFalse(fmt.no_fold)
         self.assertIn("IR_STORE_DST(ir_word, A, result);", handler)
 
+    @unittest.skip("FOR_ITER_GEN returns with the generator arms (rir90 FI, after SY)")
     def test_generator_entry_recipient_uses_actual_terminal(self):
         source = self.live_source("FOR_ITER_GEN", "SEND_GEN", "SEND")
         Path(self.temp_input_filename).write_text(source)
         analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
-        for name, kind in (("FOR_ITER_GEN", "_PY_IR_FOR_ITER"),
-                           ("SEND_GEN", "_PY_IR_SEND")):
+        for name, kind in (("SEND_GEN", "_PY_IR_SEND"),):
             instruction = analysis.instructions[name]
             recipe = ir_generator.generator_entry_recipe(instruction)
             self.assertIsNotNone(recipe)
@@ -1250,7 +1247,7 @@ class TestIRCases(unittest.TestCase):
         output = io.StringIO()
         ir_generator.generate_ir(
             [self.temp_input_filename], analysis, output, False)
-        for name in ("SEND", "SEND_GEN", "FOR_ITER_GEN"):
+        for name in ("SEND", "SEND_GEN"):
             with self.subTest(name=name):
                 handler = self.handler(output.getvalue(), name)
                 self.assertEqual(handler.count("_Py_EnterRecursivePy(tstate)"), 1)
@@ -3564,8 +3561,7 @@ class TestIRCases(unittest.TestCase):
         contracts = ir_generator.handler_contracts(real, formats)
         for name in self.live_among(
                 BYTECODES.read_text(), "IS_OP_JUMP", "INSTRUMENTED_IS_OP_JUMP",
-                "COMPARE_OP_JUMP", "COMPARE_OP_JUMP_INT", "CONTAINS_OP_JUMP",
-                "POP_ITER", "INSTRUMENTED_POP_ITER"):
+                "COMPARE_OP_JUMP", "COMPARE_OP_JUMP_INT", "CONTAINS_OP_JUMP"):
             with self.subTest(handler=name):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
@@ -3590,6 +3586,7 @@ class TestIRCases(unittest.TestCase):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_CALL_DRAIN"),))
 
+    @unittest.skip("FOR_ITER is a stub; the arms carry the loop (rir90 FI)")
     def test_loop_completion_recipes_follow_actual_emitted_routes(self):
         source = BYTECODES
         analysis = analyzer.analyze_files([str(source)])

@@ -1138,6 +1138,20 @@ def cx():
 UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
               "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
+    # Iteration (rir90 FI): the arms are checked by test_rop_iter
+    "IterOpen.Generic": "covered by test_rop_iter",
+    "ForIter.Generic": "covered by test_rop_iter",
+    "ForIter.Observed": "covered by test_rop_iter",
+    "IterClose.Retire": "covered by test_rop_iter",
+    "IterClose.Observed": "covered by test_rop_iter",
+    "ForIter.Indexed": "covered by test_rop_iter",
+    "ForIter.Slot": "covered by test_rop_iter",
+    "ForIter.List": "covered by test_rop_iter",
+    "ForIter.Tuple": "covered by test_rop_iter",
+    "ForIter.Range": "covered by test_rop_iter",
+    "IterOpen.GenMethod": "covered by test_rop_iter",
+    "IterOpen.Indexed": "covered by test_rop_iter",
+    "IterOpen.Self": "covered by test_rop_iter",
     # The tracer's view of the keyword and expanded calls is deferred while the
     # interpreter ports finish (rir90 interpreter-first rule)
     "CallKw.Plan": "deferred: binds keywords by a site's plan",

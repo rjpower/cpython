@@ -155,7 +155,7 @@ dummy_func(
 
         /* A stack op only: the pseudo op that PrepareKwargs puts before a read of
          * a lazy **kwargs local is the MaterializeKwargs family. */
-        tier1 inst(MATERIALIZE_KWARGS, (--))
+        translator_only tier1 inst(MATERIALIZE_KWARGS, (--))
             exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
@@ -748,7 +748,6 @@ dummy_func(
             EXIT_IF(!PyValue_IsNone(val));
         }
 
-        macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
 
         op(_GUARD_NOS_NOT_NULL, (nos, unused -- nos, unused))
             effects() exits(next, miss)
@@ -1195,51 +1194,32 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(BUILD_STRING, (pieces[oparg]: consumed -- str: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: BUILD_STRING is the BuildText family (Python/register_ops/text.rop). */
+        tier1 inst(BUILD_STRING,
+                (pieces[oparg]: consumed -- str: owned))
+            exits(abort)
         {
-            PyObject *str_o = IR_BUILD_STRING(pieces);
-            DEAD(pieces);
-            ERROR_IF(str_o == NULL);
-            str = PyValue_FromObjectSteal(str_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(BUILD_INTERPOLATION,
-                (value: consumed, str: consumed object, format[oparg & 1]: consumed object
+        /* A stack op only: BUILD_INTERPOLATION is the BuildText family (Python/register_ops/text.rop). */
+        tier1 inst(BUILD_INTERPOLATION,
+                (value: consumed, str: consumed, format[oparg & 1]: consumed
                  -- interpolation: owned))
-            effects(runs_python, releases) exits(next, raise)
+            exits(abort)
         {
-            PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
-            int conversion = oparg >> 2;
-            PyObject *format_o;
-            if (oparg & 1) {
-                format_o = PyValue_AsKnownObjectBorrow(format[0]);
-            }
-            else {
-                format_o = &_Py_STR(empty);
-            }
-            // The value may be a number: the interpolation holds its box
-            PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
-            DECREF_INPUTS();
-            ERROR_IF(interpolation_o == NULL);
-            interpolation = PyValue_FromObjectSteal(interpolation_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(BUILD_TEMPLATE,
-                (strings: consumed assumed(object) by BUILD_TUPLE,
-                 interpolations: consumed assumed(object) by BUILD_TUPLE -- template: owned))
-            effects(allocates, raises, releases) exits(next, raise)
+        /* A stack op only: BUILD_TEMPLATE is the BuildText family (Python/register_ops/text.rop). */
+        tier1 inst(BUILD_TEMPLATE,
+                (strings: consumed, interpolations: consumed -- template: owned))
+            exits(abort)
         {
-            // Both are tuples that the compiler built
-            assert(PyValue_IsObject(strings));
-            assert(PyValue_IsObject(interpolations));
-            PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
-            PyObject *interpolations_o = PyValue_AsKnownObjectBorrow(interpolations);
-            PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
-            PyValue_CLOSE(interpolations);
-            PyValue_CLOSE(strings);
-            ERROR_IF(template_o == NULL);
-            template = PyValue_FromObjectSteal(template_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: BUILD_TUPLE is the Build family (Python/register_ops/displays.rop). */
@@ -1546,7 +1526,7 @@ dummy_func(
         /* The keeping jumps of "x and y" and "x or y" are BranchTruth words
          * (the keep modes); these names remain for the family's ops and the
          * event tables of Python/instrumentation.c, with no handler. */
-        inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+        translator_only inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
             effects(runs_python) exits(next, branch, raise)
         {
             PyValue held = TAKE(cond);
@@ -1565,7 +1545,7 @@ dummy_func(
             }
         }
 
-        inst(JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+        translator_only inst(JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
             effects(runs_python) exits(next, branch, raise)
         {
             PyValue held = TAKE(cond);
@@ -1584,7 +1564,7 @@ dummy_func(
             }
         }
 
-        tier1 inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
+        translator_only tier1 inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
             exits(abort)
         {
             (void)oparg;
@@ -1592,7 +1572,7 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
+        translator_only tier1 inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
             exits(abort)
         {
             (void)oparg;
@@ -1642,95 +1622,50 @@ dummy_func(
             }
         }
 
-        outlined inst(GET_LEN, (obj -- obj, len: owned exact(PyLong_Type)))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: GET_LEN is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(GET_LEN,
+                (obj -- obj, len: owned))
+            exits(abort)
         {
-            // PUSH(len(TOS))
-            Py_ssize_t len_i = _PyValue_Size(obj);
-            ERROR_IF(len_i < 0);
-            len = PyValue_FromInt64(len_i);
-            ERROR_IF(PyValue_IsNull(len));
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        op(_MATCH_CLASS,
-                (subject: taken, type: taken, names: taken assumed(object) by codegen_pattern_class
-                 -- attrs: owned, s: moved(subject), tp: moved(type), n: moved(names)))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: MATCH_CLASS is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(MATCH_CLASS,
+                (subject: consumed, type: consumed, names: consumed -- attrs: owned))
+            exits(abort)
         {
-            // Pop TOS and TOS1. Set TOS to a tuple of attributes on success, or
-            // None on failure.
-            assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
-            // The class pattern may name a number: MatchClass rejects it
-            PyObject *attrs_o = _PyEval_MatchClass(tstate,
-                subject,
-                type, oparg,
-                PyValue_AsKnownObjectBorrow(names));
-            if (attrs_o) {
-                assert(PyTuple_CheckExact(attrs_o));  // Success!
-                attrs = PyValue_FromObjectSteal(attrs_o);
-            }
-            else {
-                if (_PyErr_Occurred(tstate)) { // Error!
-                    ERROR_NO_POP();
-                }
-                attrs = PyValue_None;  // Failure!
-            }
-            s = subject;
-            tp = type;
-            n = names;
-            INPUTS_DEAD();
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(MATCH_CLASS) = _MATCH_CLASS + _POP_TOP_ANY + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        outlined inst(MATCH_MAPPING, (subject -- subject, res: owned exact(PyBool_Type)))
-            effects(reads) exits(next)
+        /* A stack op only: MATCH_MAPPING is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(MATCH_MAPPING,
+                (subject -- subject, res: owned))
+            exits(abort)
         {
-            int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_MAPPING;
-            res = match ? PyValue_True : PyValue_False;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(MATCH_SEQUENCE, (subject -- subject, res: owned exact(PyBool_Type)))
-            effects(reads) exits(next)
+        /* A stack op only: MATCH_SEQUENCE is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(MATCH_SEQUENCE,
+                (subject -- subject, res: owned))
+            exits(abort)
         {
-            int match = PyValue_TYPE(subject)->tp_flags & Py_TPFLAGS_SEQUENCE;
-            res = match ? PyValue_True : PyValue_False;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(MATCH_KEYS,
-                (subject: assumed(object) by MATCH_MAPPING, keys: assumed(object) by codegen_pattern_mapping
-                 -- subject, keys, values_or_none: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: MATCH_KEYS is in the family of Python/register_ops/patterns.rop. */
+        tier1 inst(MATCH_KEYS,
+                (subject, keys -- subject, keys, values_or_none: owned))
+            exits(abort)
         {
-            // On successful match, PUSH(values). Otherwise, PUSH(None).
-            // MATCH_MAPPING has accepted the subject: a mapping, not a number
-            assert(PyValue_IsObject(subject));
-            assert(PyValue_IsObject(keys));
-            PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
-                PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
-            ERROR_IF(values_or_none_o == NULL);
-            values_or_none = PyValue_FromObjectSteal(values_or_none_o);
-        }
-
-        family(GET_ITER, INLINE_CACHE_ENTRIES_GET_ITER) = {
-            GET_ITER_SELF,
-            GET_ITER_VIRTUAL,
-            GET_ITER_PY_GENERATOR,
-        };
-
-        specializing op(_SPECIALIZE_GET_ITER, (iterable -- iterable))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_GetIter(iterable, next_instr);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(GET_ITER);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         op(_GET_ITER,
@@ -1744,126 +1679,11 @@ dummy_func(
             index_or_null = got.second;
         }
 
-        macro(GET_ITER) =
-            unused/1 + _SPECIALIZE_GET_ITER +
-            _GET_ITER;
-
-        op(_GUARD_ITERATOR, (iterable: object -- iterable))
-            effects(reads) exits(next, miss)
-        {
-            PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-            EXIT_IF(tp->tp_iter != PyObject_SelfIter, "the type's tp_iter is not PyObject_SelfIter");
-            STAT_INC(GET_ITER, hit);
-        }
-
-        macro(GET_ITER_SELF) =
-            unused/1 +
-            _GUARD_ITERATOR +
-            PUSH_NULL;
-
-        op(_GUARD_ITER_VIRTUAL, (iterable: object -- iterable))
-            effects(reads) exits(next, miss)
-        {
-            PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-            EXIT_IF(!_PyType_IteratesByIndex(tp), "the type iterates by index");
-            STAT_INC(GET_ITER, hit);
-        }
-
-        op(_PUSH_TAGGED_ZERO, ( -- zero: owned))
-            effects() exits(next)
-        {
-            zero = PyValue_TagIndex(0);
-        }
-
-        macro(GET_ITER_VIRTUAL) =
-            unused/1 +
-            _GUARD_ITER_VIRTUAL +
-            _PUSH_TAGGED_ZERO;
-
-        // The iterable's class defines __iter__ as a generator function of
-        // the one argument: the type caches the function under its version
-        // (as for __getitem__), which PyType_Modified() invalidates.  The
-        // iterator is the generator, created at once with the iterable as its
-        // argument and no call of the function.
-        inline_ok op(_GUARD_ITER_PY_GENERATOR, (iterable -- iterable: object))
-            effects(reads) exits(next, miss)
-        {
-            EXIT_IF(!PyValue_IsObject(iterable));
-            PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE),
-                    "only a heap type caches its __iter__ function");
-            PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
-            PyObject *iter_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.iter);
-            EXIT_IF(iter_o == NULL, "the type caches no __iter__ function");
-            assert(PyFunction_Check(iter_o));
-            EXIT_IF(((PyFunctionObject *)iter_o)->func_version !=
-                    FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.iter_version),
-                    "the cached function changed version");
-        }
-
-        // Contract (G0d1): _PyGen_NewCall allocates the generator; if it fails the
-        // iterable is still in its home (holding).  Then the iterable moves into the
-        // generator's frame (TAKE), and a failed prologue discards the generator
-        // with it (_PyGen_DiscardCall); the generator becomes iter.
-        ir_only op(_GET_ITER_PY_GENERATOR,
-                (iterable: consumed object
-                 -- iter: owned object, index_or_null: inline encoding(null)))
-            effects(runs_python) exits(next, raise)
-        {
-            STAT_INC(GET_ITER, hit);
-            assert(PyValue_IsObject(iterable));
-            PyHeapTypeObject *ht =
-                (PyHeapTypeObject *)Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-            PyFunctionObject *func = (PyFunctionObject *)ht->_spec_cache.iter;
-            PyGenObject *gen = _PyGen_NewCall(
-                tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
-                NULL, (PyCodeObject *)func->func_code, frame);
-            // The iterable is still in its home, for the unwinder
-            ERROR_IF(gen == NULL, holding(iterable));
-            gen->gi_iframe.base[0] = TAKE(iterable);
-            if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
-                _PyGen_DiscardCall(gen);
-                ERROR_NO_POP();
-            }
-            INPUTS_DEAD();
-            iter = PyValue_FromObjectSteal((PyObject *)gen);
-            index_or_null = PyValue_NULL;
-        }
-
-        macro(GET_ITER_PY_GENERATOR) =
-            unused/1 +
-            _CHECK_PEP_523 +
-            _GUARD_ITER_PY_GENERATOR +
-            _GET_ITER_PY_GENERATOR;
+        macro(GET_ITER) = unused/1 + _GET_ITER;
 
         // The body outcome preserves the iterator/cursor pair and defines
         // the item recipient. Exhaustion retires the pair, preserves the
         // last item binding and continues at the real exit target.
-
-        family(FOR_ITER, INLINE_CACHE_ENTRIES_FOR_ITER) = {
-            FOR_ITER_LIST,
-            FOR_ITER_TUPLE,
-            FOR_ITER_RANGE,
-            FOR_ITER_GEN,
-            FOR_ITER_VIRTUAL,
-            FOR_ITER_DICT_ITEMS,
-        };
-
-        specializing op(_SPECIALIZE_FOR_ITER,
-                (iter: assumed(object) by GET_ITER, null_or_index -- iter, null_or_index))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_ForIter(iter, null_or_index, next_instr, oparg);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(FOR_ITER);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
 
         replaced op(_FOR_ITER, (iter, index: consumed -- iter, next_index: inline encoding(tagged_index|null) replaces(index), next: owned))
             effects(runs_python) exits(next, branch, raise)
@@ -1883,93 +1703,7 @@ dummy_func(
             next = item;
         }
 
-        macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
-
-        // One form for both cursor protocols. A tagged cursor steps an
-        // index-protocol iterator; a NULL cursor steps an object-protocol
-        // iterator through its C value slot, and a type without the slot
-        // exits.
-        replaced op(_FOR_ITER_VIRTUAL,
-                (iter: assumed(object) by GET_ITER, index: consumed
-                 -- iter, next_index: inline encoding(tagged_index|null) replaces(index), next: owned))
-            effects(runs_python) exits(next, branch, raise, miss)
-        {
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            if (PyValue_IsNull(index)) {
-                _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
-                EXIT_IF(next_value == NULL, "the type has no iternext value slot");
-                PyValue spent = TAKE(index);
-                _PyValue_DropCursor(spent);
-                _PyStatusValue step = next_value(iter_o);
-                if (step.status != PYGEN_NEXT) {
-                    // A StopIteration is the exhaustion; any other error
-                    // propagates.
-                    if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
-                        ERROR_NO_POP();
-                    }
-                    PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;
-                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
-                }
-                next_index = PyValue_NULL;
-                next = step.value;
-            }
-            else {
-                Py_ssize_t position = PyValue_UntagIndex(index);
-                PyValue spent = TAKE(index);
-                _PyValue_DropCursor(spent);
-                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair item = iteritem(iter_o, position);
-                if (PyValue_IsNull(item.value)) {
-                    if (item.index < 0) {
-                        ERROR_NO_POP();
-                    }
-                    PyValue completed = PyValue_None;
-                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
-                }
-                next_index = PyValue_TagIndex(item.index);
-                next = item.value;
-            }
-        }
-
-        macro(FOR_ITER_VIRTUAL) =
-            unused/1 +  // Skip over the entry distance
-            _FOR_ITER_VIRTUAL;
-
-        // `for key, value in d.items()`: FOR_ITER over a dict's items, whose
-        // key and value go straight to the two locals that the unpack after
-        // it names, with no pair and no unpack.  The specializer chooses it
-        // only when the next word unpacks the item into a run of two locals;
-        // the handler then continues after that word, which stays in place
-        // for the generic form.  Instrumentation may replace that word, and
-        // then the generic form runs it.
-        // Contract (G0d1): the iterator is GET_ITER's object; the step
-        // (_PyDictIterItem_Next) writes the two locals and may raise; exhaustion
-        // completes the step (IR_COMPLETE_STEP: branch, runs Python); a wrong type
-        // or an instrumented unpack word misses. A step continues after the
-        // unpack word (`next_instr++`), not at the next word: jump (G0d1, V12).
-        ir_only op(_FOR_ITER_DICT_ITEMS,
-                (iter: assumed(object) by GET_ITER, null_or_index -- iter, null_or_index, unused))
-            effects(runs_python) exits(jump, branch, raise, miss)
-        {
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);
-            _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr);
-            EXIT_IF(_PyIR_HandlerFlags[IR_HANDLER(unpack)] & _PyIR_H_INSTRUMENTED,
-                    "the folded unpack word is instrumented");
-            int found = _PyDictIterItem_Next(iter_o, &IR_SLOT(IR_D(unpack)));
-            if (found <= 0) {
-                if (found < 0) {
-                    ERROR_NO_POP();
-                }
-                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, PyValue_None, oparg);
-            }
-            next_instr++;
-        }
-
-        macro(FOR_ITER_DICT_ITEMS) =
-            unused/1 +  // Skip over the entry distance
-            _FOR_ITER_DICT_ITEMS;
-
+        macro(FOR_ITER) = unused/1 + _FOR_ITER;
         inst(INSTRUMENTED_FOR_ITER,
                 (unused/1, iter: assumed(object) by GET_ITER, index: consumed
                  -- iter, next_index: inline encoding(tagged_index|null) replaces(index), next: owned))
@@ -1990,192 +1724,6 @@ dummy_func(
             next = item;
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
         }
-
-        leaf op(_ITER_CHECK_LIST,
-                (iter: assumed(object) by GET_ITER, null_or_index
-                 -- iter: exact(PyList_Type), null_or_index))
-            effects(reads) exits(next, miss)
-        {
-            // GET_ITER always leaves an object, never an inline value.
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(!PyList_CheckExact(iter_o));
-#ifdef Py_GIL_DISABLED
-            EXIT_IF(!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o),
-                    "a list another thread owns, and that is not shared");
-#endif
-        }
-
-        // GET_ITER stores a tagged index beside an exact list (its
-        // `_PyEval_GetIter` gives `PyValue_TagIndex(0)` for it), and the
-        // guard before this uop has shown that the iterator is one: only
-        // then is the cursor assumed, so the assertion follows the guard
-        leaf replaced op(_ITER_JUMP_LIST,
-                (iter: object, index: consumed assumed(tagged_index) by GET_ITER
-                 -- iter, next_index: inline tagged_index replaces(index)))
-            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
-        {
-#ifdef Py_GIL_DISABLED
-            // For free-threaded Python, the loop exit can happen at any point during
-            // item retrieval, so it doesn't make much sense to check and jump
-            // separately before item retrieval. Any length check we do here can be
-            // invalid by the time we actually try to fetch the item.
-#else
-            PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-            assert(Py_TYPE(list_o) == &PyList_Type);
-            STAT_INC(FOR_ITER, hit);
-            if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyList_GET_SIZE(list_o)) {
-                next_index = PyValue_TagIndex(-1);
-                PyValue completed = PyValue_None;
-                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
-            }
-#endif
-            next_index = index;
-            DEAD(index);
-        }
-
-        leaf replaced op(_ITER_NEXT_LIST,
-                (iter: object, index: consumed -- iter, next_index: inline replaces(index), next: owned))
-            effects(reads) exits(next)
-        {
-            PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-            assert(PyList_CheckExact(list_o));
-            PyValueBorrow item = _PyValue_PublishedItem(
-                PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
-            next = PyValue_DUP(item);
-            next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
-            DEAD(index);
-        }
-
-        macro(FOR_ITER_LIST) =
-            unused/1 +  // Skip over the entry distance
-            _ITER_CHECK_LIST +
-            _ITER_JUMP_LIST +
-            _ITER_NEXT_LIST;
-
-        leaf op(_ITER_CHECK_TUPLE,
-                (iter: assumed(object) by GET_ITER, null_or_index
-                 -- iter: exact(PyTuple_Type), null_or_index))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(!PyTuple_CheckExact(iter_o));
-        }
-
-        // GET_ITER stores a tagged index beside an exact tuple (its
-        // `_PyEval_GetIter` gives `PyValue_TagIndex(0)` for it), and the
-        // guard before this uop has shown that the iterator is one: only
-        // then is the cursor assumed, so the assertion follows the guard
-        leaf replaced op(_ITER_JUMP_TUPLE,
-                (iter: object, index: consumed assumed(tagged_index) by GET_ITER
-                 -- iter, next_index: inline tagged_index replaces(index)))
-            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
-        {
-            PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
-            (void)tuple_o;
-            assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-            STAT_INC(FOR_ITER, hit);
-            if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-                next_index = PyValue_TagIndex(-1);
-                PyValue completed = PyValue_None;
-                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
-            }
-            next_index = index;
-            DEAD(index);
-        }
-
-        leaf op(_ITER_NEXT_TUPLE,
-                (iter: object, index: consumed -- iter, next_index: inline replaces(index), next: owned))
-            effects(reads) exits(next)
-        {
-            PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
-            assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-            uintptr_t i = PyValue_UntagIndex(index);
-            assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-            PyValueBorrow item = _PyValue_PublishedItem(PyTuple_GET_VALUE(tuple_o, i));
-            next = PyValue_DUP(item);
-            next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
-            DEAD(index);
-        }
-
-        macro(FOR_ITER_TUPLE) =
-            unused/1 +  // Skip over the entry distance
-            _ITER_CHECK_TUPLE +
-            _ITER_JUMP_TUPLE +
-            _ITER_NEXT_TUPLE;
-
-        leaf op(_ITER_CHECK_RANGE,
-                (iter: assumed(object) by GET_ITER, null_or_index
-                 -- iter: exact(PyRangeIter_Type), null_or_index))
-            effects(reads) exits(next, miss)
-        {
-            _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(Py_TYPE(r) != &PyRangeIter_Type);
-#ifdef Py_GIL_DISABLED
-            EXIT_IF(!_PyObject_IsUniquelyReferenced((PyObject *)r),
-                    "another reference to the range iterator exists");
-#endif
-        }
-
-        leaf replaced op(_ITER_JUMP_RANGE,
-                (iter: object, null_or_index -- iter, null_or_index))
-            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
-        {
-            _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
-            assert(Py_TYPE(r) == &PyRangeIter_Type);
-#ifdef Py_GIL_DISABLED
-            assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
-#endif
-            STAT_INC(FOR_ITER, hit);
-            if (r->len <= 0) {
-                PyValue completed = PyValue_None;
-                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
-            }
-        }
-
-        leaf op(_ITER_NEXT_RANGE,
-                (iter: object, null_or_index
-                 -- iter, null_or_index, next: owned exact(PyLong_Type)))
-            effects(reads, writes, allocates, raises) exits(next, raise)
-        {
-            _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
-            assert(Py_TYPE(r) == &PyRangeIter_Type);
-#ifdef Py_GIL_DISABLED
-            assert(_PyObject_IsUniquelyReferenced((PyObject *)r));
-#endif
-            assert(r->len > 0);
-            long value = r->start;
-            r->start = value + r->step;
-            r->len--;
-            // A range may cross the inline range.
-            next = PyValue_FromInt64(value);
-            ERROR_IF(PyValue_IsNull(next));
-        }
-
-        macro(FOR_ITER_RANGE) =
-            unused/1 +  // Skip over the entry distance
-            _ITER_CHECK_RANGE +
-            _ITER_JUMP_RANGE +
-            _ITER_NEXT_RANGE;
-
-        op(_FOR_ITER_GEN_FRAME,
-                (iter: assumed(object) by GET_ITER, null -- iter, null))
-            effects(reads, writes, raises, runs_python, switches_frame)
-            exits(miss, raise, enter)
-        {
-            PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(Py_TYPE(gen) != &PyGen_Type, "the iterator is not a generator");
-            EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
-            STAT_INC(FOR_ITER, hit);
-            if (!gen_claim(tstate, gen)) {
-                ERROR_NO_POP();
-            }
-            IR_ENTER_GENERATOR(gen, _PY_IR_FOR_ITER);
-        }
-
-        macro(FOR_ITER_GEN) =
-            unused/1 +
-            _CHECK_PEP_523 +
-            _FOR_ITER_GEN_FRAME;
 
         /* A stack op only: rule_load_special (Python/regcfg.c) lowers it to
          * SpecialLookup (Python/register_ops/attrs.rop). */
@@ -2406,57 +1954,32 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(CONVERT_VALUE, (value: consumed -- result: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: CONVERT_VALUE is the Convert family (Python/register_ops/text.rop). */
+        tier1 inst(CONVERT_VALUE,
+                (value: consumed -- result: owned))
+            exits(abort)
         {
-            assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
-            PyObject *result_o;
-            if (oparg == FVC_STR) {
-                result_o = _PyValue_Str(value);
-            }
-            else if (oparg == FVC_REPR) {
-                result_o = _PyValue_Repr(value);
-            }
-            else {
-                result_o = _PyValue_ASCII(value);
-            }
-            PyValue_CLOSE(value);
-            ERROR_IF(result_o == NULL);
-            result = PyValue_FromObjectSteal(result_o);
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inline_ok inst(FORMAT_SIMPLE, (value: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: FORMAT_SIMPLE is the Format family (Python/register_ops/text.rop). */
+        tier1 inst(FORMAT_SIMPLE,
+                (value: consumed -- res: owned))
+            exits(abort)
         {
-            /* If value is a unicode object, then we know the result
-             * of format(value) is value itself. An inline int or float
-             * formats as it prints: format(x, "") is str(x). A language
-             * value is an object or inline, so the test is the same as
-             * the inline test and states `object` on the other path. */
-            if (!PyValue_IsObject(value)) {
-                PyObject *res_o = _PyValue_Str(value);
-                PyValue_CLOSE(value);
-                ERROR_IF(res_o == NULL);
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else if (!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-                PyObject *res_o = _PyValue_Format(value, PyValue_NULL);
-                PyValue_CLOSE(value);
-                ERROR_IF(res_o == NULL);
-                res = PyValue_FromObjectSteal(res_o);
-            }
-            else {
-                res = TAKE(value);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(FORMAT_WITH_SPEC, (value: consumed, fmt_spec: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: FORMAT_WITH_SPEC is the Format family (Python/register_ops/text.rop). */
+        tier1 inst(FORMAT_WITH_SPEC,
+                (value: consumed, fmt_spec: consumed -- res: owned))
+            exits(abort)
         {
-            PyObject *res_o = _PyValue_Format(value, fmt_spec);
-            DECREF_INPUTS();
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObjectSteal(res_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         tier1 inst(BINARY_OP, (unused/5, lhs: consumed, rhs: consumed -- res: owned))

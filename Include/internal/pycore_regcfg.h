@@ -10,7 +10,7 @@ extern "C" {
 
 #include "pycore_ir.h"          // IR_MAX_SLOTS
 #include "pycore_opcode_utils.h" // IS_NO_FALLTHROUGH_OPCODE
-#include "pycore_rop_metadata.h" // ROP_HANDLER_CallKw_Generic
+#include "pycore_rop_metadata.h" // ROP_OP_CallKw_Generic
 #include "pycore_symtable.h"    // _Py_SourceLocation
 
 /* The register CFG (boil/design/07-compiler-passes.md).
@@ -210,7 +210,7 @@ _PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
 static inline int
 _PyRegOp_CallBorrows(const _PyRegOp *op, int k)
 {
-    return k != 1 && !(op->opcode == ROP_HANDLER_CallKw_Generic && k == op->nread - 1);
+    return k != 1 && !(op->opcode == ROP_OP_CallKw_Generic && k == op->nread - 1);
 }
 
 const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
@@ -267,6 +267,10 @@ int _PyRegTr_Fresh(_PyRegTr *t, int *id);
 int _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
                   const int *uses, int nuses, const int *defs, int ndefs,
                   _PyRegOp **op);
+/* The same for an op that takes only the last ntaken of its inputs */
+int _PyRegTr_EmitTaking(_PyRegTr *t, const _PyRegOp *src, int opcode,
+                        const int *uses, int nuses, int ntaken,
+                        const int *defs, int ndefs, _PyRegOp **op);
 /* The rule of an unported stack op: its old handler op */
 int _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *src);
 

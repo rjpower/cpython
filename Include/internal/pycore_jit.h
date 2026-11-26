@@ -154,7 +154,7 @@ _PyJit_CompiledHandler(_PyIRWord w)
 {
     int handler = IR_HANDLER(w);
     return (_PyIR_HandlerFlags[handler] & _PyIR_H_JIT_EVENT)
-        ? _PyIR_HandlerBase[handler] : handler;
+        ? _PyIR_OpcodeHandler[_PyIR_HandlerBase[handler]] : handler;
 }
 
 #ifdef _PY_JIT_SUPPORTED

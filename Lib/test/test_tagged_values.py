@@ -463,7 +463,7 @@ def existing(*names):
     """The names of old handlers that this build still has, and every arm
     name (it has a dot).  A port deletes the old handlers of its family."""
     return [name for name in names
-            if "." in name or name in dis._ir_opmap
+            if "." in name or name in dis._ir_handlers
             or name in dis._specialized_opmap or name in dis.opmap]
 
 
@@ -519,7 +519,7 @@ class InlineIntTest(unittest.TestCase):
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
         for name in existing("Const.Small",
-                             "Add.Int", "Binary.Int", "FOR_ITER_RANGE"):
+                             "Add.Int", "Binary.Int", "ForIter.Range"):
             self.assertIn(name, names)
         self.assertIn("Add.Int", opnames(add3))
 

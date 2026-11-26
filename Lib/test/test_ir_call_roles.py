@@ -153,7 +153,7 @@ class CallRoleTests(unittest.TestCase):
                 fn(value)
             return fn(17)
         rows = _testinternalcapi.get_ir(invoke.__code__)
-        self.assertTrue(any(row[0] == "FOR_ITER" for row in rows))
+        self.assertTrue(any(row[0] == "ForIter.Generic" for row in rows))
         self.assertGreaterEqual(sum("NO_SELF" in row[0] for row in rows), 2)
         for admitted in routes(invoke.__code__):
             function = types.FunctionType(admitted, globals())
@@ -182,7 +182,7 @@ class CallRoleTests(unittest.TestCase):
                     continue
             return fn(17)
         rows = _testinternalcapi.get_ir(invoke.__code__)
-        self.assertTrue(any(row[0] == "FOR_ITER" and
+        self.assertTrue(any(row[0] == "ForIter.Generic" and
                             row[1] < invoke.__code__.co_nlocals for row in rows))
         for admitted in routes(invoke.__code__):
             function = types.FunctionType(admitted, globals())

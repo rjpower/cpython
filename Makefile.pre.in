@@ -1252,6 +1252,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/genericaliasobject.h \
 		$(srcdir)/Include/import.h \
 		$(srcdir)/Include/intrcheck.h \
+		$(srcdir)/Include/ir_handler_ids.h \
 		$(srcdir)/Include/iterobject.h \
 		$(srcdir)/Include/listobject.h \
 		$(srcdir)/Include/longobject.h \
@@ -2221,8 +2222,10 @@ regen-cases: \
 .PHONY: regen-opcode-ids
 regen-opcode-ids:
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/opcode_id_generator.py \
-	    -o $(srcdir)/Include/opcode_ids.h.new $(srcdir)/Python/bytecodes.c
+	    -o $(srcdir)/Include/opcode_ids.h.new \
+	    --handler-ids-output $(srcdir)/Include/ir_handler_ids.h.new $(srcdir)/Python/bytecodes.c
 	$(UPDATE_FILE) $(srcdir)/Include/opcode_ids.h $(srcdir)/Include/opcode_ids.h.new
+	$(UPDATE_FILE) $(srcdir)/Include/ir_handler_ids.h $(srcdir)/Include/ir_handler_ids.h.new
 
 .PHONY: regen-uop-ids
 regen-uop-ids:

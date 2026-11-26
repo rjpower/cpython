@@ -106,8 +106,8 @@ class LoweringTests(unittest.TestCase):
         self.assertEqual(f(5), 5)
 
     def test_no_fused_handlers_remain(self):
-        from _opcode_metadata import _ir_opmap
-        fused = [n for n in _ir_opmap
+        from _opcode_metadata import _ir_handlers
+        fused = [n for n in _ir_handlers
                  if n.startswith(("COMPARE_OP_", "CONTAINS_OP_", "IS_OP_"))
                  or n.startswith(("INSTRUMENTED_COMPARE_OP", "INSTRUMENTED_CONTAINS_OP",
                                   "INSTRUMENTED_IS_OP"))]

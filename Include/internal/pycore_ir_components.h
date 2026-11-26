@@ -1789,19 +1789,6 @@
      * heap state (nothing rewrites it), so the row reads nothing: `reads` is removed. */ \
     HELPER(_PyFb_HasEntry, int, (int), \
         ARGS(scalar), SCALAR, EFFECTS()) \
-    /* Evidence (G0c8): as the block above. Reads the iterator's type and \
-     * iteration slots, and classifies the failure \
-     * (_PySpecialization_ClassifyIterator). 
-     * The iterator is taken as an object without a test (PyValue_AsKnownObjectBorrow; GET_ITER always leaves one): the row requires `object`. */ \
-    HELPER(_Py_Specialize_ForIter, void, (PyValue, PyValue, _PyInstr *, int), \
-        ARGS(borrowed object, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as the block above. Reads the iterable's type and \
-     * iteration slots (_PyType_IteratesByIndex, tp_iter); \
-     * specialize_iter_generator looks up __iter__ without allocating \
-     * (_PyType_TryLookupValueNoAlloc) and lowers a generator function's code \
-     * (prepare_function_exec). */ \
-    HELPER(_Py_Specialize_GetIter, void, (PyValue, _PyInstr *), \
-        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as the block above. Reads the receiver's type and \
      * its _tp_iteritem slot; no lookup and no lowering. 
      * The receiver is taken as an object without a test (PyValue_AsKnownObjectBorrow; the send loop's receiver is always one): the row requires `object`. */ \
@@ -2929,20 +2916,9 @@
           EFFECTS(allocates, raises), EXITS()) \
     MACRO(IR_BUILD_LIST, ARGS(taken), VALUE_OR_NULL(owned), \
           EFFECTS(allocates, raises), EXITS()) \
-    /* _Py_BuildString_ValueSteal and _Py_BuildMap_ValueSteal: \
-     * IR_HELPER_EFFECTS marks them "escapes" (they hash, compare and \
-     * release, which may run Python).  The values are taken, as for the \
-     * tuple */ \
-    /* Evidence (Python/ceval.c _Py_BuildString_ValueSteal, which \
-     * ir_generator.home_helper expands to): _PyUnicode_JoinArray over the \
-     * borrowed window, then clear_value_arguments on every path, success \
-     * and failure, so the pieces are consumed and never come back (the \
-     * seed said taken, which leaves them to the skeleton on failure). \
-     * Failure: NULL with an exception set.  Callbacks: the join reads str \
-     * pieces only; the close releases them, which may run a finalizer */ \
-    MACRO(IR_BUILD_STRING, ARGS(consumed), VALUE_OR_NULL(owned), \
-          EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
-          EXITS()) \
+    /* _Py_BuildMap_ValueSteal: IR_HELPER_EFFECTS marks it "escapes" (it \
+     * hashes, compares and releases, which may run Python).  The values \
+     * are consumed */ \
     /* Evidence (Python/ceval.c _Py_BuildMap_ValueSteal): \
      * _PyDict_FromValueItems over the window, then clear_value_arguments on \
      * every path, success and failure: the values are consumed, not taken. \

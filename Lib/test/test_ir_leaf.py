@@ -657,11 +657,6 @@ def _type_version(tp):
 
 # Handler: (inputs, a function of the inputs giving the cache operands, opargs)
 HANDLERS = {
-    "FOR_ITER_LIST": (lambda: iterator_domain(lambda: [(l, len(l)) for l in LISTS]), None, [0]),
-    "FOR_ITER_TUPLE": (lambda: iterator_domain(lambda: [(t, len(t)) for t in TUPLES]), None, [0]),
-    "FOR_ITER_RANGE": (lambda: [(word(it), 0) for it in
-                                (iter(range(3)), iter(range(5, -2, -2)), iter(range(0)))]
-                       + [(word(it), 0) for it in (iter([1]),)], None, [0]),
 }
 
 

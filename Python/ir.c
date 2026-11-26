@@ -285,7 +285,7 @@ _PyIR_GeneratorBoundaryCandidate(const _PyIRWord *words, int nwords, int nl,
         }
         if (event->flags & _PyIR_COMPLETION_SEND_YIELDED) {
             if (pc + 1 >= nwords || event->src != 3 || event->extent != 2 ||
-                !generator_is(words[pc + 1], YIELD_DELEGATED) ||
+                !generator_is(words[pc + 1], IR_H_YIELD_DELEGATED) ||
                 IR_D(words[pc + 1]) != IR_B(word) ||
                 IR_B(words[pc + 1]) != IR_B(word) + event->extent)
             {
@@ -300,15 +300,15 @@ _PyIR_GeneratorBoundaryCandidate(const _PyIRWord *words, int nwords, int nl,
             yielded = _PyIR_GEN_CONSUMER_DELEGATED;
         }
     }
-    else if (generator_is(word, YIELD_VALUE) ||
-             generator_is(word, YIELD_DELEGATED))
+    else if (generator_is(word, IR_H_YIELD_VALUE) ||
+             generator_is(word, IR_H_YIELD_DELEGATED))
     {
         int consumer;
         resume = generator_resume_shape(words, nwords, nl, pc, &consumer);
         if (resume == _PyIR_GEN_CONSUMER_NONE ||
-            (generator_is(word, YIELD_DELEGATED) &&
+            (generator_is(word, IR_H_YIELD_DELEGATED) &&
              (resume != _PyIR_GEN_CONSUMER_SEND || consumer != pc - 1)) ||
-            (!generator_is(word, YIELD_DELEGATED) &&
+            (!generator_is(word, IR_H_YIELD_DELEGATED) &&
              resume != _PyIR_GEN_CONSUMER_STORE_LOCAL))
         {
             return -1;
@@ -388,7 +388,7 @@ _PyIR_HandlerName(int handler)
 {
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     return _PyIR_IsOnlyHandler(handler)
-        ? _PyIR_OnlyNames[handler] : _PyOpcode_OpName[handler];
+        ? _PyIR_OnlyNames[handler] : _PyOpcode_OpName[_PyIR_HandlerOpcode[handler]];
 }
 
 int
@@ -410,13 +410,10 @@ _PyIR_BaseOpcode(int handler)
         // Part of the instruction before it, as a CACHE is upstream
         return CACHE;
     }
-    if (_PyIR_IsOnlyHandler(handler)) {
-        handler = _PyIR_Formats[handler].shadow;
-        assert(!_PyIR_IsOnlyHandler(handler));
-    }
-    // _PyOpcode_Deopt is sized for the stack ops: a handler id is no index
-    assert(handler < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
-    return _PyOpcode_Deopt[handler];
+    // The shadow of a handler is the stack opcode that it stands for
+    int shadow = _PyIR_Formats[handler].shadow;
+    assert(shadow < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
+    return _PyOpcode_Deopt[shadow];
 }
 
 /* The value of the field at loc of word */
@@ -731,8 +728,8 @@ ordinary_handler_for(int handler, int opcode)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
-        opcode >= MIN_INSTRUMENTED_OPCODE && !_PyIR_IsOnlyHandler(opcode) &&
-        _PyIR_HandlerBase[opcode] == _PyIR_HandlerBase[handler])
+        opcode >= MIN_INSTRUMENTED_OPCODE &&
+        _PyIR_OpcodeBase[opcode] == _PyIR_HandlerBase[handler])
     {
         // A register instruction arm of a family that has events: the
         // instrumented form of its stack op runs the arm's observed
@@ -740,18 +737,20 @@ ordinary_handler_for(int handler, int opcode)
         // instrumented opcode to its stack op.
         return fmt->twin;
     }
-    if (handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) {
+    if (handler == IR_H_YIELD_DELEGATED || handler == IR_H_INSTRUMENTED_YIELD_DELEGATED) {
         if (opcode == YIELD_VALUE) {
-            return YIELD_DELEGATED;
+            return IR_H_YIELD_DELEGATED;
         }
         if (opcode == INSTRUMENTED_YIELD_VALUE) {
-            return INSTRUMENTED_YIELD_DELEGATED;
+            return IR_H_INSTRUMENTED_YIELD_DELEGATED;
         }
     }
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
-    return opcode;
+    // The handler that the stack op has
+    assert(_PyIR_OpcodeHandler[opcode] != _PyIR_NO_HANDLER);
+    return _PyIR_OpcodeHandler[opcode];
 }
 
 int
@@ -1164,7 +1163,7 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
         return -1;
     }
     handler = boundary->ordinary;
-    if (handler != YIELD_DELEGATED && handler != INSTRUMENTED_YIELD_DELEGATED) {
+    if (handler != IR_H_YIELD_DELEGATED && handler != IR_H_INSTRUMENTED_YIELD_DELEGATED) {
         return -1;
     }
     int dst = (int)IR_A(word), outgoing = (int)IR_B(word), receiver = (int)IR_D(word);

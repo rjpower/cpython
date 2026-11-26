@@ -433,6 +433,14 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     imm = fb = "_PyIR_LOC_NONE"
     fb_schema = None
     ninputs = writes = 0
+    # A loop's pair of homes (the iterator, then its cursor): the family's
+    # points say how the word treats it.  A word that defines it writes two
+    # homes at the field; one that keeps the receiver steps it in place, as
+    # a window of the legacy op; else the word spends both
+    reads = None
+    through = 0
+    pair_writes = 0
+    window = False
     has_target = has_args = has_span = False
     target = "_PyIR_LOC_NONE"
     for slot in enc.elements:
@@ -467,6 +475,19 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                 writes += 1
             elif kind in ("CELL", "FREE"):
                 role = "_PyIR_ROLE_CELL"
+            elif kind == "ITERPAIR":
+                pair = pl.operand
+                if pair in defined:
+                    role = "_PyIR_ROLE_DST"
+                    pair_writes = 2
+                elif any(f"{pair}.receiver" in pt.keep
+                         for pt in program.points.values()
+                         if pt.family == arm.family):
+                    role = "_PyIR_ROLE_BASE"
+                    window = True
+                else:
+                    role = f"_PyIR_ROLE_IN0 + {ninputs}"
+                    ninputs += 2
             else:
                 role = "_PyIR_ROLE_NONE"
         elif pl.kind is FieldKind.feedback:
@@ -478,6 +499,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
             elif fb_schema == "Item":
                 # The item families keep the entry of BINARY_OP and STORE_SUBSCR
                 fb_schema = "Binary"
+            elif fb_schema == "Iter":
+                fb_schema = "Unary"
         elif pl.kind is FieldKind.target:
             has_target = True
             target = "_PyIR_LOC_AB" if len(pl.slots) == 2 else LOC_NAMES[pl.slots[0]]
@@ -509,6 +532,12 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     if is_generic(program, arm) and "again" in fam.exits:
         effects.add("_PyIR_SPECIALIZES")
     flags = ["_PyIR_VALID"]
+    if window:
+        # FOR_ITER's shape: the pair is read and rewritten in place, the
+        # item goes two homes above it, and the receiver passes through
+        flags.append("_PyIR_WINDOW")
+        reads, through = 2, 1
+        writes = 3
     if writes:
         # A result that nothing reads goes to the frame's discard slot
         flags += ["_PyIR_STORE_DST", "_PyIR_DISCARDS"]
@@ -520,12 +549,18 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
             flags.append("_PyIR_JUMP_ALWAYS")
     return ir_arms.ArmFormat(
         tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
-        imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
+        imm, fb, ninputs,
+        2 if window else -ninputs if writes or pair_writes else None,
+        (1 << ninputs) - 1,
         fb_schema, (ARGS_OPERANDS.get(fam.ops[0], "_PyIR_OPERANDS_CALL") if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
-        0 if has_args else enc.words, writes, arm_transfer(exits, ninputs, arm.family, writes or bool(
+        0 if has_args else enc.words, writes + pair_writes, arm_transfer(exits, ninputs, arm.family, writes or pair_writes > 0 or bool(
             {e.name for e in arm.contract.effect_set} & HOME_EFFECTS)), target,
-        "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE")
+        ("_PyIR_OBSERVER_FOR_BODY" if window else
+         "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE"),
+        # A loop step's item is the body's input; its exhaustion completes
+        "_PyIR_OBSERVER_COMPLETION" if window else None,
+        reads, through)
 
 
 
@@ -723,7 +758,7 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     write_header(__file__, sources, out)
     families = sorted(prog.families)
     out.write("\n#ifndef Py_INTERNAL_ROP_METADATA_H\n#define Py_INTERNAL_ROP_METADATA_H\n")
-    out.write('\n#include "opcode_ids.h"        // IR_NUM_OLD_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
+    out.write('\n#include "ir_handler_ids.h"     // IR_NUM_OLD_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
     wrapped = wrapped_arms(prog)
     twins = len(wrapped)
     out.write("\n/* The arms' handler ids follow the old handlers, in definition order; the\n"
@@ -745,12 +780,26 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     for k, name in enumerate(wrapped):
         out.write(f"#define {handler(name)}_Observed "
                   f"(ROP_FIRST_HANDLER + {len(prog.arms) + k})\n")
+    out.write("\n/* The translator's CFG holds stack opcodes below 256 in its ops, so an op\n"
+              " * that names an arm is tagged: ROP_OP_<arm> is ROP_CFG_BASE plus the arm's\n"
+              " * handler offset, and ROP_CFG_HANDLER() takes it back to the handler id */\n")
+    out.write("#define ROP_CFG_BASE 512\n")
+    out.write("#define ROP_CFG_IS_ARM(op) ((op) >= ROP_CFG_BASE)\n")
+    out.write("#define ROP_CFG_HANDLER(op) ((op) - ROP_CFG_BASE + ROP_FIRST_HANDLER)\n")
+    for name in prog.arms:
+        out.write(f"#define ROP_OP_{c_name(name)} (ROP_CFG_BASE + {p.numbers[name]})\n")
+    for k, name in enumerate(wrapped):
+        out.write(f"#define ROP_OP_{c_name(name)}_Observed "
+                  f"(ROP_CFG_BASE + {len(prog.arms) + k})\n")
+    out.write("\n/* ROP_ARM(name) is the arm's handler id; the translator's CFG files\n"
+              " * (regcfg*.c, ir_assemble.c) redefine it as the tagged ROP_OP_<name> */\n")
+    out.write("#ifndef ROP_ARM\n#define ROP_ARM(name) ROP_HANDLER_##name\n#endif\n")
     out.write("\n/* The arm of a statically selected family that each selection admits\n"
               " * (its `select`): ROP_SELECT_<Family>_<member>... */\n")
     for name, arm in prog.arms.items():
         if arm.select:
             members = "_".join(m.value for m in arm.select)
-            out.write(f"#define ROP_SELECT_{arm.family}_{members} {handler(name)}\n")
+            out.write(f"#define ROP_SELECT_{arm.family}_{members} ROP_ARM({c_name(name)})\n")
     out.write("\n/* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */\n")
     for name, k in p.points.items():
         out.write(f"#define ROP_POINT_{c_name(name)} {k}\n")
@@ -841,7 +890,7 @@ def write_selectors(out: TextIO, prog: Program) -> None:
         for a in arms:
             tests = " && ".join(f"({select_dimension(m)}) == ROP_SELECT_{m.value.upper()}"
                                 for m in a.select)
-            out.write(f"    ({tests}) ? {handler(a.name)} : \\\n")
+            out.write(f"    ({tests}) ? ROP_ARM({c_name(a.name)}) : \\\n")
         out.write("    -1)\n")
     out.write("\n")
 

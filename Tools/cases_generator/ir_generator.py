@@ -98,6 +98,7 @@ from dataclasses import dataclass, fields, replace
 
 from analyzer import (
     Analysis,
+    stack_ops_of,
     IR_HELPER_CALLEES,
     IR_HELPER_EFFECTS,
     IR_MARKER_EFFECTS,
@@ -820,7 +821,6 @@ OBJECT_READERS = {
     "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
     "PyUnicode_CheckExact",
-    "_PyTemplate_Build",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -1205,7 +1205,8 @@ def group_name(inst: Instruction, analysis: Analysis) -> str:
 
 
 def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
-    return {**analysis.instructions, **analysis.ir_only}
+    return {**analysis.instructions, **analysis.ir_only,
+            **analysis.translator_only}
 
 
 # Opcodes of the compiler's stack model that no word ever has: the register
@@ -1219,7 +1220,10 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 STACK_ONLY_WITH_BODY = (
     "PUSH_NULL", "TO_BOOL", "UNARY_NOT", "POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
     "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE", "JUMP_FORWARD", "JUMP_BACKWARD",
-    "JUMP_BACKWARD_NO_INTERRUPT", "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP")
+    "JUMP_BACKWARD_NO_INTERRUPT", "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
+    # The loop stubs keep the bodies that name their exits (FOR_ITER is a jump)
+    "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER", "INSTRUMENTED_FOR_ITER",
+    "INSTRUMENTED_END_FOR", "INSTRUMENTED_POP_ITER")
 
 # Abort stubs that still have a handler and an id (the cell ops that CE
 # ported were left out of the old list; IR_OPERANDS is a word, not an op).
@@ -1246,15 +1250,6 @@ def stack_only_names(analysis: Analysis) -> frozenset[str]:
         | set(STACK_ONLY_WITH_BODY))
 
 
-# Handlers that the register passes make and that no stack bytecode has, but
-# whose opcode numbers lie in the opcode space (their instrumented forms are
-# tables indexed by opcode).  They are not in opcode.opmap, which lists what
-# co_code can hold.
-IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP")
-
-
 def ir_only_handler_names(analysis: Analysis) -> list[str]:
     "The IR-only handlers, in the order that numbers them"
     return (sorted(analysis.ir_only)
@@ -1262,24 +1257,21 @@ def ir_only_handler_names(analysis: Analysis) -> list[str]:
             + sorted(generator_boundaries(analysis)))
 
 
-def ir_only_numbers(analysis: Analysis, count: int) -> list[int]:
-    "The numbers of the first count IR-only handlers"
-    wide = max(0, count - len(analysis.free_ids))
-    return [*analysis.free_ids[:count], *range(256, 256 + wide)]
+def inherited_handler_names(analysis: Analysis) -> list[str]:
+    "The stack ops that have a handler, in the order of their stack opcodes"
+    stack_only = stack_only_names(analysis)
+    return [name for name, _ in sorted(
+        ((name, inst.opcode) for name, inst in analysis.instructions.items()
+         if name not in stack_only), key=lambda item: item[1])]
 
 
 def handler_ids(analysis: Analysis) -> dict[str, int]:
-    """Handler index of each handler, by name.  The real opcodes keep their
-    opcode.  The IR-only handlers, in a fixed order, take the numbers below
-    256 that no opcode holds, then continue from 256: a pseudo-instruction
-    has no handler, so its number is free to name one.  BINARY_OP itself has
-    none: its operations do, and a STACK_ONLY opcode has none."""
-    ids = {name: inst.opcode for name, inst in analysis.instructions.items()
-           if name not in stack_only_names(analysis)}
-    names = ir_only_handler_names(analysis)
-    for number, name in zip(ir_only_numbers(analysis, len(names)), names):
-        ids[name] = number
-    return ids
+    """Handler id of each handler, by name.  The ids are dense and their own:
+    a handler's id is no stack opcode, and a stack-only stub has none.  The
+    handlers that a stack op has come first, in the order of the stack
+    opcodes, then the IR-only handlers; the arms follow them."""
+    names = inherited_handler_names(analysis) + ir_only_handler_names(analysis)
+    return {name: number for number, name in enumerate(names)}
 
 
 def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
@@ -3468,7 +3460,6 @@ class IREmitter(Emitter):
         self._replacers["IR_UNPACK_ITEMS"] = self.unpack_items_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_CLOSE_INPUTS"] = self.close_input_homes
-        self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
         self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
@@ -3605,8 +3596,7 @@ class IREmitter(Emitter):
             helper = IR_HELPER_CALLEES[tkn.text]
             expression = f"{helper}({local.name}, oparg)"
         else:
-            helper = {"IR_BUILD_STRING": "_Py_BuildString_ValueSteal",
-                      "IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
+            helper = {"IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
                       "IR_BUILD_SET": "_Py_BuildSet_ValueSteal"}[tkn.text]
             expression = f"{helper}(frame, {local.name}, oparg)"
         self.out.emit_at(expression, tkn)
@@ -5440,7 +5430,12 @@ class IREmitter(Emitter):
             self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{head});\n")
             return
         if kind == "FAMILY_HEAD":
-            super().emit_jump_to_predicted(inst)
+            family_name = inst.family.name
+            # opcode is a handler id here: the stack op it stands for, not
+            # _PyOpcode_Deopt, names its family
+            self.emit(f"UPDATE_MISS_STATS({family_name});\n")
+            self.emit(f"assert(_PyIR_BaseOpcode(opcode) == ({family_name}));\n")
+            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{family_name});\n")
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
                              inst.where)
@@ -6367,7 +6362,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("home drain needs its sole owning array and unconditional handoff", token)
                 index = 0
                 covered.add(id(args[0][0]))
-            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", "IR_BUILD_SET",
+            elif token.text in {"IR_BUILD_MAP", "IR_BUILD_SET",
                                 *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)
@@ -6996,7 +6991,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     out.emit("\n")
     out.emit(f"TARGET({name}) {{\n")
     handler_id = canonical_handler(name)
-    out.emit(f"int opcode = {handler_id};\n")
+    out.emit(f"int opcode = IR_H_{handler_id};\n")
     out.emit(f"(void)(opcode);\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
@@ -7087,7 +7082,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
             out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
             out.emit("(void)call_feedback;\n")
     if inst.properties.uses_opcode:
-        out.emit(f"opcode = {canonical_handler(name)};\n")
+        out.emit(f"opcode = IR_H_{canonical_handler(name)};\n")
     mode = record.store_mode
     if mode == STORE_LEAVE:
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
@@ -8691,8 +8686,9 @@ def handler_contracts(analysis: Analysis,
                 normal_storage[name] = None
     result = {}
     insts = {**handler_instructions(analysis),
-             **{name: analysis.instructions[name] for name in stack_only_names(analysis)
-                if name in analysis.instructions}}
+             **{name: inst for name, inst in
+                stack_ops_of(analysis).items()
+                if name in stack_only_names(analysis)}}
     # A family's baseline(...) arm runs in compiled code only, never on a
     # word, so instrumentation never replaces it: it has no twin
     baselines = {family.baseline for family in analysis.families.values()}
@@ -8960,10 +8956,8 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 
 
 def num_old_handlers(analysis: Analysis) -> int:
-    """The arms start here.  The IR-only handlers fill the free numbers below
-    256 and continue from 256, so the arms' range stays contiguous.  If they
-    do not fill the free numbers, the rest stay unused."""
-    return 256 + max(0, len(ir_only_handler_names(analysis)) - len(analysis.free_ids))
+    "The arms start here: the count of the handlers that bytecodes.c defines"
+    return len(handler_ids(analysis))
 
 
 def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:

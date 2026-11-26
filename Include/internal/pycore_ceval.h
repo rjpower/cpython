@@ -447,6 +447,9 @@ typedef struct {
 PyAPI_FUNC(_PyIRStepResult) _Py_COLD_FUNCTION _PyIR_ObserveStep(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *,
     PyValueBorrow, enum _PyIRStepKind, int);
+PyAPI_FUNC(int) _PyIR_ObserveStopIteration(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *,
+    PyValueBorrow, PyValueBorrow);
 PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteForIter(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, _PyInstr *, PyValue);
 PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteSend(
@@ -549,12 +552,6 @@ extern int _PyRunRemoteDebugger(PyThreadState *tstate);
 PyAPI_DATA(const _PyInstr *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
 
 /* Helper functions for large uops */
-
-PyAPI_FUNC(PyObject *)
-_Py_BuildString_ValueSteal(
-    struct _PyInterpreterFrame *frame,
-    PyValue *arguments,
-    int total_args);
 
 PyAPI_FUNC(PyObject *)
 _Py_BuildMap_ValueSteal(

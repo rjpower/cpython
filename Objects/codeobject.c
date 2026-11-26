@@ -779,8 +779,8 @@ is_delegated_yield_handler(int handler)
     if (boundary == NULL) {
         return 0;
     }
-    return boundary->ordinary == YIELD_DELEGATED ||
-           boundary->ordinary == INSTRUMENTED_YIELD_DELEGATED;
+    return boundary->ordinary == IR_H_YIELD_DELEGATED ||
+           boundary->ordinary == IR_H_INSTRUMENTED_YIELD_DELEGATED;
 }
 
 typedef struct {
@@ -1970,7 +1970,7 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                 block_at[i + length] = 1;
             }
         }
-        if (IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[
+        if (IS_SCOPE_EXIT_OPCODE(_PyIR_OpcodeBase[
                 _PyIR_BaseOpcode(IR_HANDLER(words[i]))]) && i + length < n)
         {
             block_at[i + length] = 1;
@@ -2179,7 +2179,7 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
             memcpy(work.branch, state, state_words * sizeof(uint64_t));
             semantic_delegated outgoing = work.delegated;
             if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) &&
-                !IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[opcode]))
+                !IS_SCOPE_EXIT_OPCODE(_PyIR_OpcodeBase[opcode]))
             {
                 semantic_normal_edge(image, &work, state, last, 0);
                 semantic_enqueue(&work, block_at[end], state, complete);

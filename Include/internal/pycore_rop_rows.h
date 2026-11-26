@@ -62,6 +62,10 @@ PyAPI_FUNC(PyValue) _PyRop_BuildTuple(const _PyRopSpan *items);
 PyAPI_FUNC(PyValue) _PyRop_BuildList(const _PyRopSpan *items);
 PyAPI_FUNC(PyValue) _PyRop_BuildSet(const _PyRopSpan *items);
 PyAPI_FUNC(PyValue) _PyRop_BuildMap(const _PyRopSpan *items);
+/* BuildText, in ceval.c */
+PyAPI_FUNC(PyValue) _PyRop_JoinText(const _PyRopSpan *parts);
+PyAPI_FUNC(PyValue) _PyRop_BuildInterpolation(const _PyRopSpan *parts, int flags);
+PyAPI_FUNC(PyValue) _PyRop_BuildTemplate(const _PyRopSpan *parts);
 PyAPI_FUNC(int) _PyRop_ListAppend(PyValue *list, PyValue item);
 PyAPI_FUNC(int) _PyRop_SetAdd(PyValue *set, PyValue item);
 PyAPI_FUNC(int) _PyRop_DictPut(PyValue *dict, PyValue key, PyValue value);
@@ -99,8 +103,11 @@ typedef struct {
     PyValue owned[_PY_ROP_MAX_SRCS];
 } _PyRopAnchors;
 
+/* The sources of a span operand (at most four), for a call that reads them */
+PyAPI_FUNC(_PyRopSrcs) _PyRop_SrcsOfSpan(const _PyRopSpan *span);
+
 static inline _PyRopAnchors
-_PyRop_AnchorForCall(const _PyRopSrcs *s)
+_PyRop_AnchorForSrcs(const _PyRopSrcs *s)
 {
     assert(s->n <= _PY_ROP_MAX_SRCS);
     _PyRopAnchors a = {.n = s->n};
@@ -125,7 +132,7 @@ _PyRop_CloseAnchors(_PyRopAnchors *a)
 /* The failure of a call: the anchors' owners, then each temporary source
  * in the order listed, are closed with the pending exception set aside. */
 static inline void
-_PyRop_RetireFailedCall(_PyRopAnchors *a, const _PyRopSrcs *s)
+_PyRop_RetireFailedSrcs(_PyRopAnchors *a, const _PyRopSrcs *s)
 {
     PyObject *exc = PyErr_GetRaisedException();
     _PyRop_CloseAnchors(a);
@@ -135,6 +142,44 @@ _PyRop_RetireFailedCall(_PyRopAnchors *a, const _PyRopSrcs *s)
         }
     }
     PyErr_SetRaisedException(exc);
+}
+
+/* The temporary sources of a span, taken out of their homes and closed */
+static inline void
+_PyRop_RetireSources(const _PyRopSpan *span)
+{
+    _PyRopSrcs s = _PyRop_SrcsOfSpan(span);
+    for (int i = 0; i < s.n; i++) {
+        if (!s.local[i]) {
+            PyValue_XCLOSE(_PyFrame_TakeHome(s.frame, s.home[i]));
+        }
+    }
+}
+
+/* The sources of a call are the listed operands or a span */
+#define _PyRop_AnchorForCall(...) \
+    _Generic((__VA_ARGS__), \
+        const _PyRopSpan *: _PyRop_AnchorForSpan, \
+        _PyRopSpan *: _PyRop_AnchorForSpan, \
+        default: _PyRop_AnchorForSrcs)(__VA_ARGS__)
+#define _PyRop_RetireFailedCall(A, ...) \
+    _Generic((__VA_ARGS__), \
+        const _PyRopSpan *: _PyRop_RetireFailedSpan, \
+        _PyRopSpan *: _PyRop_RetireFailedSpan, \
+        default: _PyRop_RetireFailedSrcs)(A, __VA_ARGS__)
+
+static inline _PyRopAnchors
+_PyRop_AnchorForSpan(const _PyRopSpan *span)
+{
+    _PyRopSrcs s = _PyRop_SrcsOfSpan(span);
+    return _PyRop_AnchorForSrcs(&s);
+}
+
+static inline void
+_PyRop_RetireFailedSpan(_PyRopAnchors *a, const _PyRopSpan *span)
+{
+    _PyRopSrcs s = _PyRop_SrcsOfSpan(span);
+    _PyRop_RetireFailedSrcs(a, &s);
 }
 
 static inline void
@@ -553,6 +598,15 @@ PyAPI_FUNC(PyValue) _PyRop_ImportName(PyThreadState *, _PyInterpreterFrame *,
 PyAPI_FUNC(PyValue) _PyRop_ImportFrom(PyThreadState *, _PyInterpreterFrame *,
                                       PyValue, uint32_t);
 
+/* IterOpen (Python/register_ops/iteration.rop).  The members of IterMode in
+ * declaration order: an ordinary GET_ITER, and that of `yield from` where
+ * the code's flags allow a coroutine or refuse it. */
+enum {
+    ITER_ORDINARY,
+    ITER_DELEGATE_COROUTINE_OK,
+    ITER_DELEGATE_NO_COROUTINE,
+};
+
 /* Unary (Python/register_ops/numeric.rop).  The members of UnaryOp in
  * declaration order, the numbers the generated handlers use for the enum's
  * names. */
@@ -873,6 +927,7 @@ void _PyRop_RecordOperands(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b);
 int _PyRop_Install(_PyInstr *site, _PyFbHeader *fb, int handler);
 void _PyRop_BeginTruth(_PyFbUnary *fb, PyValueBorrow v);
 bool _PyRop_ValidatePlain(_PyFbUnary *fb, PyValueBorrow v);
+bool _PyRop_ValidateGenMethod(PyValueBorrow v);
 bool _PyRop_ValidateSlot(_PyFbUnary *fb, PyValueBorrow v);
 int _PyRop_ClassifyGetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k);
 int _PyRop_ClassifySetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k);

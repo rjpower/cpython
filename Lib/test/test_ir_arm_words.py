@@ -144,9 +144,9 @@ import sys
 import _testinternalcapi as capi
 
 MON = sys.monitoring
-from _opcode_metadata import _ir_opmap
+from _opcode_metadata import _ir_handlers
 
-LOW = {"decoy": dis.opmap["RETURN_VALUE"], "marker": _ir_opmap["IR_OPERANDS"]}
+LOW = {"decoy": dis.opmap["RETURN_VALUE"], "marker": _ir_handlers["IR_OPERANDS"]}
 
 
 def gen(flag, o):

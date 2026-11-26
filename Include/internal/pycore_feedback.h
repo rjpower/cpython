@@ -12,6 +12,7 @@ extern "C" {
 #include "pycore_pymem.h"       // _PyMem_NoScanFree()
 #include "pycore_value.h"       // _PyValueGuarded
 #include "opcode_ids.h"         // RESUME, LOAD_ATTR, ...
+#include "ir_handler_ids.h"     // IR_H_*
 
 /* Typed feedback.
  *

@@ -2892,48 +2892,6 @@ binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
     return 0;
 }
 
-/* Nominate GET_ITER_PY_GENERATOR for a heap type whose __iter__ is a
- * generator function of one argument.
- * The lookup neither allocates nor runs code; the type caches the function
- * under its version, which PyType_Modified() invalidates. */
-static bool
-specialize_iter_generator(PyTypeObject *tp, _PyInstr *instr)
-{
-    if (!(tp->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
-        tp->tp_iter != _PyType_SlotIter ||
-        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
-    {
-        return false;
-    }
-    PyValue descriptor = PyValue_NULL;
-    unsigned int tp_version = 0;
-    bool nominated = false;
-    if (_PyType_TryLookupValueNoAlloc(tp, &_Py_ID(__iter__), &descriptor,
-                                      &tp_version) == 1 &&
-        PyValue_IsObject(descriptor) &&
-        PyFunction_Check(PyValue_AsKnownObjectBorrow(descriptor)))
-    {
-        PyObject *iter = PyValue_AsKnownObjectBorrow(descriptor);
-        PyFunctionObject *func = (PyFunctionObject *)iter;
-        PyCodeObject *code = (PyCodeObject *)func->func_code;
-        // An async generator or coroutine is no iterator, and GET_ITER
-        // reports it
-        if (func->vectorcall == _PyFunction_Vectorcall &&
-            (code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR))
-                == CO_GENERATOR &&
-            function_signature(code) == SIMPLE_SIGNATURE &&
-            code->co_argcount == 1 && prepare_function_exec(code) &&
-            _PyType_CacheIterForSpecialization((PyHeapTypeObject *)tp, iter,
-                                               tp_version))
-        {
-            specialize(instr, GET_ITER_PY_GENERATOR);
-            nominated = true;
-        }
-    }
-    PyValue_XCLOSE(descriptor);
-    return nominated;
-}
-
 #ifdef Py_STATS
 int
  _PySpecialization_ClassifyIterator(PyObject *iter)
@@ -3007,88 +2965,6 @@ int
 }
 #endif   // Py_STATS
 
-/* Whether the word after the FOR_ITER at instr unpacks its item, which this
- * word leaves in a temporary, into two locals: the loop of
- * `for key, value in d.items()`.  Unpack publishes into the homes of its
- * targets, so a word that does is an Unpack with two element homes that are
- * both locals; the translator does not yet fold the target stores into the
- * Unpack word, so none is. */
-static inline int
-for_iter_unpacks_pair(_PyInstr *instr)
-{
-    (void)instr;
-    return 0;
-}
-
-Py_NO_INLINE void
-_Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[FOR_ITER] == INLINE_CACHE_ENTRIES_FOR_ITER);
-    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-    PyTypeObject *tp = Py_TYPE(iter_o);
-    fb_begin_unary(instr, tp);
-
-    if (PyValue_IsNull(null_or_index)) {
-        if (tp == &PyRangeIter_Type && true) {
-#ifdef Py_GIL_DISABLED
-            // Only specialize for uniquely referenced iterators, so that we know
-            // they're only referenced by this one thread. This is more limiting
-            // than we need (even `it = iter(mylist); for item in it:` won't get
-            // specialized) but we don't have a way to check whether we're the only
-            // _thread_ who has access to the object.
-            if (!_PyObject_IsUniquelyReferenced(iter_o)) {
-                goto failure;
-            }
-#endif
-            specialize(instr, FOR_ITER_RANGE);
-            return;
-        }
-        else if (tp == &PyGen_Type && oparg <= SHRT_MAX) {
-            // The operation carries its real exhausted continuation; a
-            // generator return uses the same outcome as native exhaustion.
-            /* Don't specialize if PEP 523 is active */
-            if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
-                goto failure;
-            }
-            specialize(instr, FOR_ITER_GEN);
-            return;
-        }
-        else if (tp == &PyDictIterItem_Type && for_iter_unpacks_pair(instr)) {
-            specialize(instr, FOR_ITER_DICT_ITEMS);
-            return;
-        }
-        else if (_PyType_VALUE_SLOT(tp, iternext) != NULL) {
-            specialize(instr, FOR_ITER_VIRTUAL);
-            return;
-        }
-    }
-    else {
-        if (tp->_tp_iteritem != NULL) {
-            if (tp == &PyList_Type) {
-    #ifdef Py_GIL_DISABLED
-                // Only specialize for lists owned by this thread or shared
-                if (!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o)) {
-                    goto failure;
-                }
-    #endif
-                specialize(instr, FOR_ITER_LIST);
-                return;
-            }
-            else if (tp == &PyTuple_Type) {
-                specialize(instr, FOR_ITER_TUPLE);
-                return;
-            }
-        }
-        specialize(instr, FOR_ITER_VIRTUAL);
-        return;
-    }
-failure:
-    SPECIALIZATION_FAIL(FOR_ITER,
-                        _PySpecialization_ClassifyIterator(iter_o));
-    unspecialize(instr);
-}
-
 Py_NO_INLINE void
 _Py_Specialize_Send(PyValue receiver_st, _PyInstr *instr)
 {
@@ -3104,15 +2980,15 @@ _Py_Specialize_Send(PyValue receiver_st, _PyInstr *instr)
             SPECIALIZATION_FAIL(SEND, SPEC_FAIL_OTHER);
             goto failure;
         }
-        specialize(instr, SEND_GEN);
+        specialize(instr, IR_H_SEND_GEN);
         return;
     }
     if (tp->_tp_iteritem != NULL) {
-        specialize(instr, SEND_VIRTUAL);
+        specialize(instr, IR_H_SEND_VIRTUAL);
         return;
     }
     if (tp == &_PyAsyncGenASend_Type) {
-        specialize(instr, SEND_ASYNC_GEN);
+        specialize(instr, IR_H_SEND_ASYNC_GEN);
         return;
     }
     SPECIALIZATION_FAIL(SEND,
@@ -3154,6 +3030,45 @@ _PyRop_BeginTruth(_PyFbUnary *fb, PyValueBorrow v)
     fb->type_version = fb_type_version(PyValue_TYPE(v));
 }
 
+/* Whether the type of v defines __iter__ as a generator function of the one
+ * argument: the type then caches the function under its version, which
+ * PyType_Modified() invalidates, and IterOpen.GenMethod makes the generator
+ * at once, with no call of the function. */
+bool
+_PyRop_ValidateGenMethod(PyValueBorrow v)
+{
+    PyTypeObject *tp = PyValue_TYPE(v);
+    if (!(tp->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
+        tp->tp_iter != _PyType_SlotIter ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return false;
+    }
+    PyValue descriptor = PyValue_NULL;
+    unsigned int tp_version = 0;
+    bool cached = false;
+    if (_PyType_TryLookupValueNoAlloc(tp, &_Py_ID(__iter__), &descriptor,
+                                      &tp_version) == 1 &&
+        PyValue_IsObject(descriptor) &&
+        PyFunction_Check(PyValue_AsKnownObjectBorrow(descriptor)))
+    {
+        PyObject *iter = PyValue_AsKnownObjectBorrow(descriptor);
+        PyFunctionObject *func = (PyFunctionObject *)iter;
+        PyCodeObject *code = (PyCodeObject *)func->func_code;
+        // An async generator or coroutine is no iterator, and GET_ITER
+        // reports it
+        cached = func->vectorcall == _PyFunction_Vectorcall &&
+            (code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR))
+                == CO_GENERATOR &&
+            function_signature(code) == SIMPLE_SIGNATURE &&
+            code->co_argcount == 1 && prepare_function_exec(code) &&
+            _PyType_CacheIterForSpecialization((PyHeapTypeObject *)tp, iter,
+                                               tp_version);
+    }
+    PyValue_XCLOSE(descriptor);
+    return cached;
+}
+
 bool
 _PyRop_ValidatePlain(_PyFbUnary *fb, PyValueBorrow v)
 {
@@ -3180,74 +3095,6 @@ _PyRop_ValidateSlot(_PyFbUnary *fb, PyValueBorrow v)
     return true;
 }
 
-void
-_Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr)
-{
-    assert(ENABLE_SPECIALIZATION);
-    PyTypeObject *tp = PyValue_TYPE(iterable);
-    fb_begin_unary(instr, tp);
-    if (_PyType_IteratesByIndex(tp)) {
-        specialize(instr, GET_ITER_VIRTUAL);
-        return;
-    }
-    if (tp->tp_iter == PyObject_SelfIter) {
-        specialize(instr, GET_ITER_SELF);
-        return;
-    }
-    if (specialize_iter_generator(tp, instr)) {
-        return;
-    }
-    SPECIALIZATION_FAIL(GET_ITER,
-        tp == &PyCoro_Type ? SPEC_FAIL_ITER_COROUTINE : SPEC_FAIL_OTHER);
-    unspecialize(instr);
-}
-
-
-#ifdef Py_STATS
-void
-_Py_GatherStats_GetIter(PyValue iterable)
-{
-    PyTypeObject *tp = PyValue_TYPE(iterable);
-    int kind = SPEC_FAIL_OTHER;
-    if (tp == &PyTuple_Type) {
-        kind = SPEC_FAIL_ITER_TUPLE;
-    }
-    else if (tp == &PyList_Type) {
-        kind = SPEC_FAIL_ITER_LIST;
-    }
-    else if (tp == &PyDict_Type) {
-        kind = SPEC_FAIL_ITER_DICT_KEYS;
-    }
-    else if (tp == &PySet_Type) {
-        kind = SPEC_FAIL_ITER_SET;
-    }
-    else if (tp == &PyBytes_Type) {
-        kind = SPEC_FAIL_ITER_BYTES;
-    }
-    else if (tp == &PyEnum_Type) {
-        kind = SPEC_FAIL_ITER_ENUMERATE;
-    }
-    else if (tp == &PyUnicode_Type) {
-        kind = SPEC_FAIL_ITER_STRING;
-    }
-    else if (tp == &PyGen_Type) {
-        kind = SPEC_FAIL_ITER_GENERATOR;
-    }
-    else if (tp == &PyCoro_Type) {
-        kind = SPEC_FAIL_ITER_COROUTINE;
-    }
-    else if (tp == &PyAsyncGen_Type) {
-        kind = SPEC_FAIL_ITER_ASYNC_GENERATOR;
-    }
-    else if (tp == &_PyAsyncGenASend_Type) {
-        kind = SPEC_FAIL_ITER_ASYNC_GENERATOR_SEND;
-    }
-    else if (tp->tp_iter == PyObject_SelfIter) {
-        kind = SPEC_FAIL_ITER_SELF;
-    }
-    SPECIALIZATION_FAIL(GET_ITER, kind);
-}
-#endif
 
 
 /* Code init cleanup.

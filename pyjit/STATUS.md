@@ -272,9 +272,18 @@ Running:
   (Add.Int nine stack operations to golden87's none, Move.Copy twelve,
   ForIter.Range fourteen), while the same arm compiled as its own function
   form has none.  TI compiles the generated arms as functions that dispatch
-  by guaranteed tail call, so each arm gets its own register allocation,
-  and measures gcc and clang (`preserve_none`), computed-goto and
-  tail-call, against golden87.  The JIT's function forms do not change.
+  by guaranteed tail call, so each arm gets its own register allocation.
+  Done on `pyjit/rir90-ti` (`954c8715770`, not merged).  On seven kernels
+  (CPU 3, ratio to golden87), gcc 15 with tail functions that save no
+  callee-saved register runs 1.143 of golden87's cycles against the
+  computed-goto loop's 1.274, with 1.241 of its instructions against
+  1.277.  The hot arms touch no stack memory on their fast path.  Clang
+  is no better (tail calls with `preserve_none` 1.247, computed goto
+  1.500), so the landing needs no clang.  It lands after OB, whose
+  observing evaluator becomes a second table of tail functions.  The
+  computed-goto loop is then deleted, so the build needs a compiler with
+  `musttail` (gcc 15 or clang).  The all-29 timing on CPU 15 follows the
+  full suites.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

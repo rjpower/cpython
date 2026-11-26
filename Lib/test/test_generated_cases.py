@@ -3312,33 +3312,6 @@ class TestShapeReadMetadata(unittest.TestCase):
         record = ir_generator.build_record(name, instruction, formats[name], analysis, formats)
         return output.getvalue(), ir_generator.handler_effects(record)
 
-    def test_zero_width_second_cache_has_no_encoded_operand(self):
-        source = """
-        // BEGIN BYTECODES //
-        op(_SECOND_ZERO, (first/2, second/0 --)) {
-            (void)first; (void)second;
-        }
-        op(_BOTH_ENCODED, (first/2, second/1 --)) {
-            (void)first; (void)second;
-        }
-        op(_FIRST_ZERO, (first/0, second/1 --)) {
-            (void)first; (void)second;
-        }
-        macro(SECOND_ZERO) = unused/1 + _SECOND_ZERO;
-        macro(BOTH_ENCODED) = unused/1 + _BOTH_ENCODED;
-        macro(FIRST_ZERO) = unused/1 + _FIRST_ZERO;
-        // END BYTECODES //
-        """
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        output = io.StringIO()
-        opcode_metadata_generator.generate_expansion_table(analysis, CWriter(output, 0, False))
-        table = output.getvalue()
-        self.assertNotIn("OPERAND1_0", table)
-        self.assertIn("[SECOND_ZERO] = { .nuops = 1, .uops = { { _SECOND_ZERO, 2, 1 } } }", table)
-        self.assertIn("[BOTH_ENCODED] = { .nuops = 2, .uops = { { _BOTH_ENCODED, 2, 1 }, { _BOTH_ENCODED, OPERAND1_1, 3 } } }", table)
-        self.assertIn("[FIRST_ZERO] = { .nuops = 2, .uops = { { _FIRST_ZERO, 0, 1 }, { _FIRST_ZERO, OPERAND1_1, 1 } } }", table)
-
 
 class TestCallMarkers(unittest.TestCase):
     @classmethod

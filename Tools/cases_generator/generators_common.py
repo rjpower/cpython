@@ -1055,22 +1055,6 @@ def cflags(p: Properties) -> str:
         flags.append("HAS_LOCAL_FLAG")
     if p.eval_breaker:
         flags.append("HAS_EVAL_BREAK_FLAG")
-    if p.deopts:
-        flags.append("HAS_DEOPT_FLAG")
-    if p.side_exit:
-        flags.append("HAS_EXIT_FLAG")
-    if not p.infallible:
-        flags.append("HAS_ERROR_FLAG")
-    if p.error_without_pop:
-        flags.append("HAS_ERROR_NO_POP_FLAG")
-    if p.escapes:
-        flags.append("HAS_ESCAPES_FLAG")
-    if p.pure:
-        flags.append("HAS_PURE_FLAG")
-    if p.no_save_ip:
-        flags.append("HAS_NO_SAVE_IP_FLAG")
-    if p.sync_sp:
-        flags.append("HAS_SYNC_SP_FLAG")
     if flags:
         return " | ".join(flags)
     else:

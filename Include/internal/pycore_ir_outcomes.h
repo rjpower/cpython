@@ -1270,15 +1270,4 @@ _PyIR_NormalCallAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limi
     }
     return _PyIR_ABSENCE_PRESERVE;
 }
-
-static inline int
-_PyIR_CompletionWindow(int opcode)
-{
-    switch (opcode) {
-        case FOR_ITER: return 2;
-        case SEND: return 3;
-        case CLEANUP_THROW: return 4;
-        default: return 0;
-    }
-}
 #endif

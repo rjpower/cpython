@@ -73,6 +73,7 @@ import io
 from collections.abc import Sequence
 import ir_contract
 import ir_leaf
+import rop_primitives
 import ir_arms
 from ir_records import (
     ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, NEXT,
@@ -5427,7 +5428,7 @@ def build_records(analysis: Analysis,
                                                for u in record.uops},
                                    temporaries=fmt.window and not fmt.n_inputs)
         records[name] = record
-    ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())
+    ir_contract.check_primitives(rop_primitives.PRIMITIVES, ir_contract.lowerings())
     return records
 
 

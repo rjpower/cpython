@@ -357,24 +357,6 @@ do { \
         DISPATCH(); \
     } while (0)
 
-/* The handler of an instrumented twin whose event precedes the effect (rule
- * 12): the event runs in the cold function FN, then the twin goes to the
- * handler of its base with the same word.  FN returns the word to run, the
- * twin's own word to go on, or no word for an error. */
-#define IR_RUN_EVENT(FN, BASE) \
-    do { \
-        _PyIRTransfer ir_t = FN(tstate, frame, next_instr, ir_word); \
-        if (ir_t.next == NULL) { \
-            goto LABEL_outlined_exit; \
-        } \
-        if (ir_t.next != next_instr) { \
-            next_instr = ir_t.next; \
-            int opcode; \
-            DISPATCH(); \
-        } \
-        goto TARGET_##BASE; \
-    } while (0)
-
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \
@@ -398,8 +380,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Code access macros */
 
-/* In words */
-#define INSTR_OFFSET() ((int)(next_instr - frame->ir_words))
 #define NEXTOPARG()  do { \
         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
         opcode = IR_HANDLER(ir_word); \
@@ -427,7 +407,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
  * the frame where used: a register for them would be one more value live
  * across every dispatch. */
 #define IR_SLOTS()      (frame->base)
-#define LOCALS_ARRAY    IR_SLOTS()
 #define GETLOCAL(i)     (IR_SLOTS()[i])
 
 
@@ -471,8 +450,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #define GLOBALS() frame->f_globals
 #define BUILTINS() frame->f_builtins
 #define LOCALS() frame->f_locals
-#define CONSTS() _PyFrame_GetCode(frame)->co_consts
-#define NAMES() _PyFrame_GetCode(frame)->co_names
 
 #if defined(WITH_DTRACE) && !defined(Py_BUILD_CORE_MODULE)
 static void dtrace_function_entry(_PyInterpreterFrame *);
@@ -607,8 +584,6 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 
 /* Value/object bridge macros */
-
-#define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
 
 static inline bool
 IS_PEP523_HOOKED(PyThreadState *tstate)
@@ -753,9 +728,6 @@ gen_claim(PyThreadState *tstate, PyGenObject *gen)
     return 1;
 }
 
-#define CALL_TP_ITERITEM_NO_ESCAPE(ITER, INDEX) \
-    Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
-
 /* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
  * F is the value of a field, IR_A(ir_word) and so on.  The result and input
  * macros take the word W and the letter X of the field instead, so that they
@@ -818,46 +790,6 @@ _PyIR_Taken(PyValueBorrow view, PyValue *owner)
 }
 #define IR_TAKEN(V, OWN) _PyIR_Taken(PyValue_Borrow(V), &(OWN))
 
-/* IR_TAKEN() of a view of a required input, which is not PyValue_NULL, and
- * of one that a guard has shown to be in pointer space: a local's value then
- * gets its count with one test fewer (see PyValue_DUP() and
- * _PyValue_DUP_POINTER()). */
-static inline PyValue
-_PyIR_TakenRequired(PyValueBorrow view, PyValue *owner)
-{
-    PyValue taken = *owner;
-    if (PyValue_IsNull(taken)) {
-        return PyValue_DUP(view);
-    }
-    *owner = PyValue_NULL;
-    return taken;
-}
-#define IR_TAKEN_REQUIRED(V, OWN) _PyIR_TakenRequired(PyValue_Borrow(V), &(OWN))
-
-static inline PyValue
-_PyIR_TakenPointer(PyValueBorrow view, PyValue *owner)
-{
-    PyValue taken = *owner;
-    if (PyValue_IsNull(taken)) {
-        return _PyValue_DUP_POINTER(view);
-    }
-    *owner = PyValue_NULL;
-    return taken;
-}
-#define IR_TAKEN_POINTER(V, OWN) _PyIR_TakenPointer(PyValue_Borrow(V), &(OWN))
-
-/* Values are canonical where they are made (the PyValue_From*()
- * constructors), so a store writes V as it is; the debug check proves it. */
-
-/* A result whose format puts it only in a temporary: a plain store into a
- * slot that owns nothing. */
-#define IR_STORE_TEMP(SLOT, V) \
-    do { \
-        assert(PyValue_IsNull(SLOT)); \
-        (SLOT) = (V); \
-        _PyValue_CheckTemp(SLOT); \
-    } while (0)
-
 /* A handler writes a temporary of its window, or one that it wrote
  * before. */
 #define IR_SET_TEMP(SLOT, V) \
@@ -892,127 +824,6 @@ _PyIR_TakenPointer(PyValueBorrow view, PyValue *owner)
         } \
     } while (0)
 
-/* IR_MOVE_TO_DST for the result V of a window-style handler, which the
- * slot SLOT above the inputs' would only pass on: a local gets V directly
- * and the slot stays empty. */
-#define IR_MOVE_RESULT_TO_DST(W, X, SLOT, V) \
-    do { \
-        if (IR_IS_LOCAL_FIELD(W, X)) { \
-            ir_old = IR_SLOT(IR_FIELD(W, X)); \
-            assert(_PyValue_IsHome(V)); \
-            IR_SLOT(IR_FIELD(W, X)) = (V); \
-            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
-        } \
-        else { \
-            IR_SET_TEMP(SLOT, V); \
-        } \
-    } while (0)
-
-/* The elements of an unpack go to the locals LOCALS[0..N-1], the first of
- * a run: element I goes to LOCALS[N - 1 - I] (the elements are in stack
- * order) and the old value of that local to the window's slot SLOT, if it
- * owns an object, or the slot stays empty.  The frame owns every value
- * throughout.  The handler then closes the old values from the window
- * (IR_CLOSE_WINDOW), after all the stores and only if one owns an object. */
-#define IR_UNPACK_DIRECT(LOCALS, SLOT, I, N, X) \
-    do { \
-        PyValue *ir_local = (LOCALS) + ((N) - 1 - (I)); \
-        PyValue ir_displaced = *ir_local; \
-        *ir_local = (X); \
-        _PyValue_CheckHome(*ir_local); \
-        bool ir_owns = PyValue_RefcountOnObject(ir_displaced); \
-        *(SLOT) = ir_owns ? ir_displaced : PyValue_NULL; \
-        ir_unpack_owned |= ir_owns; \
-    } while (0)
-
-/* One element of an unpack: the item goes to the local, and the local's old
- * value to the window slot if it owns an object, or the slot is left empty
- * (zero), as IR_UNPACK_DIRECT does. The result says whether the slot holds
- * an owner. */
-static inline bool
-_PyIR_UnpackOneToLocal(PyValue *local, PyValue *slot, const PyValue *item)
-{
-    PyValue dup = PyValue_DUP(*item);
-    PyValue old = *local;
-    *local = dup;
-    _PyValue_CheckHome(*local);
-    bool owns = PyValue_RefcountOnObject(old);
-    *slot = owns ? old : PyValue_NULL;
-    return owns;
-}
-
-/* The elements of an unpack of ITEMS[0..N-1]: ITEMS[J] goes to LOCALS[J] and
- * the old value of that local to WINDOW[N - 1 - J] if it owns an object, or
- * the slot is left empty (zero). The frame owns every value throughout. The
- * result says whether the window holds an owner to close.
- *
- * A leaf function, so that the evaluator does not carry the loop's state
- * across its many live values. Two and three elements, the common unpacks,
- * are straight-line copies with no loop; the loop selects an old value's
- * ownership with a mask, without a branch. */
-static Py_NO_INLINE bool
-_PyIR_UnpackItemsToLocals(PyValue *locals, PyValue *window,
-                          const PyValue *items, int n)
-{
-    if (n == 2) {
-        bool owns0 = _PyIR_UnpackOneToLocal(&locals[0], &window[1], &items[0]);
-        bool owns1 = _PyIR_UnpackOneToLocal(&locals[1], &window[0], &items[1]);
-        return owns0 | owns1;
-    }
-    if (n == 3) {
-        bool owns0 = _PyIR_UnpackOneToLocal(&locals[0], &window[2], &items[0]);
-        bool owns1 = _PyIR_UnpackOneToLocal(&locals[1], &window[1], &items[1]);
-        bool owns2 = _PyIR_UnpackOneToLocal(&locals[2], &window[0], &items[2]);
-        return owns0 | owns1 | owns2;
-    }
-    uintptr_t owned = 0;
-    PyValue *slot = window + (n - 1);
-    for (int j = 0; j < n; j++, slot--) {
-        PyValue item = PyValue_DUP(items[j]);
-        PyValue old = locals[j];
-        locals[j] = item;
-        _PyValue_CheckHome(locals[j]);
-        bool owns = PyValue_RefcountOnObject(old);
-        *slot = owns ? old : PyValue_NULL;
-        owned |= owns;
-    }
-    return owned != 0;
-}
-
-/* The elements of an unpack of ITEMS[0..N-1] into the window's homes, in
- * stack order: ITEMS[N - 1 - I] to WINDOW[I]. */
-static Py_NO_INLINE void
-_PyIR_UnpackItemsToWindow(_PyInterpreterFrame *frame, PyValue *window,
-                          const PyValue *items, int n)
-{
-    for (int i = 0; i < n; i++) {
-        _PyFrame_WriteHome(frame, &window[i], PyValue_XDUP(items[n - 1 - i]));
-    }
-}
-
-/* The elements of an unpack that a function wrote into WINDOW in stack
- * order (element i in WINDOW[N - 1 - i]) go to the locals LOCALS[0..N-1].
- * Each local's old value changes places with the element's slot if it owns
- * an object, and the slot is left empty otherwise.  The frame owns every
- * value throughout.  The result says whether the window holds an owner to
- * close. */
-static inline bool
-_PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
-{
-    bool owned = false;
-    for (int i = 0; i < n; i++) {
-        PyValue *element = &window[n - 1 - i];
-        PyValue old = locals[i];
-        locals[i] = *element;
-        _PyValue_CheckHome(locals[i]);
-        bool owns = PyValue_RefcountOnObject(old);
-        *element = owns ? old : PyValue_NULL;
-        owned |= owns;
-    }
-    return owned;
-}
-#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N))
-
 /* Close the N owners in WINDOW, which are the old values of the locals that
  * received the elements, detaching each before it closes it.  The first
  * local's old value goes first, as the STORE_FASTs that the unpack replaces
@@ -1027,15 +838,6 @@ _PyIR_CloseWindow(PyValue *window, int n)
     }
 }
 #define IR_CLOSE_WINDOW(W, N) _PyIR_CloseWindow((W), (N))
-
-/* Clear N slots from PTR on; N may be zero or less. */
-#define IR_CLEAR_SLOTS(PTR, N) \
-    do { \
-        PyValue *ir_p = (PTR); \
-        for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
-            ir_p[ir_i] = PyValue_NULL; \
-        } \
-    } while (0)
 
 /* The frame's view of its executing copy: frame->ir_words follows the copy
  * that instr_ptr points into. */
@@ -1121,13 +923,6 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
     return -1;
 #endif
 }
-
-/* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with
- * entry FB at unit F, keeps in the arg field of the entry.  These sites
- * always have an entry of their own: the assembler assigns theirs first and
- * lowers a site that gets none to CALL_INTRINSIC_2. */
-#define IR_FB_ARG(FB, F) \
-    (assert((F) != IR_FB_SHARED), (int)((_PyFbHeader *)(FB))->arg)
 
 /* On entry to a frame at next_instr, its instr_ptr: if the word there is a
  * RESUME that would do nothing, because the eval breaker has nothing pending
@@ -1227,10 +1022,7 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
  * alive.  The function forms and the stubs bind it to _PyJit_PinDeparting(). */
 #define IR_PIN_DEPARTING() ((void)0)
 
-/* The oparg and feedback entry of another instruction of the frame. */
-#define _PyIR_Oparg(FRAME, INSTR) \
-    _PyCode_InstrOparg(_PyFrame_GetCode(FRAME), \
-                       _PyFrame_InstrOffset((FRAME), (INSTR)))
+/* The feedback entry of another instruction of the frame. */
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
     ((void)(HANDLER), \
      _PyIR_InstrFeedback(_PyFrame_GetCode(FRAME), _PyFrame_Exec(FRAME), (INSTR)))

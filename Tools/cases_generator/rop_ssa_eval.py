@@ -3,7 +3,7 @@
 The evaluator runs an `SsaArm` on the homes of a live frame: their words,
 read from the objects a test placed in them, and memory read through ctypes
 (ir_leaf_eval.RealMemory).  It never writes real memory and never runs
-Python.  A primitive row whose C symbol has a spec in ir_leaf.PRIMITIVES runs
+Python.  A primitive row whose C symbol has a spec in rop_primitives.PRIMITIVES runs
 that spec.  A row with a model in MODELS runs the model.  Every other row is
 opaque.  The opaque rows are those that may run Python, read feedback recipes
 or would need a model of CPython's machinery, and the evaluator explores
@@ -29,8 +29,8 @@ import ctypes
 from collections import Counter
 from dataclasses import dataclass, field
 
-import ir_leaf
-from ir_leaf_eval import Box, Context, HELPER_MODELS
+import rop_primitives
+from rop_primitives import Box, Context, HELPER_MODELS
 from rop_catalog import AccessMode, FieldKind, Handle, Scalar, Slot
 from rop_check import Program, is_linear
 from rop_model import Cases, EnumType, HandleType, ScalarType, Type, WrapType
@@ -123,19 +123,19 @@ def owns(cx: Context, w) -> bool:
     "Whether a value carries a count: a mortal object word, or a new value"
     if isinstance(w, (Box, Symbol)):
         return True
-    return (isinstance(w, int) and w != 0 and (ir_leaf.u64(w) & cx.k("Py_OWNED_MASK")) == 0
-            and ir_leaf.u64(w) < cx.k("Py_PTR_LIMIT"))
+    return (isinstance(w, int) and w != 0 and (rop_primitives.u64(w) & cx.k("Py_OWNED_MASK")) == 0
+            and rop_primitives.u64(w) < cx.k("Py_PTR_LIMIT"))
 
 
 def key(cx: Context, w):
     "What an owner is an owner of"
     if isinstance(w, (Box, Symbol)):
         return w
-    return ir_leaf.u64(w) & ~cx.k("Py_TAG_REFCNT")
+    return rop_primitives.u64(w) & ~cx.k("Py_TAG_REFCNT")
 
 
 def spec(name: str):
-    return ir_leaf.PRIMITIVES[name].spec
+    return rop_primitives.PRIMITIVES[name].spec
 
 
 def obj_of(cx: Context, w):
@@ -156,7 +156,7 @@ def exact(cx, w, symbol: str) -> bool:
 
 
 def value_word(cx, name: str) -> int:
-    symbol, tag = ir_leaf.VALUE_CONSTANTS[name]
+    symbol, tag = rop_primitives.VALUE_CONSTANTS[name]
     return cx.addr(symbol) | tag
 
 
@@ -173,7 +173,7 @@ def fact_holds(cx: Context, fact: str, type_arg, w) -> bool | None:
     if fact == "exact" and type_arg is not None:
         if type_arg.name == "int" and spec("PyValue_IsInlineInt")(cx, w):
             return True
-        if type_arg.value in ir_leaf.SYMBOLS:
+        if type_arg.value in rop_primitives.SYMBOLS:
             return exact(cx, w, type_arg.value)
     return None
 
@@ -455,7 +455,7 @@ class Path:
                 raise Opaque(name)
             if model is not None and concrete(*args):
                 result = model(self, *args)
-            elif symbol in ir_leaf.PRIMITIVES and concrete(*args) and all(
+            elif symbol in rop_primitives.PRIMITIVES and concrete(*args) and all(
                     isinstance(a, (int, float, bool)) for a in args):
                 result = self.run_spec(symbol, args, x)
             else:
@@ -750,7 +750,7 @@ def same_value(cx: Context, pred, c, binding: dict) -> bool:
         return True
     if pred == EMPTY:
         return c == 0
-    return isinstance(pred, int) and ir_leaf.u64(pred) < cx.k("Py_PTR_LIMIT") and key(cx, pred) == id(c)
+    return isinstance(pred, int) and rop_primitives.u64(pred) < cx.k("Py_PTR_LIMIT") and key(cx, pred) == id(c)
 
 
 # The exit a C run shows for each model exit: an unwind leaves the word

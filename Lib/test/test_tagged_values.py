@@ -463,7 +463,7 @@ def existing(*names):
     """The names of old handlers that this build still has, and every arm
     name (it has a dot).  A port deletes the old handlers of its family."""
     return [name for name in names
-            if "." in name or name in dis._ir_opmap
+            if "." in name or name in dis._ir_handlers
             or name in dis._specialized_opmap or name in dis.opmap]
 
 

@@ -37,7 +37,7 @@ def handlers(func):
 def ordinary_handlers(func):
     contracts = _opcode.get_ir_contract()
     # The word flags after a handler's name stay with the ordinary handler
-    return [opcode.opname[contracts[opcode.opname.index(handler)].ordinary_handler]
+    return [opcode._all_opname[contracts[opcode._all_opname.index(handler)].ordinary_handler]
             + plus + flags
             for handler, plus, flags in (name.partition("+") for name in handlers(func))]
 

@@ -19,7 +19,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
-from ir_generator import num_handlers, num_old_handlers
+from ir_generator import handler_ids, num_handlers, num_old_handlers
 from stack_opcode_pins import (
     HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE, MIN_SPECIALIZED_OPCODE,
     PINNED_OPCODES, PINNED_PSEUDOS,
@@ -54,26 +54,34 @@ def generate_opcode_header(
         write_define("HAVE_ARGUMENT", HAVE_ARGUMENT)
         write_define("MIN_SPECIALIZED_OPCODE", MIN_SPECIALIZED_OPCODE)
         write_define("MIN_INSTRUMENTED_OPCODE", MIN_INSTRUMENTED_OPCODE)
-        out.emit('\n#include "ir_handler_ids.h"\n')
 
 
 def generate_handler_ids_header(
     filenames: list[str], analysis: Analysis, outfile: TextIO,
     arms: Sequence[ir_arms.ArmEntry] = ()
 ) -> None:
-    """The register handler ids that no stack opcode holds: the handler-only
-    names, and how many handlers there are.  Both move with every port."""
+    """The register handler ids.  They are dense, computed at each build and
+    independent of the stack opcodes: IR_H_<name> for every handler that
+    bytecodes.c defines, then the counts.  The numbers of the translator-only
+    ops follow: they are CFG numbers in the gap that no stack opcode holds,
+    and no word has them as a handler."""
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     with out.header_guard("Py_IR_HANDLER_IDS_H"):
         out.emit("/* Register handler ids; not stack opcodes */\n")
-        insts = analysis.translator_only
-        for name in sorted(analysis.translator_only,
-                           key=lambda name: insts[name].opcode):
-            out.emit(f"#define {name:<38} {insts[name].opcode:>3}\n")
+        for name, number in handler_ids(analysis).items():
+            out.emit(f"#define IR_H_{name:<36} {number:>3}\n")
         out.emit("\n")
         out.emit(f"#define {'IR_NUM_OLD_HANDLERS':<38} {num_old_handlers(analysis):>3}\n")
         out.emit(f"#define {'IR_NUM_HANDLERS':<38} {num_handlers(analysis, arms):>3}\n")
+        out.emit("\n/* What _PyIR_HandlerBase holds for a handler that is no stack op: "
+                 "a number\n * past every stack opcode and pseudo-instruction */\n")
+        out.emit("#define IR_HANDLER_ONLY_BASE(handler) (512 + (handler))\n")
+        out.emit("\n/* Ops of the translator's CFG that no co_code holds: "
+                 "numbers in the gap of the stack opcodes */\n")
+        insts = analysis.translator_only
+        for name in sorted(insts, key=lambda name: insts[name].opcode):
+            out.emit(f"#define {name:<38} {insts[name].opcode:>3}\n")
 
 
 arg_parser = argparse.ArgumentParser(

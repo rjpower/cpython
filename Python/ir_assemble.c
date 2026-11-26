@@ -7,13 +7,17 @@
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
-#include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic, ROP_FIRST_HANDLER
+#include "pycore_rop_metadata.h"    // ROP_OP_Call_Generic, ROP_FIRST_HANDLER
 #include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
 
 #include <stdbool.h>
+
+// The CFG names an arm by its tagged ROP_OP_ number, not its handler id
+#undef ROP_ARM
+#define ROP_ARM(name) ROP_OP_##name
 
 #undef SUCCESS
 #undef ERROR
@@ -363,7 +367,7 @@ assemble_pcmap(struct assembler *a, _PyRegCfg *cfg)
 
 /* The loop word of a for statement: the ForIter arm that the translator
  * emits, before any specialization chooses another */
-#define IS_FOR_ITER(op) ((op)->opcode == ROP_HANDLER_ForIter_Generic)
+#define IS_FOR_ITER(op) ((op)->opcode == ROP_OP_ForIter_Generic)
 
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
 int _PyIR_MaxForward = IR_MAX_FORWARD;
@@ -400,14 +404,14 @@ operand_word_count(int n)
 static int
 call_has_self(const _PyRegOp *op)
 {
-    return op->opcode != ROP_HANDLER_CallEx_Generic &&
+    return op->opcode != ROP_OP_CallEx_Generic &&
            !(op->flags & _PyReg_CALL_NO_SELF);
 }
 
 static int
 call_noperands(const _PyRegOp *op)
 {
-    if (op->opcode == ROP_HANDLER_CallEx_Generic) {
+    if (op->opcode == ROP_OP_CallEx_Generic) {
         return 1 + !(op->flags & _PyReg_CALL_NO_KWARGS);
     }
     return op->nread - 1 - !call_has_self(op);
@@ -418,11 +422,11 @@ call_noperands(const _PyRegOp *op)
 static uint32_t
 call_operand_field(_PyRegCfg *cfg, const _PyRegOp *op, int k, int n)
 {
-    if (op->opcode == ROP_HANDLER_CallKw_Generic && k == n - 1) {
+    if (op->opcode == ROP_OP_CallKw_Generic && k == n - 1) {
         return op->kwnames > 0 ? (uint32_t)(op->kwnames - 1) : 0;
     }
     const int *in = _PyReg_IN(cfg, op);
-    int first = op->opcode == ROP_HANDLER_CallEx_Generic ? 2 : 2 - call_has_self(op);
+    int first = op->opcode == ROP_OP_CallEx_Generic ? 2 : 2 - call_has_self(op);
     return (uint32_t)_PyRegCfg_Slot(cfg, in[first + k]);
 }
 
@@ -589,13 +593,13 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
 static int
 call_role_flags(const _PyRegOp *op)
 {
-    if (op->opcode == ROP_HANDLER_CallEx_Generic) {
+    if (op->opcode == ROP_OP_CallEx_Generic) {
         return IR_F_EX | ((op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0);
     }
-    if (op->opcode == ROP_HANDLER_CallKw_Generic) {
+    if (op->opcode == ROP_OP_CallKw_Generic) {
         return IR_F_KW | ((op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0);
     }
-    if (op->opcode == ROP_HANDLER_Call_Generic) {
+    if (op->opcode == ROP_OP_Call_Generic) {
         int flags = (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
         if (op->flags & _PyReg_CALL_UNINTERRUPTED) {
             flags |= IR_F_UNINTERRUPTED;
@@ -615,13 +619,14 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     int opcode = op->opcode;
     int oparg = op->oparg;
     /* A rule that emitted a register family's arm named its handler */
-    if (opcode >= IR_NUM_OLD_HANDLERS) {
-        return opcode;
+    if (ROP_CFG_IS_ARM(opcode)) {
+        return ROP_CFG_HANDLER(opcode);
     }
     if (opcode == YIELD_VALUE && oparg == 1) {
-        return YIELD_DELEGATED;
+        return IR_H_YIELD_DELEGATED;
     }
-    return opcode;
+    assert(_PyIR_OpcodeHandler[opcode] != _PyIR_NO_HANDLER);
+    return _PyIR_OpcodeHandler[opcode];
 }
 
 /* END_ASYNC_FOR names its semantic SEND site for branch observation. */
@@ -777,7 +782,7 @@ done:
 static inline int
 is_resume_word(int opcode)
 {
-    return opcode == ROP_HANDLER_Resume_Poll || opcode == ROP_HANDLER_Resume_Warm;
+    return opcode == ROP_OP_Resume_Poll || opcode == ROP_OP_Resume_Warm;
 }
 
 static int
@@ -850,7 +855,7 @@ lower_completions(_PyRegCfg *cfg)
             op->completion = target + 1;
             if (IS_FOR_ITER(op)) {
                 int pop = next_frontend_op(cfg, target + 1, 0);
-                if (pop < 0 || cfg->ops[pop].opcode != ROP_HANDLER_IterClose_Retire ||
+                if (pop < 0 || cfg->ops[pop].opcode != ROP_OP_IterClose_Retire ||
                     cfg->ops[pop].nread != 2 ||
                     memcmp(_PyReg_IN(cfg, &cfg->ops[pop]),
                            _PyReg_OUT(cfg, op), 2 * sizeof(int)))
@@ -981,10 +986,10 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             continue;
         }
         // A register instruction arm is its own handler
-        assert(op->opcode >= ROP_FIRST_HANDLER ||
+        assert(ROP_CFG_IS_ARM(op->opcode) ||
                (!IS_PSEUDO_INSTR(op->opcode) && IS_VALID_OPCODE(op->opcode)));
         if (op->opcode == NOP || (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
-            op->handler = NOP;
+            op->handler = IR_H_NOP;
             op->nwords = 0;
             continue;
         }
@@ -998,7 +1003,7 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             if (op->noperands > IR_FIELD_MAX) {
                 return too_large("call operands", op->noperands);
             }
-            if (op->opcode == ROP_HANDLER_CallKw_Generic && op->kwnames - 1 >= IR_FIELD_MAX) {
+            if (op->opcode == ROP_OP_CallKw_Generic && op->kwnames - 1 >= IR_FIELD_MAX) {
                 return too_large("call keyword names constant", op->kwnames - 1);
             }
             op->nwords += operand_word_count(op->noperands);

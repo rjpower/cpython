@@ -418,7 +418,7 @@ get_awaited_coro_address(
         handler = boundary->ordinary;
     }
     int receiver = (int)IR_D(word);
-    if ((handler != YIELD_DELEGATED && handler != INSTRUMENTED_YIELD_DELEGATED) ||
+    if ((handler != IR_H_YIELD_DELEGATED && handler != IR_H_INSTRUMENTED_YIELD_DELEGATED) ||
         IR_A(word) != return_slot ||
         IR_B(word) < (uint32_t)locals ||
         IR_B(word) >= (uint32_t)slots ||

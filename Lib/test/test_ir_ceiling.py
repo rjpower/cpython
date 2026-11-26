@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 
 import opcode
+import _opcode
 import _opcode_metadata as metadata
 
 from test import test_tools
@@ -32,7 +33,7 @@ def read_ceiling() -> dict[str, set[str]]:
 
 
 def arm_names() -> set[str]:
-    return {name for name in metadata._ir_opmap if "." in name}
+    return {name for name in metadata._ir_handlers if "." in name}
 
 
 def stack_op_names() -> set[str]:
@@ -42,7 +43,8 @@ def stack_op_names() -> set[str]:
 def handler_table() -> set[str]:
     """Every name that can run: the opcodes, their specialized forms and
     the IR-only handlers.  The compiler's pseudo-instructions never run."""
-    names = set(metadata._specialized_opmap) | set(metadata._ir_opmap)
+    names = set(metadata._specialized_opmap) | set(metadata._ir_handlers)
+    names.update(metadata._ir_translator_only)
     names.update(name for name, number in metadata.opmap.items()
                  if number < FIRST_PSEUDO)
     return names
@@ -132,6 +134,56 @@ class ArmNameTests(unittest.TestCase):
             declared |= {x.name, *(p.name for p in x.params)}
         self.assertTrue(declared)
         self.assertEqual(declared & stack_op_names(), set())
+
+
+class HandlerIdTests(unittest.TestCase):
+    """Handler ids and stack opcodes are separate number spaces"""
+
+    HANDLER_FIELD_IDS = 512  # IR_HANDLER_BITS is 9
+
+    def test_ids_are_dense(self):
+        ids = metadata._ir_handlers
+        self.assertEqual(sorted(ids.values()), list(range(_opcode.IR_NUM_HANDLERS)))
+        old = {name for name, h in ids.items() if h < _opcode.IR_NUM_OLD_HANDLERS}
+        self.assertFalse(old & arm_names())
+        self.assertTrue(arm_names() <= set(ids))
+
+    def test_ids_fit_the_handler_field(self):
+        # The headroom: ids that the handler field still has free
+        headroom = self.HANDLER_FIELD_IDS - _opcode.IR_NUM_HANDLERS
+        self.assertGreaterEqual(headroom, 0)
+
+    def test_translator_only_ops_have_no_handler(self):
+        ids = metadata._ir_handlers
+        for name, number in metadata._ir_translator_only.items():
+            with self.subTest(name=name):
+                self.assertNotIn(name, ids)
+                self.assertNotIn(name, metadata.opmap)
+                self.assertNotIn(number, metadata.opmap.values())
+
+    def test_no_handler_is_compared_with_a_stack_constant(self):
+        # A handler id that is compared with a bare stack opcode constant
+        # (CALL, INSTRUMENTED_LINE, ...) matches whichever handler has that
+        # number.  Handler ids are IR_H_<name>; stack opcodes come from
+        # _PyIR_BaseOpcode(), _PyIR_OpcodeHandler[] and the other maps.
+        test_tools.skip_if_missing("cases_generator")
+        root = Path(test_tools.basepath)
+        stack = "|".join(sorted(metadata.opmap, key=len, reverse=True))
+        call = r"\((?:[^()]|\([^()]*\))*\)"
+        handler = (rf"(?:IR_HANDLER{call}|_PyCode_InstrHandler{call}"
+                   r"|\bhandler\b|\bordinary_handler\b|->ordinary\b)")
+        compare = re.compile(rf"{handler}\s*[!=]=\s*(?:{stack})\b"
+                             rf"|(?:{stack})\s*[!=]=\s*{handler}")
+        bad = []
+        for directory in ("Python", "Include/internal", "Objects", "Modules"):
+            for path in sorted((root / directory).rglob("*.[ch]")):
+                if "generated" in path.name or path.name.endswith("_audit.c"):
+                    continue
+                for number, line in enumerate(path.read_text().splitlines(), 1):
+                    code = re.sub(r"/\*.*?\*/|//.*", "", line)
+                    if compare.search(code):
+                        bad.append(f"{path.relative_to(root)}:{number}: {line.strip()}")
+        self.assertEqual(bad, [])
 
 
 class BannerTests(unittest.TestCase):

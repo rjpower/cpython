@@ -100,14 +100,14 @@ class WordLengthTests(unittest.TestCase):
         for n, expected in [(0, 1), (1, 2), (4, 2), (5, 3), (8, 3), (9, 4),
                             (4095, 1 + 1024)]:
             with self.subTest(n=n):
-                self.assertEqual(length(self.word("CALL", 0, 0, n, 0)), expected)
+                self.assertEqual(length(self.word("Call.Generic", 0, 0, n, 0)), expected)
                 self.assertEqual(
-                    length(self.word("CALL+NO_SELF", 0, 0, n, 0)), expected)
+                    length(self.word("Call.Generic+NO_SELF", 0, 0, n, 0)), expected)
 
     def test_every_other_word_has_length_one(self):
         length = _opcode.get_ir_word_length
         self.assertEqual(length(self.word("IR_OPERANDS", 1, 2, 3, 4)), 1)
-        self.assertEqual(length(self.word("RETURN_VALUE", 0, 0, 7, 0)), 1)
+        self.assertEqual(length(self.word("Return.Ordinary", 0, 0, 7, 0)), 1)
 
     def test_only_the_call_families_have_operand_words(self):
         length = _opcode.get_ir_word_length
@@ -123,7 +123,7 @@ class WordLengthTests(unittest.TestCase):
                 self.assertEqual(length(word), 3 if is_call else 1)
 
     def test_operands_handler_is_never_dispatched(self):
-        row = CONTRACT[opcode._ir_opmap["IR_OPERANDS"]]
+        row = CONTRACT[opcode._ir_handlers["IR_OPERANDS"]]
         self.assertEqual(row.roles, (_opcode.IR_ROLE_NONE,) * 4)
         self.assertEqual(row.word_flags, 0)
 

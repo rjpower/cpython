@@ -352,11 +352,6 @@ _PyIR_CallReadsOperandHome(const _PyIRWord *wp, int home, int *nullable)
 static inline uint32_t
 _PyIR_NullableInputs(_PyIRWord word)
 {
-    /* Deletion is a capability of these actual handlers, not of every
-     * STORE_ATTR specialization. Static deletion sites never specialize. */
-    if (IR_HANDLER(word) == STORE_ATTR) {
-        return 1u;
-    }
     switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
         case CALL:
         case CALL_KW:
@@ -392,7 +387,7 @@ _PyIR_Outcome(_PyIRWord word, int taken)
         case CLEANUP_THROW:
             return (_PyIRSlotOutcome){1, base, 4, dst};
         case YIELD_VALUE:
-        case YIELD_DELEGATED:
+        case IR_HANDLER_ONLY_BASE(IR_H_YIELD_DELEGATED):
             /* The outgoing value is taken; the next activation supplies A. */
             return (_PyIRSlotOutcome){1, base, 1, dst};
         case RETURN_GENERATOR:
@@ -1036,7 +1031,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
             }
             break;
         case YIELD_VALUE:
-            if (_PyIR_HandlerBase[handler] == YIELD_DELEGATED) {
+            if (_PyIR_HandlerBase[handler] == IR_HANDLER_ONLY_BASE(IR_H_YIELD_DELEGATED)) {
                 /* A send's delegated yield names its inputs in IN fields;
                  * the generic rule keeps every other home. */
                 break;

@@ -1290,7 +1290,7 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(OP) {
-            int opcode = OP;
+            int opcode = IR_H_OP;
             (void)(opcode);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2410,7 +2410,7 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(OP) {
-            int opcode = OP;
+            int opcode = IR_H_OP;
             (void)(opcode);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2718,7 +2718,7 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(OP) {
-            int opcode = OP;
+            int opcode = IR_H_OP;
             (void)(opcode);
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
@@ -2755,7 +2755,7 @@ class TestIRCases(unittest.TestCase):
         }
 
         TARGET(OP_SPECIALIZED) {
-            int opcode = OP_SPECIALIZED;
+            int opcode = IR_H_OP_SPECIALIZED;
             (void)(opcode);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2778,12 +2778,12 @@ class TestIRCases(unittest.TestCase):
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(OP);
-                    assert(_PyOpcode_Deopt[opcode] == (OP));
+                    assert(_PyIR_BaseOpcode(opcode) == (OP));
                     JUMP_TO_PREDICTED(OP);
                 }
                 if (Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner))->tp_version_tag != type_version) {
                     UPDATE_MISS_STATS(OP);
-                    assert(_PyOpcode_Deopt[opcode] == (OP));
+                    assert(_PyIR_BaseOpcode(opcode) == (OP));
                     JUMP_TO_PREDICTED(OP);
                 }
             }
@@ -2828,7 +2828,7 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(OP) {
-            int opcode = OP;
+            int opcode = IR_H_OP;
             (void)(opcode);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2914,7 +2914,7 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(IR_PASS) {
-            int opcode = IR_PASS;
+            int opcode = IR_H_IR_PASS;
             (void)(opcode);
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
@@ -2967,11 +2967,12 @@ class TestIRCases(unittest.TestCase):
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
         self.assertIn("#define _PyIR_OBSERVER_ENTRY_ABSENCE 0", lines)
-        # The shared handler bound is emitted in opcode_ids.h, not metadata.
-        # The IR-only handlers fit the free numbers below 256, so the arms
-        # start at 256.
-        self.assertEqual(ir_generator.num_old_handlers(analysis), 256)
-        bacon, ir_pass = analysis.free_ids[:2]
+        # The handler ids are dense and apart from the stack opcodes:
+        # emitted in ir_handler_ids.h, with the arms after the old handlers.
+        ids = ir_generator.handler_ids(analysis)
+        self.assertEqual(ir_generator.num_old_handlers(analysis), 4)
+        self.assertEqual(sorted(ids.values()), [0, 1, 2, 3])
+        self.assertGreater(ids["IR_BACON"], ids["LOAD"])
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
         # Only the twin runs Python itself; the format does, as the twin's.
         load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, "
@@ -2990,16 +2991,14 @@ class TestIRCases(unittest.TestCase):
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
                 ".through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD, "
-                ".twin = INSTRUMENTED_LOAD, .events = 0 }")
+                ".twin = IR_H_INSTRUMENTED_LOAD, .events = 0 }")
         instrumented = (load.replace(".effects = 0",
                                      ".effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON")
                             .replace("shadow = LOAD", "shadow = INSTRUMENTED_LOAD"))
         for expected in [
-            f"#define {'IR_BACON':<46} {bacon}",
-            f"#define {'IR_PASS':<46} {ir_pass}",
-            f"[LOAD] = {load},",
-            f"[INSTRUMENTED_LOAD] = {instrumented},",
-            "[IR_PASS] = { .flags = _PyIR_VALID | _PyIR_TRANSPARENT, "
+            f"[{ids['LOAD']}] = {load},  /* LOAD */",
+            f"[{ids['INSTRUMENTED_LOAD']}] = {instrumented},  /* INSTRUMENTED_LOAD */",
+            f"[{ids['IR_PASS']}] = " + "{ .flags = _PyIR_VALID | _PyIR_TRANSPARENT, "
             ".effects = 0, "
             ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, "
             "_PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
@@ -3013,10 +3012,10 @@ class TestIRCases(unittest.TestCase):
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
-            ".through = { 0, _PyIR_EXT_FIXED }, .shadow = IR_PASS, "
-            ".twin = 0, .events = 0 },",
-            f'[IR_BACON] = "IR_BACON",',
-            f'[IR_PASS] = "IR_PASS",',
+            ".through = { 0, _PyIR_EXT_FIXED }, .shadow = 0, "
+            ".twin = 0, .events = 0 },  /* IR_PASS */",
+            f'[{ids["IR_BACON"]}] = "IR_BACON",',
+            f'[{ids["IR_PASS"]}] = "IR_PASS",',
         ]:
             self.assertIn(expected, lines)
 
@@ -3749,9 +3748,10 @@ class TestIRCases(unittest.TestCase):
                     self.slot_role(effect, body)
                 self.assertIsNotNone(cm.exception.lineno)
 
-    def test_ir_only_takes_free_numbers(self):
-        # IR-only handlers take the numbers below 256 that no opcode holds;
-        # a pseudo-instruction has no handler, so it reserves none.
+    def test_handler_ids_are_dense(self):
+        # Handlers number from 0 in the order of their opcodes, the IR-only
+        # ones after them; a pseudo-instruction has no handler and a stack
+        # op that only aborts takes none.
         input = """
         inst(GO, ( -- )) {
             JUMPBY(oparg);
@@ -3762,34 +3762,14 @@ class TestIRCases(unittest.TestCase):
         ir_only inst(IR_BACON, ( -- )) {
             SPAM();
         }
-    """
-        analysis = self.analyze(input)
-        self.assertEqual(analysis.pseudos["JUMP"].opcode, 257)
-        self.assertNotIn(257, analysis.free_ids)
-        self.assertNotIn(analysis.instructions["GO"].opcode, analysis.free_ids)
-        self.assertEqual(ir_generator.handler_ids(analysis)["IR_BACON"],
-                         analysis.free_ids[0])
-
-    def test_ir_only_continue_from_256(self):
-        # Past the free numbers, handlers continue from 256 and the arms
-        # follow them.
-        input = """
-        inst(GO, ( -- )) {
-            JUMPBY(oparg);
-        }
-        ir_only inst(IR_BACON, ( -- )) {
-            SPAM();
-        }
         ir_only inst(IR_PASS, ( -- )) {
             SPAM();
         }
     """
         analysis = self.analyze(input)
-        analysis.free_ids = analysis.free_ids[:1]
-        ids = ir_generator.handler_ids(analysis)
-        self.assertEqual((ids["IR_BACON"], ids["IR_PASS"]),
-                         (analysis.free_ids[0], 256))
-        self.assertEqual(ir_generator.num_old_handlers(analysis), 257)
+        self.assertEqual(ir_generator.handler_ids(analysis),
+                         {"GO": 0, "IR_BACON": 1, "IR_PASS": 2})
+        self.assertEqual(ir_generator.num_old_handlers(analysis), 3)
 
 
 def generated_address_sites(text):

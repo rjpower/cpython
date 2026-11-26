@@ -28,7 +28,7 @@ CONTRACT = _opcode.get_ir_contract()
 # no stack effect to check (test_ir_arm_words)
 OLD_CONTRACT = CONTRACT[:_opcode.IR_NUM_OLD_HANDLERS]
 ROWS = {h: row for h, row in enumerate(OLD_CONTRACT) if row is not None}
-BY_NAME = {opcode.opname[h]: row for h, row in ROWS.items()}
+BY_NAME = {opcode._all_opname[h]: row for h, row in ROWS.items()}
 
 SLOT_ROLES = (_opcode.IR_ROLE_LOCAL_IN, _opcode.IR_ROLE_LOCAL_OUT,
               _opcode.IR_ROLE_LOCAL_CLEAR, _opcode.IR_ROLE_LOCAL_MOVE,
@@ -96,7 +96,7 @@ class ContractTests(unittest.TestCase):
     def test_normal_physical_transfer(self):
         testapi = import_helper.import_module("_testinternalcapi")
         named = {**opcode.opmap, **opcode._specialized_opmap,
-                 **opcode._ir_opmap}
+                 **opcode._ir_handlers}
         preserve = (0, -1)
         set_null = (1, -1)
         unknown = (2, -1)
@@ -149,7 +149,7 @@ class ContractTests(unittest.TestCase):
         for handler, row in ROWS.items():
             if row.base not in families and handler not in twins:
                 continue
-            name = opcode.opname[handler]
+            name = opcode._all_opname[handler]
             selected.add(name)
             with self.subTest(handler=name):
                 self.assertEqual(row.roles, (_opcode.IR_ROLE_DST,
@@ -171,18 +171,19 @@ class ContractTests(unittest.TestCase):
 
     def test_rows(self):
         self.assertEqual(len(CONTRACT), _opcode.IR_NUM_HANDLERS)
-        named = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
+        named = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_handlers}
         for h, row in ROWS.items():
-            with self.subTest(handler=opcode.opname[h]):
+            with self.subTest(handler=opcode._all_opname[h]):
                 self.assertTrue(row.flags & _opcode.IR_VALID)
-                self.assertIn(opcode.opname[h], named)
-                # The handlers that only the IR has as base opcodes are not in
-                # opmap, which lists what co_code can hold
-                self.assertIn(row.base, {*opcode.opmap.values(),
-                                         *(opcode._ir_opmap[name] for name in TRANSLATOR_ONLY)})
-                self.assertIn(row.shadow, ROWS)
-        for name in (*opcode._specialized_opmap, *opcode._ir_opmap):
-            if (opcode._ir_opmap.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS
+                self.assertIn(opcode._all_opname[h], named)
+                # A base is the stack opcode that the handler stands for, or
+                # 512 + the handler for one that has no stack op
+                self.assertIn(row.base, {*opcode._stack_opmap.values(),
+                                         *(opcode._HANDLER_OP + h
+                                           for h in opcode._ir_only_handlers)})
+                self.assertIn(row.shadow, {0, *opcode._stack_opmap.values()})
+        for name in (*opcode._specialized_opmap, *opcode._ir_handlers):
+            if (opcode._ir_handlers.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS
                     or name in TRANSLATOR_ONLY):
                 continue
             self.assertIn(name, BY_NAME)
@@ -205,7 +206,7 @@ class ContractTests(unittest.TestCase):
                         op, oparg if _opcode.has_arg(op) else None)
                 except ValueError:
                     continue
-                with self.subTest(handler=opcode.opname[h], oparg=oparg):
+                with self.subTest(handler=opcode._all_opname[h], oparg=oparg):
                     reads = extent(row.reads, oparg)
                     writes = extent(row.writes, oparg)
                     through = extent(row.through, oparg)
@@ -229,11 +230,11 @@ class ContractTests(unittest.TestCase):
 
     def test_window_and_fields(self):
         for h, row in ROWS.items():
-            with self.subTest(handler=opcode.opname[h]):
+            with self.subTest(handler=opcode._all_opname[h]):
                 roles = row.roles
                 inputs = [r - _opcode.IR_ROLE_IN0 for r in roles
                           if r >= _opcode.IR_ROLE_IN0]
-                if opcode.opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                if opcode._all_opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
                     self.assertEqual(row.ninputs, 3)
                     self.assertEqual(sorted(inputs), [0, 2])
                     self.assertEqual(roles[2], _opcode.IR_ROLE_NONE)
@@ -281,7 +282,8 @@ class ContractTests(unittest.TestCase):
 
     def test_targets(self):
         for name, op in opcode.opmap.items():
-            row = CONTRACT[op] if op < len(CONTRACT) else None
+            handler = opcode._ir_handlers.get(name)
+            row = None if handler is None else CONTRACT[handler]
             if row is None or op >= opcode.MIN_INSTRUMENTED_OPCODE:
                 continue
             with self.subTest(name=name):
@@ -306,7 +308,7 @@ class ContractTests(unittest.TestCase):
         for h, row in ROWS.items():
             # A twin shares the format, and so the entry, of its family
             family = opcode.opname[row.base].removeprefix("INSTRUMENTED_")
-            with self.subTest(handler=opcode.opname[h]):
+            with self.subTest(handler=opcode._all_opname[h]):
                 if row.fb == _opcode.IR_LOC_NONE:
                     self.assertEqual((row.fb_kind, row.fb_size), (0, 0))
                     continue
@@ -319,8 +321,9 @@ class ContractTests(unittest.TestCase):
                 self.assertNotEqual(BY_NAME[family].fb, _opcode.IR_LOC_NONE)
         # The generic handlers that specialise from their entry
         self.assertLessEqual(
-            {opcode.opname[op] for op in range(opcode.MIN_INSTRUMENTED_OPCODE)
+            {opcode._all_opname[op] for op in range(_opcode.IR_NUM_OLD_HANDLERS)
              if CONTRACT[op] is not None
+             and not opcode._all_opname[op].startswith("INSTRUMENTED_")
              and op not in opcode._ir_only_handlers
              and CONTRACT[op].effects & _opcode.IR_SPECIALIZES},
             # GET_ITER and FOR_ITER specialise again at step 3
@@ -341,7 +344,7 @@ class ContractTests(unittest.TestCase):
                     kind, _, units = dis._feedback_entry(fbinit, fb)
                     self.assertGreaterEqual(units * 8, CONTRACT[h].fb_size)
                     self.assertEqual(kind, CONTRACT[h].fb_kind,
-                                     opcode.opname[h])
+                                     opcode._all_opname[h])
                     seen.add(dis._FEEDBACK_KINDS[kind])
         # COUNTER is entry 0, which no word names
         # (No word names BRANCH: a conditional jump keeps its operand's type
@@ -351,7 +354,7 @@ class ContractTests(unittest.TestCase):
     def test_monitoring(self):
         events = sys.monitoring.events
         for h, row in ROWS.items():
-            name = opcode.opname[h]
+            name = opcode._all_opname[h]
             with self.subTest(handler=name):
                 twin = row.twin
                 if name.startswith("INSTRUMENTED_"):
@@ -365,7 +368,7 @@ class ContractTests(unittest.TestCase):
                     else:
                         self.assertEqual(row.events, 0)
                     continue
-                self.assertTrue(opcode.opname[twin].startswith("INSTRUMENTED_"))
+                self.assertTrue(opcode._all_opname[twin].startswith("INSTRUMENTED_"))
                 self.assertEqual(ROWS[twin].twin, twin)
                 self.assertEqual(row.events, ROWS[twin].events)
                 self.assertEqual(row.flags, ROWS[twin].flags)
@@ -455,7 +458,7 @@ class ContractTests(unittest.TestCase):
     def test_effects(self):
         for h, row in ROWS.items():
             effects, flags = row.effects, row.flags
-            with self.subTest(handler=opcode.opname[h]):
+            with self.subTest(handler=opcode._all_opname[h]):
                 # The format runs code if any of its handlers may
                 if effects & _opcode.IR_RUNS_PYTHON:
                     self.assertTrue(flags & _opcode.IR_RUNS_CODE)
@@ -465,11 +468,11 @@ class ContractTests(unittest.TestCase):
                 if effects & (_opcode.IR_PUSHES_FRAME | _opcode.IR_SUSPENDS):
                     self.assertTrue(effects & _opcode.IR_RUNS_PYTHON)
                 if effects & _opcode.IR_SPECIALIZES:
-                    name = opcode.opname[h]
+                    name = opcode._all_opname[h]
                     self.assertNotIn(name, opcode._specialized_opmap)
                     self.assertFalse(name.startswith("INSTRUMENTED_"))
                     self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
-        suspends = {opcode.opname[row.ordinary_handler] for row in ROWS.values()
+        suspends = {opcode._all_opname[row.ordinary_handler] for row in ROWS.values()
                     if row.effects & _opcode.IR_SUSPENDS}
         # A send to a native iterator that suspends yields its value from
         # the outer frame, which the record states as a YIELD transfer
@@ -530,7 +533,7 @@ class AnalyzerTests(unittest.TestCase):
 
     def test_ids(self):
         for name, h in self.ids.items():
-            self.assertEqual(opcode.opname[h], name)
+            self.assertEqual(opcode._all_opname[h], name)
             self.assertIsNotNone(CONTRACT[h], name)
 
     def test_properties(self):
@@ -777,10 +780,10 @@ class SourceScanTests(unittest.TestCase):
         ops, macros = _scan_definitions(self.source("Python", "bytecodes.c"))
         result = {}
         for h, row in ROWS.items():
-            name = opcode.opname[h]
+            name = opcode._all_opname[h]
             if name in ops or name in macros:
                 result[h] = _scan_stack(ops, macros, name)
-        names = {opcode.opname[h] for h in result}
+        names = {opcode._all_opname[h] for h in result}
         self.assertTrue(names)
         return result
 
@@ -791,7 +794,7 @@ class SourceScanTests(unittest.TestCase):
                 count = _scan_count(through, oparg)
                 if count is None:
                     continue
-                with self.subTest(handler=opcode.opname[h], oparg=oparg):
+                with self.subTest(handler=opcode._all_opname[h], oparg=oparg):
                     self.assertEqual(extent(ROWS[h].through, oparg), count)
 
     def test_stack_counts(self):
@@ -807,7 +810,7 @@ class SourceScanTests(unittest.TestCase):
         scans = self.scans()
         invokes = set()
         for h, row in ROWS.items():
-            name = opcode.opname[h]
+            name = opcode._all_opname[h]
             if name not in popped:
                 shadow = opcode.opname[row.shadow]
                 name = shadow if shadow in popped else opcode.opname[row.base]
@@ -816,7 +819,7 @@ class SourceScanTests(unittest.TestCase):
                           extent(row.writes, oparg))
                 expected = (eval(popped[name], {"oparg": oparg}),
                             eval(pushed[name], {"oparg": oparg}))
-                if opcode.opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                if opcode._all_opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
                     # Frontend YIELD_VALUE1 is normalized to three logical
                     # inputs/outputs before allocation. Its cursor dependency
                     # remains in SSA without a physical input field.
@@ -825,7 +828,7 @@ class SourceScanTests(unittest.TestCase):
                     expected = (3, 3)
                 if min(expected) < 0:
                     continue
-                with self.subTest(handler=opcode.opname[h], oparg=oparg):
+                with self.subTest(handler=opcode._all_opname[h], oparg=oparg):
                     scanned = tuple(_scan_count(e, oparg)
                                     for e in scans.get(h, ()))
                     if scanned and None not in scanned:

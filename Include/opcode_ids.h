@@ -257,8 +257,6 @@ extern "C" {
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                233
 
-#include "ir_handler_ids.h"
-
 #ifdef __cplusplus
 }
 #endif

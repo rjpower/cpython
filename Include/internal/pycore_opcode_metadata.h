@@ -803,7 +803,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [INSTRUMENTED_INSTRUCTION] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [INSTRUMENTED_JUMP_BACKWARD] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
     [INSTRUMENTED_JUMP_FORWARD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
-    [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IX, HAS_ARG_FLAG },
+    [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [INSTRUMENTED_JUMP_IF_TRUE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [INSTRUMENTED_LINE] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INSTRUMENTED_LOAD_SUPER_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG },
@@ -1159,7 +1159,6 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
-    [121] = 121,
     [122] = 122,
     [123] = 123,
     [124] = 124,
@@ -1270,6 +1269,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [239] = 239,
     [254] = 254,
     [255] = 255,
+    [3] = 3,
     [BINARY_OP] = BINARY_OP,
     [BINARY_SLICE] = BINARY_SLICE,
     [BUILD_INTERPOLATION] = BUILD_INTERPOLATION,
@@ -1420,7 +1420,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
-    case 121: \
+    case 3: \
     case 122: \
     case 123: \
     case 124: \

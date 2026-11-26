@@ -21,7 +21,7 @@ CONTRACTS = _opcode.get_ir_contract()
 def ordinary_name(name):
     # The word flags after the handler's name stay with the ordinary handler
     handler, plus, flags = name.partition("+")
-    return (opcode.opname[CONTRACTS[opcode.opname.index(handler)].ordinary_handler]
+    return (opcode._all_opname[CONTRACTS[opcode._all_opname.index(handler)].ordinary_handler]
             + plus + flags)
 
 
@@ -123,7 +123,7 @@ class DelegatedYieldTests(unittest.TestCase):
         try:
             for source, receiver in ((outer, iter(range(4))), (awaiting, Awaitable())):
                 code = source.__code__
-                original = next(CONTRACTS[opcode.opname.index(row[0].partition("+")[0])]
+                original = next(CONTRACTS[opcode._all_opname.index(row[0].partition("+")[0])]
                                 for row in _testinternalcapi.get_ir(code)
                                 if ordinary_name(row[0]) == "YIELD_DELEGATED")
                 suspended = source(receiver)
@@ -142,7 +142,7 @@ class DelegatedYieldTests(unittest.TestCase):
                         names = {ordinary_name(row[0]) for row in rows}
                         self.assertIn("INSTRUMENTED_YIELD_DELEGATED" if enabled
                                       else "YIELD_DELEGATED", names)
-                        actual = next(CONTRACTS[opcode.opname.index(row[0].partition("+")[0])]
+                        actual = next(CONTRACTS[opcode._all_opname.index(row[0].partition("+")[0])]
                                       for row in rows if ordinary_name(row[0]) ==
                                       ("INSTRUMENTED_YIELD_DELEGATED" if enabled
                                        else "YIELD_DELEGATED"))

@@ -1257,24 +1257,21 @@ def ir_only_handler_names(analysis: Analysis) -> list[str]:
             + sorted(generator_boundaries(analysis)))
 
 
-def ir_only_numbers(analysis: Analysis, count: int) -> list[int]:
-    "The numbers of the first count IR-only handlers"
-    wide = max(0, count - len(analysis.free_ids))
-    return [*analysis.free_ids[:count], *range(256, 256 + wide)]
+def inherited_handler_names(analysis: Analysis) -> list[str]:
+    "The stack ops that have a handler, in the order of their stack opcodes"
+    stack_only = stack_only_names(analysis)
+    return [name for name, _ in sorted(
+        ((name, inst.opcode) for name, inst in analysis.instructions.items()
+         if name not in stack_only), key=lambda item: item[1])]
 
 
 def handler_ids(analysis: Analysis) -> dict[str, int]:
-    """Handler index of each handler, by name.  The real opcodes keep their
-    opcode.  The IR-only handlers, in a fixed order, take the numbers below
-    256 that no opcode holds, then continue from 256: a pseudo-instruction
-    has no handler, so its number is free to name one.  BINARY_OP itself has
-    none: its operations do, and a STACK_ONLY opcode has none."""
-    ids = {name: inst.opcode for name, inst in analysis.instructions.items()
-           if name not in stack_only_names(analysis)}
-    names = ir_only_handler_names(analysis)
-    for number, name in zip(ir_only_numbers(analysis, len(names)), names):
-        ids[name] = number
-    return ids
+    """Handler id of each handler, by name.  The ids are dense and their own:
+    a handler's id is no stack opcode, and a stack-only stub has none.  The
+    handlers that a stack op has come first, in the order of the stack
+    opcodes, then the IR-only handlers; the arms follow them."""
+    names = inherited_handler_names(analysis) + ir_only_handler_names(analysis)
+    return {name: number for number, name in enumerate(names)}
 
 
 def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
@@ -5433,7 +5430,12 @@ class IREmitter(Emitter):
             self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{head});\n")
             return
         if kind == "FAMILY_HEAD":
-            super().emit_jump_to_predicted(inst)
+            family_name = inst.family.name
+            # opcode is a handler id here: the stack op it stands for, not
+            # _PyOpcode_Deopt, names its family
+            self.emit(f"UPDATE_MISS_STATS({family_name});\n")
+            self.emit(f"assert(_PyIR_BaseOpcode(opcode) == ({family_name}));\n")
+            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{family_name});\n")
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
                              inst.where)
@@ -6989,7 +6991,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     out.emit("\n")
     out.emit(f"TARGET({name}) {{\n")
     handler_id = canonical_handler(name)
-    out.emit(f"int opcode = {handler_id};\n")
+    out.emit(f"int opcode = IR_H_{handler_id};\n")
     out.emit(f"(void)(opcode);\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
@@ -7080,7 +7082,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
             out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
             out.emit("(void)call_feedback;\n")
     if inst.properties.uses_opcode:
-        out.emit(f"opcode = {canonical_handler(name)};\n")
+        out.emit(f"opcode = IR_H_{canonical_handler(name)};\n")
     mode = record.store_mode
     if mode == STORE_LEAVE:
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
@@ -8954,10 +8956,8 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 
 
 def num_old_handlers(analysis: Analysis) -> int:
-    """The arms start here.  The IR-only handlers fill the free numbers below
-    256 and continue from 256, so the arms' range stays contiguous.  If they
-    do not fill the free numbers, the rest stay unused."""
-    return 256 + max(0, len(ir_only_handler_names(analysis)) - len(analysis.free_ids))
+    "The arms start here: the count of the handlers that bytecodes.c defines"
+    return len(handler_ids(analysis))
 
 
 def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:

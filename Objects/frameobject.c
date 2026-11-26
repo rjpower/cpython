@@ -1355,7 +1355,7 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
     }
     /* Project optimized forms through their frontend shadow before removing
      * instrumentation. Encoded family identity alone is not a CFG opcode. */
-    int opcode = _PyIR_HandlerBase[_PyIR_BaseOpcode(IR_HANDLER(word))];
+    int opcode = _PyIR_OpcodeBase[_PyIR_BaseOpcode(IR_HANDLER(word))];
     if (IS_SCOPE_EXIT_OPCODE(opcode) ||
         (fmt->flags & _PyIR_JUMP_ALWAYS))
     {
@@ -1532,7 +1532,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
         current >= 0 && current < _PyCode_IRSize(_PyFrame_GetCode(frame)) &&
         frame->instr_ptr == _PyFrame_InstrAt(frame, current) &&
-        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == INSTRUMENTED_LINE)
+        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == IR_H_INSTRUMENTED_LINE)
     {
         phase.kind = REGISTER_RESUME_PRE_WORD;
     }

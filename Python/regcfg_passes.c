@@ -16,7 +16,6 @@
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_regcfg.h"
 #include "pycore_rop_metadata.h"    // ROP_OP_Call_Generic
-#include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_value.h"           // PyValue_FromInlineInt()
 
 // The CFG names an arm by its tagged ROP_OP_ number, not its handler id
@@ -464,7 +463,8 @@ plain_branch_sense(const _PyRegOp *op)
     if (op->opcode != ROP_OP_BranchTruth_Generic) {
         return -1;
     }
-    return op->oparg == BRANCH_IF_FALSE ? 0 : op->oparg == BRANCH_IF_TRUE ? 1 : -1;
+    return op->oparg == ROP_BRANCHMODE_BRANCH_IF_FALSE ? 0
+        : op->oparg == ROP_BRANCHMODE_BRANCH_IF_TRUE ? 1 : -1;
 }
 
 /* The mode of the BranchTruth that keeps its operand where the plain branch
@@ -473,7 +473,8 @@ static inline int
 keep_mode(const _PyRegOp *jump)
 {
     int sense = plain_branch_sense(jump);
-    return sense < 0 ? -1 : sense ? BRANCH_KEEP_IF_TRUE : BRANCH_KEEP_IF_FALSE;
+    return sense < 0 ? -1
+        : sense ? ROP_BRANCHMODE_BRANCH_KEEP_IF_TRUE : ROP_BRANCHMODE_BRANCH_KEEP_IF_FALSE;
 }
 
 /* The jump takes the value of prod's output v, which pop releases where

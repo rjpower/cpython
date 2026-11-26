@@ -672,7 +672,7 @@ class MemberArmTests(unittest.TestCase):
         text = out.getvalue()
         body = text[text.index("TARGET(BranchTruth_Bool_BRANCH_IF_TRUE)"):]
         body = body[:body.index("\n        }\n")]
-        self.assertIn("_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)", body)
+        self.assertIn("_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)", body)
         # The mode sits in field C: the arm does not read it
         self.assertNotIn("IR_C(ir_word)", body)
         # The generic arm installs the member arm of the word's mode

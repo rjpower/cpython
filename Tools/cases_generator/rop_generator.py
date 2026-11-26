@@ -36,7 +36,7 @@ from rop_cgen import (ESCAPING, Lowering, Unsupported, inline_rows, lower_arm,
                       outlined_name, pending_blockers, row_signature)
 from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, FieldKind,
                          Handle, Slot, Wrap)
-from rop_check import Program, select_dimension
+from rop_check import Program, enum_c_name, select_dimension
 from rop_model import Arm, Encoding, HandleType, Param, WrapType
 from rop_print import type_text
 from rop_ssa import SsaError
@@ -965,6 +965,11 @@ def write_encodings(out: TextIO, p: Products) -> None:
                   f'_PyRop_Operands_{f}}},\n')
     out.write("};\n\n")
     enums = sorted(prog.enums.values(), key=lambda e: e.name)
+    out.write("/* The declared enums: each member's number is its declaration order,\n"
+              " * which the words' immediates carry */\n")
+    for e in enums:
+        names = ", ".join(f"{enum_c_name(e.name, m)} = {i}" for i, m in enumerate(e.members))
+        out.write(f"enum {{ {names} }};\n")
     for e in enums:
         members = ", ".join(f'"{m}"' for m in e.members)
         out.write(f"static const char *const _PyRop_EnumMembers_{e.name}[] = "

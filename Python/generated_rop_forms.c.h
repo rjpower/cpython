@@ -125,10 +125,21 @@ static _PyIRTransfer ir_run_CellMapRead_Lookup(PyThreadState *tstate, _PyInterpr
 static _PyIRTransfer ir_run_CellRead_Get(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CellStore_Set(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CleanupThrow_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_Compare_Float(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Float_EQ(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Float_GE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Float_GT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Float_LE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Float_LT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Float_NE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Compare_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_Compare_Int(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
-static _PyIRTransfer ir_run_Compare_Str(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Int_EQ(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Int_GE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Int_GT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Int_LE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Int_LT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Int_NE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Str_EQ(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Compare_Str_NE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Const_Common(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Const_Pool(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Const_Small(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -423,7 +434,7 @@ ir_run_Add_Generic(
     a_view1 = PyValue_Borrow(*home_y);
     a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) : PyValue_NULL;
     IR_STUB_ESCAPE();
-    ret1 = _PyEval_value_binary_op(NB_ADD, a_view0, a_view1);
+    ret1 = _PyEval_value_binary_op(ROP_NUMERIC_NB_ADD, a_view0, a_view1);
     if (PyValue_IsNull(ret1)) {
         goto rop_Add_Generic_binary_at_origin1_Failed;
     }
@@ -497,7 +508,7 @@ ir_run_Add_Generic(
     }
     goto rop_Add_Generic_adapt_before_use_add2_Run;
     rop_Add_Generic_adapt_before_use_add2_TryExtended:
-    if (!_PyRop_FindExtension(((_PyFbBinary *)IR_FB(IR_D(ir_word))), NB_ADD, PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+    if (!_PyRop_FindExtension(((_PyFbBinary *)IR_FB(IR_D(ir_word))), ROP_NUMERIC_NB_ADD, PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
         goto rop_Add_Generic_adapt_before_use_add2_NoArm;
     }
     adapt_before_use_add2_ce = ROP_HANDLER_Add_Extended;
@@ -3327,7 +3338,7 @@ ir_run_Compare_Generic(
     }
     goto rop_Compare_Generic_adapt_before_use_compare3_TryFloat;
     rop_Compare_Generic_adapt_before_use_compare3_ChosenInt:
-    adapt_before_use_compare3_ci = ROP_HANDLER_Compare_Int;
+    adapt_before_use_compare3_ci = _PyRop_Members_Compare_Int[(((uint32_t)IR_D(ir_word) >> 0) & 0x7)];
     ret2 = _PyRop_Install(this_instr, &((_PyFbCompare *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_compare3_ci);
     if (ret2 == 0) {
         goto rop_Compare_Generic_adapt_before_use_compare3_Run;
@@ -3344,7 +3355,7 @@ ir_run_Compare_Generic(
     }
     goto rop_Compare_Generic_adapt_before_use_compare3_TryStr;
     rop_Compare_Generic_adapt_before_use_compare3_ChosenFloat:
-    adapt_before_use_compare3_cf = ROP_HANDLER_Compare_Float;
+    adapt_before_use_compare3_cf = _PyRop_Members_Compare_Float[(((uint32_t)IR_D(ir_word) >> 0) & 0x7)];
     ret3 = _PyRop_Install(this_instr, &((_PyFbCompare *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_compare3_cf);
     if (ret3 > 0) {
         goto rop_Compare_Generic_adapt_before_use_compare3_Changed;
@@ -3364,7 +3375,7 @@ ir_run_Compare_Generic(
     }
     goto rop_Compare_Generic_adapt_before_use_compare3_NoArm;
     rop_Compare_Generic_adapt_before_use_compare3_ChosenStr:
-    adapt_before_use_compare3_cs = ROP_HANDLER_Compare_Str;
+    adapt_before_use_compare3_cs = _PyRop_Members_Compare_Str[(((uint32_t)IR_D(ir_word) >> 0) & 0x7)];
     ret4 = _PyRop_Install(this_instr, &((_PyFbCompare *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_compare3_cs);
     if (ret4 > 0) {
         goto rop_Compare_Generic_adapt_before_use_compare3_Changed;
@@ -10688,7 +10699,7 @@ ir_run_Import_Eager(
     l = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_level) : _PyFrame_TakeHome(frame, home_level));
     f = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_fromlist) : _PyFrame_TakeHome(frame, home_fromlist));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, IMPORT_EAGER);
+    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_EAGER);
     if (PyValue_IsNull(ret1)) {
         goto rop_Import_Eager_Failed;
     }
@@ -10726,7 +10737,7 @@ ir_run_Import_Policy(
     l = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_level) : _PyFrame_TakeHome(frame, home_level));
     f = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_fromlist) : _PyFrame_TakeHome(frame, home_fromlist));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, IMPORT_POLICY);
+    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_POLICY);
     if (PyValue_IsNull(ret1)) {
         goto rop_Import_Policy_Failed;
     }
@@ -10764,7 +10775,7 @@ ir_run_Import_Lazy(
     l = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_level) : _PyFrame_TakeHome(frame, home_level));
     f = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_fromlist) : _PyFrame_TakeHome(frame, home_fromlist));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, IMPORT_LAZY);
+    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_LAZY);
     if (PyValue_IsNull(ret1)) {
         goto rop_Import_Lazy_Failed;
     }
@@ -10878,10 +10889,10 @@ ir_run_Binary_Int_NB_INPLACE_ADD(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_INPLACE_ADD, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_INPLACE_ADD, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_INPLACE_ADD, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_INPLACE_ADD, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_INPLACE_ADD_Failed;
     }
@@ -10931,10 +10942,10 @@ ir_run_Binary_Int_NB_SUBTRACT(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_SUBTRACT, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_SUBTRACT, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_SUBTRACT, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_SUBTRACT, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_SUBTRACT_Failed;
     }
@@ -10984,10 +10995,10 @@ ir_run_Binary_Int_NB_INPLACE_SUBTRACT(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_INPLACE_SUBTRACT, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_INPLACE_SUBTRACT, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_INPLACE_SUBTRACT, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_INPLACE_SUBTRACT, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_INPLACE_SUBTRACT_Failed;
     }
@@ -11037,10 +11048,10 @@ ir_run_Binary_Int_NB_MULTIPLY(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_MULTIPLY, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_MULTIPLY, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_MULTIPLY, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_MULTIPLY, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_MULTIPLY_Failed;
     }
@@ -11090,10 +11101,10 @@ ir_run_Binary_Int_NB_INPLACE_MULTIPLY(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_INPLACE_MULTIPLY, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_INPLACE_MULTIPLY, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_INPLACE_MULTIPLY, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_INPLACE_MULTIPLY, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_INPLACE_MULTIPLY_Failed;
     }
@@ -11143,10 +11154,10 @@ ir_run_Binary_Int_NB_FLOOR_DIVIDE(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_FLOOR_DIVIDE, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_FLOOR_DIVIDE, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_FLOOR_DIVIDE, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_FLOOR_DIVIDE, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_FLOOR_DIVIDE_Failed;
     }
@@ -11196,10 +11207,10 @@ ir_run_Binary_Int_NB_REMAINDER(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_REMAINDER, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_REMAINDER, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_REMAINDER, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_REMAINDER, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_REMAINDER_Failed;
     }
@@ -11249,10 +11260,10 @@ ir_run_Binary_Int_NB_AND(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_AND, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_AND, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_AND, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_AND, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_AND_Failed;
     }
@@ -11302,10 +11313,10 @@ ir_run_Binary_Int_NB_OR(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_OR, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_OR, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_OR, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_OR, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_OR_Failed;
     }
@@ -11355,10 +11366,10 @@ ir_run_Binary_Int_NB_XOR(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_XOR, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_XOR, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_XOR, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_XOR, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_XOR_Failed;
     }
@@ -11408,10 +11419,10 @@ ir_run_Binary_Int_NB_LSHIFT(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_LSHIFT, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_LSHIFT, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_LSHIFT, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_LSHIFT, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_LSHIFT_Failed;
     }
@@ -11461,10 +11472,10 @@ ir_run_Binary_Int_NB_RSHIFT(
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);
-    if (!_PyRop_IntOpAdmits(NB_RSHIFT, b)) {
+    if (!_PyRop_IntOpAdmits(ROP_NUMERIC_NB_RSHIFT, b)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary(NB_RSHIFT, a, b);
+    ret1 = _PyRop_IntBinary(ROP_NUMERIC_NB_RSHIFT, a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_NB_RSHIFT_Failed;
     }
@@ -11568,8 +11579,8 @@ ir_run_Binary_Float_NB_INPLACE_ADD(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_INPLACE_ADD, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_INPLACE_ADD, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_INPLACE_ADD, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_ADD, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -11623,8 +11634,8 @@ ir_run_Binary_Float_NB_SUBTRACT(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_SUBTRACT, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_SUBTRACT, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_SUBTRACT, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_SUBTRACT, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -11678,8 +11689,8 @@ ir_run_Binary_Float_NB_INPLACE_SUBTRACT(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_INPLACE_SUBTRACT, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_INPLACE_SUBTRACT, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_INPLACE_SUBTRACT, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_SUBTRACT, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -11733,8 +11744,8 @@ ir_run_Binary_Float_NB_MULTIPLY(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_MULTIPLY, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_MULTIPLY, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_MULTIPLY, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_MULTIPLY, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -11788,8 +11799,8 @@ ir_run_Binary_Float_NB_INPLACE_MULTIPLY(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_INPLACE_MULTIPLY, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_INPLACE_MULTIPLY, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_INPLACE_MULTIPLY, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_MULTIPLY, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -11843,8 +11854,8 @@ ir_run_Binary_Float_NB_TRUE_DIVIDE(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_TRUE_DIVIDE, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_TRUE_DIVIDE, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_TRUE_DIVIDE, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_TRUE_DIVIDE, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -11898,8 +11909,8 @@ ir_run_Binary_Float_NB_INPLACE_TRUE_DIVIDE(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_INPLACE_TRUE_DIVIDE, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_INPLACE_TRUE_DIVIDE, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_INPLACE_TRUE_DIVIDE, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_TRUE_DIVIDE, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -11953,8 +11964,8 @@ ir_run_Binary_Float_NB_POWER(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_POWER, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_POWER, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_POWER, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_POWER, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -12008,8 +12019,8 @@ ir_run_Binary_Float_NB_INPLACE_POWER(
     }
     a = PyValue_NumberAsDouble(l);
     b = PyValue_NumberAsDouble(r);
-    v = _PyRop_FloatValue(NB_INPLACE_POWER, a, b);
-    if (!_PyRop_FloatOpAdmits(NB_INPLACE_POWER, a, b, v)) {
+    v = _PyRop_FloatValue(ROP_NUMERIC_NB_INPLACE_POWER, a, b);
+    if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_POWER, a, b, v)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
     ret1 = PyValue_FromDouble_Outlined(v);
@@ -13243,18 +13254,18 @@ ir_run_Send_Observed(
 }
 
 static Py_NO_INLINE _PyIRTransfer
-ir_run_Compare_Int(
+ir_run_Compare_Int_LT(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    // Compare.Int (shared)
-    int opcode = ROP_HANDLER_Compare_Int;
+    // Compare.Int_LT (shared)
+    int opcode = ROP_HANDLER_Compare_Int_LT;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
     IR_HOLD_NEXT();
     next_instr += 2;
-    INSTRUCTION_STATS(ROP_HANDLER_Compare_Int);
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_LT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
@@ -13267,7 +13278,7 @@ ir_run_Compare_Int(
     if (!PyValue_BothInlineInt(l, r)) {
         JUMP_TO_PREDICTED(Compare_Generic);
     }
-    z = _PyRop_TruthObject(_PyRop_CompareScaled((((uint32_t)IR_D(ir_word) >> 0) & 0x7), _PyValue_IntScaled(l), _PyValue_IntScaled(r)), false);
+    z = _PyRop_TruthObject(_PyRop_CompareScaled(ROP_RELATION_LT, _PyValue_IntScaled(l), _PyValue_IntScaled(r)), false);
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
@@ -13282,18 +13293,213 @@ ir_run_Compare_Int(
 }
 
 static Py_NO_INLINE _PyIRTransfer
-ir_run_Compare_Float(
+ir_run_Compare_Int_LE(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    // Compare.Float (shared)
-    int opcode = ROP_HANDLER_Compare_Float;
+    // Compare.Int_LE (shared)
+    int opcode = ROP_HANDLER_Compare_Int_LE;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
     IR_HOLD_NEXT();
     next_instr += 2;
-    INSTRUCTION_STATS(ROP_HANDLER_Compare_Float);
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_LE);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!PyValue_BothInlineInt(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareScaled(ROP_RELATION_LE, _PyValue_IntScaled(l), _PyValue_IntScaled(r)), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Int_EQ(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Int_EQ (shared)
+    int opcode = ROP_HANDLER_Compare_Int_EQ;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_EQ);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!PyValue_BothInlineInt(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareScaled(ROP_RELATION_EQ, _PyValue_IntScaled(l), _PyValue_IntScaled(r)), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Int_NE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Int_NE (shared)
+    int opcode = ROP_HANDLER_Compare_Int_NE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_NE);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!PyValue_BothInlineInt(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareScaled(ROP_RELATION_NE, _PyValue_IntScaled(l), _PyValue_IntScaled(r)), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Int_GT(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Int_GT (shared)
+    int opcode = ROP_HANDLER_Compare_Int_GT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_GT);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!PyValue_BothInlineInt(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareScaled(ROP_RELATION_GT, _PyValue_IntScaled(l), _PyValue_IntScaled(r)), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Int_GE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Int_GE (shared)
+    int opcode = ROP_HANDLER_Compare_Int_GE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_GE);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!PyValue_BothInlineInt(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareScaled(ROP_RELATION_GE, _PyValue_IntScaled(l), _PyValue_IntScaled(r)), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Float_LT(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Float_LT (shared)
+    int opcode = ROP_HANDLER_Compare_Float_LT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_LT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
@@ -13306,7 +13512,7 @@ ir_run_Compare_Float(
     if (!_PyRop_BothInlineFloat(l, r)) {
         JUMP_TO_PREDICTED(Compare_Generic);
     }
-    z = _PyRop_TruthObject(_PyRop_CompareFloats((((uint32_t)IR_D(ir_word) >> 0) & 0x7), l, r), false);
+    z = _PyRop_TruthObject(_PyRop_CompareFloats(ROP_RELATION_LT, l, r), false);
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
@@ -13321,18 +13527,213 @@ ir_run_Compare_Float(
 }
 
 static Py_NO_INLINE _PyIRTransfer
-ir_run_Compare_Str(
+ir_run_Compare_Float_LE(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    // Compare.Str (shared)
-    int opcode = ROP_HANDLER_Compare_Str;
+    // Compare.Float_LE (shared)
+    int opcode = ROP_HANDLER_Compare_Float_LE;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
     IR_HOLD_NEXT();
     next_instr += 2;
-    INSTRUCTION_STATS(ROP_HANDLER_Compare_Str);
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_LE);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!_PyRop_BothInlineFloat(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareFloats(ROP_RELATION_LE, l, r), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Float_EQ(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Float_EQ (shared)
+    int opcode = ROP_HANDLER_Compare_Float_EQ;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_EQ);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!_PyRop_BothInlineFloat(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareFloats(ROP_RELATION_EQ, l, r), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Float_NE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Float_NE (shared)
+    int opcode = ROP_HANDLER_Compare_Float_NE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_NE);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!_PyRop_BothInlineFloat(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareFloats(ROP_RELATION_NE, l, r), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Float_GT(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Float_GT (shared)
+    int opcode = ROP_HANDLER_Compare_Float_GT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_GT);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!_PyRop_BothInlineFloat(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareFloats(ROP_RELATION_GT, l, r), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Float_GE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Float_GE (shared)
+    int opcode = ROP_HANDLER_Compare_Float_GE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_GE);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!_PyRop_BothInlineFloat(l, r)) {
+        JUMP_TO_PREDICTED(Compare_Generic);
+    }
+    z = _PyRop_TruthObject(_PyRop_CompareFloats(ROP_RELATION_GE, l, r), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Str_EQ(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Str_EQ (shared)
+    int opcode = ROP_HANDLER_Compare_Str_EQ;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Str_EQ);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
@@ -13347,10 +13748,50 @@ ir_run_Compare_Str(
     if (!_PyRop_BothExactStr(l, r)) {
         JUMP_TO_PREDICTED(Compare_Generic);
     }
-    if (!_PyRop_EqualityRelation((((uint32_t)IR_D(ir_word) >> 0) & 0x7))) {
+    z = _PyRop_TruthObject(_PyRop_EqualStrings(ROP_RELATION_EQ, l, r), false);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_x = _PyFrame_TakeHome(frame, home_x);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        own_y = _PyFrame_TakeHome(frame, home_y);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(own_y);
+    PyValue_XCLOSE(own_x);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Compare_Str_NE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Compare.Str_NE (shared)
+    int opcode = ROP_HANDLER_Compare_Str_NE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_Compare_Str_NE);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    if (!_PyRop_BothExactStr(l, r)) {
         JUMP_TO_PREDICTED(Compare_Generic);
     }
-    z = _PyRop_TruthObject(_PyRop_EqualStrings((((uint32_t)IR_D(ir_word) >> 0) & 0x7), l, r), false);
+    z = _PyRop_TruthObject(_PyRop_EqualStrings(ROP_RELATION_NE, l, r), false);
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_x = _PyFrame_TakeHome(frame, home_x);
     }
@@ -14939,7 +15380,7 @@ ir_run_BranchTruth_Bool_BRANCH_IF_FALSE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = PyValue_IsTrue(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_FALSE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_FALSE, hit)) {
         goto rop_BranchTruth_Bool_BRANCH_IF_FALSE_Taken;
     }
     goto rop_BranchTruth_Bool_BRANCH_IF_FALSE_Fall;
@@ -14976,7 +15417,7 @@ ir_run_BranchTruth_Bool_BRANCH_IF_TRUE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = PyValue_IsTrue(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)) {
         goto rop_BranchTruth_Bool_BRANCH_IF_TRUE_Taken;
     }
     goto rop_BranchTruth_Bool_BRANCH_IF_TRUE_Fall;
@@ -15014,7 +15455,7 @@ ir_run_BranchTruth_Int_BRANCH_IF_FALSE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = _PyRop_IntNonzero(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_FALSE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_FALSE, hit)) {
         goto rop_BranchTruth_Int_BRANCH_IF_FALSE_Taken;
     }
     goto rop_BranchTruth_Int_BRANCH_IF_FALSE_Fall;
@@ -15054,7 +15495,7 @@ ir_run_BranchTruth_Int_BRANCH_IF_TRUE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = _PyRop_IntNonzero(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)) {
         goto rop_BranchTruth_Int_BRANCH_IF_TRUE_Taken;
     }
     goto rop_BranchTruth_Int_BRANCH_IF_TRUE_Fall;
@@ -15094,7 +15535,7 @@ ir_run_BranchTruth_List_BRANCH_IF_FALSE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = _PyRop_ListNonempty(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_FALSE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_FALSE, hit)) {
         goto rop_BranchTruth_List_BRANCH_IF_FALSE_Taken;
     }
     goto rop_BranchTruth_List_BRANCH_IF_FALSE_Fall;
@@ -15134,7 +15575,7 @@ ir_run_BranchTruth_List_BRANCH_IF_TRUE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = _PyRop_ListNonempty(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)) {
         goto rop_BranchTruth_List_BRANCH_IF_TRUE_Taken;
     }
     goto rop_BranchTruth_List_BRANCH_IF_TRUE_Fall;
@@ -15173,7 +15614,7 @@ ir_run_BranchTruth_None_BRANCH_IF_FALSE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = false;
-    if (_PyRop_BranchTaken(BRANCH_IF_FALSE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_FALSE, hit)) {
         goto rop_BranchTruth_None_BRANCH_IF_FALSE_Taken;
     }
     goto rop_BranchTruth_None_BRANCH_IF_FALSE_Fall;
@@ -15210,7 +15651,7 @@ ir_run_BranchTruth_None_BRANCH_IF_TRUE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = false;
-    if (_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)) {
         goto rop_BranchTruth_None_BRANCH_IF_TRUE_Taken;
     }
     goto rop_BranchTruth_None_BRANCH_IF_TRUE_Fall;
@@ -15248,7 +15689,7 @@ ir_run_BranchTruth_Str_BRANCH_IF_FALSE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = _PyRop_StrNonempty(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_FALSE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_FALSE, hit)) {
         goto rop_BranchTruth_Str_BRANCH_IF_FALSE_Taken;
     }
     goto rop_BranchTruth_Str_BRANCH_IF_FALSE_Fall;
@@ -15288,7 +15729,7 @@ ir_run_BranchTruth_Str_BRANCH_IF_TRUE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = _PyRop_StrNonempty(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)) {
         goto rop_BranchTruth_Str_BRANCH_IF_TRUE_Taken;
     }
     goto rop_BranchTruth_Str_BRANCH_IF_TRUE_Fall;
@@ -15328,7 +15769,7 @@ ir_run_BranchTruth_Plain_BRANCH_IF_FALSE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = _PyRop_NotNone(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_FALSE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_FALSE, hit)) {
         goto rop_BranchTruth_Plain_BRANCH_IF_FALSE_Taken;
     }
     goto rop_BranchTruth_Plain_BRANCH_IF_FALSE_Fall;
@@ -15368,7 +15809,7 @@ ir_run_BranchTruth_Plain_BRANCH_IF_TRUE(
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     hit = _PyRop_NotNone(v);
-    if (_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)) {
         goto rop_BranchTruth_Plain_BRANCH_IF_TRUE_Taken;
     }
     goto rop_BranchTruth_Plain_BRANCH_IF_TRUE_Fall;
@@ -15439,7 +15880,7 @@ ir_run_BranchTruth_Slot_BRANCH_IF_FALSE(
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Is:
     hit = true;
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_Test:
-    if (_PyRop_BranchTaken(BRANCH_IF_FALSE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_FALSE, hit)) {
         goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Taken;
     }
     goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Fall;
@@ -15531,7 +15972,7 @@ ir_run_BranchTruth_Slot_BRANCH_IF_TRUE(
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Is:
     hit = true;
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_Test:
-    if (_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)) {
+    if (_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)) {
         goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Taken;
     }
     goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Fall;
@@ -16435,151 +16876,151 @@ static const _PyIRForm ir_handler_forms[512] = {
     [191] = ir_run_Send_Virtual,
     [192] = ir_run_Send_AsyncGen,
     [193] = ir_run_Send_Observed,
-    [194] = ir_run_Compare_Int,
-    [195] = ir_run_Compare_Float,
-    [196] = ir_run_Compare_Str,
-    [197] = ir_run_Compare_Generic,
-    [198] = ir_run_Identity_Test,
-    [199] = ir_run_Contains_Set,
-    [200] = ir_run_Contains_Dict,
-    [201] = ir_run_Contains_Generic,
-    [202] = ir_run_TestBranch_Identity,
-    [203] = ir_run_TestBranch_Int,
-    [204] = ir_run_TestBranch_Float,
-    [205] = ir_run_TestBranch_Str,
-    [206] = ir_run_TestBranch_Set,
-    [207] = ir_run_TestBranch_Dict,
-    [208] = ir_run_TestBranch_Sequence,
-    [209] = ir_run_TestBranch_Generic,
-    [210] = ir_run_TestBranch_Observed,
-    [211] = ir_run_BuildText_Join,
-    [212] = ir_run_BuildText_Interpolation,
-    [213] = ir_run_BuildText_Template,
-    [214] = ir_run_Convert_Text,
-    [215] = ir_run_Format_Simple,
-    [216] = ir_run_FormatSpec_Value,
-    [217] = ir_run_Truth_Bool,
-    [218] = ir_run_Truth_Int,
-    [219] = ir_run_Truth_List,
-    [220] = ir_run_Truth_None,
-    [221] = ir_run_Truth_Str,
-    [222] = ir_run_Truth_Plain,
-    [223] = ir_run_Truth_Slot,
-    [224] = ir_run_Truth_Generic,
-    [225] = ir_run_BranchTruth_Bool_BRANCH_IF_FALSE,
-    [226] = ir_run_BranchTruth_Bool_BRANCH_IF_TRUE,
-    [227] = ir_run_BranchTruth_Int_BRANCH_IF_FALSE,
-    [228] = ir_run_BranchTruth_Int_BRANCH_IF_TRUE,
-    [229] = ir_run_BranchTruth_List_BRANCH_IF_FALSE,
-    [230] = ir_run_BranchTruth_List_BRANCH_IF_TRUE,
-    [231] = ir_run_BranchTruth_None_BRANCH_IF_FALSE,
-    [232] = ir_run_BranchTruth_None_BRANCH_IF_TRUE,
-    [233] = ir_run_BranchTruth_Str_BRANCH_IF_FALSE,
-    [234] = ir_run_BranchTruth_Str_BRANCH_IF_TRUE,
-    [235] = ir_run_BranchTruth_Plain_BRANCH_IF_FALSE,
-    [236] = ir_run_BranchTruth_Plain_BRANCH_IF_TRUE,
-    [237] = ir_run_BranchTruth_Slot_BRANCH_IF_FALSE,
-    [238] = ir_run_BranchTruth_Slot_BRANCH_IF_TRUE,
-    [239] = ir_run_BranchTruth_Generic,
-    [240] = ir_run_BranchNone_Test,
-    [241] = ir_run_BranchTruth_Observed,
-    [242] = ir_run_BranchNone_Observed,
-    [243] = ir_run_Jump_Direct,
-    [244] = ir_run_Jump_Trailing,
-    [245] = ir_run_Jump_Poll,
-    [246] = ir_run_Jump_Warm,
-    [247] = ir_run_Jump_Observed,
-    [248] = ir_run_Const_Pool,
-    [249] = ir_run_Const_Small,
-    [250] = ir_run_Const_Common,
-    [251] = ir_run_LocalRead_Bound,
-    [252] = ir_run_LocalRead_Checked,
-    [253] = ir_run_LocalWrite_Store,
-    [254] = ir_run_LocalWrite_Restore,
-    [255] = ir_run_SaveLocal_Take,
-    [256] = ir_run_LocalDelete_Checked,
-    [257] = ir_run_Move_Transfer,
-    [258] = ir_run_Move_Retire,
-    [259] = ir_run_Move_Copy,
-    [260] = ir_run_SuperAttr_Observed,
-    [261] = ir_run_SuperAttr_Observed,
-    [262] = ir_run_SuperAttrExplicit_Observed,
-    [263] = ir_run_SuperAttrExplicit_Observed,
-    [264] = ir_run_SuperMethod_Observed,
-    [265] = ir_run_SuperMethod_Observed,
-    [266] = ir_run_SuperMethodExplicit_Observed,
-    [267] = ir_run_SuperMethodExplicit_Observed,
-    [268] = ir_run_Call_Observed,
-    [269] = ir_run_Call_Observed,
-    [270] = ir_run_Call_Observed,
-    [271] = ir_run_Call_Observed,
-    [272] = ir_run_Call_Observed,
-    [273] = ir_run_Return_Observed,
-    [274] = ir_run_Return_Observed,
-    [275] = ir_run_Return_Observed,
-    [276] = ir_run_Return_Observed,
-    [277] = ir_run_CallKw_Observed,
-    [278] = ir_run_CallKw_Observed,
-    [279] = ir_run_CallKw_Observed,
-    [280] = ir_run_CallKw_Observed,
-    [281] = ir_run_CallKw_Observed,
-    [282] = ir_run_CallEx_Observed,
-    [283] = ir_run_CallEx_Observed,
-    [284] = ir_run_CallEx_Observed,
-    [285] = ir_run_EndAsyncFor_Observed,
-    [286] = ir_run_ForIter_Observed,
-    [287] = ir_run_ForIter_Observed,
-    [288] = ir_run_ForIter_Observed,
-    [289] = ir_run_ForIter_Observed,
-    [290] = ir_run_ForIter_Observed,
-    [291] = ir_run_ForIter_Observed,
-    [292] = ir_run_IterClose_Observed,
-    [293] = ir_run_Resume_Observed,
-    [294] = ir_run_Resume_Observed,
-    [295] = ir_run_Yield_Observed,
-    [296] = ir_run_YieldFrom_Observed,
-    [297] = ir_run_Send_Observed,
-    [298] = ir_run_Send_Observed,
-    [299] = ir_run_Send_Observed,
-    [300] = ir_run_Send_Observed,
-    [301] = ir_run_TestBranch_Observed,
-    [302] = ir_run_TestBranch_Observed,
-    [303] = ir_run_TestBranch_Observed,
-    [304] = ir_run_TestBranch_Observed,
-    [305] = ir_run_TestBranch_Observed,
-    [306] = ir_run_TestBranch_Observed,
-    [307] = ir_run_TestBranch_Observed,
-    [308] = ir_run_TestBranch_Observed,
-    [309] = ir_run_BranchTruth_Observed,
-    [310] = ir_run_BranchTruth_Observed,
-    [311] = ir_run_BranchTruth_Observed,
-    [312] = ir_run_BranchTruth_Observed,
-    [313] = ir_run_BranchTruth_Observed,
-    [314] = ir_run_BranchTruth_Observed,
-    [315] = ir_run_BranchTruth_Observed,
-    [316] = ir_run_BranchTruth_Observed,
-    [317] = ir_run_BranchTruth_Observed,
-    [318] = ir_run_BranchTruth_Observed,
-    [319] = ir_run_BranchTruth_Observed,
+    [194] = ir_run_Compare_Int_LT,
+    [195] = ir_run_Compare_Int_LE,
+    [196] = ir_run_Compare_Int_EQ,
+    [197] = ir_run_Compare_Int_NE,
+    [198] = ir_run_Compare_Int_GT,
+    [199] = ir_run_Compare_Int_GE,
+    [200] = ir_run_Compare_Float_LT,
+    [201] = ir_run_Compare_Float_LE,
+    [202] = ir_run_Compare_Float_EQ,
+    [203] = ir_run_Compare_Float_NE,
+    [204] = ir_run_Compare_Float_GT,
+    [205] = ir_run_Compare_Float_GE,
+    [206] = ir_run_Compare_Str_EQ,
+    [207] = ir_run_Compare_Str_NE,
+    [208] = ir_run_Compare_Generic,
+    [209] = ir_run_Identity_Test,
+    [210] = ir_run_Contains_Set,
+    [211] = ir_run_Contains_Dict,
+    [212] = ir_run_Contains_Generic,
+    [213] = ir_run_TestBranch_Identity,
+    [214] = ir_run_TestBranch_Int,
+    [215] = ir_run_TestBranch_Float,
+    [216] = ir_run_TestBranch_Str,
+    [217] = ir_run_TestBranch_Set,
+    [218] = ir_run_TestBranch_Dict,
+    [219] = ir_run_TestBranch_Sequence,
+    [220] = ir_run_TestBranch_Generic,
+    [221] = ir_run_TestBranch_Observed,
+    [222] = ir_run_BuildText_Join,
+    [223] = ir_run_BuildText_Interpolation,
+    [224] = ir_run_BuildText_Template,
+    [225] = ir_run_Convert_Text,
+    [226] = ir_run_Format_Simple,
+    [227] = ir_run_FormatSpec_Value,
+    [228] = ir_run_Truth_Bool,
+    [229] = ir_run_Truth_Int,
+    [230] = ir_run_Truth_List,
+    [231] = ir_run_Truth_None,
+    [232] = ir_run_Truth_Str,
+    [233] = ir_run_Truth_Plain,
+    [234] = ir_run_Truth_Slot,
+    [235] = ir_run_Truth_Generic,
+    [236] = ir_run_BranchTruth_Bool_BRANCH_IF_FALSE,
+    [237] = ir_run_BranchTruth_Bool_BRANCH_IF_TRUE,
+    [238] = ir_run_BranchTruth_Int_BRANCH_IF_FALSE,
+    [239] = ir_run_BranchTruth_Int_BRANCH_IF_TRUE,
+    [240] = ir_run_BranchTruth_List_BRANCH_IF_FALSE,
+    [241] = ir_run_BranchTruth_List_BRANCH_IF_TRUE,
+    [242] = ir_run_BranchTruth_None_BRANCH_IF_FALSE,
+    [243] = ir_run_BranchTruth_None_BRANCH_IF_TRUE,
+    [244] = ir_run_BranchTruth_Str_BRANCH_IF_FALSE,
+    [245] = ir_run_BranchTruth_Str_BRANCH_IF_TRUE,
+    [246] = ir_run_BranchTruth_Plain_BRANCH_IF_FALSE,
+    [247] = ir_run_BranchTruth_Plain_BRANCH_IF_TRUE,
+    [248] = ir_run_BranchTruth_Slot_BRANCH_IF_FALSE,
+    [249] = ir_run_BranchTruth_Slot_BRANCH_IF_TRUE,
+    [250] = ir_run_BranchTruth_Generic,
+    [251] = ir_run_BranchNone_Test,
+    [252] = ir_run_BranchTruth_Observed,
+    [253] = ir_run_BranchNone_Observed,
+    [254] = ir_run_Jump_Direct,
+    [255] = ir_run_Jump_Trailing,
+    [256] = ir_run_Jump_Poll,
+    [257] = ir_run_Jump_Warm,
+    [258] = ir_run_Jump_Observed,
+    [259] = ir_run_Const_Pool,
+    [260] = ir_run_Const_Small,
+    [261] = ir_run_Const_Common,
+    [262] = ir_run_LocalRead_Bound,
+    [263] = ir_run_LocalRead_Checked,
+    [264] = ir_run_LocalWrite_Store,
+    [265] = ir_run_LocalWrite_Restore,
+    [266] = ir_run_SaveLocal_Take,
+    [267] = ir_run_LocalDelete_Checked,
+    [268] = ir_run_Move_Transfer,
+    [269] = ir_run_Move_Retire,
+    [270] = ir_run_Move_Copy,
+    [271] = ir_run_SuperAttr_Observed,
+    [272] = ir_run_SuperAttr_Observed,
+    [273] = ir_run_SuperAttrExplicit_Observed,
+    [274] = ir_run_SuperAttrExplicit_Observed,
+    [275] = ir_run_SuperMethod_Observed,
+    [276] = ir_run_SuperMethod_Observed,
+    [277] = ir_run_SuperMethodExplicit_Observed,
+    [278] = ir_run_SuperMethodExplicit_Observed,
+    [279] = ir_run_Call_Observed,
+    [280] = ir_run_Call_Observed,
+    [281] = ir_run_Call_Observed,
+    [282] = ir_run_Call_Observed,
+    [283] = ir_run_Call_Observed,
+    [284] = ir_run_Return_Observed,
+    [285] = ir_run_Return_Observed,
+    [286] = ir_run_Return_Observed,
+    [287] = ir_run_Return_Observed,
+    [288] = ir_run_CallKw_Observed,
+    [289] = ir_run_CallKw_Observed,
+    [290] = ir_run_CallKw_Observed,
+    [291] = ir_run_CallKw_Observed,
+    [292] = ir_run_CallKw_Observed,
+    [293] = ir_run_CallEx_Observed,
+    [294] = ir_run_CallEx_Observed,
+    [295] = ir_run_CallEx_Observed,
+    [296] = ir_run_EndAsyncFor_Observed,
+    [297] = ir_run_ForIter_Observed,
+    [298] = ir_run_ForIter_Observed,
+    [299] = ir_run_ForIter_Observed,
+    [300] = ir_run_ForIter_Observed,
+    [301] = ir_run_ForIter_Observed,
+    [302] = ir_run_ForIter_Observed,
+    [303] = ir_run_IterClose_Observed,
+    [304] = ir_run_Resume_Observed,
+    [305] = ir_run_Resume_Observed,
+    [306] = ir_run_Yield_Observed,
+    [307] = ir_run_YieldFrom_Observed,
+    [308] = ir_run_Send_Observed,
+    [309] = ir_run_Send_Observed,
+    [310] = ir_run_Send_Observed,
+    [311] = ir_run_Send_Observed,
+    [312] = ir_run_TestBranch_Observed,
+    [313] = ir_run_TestBranch_Observed,
+    [314] = ir_run_TestBranch_Observed,
+    [315] = ir_run_TestBranch_Observed,
+    [316] = ir_run_TestBranch_Observed,
+    [317] = ir_run_TestBranch_Observed,
+    [318] = ir_run_TestBranch_Observed,
+    [319] = ir_run_TestBranch_Observed,
     [320] = ir_run_BranchTruth_Observed,
     [321] = ir_run_BranchTruth_Observed,
     [322] = ir_run_BranchTruth_Observed,
     [323] = ir_run_BranchTruth_Observed,
-    [324] = ir_run_BranchNone_Observed,
-    [325] = ir_run_Jump_Observed,
-    [326] = ir_run_Jump_Observed,
-    [327] = ir_run_Jump_Observed,
-    [328] = ir_run_UNKNOWN_OPCODE,
-    [329] = ir_run_UNKNOWN_OPCODE,
-    [330] = ir_run_UNKNOWN_OPCODE,
-    [331] = ir_run_UNKNOWN_OPCODE,
-    [332] = ir_run_UNKNOWN_OPCODE,
-    [333] = ir_run_UNKNOWN_OPCODE,
-    [334] = ir_run_UNKNOWN_OPCODE,
-    [335] = ir_run_UNKNOWN_OPCODE,
-    [336] = ir_run_UNKNOWN_OPCODE,
-    [337] = ir_run_UNKNOWN_OPCODE,
-    [338] = ir_run_UNKNOWN_OPCODE,
+    [324] = ir_run_BranchTruth_Observed,
+    [325] = ir_run_BranchTruth_Observed,
+    [326] = ir_run_BranchTruth_Observed,
+    [327] = ir_run_BranchTruth_Observed,
+    [328] = ir_run_BranchTruth_Observed,
+    [329] = ir_run_BranchTruth_Observed,
+    [330] = ir_run_BranchTruth_Observed,
+    [331] = ir_run_BranchTruth_Observed,
+    [332] = ir_run_BranchTruth_Observed,
+    [333] = ir_run_BranchTruth_Observed,
+    [334] = ir_run_BranchTruth_Observed,
+    [335] = ir_run_BranchNone_Observed,
+    [336] = ir_run_Jump_Observed,
+    [337] = ir_run_Jump_Observed,
+    [338] = ir_run_Jump_Observed,
     [339] = ir_run_UNKNOWN_OPCODE,
     [340] = ir_run_UNKNOWN_OPCODE,
     [341] = ir_run_UNKNOWN_OPCODE,

@@ -484,6 +484,16 @@ TEXTS = [1, 2**50, 2**60, 1.5, True, None, "", "s", "\u00e9", StrSub("t"), Plain
 SPECS = [(1, "5"), (2**60, ">30"), (1.5, ".1f"), ("s", ">4"), (Plain(), ""), (BadStr(), "x"),
          (1, "zz"), (None, ""), (StrSub("t"), "<3")]
 
+# The member arms of Compare (and TestBranch) that the named sources of their
+# scenarios do not reach: (operand kind, relation, operator)
+COMPARE_MEMBER_SOURCES = [
+    ("int", "ne", "!="), ("int", "gt", ">"),
+    ("float", "lt", "<"), ("float", "le", "<="), ("float", "eq", "=="),
+    ("float", "ne", "!="), ("float", "ge", ">="),
+    ("str", "eq", "=="),
+]
+COMPARE_WARM = {"int": (1, 2), "float": (1.5, 2.5), "str": ("a", "b")}
+
 SCENARIOS = {
     "Convert": Scenario("Convert", {
         "locals": "def f(a):\n    return f'{a!r}'\n",
@@ -836,11 +846,17 @@ SCENARIOS = {
         "truth": "def f(a, b):\n    return not (a <= b)\n",
         "int": "def f(a, b):\n    return a >= b\n",
         "float": "def f(a, b):\n    return a > b\n",
-        "str": "def f(a, b):\n    return a != b\n"},
+        "str": "def f(a, b):\n    return a != b\n",
+        # A word adapts to the arm of its relation (`over(relation: ...)`): one
+        # source for each member arm the sources above leave out
+        **{f"{kind}_{name}": f"def f(a, b):\n    return a {op} b\n"
+           for kind, name, op in COMPARE_MEMBER_SOURCES}},
         [{"x": x, "y": y} for x, y in COMPARE_PAIRS],
         warm_by_source={"rich": (Args((1, 2)), Args(("a", "b"))), "equal": (Args((1, 2)),),
                         "truth": (Args((1, 2)),), "int": (Args((1, 2)),),
-                        "float": (Args((1.5, 2.5)),), "str": (Args(("a", "b")),)},
+                        "float": (Args((1.5, 2.5)),), "str": (Args(("a", "b")),),
+                        **{f"{kind}_{name}": (Args(COMPARE_WARM[kind]),)
+                           for kind, name, _ in COMPARE_MEMBER_SOURCES}},
         warmups=200, coherent=True),
     "Identity": Scenario("Identity", {
         "is": "def f(a, b):\n    return a is b\n",

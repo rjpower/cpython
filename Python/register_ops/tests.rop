@@ -633,9 +633,10 @@ macro adapt_before_use_test(f:Fb<Compare>, x:Src, y:Src, test:Enum<BranchTest>)
     exit run();
 }
 
-// Compare
+// Compare: an arm per relation (`over(relation: ...)`), the relation its
+// constant
 
-arm Compare.Int shared
+arm Compare.Int shared over(relation: LT, LE, EQ, NE, GT, GE)
   effects(writes, releases on (dst))
   feedback()
   exits(next, miss)
@@ -651,7 +652,7 @@ arm Compare.Int shared
     exit next();
 }
 
-arm Compare.Float shared
+arm Compare.Float shared over(relation: LT, LE, EQ, NE, GT, GE)
   effects(writes, releases on (dst))
   feedback()
   exits(next, miss)
@@ -667,7 +668,8 @@ arm Compare.Float shared
     exit next();
 }
 
-arm Compare.Str shared
+// Only the equality relations: the order of strings is the generic arm's
+arm Compare.Str shared over(relation: EQ, NE)
   effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
@@ -677,7 +679,6 @@ arm Compare.Str shared
     let l:B = use(x);
     let r:B = use(y);
     guard both_exact_str(l, r) else miss;
-    guard equality_relation(relation) else miss;
     goto Finish(truth_object(equal_strings(relation, l, r), false));
   Finish(z:O):
     publish [dst = z] retire [spent(y), spent(x), old(dst)] at Compare.Done;

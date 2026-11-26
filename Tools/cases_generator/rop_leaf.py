@@ -31,7 +31,7 @@ from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLay
                          CSource, CTest, DebtKind, FieldKind, Handle, Scalar,
                          Schema, SchemaCtor, Wrap)
 from rop_cgen import Unsupported, arm_facts, facts_at, flatten, home_views
-from rop_check import Program
+from rop_check import Program, enum_c_name
 from rop_model import (Arm, EnumType, Extern, HandleType, Publish, ScalarType, SchemaType,
                        Type, WrapType)
 from rop_ssa import (INTACT, BranchTerm, ExitTerm, Jump, Op, OpKind, SsaArm, Switch,
@@ -413,9 +413,8 @@ class LeafBuilder:
             t = self.ssa.types[op.result]
             if isinstance(t, EnumType):
                 # An enum member is its number, as an immediate of the word is
-                members = self.program.enums[t.name].members
-                self.env[op.result] = Imm(str(members.index(op.attr.rpartition(".")[2])),
-                                          "u32")
+                self.env[op.result] = Imm(
+                    enum_c_name(t.name, op.attr.rpartition(".")[2]), "u32")
             elif (lt := leaf_type(t)) is None:
                 self.refuse(f"a constant of type {t}")
             else:

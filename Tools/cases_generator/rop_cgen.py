@@ -18,7 +18,7 @@ from dataclasses import dataclass, field, replace
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          PcRole, Slot, UNCOUNTED_FACTS, Wrap)
-from rop_check import GraphInfo, Program, expand_debts, expand_group, group_part_decls, group_parts, is_args
+from rop_check import GraphInfo, Program, enum_c_name, enum_of_member, expand_debts, expand_group, group_part_decls, group_parts, is_args
 from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
@@ -793,6 +793,9 @@ class ArmLowerer:
             if e.name in ENVIRONMENT_C:
                 return ENVIRONMENT_C[e.name]
             if e.name not in self.info.types:
+                member = enum_of_member(self.program.enums, e.name)
+                if member is not None:
+                    return enum_c_name(*member)
                 return e.name.rsplit(".", 1)[-1]
             return self.local(e.name)
         if isinstance(e, Nat):

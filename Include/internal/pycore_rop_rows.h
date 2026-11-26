@@ -15,6 +15,7 @@ extern "C" {
 #include "pycore_interpframe.h"   // _PyFrame_TakeHome()
 #include "pycore_value.h"         // PyValue
 #include "pycore_opcode_utils.h"  // NUM_COMMON_CONSTANTS
+#include "pycore_rop_metadata.h"  // ROP_RELATION_LT and the other declared enums
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
@@ -22,6 +23,35 @@ extern "C" {
 #include "pycore_setobject.h"     // _PySet_Contains()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value_slots.h"   // _PyType_VALUE_SLOT()
+
+/* Binary's op operand is BINARY_OP's oparg, so the declared Numeric enum
+ * numbers its members as Include/opcode.h numbers NB_*. */
+static_assert(ROP_NUMERIC_NB_ADD == NB_ADD, "Numeric NB_ADD");
+static_assert(ROP_NUMERIC_NB_AND == NB_AND, "Numeric NB_AND");
+static_assert(ROP_NUMERIC_NB_FLOOR_DIVIDE == NB_FLOOR_DIVIDE, "Numeric NB_FLOOR_DIVIDE");
+static_assert(ROP_NUMERIC_NB_LSHIFT == NB_LSHIFT, "Numeric NB_LSHIFT");
+static_assert(ROP_NUMERIC_NB_MATRIX_MULTIPLY == NB_MATRIX_MULTIPLY, "Numeric NB_MATRIX_MULTIPLY");
+static_assert(ROP_NUMERIC_NB_MULTIPLY == NB_MULTIPLY, "Numeric NB_MULTIPLY");
+static_assert(ROP_NUMERIC_NB_REMAINDER == NB_REMAINDER, "Numeric NB_REMAINDER");
+static_assert(ROP_NUMERIC_NB_OR == NB_OR, "Numeric NB_OR");
+static_assert(ROP_NUMERIC_NB_POWER == NB_POWER, "Numeric NB_POWER");
+static_assert(ROP_NUMERIC_NB_RSHIFT == NB_RSHIFT, "Numeric NB_RSHIFT");
+static_assert(ROP_NUMERIC_NB_SUBTRACT == NB_SUBTRACT, "Numeric NB_SUBTRACT");
+static_assert(ROP_NUMERIC_NB_TRUE_DIVIDE == NB_TRUE_DIVIDE, "Numeric NB_TRUE_DIVIDE");
+static_assert(ROP_NUMERIC_NB_XOR == NB_XOR, "Numeric NB_XOR");
+static_assert(ROP_NUMERIC_NB_INPLACE_ADD == NB_INPLACE_ADD, "Numeric NB_INPLACE_ADD");
+static_assert(ROP_NUMERIC_NB_INPLACE_AND == NB_INPLACE_AND, "Numeric NB_INPLACE_AND");
+static_assert(ROP_NUMERIC_NB_INPLACE_FLOOR_DIVIDE == NB_INPLACE_FLOOR_DIVIDE, "Numeric NB_INPLACE_FLOOR_DIVIDE");
+static_assert(ROP_NUMERIC_NB_INPLACE_LSHIFT == NB_INPLACE_LSHIFT, "Numeric NB_INPLACE_LSHIFT");
+static_assert(ROP_NUMERIC_NB_INPLACE_MATRIX_MULTIPLY == NB_INPLACE_MATRIX_MULTIPLY, "Numeric NB_INPLACE_MATRIX_MULTIPLY");
+static_assert(ROP_NUMERIC_NB_INPLACE_MULTIPLY == NB_INPLACE_MULTIPLY, "Numeric NB_INPLACE_MULTIPLY");
+static_assert(ROP_NUMERIC_NB_INPLACE_REMAINDER == NB_INPLACE_REMAINDER, "Numeric NB_INPLACE_REMAINDER");
+static_assert(ROP_NUMERIC_NB_INPLACE_OR == NB_INPLACE_OR, "Numeric NB_INPLACE_OR");
+static_assert(ROP_NUMERIC_NB_INPLACE_POWER == NB_INPLACE_POWER, "Numeric NB_INPLACE_POWER");
+static_assert(ROP_NUMERIC_NB_INPLACE_RSHIFT == NB_INPLACE_RSHIFT, "Numeric NB_INPLACE_RSHIFT");
+static_assert(ROP_NUMERIC_NB_INPLACE_SUBTRACT == NB_INPLACE_SUBTRACT, "Numeric NB_INPLACE_SUBTRACT");
+static_assert(ROP_NUMERIC_NB_INPLACE_TRUE_DIVIDE == NB_INPLACE_TRUE_DIVIDE, "Numeric NB_INPLACE_TRUE_DIVIDE");
+static_assert(ROP_NUMERIC_NB_INPLACE_XOR == NB_INPLACE_XOR, "Numeric NB_INPLACE_XOR");
 
 /* The C bodies of the call-boundary rows of Python/register_ops/core.rop.
  * The generated handlers build the arguments from the word: a `Span<Src>`
@@ -592,9 +622,6 @@ PyValue _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 PyValue _PyRop_AppendText(PyValue *home, PyValueBorrow right);
 
 
-/* The members of ImportKind in declaration order */
-enum { IMPORT_EAGER, IMPORT_POLICY, IMPORT_LAZY };
-
 /* Python/ceval.c: the namespace rows (Python/register_ops/namespaces.rop).
  * A name is passed as its index in co_names, which an operand holds in 16
  * bits, wider than a name field. */
@@ -622,35 +649,10 @@ PyAPI_FUNC(PyValue) _PyRop_ImportName(PyThreadState *, _PyInterpreterFrame *,
 PyAPI_FUNC(PyValue) _PyRop_ImportFrom(PyThreadState *, _PyInterpreterFrame *,
                                       PyValue, uint32_t);
 
-/* IterOpen (Python/register_ops/iteration.rop).  The members of IterMode in
- * declaration order: an ordinary GET_ITER, and that of `yield from` where
- * the code's flags allow a coroutine or refuse it. */
-enum {
-    ITER_ORDINARY,
-    ITER_DELEGATE_COROUTINE_OK,
-    ITER_DELEGATE_NO_COROUTINE,
-};
-
-/* Unary (Python/register_ops/numeric.rop).  The members of UnaryOp in
- * declaration order, the numbers the generated handlers use for the enum's
- * names. */
-enum {
-    NEGATIVE,
-    POSITIVE,
-    INVERT,
-};
-
-/* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The
- * members of BranchMode in declaration order, the numbers the generated
- * handlers use for the enum's names: the jump is taken when the test is
- * true in the odd modes, false in the even ones, and the KEEP modes leave
- * the owner in its home on the jump edge. */
-enum {
-    BRANCH_IF_FALSE,
-    BRANCH_IF_TRUE,
-    BRANCH_KEEP_IF_FALSE,
-    BRANCH_KEEP_IF_TRUE,
-};
+/* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  Of
+ * BranchMode's members (pycore_rop_metadata.h), the jump is taken when the
+ * test is true in the odd modes, false in the even ones, and the KEEP modes
+ * leave the owner in its home on the jump edge. */
 
 static inline bool
 _PyRop_BranchTaken(int mode, bool test)
@@ -661,7 +663,7 @@ _PyRop_BranchTaken(int mode, bool test)
 static inline bool
 _PyRop_BranchKeeps(int mode)
 {
-    return mode >= BRANCH_KEEP_IF_FALSE;
+    return mode >= ROP_BRANCHMODE_BRANCH_KEEP_IF_FALSE;
 }
 
 static inline bool
@@ -768,39 +770,28 @@ _PyRop_SlotTruth(PyValueBorrow v)
 
 /* Python/register_ops/tests.rop: Compare, Identity, Contains, TestBranch */
 
-/* The enums of tests.rop, in declaration order */
-enum {
-    ROP_RELATION_LT, ROP_RELATION_LE, ROP_RELATION_EQ, ROP_RELATION_NE,
-    ROP_RELATION_GT, ROP_RELATION_GE,
-};
-enum { ROP_RESULT_RICH, ROP_RESULT_TRUTH };
-enum {
-    ROP_TEST_IDENTITY, ROP_TEST_CONTAINS, ROP_TEST_LT, ROP_TEST_LE, ROP_TEST_EQ,
-    ROP_TEST_NE, ROP_TEST_GT, ROP_TEST_GE,
-};
-
 static inline bool
 _PyRop_TestIsIdentity(int test)
 {
-    return test == ROP_TEST_IDENTITY;
+    return test == ROP_BRANCHTEST_IDENTITY;
 }
 
 static inline bool
 _PyRop_TestIsContains(int test)
 {
-    return test == ROP_TEST_CONTAINS;
+    return test == ROP_BRANCHTEST_CONTAINS;
 }
 
 static inline int
 _PyRop_RelationOf(int test)
 {
-    return test >= ROP_TEST_LT ? test - ROP_TEST_LT : ROP_RELATION_LT;
+    return test >= ROP_BRANCHTEST_TEST_LT ? test - ROP_BRANCHTEST_TEST_LT : ROP_RELATION_LT;
 }
 
 static inline bool
 _PyRop_ResultIsTruth(int result)
 {
-    return result == ROP_RESULT_TRUTH;
+    return result == ROP_COMPARERESULT_TRUTH;
 }
 
 static inline bool

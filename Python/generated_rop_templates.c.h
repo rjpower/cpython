@@ -2046,7 +2046,7 @@ jit_template_Truth_Plain(_PyJitWordCx *cx)
 //     %4:bool = prim PyValue_IsTrue %1
 //     jmp b1(%4)
 //   b1(%0:bool):
-//     %5:bool = xorb !((0) & 1) %0
+//     %5:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1) %0
 //     br %5, b4, b5
 //   b2:
 //     branch
@@ -2070,7 +2070,7 @@ jit_template_BranchTruth_Bool_BRANCH_IF_FALSE(_PyJitWordCx *cx)
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
     }
     int c6 = _PyJitLower_PyValue_IsTrue(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
-    int c7 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c6) : (int)c6);
+    int c7 = ((!((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c6) : (int)c6);
     _PyJitTemplate_Branch(cx, c7);
 }
 
@@ -2083,7 +2083,7 @@ jit_template_BranchTruth_Bool_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 //     %4:bool = prim PyValue_IsTrue %1
 //     jmp b1(%4)
 //   b1(%0:bool):
-//     %5:bool = xorb !((1) & 1) %0
+//     %5:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1) %0
 //     br %5, b4, b5
 //   b2:
 //     branch
@@ -2107,7 +2107,7 @@ jit_template_BranchTruth_Bool_BRANCH_IF_TRUE(_PyJitWordCx *cx)
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
     }
     int c6 = _PyJitLower_PyValue_IsTrue(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
-    int c7 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c6) : (int)c6);
+    int c7 = ((!((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c6) : (int)c6);
     _PyJitTemplate_Branch(cx, c7);
 }
 
@@ -2120,7 +2120,7 @@ jit_template_BranchTruth_Bool_BRANCH_IF_TRUE(_PyJitWordCx *cx)
 //     %4:bool = prim PyValue_IsInlineInt %1
 //     br %4, b4, b5
 //   b1(%0:bool):
-//     %12:bool = xorb !((0) & 1) %0
+//     %12:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1) %0
 //     br %12, b7, b8
 //   b2:
 //     branch
@@ -2177,7 +2177,7 @@ jit_template_BranchTruth_Int_BRANCH_IF_FALSE(_PyJitWordCx *cx)
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    int c8 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    int c8 = ((!((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
     _PyJitTemplate_Branch(cx, c8);
 }
 
@@ -2190,7 +2190,7 @@ jit_template_BranchTruth_Int_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 //     %4:bool = prim PyValue_IsInlineInt %1
 //     br %4, b4, b5
 //   b1(%0:bool):
-//     %12:bool = xorb !((1) & 1) %0
+//     %12:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1) %0
 //     br %12, b7, b8
 //   b2:
 //     branch
@@ -2247,7 +2247,7 @@ jit_template_BranchTruth_Int_BRANCH_IF_TRUE(_PyJitWordCx *cx)
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    int c8 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    int c8 = ((!((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
     _PyJitTemplate_Branch(cx, c8);
 }
 
@@ -2257,7 +2257,7 @@ jit_template_BranchTruth_Int_BRANCH_IF_TRUE(_PyJitWordCx *cx)
 //     %2:bool = prim PyValue_IsObject %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %12:bool = xorb !((0) & 1) %0
+//     %12:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1) %0
 //     br %12, b7, b8
 //   b2:
 //     branch
@@ -2307,7 +2307,7 @@ jit_template_BranchTruth_List_BRANCH_IF_FALSE(_PyJitWordCx *cx)
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
     int c16 = _PyJitCond_NE;
-    int c6 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
+    int c6 = ((!((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
     _PyJitTemplate_Branch(cx, c6);
 }
 
@@ -2317,7 +2317,7 @@ jit_template_BranchTruth_List_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 //     %2:bool = prim PyValue_IsObject %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %12:bool = xorb !((1) & 1) %0
+//     %12:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1) %0
 //     br %12, b7, b8
 //   b2:
 //     branch
@@ -2367,7 +2367,7 @@ jit_template_BranchTruth_List_BRANCH_IF_TRUE(_PyJitWordCx *cx)
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
     int c16 = _PyJitCond_NE;
-    int c6 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
+    int c6 = ((!((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
     _PyJitTemplate_Branch(cx, c6);
 }
 
@@ -2380,7 +2380,7 @@ jit_template_BranchTruth_List_BRANCH_IF_TRUE(_PyJitWordCx *cx)
 //     %4:bool = const 0
 //     jmp b1(%4)
 //   b1(%0:bool):
-//     %5:bool = xorb !((0) & 1) %0
+//     %5:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1) %0
 //     br %5, b4, b5
 //   b2:
 //     branch
@@ -2408,7 +2408,7 @@ jit_template_BranchTruth_None_BRANCH_IF_FALSE(_PyJitWordCx *cx)
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
-    int c7 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    int c7 = ((!((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
     _PyJitTemplate_Branch(cx, c7);
 }
 
@@ -2421,7 +2421,7 @@ jit_template_BranchTruth_None_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 //     %4:bool = const 0
 //     jmp b1(%4)
 //   b1(%0:bool):
-//     %5:bool = xorb !((1) & 1) %0
+//     %5:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1) %0
 //     br %5, b4, b5
 //   b2:
 //     branch
@@ -2449,7 +2449,7 @@ jit_template_BranchTruth_None_BRANCH_IF_TRUE(_PyJitWordCx *cx)
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
-    int c7 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    int c7 = ((!((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
     _PyJitTemplate_Branch(cx, c7);
 }
 
@@ -2459,7 +2459,7 @@ jit_template_BranchTruth_None_BRANCH_IF_TRUE(_PyJitWordCx *cx)
 //     %2:bool = prim PyValue_IsObject %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %12:bool = xorb !((0) & 1) %0
+//     %12:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1) %0
 //     br %12, b7, b8
 //   b2:
 //     branch
@@ -2509,7 +2509,7 @@ jit_template_BranchTruth_Str_BRANCH_IF_FALSE(_PyJitWordCx *cx)
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
     int c16 = _PyJitCond_NE;
-    int c6 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
+    int c6 = ((!((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
     _PyJitTemplate_Branch(cx, c6);
 }
 
@@ -2519,7 +2519,7 @@ jit_template_BranchTruth_Str_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 //     %2:bool = prim PyValue_IsObject %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %12:bool = xorb !((1) & 1) %0
+//     %12:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1) %0
 //     br %12, b7, b8
 //   b2:
 //     branch
@@ -2569,7 +2569,7 @@ jit_template_BranchTruth_Str_BRANCH_IF_TRUE(_PyJitWordCx *cx)
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
     int c16 = _PyJitCond_NE;
-    int c6 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
+    int c6 = ((!((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
     _PyJitTemplate_Branch(cx, c6);
 }
 
@@ -2579,7 +2579,7 @@ jit_template_BranchTruth_Str_BRANCH_IF_TRUE(_PyJitWordCx *cx)
 //     %2:bool = prim PyValue_IsNone %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %27:bool = xorb !((0) & 1) %0
+//     %27:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1) %0
 //     br %27, b16, b17
 //   b2:
 //     branch
@@ -2683,7 +2683,7 @@ jit_template_BranchTruth_Plain_BRANCH_IF_FALSE(_PyJitWordCx *cx)
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    int c9 = ((!(!((0) & 1))) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    int c9 = ((!(!((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1))) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
     _PyJitTemplate_Branch(cx, c9);
 }
 
@@ -2693,7 +2693,7 @@ jit_template_BranchTruth_Plain_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 //     %2:bool = prim PyValue_IsNone %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %27:bool = xorb !((1) & 1) %0
+//     %27:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1) %0
 //     br %27, b16, b17
 //   b2:
 //     branch
@@ -2797,7 +2797,7 @@ jit_template_BranchTruth_Plain_BRANCH_IF_TRUE(_PyJitWordCx *cx)
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    int c9 = ((!(!((1) & 1))) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    int c9 = ((!(!((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1))) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
     _PyJitTemplate_Branch(cx, c9);
 }
 

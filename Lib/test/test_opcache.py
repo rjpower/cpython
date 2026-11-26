@@ -2149,7 +2149,7 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_int()
-        self.assert_specialized(compare_op_int, "Compare.Int")
+        self.assert_specialized(compare_op_int, "Compare.Int_EQ")
         self.assert_no_opcode(compare_op_int, "Compare.Generic")
 
         def compare_op_float():
@@ -2159,7 +2159,7 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_float()
-        self.assert_specialized(compare_op_float, "Compare.Float")
+        self.assert_specialized(compare_op_float, "Compare.Float_EQ")
         self.assert_no_opcode(compare_op_float, "Compare.Generic")
 
         def compare_op_str():
@@ -2169,7 +2169,7 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_str()
-        self.assert_specialized(compare_op_str, "Compare.Str")
+        self.assert_specialized(compare_op_str, "Compare.Str_EQ")
         self.assert_no_opcode(compare_op_str, "Compare.Generic")
 
 

@@ -197,6 +197,10 @@ class AnswerTests(unittest.TestCase):
             self.assertEqual(f([1, 2, "a", 3], 3), 102)
 
 
+# The Relation member of each operator
+RELATION_MEMBERS = {"<": "LT", "<=": "LE", "==": "EQ", "!=": "NE", ">": "GT", ">=": "GE"}
+
+
 class AdaptationTests(unittest.TestCase):
     def arms(self, source, *args, expect=None):
         f = make(source)
@@ -205,9 +209,15 @@ class AdaptationTests(unittest.TestCase):
 
     def test_compare_arms(self):
         template = "def f(a, b):\n    return a {} b\n"
-        self.assertIn("Compare.Int", self.arms(template.format("<"), 1, 2))
-        self.assertIn("Compare.Float", self.arms(template.format("<"), 1.5, 2.5))
-        self.assertIn("Compare.Str", self.arms(template.format("=="), "a", "b"))
+        # An arm per relation (`over(relation: ...)`)
+        for op, relation in RELATION_MEMBERS.items():
+            with self.subTest(op=op):
+                self.assertIn(f"Compare.Int_{relation}",
+                              self.arms(template.format(op), 1, 2))
+                self.assertIn(f"Compare.Float_{relation}",
+                              self.arms(template.format(op), 1.5, 2.5))
+        self.assertIn("Compare.Str_EQ", self.arms(template.format("=="), "a", "b"))
+        self.assertIn("Compare.Str_NE", self.arms(template.format("!="), "a", "b"))
         self.assertIn("Compare.Generic", self.arms(template.format("<"), "a", "b"))
 
     def test_contains_arms(self):

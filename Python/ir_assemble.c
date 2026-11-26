@@ -8,7 +8,6 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
 #include "pycore_rop_metadata.h"    // ROP_OP_Call_Generic, ROP_FIRST_HANDLER
-#include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation

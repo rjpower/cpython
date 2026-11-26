@@ -206,6 +206,20 @@ def member_arm_name(name: str, member: str) -> str:
     return f"{name}_{member}"
 
 
+def enum_c_name(enum: str, member: str) -> str:
+    """The C name of an enum member, which the generated metadata declares"""
+    return f"ROP_{enum.upper()}_{member}"
+
+
+def enum_of_member(enums: Mapping[str, EnumDecl], name: str) -> tuple[str, str] | None:
+    """The enum and member that a (possibly qualified) member name names"""
+    enum, _, member = name.rpartition(".")
+    for e in enums.values():
+        if member in e.members and enum in ("", e.name):
+            return e.name, member
+    return None
+
+
 @dataclass(frozen=True)
 class Program:
     files: tuple[SourceFile, ...]

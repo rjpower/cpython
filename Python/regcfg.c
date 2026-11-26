@@ -4503,7 +4503,8 @@ reserve_folded(_PyRegCfg *cfg, occupancy *o, _PyRegOp *load)
     int nl = cfg->nlocalsplus;
     const _PyRegOp *reader = &cfg->ops[load->reader];
     // A call reads its operands from words: no result has to clear them
-    if (_PyIR_HandlerHasOperands(reader->opcode)) {
+    if (_PyIR_CALL_SHAPED(
+            _PyRegCfg_FormatOf(reader->opcode, reader->oparg)->operands)) {
         return SUCCESS;
     }
     const int *in = _PyReg_IN(cfg, reader);

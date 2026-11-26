@@ -448,12 +448,12 @@ ordinary_handler_for(int handler, int opcode)
     return _PyIR_OpcodeHandler[opcode];
 }
 
-/* Whether a tool observes the SEND at word i.  SEND has no instrumented
- * stack opcode (upstream has none), so monitoring does not rewrite its
- * opcode: its word runs the observed twin of its handler while a tool
- * listens for its events. */
+/* Whether a tool listens for an event that the handler at word i declares.
+ * An instruction of a family that declares events but has no instrumented
+ * stack opcode (_PyIR_H_TWIN_BY_TOOLS) is not rewritten by monitoring: its
+ * word runs the observed twin of its handler while a tool listens. */
 static int
-send_observed(PyCodeObject *co, int i)
+tools_observe(PyCodeObject *co, int i, int handler)
 {
     _PyCoMonitoringData *monitoring = co->_co_monitoring;
     if (monitoring == NULL) {
@@ -464,15 +464,28 @@ send_observed(PyCodeObject *co, int i)
                (monitoring->stop_tools != NULL && monitoring->stop_tools[i] != 0) ||
                (monitoring->left_tools != NULL && monitoring->left_tools[i] != 0);
     }
-    return monitoring->active_monitors.tools[PY_MONITORING_EVENT_STOP_ITERATION] != 0 ||
-           monitoring->active_monitors.tools[PY_MONITORING_EVENT_BRANCH_LEFT] != 0;
+    uint32_t events = _PyIR_FormatOf(handler)->events;
+    for (int event = 0; events != 0; event++, events >>= 1) {
+        if ((events & 1) && monitoring->active_monitors.tools[event] != 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int
+_PyCode_TwinByTools(PyCodeObject *co, int i)
+{
+    return (_PyIR_HandlerFlags[_PyCode_InstrHandler(co, i)] & _PyIR_H_TWIN_BY_TOOLS) != 0;
 }
 
 int
 _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
 {
     int handler = ordinary_handler_for(_PyCode_InstrHandler(co, i), opcode);
-    if (opcode == SEND && send_observed(co, i)) {
+    if ((_PyIR_HandlerFlags[handler] & _PyIR_H_TWIN_BY_TOOLS) &&
+        tools_observe(co, i, handler))
+    {
         int twin = _PyIR_FormatOf(handler)->twin;
         if (twin != 0 && handler >= IR_NUM_OLD_HANDLERS) {
             return twin;

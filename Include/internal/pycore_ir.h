@@ -960,6 +960,10 @@ PyAPI_FUNC(int) _PyIR_OriginalHandler(struct _PyInterpreterFrame *frame,
  * of the word at index i of co, on that word. */
 PyAPI_FUNC(int) _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode);
 
+/* Whether the word at index i of co has a handler that monitoring selects
+ * by tools, not by rewriting its opcode (_PyIR_H_TWIN_BY_TOOLS). */
+PyAPI_FUNC(int) _PyCode_TwinByTools(PyCodeObject *co, int i);
+
 /* Rewrite the handler of the word at instr of an executing copy, for
  * specialisation and instrumentation.  The fields never change, but other
  * threads may be dispatching on the word. */

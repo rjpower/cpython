@@ -42,6 +42,7 @@ const _PyIROwnershipEvent _PyIR_OwnerPrograms[11] = {
 #define _PyIR_H_ADAPTIVE 512
 #define _PyIR_H_SAVES_IP 1024
 #define _PyIR_H_JIT_EVENT 2048
+#define _PyIR_H_TWIN_BY_TOOLS 4096
 
 PyAPI_DATA(const uint16_t) _PyIR_HandlerFlags[IR_NUM_HANDLERS];
 #ifdef NEED_IR_METADATA
@@ -222,11 +223,11 @@ const uint16_t _PyIR_HandlerFlags[IR_NUM_HANDLERS] = {
     [173] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* YieldFrom.Delegated */
     [174] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Yield.Observed */
     [175] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* YieldFrom.Observed */
-    [176] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Send.Generic */
-    [177] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Send.Gen */
-    [178] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Send.Virtual */
-    [179] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Send.AsyncGen */
-    [180] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Send.Observed */
+    [176] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.Generic */
+    [177] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.Gen */
+    [178] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.Virtual */
+    [179] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.AsyncGen */
+    [180] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.Observed */
     [181] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Int */
     [182] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Float */
     [183] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Str */
@@ -316,10 +317,10 @@ const uint16_t _PyIR_HandlerFlags[IR_NUM_HANDLERS] = {
     [267] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Resume.Warm.Observed */
     [268] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Yield.Ordinary.Observed */
     [269] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* YieldFrom.Delegated.Observed */
-    [270] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Send.Generic.Observed */
-    [271] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Send.Gen.Observed */
-    [272] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Send.Virtual.Observed */
-    [273] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Send.AsyncGen.Observed */
+    [270] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.Generic.Observed */
+    [271] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.Gen.Observed */
+    [272] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.Virtual.Observed */
+    [273] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_TWIN_BY_TOOLS | _PyIR_H_IR_ONLY, /* Send.AsyncGen.Observed */
     [274] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* TestBranch.Identity.Observed */
     [275] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* TestBranch.Int.Observed */
     [276] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* TestBranch.Float.Observed */

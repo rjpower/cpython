@@ -219,7 +219,14 @@ def arm_base_ids(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry],
     return result
 
 
-def arm_flags(arm: ir_arms.ArmEntry) -> str:
+def twin_by_tools(analysis: Analysis, arm: ir_arms.ArmEntry) -> bool:
+    """Whether monitoring selects the arm's observed twin by handler: its
+    family declares events, but upstream's pinned table has no
+    INSTRUMENTED_ stack opcode of its base to rewrite the opcode to"""
+    return bool(arm.events) and f"INSTRUMENTED_{arm.base}" not in analysis.opmap
+
+
+def arm_flags(analysis: Analysis, arm: ir_arms.ArmEntry) -> str:
     parts = ["_PyIR_H_METADATA"]
     if arm.emitted:
         parts += ["_PyIR_H_DISPATCH", "_PyIR_H_SAVES_IP"]
@@ -227,6 +234,8 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
         parts.append("_PyIR_H_SPECIALIZED")
     if arm.observes is not None:
         parts.append("_PyIR_H_INSTRUMENTED")
+    if twin_by_tools(analysis, arm):
+        parts.append("_PyIR_H_TWIN_BY_TOOLS")
     parts.append("_PyIR_H_IR_ONLY")
     return " | ".join(parts)
 
@@ -351,7 +360,8 @@ def generate_ir_metadata(
                           ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
-                          ("SAVES_IP", 1024), ("JIT_EVENT", 2048)):
+                          ("SAVES_IP", 1024), ("JIT_EVENT", 2048),
+                          ("TWIN_BY_TOOLS", 4096)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
         for ctype, table, values in (
@@ -365,7 +375,7 @@ def generate_ir_metadata(
             for name in sorted(fact_ids, key=fact_ids.get):
                 out.emit(f"[{fact_ids[name]}] = {values[name]}, /* {name} */\n")
             for arm in arms:
-                value = (arm_flags(arm) if table == "_PyIR_HandlerFlags"
+                value = (arm_flags(analysis, arm) if table == "_PyIR_HandlerFlags"
                          else str(base_ids[arm.base]))
                 out.emit(f"[{arm_id(analysis, arm)}] = {value}, /* {arm.dotted} */\n")
             out.emit("};\n#endif\n\n")

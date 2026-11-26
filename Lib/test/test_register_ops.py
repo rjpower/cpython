@@ -1,6 +1,7 @@
 """Tests of the register instruction definition language's frontend:
 Tools/cases_generator/rop_*.py and the definitions in Python/register_ops/."""
 
+import re
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import rop_header
     import rop_print
     import rop_syntax
+    import stack_opcode_pins
     from rop_model import RopError
 
 ROP_DIR = Path(test_tools.basepath) / "Python" / "register_ops"
@@ -746,6 +748,29 @@ class DefinitionTests(unittest.TestCase):
             for word in words:
                 with self.subTest(path=path.name, word=word):
                     self.assertNotRegex(text, rf"\b{word}\b")
+
+    def test_declared_events_have_an_instrumented_opcode_or_the_mark(self):
+        """Monitoring rewrites a stack opcode to its INSTRUMENTED_ form, so
+        a family that declares events needs one in upstream's pinned table;
+        without one its arms carry _PyIR_H_TWIN_BY_TOOLS and monitoring
+        selects their observed twin by handler."""
+        header = (ROP_DIR.parent.parent / "Include" / "internal"
+                  / "pycore_ir_metadata.h").read_text()
+        marked = {
+            m.group(1).split(".")[0]
+            for m in re.finditer(
+                r"_PyIR_H_TWIN_BY_TOOLS[^\n]*/\* (\S+) \*/", header)}
+        expected = set()
+        for path in rop_files():
+            for decl in rop_syntax.parse(path.read_text(), path.name).decls:
+                if not isinstance(decl, rop_syntax.Family) or not decl.events:
+                    continue
+                has_opcode = f"INSTRUMENTED_{decl.ops[0]}" in stack_opcode_pins.PINNED_OPCODES
+                with self.subTest(decl.name):
+                    self.assertEqual(decl.name in marked, not has_opcode)
+                if not has_opcode:
+                    expected.add(decl.name)
+        self.assertEqual(marked, expected)
 
 
 if __name__ == "__main__":

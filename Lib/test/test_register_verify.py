@@ -1575,9 +1575,26 @@ class PilotTests(unittest.TestCase):
                     f"items.rop:{number}:5: {arm}: points: raise at {family}.Failed: "
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
-        attr_store = at("attrs.rop", "exit raise(AttrWrite.Failed, saved);", 5)
-        attr_delete = at("attrs.rop", "exit raise(AttrWrite.DeleteFailed, dsaved);", 5)
-        special = at("attrs.rop", "exit raise(SpecialLookup.Failed, saved);", 5)
+        # Every arm of attrs.rop that raises through retire_failed_call: the
+        # generic store and delete, the stores that fall back to the generic
+        # store, the special lookup; the super arms spend their parts in the
+        # row and so have no such raise
+        attr_spent = {"AttrWrite.Failed": ("obj", "value"),
+                      "AttrWrite.DeleteFailed": ("obj",),
+                      "SpecialLookup.Failed": ("obj",)}
+        attr_diagnostics = []
+        arm = None
+        for number, source in enumerate(
+                (ROP_DIR / "attrs.rop").read_text().splitlines(), 1):
+            if source.startswith("arm "):
+                arm = source.split()[1]
+            elif source.lstrip().startswith("exit raise(") and \
+                    source.split("raise(")[1].split(",")[0] in attr_spent:
+                point = source.split("raise(")[1].split(",")[0]
+                attr_diagnostics.extend(
+                    f"attrs.rop:{number}:5: {arm}: points: raise at {point}: "
+                    f"{point} lists {name} in spent, but {name} is intact"
+                    for name in attr_spent[point])
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
         pattern_class = at("patterns.rop", "exit raise(PatternClass.Failed, saved);", 5)
         convert = at("text.rop", "exit raise(Convert.Failed, saved);", 5)
@@ -1642,14 +1659,7 @@ class PilotTests(unittest.TestCase):
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact",
-              f"{attr_store}: AttrWrite.Generic: points: raise at AttrWrite.Failed: "
-              "AttrWrite.Failed lists obj in spent, but obj is intact",
-              f"{attr_store}: AttrWrite.Generic: points: raise at AttrWrite.Failed: "
-              "AttrWrite.Failed lists value in spent, but value is intact",
-              f"{attr_delete}: AttrWrite.Generic: points: raise at AttrWrite.DeleteFailed: "
-              "AttrWrite.DeleteFailed lists obj in spent, but obj is intact",
-              f"{special}: SpecialLookup.Generic: points: raise at SpecialLookup.Failed: "
-              "SpecialLookup.Failed lists obj in spent, but obj is intact",
+              *attr_diagnostics,
               f"{cell_map}: CellMapRead.Lookup: points: raise at CellMapRead.Failed: "
               "CellMapRead.Failed lists mapping in spent, but mapping is intact",
               f"{raise_getset}: GetAttr.GetSet: points: raise at GetAttr.Failed: "

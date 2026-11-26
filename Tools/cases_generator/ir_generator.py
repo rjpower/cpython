@@ -446,8 +446,8 @@ OPERAND_CALLS = {
 # specialisation and instrumentation keep them by keeping the flags.
 CALL_ROLE_FLAGS = {
     "CALL": ("IR_F_NO_SELF", "IR_F_UNINTERRUPTED"),
-    "CALL_KW": ("IR_F_NO_SELF",),
-    "CALL_FUNCTION_EX": ("IR_F_NO_KW",),
+    "CALL_KW": ("IR_F_NO_SELF", "IR_F_KW"),
+    "CALL_FUNCTION_EX": ("IR_F_NO_KW", "IR_F_EX"),
 }
 
 
@@ -820,10 +820,6 @@ OBJECT_READERS = {
     "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
     "PyUnicode_CheckExact",
-    # Operations that read their operands and count what they keep
-    "PyErr_GivenExceptionMatches",
-
-    "value_exception_group_match",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -1215,38 +1211,39 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("RESUME", "INSTRUMENTED_RESUME", "CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
-              "INSTRUMENTED_RETURN_VALUE", "BINARY_OP", "UNARY_NEGATIVE", "UNARY_INVERT", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
-              "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
-              "LOAD_FAST_LOAD_FAST",
-              "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
-              "STORE_FAST_STORE_FAST", "TO_BOOL", "UNARY_NOT", "POP_JUMP_IF_FALSE",
-              "POP_JUMP_IF_TRUE", "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE",
-              "JUMP_FORWARD", "JUMP_BACKWARD", "JUMP_BACKWARD_NO_INTERRUPT",
-              "INSTRUMENTED_JUMP_FORWARD", "INSTRUMENTED_JUMP_BACKWARD",
-              "INSTRUMENTED_POP_JUMP_IF_TRUE", "INSTRUMENTED_POP_JUMP_IF_FALSE",
-              "INSTRUMENTED_POP_JUMP_IF_NONE", "INSTRUMENTED_POP_JUMP_IF_NOT_NONE",
-              "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
-              "INSTRUMENTED_JUMP_IF_FALSE_OR_POP", "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
-              "LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
-              "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP",
-              "POP_TOP", "MAKE_FUNCTION", "SET_FUNCTION_ATTRIBUTE",
-              "CALL_INTRINSIC_1", "CALL_INTRINSIC_2",
-              "LOAD_NAME", "LOAD_LOCALS", "LOAD_BUILD_CLASS",
-              "LOAD_FROM_DICT_OR_GLOBALS", "STORE_NAME", "STORE_GLOBAL",
-              "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM",
-              "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
-              "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
-              "COMPARE_OP", "IS_OP", "CONTAINS_OP",
-              "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
-              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
-              "BUILD_STRING", "BUILD_INTERPOLATION", "BUILD_TEMPLATE",
-              "CONVERT_VALUE", "FORMAT_SIMPLE", "FORMAT_WITH_SPEC",
-              "GET_LEN", "MATCH_CLASS", "MATCH_MAPPING", "MATCH_SEQUENCE",
-              "MATCH_KEYS",
-              "UNPACK_SEQUENCE", "UNPACK_EX",
-              "STORE_ATTR", "LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR",
-              "LOAD_SPECIAL")
+#
+# A stack op whose body only aborts (`exits(abort)`, a ported op's stub) is
+# stack-only by that declaration: a port edits no list.  These are the ones
+# that have a real body, or none, and still have no handler.
+STACK_ONLY_WITH_BODY = (
+    "PUSH_NULL", "TO_BOOL", "UNARY_NOT", "POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
+    "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE", "JUMP_FORWARD", "JUMP_BACKWARD",
+    "JUMP_BACKWARD_NO_INTERRUPT", "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP")
+
+# Abort stubs that still have a handler and an id (the cell ops that CE
+# ported were left out of the old list; IR_OPERANDS is a word, not an op).
+# Dropping one frees its id, which changes the generated products, so it goes
+# with its own regen.
+ABORT_STUBS_WITH_HANDLERS = (
+    "IR_OPERANDS", "MAKE_CELL", "DELETE_DEREF", "LOAD_FROM_DICT_OR_DEREF", "LOAD_DEREF",
+    "STORE_DEREF", "COPY_FREE_VARS", "CACHE", "RESERVED")
+
+
+def is_abort_body(analysis: Analysis, name: str) -> bool:
+    "Whether name is a ported stack op's stub: a body that only aborts"
+    inst = all_instructions(analysis).get(name)
+    return inst is not None and any(
+        isinstance(part, Uop) and tuple(part.clauses.get("exits", ())) == ("abort",)
+        for part in inst.parts)
+
+
+def stack_only_names(analysis: Analysis) -> frozenset[str]:
+    "The stack ops that have a format for the CFG and no handler"
+    return frozenset(
+        {name for name in all_instructions(analysis)
+         if is_abort_body(analysis, name) and name not in ABORT_STUBS_WITH_HANDLERS}
+        | set(STACK_ONLY_WITH_BODY))
+
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -1254,7 +1251,7 @@ STACK_ONLY = ("RESUME", "INSTRUMENTED_RESUME", "CALL", "INSTRUMENTED_CALL", "RET
 # co_code can hold.
 IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
+                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP")
 
 
 def ir_only_handler_names(analysis: Analysis) -> list[str]:
@@ -1277,7 +1274,7 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     has no handler, so its number is free to name one.  BINARY_OP itself has
     none: its operations do, and a STACK_ONLY opcode has none."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
-           if name not in STACK_ONLY}
+           if name not in stack_only_names(analysis)}
     names = ir_only_handler_names(analysis)
     for number, name in zip(ir_only_numbers(analysis, len(names)), names):
         ids[name] = number
@@ -8653,6 +8650,7 @@ def handler_contracts(analysis: Analysis,
                       formats: dict[str, IRFormat]) -> dict[str, HandlerContract]:
     "The handler's own columns of the contract, by handler name"
     ids = handler_ids(analysis)
+    stack_only = stack_only_names(analysis)
     programs = {}
     abrupt = {}
     operand_abrupt = {}
@@ -8690,7 +8688,7 @@ def handler_contracts(analysis: Analysis,
                 normal_storage[name] = None
     result = {}
     insts = {**handler_instructions(analysis),
-             **{name: analysis.instructions[name] for name in STACK_ONLY
+             **{name: analysis.instructions[name] for name in stack_only_names(analysis)
                 if name in analysis.instructions}}
     # A family's baseline(...) arm runs in compiled code only, never on a
     # word, so instrumentation never replaces it: it has no twin
@@ -8712,7 +8710,7 @@ def handler_contracts(analysis: Analysis,
             transfer_kind=normal_transfer_kind(inst, fmt),
             ownership_events=programs.get(name, ()),
             # A stack-only op has no handler, so no word admits flags
-            word_flags=() if name in STACK_ONLY else call_role_flags(name, inst),
+            word_flags=() if name in stack_only else call_role_flags(name, inst),
             abrupt_prefix=abrupt.get(name, False),
             abrupt_operands=operand_abrupt.get(name, False),
             error_routes=error_routes.get(name, ()),

@@ -6,8 +6,6 @@ enum IterMode(ORDINARY_ITER, YIELD_FROM_ITER);
 enum AsyncIterMode(AITER, ANEXT);
 enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
 enum YieldMode(ORDINARY_YIELD, DELEGATED_YIELD);
-enum ExceptMode(ENTER_HANDLER, LEAVE_HANDLER);
-enum MatchMode(ORDINARY_MATCH, GROUP_MATCH);
 // A call word's poll: a flag of the word, set by the translator on the call
 // that follows a special-method lookup, which `with` relies on to enter the
 // body without a pending signal or collection running first.
@@ -600,17 +598,18 @@ arm Call.Observed split observes
   exits(next, enter, raise)
 {
   entry():
+    let fo:O = dup(use(fn));
     call call_event(thread, frame, site, fn, args) {
-      ok -> Run();
-      err -> EventFailed();
+      ok -> Run(fo);
+      err -> EventFailed(fo);
     }
-  EventFailed(ee:Err):
-    let esaved:Err = retire_failed_args(frame, fn, args, ee);
+  EventFailed(ee:Err, efo:O):
+    let esaved:Err = retire_failed_held(frame, fn, efo, args, ee);
     exit raise(Call.Failed, esaved);
-  Run():
-    branch python_target(thread, frame, fn, args) -> Python(), Native();
-  Python():
-    call push_python(thread, frame, fn, args) {
+  Run(rfo:O):
+    branch python_target_held(thread, frame, rfo, args) -> Python(rfo), Native(rfo);
+  Python(pfo:O):
+    call push_python_held(thread, frame, fn, pfo, args) {
       entered -> Enter();
       err -> Failed();
     }
@@ -618,8 +617,8 @@ arm Call.Observed split observes
     exit enter(c) resume Call.Returned;
   Failed(e:Err):
     exit raise(Call.Failed, e);
-  Native():
-    call call_native_observed(thread, frame, site, fn, args) {
+  Native(nfo:O):
+    call call_native_observed_held(thread, frame, site, fn, nfo, args) {
       ok -> Result();
       err -> NativeFailed();
     }
@@ -750,14 +749,467 @@ arm Return.External split select(entry_frame)
 
 // 2A: keyword and expanded calls
 
-family CallKw(dst:Dst, fn:Src, args:Args, names:Src, fb:Fb<Call>)
-  exits(next, enter, raise, redirect, miss, again) ops(CALL_KW);
+// The operand block of a CallKw is Call's, with the constant tuple of the
+// keyword names as its last operand (the elided LOAD_CONST); the arms share
+// Call's rows, which read the keywords from the word.
+family CallKw(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
+  exits(next, enter, raise, miss, again) generic(Generic) ops(CALL_KW)
+  events(CALL, C_RETURN, C_RAISE);
 
-family CallEx(dst:Dst, fn:Src, star:Src, kwargs:Maybe<Src>, fb:Fb<Call>)
-  exits(next, enter, raise, redirect, miss, again) ops(CALL_FUNCTION_EX);
+// `args` is the positional iterable or tuple and, unless the word says
+// otherwise, the kwargs dict.  The tuple that the call makes of the iterable
+// is an owner of the call, not a home.
+family CallEx(dst:Dst, fn:Src, args:Args)
+  exits(next, enter, raise) ops(CALL_FUNCTION_EX) events(CALL, C_RETURN, C_RAISE);
 
+// The local's **kwargs dict, which the binding of a frame left pending
 family MaterializeKwargs(local:Local)
-  exits(next, raise) ops(MATERIALIZE_KWARGS);
+  exits(next, raise) ops(LOAD_FAST);
+
+point CallKw.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst);
+point CallKw.Done(current, next_head, clear) keep() spent(fn, args) defs(dst);
+point CallKw.PollFailed(current, site, pending) keep() spent(fn, args) defs(dst);
+point CallKw.Failed(current, site, pending) keep() spent(fn, args) defs();
+point CallEx.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst);
+point CallEx.Done(current, next_head, clear) keep() spent(fn, args) defs(dst);
+point CallEx.PollFailed(current, site, pending) keep() spent(fn, args) defs(dst);
+point CallEx.Failed(current, site, pending) keep() spent(fn, args) defs();
+point MaterializeKwargs.Done(current, next_head, clear) keep() spent(local) defs(local);
+point MaterializeKwargs.Failed(current, site, pending) keep(local) spent() defs();
+
+// The callable of a call that steps through Python before it runs (the CALL
+// event, the iteration of *args) is held by an owner that the later rows take:
+// evaluation order is the language's, and a callback may rebind the local that
+// the callable was read from
+
+extern helper python_target_held(t:Thread, f:Frame, fo:O, a:Args) -> Bool
+  effects(reads)
+  borrows(fo)
+  c _PyRop_PythonTargetHeld as bool
+  evidence(
+    review: "2A. ceval.c: _PyRop_PythonTarget on the held callable.",
+    contract: "Reads the callable and the code; no memory, no failure.");
+
+extern helper push_python_held(t:Thread, f:Frame, fn:Src, fo:O, a:Args)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, allocates, releases, raises)
+  spends(fn, a)
+  c _PyRop_PushPythonHeld as pointer_or_raised
+  evidence(
+    review: "2A. ceval.c: _PyRop_PushPython on the held callable.",
+    contract: "As push_python; takes the held callable on both cases.");
+
+extern helper call_native_observed_held(t:Thread, f:Frame, at:Site, fn:Src, fo:O, a:Args)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_CallNativeObservedHeld as value_or_null
+  evidence(
+    review: "2A. ceval.c: _PyRop_CallNativeObserved on the held callable.",
+    contract: "As call_native_observed; takes the held callable on both cases.");
+
+extern helper retire_failed_held(f:Frame, fn:Src, fo:O, a:Args, e:Err) -> Err
+  effects(writes, releases)
+  spends(fn, a)
+  c _PyRop_RetireFailedHeld as handle
+  evidence(
+    review: "2A. ceval.c: _PyRop_RetireFailedArgs, and the held callable closed.",
+    contract: "As retire_failed_args; closes the held callable.");
+
+extern helper hold_kwargs(f:Frame, a:Args) -> O
+  effects(reads)
+  c _PyRop_HoldKwargs as value
+  evidence(
+    review: "2A. ceval.c: the kwargs dict of the call, which call_run_ex read first.",
+    contract: "A new owner of the dict, or none if the word has no kwargs operand; a count.");
+
+extern helper retire_failed_held_ex(f:Frame, fn:Src, fo:O, ko:O, a:Args, e:Err) -> Err
+  effects(writes, releases)
+  spends(fn, a)
+  c _PyRop_RetireFailedHeldEx as handle
+  evidence(
+    review: "2A. ceval.c: _PyRop_RetireFailedArgs, and the held callable and kwargs closed.",
+    contract: "As retire_failed_args; closes the held callable and kwargs.");
+
+// CallEx rows
+
+// The positional arguments as an exact tuple, owned by the call: a count of
+// the tuple the operand is, or a new tuple of the iterable
+extern helper star_tuple(t:Thread, f:Frame, fn:Src, a:Args)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, allocates, raises)
+  c _PyRop_StarTuple as value_or_null
+  evidence(
+    review: "2A. ceval.c: call_args_tuple (_MAKE_CALLARGS_A_TUPLE), once per call.",
+    contract: "Borrows the operands; may run __iter__ and __getitem__.");
+
+// The child frame of a Python callee: the tuple and the kwargs dict bind in
+// place; the operands and the tuple are released once it is current
+extern helper push_python_ex(t:Thread, f:Frame, fn:Src, fo:O, ko:O, tup:O, a:Args)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, allocates, releases, raises)
+  spends(fn, a)
+  c _PyRop_PushPythonEx as pointer_or_raised
+  evidence(
+    review: "2A. ceval.c: call_run_ex's Python paths (call_bind_tuple, else"
+            "eval_frame_push_and_init_ex_code with one code snapshot).",
+    contract: "Takes the held callable, the held kwargs and the tuple on both cases;"
+              "on failure the operands are closed with the exception set aside.  The"
+              "operands stay in their homes while the binding runs.");
+
+extern helper call_native_ex(t:Thread, f:Frame, fo:O, ko:O, tup:O, a:Args)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, releases)
+  c _PyRop_CallNativeEx as value_or_null
+  evidence(
+    review: "2A. ceval.c: call_run_ex's _PyValue_Call.",
+    contract: "Calls the held callable with the held kwargs; takes both and the tuple"
+              "on both cases.");
+
+// The CALL event of an expanded call: the callable and the first argument of
+// the tuple.  Takes the tuple and gives it back; closes it if the callback raises.
+extern helper call_event_ex(t:Thread, f:Frame, at:Site, fo:O, tup:O, a:Args)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, releases)
+  borrows(fo)
+  requires(instrumented(at))
+  c _PyRop_CallEventEx as value_or_null
+  evidence(
+    review: "2A. ceval.c: call_run_ex's call_monitor.",
+    contract: "The callback may run Python and raise; the held callable stays held.");
+
+extern helper call_native_observed_ex(t:Thread, f:Frame, at:Site, fo:O, ko:O, tup:O, a:Args)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, releases)
+  requires(instrumented(at))
+  c _PyRop_CallNativeObservedEx as value_or_null
+  evidence(
+    review: "2A. ceval.c: call_run_ex's _PyValue_Call and call_monitor_result;"
+            "a function or method fires no C event.",
+    contract: "Takes the held callable, the held kwargs and the tuple; the result is"
+              "closed if a callback raises.");
+
+// MaterializeKwargs rows
+
+extern helper kwargs_pending(f:Frame, x:Local) -> Bool
+  effects(reads)
+  c _PyRop_KwargsPending as bool
+  evidence(
+    review: "2A. frame.c: frame->pending_kwargs is the local's slot.",
+    contract: "A read of the frame; no memory, no failure.");
+
+// The dict that the pending binding stands for; the pending state is cleared
+extern helper new_kwargs(f:Frame, x:Local)
+  cases(made(z:O), err(e:Err))
+  effects(allocates, writes, raises)
+  c _PyRop_NewKwargs as value_or_null
+  evidence(
+    review: "2A. frame.c: _PyFrame_MaterializeKwargs, without the store of the home.",
+    contract: "PyDict_New runs no Python; the state is cleared only on success.");
+
+arm MaterializeKwargs.Pending split
+  effects(reads, writes, allocates, releases, raises, runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    branch kwargs_pending(frame, local) -> Make(), Done();
+  Done():
+    exit next();
+  Make():
+    call new_kwargs(frame, local) {
+      made -> Store();
+      err -> Failed();
+    }
+  Store(z:O):
+    publish [local = z] retire [old(local)] at MaterializeKwargs.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(MaterializeKwargs.Failed, e);
+}
+
+// CallKw.Plan rows
+
+// Adaptation evidence (specialize.c): whether the keyword names of the call
+// have a binding plan for the function, which this writes in the site's entry
+extern helper classify_call_kw(at:Site, f:Fb<Call>, fn:B, a:Args)
+  cases(plan(), other())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyRop_ClassifyCallKw as case_index
+  evidence(
+    review: "2A. specialize.c: the old _Py_Specialize_CallKw for a function, with"
+            "specialize_keyword_binding; a bound method object and every other"
+            "callable are other (CallKw.Generic).",
+    contract: "Writes the site's entry (func_version, plan) and sets no handler.  No"
+              "Python runs.");
+
+// Every test of the binding that precedes a change: the plan holds for this
+// call's self slot, the arena has room, the function's defaults and
+// keyword-only defaults are there
+extern helper plan_fits(t:Thread, f:Frame, fn:B, a:Args, fb:Fb<Call>) -> Bool
+  effects(reads)
+  feedback(read(entry.plan))
+  requires(exact<function>(fn))
+  c _PyRop_PlanFits as bool inline
+  evidence(
+    review: "2A. ceval.c: the tests of call_bind_core before its first change.",
+    contract: "Reads the function, its code and the self operand's home; no memory,"
+              "no failure.");
+
+// The child frame of a call that the plan binds: the function and the
+// operands move to it (a temporary moves, a local is counted)
+extern helper push_plan(t:Thread, f:Frame, fn:Src, a:Args, fb:Fb<Call>)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, allocates, releases, raises)
+  feedback(read(entry.plan))
+  spends(fn, a)
+  requires(exact<function>(fn))
+  c _PyRop_PushPlan as pointer_or_raised
+  evidence(
+    review: "2A. ceval.c: call_bind_positional with the site's plan, after"
+            "plan_fits.",
+    contract: "Declines nothing (plan_fits proved the tests).  The **kwargs dict and"
+              "the *args tuple allocate, and a failure closes the operands with the"
+              "exception set aside.");
+
+macro adapt_before_use_call_kw(f:Fb<Call>, fn:Src, a:Args)
+  cases(run(), changed(t:Ticket<Call>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_call_kw(site, f, use(fn), a) {
+      plan -> Planned();
+      other -> Other();
+    }
+  Planned():
+    let cp:Candidate<Call> = candidate(CallKw.Plan);
+    call install(site, f, cp) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Call>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm CallKw.Plan split
+  effects(reads, writes, allocates, releases, raises, switches_frame)
+  feedback(read(entry.func_version), read(entry.plan))
+  exits(enter, raise, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard function_version(use(fn), fb) else miss;
+    guard recursion_budget(thread) else miss;
+    guard plan_fits(thread, frame, use(fn), args, fb) else miss;
+    call push_plan(thread, frame, fn, args, fb) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume CallKw.Returned;
+  Failed(e:Err):
+    exit raise(CallKw.Failed, e);
+}
+
+arm CallKw.Generic split
+  effects(runs_python, raises, polls, switches_frame, releases on (dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, enter, raise, again)
+{
+  entry():
+    call adapt_before_use_call_kw(fb, fn, args) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Call>):
+    exit again(t);
+  Run():
+    branch python_target(thread, frame, fn, args) -> Python(), Native();
+  Python():
+    call push_python(thread, frame, fn, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume CallKw.Returned;
+  Failed(e:Err):
+    exit raise(CallKw.Failed, e);
+  Native():
+    call call_native(thread, frame, fn, args) {
+      ok -> Result();
+      err -> NativeFailed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallKw.Done;
+    call end_poll(thread, frame) {
+      ok -> Next();
+      err -> PollFailed();
+    }
+  Next():
+    exit next();
+  PollFailed(pe:Err):
+    exit raise(CallKw.PollFailed, pe);
+  NativeFailed(ne:Err):
+    let saved:Err = retire_failed_args(frame, fn, args, ne);
+    exit raise(CallKw.Failed, saved);
+}
+
+arm CallKw.Observed split observes
+  effects(runs_python, raises, polls, switches_frame, releases on (dst))
+  feedback()
+  exits(next, enter, raise)
+{
+  entry():
+    let fo:O = dup(use(fn));
+    call call_event(thread, frame, site, fn, args) {
+      ok -> Run(fo);
+      err -> EventFailed(fo);
+    }
+  EventFailed(ee:Err, efo:O):
+    let esaved:Err = retire_failed_held(frame, fn, efo, args, ee);
+    exit raise(CallKw.Failed, esaved);
+  Run(rfo:O):
+    branch python_target_held(thread, frame, rfo, args) -> Python(rfo), Native(rfo);
+  Python(pfo:O):
+    call push_python_held(thread, frame, fn, pfo, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume CallKw.Returned;
+  Failed(e:Err):
+    exit raise(CallKw.Failed, e);
+  Native(nfo:O):
+    call call_native_observed_held(thread, frame, site, fn, nfo, args) {
+      ok -> Result();
+      err -> NativeFailed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallKw.Done;
+    call end_poll(thread, frame) {
+      ok -> Next();
+      err -> PollFailed();
+    }
+  Next():
+    exit next();
+  PollFailed(pe:Err):
+    exit raise(CallKw.PollFailed, pe);
+  NativeFailed(ne:Err):
+    let saved:Err = retire_failed_args(frame, fn, args, ne);
+    exit raise(CallKw.Failed, saved);
+}
+
+arm CallEx.Generic split
+  effects(runs_python, allocates, raises, polls, switches_frame, releases on (dst))
+  feedback()
+  exits(next, enter, raise)
+{
+  entry():
+    let fo:O = dup(use(fn));
+    let ko:O = hold_kwargs(frame, args);
+    call star_tuple(thread, frame, fn, args) {
+      ok -> Prepared(fo, ko);
+      err -> TupleFailed(fo, ko);
+    }
+  TupleFailed(te:Err, tfo:O, tko:O):
+    let tsaved:Err = retire_failed_held_ex(frame, fn, tfo, tko, args, te);
+    exit raise(CallEx.Failed, tsaved);
+  Prepared(tup:O, pfo:O, pko:O):
+    branch python_target_held(thread, frame, pfo, args) -> Python(tup, pfo, pko), Native(tup, pfo, pko);
+  Python(ptup:O, qfo:O, qko:O):
+    call push_python_ex(thread, frame, fn, qfo, qko, ptup, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume CallEx.Returned;
+  Failed(e:Err):
+    exit raise(CallEx.Failed, e);
+  Native(ntup:O, nfo:O, nko:O):
+    call call_native_ex(thread, frame, nfo, nko, ntup, args) {
+      ok -> Result();
+      err -> NativeFailed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallEx.Done;
+    call end_poll(thread, frame) {
+      ok -> Next();
+      err -> PollFailed();
+    }
+  Next():
+    exit next();
+  PollFailed(pe:Err):
+    exit raise(CallEx.PollFailed, pe);
+  NativeFailed(ne:Err):
+    let saved:Err = retire_failed_args(frame, fn, args, ne);
+    exit raise(CallEx.Failed, saved);
+}
+
+arm CallEx.Observed split observes
+  effects(runs_python, allocates, raises, polls, switches_frame, releases on (dst))
+  feedback()
+  exits(next, enter, raise)
+{
+  entry():
+    let fo:O = dup(use(fn));
+    let ko:O = hold_kwargs(frame, args);
+    call star_tuple(thread, frame, fn, args) {
+      ok -> Prepared(fo, ko);
+      err -> TupleFailed(fo, ko);
+    }
+  TupleFailed(te:Err, tfo:O, tko:O):
+    let tsaved:Err = retire_failed_held_ex(frame, fn, tfo, tko, args, te);
+    exit raise(CallEx.Failed, tsaved);
+  Prepared(tup:O, pfo:O, pko:O):
+    call call_event_ex(thread, frame, site, pfo, tup, args) {
+      ok -> Run(pfo, pko);
+      err -> EventFailed(pfo, pko);
+    }
+  EventFailed(ee:Err, efo:O, eko:O):
+    let esaved:Err = retire_failed_held_ex(frame, fn, efo, eko, args, ee);
+    exit raise(CallEx.Failed, esaved);
+  Run(etup:O, rfo:O, rko:O):
+    branch python_target_held(thread, frame, rfo, args) -> Python(etup, rfo, rko), Native(etup, rfo, rko);
+  Python(ptup:O, qfo:O, qko:O):
+    call push_python_ex(thread, frame, fn, qfo, qko, ptup, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume CallEx.Returned;
+  Failed(e:Err):
+    exit raise(CallEx.Failed, e);
+  Native(ntup:O, nfo:O, nko:O):
+    call call_native_observed_ex(thread, frame, site, nfo, nko, ntup, args) {
+      ok -> Result();
+      err -> NativeFailed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallEx.Done;
+    call end_poll(thread, frame) {
+      ok -> Next();
+      err -> PollFailed();
+    }
+  Next():
+    exit next();
+  PollFailed(pe:Err):
+    exit raise(CallEx.PollFailed, pe);
+  NativeFailed(ne:Err):
+    let saved:Err = retire_failed_args(frame, fn, args, ne);
+    exit raise(CallEx.Failed, saved);
+}
 
 // 2B: iteration
 
@@ -785,21 +1237,6 @@ family Send(yielded:Dst, completed:Dst, pair:IterPair, sent:Src, done:NearHead,
 
 family Yield(value:Src, resume:Dst, route:NearHead, mode:Enum<YieldMode>)
   exits(yield, raise, redirect) ops(YIELD_VALUE);
-
-// 2D: exceptions
-
-family Raise(exc:Maybe<Src>, cause:Maybe<Src>)
-  exits(raise) ops(RAISE_VARARGS);
-
-family Reraise(exc:Src, lasti:Maybe<Src>)
-  exits(raise) ops(RERAISE);
-
-family ExceptState(mode:Enum<ExceptMode>, dst:Maybe<Dst>, exc:Src)
-  exits(next) ops(PUSH_EXC_INFO, POP_EXCEPT);
-
-family ExceptMatch(dst:Dst, rest:Maybe<Dst>, exc:Src, pattern:Src,
-                   mode:Enum<MatchMode>)
-  exits(next, raise) ops(CHECK_EXC_MATCH, CHECK_EG_MATCH);
 
 // 2E: throw completion, async-for termination, exceptional context exit
 

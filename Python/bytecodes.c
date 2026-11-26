@@ -153,13 +153,13 @@ dummy_func(
         {
         }
 
-        outlined inst(MATERIALIZE_KWARGS, (--))
-            effects(writes, allocates, raises) exits(next, raise)
+        /* A stack op only: the pseudo op that PrepareKwargs puts before a read of
+         * a lazy **kwargs local is the MaterializeKwargs family. */
+        tier1 inst(MATERIALIZE_KWARGS, (--))
+            exits(abort)
         {
-            assert(frame->pending_kwargs == IR_NO_DST ||
-                   frame->pending_kwargs == oparg);
-            int err = _PyFrame_MaterializeKwargs(frame);
-            ERROR_IF(err < 0);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         leaf op(_CHECK_PERIODIC, (--))
@@ -543,41 +543,12 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined tier1 inst(RAISE_VARARGS, (args[oparg]: consumed -- ))
-            effects(runs_python) exits(raise)
+        /* A stack op only: RAISE_VARARGS is the Raise family (Python/register_ops/exceptions.rop). */
+        tier1 inst(RAISE_VARARGS, (args[oparg]: consumed -- ))
+            exits(abort)
         {
-            assert(oparg < 3);
-            _PyValue_RecheckWindow(args, oparg);
-            PyObject *exc = NULL;
-            PyObject *cause = NULL;
-            if (oparg > 0) {
-                // A number is not an exception
-                exc = PyValue_ObjectOrNull(args[0]);
-                if (exc == NULL) {
-                    _PyErr_SetString(tstate, PyExc_TypeError,
-                                     "exceptions must derive from BaseException");
-                    ERROR_IF(true, holding(args));
-                }
-            }
-            // A number is not a cause: do_raise reports it after the
-            // exception is made
-            bool cause_is_number = false;
-            if (oparg == 2) {
-                cause = PyValue_ObjectOrNull(args[1]);
-                cause_is_number = cause == NULL;
-            }
-            /* do_raise consumes independent object owners, made before
-             * the inputs are released */
-            PyObject *exc_owner = Py_XNewRef(exc);
-            PyObject *cause_owner = Py_XNewRef(cause);
-            DECREF_INPUTS();
-            int err = do_raise(tstate, exc_owner, cause_owner, cause_is_number);
-            if (err) {
-                assert(oparg == 0);
-                monitor_reraise(tstate, frame, this_instr);
-                goto exception_unwind;
-            }
-            ERROR_IF(true);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: the entry trampoline's exit: its word is Return.External. */
@@ -952,36 +923,21 @@ dummy_func(
 
         boundary(INSTRUMENTED_YIELD_DELEGATED) at(last) resumes(SEND, STORE_LOCAL);
 
-        outlined inst(POP_EXCEPT, (exc_value: consumed assumed(object) by _PUSH_EXC_INFO -- ))
-            effects(reads, releases) exits(next)
+        /* A stack op only: POP_EXCEPT is the ExceptLeave family. */
+        tier1 inst(POP_EXCEPT, (exc_value: consumed assumed(object) by PUSH_EXC_INFO -- ))
+            exits(abort)
         {
-            _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (PyValue_IsNone(exc_value)) {
-                DEAD(exc_value);    // immortal: it owes no count
-                Py_CLEAR(exc_info->exc_value);
-            }
-            else {
-                PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
-                Py_XSETREF(exc_info->exc_value, exc);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined tier1 inst(RERAISE,
+        /* A stack op only: RERAISE is the Reraise family. */
+        tier1 inst(RERAISE,
                 (values[oparg], exc_st: consumed assumed(object) by exception_unwind -- values[oparg]))
-            effects(runs_python) exits(raise)
+            exits(abort)
         {
-            // An exception being handled is an instance of BaseException;
-            // the generator asserts the declared assumed(object)
-            PyObject *exc = PyValue_AsKnownObjectSteal(exc_st);
-
-            assert(oparg >= 0 && oparg <= 2);
-            if (oparg) {
-                frame->instr_ptr = INSTR_AT_OFFSET(PyValue_UntagIndex(values[0]));
-            }
-            assert(exc && PyExceptionInstance_Check(exc));
-            _PyErr_SetRaisedException(tstate, exc);
-            monitor_reraise(tstate, frame, this_instr);
-            goto exception_unwind;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // exc_st is the exception that exception_unwind pushed into a
@@ -1488,60 +1444,24 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(CHECK_EG_MATCH,
+        /* A stack op only: CHECK_EG_MATCH is the ExceptGroupMatch family. */
+        tier1 inst(CHECK_EG_MATCH,
                 (exc_value_st: consumed assumed(object) by exception_unwind, match_type_st: consumed
                  -- exc_rest: owned, exc_match: owned))
-            effects(runs_python, releases) exits(next, raise)
+            exits(abort)
         {
-            // The exception being handled is an object; the generator
-            // asserts the assumption
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
-            // Taken before the check, which can run code
-            PyValue held_exc = TAKE(exc_value_st);
-            PyValue held_type = TAKE(match_type_st);
-            // A number is not an exception class: the check rejects it
-            int err = _PyEval_CheckExceptStarTypeValidValue(tstate, held_type);
-            if (err < 0) {
-                PyValue_CLOSE(held_type);
-                PyValue_CLOSE(held_exc);
-                ERROR_IF(true);
-            }
-            PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
-
-            _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyValue_CLOSE(held_type);
-            PyValue_CLOSE(held_exc);
-            // A null match is an error, including a failed match (res < 0)
-            ERROR_IF(matched.match == NULL);
-
-            if (!Py_IsNone(matched.match)) {
-                PyErr_SetHandledException(matched.match);
-            }
-            exc_rest = PyValue_FromObjectSteal(matched.rest);
-            exc_match = PyValue_FromObjectSteal(matched.match);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(CHECK_EXC_MATCH,
+        /* A stack op only: CHECK_EXC_MATCH is the ExceptMatch family. */
+        tier1 inst(CHECK_EXC_MATCH,
                 (left: assumed(object) by exception_unwind, right: consumed
                  -- left, b: owned exact(PyBool_Type)))
-            effects(runs_python, releases) exits(next, raise)
+            exits(abort)
         {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            // Taken before the check, which can run code
-            PyValue held_right = TAKE(right);
-
-            assert(PyExceptionInstance_Check(left_o));
-            // A number is not an exception class: the check rejects it
-            int err = _PyEval_CheckExceptTypeValidValue(tstate, held_right);
-            if (err < 0) {
-                PyValue_CLOSE(held_right);
-                ERROR_NO_POP();
-            }
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);
-
-            int res = PyErr_GivenExceptionMatches(left_o, right_o);
-            PyValue_CLOSE(held_right);
-            b = res ? PyValue_True : PyValue_False;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // The compiler loads fromlist from a constant: None or a tuple of str
@@ -2282,23 +2202,13 @@ dummy_func(
             NOP,
         };
 
-        outlined window inst(PUSH_EXC_INFO,
+        /* A stack op only: PUSH_EXC_INFO is the ExceptEnter family. */
+        tier1 inst(PUSH_EXC_INFO,
                 (exc: consumed -- prev_exc: owned, new_exc: moved(exc)))
-            effects(reads, writes) exits(next)
+            exits(abort)
         {
-
-            _PyErr_StackItem *exc_info = tstate->exc_info;
-            PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
-            if (prev_o != NULL) {
-                prev_exc = PyValue_FromObjectSteal(prev_o);
-            }
-            else {
-                prev_exc = PyValue_None;
-            }
-            assert(PyValue_ExceptionInstanceCheck(exc));
-            exc_info->exc_value = PyValue_AsPyObjectNew(exc);
-            new_exc = exc;
-            DEAD(exc);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
 
@@ -2382,272 +2292,41 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        // Feedback: func_version
-        family(CALL_KW, INLINE_CACHE_ENTRIES_CALL_KW) = {
-            CALL_KW_BOUND_METHOD,
-            CALL_KW_PY,
-            CALL_KW_NON_PY,
-        };
-
-        inline_ok op(_MONITOR_CALL_KW,
-                (callable, self_or_null, args[oparg], unused
-                 -- callable, self_or_null, args[oparg], unused))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: CALL_KW is the CallKw family (Python/register_ops/calls.rop). */
+        eval_break tier1 inst(CALL_KW,
+                (unused/3, callable: consumed, self_or_null: consumed, args[oparg]: consumed, kwnames: consumed -- res: owned))
+            exits(abort)
         {
-            IR_MONITOR_CALL();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok op(_MAYBE_EXPAND_METHOD_KW,
-                (callable, self_or_null, unused[oparg], unused
-                 -- callable, self_or_null, unused[oparg], unused))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: CALL_KW's instrumented form: the CallKw family's twins run CallKw.Observed. */
+        eval_break tier1 inst(INSTRUMENTED_CALL_KW,
+                (unused/3, callable: consumed, self_or_null: consumed, args[oparg]: consumed, kwnames: consumed -- res: owned))
+            exits(abort)
         {
-            IR_PREPARE_CALL_METHOD();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok op(_DO_CALL_KW,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
-                 -- res: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
+        /* A stack op only: CALL_FUNCTION_EX is the CallEx family (Python/register_ops/calls.rop). */
+        eval_break tier1 inst(CALL_FUNCTION_EX,
+                (unused/1, func_st: consumed, null: consumed, callargs_st: consumed, kwargs_st: consumed -- result: owned))
+            exits(abort)
         {
-            IR_INVOKE_CALL();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok op(_PY_FRAME_KW,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
-                 -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
+        /* A stack op only: CALL_FUNCTION_EX's instrumented form: CallEx.Observed. */
+        eval_break tier1 inst(INSTRUMENTED_CALL_FUNCTION_EX,
+                (unused/1, func_st: consumed, null: consumed, callargs_st: consumed, kwargs_st: consumed -- result: owned))
+            exits(abort)
         {
-            IR_INVOKE_CALL();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        inline_ok op(_PY_FRAME_KW_GUARDED,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
-                 -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_GUARDED_PYTHON_CALL();
-        }
-
-        op(_CHECK_FUNCTION_VERSION_KW,
-                (func_version/2, callable: object, unused, unused[oparg], unused
-                 -- callable: exact(PyFunction_Type) func_version(func_version), unused, unused[oparg], unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(!PyFunction_Check(callable_o));
-            PyFunctionObject *func = (PyFunctionObject *)callable_o;
-            EXIT_IF(func->func_version != func_version);
-        }
-
-        macro(CALL_KW_PY) =
-            unused/1 + // Skip over the entry distance
-            _CHECK_PEP_523 +
-            _CHECK_FUNCTION_VERSION_KW +
-            _CHECK_RECURSION_REMAINING +
-            _PY_FRAME_KW_GUARDED +
-            _SAVE_RETURN_SLOT +
-            _PUSH_FRAME;
-
-        op(_CHECK_METHOD_VERSION_KW,
-                (func_version/2, callable: object, null, unused[oparg], unused
-                 -- callable: exact(PyMethod_Type), null, unused[oparg], unused))
-            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
-            paths(callable.im_func: exact(PyFunction_Type) func_version(func_version))
-        {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-
-            EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
-            PyObject *func = ((PyMethodObject *)callable_o)->im_func;
-            EXIT_IF(!PyFunction_Check(func));
-            EXIT_IF(((PyFunctionObject *)func)->func_version != func_version);
-            EXIT_IF(call_state & CALL_SELF_PRESENT);
-        }
-
-        inline_ok op(_EXPAND_METHOD_KW,
-                (callable, self_or_null, unused[oparg], unused
-                 -- callable, self_or_null, unused[oparg], unused))
-            effects(runs_python) exits(next, raise)
-        {
-            IR_PREPARE_CALL_METHOD();
-        }
-
-        macro(CALL_KW_BOUND_METHOD) =
-            unused/1 + // Skip over the entry distance
-            _CHECK_PEP_523 +
-            _CHECK_METHOD_VERSION_KW +
-            _EXPAND_METHOD_KW +
-            _PY_FRAME_KW +
-            _SAVE_RETURN_SLOT +
-            _PUSH_FRAME;
-
-        specializing op(_SPECIALIZE_CALL_KW,
-                (callable, self_or_null, unused[oparg], kwnames
-                 -- callable, self_or_null, unused[oparg], kwnames))
-            effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                /* As in _SPECIALIZE_CALL */
-                IR_BEGIN_CALL_EFFECTS();
-                _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
-                IR_REFRESH_CALL();
-            }
-            else {
-                OPCODE_DEFERRED_INC(CALL_KW);
-                _PyFb_AdvanceCounter(feedback);
-            }
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        macro(CALL_KW) =
-            unused/1 + _SPECIALIZE_CALL_KW +
-            unused/2 +
-            _MAYBE_EXPAND_METHOD_KW +
-            _DO_CALL_KW;
-
-        macro(INSTRUMENTED_CALL_KW) =
-            unused/1 +
-            unused/2 +
-            _MAYBE_EXPAND_METHOD_KW +
-            _MONITOR_CALL_KW +
-            _DO_CALL_KW;
-
-        inline_ok op(_CHECK_IS_NOT_PY_CALLABLE_KW,
-                (callable, unused, unused[oparg], unused -- callable, unused, unused[oparg], unused))
-            effects(reads) exits(next, miss)
-        {
-            if (PyValue_IsObject(callable)) {
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                EXIT_IF(PyFunction_Check(callable_o),
-                        "the callable is a Python function");
-                EXIT_IF(Py_TYPE(callable_o) == &PyMethod_Type,
-                        "the callable is a bound method");
-            }
-        }
-
-
-        inline_ok op(_CALL_KW_NON_PY,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
-                 -- res: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_CALL();
-        }
-
-        macro(CALL_KW_NON_PY) =
-            unused/1 + // Skip over the entry distance
-            unused/2 +
-            _CHECK_IS_NOT_PY_CALLABLE_KW +
-            _CALL_KW_NON_PY;
-
-        family(CALL_FUNCTION_EX, INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX) = {
-            CALL_EX_PY,
-            CALL_EX_NON_PY_GENERAL,
-        };
-
-        inline_ok op(_MAKE_CALLARGS_A_TUPLE,
-                (func, unused, callargs, kwargs -- func, unused, callargs, kwargs))
-            effects(runs_python) exits(next, raise)
-        {
-            IR_PREPARE_CALL_TUPLE();
-        }
-
-        inline_ok op(_DO_CALL_FUNCTION_EX,
-                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
-                 -- result: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_CALL();
-        }
-
-        specializing op(_SPECIALIZE_CALL_FUNCTION_EX,
-                (func, unused, callargs, unused -- func, unused, callargs, unused))
-            effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-        #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                /* As in _SPECIALIZE_CALL */
-                IR_BEGIN_CALL_EFFECTS();
-                _Py_Specialize_CallFunctionEx(func, callargs, this_instr);
-                IR_REFRESH_CALL();
-            }
-            else {
-                OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
-                _PyFb_AdvanceCounter(feedback);
-            }
-        #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        macro(CALL_FUNCTION_EX) =
-            unused/1 + _SPECIALIZE_CALL_FUNCTION_EX +
-            _MAKE_CALLARGS_A_TUPLE +
-            _DO_CALL_FUNCTION_EX +
-            _CHECK_PERIODIC_AT_END;
-
-        op(_CHECK_IS_PY_CALLABLE_EX,
-                (func_st: object, unused, unused, unused
-                 -- func_st: exact(PyFunction_Type), unused, unused, unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
-            EXIT_IF(!PyFunction_Check(func));
-            EXIT_IF(((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall,
-                    "the function has its own vectorcall");
-        }
-
-        inline_ok op(_PY_FRAME_EX,
-                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
-                 -- ex_frame: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_CALL();
-        }
-
-        // call_run_ex() makes the argument tuple, which may run Python, and
-        // then derives the kind of call from the callable again: the guard
-        // before it is the only one
-        macro(CALL_EX_PY) =
-            unused/1 +
-            _CHECK_PEP_523 +
-            _CHECK_IS_PY_CALLABLE_EX +
-            _MAKE_CALLARGS_A_TUPLE +
-            _PY_FRAME_EX +
-            _SAVE_RETURN_SLOT +
-            _PUSH_FRAME;
-
-        op(_CHECK_IS_NOT_PY_CALLABLE_EX,
-                (func_st: object, unused, unused, unused
-                 -- func_st, unused, unused, unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
-            EXIT_IF(Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall,
-                    "not a Python function with the standard vectorcall");
-        }
-
-        inline_ok op(_CALL_FUNCTION_EX_NON_PY_GENERAL,
-                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
-                 -- result: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_CALL();
-        }
-
-        macro(CALL_EX_NON_PY_GENERAL) =
-            unused/1 +
-            _CHECK_IS_NOT_PY_CALLABLE_EX +
-            _MAKE_CALLARGS_A_TUPLE +
-            _CALL_FUNCTION_EX_NON_PY_GENERAL +
-            _CHECK_PERIODIC_AT_END;
-
-        macro(INSTRUMENTED_CALL_FUNCTION_EX) =
-            unused/1 +
-            _MAKE_CALLARGS_A_TUPLE +
-            _DO_CALL_FUNCTION_EX +
-            _CHECK_PERIODIC_AT_END;
 
         /* A stack op only: its words are Function.Make. */
         tier1 inst(MAKE_FUNCTION, (codeobj_st: consumed -- func: owned))

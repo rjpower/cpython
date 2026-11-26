@@ -321,7 +321,7 @@ _PyIR_CallNumSlots(_PyIRWord word)
 static inline int
 _PyIR_CallOperandNullable(_PyIRWord word, int k)
 {
-    if (_PyIR_FormatOf(IR_HANDLER(word))->operands == _PyIR_OPERANDS_EX) {
+    if (IR_IS_EX_WORD(word)) {
         return k == 1;
     }
     return k == 0 && _PyIR_CallHasSelf(word);
@@ -1008,7 +1008,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
             return;
         case POP_EXCEPT:
             /* It detaches scratch A, the saved exception */
-            if (edge || handler != POP_EXCEPT ||
+            if (edge || handler != ROP_HANDLER_ExceptLeave_Restore ||
                 fmt->roles[0] != _PyIR_ROLE_IN0 ||
                 fmt->roles[1] != _PyIR_ROLE_NONE ||
                 fmt->roles[2] != _PyIR_ROLE_NONE ||

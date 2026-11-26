@@ -164,6 +164,59 @@ class CallOperandOwnershipTests(unittest.TestCase):
                 sys.monitoring.register_callback(tool, sys.monitoring.events.CALL, None)
                 sys.monitoring.free_tool_id(tool)
 
+    def test_call_event_callback_rebinding_the_callable_local(self):
+        # The call is of the value the local had when it was evaluated, as
+        # far as a CALL callback that rebinds the local through f_locals
+        tool = sys.monitoring.DEBUGGER_ID
+        sources = {
+            "positional": "def template(target, value):\n    return target(value)\n",
+            "keywords": "def template(target, value):\n    return target(value, k=1)\n",
+            "star": "def template(target, value):\n    return target(*value)\n",
+            "star_kwargs": "def template(target, value):\n    return target(*value, **{'k': 1})\n",
+        }
+        for name, source in sources.items():
+            namespace = {}
+            exec(source, namespace)
+            template = namespace["template"]
+            args = (1,) if name.startswith("star") else 1
+
+            def target(*arguments, **keywords):
+                return "original"
+
+            def monitor(code, offset, function, first):
+                self.assertIs(function, target)
+                sys._getframe(1).f_locals["target"] = None
+                sys.monitoring.set_local_events(tool, template.__code__, 0)
+
+            sys.monitoring.use_tool_id(tool, "rebound-callable")
+            try:
+                sys.monitoring.register_callback(
+                    tool, sys.monitoring.events.CALL, monitor)
+                sys.monitoring.set_local_events(
+                    tool, template.__code__, sys.monitoring.events.CALL)
+                with self.subTest(name):
+                    self.assertEqual(template(target, args), "original")
+            finally:
+                sys.monitoring.set_local_events(tool, template.__code__, 0)
+                sys.monitoring.register_callback(
+                    tool, sys.monitoring.events.CALL, None)
+                sys.monitoring.free_tool_id(tool)
+
+    def test_star_iteration_rebinding_the_kwargs_local(self):
+        def template(target, arguments, kwargs):
+            return target(*arguments, **kwargs)
+
+        def target(*arguments, **keywords):
+            return keywords
+
+        class Arguments:
+            def __iter__(self):
+                sys._getframe(1).f_locals["kwargs"] = {"replaced": 1}
+                return iter(())
+
+        self.assertEqual(template(target, Arguments(), {"original": 1}),
+                         {"original": 1})
+
     def check_alias(self, expanded):
         events, states = [], []
         kwargs = {}

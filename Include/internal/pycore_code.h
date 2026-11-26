@@ -194,12 +194,9 @@ extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 /* Specialization functions, these are exported only for other re-generated
  * interpreters to call */
 
-PyAPI_FUNC(void) _Py_Specialize_CallKw(PyValue callable, PyValue self_or_null,
-                                  PyValue kwnames, _PyInstr *instr, int nargs);
 PyAPI_FUNC(void) _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg);
 PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(PyValue iterable);
-PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(PyValue func_st, PyValue args_st, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr);
 
 /* See InternalDocs/exception_handling.md for details.

@@ -393,8 +393,10 @@ Known values:
           no pinned table; MIN_INSTRUMENTED_OPCODE is 234 and the numbers of
           the has-argument and specialized opcodes shift
    64448: rir90 BN: BINARY_OP and the unary ops are stack-only stubs, so
-          BINARY_OP and the opcodes after it take new numbers */
-#define PYC_MAGIC_NUMBER 64448
+          BINARY_OP and the opcodes after it take new numbers
+   64449: rir90 KC: the CALL_KW and CALL_FUNCTION_EX specializations are
+          deleted, so the base opcodes take new numbers */
+#define PYC_MAGIC_NUMBER 64449
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

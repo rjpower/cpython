@@ -1,0 +1,293 @@
+// 2D: raising, reraising, the handled-exception state and exception matching.
+//
+// None of these has an instrumented word.  RAISE and the unwinder's
+// events fire in the unwinder; the RERAISE event fires in a row, which tests
+// the tool mask itself.  The families declare no events(...).
+
+// RAISE_VARARGS: `args` holds the exception and the cause, or neither.  An
+// empty span is a bare `raise`.
+family Raise(args:Span<Src>)
+  exits(raise, unwind) ops(RAISE_VARARGS);
+
+// An explicit raise raises with a traceback entry; a bare raise that finds a
+// handled exception goes to the unwinder with the RERAISE event fired
+point Raise.Failed(current, site, pending) keep() spent(args) defs();
+point Raise.Reraised(current, site, pending) keep() spent(args) defs();
+
+// The thread's topmost handled exception is raised again when `args` is empty
+// (do_raise: RuntimeError when none is handled); otherwise the exception is
+// made and raised (a number is no exception or cause: TypeError).  The
+// operands are spent on every outcome.  Only a bare raise returns 0: the
+// exception is then pending and its RERAISE event is not yet fired.
+extern helper raise_args(t:Thread, args:Span<Src>)
+  cases(reraised(), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  spends(args)
+  c _PyRop_RaiseArgs as int_zero_ok
+  evidence(
+    review: "ceval.h do_raise and the former RAISE_VARARGS.",
+    contract: "Consumes the exception and the cause. Returns 0 only for a bare raise"
+              "with a handled exception, with it pending. Callbacks: the exception"
+              "class's __init__ and __new__, finalizers.");
+
+// The RERAISE event for the pending exception; the exception stays pending.
+// A callback's failure supersedes it and is not reported.
+extern helper reraise_pending(t:Thread, f:Frame, at:Site)
+  cases(err(x:Err))
+  effects(runs_python, raises)
+  c _PyRop_ReraisePending as raised
+  evidence(
+    review: "ceval.h monitor_reraise.",
+    contract: "Fires RERAISE with the tool mask test; the exception is pending on"
+              "return, as the old body went to exception_unwind either way.");
+
+arm Raise.Throw split
+  effects(allocates, writes, releases, runs_python, raises)
+  feedback()
+  exits(raise, unwind)
+{
+  entry():
+    call raise_args(thread, args) {
+      reraised -> Bare();
+      err -> Failed();
+    }
+  Bare():
+    call reraise_pending(thread, frame, site) {
+      err -> Unwound();
+    }
+  Unwound(x:Err):
+    exit unwind(Raise.Reraised, x);
+  Failed(e:Err):
+    exit raise(Raise.Failed, e);
+}
+
+// RERAISE: `lasti` is the tagged word index that the unwinder wrote when it
+// entered the handler (the public origin of the exception); absent for
+// RERAISE 0.  The exception is spent.
+family Reraise(lasti:Maybe<Src>, exc:Src)
+  exits(unwind) ops(RERAISE);
+
+point Reraise.Raised(current, site, pending) keep(lasti) spent(exc) defs();
+point Reraise.Origin(current, saved_origin, pending) keep(lasti) spent(exc) defs();
+
+// The pending exception becomes a new reference to the exception in its home,
+// then the RERAISE event fires; always leaves the word with it pending.  The
+// owner of the home stays with the arm.
+extern helper restore_exception(t:Thread, f:Frame, at:Site, e:Src)
+  cases(err(x:Err))
+  effects(runs_python, raises)
+  c _PyRop_RestoreException as raised
+  evidence(
+    review: "the former RERAISE: _PyErr_SetRaisedException, then monitor_reraise.",
+    contract: "Reads the home; a new reference becomes the pending exception, the"
+              "displaced pending exception is released (a finalizer may run).");
+
+// The word of the origin: frame->instr_ptr names it, as RERAISE n sets it
+// before it fires its event
+extern helper set_origin(f:Frame, x:Src) -> Unit
+  effects(writes)
+  c _PyRop_SetOrigin as unit
+  evidence(
+    review: "the former RERAISE: frame->instr_ptr = INSTR_AT_OFFSET(lasti).",
+    contract: "Writes the frame's instruction pointer; a value that is not a tagged"
+              "index leaves it alone. No failure, no callback.");
+
+// Closes the owner of one operand with the pending exception set aside
+extern helper retire_failed_operand(f:Frame, x:Src, e:Err) -> Err
+  effects(writes, releases)
+  spends(x)
+  c _PyRop_RetireFailedOperand as handle
+  evidence(
+    review: "ceval.c: _PyRop_RetireFailedArgs for one operand.",
+    contract: "Takes the home and closes it; a finalizer may run Python. The"
+              "exception is pending again on return.");
+
+arm Reraise.Plain split select(absent)
+  effects(writes, releases, runs_python, raises)
+  feedback()
+  exits(unwind)
+{
+  entry():
+    call restore_exception(thread, frame, site, exc) {
+      err -> Failed();
+    }
+  Failed(x:Err):
+    let saved:Err = retire_failed_operand(frame, exc, x);
+    exit unwind(Reraise.Raised, saved);
+}
+
+arm Reraise.Origin split select(present)
+  effects(writes, releases, runs_python, raises)
+  feedback()
+  exits(unwind)
+{
+  entry():
+    let _:Unit = set_origin(frame, lasti);
+    call restore_exception(thread, frame, site, exc) {
+      err -> Failed();
+    }
+  Failed(x:Err):
+    let saved:Err = retire_failed_operand(frame, exc, x);
+    exit unwind(Reraise.Origin, saved);
+}
+
+// PUSH_EXC_INFO: the handled exception is saved in `prev` (None when there is
+// none) and replaced by `exc`, which moves to `held`: the handler's exception
+// takes the next position, as the old op put it.
+family ExceptEnter(prev:Dst, held:Dst, exc:Src)
+  exits(next) ops(PUSH_EXC_INFO);
+
+point ExceptEnter.Done(current, next_head, handled) keep() spent(exc) defs(prev, held);
+
+// The previous handled exception, taken out of the thread's exception state
+// (None when there is none), and a new reference to `x` installed
+extern helper swap_handled(t:Thread, x:Src) -> O
+  effects(reads, writes)
+  c _PyRop_SwapHandled as value
+  evidence(
+    review: "the former PUSH_EXC_INFO: _PyErr_StackItemTakeValue, then the new"
+            "reference in exc_info->exc_value.",
+    contract: "Reads and writes the exception state; no failure, no callback.");
+
+arm ExceptEnter.Install shared
+  effects(reads, writes, releases on (prev, held))
+  feedback()
+  exits(next)
+{
+  entry():
+    let p:O = swap_handled(thread, exc);
+    let x:O = acquire(exc);
+    publish [prev = p, held = x] retire [spent(exc), old(prev), old(held)] at ExceptEnter.Done;
+    exit next();
+}
+
+// POP_EXCEPT: the saved previous exception is the handled one again
+family ExceptLeave(saved:Src)
+  exits(next) ops(POP_EXCEPT);
+
+point ExceptLeave.Done(current, next_head, handled) keep() spent(saved) defs();
+
+// The saved exception moves into the exception state (None clears it); the
+// exception it displaces is released
+extern helper restore_handled(t:Thread, x:O) -> Unit
+  effects(reads, writes, releases, runs_python)
+  c _PyRop_RestoreHandled as unit
+  evidence(
+    review: "the former POP_EXCEPT: Py_XSETREF(exc_info->exc_value, ...).",
+    contract: "Takes x; the displaced exception's finalizer may run Python. No"
+              "failure.");
+
+arm ExceptLeave.Restore shared
+  effects(reads, writes, releases, runs_python)
+  feedback()
+  exits(next)
+{
+  entry():
+    let x:O = acquire(saved);
+    let _:Unit = restore_handled(thread, x);
+    publish [] retire [spent(saved)] at ExceptLeave.Done;
+    exit next();
+}
+
+// CHECK_EXC_MATCH: whether the exception matches the class or the tuple of
+// classes; the exception stays, the pattern is spent
+family ExceptMatch(dst:Dst, exc:Src, pattern:Src)
+  exits(next, raise) ops(CHECK_EXC_MATCH);
+
+point ExceptMatch.Done(current, next_head, clear) keep(exc) spent(pattern) defs(dst);
+point ExceptMatch.Invalid(current, site, pending) keep(exc) spent(pattern) defs();
+
+// A number or a non-class in the pattern is a TypeError
+extern helper check_except_type(t:Thread, x:Src)
+  cases(ok(), err(e:Err))
+  effects(reads, allocates, raises)
+  c _PyRop_CheckExceptType as int_zero_ok
+  evidence(
+    review: "ceval.c _PyEval_CheckExceptTypeValidValue.",
+    contract: "Reads the pattern's home; TypeError, no Python.");
+
+extern helper exception_matches(e:B, p:B) -> Bool
+  effects(reads)
+  c _PyRop_ExceptionMatches as bool
+  evidence(
+    review: "the former CHECK_EXC_MATCH: PyErr_GivenExceptionMatches.",
+    contract: "A subtype test over the exception's MRO and the pattern's classes; a"
+              "value that is not an object matches nothing. No allocation, no"
+              "callback.");
+
+arm ExceptMatch.Match shared
+  effects(reads, allocates, releases on (dst), runs_python, raises)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call check_except_type(thread, pattern) {
+      ok -> Checked();
+      err -> Invalid();
+    }
+  Checked():
+    let m:Bool = exception_matches(use(exc), use(pattern));
+    let r:O = truth_object(m, false);
+    publish [dst = r] retire [spent(pattern), old(dst)] at ExceptMatch.Done;
+    exit next();
+  Invalid(e:Err):
+    let saved:Err = retire_failed_operand(frame, pattern, e);
+    exit raise(ExceptMatch.Invalid, saved);
+}
+
+// CHECK_EG_MATCH: the exception group is split by the classes; `match` is the
+// matching part (None when none matches, else it is also the handled
+// exception) and `rest` the remainder.  Both operands are spent.  The
+// destinations are in the order the old op defined them: the rest, then the match.
+family ExceptGroupMatch(rest:Dst, match:Dst, exc:Src, pattern:Src)
+  exits(next, raise) ops(CHECK_EG_MATCH);
+
+point ExceptGroupMatch.Done(current, next_head, handled) keep() spent(exc, pattern) defs(rest, match);
+point ExceptGroupMatch.Failed(current, site, pending) keep() spent(exc, pattern) defs();
+
+extern helper check_except_star_type(t:Thread, x:Src)
+  cases(ok(), err(e:Err))
+  effects(reads, allocates, raises)
+  c _PyRop_CheckExceptStarType as int_zero_ok
+  evidence(
+    review: "ceval.c _PyEval_CheckExceptStarTypeValidValue.",
+    contract: "Reads the pattern's home; TypeError, no Python.");
+
+// The split: the match and the rest, both new owners.  A match that is not
+// None becomes the handled exception.  The exception and the pattern are
+// closed on both outcomes.
+extern helper group_match(t:Thread, f:Frame, exc:Src, pattern:Src)
+  cases(ok(match:O, rest:O), err(e:Err))
+  effects(reads, writes, releases, runs_python, raises)
+  spends(exc, pattern)
+  c _PyRop_GroupMatch as value_out_or_null
+  evidence(
+    review: "the former CHECK_EG_MATCH: value_exception_group_match, then"
+            "PyErr_SetHandledException of a match that is not None.",
+    contract: "Closes both operands; the split calls the group's methods (Python).");
+
+arm ExceptGroupMatch.Split split
+  effects(reads, writes, allocates, releases on (rest, match), runs_python, raises)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call check_except_star_type(thread, pattern) {
+      ok -> Checked();
+      err -> Invalid();
+    }
+  Checked():
+    call group_match(thread, frame, exc, pattern) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(m:O, r:O):
+    publish [rest = r, match = m] retire [old(rest), old(match)] at ExceptGroupMatch.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(ExceptGroupMatch.Failed, e);
+  Invalid(ie:Err):
+    let first:Err = retire_failed_operand(frame, pattern, ie);
+    let second:Err = retire_failed_operand(frame, exc, first);
+    exit raise(ExceptGroupMatch.Failed, second);
+}

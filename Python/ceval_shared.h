@@ -19,11 +19,6 @@
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_native_scope.h"
 #include "pycore_rop_metadata.h"  // ROP_HANDLER_*
-#include "pycore_feedback.h"      // _PyFbCall
-/* The rows that the register arms always inline, wherever the arms run:
- * declared before pycore_rop_rows.h defines some of them, since clang
- * ignores an attribute that a declaration adds after the definition */
-#include "generated_rop_inline.h"
 #include "pycore_rop_rows.h"      // _PyRop_AnchorForCall()
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
@@ -4313,6 +4308,9 @@ PyValue _PyRop_SuperMethodExplicit(PyThreadState *tstate, _PyInterpreterFrame *f
     const _PyRopSpan *parts, PyObject *attr_name, PyValue *self);
 PyValue _PyRop_SuperMethodExplicitObserved(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
     const _PyRopSpan *parts, PyObject *attr_name, PyValue *self);
+
+/* The rows that the register arms always inline, wherever the arms run */
+#include "generated_rop_inline.h"
 
 /* The whole-word completion of each arm (Python/ceval_forms.c) */
 typedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,

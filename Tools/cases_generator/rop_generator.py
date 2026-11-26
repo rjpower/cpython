@@ -502,7 +502,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     defines come from the family's derived encoding: a Src operand is an
     input and a Dst operand the destination.  The format says nothing of
     stack positions; the translator derives its row of the arm from it
-    (ir_metadata_generator.arm_stack_format)."""
+    (Python/regcfg.c, _PyRegCfg_ArmFormat)."""
     fam = program.families[arm.family]
     enc = program.encodings[arm.family]
     params = {x.name: x for x in fam.params}
@@ -513,12 +513,13 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     roles = ["_PyIR_ROLE_NONE"] * 4
     imm = fb = "_PyIR_LOC_NONE"
     fb_schema = None
-    ninputs = writes = 0
-    # A loop's pair of homes (the iterator, then its cursor): the family's
-    # points say how the word treats it.  A word that defines it writes two
-    # homes at the field; one that keeps the receiver steps it in place
-    # (role BASE); else the word spends both
+    # ninputs counts the homes the word reads, nsrc its SRC fields
+    ninputs = nsrc = writes = 0
+    # A home group (a loop's pair, a delegation's window) takes one GROUP
+    # field.  A word that defines the group (Out<G>) has GROUP_OUT; one that
+    # keeps the receiver steps the group in place; else it spends the parts
     pair_writes = 0
+    group_out = False
     window = False
     send_window = False
     has_target = has_args = has_span = False
@@ -548,7 +549,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         elif pl.kind is FieldKind.home:
             kind, _ = operand_role(param)
             if kind == "SRC":
-                role = f"_PyIR_ROLE_IN0 + {ninputs}"
+                role = f"_PyIR_ROLE_SRC + {nsrc}"
+                nsrc += 1
                 ninputs += 1
             elif kind == "DST" or (kind == "LOCAL" and pl.operand in defined):
                 role = "_PyIR_ROLE_DST"
@@ -559,21 +561,20 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                 # SEND's shape: the window (receiver, cursor, sent value) is
                 # read and rewritten in place, the yielded value goes two
                 # homes above its base, and the receiver passes through
-                role = "_PyIR_ROLE_BASE"
+                role = "_PyIR_ROLE_GROUP"
                 window = True
                 send_window = True
             elif kind == "ITERPAIR":
                 pair = pl.operand
+                role = "_PyIR_ROLE_GROUP"
                 if rop_check.is_out(param.type):
-                    role = "_PyIR_ROLE_DST"
+                    group_out = True
                     pair_writes = 2
                 elif any(f"{pair}.receiver" in pt.keep
                          for pt in program.points.values()
                          if pt.family == arm.family):
-                    role = "_PyIR_ROLE_BASE"
                     window = True
                 else:
-                    role = f"_PyIR_ROLE_IN0 + {ninputs}"
                     ninputs += 2
             else:
                 role = "_PyIR_ROLE_NONE"
@@ -624,6 +625,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     if is_generic(program, arm) and "again" in fam.exits:
         effects.add("_PyIR_SPECIALIZES")
     flags = ["_PyIR_VALID"]
+    if group_out:
+        flags.append("_PyIR_GROUP_OUT")
     if "_PyIR_RUNS_PYTHON" in effects:
         flags.append("_PyIR_RUNS_CODE")
     if arm.displacing:
@@ -774,7 +777,6 @@ def word_homes(program: Program, family: str, enc: Encoding,
     out by the fields its encoding gives each home operand"""
     fh = family_homes(program, family)
     index: dict[str, int] = {}
-    group_at = 0
     for pl in enc.placements:
         if pl.kind is not FieldKind.home:
             continue
@@ -784,7 +786,6 @@ def word_homes(program: Program, family: str, enc: Encoding,
         field = HEAD_FIELDS[pl.slots[0]]
         parts = rop_check.group_parts(params[pl.operand].type)
         if parts:
-            group_at = field
             names = rop_check.expand_group(pl.operand, {pl.operand: params[pl.operand].type})
             index[names[0]] = field
             for i, name in enumerate(names[1:]):
@@ -794,7 +795,7 @@ def word_homes(program: Program, family: str, enc: Encoding,
     assert set(index) == set(fh.homes), (family, index, fh.homes)
     edges = sum(HOME_CODES[state.value] << 2 * (6 * e + index[h])
                 for e, states in enumerate(fh.edges) for h, state in states.items())
-    return {"group": fh.group, "group_at": group_at, "normal": fh.normal,
+    return {"group": fh.group, "normal": fh.normal,
             "vacant": sum(1 << index[h] for h in fh.vacant), "edges": edges}
 
 

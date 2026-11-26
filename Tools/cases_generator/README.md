@@ -17,6 +17,8 @@ What's currently here:
   templates and lowerings, and `Include/internal/pycore_rop_metadata.h`
 - `ir_metadata_generator.py`: writes the handler formats and other tables of
   the register IR to `Include/internal/pycore_ir_metadata.h`
+- `regcfg_metadata_generator.py`: writes the translator's rows of the stack
+  ops to `Include/internal/pycore_regcfg_metadata.h`
 - `handler_table.py`, `ir_arms.py`: the handler ids, which are dense and
   independent of the stack opcodes
 - `stack_ops.py`: the stack ops, their pinned numbers and the translator's rows

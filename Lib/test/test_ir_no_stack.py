@@ -39,6 +39,7 @@ EXCLUDED = {
     "Python/regcfg.c": "the translator",
     "Python/regcfg_passes.c": "the translator",
     "Include/internal/pycore_regcfg.h": "the translator",
+    "Include/internal/pycore_regcfg_metadata.h": "the translator's generated stack-op table",
     "Include/internal/pycore_opcode_metadata.h": "the opcode schema",
     "Include/internal/pycore_opcode_utils.h": "the opcode schema",
     "Include/opcode_ids.h": "the opcode schema",
@@ -64,12 +65,6 @@ class Allowed:
 
 
 ALLOWED: tuple[Allowed, ...] = (
-    # The translator's row type and the tables it reads.  They move into the
-    # translator's own generated header with the second WF4 commit.
-    Allowed("Include/internal/pycore_ir.h", None, r"_PyStackFormat",
-            "the stack-op row type, which only the translator reads"),
-    Allowed("Include/internal/pycore_ir_metadata.h", None, r"_PyStack(?:Format|_Formats|_ArmFormats)",
-            "the translator's tables of stack-op and arm rows"),
     Allowed("Include/internal/pycore_ir_metadata.h", None, r"_PyIR_OpcodeHandler",
             "the translator's map from a stack op to its handler; the generated "
             "table of stack_ops.py replaces it with item 6"),

@@ -29,7 +29,7 @@
     <_KeywordSources Include="$(PySourcePath)Grammar\python.gram;$(PySourcePath)Grammar\invalid.gram;$(PySourcePath)Grammar\Tokens" />
     <_KeywordOutputs Include="$(PySourcePath)Lib\keyword.py" />
     <_CasesSources Include="$(PySourcePath)Tools\cases_generator\stack_ops.py;"/>
-    <_CasesOutputs Include="$(PySourcePath)Python\generated_rop_cases.c.h;$(PySourcePath)Include\opcode_ids.h;$(PySourcePath)Include\ir_handler_ids.h;$(PySourcePath)Python\ir_targets.h;$(PySourcePath)Include\internal\pycore_ir_metadata.h;$(PySourcePath)Include\internal\pycore_opcode_metadata.h;$(PySourcePath)Lib\_opcode_metadata.py"/>
+    <_CasesOutputs Include="$(PySourcePath)Python\generated_rop_cases.c.h;$(PySourcePath)Include\opcode_ids.h;$(PySourcePath)Include\ir_handler_ids.h;$(PySourcePath)Python\ir_targets.h;$(PySourcePath)Include\internal\pycore_ir_metadata.h;$(PySourcePath)Include\internal\pycore_regcfg_metadata.h;$(PySourcePath)Include\internal\pycore_opcode_metadata.h;$(PySourcePath)Lib\_opcode_metadata.py"/>
     <_SbomSources Include="$(PySourcePath)PCbuild\get_externals.bat" />
     <_SbomOutputs Include="$(PySourcePath)Misc\externals.spdx.json;$(PySourcePath)Misc\sbom.spdx.json">
       <Format>json</Format>
@@ -94,6 +94,8 @@
     <Exec Command="$(PythonForBuild) Tools\cases_generator\rop_generator.py --cases Python\generated_rop_cases.c.h --forms Python\generated_rop_forms.c.h --stubs Python\generated_rop_stubs.c.h --targets Python\ir_targets.h --templates Python\generated_rop_templates.c.h --lowerings Python\jit_lowerings.h --metadata Include\internal\pycore_rop_metadata.h"
           WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\ir_metadata_generator.py"
+          WorkingDirectory="$(PySourcePath)" />
+    <Exec Command="$(PythonForBuild) Tools\cases_generator\regcfg_metadata_generator.py"
           WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\opcode_metadata_generator.py Tools\cases_generator\stack_ops.py"
           WorkingDirectory="$(PySourcePath)" />

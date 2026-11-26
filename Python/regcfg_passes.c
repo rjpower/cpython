@@ -355,10 +355,10 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 op->flags |= _PyReg_STORE_FOLDED;
                 continue;
             }
-            if (!(fmt->flags & _PyIR_STORE_DST) || fmt->dst == _PyIR_NO_DST) {
+            if (!(fmt->flags & _PyStack_STORE_DST) || fmt->dst == _PyStack_NO_DST) {
                 continue;
             }
-            int j = fmt->flags & _PyIR_WINDOW ? fmt->dst
+            int j = fmt->flags & _PyStack_WINDOW ? fmt->dst
                                               : _PyRegOp_Through(p, fmt);
             // The result is the producer's last output, on top
             if (j != p->nout - 1) {
@@ -984,7 +984,7 @@ call_null_step(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *state, uint8_t *outputs)
 {
     int *in = _PyReg_IN(cfg, op), *out = _PyReg_OUT(cfg, op);
     const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
-    int through = _PyIR_Extent(fmt->through, op->oparg);
+    int through = _PyStack_Extent(fmt->through, op->oparg);
     for (int j = 0; j < op->nout; j++) {
         int value = 0;
         if (op->opcode == PUSH_NULL) {

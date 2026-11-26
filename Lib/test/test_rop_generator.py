@@ -14,7 +14,6 @@ from test.support import os_helper
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import handler_table
-    import ir_metadata_generator
     import rop_primitives
     import rop_catalog
     import rop_check
@@ -442,14 +441,15 @@ class HomeStateTests(unittest.TestCase):
         P, V, D, U = range(4)
         def at(edge, home, state):
             return state << 2 * (6 * edge + home)
-        self.assertEqual((fmt.group, fmt.group_at, fmt.normal, fmt.vacant),
-                         (2, 1, 0b11, 1 << 4))
+        self.assertEqual(fmt.roles[1], "_PyIR_ROLE_GROUP")
+        self.assertEqual((fmt.group, fmt.normal, fmt.vacant), (2, 0b11, 1 << 4))
         self.assertEqual(fmt.edges, at(0, 0, D) | at(0, 1, P) | at(0, 4, U) |
                                     at(1, 0, P) | at(1, 1, V) | at(1, 4, V))
         # IterOpen(pair:Out<IterPair>, source:Src) defines the pair
         fmt = rop_generator.arm_format(self.program, self.program.arms["IterOpen.Generic"])
-        self.assertEqual((fmt.group, fmt.group_at, fmt.normal, fmt.vacant),
-                         (2, 0, 0b01, 0))
+        self.assertEqual(fmt.roles[0], "_PyIR_ROLE_GROUP")
+        self.assertIn("_PyIR_GROUP_OUT", fmt.flags)
+        self.assertEqual((fmt.group, fmt.normal, fmt.vacant), (2, 0b01, 0))
         self.assertEqual(fmt.edges, at(0, 0, D) | at(0, 4, D) | at(0, 1, V))
 
     def test_every_normal_exit_names_a_point_of_its_family(self):
@@ -502,38 +502,39 @@ class ArmRowTests(unittest.TestCase):
         add_int = next(e for e in entries if e.dotted == "Add.Int")
         fmt = add_int.format
         self.assertEqual(add_int.base, "BINARY_OP")
-        self.assertEqual(fmt.roles, ("_PyIR_ROLE_DST", "_PyIR_ROLE_IN0 + 0",
-                                     "_PyIR_ROLE_IN0 + 1", "_PyIR_ROLE_FB"))
+        self.assertEqual(fmt.roles, ("_PyIR_ROLE_DST", "_PyIR_ROLE_SRC + 0",
+                                     "_PyIR_ROLE_SRC + 1", "_PyIR_ROLE_FB"))
         self.assertEqual((fmt.fb, fmt.fb_schema), ("_PyIR_LOC_D", "Binary"))
-        # The translator's row: two inputs and a result above them, which
-        # may name a local
-        row = ir_metadata_generator.arm_stack_format(fmt)
-        self.assertEqual((row.ninputs, row.dst, row.borrow_mask), (2, -2, 0b11))
-        self.assertEqual(row.roles, ("DST", "IN0+0", "IN0+1", "FB"))
-        self.assertIn("STORE_DST", row.flags)
         self.assertEqual(fmt.effects, ("_PyIR_RAISES", "_PyIR_DEOPTS"))
         self.assertEqual(fmt.operands, "_PyIR_OPERANDS_NONE")
         generic = next(e for e in entries if e.dotted == "Add.Generic")
         self.assertIn("_PyIR_SPECIALIZES", generic.format.effects)
         self.assertIn("_PyIR_ESCAPES", generic.format.effects)
 
-    def test_window_rows_are_derived_from_the_home_group(self):
-        # A BASE field names the window: its result is part 2 of the group,
-        # and part 0 passes through where edge 0 keeps it.  CleanupThrow's
-        # completion spends the receiver, so nothing passes through, and its
-        # thrown exception is an input of its own.  The edges come from the
-        # verified points (load_arm_entries).
+    def test_group_operands(self):
+        # A home group takes one GROUP field.  ForIter, Send and CleanupThrow
+        # read it and have a destination of their own: the translator steps
+        # the group as a window, whose receiver passes through where edge 0
+        # keeps it (_PyRegCfg_ArmFormat).  IterClose spends its group;
+        # IterOpen defines it (GROUP_OUT).  The edges come from the verified
+        # points (load_arm_entries).
         entries = {e.dotted: e for e in rop_generator.load_arm_entries()}
-        for name, ninputs, through in (("ForIter.Generic", 0, 1),
-                                       ("Send.Generic", 0, 1),
-                                       ("CleanupThrow.Generic", 1, 0)):
+        for name, group, keeps, has_dst, out in (
+                ("ForIter.Generic", 2, True, True, False),
+                ("Send.Generic", 3, True, True, False),
+                ("CleanupThrow.Generic", 3, False, True, False),
+                ("IterClose.Retire", 2, False, False, False),
+                ("IterOpen.Generic", 2, False, True, True)):
             with self.subTest(arm=name):
                 fmt = entries[name].format
-                self.assertNotIn("_PyIR_WINDOW", fmt.flags)
-                row = ir_metadata_generator.arm_stack_format(fmt)
-                self.assertIn("WINDOW", row.flags)
-                self.assertEqual((row.ninputs, row.dst, row.through),
-                                 (ninputs, 2, (through, "FIXED")))
+                self.assertEqual(fmt.group, group)
+                self.assertEqual(fmt.roles.count("_PyIR_ROLE_GROUP"), 1)
+                at = fmt.roles.index("_PyIR_ROLE_GROUP")
+                self.assertEqual("_PyIR_GROUP_OUT" in fmt.flags, out)
+                self.assertEqual("_PyIR_ROLE_DST" in fmt.roles, has_dst and not out)
+                if not out:
+                    kept = fmt.normal & 1 and (fmt.edges >> 2 * at) & 3 == 0
+                    self.assertEqual(bool(kept), keeps)
 
     def test_every_arm_has_a_row_in_every_generated_table(self):
         entries = rop_generator.arm_entries(products())

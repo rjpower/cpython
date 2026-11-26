@@ -3,9 +3,8 @@
 The register instruction arms (Python/register_ops) follow the word kinds in
 every per-handler table, then the observed wrappers of the arms of families
 that declare events: rop_generator.arm_entries() lists them, and
-IR_NUM_HANDLERS counts them.  The translator reads a stack op's row
-(stack_ops.py) in _PyStack_Formats and an arm's in _PyStack_ArmFormats, both
-of type _PyStackFormat (arm_stack_format).
+IR_NUM_HANDLERS counts them.  The translator's rows of the stack ops are
+in its own header (regcfg_metadata_generator.py).
 
 The tables are defined where NEED_IR_METADATA is defined (Python/ir.c) and
 declared elsewhere.  Handler ids without an instruction have a zeroed row,
@@ -20,7 +19,7 @@ import ir_arms
 from cwriter import CWriter
 from generators_common import ROOT, write_header
 from handler_table import first_arm, num_handlers
-from stack_ops import PSEUDOS, STACK_OPS, StackFormat, StackOp
+from stack_ops import PSEUDOS, STACK_OPS
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 STACK_NUMBERS = {op.name: op.opcode for op in STACK_OPS}
@@ -46,69 +45,6 @@ OPERANDS_FLAGS = "_PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_IR_ONLY | _PyIR_
 
 def bits(names: list[str]) -> str:
     return " | ".join(names) if names else "0"
-
-
-def extent_row(extent: tuple[int, str]) -> str:
-    k, form = extent
-    return f"{{ {k}, _PyIR_EXT_{form} }}"
-
-
-def stack_format_row(fmt: StackFormat) -> str:
-    "A _PyStackFormat row"
-    roles = ", ".join("_PyIR_ROLE_" + role.replace("+", " + ") for role in fmt.roles)
-    dst = "_PyIR_NO_DST" if fmt.dst is None else str(fmt.dst)
-    return (
-        f"{{ .flags = {bits(['_PyIR_' + f for f in fmt.flags])}, "
-        f".effects = {bits(['_PyIR_' + e for e in fmt.effects])}, "
-        f".roles = {{ {roles} }}, .imm = _PyIR_LOC_{fmt.imm}, "
-        f".ninputs = {fmt.ninputs}, .dst = {dst}, "
-        f".borrow_mask = {fmt.borrow_mask:#x}, "
-        f".operands = _PyIR_OPERANDS_{fmt.operands}, "
-        f".through = {extent_row(fmt.through)} }}"
-    )
-
-
-def _strip(prefix: str, name: str) -> str:
-    assert name.startswith(prefix), name
-    return name[len(prefix):]
-
-
-def arm_stack_format(fmt: ir_arms.ArmFormat) -> StackFormat:
-    """The translator's row of an arm, from its word format.  A window (a
-    BASE role: ForIter, Send, CleanupThrow) reads its home group from the
-    base and its other inputs from IN fields; its result is part 2 of the
-    group, and part 0 passes through where the family's edge 0 keeps it.
-    Other arms read an input per IN field, or the parts of the home group
-    that an IN field names, and write dst above the inputs they pop.  A
-    destination of its own may name a local or the discard slot; an out
-    group (IterOpen's pair) is a result but not such a destination."""
-    window = "_PyIR_ROLE_BASE" in fmt.roles
-    ninputs = 0
-    has_dst = out_group = False
-    for f, role in enumerate(fmt.roles):
-        grouped = bool(fmt.group) and f == fmt.group_at
-        if role.startswith("_PyIR_ROLE_IN0"):
-            ninputs += fmt.group if grouped else 1
-        elif role == "_PyIR_ROLE_DST":
-            out_group |= grouped
-            has_dst |= not grouped
-    through = 0
-    if window:
-        dst: int | None = 2
-        kept = (fmt.edges >> (2 * fmt.group_at)) & 3 == 0   # _PyIR_HOME_PRESERVE
-        through = 1 if fmt.normal & 1 and kept else 0
-    else:
-        dst = -ninputs if has_dst or out_group else None
-    flags = [_strip("_PyIR_", f) for f in fmt.flags]
-    if window:
-        flags.append("WINDOW")
-    if window or has_dst:
-        flags += ["STORE_DST", "DISCARDS"]
-    return StackFormat(
-        tuple(flags), tuple(_strip("_PyIR_", e) for e in fmt.effects),
-        tuple(_strip("_PyIR_ROLE_", r).replace(" ", "") for r in fmt.roles),
-        _strip("_PyIR_LOC_", fmt.imm), ninputs, dst, (1 << ninputs) - 1,
-        _strip("_PyIR_OPERANDS_", fmt.operands), (through, "FIXED"))
 
 
 def arm_id(arm: ir_arms.ArmEntry) -> int:
@@ -192,7 +128,7 @@ def arm_row(arm: ir_arms.ArmEntry) -> str:
         f".fb_size = {fb_size}, .transfer_kind = {fmt.transfer}, "
         f".word_flags = {word_flags}, .operands = {fmt.operands}, {fixed}"
         f".twin = {twin}, .events = {events}, .group = {fmt.group}, "
-        f".group_at = {fmt.group_at}, .normal = {fmt.normal:#x}, .vacant = {fmt.vacant:#x}, "
+        f".normal = {fmt.normal:#x}, .vacant = {fmt.vacant:#x}, "
         f".committed = {fmt.committed:#x}, .edges = {fmt.edges:#x} }}")
 
 
@@ -233,24 +169,6 @@ def generate_ir_metadata(
         for arm in arms:
             assert arm.format is not None
             out.emit(f"[{arm_id(arm)}] = {arm_row(arm)},  /* {arm.dotted} */\n")
-        out.emit("};\n")
-        out.emit("#endif\n\n")
-
-        # The translator reads the row of a stack op by its stack number, and
-        # of an arm by its handler (_PyRegCfg_FormatOf)
-        out.emit("PyAPI_DATA(const _PyStackFormat) _PyStack_Formats[256];\n")
-        out.emit(f"PyAPI_DATA(const _PyStackFormat) _PyStack_ArmFormats[{n}];\n")
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const _PyStackFormat _PyStack_Formats[256] = {\n")
-        for op in sorted(STACK_OPS, key=lambda op: op.opcode):
-            assert op.format is not None, op.name
-            out.emit(f"[{op.opcode}] = {stack_format_row(op.format)},  /* {op.name} */\n")
-        out.emit("};\n")
-        out.emit(f"const _PyStackFormat _PyStack_ArmFormats[{n}] = {{\n")
-        for arm in arms:
-            assert arm.format is not None
-            row = stack_format_row(arm_stack_format(arm.format))
-            out.emit(f"[{arm_id(arm)}] = {row},  /* {arm.dotted} */\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
 

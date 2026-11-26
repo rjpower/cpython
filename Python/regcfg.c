@@ -29,6 +29,7 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
+#include "pycore_regcfg_metadata.h"  // _PyStack_Formats
 #include "pycore_rop_metadata.h"       // ROP_OP_GetAttr_Generic
 #include "pycore_rop_metadata.h"      // ROP_OP_Add_Generic, ROP_OP_Call_Generic
 #include "pycore_rop_rows.h"          // BRANCH_IF_FALSE
@@ -223,6 +224,63 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
     return SUCCESS;
 }
 
+
+/* Formats */
+
+const _PyStackFormat *
+_PyRegCfg_FormatInto(int opcode, _PyStackFormat *row)
+{
+    if (ROP_CFG_IS_ARM(opcode)) {
+        _PyRegCfg_ArmFormat(ROP_CFG_HANDLER(opcode), row);
+        return row;
+    }
+    return &_PyStack_Formats[opcode];
+}
+
+/* The translator's row of an arm: its word format's flags, effects, imm and
+ * operands, its fields' translator roles (_PyRegCfg_ArmRole), and the
+ * inputs and result those roles give.  A window's result is part 2 of its
+ * group, and part 0 passes through where the family's edge 0 keeps it. */
+void
+_PyRegCfg_ArmFormat(int handler, _PyStackFormat *row)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    memset(row, 0, sizeof(*row));
+    row->flags = fmt->flags & ~_PyIR_GROUP_OUT;
+    row->effects = fmt->effects;
+    row->imm = fmt->imm;
+    row->operands = fmt->operands;
+    row->through = (_PyStackExtent){0, _PyStack_EXT_FIXED};
+    int window = -1, result = 0, own_dst = 0, ninputs = 0;
+    for (int f = 0; f < 4; f++) {
+        int role = _PyRegCfg_ArmRole(fmt, f);
+        row->roles[f] = (uint8_t)role;
+        if (role == _PyIR_ROLE_GROUP) {
+            window = f;
+        }
+        else if (role >= _PyIR_ROLE_SRC) {
+            ninputs += fmt->roles[f] == _PyIR_ROLE_GROUP ? fmt->group : 1;
+        }
+        else if (role == _PyIR_ROLE_DST) {
+            result = 1;
+            own_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
+        }
+    }
+    row->ninputs = (uint8_t)ninputs;
+    row->borrow_mask = (uint8_t)((1 << ninputs) - 1);
+    if (window >= 0) {
+        int kept = ((fmt->edges >> (2 * window)) & 3) == _PyIR_HOME_PRESERVE;
+        row->flags |= _PyStack_WINDOW;
+        row->dst = 2;
+        row->through.k = (int8_t)((fmt->normal & 1) && kept);
+    }
+    else {
+        row->dst = result ? (int8_t)-ninputs : _PyStack_NO_DST;
+    }
+    if (window >= 0 || own_dst) {
+        row->flags |= _PyStack_STORE_DST | _PyStack_DISCARDS;
+    }
+}
 
 /* Whether op jumps to its target.  END_ASYNC_FOR names the SEND of its
  * loop, for sys.monitoring, but does not go there (_PyIR_NAMES_TARGET). */
@@ -619,7 +677,7 @@ placeable(const _PyRegTr *t, int v, int k)
     }
     const _PyRegOp *op = &t->ops[t->def[f]];
     const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
-    if (fmt->flags & _PyIR_WINDOW) {
+    if (fmt->flags & _PyStack_WINDOW) {
         return op->nread == 0 && op->nout == 1;
     }
     return op->nout - _PyRegOp_Through(op, fmt) == 1;
@@ -1037,7 +1095,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
 {
     _PyRegCfg *cfg = t->cfg;
     const _PyStackFormat *fmt = _PyRegCfg_FormatOf(instr->opcode);
-    int window = (fmt->flags & _PyIR_WINDOW) != 0;
+    int window = (fmt->flags & _PyStack_WINDOW) != 0;
     int popped = _PyOpcode_num_popped(instr->opcode, instr->oparg);
     int pushed = _PyOpcode_num_pushed(instr->opcode, instr->oparg);
     // Every handler finds its parameters before the op can raise: renamed
@@ -1071,7 +1129,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     int through = 0;
     if (!window) {
         through = _PyIR_CALL_SHAPED(fmt->operands) ? 0
-                : fmt->dst == _PyIR_NO_DST ? pushed : popped + fmt->dst;
+                : fmt->dst == _PyStack_NO_DST ? pushed : popped + fmt->dst;
         if (through < 0 || through > pushed) {
             PyErr_Format(PyExc_SystemError, "bad format for opcode %d",
                          instr->opcode);
@@ -1322,7 +1380,7 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
  *      temporary, and nothing else read the value: the producer goes too.
  *      It must share the POP_TOP's line and handler, so no line event goes.
  *   2. The producer absorbs it: an op that may discard its result
- *      (_PyIR_DISCARDS), which nothing else read, writes it nowhere
+ *      (_PyStack_DISCARDS), which nothing else read, writes it nowhere
  *      (_PyReg_DISCARD).
  *   3. A retirement: Move.Retire of the value, which closes it and may run
  *      Python.  A retirement right after another on the same line and
@@ -1504,7 +1562,7 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
     }
     else if (prod != NULL &&
              (_PyRegCfg_FormatOf(prod->opcode)->flags
-              & _PyIR_DISCARDS))
+              & _PyStack_DISCARDS))
     {
         prod->flags |= _PyReg_DISCARD;
     }
@@ -3674,7 +3732,7 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         slots->out[1] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
                     : _PyRegCfg_Slot(cfg, out[1]);
     }
-    if (fmt->flags & _PyIR_WINDOW) {
+    if (fmt->flags & _PyStack_WINDOW) {
         slots->base = op->nread > 0 ? _PyRegCfg_Slot(cfg, in[0]) : op->base;
         // The top ninputs inputs of a window are its sources
         int first = op->nread - fmt->ninputs;
@@ -3718,7 +3776,7 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     else if (op->dst >= 0) {
         slots->out[0] = op->dst;
     }
-    else if (fmt->dst == _PyIR_NO_DST) {
+    else if (fmt->dst == _PyStack_NO_DST) {
         slots->out[0] = 0;
     }
     else {
@@ -4264,7 +4322,7 @@ window_vacant(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
     const int *in = _PyReg_IN(cfg, op);
     const int *out = _PyReg_OUT(cfg, op);
     // The op's other inputs stay where they are until it reads them
-    int nwin = (fmt->flags & _PyIR_WINDOW) ? op->nread - fmt->ninputs : 1;
+    int nwin = (fmt->flags & _PyStack_WINDOW) ? op->nread - fmt->ninputs : 1;
     for (int k = nwin; k < op->nread; k++) {
         int h = in[k] >= nl ? _PyRegCfg_Slot(cfg, in[k]) : -1;
         if (h >= s && h < s + n) {
@@ -4371,7 +4429,7 @@ reuse_slot(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
     // A window takes its inputs from consecutive slots at the top: a value
     // it reads stays there rather than be staged back
     const _PyRegOp *reader = &cfg->ops[take];
-    if (_PyRegCfg_FormatOf(reader->opcode)->flags & _PyIR_WINDOW) {
+    if (_PyRegCfg_FormatOf(reader->opcode)->flags & _PyStack_WINDOW) {
         return -1;
     }
     int floor = 0;
@@ -4418,7 +4476,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
     int *in = _PyReg_IN(cfg, op);
     int *out = _PyReg_OUT(cfg, op);
     int nin = op->nread + op->nimplicit;
-    int window = (fmt->flags & _PyIR_WINDOW) != 0;
+    int window = (fmt->flags & _PyStack_WINDOW) != 0;
     // A window without inputs starts at the stack top, above the values a
     // raise leaves for the unwinder
     int top_before = o->top;
@@ -4821,17 +4879,17 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         int ndst = 0;
         for (int r = 0; r < 4; r++) {
             int role = fmt->roles[r];
-            if (role == _PyIR_ROLE_DST && fmt->dst != _PyIR_NO_DST
+            if (role == _PyIR_ROLE_DST && fmt->dst != _PyStack_NO_DST
                 && !(op->flags & _PyReg_DISCARD)) {
                 high = Py_MAX(high, slots.out[ndst++]);
             }
-            else if (role == _PyIR_ROLE_BASE) {
+            else if (role == _PyIR_ROLE_GROUP) {
                 // A window's handler reads and writes from its base up
                 int n = Py_MAX(op->nread, op->nout);
                 high = Py_MAX(high, slots.base + Py_MAX(n, 1) - 1);
             }
-            else if (role >= _PyIR_ROLE_IN0) {
-                high = Py_MAX(high, slots.in[role - _PyIR_ROLE_IN0]);
+            else if (role >= _PyIR_ROLE_SRC) {
+                high = Py_MAX(high, slots.in[role - _PyIR_ROLE_SRC]);
             }
         }
         cfg->ntemps = Py_MAX(cfg->ntemps, high + 1 - nl);
@@ -5111,7 +5169,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
             if (op->flags & _PyReg_MOVES) {
                 // A parallel move: its outputs are parameters in their homes
             }
-            else if (fmt->flags & _PyIR_WINDOW) {
+            else if (fmt->flags & _PyStack_WINDOW) {
                 int nwin = op->nread - fmt->ninputs;
                 for (int k = 0; k < op->nread; k++) {
                     if (in[k] < nl) {
@@ -5159,7 +5217,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                 }
             }
             if (op->dst >= 0
-                && !(fmt->flags & _PyIR_STORE_DST)) {
+                && !(fmt->flags & _PyStack_STORE_DST)) {
                 err = verify_error(after, op, "a local dst");
             }
             // A jump gives a temporary where it goes by leaving it in
@@ -5204,7 +5262,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                         reads += reads_of(cfg, &cfg->ops[q], out[0]);
                     }
                 }
-                if (!(fmt->flags & _PyIR_DISCARDS) || op->dst >= 0
+                if (!(fmt->flags & _PyStack_DISCARDS) || op->dst >= 0
                     || op->nout != 1 || reads != 0)
                 {
                     err = verify_error(after, op, "a discarded result that "
@@ -5366,7 +5424,7 @@ dump(const _PyRegCfg *cfg, const char *after)
             }
             if (op->opcode != _PyReg_DEAD && op->nread == 0
                 && (_PyRegCfg_FormatOf(op->opcode)->flags
-                    & _PyIR_WINDOW))
+                    & _PyStack_WINDOW))
             {
                 fprintf(stderr, " base %d", op->base);
             }

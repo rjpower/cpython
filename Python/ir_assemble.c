@@ -473,7 +473,7 @@ span_elems(_PyRegCfg *cfg, const _PyRegOp *op, int counts[2], int *elems)
     }
     int span_out = 0, nfixed_in = 0;
     for (int f = 0; f < 4; f++) {
-        nfixed_in += fmt->roles[f] >= _PyIR_ROLE_IN0;
+        nfixed_in += fmt->roles[f] >= _PyIR_ROLE_SRC;
     }
     if (_PyIR_SpanCountFields(fmt) == 2) {
         counts[0] = op->nout;
@@ -519,7 +519,7 @@ span_nelems(_PyRegCfg *cfg, const _PyRegOp *op)
     }
     int nfixed_in = 0;
     for (int f = 0; f < 4; f++) {
-        nfixed_in += fmt->roles[f] >= _PyIR_ROLE_IN0;
+        nfixed_in += fmt->roles[f] >= _PyIR_ROLE_SRC;
     }
     return _PyIR_SingleSpanReads(fmt) ? op->nread - nfixed_in : op->nout;
 }
@@ -565,7 +565,7 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
         else if (role == _PyIR_ROLE_DST) {
             fields[f] = (uint32_t)slots.out[ndst++];
         }
-        else if (role >= _PyIR_ROLE_IN0) {
+        else if (role >= _PyIR_ROLE_SRC) {
             fields[f] = (uint32_t)_PyRegCfg_Slot(cfg, _PyReg_IN(cfg, op)[fixed_in++]);
         }
         else if (role == _PyIR_ROLE_FB) {
@@ -1197,12 +1197,11 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         slots.out[0] = completed.out[0];
     }
     int oparg = handler_oparg(cfg, op);
-    // Every role's value, then a pick per field.  DST is meaningless when
-    // fmt->dst is _PyIR_NO_DST.
-    int values[_PyIR_ROLE_IN0 + 4] = {
+    // Every translator role's value, then a pick per field
+    int values[_PyIR_ROLE_SRC + 4] = {
         [_PyIR_ROLE_NONE] = 0,
         [_PyIR_ROLE_DST] = slots.out[0],
-        [_PyIR_ROLE_BASE] = slots.base,
+        [_PyIR_ROLE_GROUP] = slots.base,
         [_PyIR_ROLE_FB] = op->fb > 0 ? op->fb : IR_FB_SHARED,
         [_PyIR_ROLE_IMM] = oparg,
         [_PyIR_ROLE_LOCAL_IN] = oparg,
@@ -1210,16 +1209,16 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         [_PyIR_ROLE_LOCAL_CLEAR] = oparg,
         [_PyIR_ROLE_LOCAL_MOVE] = oparg,
         [_PyIR_ROLE_CELL] = oparg,
-        [_PyIR_ROLE_IN0] = slots.in[0],
-        [_PyIR_ROLE_IN0 + 1] = slots.in[1],
-        [_PyIR_ROLE_IN0 + 2] = slots.in[2],
-        [_PyIR_ROLE_IN0 + 3] = slots.in[3],
+        [_PyIR_ROLE_SRC] = slots.in[0],
+        [_PyIR_ROLE_SRC + 1] = slots.in[1],
+        [_PyIR_ROLE_SRC + 2] = slots.in[2],
+        [_PyIR_ROLE_SRC + 3] = slots.in[3],
     };
     uint32_t fields[4];
     int ndst = 0;
     for (int r = 0; r < 4; r++) {
-        int role = fmt->roles[r];
-        assert(role < _PyIR_ROLE_IN0 + 4);
+        int role = _PyRegCfg_ArmRole(fmt, r);
+        assert(role < _PyIR_ROLE_SRC + 4);
         int value = values[role];
         if (role == _PyIR_ROLE_DST) {
             value = slots.out[ndst++];

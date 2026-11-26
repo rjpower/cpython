@@ -142,18 +142,21 @@ class ContractTests(unittest.TestCase):
             self.assertIn(name, BY_NAME)
 
     def test_fields(self):
-        # Inputs are numbered from 0 in field order; a BASE field names a
-        # home group; a feedback field is where fb says
+        # Sources are numbered from 0 in field order; a GROUP field names
+        # the home group; a feedback field is where fb says
         homes = (_opcode.IR_HOME_PRESERVE, _opcode.IR_HOME_VACATE,
                  _opcode.IR_HOME_DEFINE, _opcode.IR_HOME_UNKNOWN)
         for h, row in enumerate(CONTRACT[_opcode.IR_FIRST_ARM:], _opcode.IR_FIRST_ARM):
             with self.subTest(handler=opcode._all_opname[h]):
                 roles = row.roles
-                inputs = [r - _opcode.IR_ROLE_IN0 for r in roles
-                          if r >= _opcode.IR_ROLE_IN0]
+                inputs = [r - _opcode.IR_ROLE_SRC for r in roles
+                          if r >= _opcode.IR_ROLE_SRC]
                 self.assertEqual(inputs, list(range(len(inputs))))
-                if _opcode.IR_ROLE_BASE in roles:
-                    self.assertGreater(row.group, 0)
+                # A group takes one GROUP field, which only a group has
+                self.assertEqual(roles.count(_opcode.IR_ROLE_GROUP),
+                                 1 if row.group else 0)
+                if row.flags & _opcode.IR_GROUP_OUT:
+                    self.assertTrue(row.group)
                 self.assertEqual(_opcode.IR_ROLE_FB in roles,
                                  row.fb != _opcode.IR_LOC_NONE)
                 self.assertEqual(len(row.edges), 2)

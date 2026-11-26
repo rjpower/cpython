@@ -205,14 +205,16 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_FB_UNITS_MAX     4096
 #define IR_FB_SHARED        IR_FIELD_MAX
 
-/* Field roles; input k of a register-style instruction is _PyIR_ROLE_IN0 + k.
- * A field that holds the oparg has role IMM, or one of the slot roles when
+/* Field roles; source k of a register instruction is _PyIR_ROLE_SRC + k, and
+ * its home group's part 0 is the home of its GROUP field (part i is that
+ * home plus i).  A translator's row (Include/internal/pycore_regcfg.h) gives
+ * the base of a window role GROUP.  A field that holds the oparg has role IMM, or one of the slot roles when
  * the oparg names a slot below co_nlocalsplus that the handler reads or
  * writes itself (_PyIR_RoleIsImm()). */
 enum {
     _PyIR_ROLE_NONE,
     _PyIR_ROLE_DST,
-    _PyIR_ROLE_BASE,
+    _PyIR_ROLE_GROUP,
     _PyIR_ROLE_FB,
     _PyIR_ROLE_IMM,
     _PyIR_ROLE_LOCAL_IN,    // reads the local, which keeps its value
@@ -224,7 +226,7 @@ enum {
     _PyIR_ROLE_CELL,        // reads the cell or free variable in the slot
     _PyIR_ROLE_COUNT,       // the length of a span operand
     _PyIR_ROLE_ELEMENT,     // an element of the word's spans
-    _PyIR_ROLE_IN0,
+    _PyIR_ROLE_SRC,
 };
 
 static inline int
@@ -248,21 +250,15 @@ enum {
 
 /* _PyIRFormat.flags: the format, shared by a family, its instrumented twins
  * and the IR-only handlers named after a member.  What a flag says holds
- * for a word of the format whichever of them runs.  WINDOW, NO_FOLD,
- * STORE_DST and DISCARDS are flags of the translator's rows
- * (_PyStackFormat) only. */
+ * for a word of the format whichever of them runs.  The translator's rows
+ * (Include/internal/pycore_regcfg.h) have flags of their own in the bits
+ * that are free here: 0x2, 0x10, 0x40, 0x800. */
 #define _PyIR_VALID         0x1     // the handler exists
-#define _PyIR_WINDOW        0x2     // window style: reads and rewrites
-                                    // consecutive slots from a base
 #define _PyIR_JUMPS         0x4     // the oparg is the absolute target in
                                     // words, in CD
 #define _PyIR_FORWARD       0x8     // the oparg is a signed distance in
                                     // words from the next word, in D
-#define _PyIR_NO_FOLD       0x10    // an output may alias a borrowed input
 #define _PyIR_TRANSPARENT   0x20    // runs another handler on the same fields
-#define _PyIR_STORE_DST     0x40    // dst may name a local: a folded
-                                    // STORE_FAST, which releases the local's
-                                    // old value (_PyStack_MayRunPython())
 #define _PyIR_RUNS_CODE     0x80    // a member may run Python code, which may
                                     // rebind a local through frame.f_locals
 #define _PyIR_JUMP_ALWAYS   0x100   // a jump with one successor, its target;
@@ -270,8 +266,8 @@ enum {
 #define _PyIR_NAMES_TARGET  0x200   // the oparg names a word for monitoring
                                     // only, which control never reaches
                                     // (END_ASYNC_FOR names its END_SEND)
-#define _PyIR_DISCARDS      0x800   // dst may be IR_NO_DST: the handler
-                                    // releases the result (the calls)
+#define _PyIR_GROUP_OUT     0x400   // the word defines its home group
+                                    // and does not read it (Out<G>)
 
 /* _PyIRFormat.effects: what the handler itself may do, a projection of its
  * arm's declaration (Python/register_ops): the effects it declares, the
@@ -295,41 +291,6 @@ enum {
 #define _PyIR_LEARNED_ONLY  0x1000  // requires a reached feedback nomination;
                                     // never admitted in a code image
 
-/* _PyStackFormat.dst of a row without a result */
-#define _PyIR_NO_DST        INT8_MIN
-
-/* A count of slots as a function of the oparg: k plus the part of the oparg
- * that form names: the inputs that a translator's row passes through
- * (_PyStackFormat.through). */
-enum {
-    _PyIR_EXT_FIXED,        // k
-    _PyIR_EXT_OPARG,        // k + oparg
-    _PyIR_EXT_OPARG2,       // k + 2 * oparg
-    _PyIR_EXT_BIT0,         // k + (oparg & 1)
-    _PyIR_EXT_BYTES,        // k + (oparg & 0xFF) + (oparg >> 8): UNPACK_EX
-};
-
-typedef struct {
-    int8_t k;
-    uint8_t form;           // _PyIR_EXT_*
-} _PyIRExtent;
-
-static inline int
-_PyIR_Extent(_PyIRExtent e, int oparg)
-{
-    switch (e.form) {
-        case _PyIR_EXT_OPARG:
-            return e.k + oparg;
-        case _PyIR_EXT_OPARG2:
-            return e.k + 2 * oparg;
-        case _PyIR_EXT_BIT0:
-            return e.k + (oparg & 1);
-        case _PyIR_EXT_BYTES:
-            return e.k + (oparg & 0xFF) + (oparg >> 8);
-        default:
-            return e.k;
-    }
-}
 
 /* Positively checked normal-edge ownership contracts. UNKNOWN deliberately
  * grants no logical initialization or ownership fact during NULL shadowing. */
@@ -381,8 +342,7 @@ typedef struct _PyIRFormat {
     uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
     /* The homes a register instruction names (_PyIR_WordHomes): home h is
      * field h for h < 4, and part h - 3 of its home group for h = 4, 5. */
-    uint8_t group;          // the parts of the home group operand, or 0
-    uint8_t group_at;       // the field that names the group's part 0
+    uint8_t group;          // the parts of the GROUP operand, or 0
     uint8_t normal;         // bit e: an arm of the family takes edge e
     uint8_t vacant;         // bit h: home h may be NULL when the word reads it
     uint8_t committed;      // bit e: edge e publishes before its callbacks
@@ -395,24 +355,6 @@ typedef struct _PyIRFormat {
     uint32_t events;        // bit e: semantic handler or twin can fire event e
 } _PyIRFormat;
 
-/* The translator's row of a stack op (Python/regcfg.c), from
- * Tools/cases_generator/stack_ops.py, and of a register instruction as the
- * translator places it (_PyRegCfg_FormatOf).  Window ops read and rewrite
- * consecutive slots from a base; the others read their inputs from IN
- * fields and write dst. */
-typedef struct {
-    uint16_t flags;         // _PyIR_VALID, _PyIR_WINDOW, ...
-    uint16_t effects;       // _PyIR_RAISES, ...
-    uint8_t roles[4];       // of fields A, B, C and D
-    uint8_t imm;            // _PyIR_LOC_*: where the oparg lives
-    uint8_t ninputs;        // the inputs that IN fields name
-    int8_t dst;             // slot of dst less the depth before, or for a
-                            // window less its base; or _PyIR_NO_DST
-    uint8_t borrow_mask;    // bit k: input k may name a borrowed local
-    uint8_t operands;       // _PyIR_OPERANDS_*
-    _PyIRExtent through;    // the deepest inputs that the op leaves in
-                            // their slots with their values
-} _PyStackFormat;
 
 #define _PyIR_HOMES 6
 /* A home after a normal edge of the word */
@@ -458,11 +400,23 @@ static inline int
 _PyIR_HasDst(const _PyIRFormat *fmt)
 {
     for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] == _PyIR_ROLE_DST && !(fmt->group && f == fmt->group_at)) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
             return 1;
         }
     }
     return 0;
+}
+
+/* The field of the word format's GROUP operand, or -1 */
+static inline int
+_PyIR_GroupField(const _PyIRFormat *fmt)
+{
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_GROUP) {
+            return f;
+        }
+    }
+    return -1;
 }
 
 /* Whether words of the generic handler opcode specialise from their entry
@@ -922,7 +876,7 @@ _PyIR_SingleSpanReads(const _PyIRFormat *fmt)
     int has_dst = 0, has_input = 0;
     for (int f = 0; f < 4; f++) {
         has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
-        has_input |= fmt->roles[f] >= _PyIR_ROLE_IN0;
+        has_input |= fmt->roles[f] >= _PyIR_ROLE_SRC;
     }
     return has_dst || !has_input;
 }

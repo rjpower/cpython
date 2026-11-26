@@ -98,7 +98,7 @@ typedef enum {
 } _PyCallSelfRole;
 
 void
-value_revalidation_error(const char *message);
+_PyEval_value_revalidation_error(const char *message);
 
 /* Whether frame is still the thread's current frame and still runs the
  * executing copy of its code.  An operation can run Python; the frame and
@@ -135,7 +135,7 @@ value_import_level(PyValue level)
 }
 
 PyValue
-value_subscript(PyValueBorrow container, PyValueBorrow key);
+_PyEval_value_subscript(PyValueBorrow container, PyValueBorrow key);
 
 PyValue
 _PyRop_ConvertValue(int kind, PyValueBorrow v);
@@ -160,7 +160,7 @@ PyValue
 _PyRop_MatchKeys(PyValueBorrow subject, PyValueBorrow keys);
 
 PyValue
-value_binary_op(int oparg, PyValueBorrow lhs, PyValueBorrow rhs);
+_PyEval_value_binary_op(int oparg, PyValueBorrow lhs, PyValueBorrow rhs);
 
 /* The wrappers below keep a runtime-API out-parameter in their own C frame,
  * so that the handler that calls them takes the address of none of its
@@ -279,7 +279,7 @@ dtrace_function_entry(_PyInterpreterFrame *frame)
 }
 
 void
-dtrace_function_return(_PyInterpreterFrame *frame);
+_PyEval_dtrace_function_return(_PyInterpreterFrame *frame);
 #endif
 
 #ifndef NDEBUG
@@ -312,7 +312,7 @@ instrumentation_is_current(PyThreadState *tstate, PyCodeObject *code)
 #endif
 
 Py_NO_INLINE int
-value_operation_refresh_failed(PyThreadState *tstate,
+_PyEval_value_operation_refresh_failed(PyThreadState *tstate,
                                _PyInterpreterFrame *frame, _PyInstr *current,
                                PyValue failed_result);
 
@@ -321,14 +321,14 @@ value_operation_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         _PyInstr *current, PyValue failed_result)
 {
     if (tstate->current_frame != frame) {
-        return value_operation_refresh_failed(tstate, frame, current,
+        return _PyEval_value_operation_refresh_failed(tstate, frame, current,
                                               failed_result);
     }
     PyCodeObject *code = _PyFrame_GetCode(frame);
     _PyCodeExec *exec = code->_co_exec;
     if (exec == NULL || frame->ir_words != exec->words ||
         current < exec->words || current >= exec->words + exec->nwords) {
-        return value_operation_refresh_failed(tstate, frame, current,
+        return _PyEval_value_operation_refresh_failed(tstate, frame, current,
                                               failed_result);
     }
     assert(instrumentation_is_current(tstate, code));
@@ -363,7 +363,7 @@ call_return_pc(_PyInstr *current)
 /* The release of one temporary home of a call: the owner gives up its home,
  * and a count that is not the last closes at once, which runs nothing.
  * Returns 1 and leaves the owner in its home when it holds the last count,
- * which call_release_rest() closes.  A home may be NULL: a self operand's
+ * which _PyEval_call_release_rest() closes.  A home may be NULL: a self operand's
  * is, and a callable that a Python callee took from its home. */
 static inline Py_ALWAYS_INLINE int
 call_release_home(PyValue *slots, uint32_t home)
@@ -391,7 +391,7 @@ call_release_home(PyValue *slots, uint32_t home)
  * An owner that holds the last count is left in its home, which keeps the
  * loop free of deallocations (and so of the registers that a call would cost
  * every handler); the others close at once, which runs nothing.  The return
- * value says whether a pass is still owed, and call_release_rest() makes it. */
+ * value says whether a pass is still owed, and _PyEval_call_release_rest() makes it. */
 static inline Py_ALWAYS_INLINE int
 call_release_pass(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
                   int operands, uint32_t dst)
@@ -466,7 +466,7 @@ call_release_owners(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
 
 
 Py_NO_INLINE void
-call_release_rest(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
+_PyEval_call_release_rest(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
                   int operands, uint32_t dst);
 
 /* Release the temporary operands and the callable of a call: its owners that
@@ -479,7 +479,7 @@ call_release_operands(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
     if (Py_UNLIKELY(((word & IR_F_CALL_OWES_OPERANDS) &&
                      operands > IR_OPERANDS_PER_WORD) ||
                     call_release_pass(slots, head, word, operands, dst))) {
-        call_release_rest(slots, head, word, operands, dst);
+        _PyEval_call_release_rest(slots, head, word, operands, dst);
     }
 }
 
@@ -588,7 +588,7 @@ call_vector_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 Py_NO_INLINE PyValue
-call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
             const _PyIRWord *head, PyValue callable);
 
 /* The native call of a specialized handler: the callee reads operands first
@@ -597,7 +597,7 @@ call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * callee sees the operands as they stood at entry (the old value of a local
  * that the callee rebinds through its frame's proxy stays alive in
  * f_overwritten_fast_locals, and a temporary cannot change).  The handler
- * publishes the result and releases the temporaries, as after call_vector().
+ * publishes the result and releases the temporaries, as after _PyEval_call_vector().
  *
  * A callee written against the value API (METH_VALUE) is called through its
  * value entry; an object-API callee through the object vectorcall of the
@@ -607,7 +607,7 @@ call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * checked by the guard (_CHECK_RECURSION_LIMIT), which deopts to the generic
  * path that raises.
  *
- * More than IR_OPERANDS_PER_WORD operands are gathered by call_vector(). */
+ * More than IR_OPERANDS_PER_WORD operands are gathered by _PyEval_call_vector(). */
 
 /* A builtin function.  Its handler's guard checked the call flags and the
  * number of arguments of a fixed-arity value form (METH_VALUE | METH_O or
@@ -623,7 +623,7 @@ call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
     int n = (int)IR_C(word) - first;
     assert(!(flags & (METH_O | METH_NOARGS)) || n == ((flags & METH_O) ? 1 : 0));
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
-        return call_vector(tstate, frame, head, callable);
+        return _PyEval_call_vector(tstate, frame, head, callable);
     }
     PyValue args[IR_OPERANDS_PER_WORD];
     CALL_NATIVE_GATHER(head, _PyFrame_Slots(frame), first, n, args);
@@ -648,7 +648,7 @@ call_class_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
 {
     int n = (int)IR_C(word) - first;
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
-        return call_vector(tstate, frame, head, callable);
+        return _PyEval_call_vector(tstate, frame, head, callable);
     }
     PyValue args[IR_OPERANDS_PER_WORD];
     CALL_NATIVE_GATHER(head, _PyFrame_Slots(frame), first, n, args);
@@ -684,7 +684,7 @@ call_descriptor_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
     assert(PyValue_TYPE(slots[_PyIR_CallOperand(head, first)]) ==
            descr->d_common.d_type);
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
-        return call_vector(tstate, frame, head, callable);
+        return _PyEval_call_vector(tstate, frame, head, callable);
     }
     PyValue args[IR_OPERANDS_PER_WORD];
     CALL_NATIVE_GATHER(head, slots, first, n, args);
@@ -726,7 +726,7 @@ call_take_fields(PyValue *slots, uint64_t fields, unsigned int locals,
 }
 
 Py_NO_INLINE void
-call_take_loop(PyValue *slots, const _PyIRWord *head, int first, int count,
+_PyEval_call_take_loop(PyValue *slots, const _PyIRWord *head, int first, int count,
                PyValue *dest);
 
 static inline Py_ALWAYS_INLINE void
@@ -739,7 +739,7 @@ call_take_operands(PyValue *slots, const _PyIRWord *head, int first, int count,
                          (unsigned int)(ops >> (9 + first)), count, dest);
         return;
     }
-    call_take_loop(slots, head, first, count, dest);
+    _PyEval_call_take_loop(slots, head, first, count, dest);
 }
 
 /* Release the callable operand of a call, a temporary that the call owns. */
@@ -828,7 +828,7 @@ call_fill_exact(PyValue *slots, _PyInterpreterFrame *frame,
     int skip = (word & IR_F_NO_SELF) == 0 &&
         (expanded || !(call_state & CALL_SELF_PRESENT));
     if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
-        call_take_loop(slots, head, skip, n - skip, arguments);
+        _PyEval_call_take_loop(slots, head, skip, n - skip, arguments);
     }
     else {
         // All the operands are in the first operand word; a skipped self
@@ -1035,7 +1035,7 @@ _PyRop_InitFrameReady(PyThreadState *tstate, PyValueBorrow fn)
 }
 
 Py_NO_INLINE void
-rop_call_retire_operands(_PyInterpreterFrame *frame, const _PyIRWord *head);
+_PyEval_rop_call_retire_operands(_PyInterpreterFrame *frame, const _PyIRWord *head);
 
 Py_NO_INLINE _PyInterpreterFrame *
 _PyRop_PushInit(PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue *fn,
@@ -1047,7 +1047,7 @@ _PyRop_RetireFailedArgs(_PyInterpreterFrame *frame, PyValue *fn,
 {
     assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
     (void)fn;
-    rop_call_retire_operands(frame, head);
+    _PyEval_rop_call_retire_operands(frame, head);
 }
 
 Py_NO_INLINE void
@@ -1081,7 +1081,7 @@ Py_NO_INLINE PyValue
 _PyRop_SuperCall(PyValueBorrow sup, PyValueBorrow cls, PyValueBorrow self,
                  bool explicit);
 
-void rop_take_items(const _PyRopSpan *span, PyValue *vals);
+void _PyEval_rop_take_items(const _PyRopSpan *span, PyValue *vals);
 
 /* The argument that the CALL event reports besides `super`: the class, or
  * MISSING when the class was implied */
@@ -1103,7 +1103,7 @@ rop_super_lookup(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  PyObject *name, bool observed)
 {
     PyValue vals[3];
-    rop_take_items(parts, vals);
+    _PyEval_rop_take_items(parts, vals);
     PyValueBorrow sup = PyValue_Borrow(vals[0]);
     PyValueBorrow cls = PyValue_Borrow(vals[1]);
     PyValueBorrow self = PyValue_Borrow(vals[2]);
@@ -1609,9 +1609,9 @@ _PyRop_LeaveActivation(PyThreadState *tstate, _PyInterpreterFrame *frame)
 }
 
 Py_NO_INLINE int
-gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code);
+_PyEval_gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code);
 
-/* gen_prologue_run() for the code that has one: most generator functions have
+/* _PyEval_gen_prologue_run() for the code that has one: most generator functions have
  * no cell variables and are not generator expressions (whose first traceable
  * word follows the prelude). */
 static inline Py_ALWAYS_INLINE int
@@ -1620,7 +1620,7 @@ gen_prologue(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
     if (code->co_ncellvars == 0 && code->_co_exec->first_traceable == 0) {
         return 0;
     }
-    return gen_prologue_run(tstate, gen, code);
+    return _PyEval_gen_prologue_run(tstate, gen, code);
 }
 
 Py_NO_INLINE PyValue
@@ -1668,7 +1668,7 @@ call_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return 0;
     }
     if (!value_frame_is_current(tstate, frame)) {
-        value_revalidation_error(
+        _PyEval_value_revalidation_error(
             "call preparation changed the active frame");
         return -1;
     }
@@ -1687,7 +1687,7 @@ borrowed_word(PyObject *obj)
 
 /* The handlers' calls (call_run_*), after the binder
  * (eval_frame_push_and_init_code), which they use. */
-_PyCallResult call_bind_positional(
+_PyCallResult _PyEval_call_bind_positional(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue,
     const _PyBindPlan *);
 
@@ -1900,7 +1900,7 @@ _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s);
  * MergeKeywords (Python/register_ops/displays.rop). */
 
 void
-rop_take_items(const _PyRopSpan *span, PyValue *vals);
+_PyEval_rop_take_items(const _PyRopSpan *span, PyValue *vals);
 
 
 
@@ -2024,7 +2024,7 @@ static inline Py_ALWAYS_INLINE PyValue
 static inline PyValue
 _PyRop_Subscript(PyValueBorrow container, PyValueBorrow key)
 {
-    return value_subscript(container, key);
+    return _PyEval_value_subscript(container, key);
 }
 
 static inline int
@@ -2443,7 +2443,7 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 
 PyValue
-frame_clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_frame_clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     PyValue result);
 
 /* Retire the unlinked frame of a return; the caller holds the result
@@ -2452,7 +2452,7 @@ static inline void
 _PyRop_RetireFrame(PyThreadState *tstate, _PyInterpreterFrame *dying)
 {
     if (dying->owner != FRAME_OWNED_BY_THREAD) {
-        (void)frame_clear_and_pop(tstate, dying, PyValue_NULL);
+        (void)_PyEval_frame_clear_and_pop(tstate, dying, PyValue_NULL);
         return;
     }
     _PyThreadState_UpdateLastProfiledFrame(tstate, dying, tstate->current_frame);
@@ -2586,7 +2586,7 @@ call_first_argument(const PyValue *slots, const _PyIRWord *head,
 }
 
 _Py_COLD_FUNCTION int
-call_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_call_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
              _PyInstr *head, PyValue callable, PyValue first);
 
 
@@ -2624,24 +2624,24 @@ call_commit(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define CALL_BIND_KWONLY_MAX _Py_CALL_BIND_SLOTS_MAX
 
 Py_NO_INLINE void
-call_bind_discard(PyValue *kwdefaults, unsigned int kwonly_mask,
+_PyEval_call_bind_discard(PyValue *kwdefaults, unsigned int kwonly_mask,
                   PyObject *extras, PyObject *kwargs);
 
 Py_NO_INLINE int
-call_bind_kwdefaults(PyFunctionObject *func, PyCodeObject *code,
+_PyEval_call_bind_kwdefaults(PyFunctionObject *func, PyCodeObject *code,
                      unsigned int kwonly_mask, PyValue *kwdefaults);
 
 Py_NO_INLINE PyObject *
-call_bind_extras(PyValue *slots, _PyInstr *head, PyObject *tuple, int skip,
+_PyEval_call_bind_extras(PyValue *slots, _PyInstr *head, PyObject *tuple, int skip,
                  int filled, int lead, int extras);
 
 Py_NO_INLINE PyObject *
-call_bind_kwargs(_PyInterpreterFrame *frame, PyValue *slots, _PyInstr *head,
+_PyEval_call_bind_kwargs(_PyInterpreterFrame *frame, PyValue *slots, _PyInstr *head,
                  _PyIRWord word, int skip, int lead, int positional,
                  int kwcount, const uint16_t *destinations);
 
 Py_NO_INLINE void
-call_bind_take_rest(PyValue *slots, _PyInstr *head, int skip, int lead,
+_PyEval_call_bind_take_rest(PyValue *slots, _PyInstr *head, int skip, int lead,
                     int filled, int extras, int positional, int kwcount,
                     const uint16_t *destinations, PyValue *base);
 
@@ -2662,10 +2662,10 @@ typedef struct {
 
 
 Py_NO_INLINE PyObject *
-call_bind_dict_kwargs(const _CallDict *items);
+_PyEval_call_bind_dict_kwargs(const _CallDict *items);
 
 Py_NO_INLINE _PyCallResult
-call_publish_object(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_call_publish_object(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     _PyInstr *head, _PyIRWord word, PyGenObject *gen,
                     int operands);
 
@@ -2696,7 +2696,7 @@ call_publish_object(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * A call of a generator function (_Py_CALL_BIND_GENERATOR) creates the
  * generator with _PyGen_NewCall, the one creation routine, binds the
  * arguments into its frame and runs gen_prologue; the call's result is the
- * generator, published by call_publish_object as the generic path publishes
+ * generator, published by _PyEval_call_publish_object as the generic path publishes
  * it, and the status is 0 with no child. */
 static inline Py_ALWAYS_INLINE _PyCallResult
 call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
@@ -2755,7 +2755,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     unsigned int kwonly_mask = simple ? 0 : plan->kwonly_mask;
     PyValue kwdefaults[CALL_BIND_KWONLY_MAX];
     if (!simple && kwonly_mask &&
-        !call_bind_kwdefaults(func, code, kwonly_mask, kwdefaults)) {
+        !_PyEval_call_bind_kwdefaults(func, code, kwonly_mask, kwdefaults)) {
         return (_PyCallResult){1, NULL};
     }
     /* The *args tuple and the **kwargs dictionary hold counts of their own
@@ -2766,20 +2766,20 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyObject *kwargs = NULL;
     if (!simple) {
         if (extras > 0) {
-            extras_tuple = call_bind_extras(slots, head, tuple, skip, filled,
+            extras_tuple = _PyEval_call_bind_extras(slots, head, tuple, skip, filled,
                                             lead, extras);
             if (extras_tuple == NULL) {
-                call_bind_discard(kwdefaults, kwonly_mask, NULL, NULL);
+                _PyEval_call_bind_discard(kwdefaults, kwonly_mask, NULL, NULL);
                 return (_PyCallResult){-1, NULL};
             }
         }
         if (bits & _Py_CALL_BIND_NEW_KWARGS) {
             kwargs = items != NULL
-                ? call_bind_dict_kwargs(items)
-                : call_bind_kwargs(frame, slots, head, word, skip, lead,
+                ? _PyEval_call_bind_dict_kwargs(items)
+                : _PyEval_call_bind_kwargs(frame, slots, head, word, skip, lead,
                                    positional, kwcount, destinations);
             if (kwargs == NULL) {
-                call_bind_discard(kwdefaults, kwonly_mask, extras_tuple, NULL);
+                _PyEval_call_bind_discard(kwdefaults, kwonly_mask, extras_tuple, NULL);
                 return (_PyCallResult){-1, NULL};
             }
         }
@@ -2800,7 +2800,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (!simple && generator) {
         gen = _PyGen_NewCall(tstate, function, NULL, code, frame);
         if (gen == NULL) {
-            call_bind_discard(kwdefaults, kwonly_mask, extras_tuple, kwargs);
+            _PyEval_call_bind_discard(kwdefaults, kwonly_mask, extras_tuple, kwargs);
             return (_PyCallResult){-1, NULL};
         }
         target = &gen->gi_iframe;
@@ -2828,7 +2828,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     else {
         call_take_operands(slots, head, skip, filled - lead, arguments);
         if (kwcount > 0 || extras > 0) {
-            call_bind_take_rest(slots, head, skip, lead, filled, extras,
+            _PyEval_call_bind_take_rest(slots, head, skip, lead, filled, extras,
                                 positional, kwcount, destinations, base);
         }
     }
@@ -2868,7 +2868,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
             _PyGen_DiscardCall(gen);
             return (_PyCallResult){-1, NULL};
         }
-        return call_publish_object(tstate, frame, head, word, gen,
+        return _PyEval_call_publish_object(tstate, frame, head, word, gen,
                                    (int)IR_C(word) - (kwcount != 0));
     }
     call_commit(tstate, frame, head, target);
@@ -2886,18 +2886,18 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 
 Py_NO_INLINE _PyCallResult
-call_bind_positional(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_call_bind_positional(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *head, PyValue callable, PyValue receiver,
                      const _PyBindPlan *plan);
 
 
 Py_NO_INLINE _PyCallResult
-call_push_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_call_push_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  _PyInstr *head, PyValue callable, PyValue receiver,
                  int keywords);
 
 Py_NO_INLINE _PyCallResult
-call_run_instrumented_result(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_call_run_instrumented_result(PyThreadState *tstate, _PyInterpreterFrame *frame,
                              _PyInstr *head, _PyIRWord word, PyValue callable,
                              PyValue first, PyValue result, int flags,
                              int keywords);
@@ -2920,7 +2920,7 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
     PyValue first = PyValue_NULL;
     if (Py_UNLIKELY(instrumented)) {
         first = call_first_argument(slots, head, receiver, keywords);
-        if (call_monitor(tstate, frame, head, callable, first) < 0) {
+        if (_PyEval_call_monitor(tstate, frame, head, callable, first) < 0) {
             return (_PyCallResult){-1, NULL};
         }
     }
@@ -2936,20 +2936,20 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
                                     !PyValue_IsNull(receiver) + (int)IR_C(word) - skip,
                                     skip, !PyValue_IsNull(receiver)))
             {
-                _PyCallResult pushed = call_bind_positional(
+                _PyCallResult pushed = _PyEval_call_bind_positional(
                     tstate, frame, head, callable, receiver, &plan);
                 if (pushed.status <= 0) {
                     return pushed;
                 }
             }
         }
-        return call_push_python(tstate, frame, head, callable, receiver,
+        return _PyEval_call_push_python(tstate, frame, head, callable, receiver,
                                 keywords);
     }
     PyValue result = call_vector_impl(tstate, frame, head, callable, receiver,
                                       keywords);
     if (Py_UNLIKELY(instrumented)) {
-        return call_run_instrumented_result(tstate, frame, head, word,
+        return _PyEval_call_run_instrumented_result(tstate, frame, head, word,
                                             callable, first, result, flags,
                                             keywords);
     }
@@ -2962,7 +2962,7 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
      * temporaries are owned by their homes and a local that the callee
      * rebound keeps its old value alive, so publishing reads nothing
      * stale.  A finalizer that the release runs is in the same position.
-     * Only an event's callback (call_run_instrumented_result) reads the
+     * Only an event's callback (_PyEval_call_run_instrumented_result) reads the
      * frame after the call. */
     assert(tstate->current_frame == frame);
     assert(_PyFrame_GetCode(frame)->_co_exec != NULL &&
@@ -3233,7 +3233,7 @@ vector_arg(const void *args, Py_ssize_t i, int objects)
 }
 
 Py_NO_INLINE _PyBound
-vector_bind(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
+_PyEval_vector_bind(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
             const void *args, int objects, Py_ssize_t nargs, PyObject *kwnames);
 
 /* The entry of every native caller of a Python function: it pushes the
@@ -3284,7 +3284,7 @@ eval_vector(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
         }
     }
     else {
-        _PyBound bound = vector_bind(tstate, func, locals, args, objects,
+        _PyBound bound = _PyEval_vector_bind(tstate, func, locals, args, objects,
                                      nargs, kwnames);
         if (bound.gen != NULL) {
             return PyValue_FromObjectSteal((PyObject *)bound.gen);
@@ -3425,7 +3425,7 @@ inline_slice_bounds(PyValueBorrow start, PyValueBorrow stop,
 /* The slice start:stop as a new object, with the bounds as they are (value
    fields, M4b): no box of an inline bound. NULL with an exception set. */
 PyObject *
-slice_of_bounds(PyValueBorrow start, PyValueBorrow stop);
+_PyEval_slice_of_bounds(PyValueBorrow start, PyValueBorrow stop);
 
 // container[start:stop], for BINARY_SLICE: an owner of the item, or
 // PyValue_NULL with an exception set.
@@ -3478,7 +3478,7 @@ done:
         return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
     }
 generic:;
-    PyObject *slice = slice_of_bounds(start_st, stop_st);
+    PyObject *slice = _PyEval_slice_of_bounds(start_st, stop_st);
     if (slice == NULL) {
         return PyValue_NULL;
     }
@@ -3766,10 +3766,10 @@ extern const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS];
  * evaluator calls, and the function-form executor, which it runs under
  * -X ir_forms */
 Py_NO_INLINE _PyIRTransfer
-ir_event_edge(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_ir_event_edge(PyThreadState *tstate, _PyInterpreterFrame *frame,
               _PyInstr *this_instr, _PyInstr *source, _PyInstr *next,
               int event, int edge);
-_PyIRTransfer ir_GEN_REDIRECT_EFFECT(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyIRTransfer _PyEval_ir_GEN_REDIRECT_EFFECT(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                      _PyInstr *next_instr, _PyIRWord ir_word);
 PyValue _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame,
                              int throwflag);

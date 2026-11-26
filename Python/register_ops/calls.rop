@@ -188,7 +188,7 @@ extern helper push_init(t:Thread, f:Frame, fn:Src, a:Args)
   c _PyRop_PushInit as pointer_or_raised
   evidence(
     review: "P4. ceval.c: _PyEval_CreateInitFrame (_CREATE_INIT_FRAME), then the"
-            "operands it left in their homes on failure (call_release_rest).",
+            "operands it left in their homes on failure (_PyEval_call_release_rest).",
     contract: "The allocation may collect, and a finalizer may run Python before"
               "anything moves; the cache was counted first.  The child is current"
               "on return: its previous frame is the cleanup frame.");
@@ -232,8 +232,8 @@ extern helper push_python(t:Thread, f:Frame, fn:Src, a:Args)
   spends(fn, a)
   c _PyRop_PushPython as pointer_or_raised
   evidence(
-    review: "P4. ceval.c: call_run's Python path: call_bind_positional with a plan"
-            "of the call, else call_push_python; on failure the operands left in"
+    review: "P4. ceval.c: call_run's Python path: _PyEval_call_bind_positional with a plan"
+            "of the call, else _PyEval_call_push_python; on failure the operands left in"
             "their homes are closed with the exception set aside.",
     contract: "The child is current on return and the method operand of an expanded"
               "bound method was released with it current, as the old call did; a"
@@ -256,7 +256,7 @@ extern helper retire_failed_args(f:Frame, fn:Src, a:Args, e:Err) -> Err
   spends(fn, a)
   c _PyRop_RetireFailedArgs as handle
   evidence(
-    review: "P4. ceval.c: call_release_rest over every operand and the callable,"
+    review: "P4. ceval.c: _PyEval_call_release_rest over every operand and the callable,"
             "with the pending exception set aside.",
     contract: "Closes each temporary operand and the callable; a finalizer may run"
               "Python.  The exception is pending again on return.");
@@ -291,7 +291,7 @@ extern helper call_event(t:Thread, f:Frame, at:Site, fn:Src, a:Args)
   requires(instrumented(at))
   c _PyRop_CallEvent as int_zero_ok
   evidence(
-    review: "P4. ceval.c: call_monitor with call_first_argument, as call_run does"
+    review: "P4. ceval.c: _PyEval_call_monitor with call_first_argument, as call_run does"
             "for CALL_INSTRUMENTED.",
     contract: "The callback may run Python and raise; the operands stay in their"
               "homes.");
@@ -303,7 +303,7 @@ extern helper call_native_observed(t:Thread, f:Frame, at:Site, fn:Src, a:Args)
   effects(runs_python, raises)
   c _PyRop_CallNativeObserved as value_or_null
   evidence(
-    review: "P4. ceval.c: call_vector_impl, then call_run_instrumented_result's"
+    review: "P4. ceval.c: call_vector_impl, then _PyEval_call_run_instrumented_result's"
             "events (call_monitor_result); a generator function, a Python"
             "function, fires none, as the old Python path did not.",
     contract: "Borrows every operand; the result is a new owner, closed if a"
@@ -917,7 +917,7 @@ extern helper call_event_ex(t:Thread, f:Frame, at:Site, fo:O, tup:O, a:Args)
   requires(instrumented(at))
   c _PyRop_CallEventEx as value_or_null
   evidence(
-    review: "2A. ceval.c: call_run_ex's call_monitor.",
+    review: "2A. ceval.c: call_run_ex's _PyEval_call_monitor.",
     contract: "The callback may run Python and raise; the held callable stays held.");
 
 extern helper call_native_observed_ex(t:Thread, f:Frame, at:Site, fo:O, ko:O, tup:O, a:Args)
@@ -1011,7 +1011,7 @@ extern helper push_plan(t:Thread, f:Frame, fn:Src, a:Args, fb:Fb<Call>)
   requires(exact<function>(fn))
   c _PyRop_PushPlan as pointer_or_raised
   evidence(
-    review: "2A. ceval.c: call_bind_positional with the site's plan, after"
+    review: "2A. ceval.c: _PyEval_call_bind_positional with the site's plan, after"
             "plan_fits.",
     contract: "Declines nothing (plan_fits proved the tests).  The **kwargs dict and"
               "the *args tuple allocate, and a failure closes the operands with the"

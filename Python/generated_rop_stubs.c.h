@@ -119,7 +119,7 @@ _PyIR_Rop_Stub_Add_Generic(
     a_view1 = PyValue_Borrow(*home_y);
     a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) : PyValue_NULL;
     IR_STUB_ESCAPE();
-    ret1 = value_binary_op(NB_ADD, a_view0, a_view1);
+    ret1 = _PyEval_value_binary_op(NB_ADD, a_view0, a_view1);
     if (PyValue_IsNull(ret1)) {
         goto rop_Add_Generic_binary_at_origin1_Failed;
     }
@@ -2080,7 +2080,7 @@ _PyIR_Rop_Stub_Binary_Generic(
     a_view1 = PyValue_Borrow(*home_y);
     a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) : PyValue_NULL;
     IR_STUB_ESCAPE();
-    ret1 = value_binary_op((uint32_t)IR_D(ir_word), a_view0, a_view1);
+    ret1 = _PyEval_value_binary_op((uint32_t)IR_D(ir_word), a_view0, a_view1);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Generic_binary_at_origin1_Failed;
     }
@@ -2238,7 +2238,7 @@ _PyIR_Rop_Stub_AppendText_Generic(
     a_view1 = PyValue_Borrow(*home_y);
     a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) : PyValue_NULL;
     IR_STUB_ESCAPE();
-    ret1 = value_binary_op((uint32_t)IR_D(ir_word), a_view0, a_view1);
+    ret1 = _PyEval_value_binary_op((uint32_t)IR_D(ir_word), a_view0, a_view1);
     if (PyValue_IsNull(ret1)) {
         goto rop_AppendText_Generic_binary_at_origin1_Failed;
     }

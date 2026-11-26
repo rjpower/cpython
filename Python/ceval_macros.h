@@ -90,7 +90,7 @@
 #define GEN_DISPATCH() goto LABEL_gen_dispatch
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
-        gen_transfer = ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
+        gen_transfer = _PyEval_ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
         goto LABEL_gen_stepped; \
     } while (0)
 /* The error that a completion arm reported in the activation: unwind it */
@@ -123,7 +123,7 @@
         DISPATCH(); \
     } while (0)
 #define IR_GEN_JUMP(NAME, F, IP, V) \
-    IR_STEP_DONE(ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)))
+    IR_STEP_DONE(_PyEval_ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)))
 
 /* The generator frame DYING has returned V and been unlinked and debited;
  * frame is its resumer.  EMPTY: the return is the certified
@@ -343,11 +343,11 @@ do { \
 #define IR_REPORT_EDGE(TAKEN) ((void)(TAKEN))
 
 /* The event of an instrumented instruction that follows its effect (rule 12)
- * runs in a cold function, ir_event_edge(), which returns the word to run or
+ * runs in a cold function, _PyEval_ir_event_edge(), which returns the word to run or
  * no word for an error that the activation describes. */
 #define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
     do { \
-        _PyIRTransfer ir_t = ir_event_edge(tstate, frame, this_instr, \
+        _PyIRTransfer ir_t = _PyEval_ir_event_edge(tstate, frame, this_instr, \
                                            (SOURCE), (NEXT), (EVENT), (EDGE)); \
         next_instr = ir_t.next; \
         if (next_instr == NULL) { \
@@ -439,7 +439,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 #if defined(WITH_DTRACE) && !defined(Py_BUILD_CORE_MODULE)
 static void dtrace_function_entry(_PyInterpreterFrame *);
-static void dtrace_function_return(_PyInterpreterFrame *);
+void _PyEval_dtrace_function_return(_PyInterpreterFrame *);
 
 #define DTRACE_FUNCTION_ENTRY()  \
     if (PyDTrace_FUNCTION_ENTRY_ENABLED()) { \
@@ -448,7 +448,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 
 #define DTRACE_FUNCTION_RETURN() \
     if (PyDTrace_FUNCTION_RETURN_ENABLED()) { \
-        dtrace_function_return(frame); \
+        _PyEval_dtrace_function_return(frame); \
     }
 #else
 #define DTRACE_FUNCTION_ENTRY() ((void)0)

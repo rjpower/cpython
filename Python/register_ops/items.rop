@@ -36,12 +36,12 @@ point BuildSlice.Done(current, next_head, clear) keep() spent(parts) defs(dst);
 
 // The protocol rows.  Every operand is borrowed on every path.
 
-extern helper value_subscript(c:B, k:B)
+extern helper _PyEval_value_subscript(c:B, k:B)
   cases(ok(z:O), err(e:Err))
   effects(runs_python, raises)
   c _PyRop_Subscript as value_or_null
   evidence(
-    review: "Reviewed IT. ceval.c value_subscript: an exact dict, an exact list or"
+    review: "Reviewed IT. ceval.c _PyEval_value_subscript: an exact dict, an exact list or"
             "tuple with an inline index, else _PyValue_GetItem.",
     contract: "Both operands borrowed; the result owned, or NULL with an exception"
               "set. Callbacks: __getitem__, __hash__, __eq__, __index__.");
@@ -103,7 +103,7 @@ macro getitem_at_origin(a:Anchors)
   borrows(a)
 {
   entry():
-    call value_subscript(arg(a, 0), arg(a, 1)) {
+    call _PyEval_value_subscript(arg(a, 0), arg(a, 1)) {
       ok -> Check();
       err -> Failed();
     }

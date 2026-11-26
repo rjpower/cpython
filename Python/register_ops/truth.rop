@@ -223,7 +223,7 @@ extern helper branch_event(t:Thread, f:Frame, at:Site, taken:Bool)
   c _PyRop_BranchEvent as int_redirect
   evidence(
     review: "Reviewed P5. bytecodes.c _INSTRUMENTED_POP_JUMP_IF_x:"
-            "IR_OBSERVE_COMMITTED_BRANCH, ceval.c ir_event_edge.",
+            "IR_OBSERVE_COMMITTED_BRANCH, ceval.c _PyEval_ir_event_edge.",
     contract: "The operand is retired before the call. A callback may raise,"
               "or move the frame, whose return_pc then names the word to run.");
 

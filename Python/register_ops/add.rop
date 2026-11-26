@@ -73,17 +73,17 @@ extern helper box_i64(v:I64)
               "is outside the inline range (asserted), so the result is a new boxed"
               "int. No finalizer, no Python.");
 
-extern helper value_binary_op(op:Enum<Numeric>, a:B, b:B)
+extern helper _PyEval_value_binary_op(op:Enum<Numeric>, a:B, b:B)
   cases(ok(z:O), err(e:Err))
   effects(runs_python, raises)
-  c value_binary_op as value_or_null
+  c _PyEval_value_binary_op as value_or_null
   evidence(
     review: "Reviewed G0c2 (Python/ceval.c): _PyValue_BinaryOps[op](lhs, rhs) ->"
             "PyNumber_* -> an nb_* slot -> any __add__ or the __r*__ fallback.",
     contract: "Both operands borrowed on every path; the result owned, or NULL with"
               "an exception set. Callbacks: arbitrary Python.");
 
-// Calls value_binary_op once on the anchored operands.  A redirect that
+// Calls _PyEval_value_binary_op once on the anchored operands.  A redirect that
 // won while Python ran discharges the result that was not committed and
 // hands the route back.
 macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
@@ -93,7 +93,7 @@ macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
   borrows(a)
 {
   entry():
-    call value_binary_op(op, arg(a, 0), arg(a, 1)) {
+    call _PyEval_value_binary_op(op, arg(a, 0), arg(a, 1)) {
       ok -> Check();
       err -> Failed();
     }

@@ -98,7 +98,7 @@
 #define IR_STEP_DONE(STEP) return (STEP)
 #define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
 #define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
-    return ir_event_edge(tstate, frame, this_instr, (SOURCE), (NEXT), (EVENT), (EDGE))
+    return _PyEval_ir_event_edge(tstate, frame, this_instr, (SOURCE), (NEXT), (EVENT), (EDGE))
 #define IR_GEN_RETURN(V, DYING, EMPTY) \
     do { \
         Py_MUSTTAIL return ir_gen_return(tstate, frame, next_instr, (V), \
@@ -112,7 +112,7 @@
 #define GEN_DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
-        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
+        Py_MUSTTAIL return _PyEval_ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
     } while (0)
 /* The error that a completion arm reported in the activation, for the
  * caller to resolve */
@@ -144,7 +144,7 @@
  * only call it.  Its result is the word to run (the callbacks can redirect
  * it) or no word for an error. */
 Py_NO_INLINE _PyIRTransfer
-ir_event_edge(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_ir_event_edge(PyThreadState *tstate, _PyInterpreterFrame *frame,
               _PyInstr *this_instr, _PyInstr *source, _PyInstr *next,
               int event, int edge)
 {

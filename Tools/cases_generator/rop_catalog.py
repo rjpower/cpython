@@ -272,7 +272,7 @@ class AccessMode(enum.Enum):
 
 
 class Effect(enum.Enum):
-    """ir_contract.py's effect vocabulary, unchanged."""
+    """The effect vocabulary of the declarations."""
     reads = "reads"
     writes = "writes"
     allocates = "allocates"
@@ -550,8 +550,7 @@ SELECT_FACTS: dict[Select, tuple[tuple[Fact, str], ...]] = {
 
 class BuiltinType(enum.Enum):
     """The builtin types a fact may name, and their C type objects (the
-    names ir_contract.py's `exact(...)` uses), so the migration check
-    compares them directly."""
+    names an `exact(...)` fact uses), so a check compares them directly."""
     int = "PyLong_Type"
     float = "PyFloat_Type"
     complex = "PyComplex_Type"

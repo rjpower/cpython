@@ -59,7 +59,7 @@ class Rule(enum.Enum):
     entry = "entry"               # the entry kind a candidate's arm reads
 
 
-# The effect lattice of ir_contract.py: what a declared effect covers, the
+# The effect lattice: what a declared effect covers, the
 # effects at whose sites heap facts die, and the reentry effects, after
 # which a home may hold another value (a finalizer or Python code can
 # write the frame's locals).

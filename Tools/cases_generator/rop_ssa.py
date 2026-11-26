@@ -18,7 +18,7 @@ Nothing is inferred.  Where a declaration does not say what an arm does to
 its homes, `expand` raises `SsaError` with a diagnostic, and the arm does
 not expand.
 
-The leaf IR (ir_leaf.py) is the templates' lowering target and stays as it
+The leaf IR (rop_leaf.py) is the templates' lowering target and stays as it
 is; the evaluator (rop_ssa_eval.py) runs the leaf IR's primitive specs for
 the primitive rows that have them.
 """

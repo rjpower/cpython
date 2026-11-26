@@ -13,9 +13,8 @@ from test.support import os_helper
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
-    import ir_generator
+    import handler_table
     import rop_primitives
-    import ir_leaf_eval
     import rop_catalog
     import rop_check
     import rop_generator
@@ -57,48 +56,6 @@ class AddCheckedScaledTests(unittest.TestCase):
                     fits = -(1 << 50) <= exact < (1 << 50)
                     self.assertEqual(overflowed, not fits)
                     self.assertEqual(out, exact << shift if fits else exact)
-
-
-class AddIntLeafTests(unittest.TestCase):
-    """The leaf graph of Add.Int, run by the reference evaluator, against
-    Python integers: the lowering of add_checked_scaled and the boxing"""
-
-    @classmethod
-    def setUpClass(cls):
-        capi = support.import_helper.import_module("_testinternalcapi")
-        cls.cx = rop_primitives.Context(
-            rop_primitives.Layout.from_c(capi), ir_leaf_eval.RealMemory())
-        prog = products().program
-        cls.leaf = rop_leaf.leaf_of_arm(prog, prog.arms["Add.Int"])
-
-    def word(self, i):
-        return rop_primitives.PRIMITIVES["PyValue_FromInlineInt"].spec(self.cx, i)
-
-    def run_add(self, x, y):
-        return ir_leaf_eval.evaluate(self.leaf.body, self.cx, {"x": x, "y": y}, {})
-
-    def test_sums_at_the_int51_boundaries(self):
-        top = 1 << 50
-        lo, hi = self.cx.k("Py_INT_MIN"), self.cx.k("Py_INT_MAX")
-        values = int51_boundaries(self.cx.k("Py_INT_SHIFT"))
-        for x in values:
-            for y in values:
-                with self.subTest(x=x, y=y):
-                    result = self.run_add(self.word(x), self.word(y))
-                    self.assertEqual(result.outcome, "NEXT")
-                    z = result.outputs["dst"]
-                    if lo <= x + y <= hi:
-                        self.assertEqual(z, self.word(x + y))
-                    else:
-                        self.assertIsInstance(z, rop_primitives.Box)
-                        self.assertEqual((z.type, z.value), ("int", x + y))
-
-    def test_a_word_that_is_no_inline_int_misses(self):
-        one = self.word(1)
-        for other in (0, self.cx.addr("_Py_NoneStruct")):
-            for args in ((one, other), (other, one)):
-                with self.subTest(args=args):
-                    self.assertEqual(self.run_add(*args).outcome, "EXIT")
 
 
 def hot_sequence(lines):
@@ -555,14 +512,12 @@ class ArmRowTests(unittest.TestCase):
             self.assertIn(f"[{handler}] = {{ .flags = _PyIR_VALID", header)
 
     def test_too_many_handlers_name_the_overflow(self):
-        arms = [None] * 94
-        with mock.patch.object(ir_generator, "num_old_handlers",
-                               return_value=419):
-            with self.assertRaisesRegex(ir_generator.ir_arms.HandlerLimitError,
-                                        "419 old handlers and 94 arms and wrappers need "
-                                        "513 handler ids, past the 512"):
-                ir_generator.num_handlers(None, arms)
-            self.assertEqual(ir_generator.num_handlers(None, arms[:93]), 512)
+        arms = [None] * 512
+        with self.assertRaisesRegex(handler_table.ir_arms.HandlerLimitError,
+                                    "1 word kinds and 512 arms and wrappers need "
+                                    "513 handler ids, past the 512"):
+            handler_table.num_handlers(arms)
+        self.assertEqual(handler_table.num_handlers(arms[:511]), 512)
 
 
 ENVIRONMENT = """\

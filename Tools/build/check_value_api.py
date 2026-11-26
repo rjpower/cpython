@@ -1113,7 +1113,7 @@ THUNK_FILES = (
     "Modules/_operator.c",
 )
 FUNCTION_VECTORCALL_FILES = (
-    "Objects/call.c", "Objects/funcobject.c", "Python/bytecodes.c",
+    "Objects/call.c", "Objects/funcobject.c",
     "Python/generated_", "Python/specialize.c", "Python/ceval.c",
     "Python/perf_trampoline.c", "Include/internal/pycore_function.h",
     "Include/cpython/funcobject.h", "Modules/_testinternalcapi/value_call.c",

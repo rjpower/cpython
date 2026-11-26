@@ -568,7 +568,7 @@ Important files
     : Header file for the corresponding [Python/pyarena.c](../Python/pyarena.c).
 
   * [Include/opcode_ids.h](../Include/opcode_ids.h)
-    : List of opcodes. Generated from [Python/bytecodes.c](../Python/bytecodes.c)
+    : List of opcodes. Generated from [stack_ops.py](../Tools/cases_generator/stack_ops.py)
     by
     [Tools/cases_generator/opcode_id_generator.py](../Tools/cases_generator/opcode_id_generator.py).
 

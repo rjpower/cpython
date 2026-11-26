@@ -11,11 +11,10 @@ import ir_arms
 from generators_common import ROOT, write_header
 from cwriter import CWriter
 from handler_table import first_arm, handler_ids, num_handlers
-from stack_opcode_pins import (
+from stack_ops import (
     HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE, MIN_SPECIALIZED_OPCODE,
-    PINNED_OPCODES, PINNED_PSEUDOS,
+    PINNED_OPCODES, PINNED_PSEUDOS, STACK_OPS,
 )
-from stack_ops import STACK_OPS
 import rop_generator
 from typing import TextIO
 

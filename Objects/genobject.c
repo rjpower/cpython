@@ -2285,7 +2285,7 @@ do_send:
 }
 
 /* The object side of async_gen_asend_send_value(), as _Py_VALUE_THUNK_SEND
-   would define it; written out because the SEND handler (bytecodes.c)
+   would define it; written out because the Send arms (Python/register_ops)
    names it, and the macro defines a static function. */
 Py_VALUE_ENTRY PySendResult
 _PyAsyncGenASend_Send(PyObject *self, PyObject *arg, PyObject **presult)

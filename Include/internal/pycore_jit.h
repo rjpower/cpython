@@ -64,7 +64,7 @@ extern "C" {
 #define _PyIR_AGAIN     16
 #define _PyIR_REDIRECT  32
 
-/* The plan of a handler (Python/generated_ir_stubs.c.h, by handler): NONE
+/* The plan of a handler (Python/generated_rop_stubs.c.h, by handler): NONE
  * keeps the template or the form's call; INLINE is a template whose misses
  * run the family's generic stub; SHARED is a call of the arm's stub. */
 enum {
@@ -201,8 +201,8 @@ PyAPI_FUNC(int) _PyJit_PinDeparting(PyThreadState *tstate,
  * invalid), or goes back to an invalid unit.  Returns the code's valid
  * unit; otherwise counts the event, and compiles the code when it is warm
  * or recompiles a stale unit.  Returns the unit to run, or NULL to run the
- * frame in the evaluator.  Declared in every build, for its row's static
- * check (pycore_ir_components.h); defined where the JIT is supported. */
+ * frame in the evaluator.  Declared in every build, for the generated
+ * lowerings; defined where the JIT is supported. */
 extern _PyJitUnit *_PyJit_Event(PyThreadState *tstate,
                                 struct _PyInterpreterFrame *frame);
 

@@ -293,8 +293,8 @@ _PyValueTemps_Close(_PyValueTemps *temps)
 
   An inline value must be boxed (_PyValueTemps_Box(), or an adapter's box)
   before it is converted to a PyObject *. The cases generator does this for
-  instruction inputs; see "Inline values" in
-  Tools/cases_generator/interpreter_definition.md.
+  instruction inputs; see the inline value encoding
+  in this header.
 
   Ordinary debug and release builds use this same payload. Other word
   sizes and free-threaded builds are outside the supported private ABI.
@@ -1130,8 +1130,8 @@ _PyValue_Word(PyValueBorrow value)
 
 /* Close, dup or steal a reference known to be in pointer space, which
    includes PyValue_NULL: the cases generator knows this of a value that
-   passed a guard, was boxed or was built from an object (see "Inline values"
-   in Tools/cases_generator/interpreter_definition.md). There a reference
+   passed a guard, was boxed or was built from an object (see the inline value
+   encoding in this header). There a reference
    other than PyValue_NULL owns a count unless a tag bit is set, so these
    test Py_TAG_BITS alone instead of Py_OWNED_MASK. */
 static inline int
@@ -1294,8 +1294,8 @@ PyValue_LongCheckExact(PyValueBorrow value)
    every exact float but NaN inline, so a boxed operand is a larger int or a
    NaN, and the specialized instruction exits for it. The accessors
    (PyValue_InlineInt64(), PyValue_InlineFloat()) are not conversions to a
-   PyObject *, so the cases generator does not box their argument (see
-   "Inline values" in Tools/cases_generator/interpreter_definition.md). */
+   PyObject *, so the generated arms do not box their argument (see the inline
+   value encoding in this header). */
 
 // A new int for a value outside the inline range, or PyValue_NULL with an
 // exception set. The slow path of PyValue_FromInt64() and of int arithmetic.

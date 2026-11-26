@@ -794,8 +794,8 @@ def wrapped_arms(program: Program) -> list[str]:
 def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
     """Every arm, in handler order, for the per-handler tables, then the
     observed wrapper (twin) of each arm of a family that declares events.
-    The old generator's forms, targets and stub plans list the emitted ones
-    after the old handlers (ir_generator.py).  A twin runs its family's
+    The forms, targets and stub plans list the emitted ones after the word
+    kinds.  A twin runs its family's
     observed wrapper (`observes`), whose case and form it names; without one it
     has neither."""
     shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
@@ -862,14 +862,9 @@ def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
     return made, refused
 
 
-def template_arm_names(paths: list[Path] | None = None) -> list[str]:
-    """The C names of the arms that have a template, for the one table of
-    templates that jit_template_generator.py writes"""
-    program = rop_verify.load(paths or sorted(ROP_DIR.glob("*.rop")))
-    if program.diagnostics:
-        raise GenerateError("\n".join(str(d) for d in program.diagnostics))
-    made, _ = template_texts(lower_all(program, number_arms(program)))
-    return [c_name(name) for name in made]
+def write_lowerings(out: TextIO, p: Products, sources: list[str]) -> None:
+    "The prototypes and table of the JIT's lowerings (jit_backend.LOWERINGS)"
+    jit_backend.write_lowerings(out)
 
 
 def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
@@ -882,6 +877,10 @@ def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("\n")
     for lines in made.values():
         out.write("\n".join(lines) + "\n\n")
+    out.write(f"const _PyJitTemplate _PyJit_Templates[{ir_arms.IR_LIMIT}] = {{\n")
+    for name in made:
+        out.write(f"    [ROP_HANDLER_{c_name(name)}] = jit_template_{c_name(name)},\n")
+    out.write("};\n")
 
 
 # Metadata
@@ -1096,6 +1095,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stubs", help="the completion stubs")
     parser.add_argument("--targets", help="the dispatch table of the evaluator")
     parser.add_argument("--templates", help="the baseline templates")
+    parser.add_argument("--lowerings", help="the baseline JIT's lowerings")
     parser.add_argument("--metadata", help="the metadata header")
     parser.add_argument("sources", nargs="*", type=Path)
     args = parser.parse_args(argv)
@@ -1112,6 +1112,7 @@ def main(argv: list[str] | None = None) -> int:
     for option, writer in (("cases", write_cases), ("forms", write_forms),
                            ("stubs", write_stubs), ("targets", write_targets),
                            ("templates", write_templates),
+                           ("lowerings", write_lowerings),
                            ("metadata", write_metadata)):
         target = getattr(args, option)
         if target:

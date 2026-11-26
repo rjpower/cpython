@@ -111,7 +111,7 @@ class OperandCallShapeTests(unittest.TestCase):
         (head, operands), = head_rows(f.__code__)
         # a, the value 1 and the index of the names in co_consts
         self.assertEqual(head[3], 3)
-        names = _opcode.IR_OPERANDS and operands[0][3]
+        names = operands[0][3]
         self.assertEqual(f.__code__.co_consts[names], ("b",))
 
     def test_builtins(self):

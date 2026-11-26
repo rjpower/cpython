@@ -3,10 +3,9 @@ on:
   pull_request:
     paths: &paths
       - '.github/workflows/tail-call.yml'
-      - 'Python/bytecodes.c'
       - 'Python/ceval.c'
       - 'Python/ceval_macros.h'
-      - 'Python/generated_ir_cases.c.h'
+      - 'Python/generated_rop_cases.c.h'
   push:
     paths: *paths
   workflow_dispatch:

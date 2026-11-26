@@ -555,7 +555,7 @@ class RecordTests(unittest.TestCase):
 
     def test_annotated_uops_have_leaf_ir(self):
         annotated = {name for name, uop in self.uops.items() if "leaf" in uop.annotations}
-        self.assertGreater(len(annotated), 20)
+        self.assertGreater(len(annotated), 15)
         for uop in self.record_uops():
             if uop.name in annotated:
                 self.assertIsNotNone(uop.leaf, uop.name)
@@ -574,9 +574,9 @@ class RecordTests(unittest.TestCase):
     def test_record_dump_prints_the_leaf(self):
         with test_tools.imports_under_tool("cases_generator"):
             import ir_records
-        text = ir_records.format_record(self.records["BINARY_OP_ADD_INT"])
-        self.assertIn("  uop 2 _BINARY_OP_ADD_INT", text)
-        self.assertIn("call _PyValue_BoxInt64", text)
+        text = ir_records.format_record(self.records["COMPARE_OP_FLOAT"])
+        self.assertIn("  uop 2 _COMPARE_OP_FLOAT", text)
+        self.assertIn("prim COMPARISON_BIT", text)
         self.assertRegex(text, r"exit_if EXIT %\d+ \[")
 
 
@@ -649,34 +649,12 @@ def shape_caches(inputs):
                                   {"type_version": version, "shape": shape ^ 1, "offset": first}]
 
 
-# Owners that a store changes: made afresh, and kept alive here
-STORE_OWNERS = []
-
-
-def store_domain():
-    STORE_OWNERS.clear()
-    STORE_OWNERS.extend(Shaped(k, str(k)) for k in range(3))
-    values = [encode_int(5), word(None), word(BIG_INTS[0]), word(LISTS[0])]
-    return [(v, word(o)) for o in STORE_OWNERS for v in values]
-
-
-def store_caches(inputs):
-    return shape_caches(inputs[1:])
-
-
 def _type_version(tp):
     return ctypes.c_uint32.from_address(id(tp) + LAYOUT.offsets["PyTypeObject.tp_version_tag"]).value
 
 
 # Handler: (inputs, a function of the inputs giving the cache operands, opargs)
 HANDLERS = {
-    **{name: (int_domain, None, [0]) for name in (
-        "BINARY_OP_ADD_INT", "BINARY_OP_SUBTRACT_INT", "BINARY_OP_MULTIPLY_INT",
-        "BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT")},
-    **{name: (float_domain, None, [0]) for name in (
-        "BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
-        "BINARY_OP_TRUEDIV_FLOAT")},
-    "STORE_ATTR_SHAPE": (store_domain, store_caches, [0]),
 }
 
 

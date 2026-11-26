@@ -1308,8 +1308,12 @@ def do_exit(w: Walk, st: State, t: Exit, transfer: bool = False) -> None:
             if kind == "exit" and tok is not None and tok.source is not None:
                 # The owner acquired from the home leaves with the activation
                 accounted.add(tok.source)
+        p = w.program.points.get(t.resume or "")
+        if kind == "yield" and p is not None:
+            # The sent value defines P's home when the generator resumes
+            check_point(w, st, p, t.span, f"exit yield resume {p.name}", resume=True)
     leaves = transfer and kind in ("redirect", "exit")
-    if kind in ("next", "branch", "jump", "yield", "redirect", "exit") and not leaves:
+    if kind in ("next", "branch", "jump", "redirect", "exit") and not leaves:
         check_completion(w, st, t, what, accounted)
     if kind in DEPARTING_EXITS:
         check_pinned(w, st, t.span, what)
@@ -1420,7 +1424,7 @@ def check_point(w: Walk, st: State, p: Point, span: SrcSpan, what: str,
             if resume:
                 if actual:
                     w.report(span, Rule.points, f"{what}: {name} is {hs.text()} "
-                             f"before the child returns; the return defines it")
+                             f"before the frame resumes there; the resumption defines it")
                 continue
             if declared != actual:
                 w.report(span, Rule.points, f"{what}: {p.name} "

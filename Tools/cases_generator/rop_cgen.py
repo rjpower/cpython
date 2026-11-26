@@ -717,6 +717,8 @@ class ArmLowerer:
     def immediate(self, operand: str) -> str:
         """An immediate operand's value: its head fields, low field first"""
         p = self.placements[operand]
+        if p.kind is FieldKind.flag:
+            return f"(((uint32_t)(ir_word) >> {p.shift}) & 1u)"
         if not p.slots or any(s.word != 0 for s in p.slots):
             raise Unsupported(f"{self.arm.name}: immediate {operand} is not in the head")
         if p.shared:
@@ -734,7 +736,7 @@ class ArmLowerer:
         p = self.placements[operand]
         if p.kind is FieldKind.home:
             return self.home(operand)
-        if p.kind is FieldKind.imm:
+        if p.kind in (FieldKind.imm, FieldKind.flag):
             return self.immediate(operand)
         if p.kind is FieldKind.name:
             return f"GETITEM(FRAME_CO_NAMES, {self.field(operand)})"
@@ -1158,6 +1160,8 @@ class ArmLowerer:
             self.emit(f"PROCESS_ERROR_AT({ingress}, {self.points[point.name]}, this_instr);")
         elif t.kind == "enter":
             self.emit(f"ROP_ENTER({self.expr(t.args[0])}, {self.resume_slot(t)});")
+        elif t.kind == "yield":
+            self.emit(f"ROP_YIELD({self.expr(t.args[0])}, {self.resume_slot(t)});")
         elif t.kind == "return":
             caller, head = (self.expr(a) for a in t.args)
             self.emit(f"ROP_RETURN({caller}, {head});")
@@ -1167,8 +1171,8 @@ class ArmLowerer:
             raise Unsupported(f"{self.arm.name}: exit {t.kind} is not lowered yet")
 
     def resume_slot(self, t: Exit) -> str:
-        """The home that the child's return value goes to: the resume
-        point's definition"""
+        """The home that the child's return value, or the value sent to a
+        yielding generator, goes to: the resume point's definition"""
         assert t.resume is not None
         defs = self.program.points[t.resume].defs
         if not defs:

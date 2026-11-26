@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from rop_catalog import (CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
+from rop_catalog import (HEAD_FLAG_ENUMS, CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
                          EVIDENCE_REQUIRED, FEEDBACK_ROOTS, HOME_GROUPS, INDEX_BITS, LINEAR_HANDLES,
                          TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
@@ -70,7 +70,7 @@ EXIT_PAYLOAD: dict[ExitKind, tuple[Type | None, ...]] = {
     # The new frame; `resume P` names the caller's point at the return
     ExitKind.enter: (T(Handle.NewFrame),),
     ExitKind.return_: (T(Handle.Frame), T(Handle.Head)),
-    ExitKind.yield_: (T(Handle.Route),),
+    ExitKind.yield_: (O,),
     ExitKind.exit: (O,),
     ExitKind.redirect: (T(Handle.Route),),
 }
@@ -301,6 +301,8 @@ def field_kind(t: Type) -> FieldKind | None:
     if (isinstance(t, WrapType) and t.wrap == Wrap.Span and isinstance(t.arg, HandleType)
             and t.arg.handle in HOME_HANDLES):
         return FieldKind.vector
+    if isinstance(t, EnumType) and t.name in HEAD_FLAG_ENUMS:
+        return FieldKind.flag
     if isinstance(inner, (ScalarType, EnumType)) and imm_bits(inner, {}) is not None:
         return FieldKind.imm
     return None
@@ -343,6 +345,13 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
         if kind is None:
             problems.append((p, f"operand {p.name}:{type_text(p.type)} has no field "
                              "kind"))
+            continue
+        if kind == FieldKind.flag:
+            # A flag of the handler field takes no field of the word
+            if len(enums[p.type.name].members) != 2:
+                problems.append((p, f"operand {p.name}: a flag enum has two members"))
+                continue
+            placements.append(Placement(p.name, kind, 1, (), shift=HEAD_FLAG_ENUMS[p.type.name]))
             continue
         bits = operand_bits(p.type, kind, enums)
         if bits > WIDEST_IMMEDIATE:
@@ -1479,10 +1488,13 @@ def check_exit(c: Checker, scope: Scope, t: Exit, block: str, i: int) -> None:
                  f"{what} of {scope.definition} ({', '.join(sorted(scope.exits))})")
         return
     scope.used_exits.add(t.kind)
-    if (t.resume is not None) != (t.kind == ExitKind.enter.value and
-                                  scope.family is not None):
-        c.report(t.span, scope.definition, "an arm's exit enter names its resume point "
-                 "(exit enter(c) resume P), and no other exit does")
+    resumes = (ExitKind.enter.value, ExitKind.yield_.value)
+    if (t.resume is not None) != (t.kind in resumes and scope.family is not None):
+        c.report(t.span, scope.definition, "an arm's exit enter or yield names its "
+                 "resume point (exit enter(c) resume P, exit yield(v) resume P), and "
+                 "no other exit does")
+    if t.complete is not None and t.kind != ExitKind.enter.value:
+        c.report(t.span, scope.definition, "only an enter names a completion")
     if t.resume is not None and scope.family is not None:
         check_resume(c, scope, t)
     if t.complete is not None and scope.family is not None:
@@ -1525,6 +1537,14 @@ def check_resume(c: Checker, scope: Scope, t: Exit) -> None:
     check_point_ref(c, scope, t.resume, t.span, "", 0)
     p = c.points.get(t.resume)
     if p is None or p.family != scope.family.name:
+        return
+    if t.kind == ExitKind.yield_.value:
+        # The generator itself resumes there, the sent value its definition
+        if p.frame != FrameRole.current or p.pc != PcRole.next_head or len(p.defs) != 1:
+            c.report(t.span, scope.definition, f"yield resume {p.name}: the point is "
+                     f"({p.frame.value}, {p.pc.value}) with {len(p.defs)} definitions; "
+                     "a generator resumes at (current, next_head) with one, the sent "
+                     "value")
         return
     if p.frame != FrameRole.caller or p.pc != PcRole.next_head:
         c.report(t.span, scope.definition, f"resume {p.name}: the point is "

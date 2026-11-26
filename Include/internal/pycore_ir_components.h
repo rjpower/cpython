@@ -1359,15 +1359,6 @@
      * `runs_python`. The seed said `consumed`. */ \
     HELPER(native_call_builtin_o, PyValue, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue *), \
         ARGS(tstate, frame, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
-    /* Python/ceval.c: takes a count of class for the argument vector \
-     * {class, self}, calls the super type through _PyValue_Vectorcall \
-     * (the vector is the caller's window: arguments are not consumed), \
-     * closes class's count and returns the new super object or \
-     * PyValue_NULL with an exception.  `self` is read and not closed: \
-     * the caller's DECREF_INPUTS closes it (the seed declared it \
-     * consumed) */ \
-    HELPER(super_call, PyValue, (PyValueBorrow, PyValueBorrow, PyValue, int), \
-        ARGS(borrowed, borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c value_dict_merge_uniq -> _PyDict_MergeUniq(dict, update, \
      * &dupkey): inserts each item of update into dict, stopping at a key \
      * dict already holds.  A non-dict update is read through keys() and \
@@ -1529,20 +1520,6 @@
      * (jit_lower.c), V11 */ \
     PRIMITIVE(_PyTuple_ITEMS, PyValue *, (PyObject *), \
               ARGS(object), SCALAR, EFFECTS(reads)) \
-    /* The elements of a sequence into the arm's own outputs, the \
-     * destination homes (publication, not an effect); the homes' displaced \
-     * values are closed by the skeleton after the uop (IR_CLOSE_WINDOW) */ \
-    MACRO(IR_UNPACK_ITEMS, ARGS(out, scalar, scalar), NONE, EFFECTS(reads), \
-          EXITS()) \
-    /* The generic unpack (Python/ceval.c): _PyValue_GetIter and the \
-     * iterator's __next__ run Python.  It releases v on every return (Done: \
-     * Py_DECREF(v)); it returns 0 with an exception set, having closed the \
-     * values it wrote below sp (Error:), else 1 with argcnt values (and the \
-     * list for argcntafter >= 0) written below sp */ \
-    HELPER(_PyEval_UnpackIterableValue, int, \
-           (PyThreadState *, PyObject *, int, int, PyValue *), \
-           ARGS(tstate, consumed, scalar, scalar, out), STATUS(ZERO), \
-           EFFECTS(runs_python, raises)) \
     /* Evidence (G0d3), pycore_critical_section.h: a free-threaded build's \
      * critical section.  With the GIL, LOCK_OBJECT(op) is the constant 1 and \
      * UNLOCK_OBJECT(op) nothing; the operand is not evaluated.  Reclassified \
@@ -1604,7 +1581,7 @@
      * dict or mapping b merged into dict a; for a non-dict b it calls \
      * b.keys() and b[key], hashes and compares keys, and resizes a \
      * (arbitrary Python).  Failure: -1 with an exception set (AttributeError \
-     * when b has no keys(), which _DICT_UPDATE rewrites); both arguments are \
+     * when b has no keys(), which _PyRop_DictOverlay rewrites); both arguments are \
      * borrowed on every path.  Result 0 or -1 */ \
     HELPER(PyDict_Update, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python, raises)) \
@@ -1662,7 +1639,7 @@
      * list or tuple is copied, anything else is iterated (__iter__, \
      * __next__, __length_hint__: Python).  Returns a new reference to None \
      * (immortal) or NULL with an exception set (a TypeError when the \
-     * iterable is not iterable, which _LIST_EXTEND rewrites).  Arguments \
+     * iterable is not iterable, which _PyRop_ListExtend rewrites).  Arguments \
      * are borrowed */ \
     HELPER(_PyList_Extend, PyObject *, (PyListObject *, PyObject *), \
         ARGS(scalar, object), SCALAR, EFFECTS(runs_python, raises)) \
@@ -1791,19 +1768,7 @@
      * `runs_python` (a lookup callback or a finalizer can run code and rewrite frame \
      * homes); the feedback is read(entry) (the cache fields it checks), write(entry) \
      * and write(handler).  The operands are `borrowed`: PyValue operands are views \
-     * (the guards that cached them are the specialized words'). \
-     * BinaryOp also reaches specialize_subscr_getitem -> prepare_function_for_inline -> \
-     * _PyCode_GetExec for BINARY_OP_SUBSCR_GETITEM; its `PyValue *` out argument is \
-     * the frame's homes (LOCALS_ARRAY), read to find the operands' slots. */ \
-    HELPER(_Py_Specialize_BinaryOp, void, \
-           (PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *), \
-           ARGS(borrowed, borrowed, scalar, scalar, scalar), NONE, \
-           EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the sequence's type and \
-     * size (tuple, list); an inline operand is refused before any object access. */ \
-    HELPER(_Py_Specialize_UnpackSequence, void, (PyValue, _PyInstr *, int), \
-           ARGS(borrowed, scalar, scalar), NONE, EFFECTS(runs_python), \
-           FEEDBACK(read(entry), write(entry), write(handler))) \
+     * (the guards that cached them are the specialized words'). */ \
     /* Evidence (G0c8): the generator's expansion `_PyIR_FbHeaderOf(frame, instr, handler)` \
      * (ceval_macros.h:1163): `_PyIR_InstrFeedback(code, exec, instr)`, which indexes the \
      * code's feedback-index table and the executing copy's entry array (ir.c:705) and \
@@ -1824,29 +1789,20 @@
      * heap state (nothing rewrites it), so the row reads nothing: `reads` is removed. */ \
     HELPER(_PyFb_HasEntry, int, (int), \
         ARGS(scalar), SCALAR, EFFECTS()) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the callee and its \
+    /* Evidence (G0c8): as the block above. Reads the callee and its \
      * argument tuple and builds the binding plan (_PyBindPlan_Init); no lowering. */ \
     HELPER(_Py_Specialize_CallFunctionEx, void, (PyValue, PyValue, _PyInstr *), \
         ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_py_call_kw / \
+    /* Evidence (G0c8): as the block above. specialize_py_call_kw / \
      * specialize_keyword_binding build a binding plan (_PyBindPlan_Init) and lower \
      * the callee. */ \
     HELPER(_Py_Specialize_CallKw, void, (PyValue, PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Compares the global `super` \
-     * with PySuper_Type by address and tests the class's type flag; no lookup and \
-     * no lowering. */ \
-    HELPER(_Py_Specialize_LoadSuperAttr, void, (PyValue, PyValue, _PyInstr *, int), \
-        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the receiver's type and \
+    /* Evidence (G0c8): as the block above. Reads the receiver's type and \
      * its _tp_iteritem slot; no lookup and no lowering. 
      * The receiver is taken as an object without a test (PyValue_AsKnownObjectBorrow; the send loop's receiver is always one): the row requires `object`. */ \
     HELPER(_Py_Specialize_Send, void, (PyValue, _PyInstr *), \
-        ARGS(borrowed object, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. The instance, slot and dict- \
-     * hint paths read shapes and keys (specialize_dict_access), as for loads. */ \
-    HELPER(_Py_Specialize_StoreAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
-        ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
+        ARGS(borrowed object, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
 
 /* The evaluator's labels (bytecodes.c label(...)): the routines behind them */
 #define _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \
@@ -2855,14 +2811,14 @@
      * call handler's register local (the `call_state` STATE row, which the uop names in \
      * its state(...) clause).  No heap access. */ \
     MACRO(IR_BEGIN_CALL_EFFECTS, ARGS(), NONE, EFFECTS(), EXITS()) \
-    /* Evidence (IR_SKIP_RESUME_IF, Python/ceval_macros.h; G0c batch 6): \
+    /* Evidence (ROP_ENTER_GATE_IF, Python/ceval_macros.h; G0c batch 6): \
      * when the word at next_instr is a RESUME, loads the eval breaker, \
      * the code's instrumentation version (and, free-threaded, the tlbc \
      * index) and advances the evaluator's local next_instr past it.  It \
      * stores nothing to the heap and the frame: `reads` only (the seed \
      * also declared `writes`, for the local).  No call, no failure, no \
      * callback. */ \
-    MACRO(IR_SKIP_RESUME, ARGS(), NONE, EFFECTS(reads), EXITS()) \
+    MACRO(ROP_ENTER_GATE, ARGS(), NONE, EFFECTS(reads), EXITS()) \
     /* IR_JIT_EVENT (ceval_macros.h): counts heat, may call _PyJit_Event and \
      * jit_run through IR_STEP_DONE, which runs the unit, which runs Python, \
      * and dispatches or leaves the evaluator; no table entry, so the larger \
@@ -3001,12 +2957,6 @@
     MACRO(IR_BUILD_SET, ARGS(consumed), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
-    /* _PyObject_LookupSpecialMethod: 1 found, 0 missing (the uop raises), \
-     * negative on error; writes the two output homes.  "escapes" in \
-     * IR_HELPER_EFFECTS (a descriptor's __get__ may run Python).  The \
-     * failure values are zero and negative, which no STATUS names */ \
-    MACRO(IR_LOOKUP_SPECIAL, ARGS(object, out), SCALAR, \
-          EFFECTS(reads, writes, allocates, raises, runs_python), EXITS()) \
     /* _PyFrame_WriteHome / _PyFrame_TakeHome: IR_HELPER_EFFECTS has an empty \
      * set for both.  A value written moves into the home; a value taken \
      * moves out of it.  IR_WRITE_OUTPUT stores into a home of the uop's \

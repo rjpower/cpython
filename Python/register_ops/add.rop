@@ -211,13 +211,13 @@ macro extension_at_origin(f:Fb<Binary>, a:Anchors)
 // Adaptation policy (addendum section 2)
 // Finds the registered descriptor for two exact types and stores it in the
 // entry: hit when one matches.
-extern helper find_extension(f:Fb<Binary>, a:B, b:B)
+extern helper find_extension(f:Fb<Binary>, op:Enum<Numeric>, a:B, b:B)
   cases(hit(), absent())
   effects(reads, writes)
   feedback(write(entry.descr))
-  c _PyRop_FindAddExtension as bool_cases
+  c _PyRop_FindExtension as bool_cases
   evidence(
-    review: "Reviewed P2. specialize.c binary_op_extended_specialization for NB_ADD.",
+    review: "Reviewed P2 and BN. specialize.c binary_op_extended_specialization for the operator.",
     contract: "No memory, no Python, no failure. Writes the entry's descriptor, or"
               "clears it when none matches.");
 
@@ -259,7 +259,7 @@ macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
       blocked -> Run();
     }
   TryExtended():
-    call find_extension(f, use(x), use(y)) {
+    call find_extension(f, NB_ADD, use(x), use(y)) {
       hit -> ChosenExtended();
       absent -> NoArm();
     }

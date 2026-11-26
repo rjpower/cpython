@@ -573,12 +573,13 @@ gen_close_iter(PyObject *yf)
     return 0;
 }
 
+/* Whether the word that instr_ptr names came from a RESUME: a Resume arm or
+ * its instrumented twin, found by the word's origin */
 static inline bool
-is_resume(_PyInstr *instr)
+is_resume(_PyInterpreterFrame *frame)
 {
-    int code = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    /* RESUME, its JIT form and its instrumented twin */
-    return _PyIR_HandlerBase[code] == RESUME;
+    int word = _PyFrame_InstrOffset(frame, frame->instr_ptr);
+    return _PyIR_OriginOpcode(_PyFrame_GetCode(frame), word) == RESUME;
 }
 
 static PyObject *
@@ -621,7 +622,7 @@ gen_close(PyObject *self, PyObject *args)
         Py_DECREF(yf);
     }
 
-    if (is_resume(frame->instr_ptr)) {
+    if (is_resume(frame)) {
         bool no_unwind_tools = _PyEval_NoToolsForUnwind(_PyThreadState_GET(), frame);
         /* We can safely ignore the outermost try block
          * as it is automatically generated to handle

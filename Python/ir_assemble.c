@@ -565,6 +565,9 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
         else if (role >= _PyIR_ROLE_IN0) {
             fields[f] = (uint32_t)_PyRegCfg_Slot(cfg, _PyReg_IN(cfg, op)[fixed_in++]);
         }
+        else if (role == _PyIR_ROLE_FB) {
+            fields[f] = (uint32_t)(op->fb > 0 ? op->fb : IR_FB_SHARED);
+        }
         else if (role == _PyIR_ROLE_IMM) {
             // A scalar next to the spans (Function's `present`): the op's oparg
             fields[f] = (uint32_t)op->oparg;
@@ -595,9 +598,15 @@ call_role_flags(const _PyRegOp *op)
         return (op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0;
     }
     if (op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW) {
-        return (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
+        int flags = (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
+        if (op->opcode == ROP_HANDLER_Call_Generic &&
+            (op->flags & _PyReg_CALL_UNINTERRUPTED)) {
+            flags |= IR_F_UNINTERRUPTED;
+        }
+        return flags;
     }
-    assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)));
+    assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS |
+                          _PyReg_CALL_UNINTERRUPTED)));
     return 0;
 }
 
@@ -614,22 +623,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     }
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
-    }
-    /* With the baseline JIT on, frame entries and resumes are its warm-up
-     * events and hand-offs (Python/jit.c): a choice made here, so that with
-     * the JIT off the words are what they were.  A backedge's is the Jump
-     * family's (the translator's rule). */
-    if (opcode == RESUME && _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
-        return RESUME_JIT;
-    }
-    if (opcode == BINARY_OP) {
-        // NB_SUBSCR is the GetItem family's, never a BINARY_OP handler
-        if (oparg >= NB_SUBSCR) {
-            PyErr_Format(PyExc_SystemError,
-                         "invalid BINARY_OP operation %d", oparg);
-            return ERROR;
-        }
-        return _PyIR_BINARY_OP_FIRST + oparg;
     }
     return opcode;
 }
@@ -783,13 +776,20 @@ done:
     return res;
 }
 
+/* The translator's Resume words (the rule of RESUME in Python/regcfg.c) */
+static inline int
+is_resume_word(int opcode)
+{
+    return opcode == ROP_HANDLER_Resume_Poll || opcode == ROP_HANDLER_Resume_Warm;
+}
+
 static int
 next_frontend_op(_PyRegCfg *cfg, int first, int skip_resume)
 {
     while (first < cfg->nops) {
         int opcode = cfg->ops[first].opcode;
         if (opcode != _PyReg_DEAD && opcode != NOP &&
-            !(skip_resume && opcode == RESUME))
+            !(skip_resume && is_resume_word(opcode)))
         {
             return first;
         }
@@ -1367,6 +1367,11 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             }
             if (_PyIR_FormatOf(op->handler)->operands == _PyIR_OPERANDS_SPANS) {
                 RETURN_IF_ERROR(encode_spans(cfg, op, &words[w]));
+                if (_PyIR_FormatOf(op->handler)->fixed_words) {
+                    // The feedback entry of a span word that has no head field
+                    // left for it (SuperMethod)
+                    words[w + 1] = (_PyIRWord)(op->fb > 0 ? op->fb : IR_FB_SHARED);
+                }
                 continue;
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
@@ -1487,7 +1492,7 @@ make_ir(struct assembler *a, _PyRegCfg *cfg, int nfixed, int nslots,
     ir->first_traceable = ir->nwords;
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
-        if (op->nwords && op->opcode == RESUME &&
+        if (op->nwords && is_resume_word(op->opcode) &&
             (op->oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_GEN_EXPR_START)
         {
             ir->first_traceable = (uint32_t)op->word;

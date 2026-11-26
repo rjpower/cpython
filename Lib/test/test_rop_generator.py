@@ -116,24 +116,23 @@ def hot_sequence(lines):
     return names
 
 
-def old_template(name):
-    text = (ROOT / "Python" / "jit_templates.c.h").read_text()
-    start = text.index(f"jit_template_{name}(_PyJitWordCx *cx)")
-    return text[start:text.index("\n}\n", start)].splitlines()
-
-
 class AddIntTemplateTests(unittest.TestCase):
-    def test_hot_path_matches_the_old_handler(self):
+    def test_hot_path(self):
+        # The old BINARY_OP_ADD_INT template's hot path, with its add and the
+        # branch on overflow spelled as the primitive that is both
         prog = products().program
         arm = prog.arms["Add.Int"]
         new = rop_leaf.template_of_arm(prog, arm, "Add_Int")
-        old = hot_sequence(old_template("BINARY_OP_ADD_INT"))
-        # The old template spells the checked add as an add and a branch on
-        # overflow; the new one has the primitive that is both
-        i = old.index("_PyJitAsm_AluRR")
-        self.assertEqual(old[i:i + 2], ["_PyJitAsm_AluRR", "_PyJitAsm_Jcc"])
-        old[i:i + 2] = ["_PyJitLower__PyValue_AddCheckedScaled"]
-        self.assertEqual(hot_sequence(new), old)
+        self.assertEqual(hot_sequence(new), [
+            "_PyJitAsm_MovRM", "_PyJitAsm_MovRM",
+            "_PyJitLower_PyValue_BothInlineInt", "_PyJitAsm_Jcc",
+            "_PyJitLower__PyValue_IntScaled", "_PyJitLower__PyValue_IntScaled",
+            "_PyJitLower__PyValue_AddCheckedScaled",
+            "_PyJitLower__PyValue_FromIntScaled",
+            "if (!(ir_word & IR_F_LOCAL_B))", "_PyJitAsm_MovMI",
+            "if (!(ir_word & IR_F_LOCAL_C))", "_PyJitAsm_MovMI",
+            "if ((ir_word & IR_F_LOCAL_A))", "_PyJitAsm_MovRM", "_PyJitAsm_MovMR",
+            "if ((ir_word & IR_F_LOCAL_A))", "_PyJitLower_PyValue_XCLOSE"])
 
 
 SHARED = """\
@@ -334,6 +333,14 @@ class StubTests(unittest.TestCase):
         # The completion's status returns are the stubs' (pushed macros)
         self.assertLess(text.index("_PyRop_Complete_S_Complete("),
                         text.index('#pragma pop_macro("IR_BRANCH")'))
+
+    def test_a_yield_names_the_home_the_sent_value_resumes_into(self):
+        from test.test_register_verify import YIELD
+        program = rop_check.check([rop_syntax.parse(YIELD, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        self.assertIn("ROP_YIELD(v, IR_B(ir_word));", "\n".join(p.lowered["Y.Value"].body))
 
 
 UNWIND = """\

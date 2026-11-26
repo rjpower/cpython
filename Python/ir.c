@@ -193,8 +193,8 @@ static int
 generator_resume_shape(const _PyIRWord *words, int nwords, int nl, int pc,
                        int *consumer)
 {
-    if (pc + 2 >= nwords || (!generator_is(words[pc + 1], RESUME) &&
-                             !generator_is(words[pc + 1], RESUME_JIT))) {
+    if (pc + 2 >= nwords ||
+        _PyIR_BaseOpcode(IR_HANDLER(words[pc + 1])) != RESUME) {
         return _PyIR_GEN_CONSUMER_NONE;
     }
     int home = (int)IR_A(words[pc]);
@@ -392,6 +392,14 @@ _PyIR_HandlerName(int handler)
 }
 
 int
+_PyIR_OriginOpcode(PyCodeObject *co, int word)
+{
+    assert(word >= 0 && word < (int)_PyCode_IR(co)->nwords);
+    int offset = (int)_PyCode_IR(co)->pcmap[word];
+    return _PyOpcode_Deopt[_PyCode_CODE(co)[offset].op.code];
+}
+
+int
 _PyIR_BaseOpcode(int handler)
 {
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);
@@ -433,13 +441,6 @@ read_field(_PyIRWord word, int loc)
         default:
             Py_UNREACHABLE();
     }
-}
-
-static inline int
-is_binary_op_handler(int handler)
-{
-    return handler >= _PyIR_BINARY_OP_FIRST
-           && handler <= _PyIR_BINARY_OP_FIRST + NB_SUBSCR - 1;
 }
 
 int
@@ -655,27 +656,6 @@ _PyCode_InstrDiscards(PyCodeObject *co, int i)
 }
 
 int
-_PyCode_InstrUnpackedLocals(PyCodeObject *co, int i)
-{
-    assert(i >= 0 && i < _PyCode_IRSize(co));
-    _PyIRWord word = _PyCode_IRWords(co)[i];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (!(fmt->flags & _PyIR_UNPACKS)) {
-        return 0;
-    }
-    for (int r = 0; r < 4; r++) {
-        if (fmt->roles[r] == _PyIR_ROLE_DST) {
-            int dst = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
-            if (dst >= _PyCode_IRFixed(co)) {
-                return 0;
-            }
-            return _PyIR_Extent(fmt->writes, _PyCode_InstrOparg(co, i));
-        }
-    }
-    return 0;
-}
-
-int
 _PyCode_InstrFbIndex(PyCodeObject *co, int i)
 {
     assert(i >= 0 && i < _PyCode_IRSize(co));
@@ -702,9 +682,6 @@ _PyCode_InstrOparg(PyCodeObject *co, int i)
         case _PyIR_LOC_NONE:
             return 0;
         case _PyIR_LOC_FBARG: {
-            if (is_binary_op_handler(handler)) {
-                return handler - _PyIR_BINARY_OP_FIRST;
-            }
             // The sites that need the operation have an entry of their own
             int i = _PyCode_FbOrdinal(co, read_field(word, fmt->fb));
             assert(i > 0);

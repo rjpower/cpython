@@ -167,6 +167,11 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
  * keep them by keeping the flags (_PyIRFormat.word_flags). */
 #define IR_F_NO_SELF    (1 << 13)
 #define IR_F_NO_KW      (1 << 14)
+/* IR_F_UNINTERRUPTED, on CALL: the call does not poll for signals and
+ * collection when it returns.  The translator sets it on the call that
+ * follows a special-method lookup, so that `with` enters its body before a
+ * pending event runs (the Interrupt operand of the Call family). */
+#define IR_F_UNINTERRUPTED (1 << 15)
 #define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_NO_KW)
 
 /* What a native call owes, on the head of a call-family word, which the
@@ -891,6 +896,12 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
+/* The stack opcode that the translator lowered into the word at index
+ * `word` of co: the first stack instruction the word covers, from the
+ * public offset that pcmap records.  Instrumentation and the generator
+ * machinery read a word's origin here, whatever handler the word has. */
+PyAPI_FUNC(int) _PyIR_OriginOpcode(PyCodeObject *co, int word);
+
 /* The opcode that sys.monitoring sees the word as: the base opcode. */
 PyAPI_FUNC(int) _PyIR_EventOpcode(int handler);
 
@@ -943,7 +954,6 @@ PyAPI_FUNC(int) _PyCode_InstrDiscards(PyCodeObject *co, int i);
 /* The number of elements that the unpack at index i stores to locals (its
  * dst names a run of them), where its stack instruction pushed them; 0 if
  * its elements stay in the window or it is no unpack. */
-PyAPI_FUNC(int) _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */
@@ -1076,6 +1086,22 @@ _PyIR_SpanCountFields(const _PyIRFormat *fmt)
         n += fmt->roles[f] == _PyIR_ROLE_COUNT;
     }
     return n;
+}
+
+/* A span format whose one span is destinations (Unpack's): it has no DST
+ * role of its own and the span is not counted twice as Move's are */
+static inline int
+_PyIR_IsDstSpanFormat(const _PyIRFormat *fmt)
+{
+    if (fmt->operands != _PyIR_OPERANDS_SPANS || _PyIR_SpanCountFields(fmt) != 1) {
+        return 0;
+    }
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static inline int

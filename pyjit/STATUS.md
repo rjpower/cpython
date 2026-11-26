@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `f82408a2990` (pushed) holds:
+`pyjit/rir90` at `25e88d21f6e` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -228,10 +228,29 @@ all-29, two rounds, CPU 15): **1.340 of golden87's time**, from 1.559.
 nbody 3.18 to 1.85, chaos 1.86 to 1.37, float 1.79 to 1.34; unpack_sequence
 (2.96) and generators (1.82) wait for wave 2.
 
-Running, interpreter performance wave 2 (timing recorded, never gated):
-- SP item 4: the remaining specializations with no arm (the native calls,
-  the bound-method and generator-function calls, property, overridden
-  `__getattribute__` and `__getitem__` frames, dict-items iteration).
+SP's item 4 is merged except its last group.  Fourteen native calls
+(`isinstance`, `len`, `list.append`, the builtin and method-descriptor
+forms and the type, str and tuple constructors), the general bound method,
+the generator-function form of `Call.PyGeneral`, and the property,
+overridden `__getattribute__` and Python `__getitem__` frames each have an
+arm, selected by adaptation where golden87's specializer chose them.  Over
+the all-29 kernels, `Call.Generic` runs 1.3M words where it ran 13.2M.
+`FOR_ITER_DICT_ITEMS` is held: golden87's form skips the unpack word that
+follows it, and the port wrote that word's homes without declaring them
+and added a verifier exception for its computed jump.  Its register form
+is a fused for-loop step with both destinations declared at lowering (on
+the freeze list); it is the one golden87 specialization without an arm.
+There are 401 handler ids; the id-shifted guard build passes at base 96.
+
+Interpreter timing after wave 2 (`25e88d21f6e`, measure.py, both JIT off,
+all-29, two rounds, CPU 15): **1.191 of golden87's time**, from 1.340.
+unpack_sequence 2.96 to 1.85, nbody 1.85 to 1.37, generators 1.82 to 1.39,
+spectral_norm 1.79 to 1.41, comprehensions 1.47 to 1.16, nqueens 1.49 to
+1.12.  Nine benchmarks are within 10% of golden87; json_dumps (1.03 to
+1.13) and logging_simple (1.15 to 1.20) are slower than after wave 1.
+The full suites of the wave join are running.
+
+Running:
 - OB (user decision, 2026-11-26): observation leaves the word stream.
   Every arm of a family that declares events had an observed twin with its
   own id (81 twins and 19 observer arms, 100 of 366 ids), and line and

@@ -1051,6 +1051,11 @@ NOT_RUN = {
     "BuildText.Join": "no scenario; test_rop_text runs it",
     "BuildText.Interpolation": "no scenario; test_rop_text runs it",
     "BuildText.Template": "no scenario; test_rop_text runs it",
+    # The tracer's view of the pattern and length arms waits for the interpreter
+    "Length.Size": "no scenario yet; test_rop_patterns runs it",
+    "Pattern.Flag": "no scenario yet; test_rop_patterns runs it",
+    "PatternClass.Match": "no scenario yet; test_rop_patterns runs it",
+    "PatternKeys.Match": "no scenario yet; test_rop_patterns runs it",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "

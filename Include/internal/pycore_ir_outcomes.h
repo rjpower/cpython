@@ -1047,35 +1047,9 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
     if ((fmt->effects & _PyIR_PUSHES_FRAME) &&
         !(_PyIR_BaseOpcode(handler) == SEND && base >= 0))
     {
-        /* Only an actual independent reservation preserves the parent's
-         * homes outside its consumed inputs and eventual recipient. */
-        if (fmt->owner_events != 1) {
-            return;
-        }
-        const _PyIROwnershipEvent *event = _PyIR_OwnerPrograms + fmt->owner_program;
-        if (event->kind != _PyIR_OWNER_NORMAL_CLEAR_INPUTS ||
-            !(event->flags & _PyIR_NORMAL_DISJOINT_CHILD))
-        {
-            return;
-        }
+        return;
     }
-    int window_reads = reads;
-    if ((fmt->flags & _PyIR_WINDOW) && fmt->owner_events == 1) {
-        int event = _PyIR_OwnerPrograms[fmt->owner_program].kind;
-        if (event == _PyIR_OWNER_NORMAL_CLEAR_INPUTS ||
-            event == _PyIR_OWNER_UNPACK_LOCAL_DRAIN)
-        {
-            /* The actual final stack commit reads trailing scalar inputs
-             * through their IN fields, not their former window positions.
-             * Folding one into a local leaves that scratch tail untouched.
-             * Outputs still use their complete physical window extent. */
-            if (fmt->ninputs > reads - through) {
-                return;
-            }
-            window_reads -= fmt->ninputs;
-        }
-    }
-    p->window_reads = window_reads;
+    p->window_reads = reads;
     p->outcome = _PyIR_Outcome(word, edge);
     p->defines = _PyIR_DefinesOf(word, arg);
     p->mode = _PyIR_PHYS_GENERIC;
@@ -1232,43 +1206,12 @@ _PyIR_NormalCallAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limi
         if (home == dst) {
             return _PyIR_ABSENCE_SET_VALUE;
         }
-        if (opcode == FOR_ITER && reads == 2 &&
-            fmt->owner_events == 1 &&
-            _PyIR_OwnerPrograms[fmt->owner_program].kind ==
-                _PyIR_OWNER_NORMAL_COMPLETION)
-        {
-            /* The body result is published to A, including a named binding.
-             * A nonselected BASE+2 is neither an input nor an output home:
-             * retain only its incoming absence, never create a new one. */
-            return home >= base && home - base < reads
-                ? _PyIR_ABSENCE_UNKNOWN : _PyIR_ABSENCE_PRESERVE;
-        }
         if (home >= base && home - base < Py_MAX(reads, writes)) {
             return _PyIR_ABSENCE_UNKNOWN;
         }
         return _PyIR_ABSENCE_PRESERVE;
     }
-    if (fmt->owner_events != 1 ||
-        _PyIR_OwnerPrograms[fmt->owner_program].kind != _PyIR_OWNER_CALL_DRAIN)
-    {
-        return _PyIR_ABSENCE_UNKNOWN;
-    }
-    if (arg < 0 || fmt->roles[0] != _PyIR_ROLE_DST ||
-        fmt->roles[1] != _PyIR_ROLE_IN0 || fmt->roles[2] != _PyIR_ROLE_IMM ||
-        _PyIR_Extent(fmt->writes, arg) > 1 ||
-        _PyIR_Extent(fmt->through, arg) != 0 || fmt->dst != 0 ||
-        fmt->output_kind != _PyIR_OUTPUT_REGISTER_DST)
-    {
-        return _PyIR_ABSENCE_UNKNOWN;
-    }
-    if (home == dst) {
-        return _PyIR_ABSENCE_SET_VALUE;
-    }
-    int nullable;
-    if (home == base || _PyIR_CallReadsOperandHome(wp, home, &nullable)) {
-        return _PyIR_ABSENCE_SET_EMPTY;
-    }
-    return _PyIR_ABSENCE_PRESERVE;
+    return _PyIR_ABSENCE_UNKNOWN;
 }
 
 /* The homes of a register instruction (WF).  A word names up to six homes:

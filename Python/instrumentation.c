@@ -533,11 +533,11 @@ dump_instrumentation_data_line_tools(PyCodeObject *code, uint8_t *line_tools, in
 static void
 dump_instrumentation_data_per_instruction(PyCodeObject *code, _PyCoMonitoringData *data, int i, FILE*out)
 {
-    if (data->per_instruction_opcodes == NULL) {
+    if (data->per_instruction_state == NULL) {
         fprintf(out, ", per-inst opcode = NULL");
     }
     else {
-        fprintf(out, ", per-inst state = %d", data->per_instruction_opcodes[i]);
+        fprintf(out, ", per-inst state = %d", data->per_instruction_state[i]);
     }
     if (data->per_instruction_tools == NULL) {
         fprintf(out, ", per-inst tools = NULL");
@@ -666,7 +666,7 @@ sanity_check_instrumentation(PyCodeObject *code)
                     (_PyCo_DISPLACED_OBSERVED | _PyCo_DISPLACED_INSTRUCTION)));
         }
         if (state.instruction) {
-            CHECK(data->per_instruction_opcodes[i] & _PyCo_STATE_SET);
+            CHECK(data->per_instruction_state[i] & _PyCo_STATE_SET);
         }
         if (state.observed) {
             CHECK(has_events(base));
@@ -761,12 +761,12 @@ word_state_of(PyCodeObject *code, _PyIRWord *words,
         state.line = true;
         state.instruction = (flags & _PyCo_DISPLACED_INSTRUCTION) != 0;
         state.observed = state.instruction
-            ? (monitoring->per_instruction_opcodes[i] & _PyCo_DISPLACED_OBSERVED) != 0
+            ? (monitoring->per_instruction_state[i] & _PyCo_DISPLACED_OBSERVED) != 0
             : (flags & _PyCo_DISPLACED_OBSERVED) != 0;
     }
     else if (handler == INSTRUCTION_HOOK) {
         state.instruction = true;
-        state.observed = (monitoring->per_instruction_opcodes[i] & _PyCo_DISPLACED_OBSERVED) != 0;
+        state.observed = (monitoring->per_instruction_state[i] & _PyCo_DISPLACED_OBSERVED) != 0;
     }
     else {
         state.observed = is_observed(handler);
@@ -784,7 +784,7 @@ set_word_state(PyCodeObject *code, _PyIRWord *words,
     uint8_t displaced = state.observed ? _PyCo_DISPLACED_OBSERVED : 0;
     uint8_t *flags = monitoring->lines ? get_line_flags_ptr(monitoring->lines, i) : NULL;
     if (state.instruction) {
-        FT_ATOMIC_STORE_UINT8_RELAXED(monitoring->per_instruction_opcodes[i],
+        FT_ATOMIC_STORE_UINT8_RELAXED(monitoring->per_instruction_state[i],
                                       _PyCo_STATE_SET | displaced);
     }
     if (state.line) {
@@ -2013,7 +2013,7 @@ _PyCode_LineDisplaced(PyCodeObject *code, int index)
 int
 _PyCode_InstructionDisplaced(PyCodeObject *code, int index)
 {
-    uint8_t state = code->_co_monitoring->per_instruction_opcodes[index];
+    uint8_t state = code->_co_monitoring->per_instruction_state[index];
     assert(state & _PyCo_STATE_SET);
     return _PyCode_HandlerFor(code, index, (state & _PyCo_DISPLACED_OBSERVED) != 0);
 }
@@ -2024,7 +2024,7 @@ _Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame*
     PyCodeObject *code = _PyFrame_GetCode(frame);
     int offset = instr_offset(frame, instr);
     _PyCoMonitoringData *instrumentation_data = code->_co_monitoring;
-    assert(instrumentation_data->per_instruction_opcodes);
+    assert(instrumentation_data->per_instruction_state);
     int next_handler = _PyCode_InstructionDisplaced(code, offset);
     if (tstate->tracing) {
         return next_handler;
@@ -2221,7 +2221,7 @@ allocate_instrumentation_data(PyCodeObject *code)
         monitoring->source_line_tools = NULL;
         monitoring->line_epoch = 1;
         monitoring->source_forced = NULL;
-        monitoring->per_instruction_opcodes = NULL;
+        monitoring->per_instruction_state = NULL;
         monitoring->per_instruction_tools = NULL;
         _Py_atomic_store_ptr_release(&code->_co_monitoring, monitoring);
     }
@@ -2377,9 +2377,9 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
         monitoring->per_instruction_tools = tools;
     }
     if (all_events.tools[PY_MONITORING_EVENT_INSTRUCTION] || source_ingress) {
-        if (code->_co_monitoring->per_instruction_opcodes == NULL) {
-            code->_co_monitoring->per_instruction_opcodes = PyMem_Malloc(code_len * sizeof(_PyCoLineInstrumentationData));
-            if (code->_co_monitoring->per_instruction_opcodes == NULL) {
+        if (code->_co_monitoring->per_instruction_state == NULL) {
+            code->_co_monitoring->per_instruction_state = PyMem_Malloc(code_len * sizeof(_PyCoLineInstrumentationData));
+            if (code->_co_monitoring->per_instruction_state == NULL) {
                 PyErr_NoMemory();
                 return -1;
             }
@@ -2398,7 +2398,7 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
                 }
                 int length = _PyCode_InstrLength(code, i);
                 for (int k = 0; k < length; k++) {
-                    code->_co_monitoring->per_instruction_opcodes[i + k] = state;
+                    code->_co_monitoring->per_instruction_state[i + k] = state;
                 }
                 i += length;
             }

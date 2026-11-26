@@ -4044,7 +4044,7 @@ class TestPinnedOpcodes(unittest.TestCase):
         for name in analysis.translator_only:
             self.assertNotIn(name, analysis.opmap)
             self.assertNotIn(analysis.translator_only[name].opcode,
-                             self.PINS.values())
+                             analysis.opmap.values())
 
     def test_unpinned_instruction_is_an_error(self):
         directory = tempfile.TemporaryDirectory()
@@ -4059,12 +4059,12 @@ class TestPinnedOpcodes(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, "NOT_UPSTREAMS"):
             analyzer.check_pinned(analysis)
 
-    def test_holes_stay_reserved(self):
-        # A name that bytecodes.c does not define keeps its number, and no
-        # handler id takes it
+    def test_handler_ids_avoid_defined_opcodes(self):
+        # A hole holds no stack opcode, so a handler id may take its number
         analysis = analyzer.analyze_files(
             [str(Path(test_tools.toolsdir) / ".." / "Python" / "bytecodes.c")])
-        self.assertTrue(set(analysis.free_ids).isdisjoint(self.PINS.values()))
+        self.assertTrue(
+            set(analysis.free_ids).isdisjoint(analysis.opmap.values()))
 
 
 if __name__ == "__main__":

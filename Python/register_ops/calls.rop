@@ -8,12 +8,14 @@ enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
 enum YieldMode(ORDINARY_YIELD, DELEGATED_YIELD);
 enum ExceptMode(ENTER_HANDLER, LEAVE_HANDLER);
 enum MatchMode(ORDINARY_MATCH, GROUP_MATCH);
-enum ResumeKind(FUNC_START, AFTER_YIELD, AFTER_YIELD_FROM, AFTER_AWAIT, GEN_EXPR_START);
-enum PollKind(BACKEDGE, CALL_END, RESUME_POLL, JIT_EVENT);
+// A call word's poll: a flag of the word, set by the translator on the call
+// that follows a special-method lookup, which `with` relies on to enter the
+// body without a pending signal or collection running first.
+enum Interrupt(INTERRUPTIBLE, UNINTERRUPTED);
 
 // P4: positional calls, init cleanup, return
 
-family Call(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
+family Call(dst:Dst, fn:Src, args:Args, fb:Fb<Call>, interrupt:Enum<Interrupt>)
   exits(next, enter, raise, redirect, miss, again) generic(Generic) ops(CALL)
   events(CALL, C_RETURN, C_RAISE);
 
@@ -247,6 +249,17 @@ extern helper retire_failed_args(f:Frame, fn:Src, a:Args, e:Err) -> Err
             "with the pending exception set aside.",
     contract: "Closes each temporary operand and the callable; a finalizer may run"
               "Python.  The exception is pending again on return.");
+
+// Whether the word polls after its call: a flag of the word, folded where the
+// word is compiled
+extern primitive polls(i:Enum<Interrupt>) -> Bool
+  effects()
+  c _PyRop_Polls as bool
+  evidence(
+    review: "ceval.c: the word's interrupt flag is INTERRUPTIBLE, as `with` skips the poll after its __enter__ and __exit__ lookups' call.",
+    contract: "A comparison of an immediate: no memory, no failure.",
+    lowering: "none yet: the flag is a constant of the word",
+    test: "test_rop_call");
 
 // The poll after a call returns (CALL_PERIODIC): signals and the GC
 extern helper end_poll(t:Thread, f:Frame)
@@ -545,6 +558,8 @@ arm Call.Generic split
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
+    branch polls(interrupt) -> Poll(), Next();
+  Poll():
     call end_poll(thread, frame) {
       ok -> Next();
       err -> PollFailed();
@@ -611,6 +626,8 @@ arm Call.Observed split observes
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
+    branch polls(interrupt) -> Poll(), Next();
+  Poll():
     call end_poll(thread, frame) {
       ok -> Next();
       err -> PollFailed();
@@ -1249,11 +1266,3 @@ family EndAsyncFor(exc:Src, target:NearHead, send:NearHead)
 
 family WithExit(dst:Dst, exit_fn:Src, self:Maybe<Src>, exc:Src, context:Src)
   exits(next, raise) ops(WITH_EXCEPT_START);
-
-// 2F: resume and polls
-
-family Resume(kind:Enum<ResumeKind>)
-  exits(next, jump, raise, redirect, exit) ops(RESUME);
-
-family Poll(kind:Enum<PollKind>)
-  exits(next, raise, redirect, exit);

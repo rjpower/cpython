@@ -432,9 +432,6 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case ROP_HANDLER_GetAttr_NonDescriptorNoDict:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
-                case STORE_ATTR_SHAPE_ADD:
-                    row.payload.shape_to = ((_PyFbAttr *)h)->shape_to;
-                    break;
                 default:
                     break;
             }
@@ -536,15 +533,6 @@ fb_begin_unary(_PyInstr *instr, PyTypeObject *tp)
 {
     _PyFbUnary *fb = (_PyFbUnary *)fb_begin(instr);
     fb->type_version = fb_type_version(tp);
-}
-
-static _PyFbBinary *
-fb_begin_binary(_PyInstr *instr, PyTypeObject *lhs_type, PyTypeObject *rhs_type)
-{
-    _PyFbBinary *fb = (_PyFbBinary *)fb_begin(instr);
-    fb->lhs_version = fb_type_version(lhs_type);
-    fb->rhs_version = fb_type_version(rhs_type);
-    return fb;
 }
 
 static void
@@ -681,6 +669,11 @@ typedef enum {
     ATTR_METHOD_WITH_VALUES,
     ATTR_METHOD_NO_DICT,
     ATTR_METHOD_LAZY_DICT,
+    ATTR_STORE_INSTANCE_VALUE,
+    ATTR_STORE_SLOT,
+    ATTR_STORE_HINT,
+    ATTR_STORE_SHAPE,
+    ATTR_STORE_SHAPE_ADD,
     ATTR_KIND_LIMIT,
 } attr_kind;
 
@@ -769,7 +762,7 @@ static int binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int o
                                              _PyBinaryOpSpecializationDescr **descr);
 
 bool
-_PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
+_PyRop_FindExtension(_PyFbBinary *fb, uint32_t op, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
 {
     fb->descr = NULL;
     if (!PyValue_IsObject(lhs_st) || !PyValue_IsObject(rhs_st)) {
@@ -778,11 +771,22 @@ _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow lhs_st, PyValueBorrow rhs
     _PyBinaryOpSpecializationDescr *descr;
     if (!binary_op_extended_specialization(PyValue_AsKnownObjectBorrow(lhs_st),
                                            PyValue_AsKnownObjectBorrow(rhs_st),
-                                           NB_ADD, &descr)) {
+                                           op, &descr)) {
         return false;
     }
     fb->descr = descr;
     return true;
+}
+
+void
+_PyRop_RecordOperands(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
+{
+    if (is_shared_entry(&fb->h)) {
+        return;
+    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbBinary) - sizeof(_PyFbHeader));
+    fb->lhs_version = fb_type_version(PyValue_TYPE(a));
+    fb->rhs_version = fb_type_version(PyValue_TYPE(b));
 }
 
 int
@@ -886,28 +890,6 @@ specialize_module_load_attr(
 }
 
 /* Attribute specialization */
-
-Py_NO_INLINE void
-_Py_Specialize_LoadSuperAttr(PyValue global_super_st, PyValue cls_st, _PyInstr *instr, int load_method) {
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[LOAD_SUPER_ATTR] == INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR);
-    fb_begin(instr);
-    if (PyValue_IsInline(global_super_st) ||
-        PyValue_AsKnownObjectBorrow(global_super_st) != (PyObject *)&PySuper_Type)
-    {
-        SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_SHADOWED);
-        goto fail;
-    }
-    if (!PyType_FastSubclass(PyValue_TYPE(cls_st), Py_TPFLAGS_TYPE_SUBCLASS)) {
-        SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_BAD_CLASS);
-        goto fail;
-    }
-    uint8_t load_code = load_method ? LOAD_SUPER_ATTR_METHOD : LOAD_SUPER_ATTR_ATTR;
-    specialize(instr, load_code);
-    return;
-fail:
-    unspecialize(instr);
-}
 
 typedef enum {
     OVERRIDING, /* Is an overriding descriptor, and will remain so. */
@@ -1070,8 +1052,9 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, uint8_t shape)
     _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
     for (int i = 0; i < FB_POLY_SIZE && poly->handler[i] != 0; i++) {
         int opcode = poly->handler[i];
-        if ((opcode == ROP_HANDLER_GetAttr_Shape || opcode == STORE_ATTR_SHAPE ||
-             opcode == STORE_ATTR_SHAPE_ADD) &&
+        if ((opcode == ROP_HANDLER_GetAttr_Shape ||
+             opcode == ROP_HANDLER_AttrWrite_Shape ||
+             opcode == ROP_HANDLER_AttrWrite_ShapeAdd) &&
             poly->type_version[i] == tp_version && poly->aux[i] != shape)
         {
             return true;
@@ -1097,7 +1080,7 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     }
     int opcode;
     if (_PyShape_HasSlot(type, shape, index)) {
-        opcode = base_op == LOAD_ATTR ? ATTR_KIND(ATTR_SHAPE) : STORE_ATTR_SHAPE;
+        opcode = ATTR_KIND(base_op == LOAD_ATTR ? ATTR_SHAPE : ATTR_STORE_SHAPE);
         if (base_op == LOAD_ATTR) {
             fb->read_kind = _Py_FB_READ_SHAPE;
         }
@@ -1111,7 +1094,7 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
             return 0;
         }
         fb->shape_to = shape_to;
-        opcode = STORE_ATTR_SHAPE_ADD;
+        opcode = ATTR_KIND(ATTR_STORE_SHAPE_ADD);
     }
     fb->shape = shape;
     return opcode;
@@ -1530,8 +1513,10 @@ attr_specialize(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name,
     }
 }
 
-Py_NO_INLINE void
-(_Py_Specialize_StoreAttr)(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
+/* Specialize the site of an AttrWrite word for the attribute name of
+ * owner_st, reporting the kind found in attr_collect. */
+static void
+attr_specialize_store(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
@@ -1606,7 +1591,7 @@ Py_NO_INLINE void
             assert(offset > 0);
             fb->index = (uint32_t)offset;
             fb->type_version = tp_version;
-            specialize(instr, STORE_ATTR_SLOT);
+            specialize(instr, ATTR_KIND(ATTR_STORE_SLOT));
             goto success;
         }
         case DUNDER_CLASS:
@@ -1636,8 +1621,8 @@ Py_NO_INLINE void
             goto fail;
         case ABSENT:
             if (specialize_dict_access(owner, instr, type, kind, name, tp_version,
-                                       STORE_ATTR, STORE_ATTR_INSTANCE_VALUE,
-                                       STORE_ATTR_WITH_HINT)) {
+                                       STORE_ATTR, ATTR_KIND(ATTR_STORE_INSTANCE_VALUE),
+                                       ATTR_KIND(ATTR_STORE_HINT))) {
                 goto success;
             }
     }
@@ -1656,37 +1641,60 @@ success:
  * words); -1 where the family has no such arm.  The last case of each row is
  * "none".  A nomination of a handler without an arm (a property, an
  * overridden __getattribute__, a getset in method position) is "none": the site stays generic. */
+typedef enum {
+    ATTR_FAMILY_GETATTR,
+    ATTR_FAMILY_GETMETHOD,
+    ATTR_FAMILY_SETATTR,
+} attr_family;
+
 typedef struct {
     int kind;
     int arm;
     int getattr_case;
     int getmethod_case;
+    int setattr_case;
 } attr_arm;
 
 static const attr_arm attr_arms[] = {
-    {ATTR_INSTANCE_VALUE, ROP_HANDLER_GetAttr_Instance, 0, -1},
-    {ATTR_SHAPE, ROP_HANDLER_GetAttr_Shape, 1, -1},
-    {ATTR_MODULE, ROP_HANDLER_GetAttr_Module, 2, -1},
-    {ATTR_WITH_HINT, ROP_HANDLER_GetAttr_Hint, 3, -1},
-    {ATTR_SLOT, ROP_HANDLER_GetAttr_ValueSlot, 4, -1},
-    {ATTR_SLOT_POINTER, ROP_HANDLER_GetAttr_PointerSlot, 5, -1},
-    {ATTR_CLASS, ROP_HANDLER_GetAttr_Class, 6, -1},
-    {ATTR_CLASS_WITH_METACLASS_CHECK, ROP_HANDLER_GetAttr_Class, 6, -1},
-    {ATTR_NONDESCRIPTOR_WITH_VALUES, ROP_HANDLER_GetAttr_NonDescriptorValues, 7, -1},
-    {ATTR_NONDESCRIPTOR_NO_DICT, ROP_HANDLER_GetAttr_NonDescriptorNoDict, 8, -1},
-    {ATTR_GETSET, ROP_HANDLER_GetAttr_GetSet, 9, -1},
-    {ATTR_METHOD_WITH_VALUES, ROP_HANDLER_GetMethod_MethodValues, -1, 0},
-    {ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1},
-    {ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2},
-    {ATTR_CLASSMETHOD, ROP_HANDLER_GetMethod_ClassMethod, -1, 3},
+    {ATTR_INSTANCE_VALUE, ROP_HANDLER_GetAttr_Instance, 0, -1, -1},
+    {ATTR_SHAPE, ROP_HANDLER_GetAttr_Shape, 1, -1, -1},
+    {ATTR_MODULE, ROP_HANDLER_GetAttr_Module, 2, -1, -1},
+    {ATTR_WITH_HINT, ROP_HANDLER_GetAttr_Hint, 3, -1, -1},
+    {ATTR_SLOT, ROP_HANDLER_GetAttr_ValueSlot, 4, -1, -1},
+    {ATTR_SLOT_POINTER, ROP_HANDLER_GetAttr_PointerSlot, 5, -1, -1},
+    {ATTR_CLASS, ROP_HANDLER_GetAttr_Class, 6, -1, -1},
+    {ATTR_CLASS_WITH_METACLASS_CHECK, ROP_HANDLER_GetAttr_Class, 6, -1, -1},
+    {ATTR_NONDESCRIPTOR_WITH_VALUES, ROP_HANDLER_GetAttr_NonDescriptorValues, 7, -1, -1},
+    {ATTR_NONDESCRIPTOR_NO_DICT, ROP_HANDLER_GetAttr_NonDescriptorNoDict, 8, -1, -1},
+    {ATTR_GETSET, ROP_HANDLER_GetAttr_GetSet, 9, -1, -1},
+    {ATTR_METHOD_WITH_VALUES, ROP_HANDLER_GetMethod_MethodValues, -1, 0, -1},
+    {ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1, -1},
+    {ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2, -1},
+    {ATTR_CLASSMETHOD, ROP_HANDLER_GetMethod_ClassMethod, -1, 3, -1},
+    {ATTR_STORE_INSTANCE_VALUE, ROP_HANDLER_AttrWrite_Instance, -1, -1, 0},
+    {ATTR_STORE_SHAPE, ROP_HANDLER_AttrWrite_Shape, -1, -1, 1},
+    {ATTR_STORE_SHAPE_ADD, ROP_HANDLER_AttrWrite_ShapeAdd, -1, -1, 2},
+    {ATTR_STORE_HINT, ROP_HANDLER_AttrWrite_Hint, -1, -1, 3},
+    {ATTR_STORE_SLOT, ROP_HANDLER_AttrWrite_Slot, -1, -1, 4},
 };
 
+static int
+attr_case_of(const attr_arm *a, attr_family family)
+{
+    switch (family) {
+        case ATTR_FAMILY_GETATTR: return a->getattr_case;
+        case ATTR_FAMILY_GETMETHOD: return a->getmethod_case;
+        case ATTR_FAMILY_SETATTR: return a->setattr_case;
+    }
+    Py_UNREACHABLE();
+}
+
 static const attr_arm *
-attr_arm_of(int kind, bool method)
+attr_arm_of(int kind, attr_family family)
 {
     for (size_t i = 0; i < Py_ARRAY_LENGTH(attr_arms); i++) {
         const attr_arm *a = &attr_arms[i];
-        if (a->kind == kind && (method ? a->getmethod_case : a->getattr_case) >= 0) {
+        if (a->kind == kind && attr_case_of(a, family) >= 0) {
             return a;
         }
     }
@@ -1705,7 +1713,7 @@ attr_restore_entry(_PyFbAttr *fb, const _PyFbAttr *before)
 
 static int
 attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
-              PyObject *name, bool method, _PyAttrRecipe *recipe)
+              PyObject *name, attr_family family, _PyAttrRecipe *recipe)
 {
     assert(attr_collect == NULL);
     attr_nomination nominated = {0};
@@ -1714,17 +1722,24 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
      * nothing must leave the entry as the site's arm expects it. */
     _PyFbAttr before = *fb;
     attr_collect = &nominated;
-    attr_specialize(owner, site, name, method);
+    if (family == ATTR_FAMILY_SETATTR) {
+        attr_specialize_store(owner, site, name);
+    }
+    else {
+        attr_specialize(owner, site, name, family == ATTR_FAMILY_GETMETHOD);
+    }
     attr_collect = NULL;
-    int none = method ? 4 : 10;
-    const attr_arm *chosen = attr_arm_of(nominated.kind, method);
+    // The last case of each row is "none"
+    int none = family == ATTR_FAMILY_GETATTR ? 10
+             : family == ATTR_FAMILY_GETMETHOD ? 4 : 5;
+    const attr_arm *chosen = attr_arm_of(nominated.kind, family);
     if (chosen == NULL) {
         attr_restore_entry((_PyFbAttr *)fb, &before);
         return none;
     }
     // The first poly observation saves what the entry described before
     fb_record(site, (_PyFbHeader *)fb, chosen->arm);
-    int kind = method ? chosen->getmethod_case : chosen->getattr_case;
+    int kind = attr_case_of(chosen, family);
     bool admitted;
     switch (chosen->arm) {
         case ROP_HANDLER_GetAttr_Instance:
@@ -1732,6 +1747,15 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
             break;
         case ROP_HANDLER_GetAttr_Shape:
             admitted = _PyAttr_AdmittedShape(fb, name, recipe);
+            break;
+        case ROP_HANDLER_AttrWrite_Instance:
+        case ROP_HANDLER_AttrWrite_Hint:
+        case ROP_HANDLER_AttrWrite_Slot:
+            admitted = _PyAttr_AdmittedInstanceSlot(fb, name, recipe);
+            break;
+        case ROP_HANDLER_AttrWrite_Shape:
+        case ROP_HANDLER_AttrWrite_ShapeAdd:
+            admitted = _PyAttr_AdmittedStoreShape(fb, name, recipe);
             break;
         case ROP_HANDLER_GetMethod_MethodValues:
             admitted = _PyAttr_AdmittedMethod(fb, name, recipe);
@@ -1751,14 +1775,21 @@ int
 _PyAttr_ClassifyGetAttr(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
                         PyObject *name, _PyAttrRecipe *recipe)
 {
-    return attr_classify(owner, site, fb, name, false, recipe);
+    return attr_classify(owner, site, fb, name, ATTR_FAMILY_GETATTR, recipe);
 }
 
 int
 _PyAttr_ClassifyGetMethod(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
                           PyObject *name, _PyAttrRecipe *recipe)
 {
-    return attr_classify(owner, site, fb, name, true, recipe);
+    return attr_classify(owner, site, fb, name, ATTR_FAMILY_GETMETHOD, recipe);
+}
+
+int
+_PyAttr_ClassifySetAttr(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
+                        PyObject *name, _PyAttrRecipe *recipe)
+{
+    return attr_classify(owner, site, fb, name, ATTR_FAMILY_SETATTR, recipe);
 }
 
 bool
@@ -2710,170 +2741,6 @@ _PyRop_ClassifyCallKw(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
         ? CALLKW_CASE_PLAN : CALLKW_CASE_OTHER;
 }
 
-#ifdef Py_STATS
-static int
-binary_op_fail_kind(int oparg, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
-{
-    PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
-    PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
-    switch (oparg) {
-        case NB_INPLACE_ADD:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_ADD_DIFFERENT_TYPES;
-            }
-            return SPEC_FAIL_BINARY_OP_ADD_OTHER;
-        case NB_AND:
-        case NB_INPLACE_AND:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_AND_DIFFERENT_TYPES;
-            }
-            if (lhs_type == &PyLong_Type) {
-                return SPEC_FAIL_BINARY_OP_AND_INT;
-            }
-            return SPEC_FAIL_BINARY_OP_AND_OTHER;
-        case NB_FLOOR_DIVIDE:
-        case NB_INPLACE_FLOOR_DIVIDE:
-            return SPEC_FAIL_BINARY_OP_FLOOR_DIVIDE;
-        case NB_LSHIFT:
-        case NB_INPLACE_LSHIFT:
-            return SPEC_FAIL_BINARY_OP_LSHIFT;
-        case NB_MATRIX_MULTIPLY:
-        case NB_INPLACE_MATRIX_MULTIPLY:
-            return SPEC_FAIL_BINARY_OP_MATRIX_MULTIPLY;
-        case NB_MULTIPLY:
-        case NB_INPLACE_MULTIPLY:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_MULTIPLY_DIFFERENT_TYPES;
-            }
-            return SPEC_FAIL_BINARY_OP_MULTIPLY_OTHER;
-        case NB_OR:
-        case NB_INPLACE_OR:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_OR_DIFFERENT_TYPES;
-            }
-            if (lhs_type == &PyLong_Type) {
-                return SPEC_FAIL_BINARY_OP_OR_INT;
-            }
-            return SPEC_FAIL_BINARY_OP_OR;
-        case NB_POWER:
-        case NB_INPLACE_POWER:
-            return SPEC_FAIL_BINARY_OP_POWER;
-        case NB_REMAINDER:
-        case NB_INPLACE_REMAINDER:
-            return SPEC_FAIL_BINARY_OP_REMAINDER;
-        case NB_RSHIFT:
-        case NB_INPLACE_RSHIFT:
-            return SPEC_FAIL_BINARY_OP_RSHIFT;
-        case NB_SUBTRACT:
-        case NB_INPLACE_SUBTRACT:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_SUBTRACT_DIFFERENT_TYPES;
-            }
-            return SPEC_FAIL_BINARY_OP_SUBTRACT_OTHER;
-        case NB_TRUE_DIVIDE:
-        case NB_INPLACE_TRUE_DIVIDE:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_DIFFERENT_TYPES;
-            }
-            if (lhs_type == &PyFloat_Type) {
-                return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_FLOAT;
-            }
-            return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_OTHER;
-        case NB_XOR:
-        case NB_INPLACE_XOR:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_XOR_DIFFERENT_TYPES;
-            }
-            if (lhs_type == &PyLong_Type) {
-                return SPEC_FAIL_BINARY_OP_XOR_INT;
-            }
-            return SPEC_FAIL_BINARY_OP_XOR;
-        case NB_SUBSCR:
-            if (lhs_type == &PyList_Type) {
-                if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
-                    return SPEC_FAIL_OUT_OF_RANGE;
-                }
-                if (rhs_type == &PySlice_Type) {
-                    return SPEC_FAIL_BINARY_OP_SUBSCR_LIST_SLICE;
-                }
-            }
-            if (lhs_type == &PyTuple_Type) {
-                if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
-                    return SPEC_FAIL_OUT_OF_RANGE;
-                }
-                if (rhs_type == &PySlice_Type) {
-                    return SPEC_FAIL_BINARY_OP_SUBSCR_TUPLE_SLICE;
-                }
-            }
-            if (lhs_type == &PyUnicode_Type) {
-                if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
-                    return SPEC_FAIL_OUT_OF_RANGE;
-                }
-                if (rhs_type == &PySlice_Type) {
-                    return SPEC_FAIL_BINARY_OP_SUBSCR_STRING_SLICE;
-                }
-            }
-            PyTypeObject *container_type = lhs_type;
-            if (PyType_IsSubtype(lhs_type, &PyDictProxy_Type)) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_MAPPINGPROXY;
-            }
-
-            if (PyType_IsSubtype(lhs_type, &PyBytes_Type)) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_BYTES;
-            }
-
-            if (PyType_IsSubtype(lhs_type, &PyRange_Type)) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_RANGE;
-            }
-
-            if (strcmp(container_type->tp_name, "array.array") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_ARRAY;
-            }
-
-            if (strcmp(container_type->tp_name, "re.Match") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_RE_MATCH;
-            }
-
-            if (strcmp(container_type->tp_name, "collections.deque") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_DEQUE;
-            }
-
-            if (strcmp(container_type->tp_name, "EnumDict") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_ENUMDICT;
-            }
-
-            if (strcmp(container_type->tp_name, "StackSummary") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_STACKSUMMARY;
-            }
-
-            if (strcmp(container_type->tp_name, "collections.defaultdict") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_DEFAULTDICT;
-            }
-
-            if (strcmp(container_type->tp_name, "Counter") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_COUNTER;
-            }
-
-            if (strcmp(container_type->tp_name, "collections.OrderedDict") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_ORDEREDDICT;
-            }
-
-            if (strcmp(container_type->tp_name, "time.struct_time") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_STRUCTTIME;
-            }
-
-            if (rhs_type == &PySlice_Type) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_OTHER_SLICE;
-            }
-            return SPEC_FAIL_BINARY_OP_SUBSCR;
-    }
-    Py_UNREACHABLE();
-}
-#endif
-
 /** Binary Op Specialization Extensions */
 
 #define SEQ_INT_MULTIPLY_ACTION(NAME, REPEAT, SEQ, COUNT) \
@@ -2994,207 +2861,6 @@ specialize_iter_generator(PyTypeObject *tp, _PyInstr *instr)
     return nominated;
 }
 
-/* Binary nomination cannot escape: evaluated operands remain in their
- * canonical homes until the semantic operation captures independent owners.
- * Scalar types and existing compact predicates need no temporary boxes. */
-static void
-specialize_binary_op(PyObject *lhs, PyObject *rhs,
-                     PyValueBorrow lhs_st, PyValueBorrow rhs_st,
-                     _PyInstr *instr, int oparg, PyValue *locals)
-{
-    PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
-    PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
-    _PyFbBinary *fb = fb_begin_binary(instr, lhs_type, rhs_type);
-    fb->descr = NULL;
-    bool producers = true;
-    // The specialized forms take inline operands only.
-    bool inline_ints = producers && PyValue_BothInlineInt(lhs_st, rhs_st);
-    // Two floats, or a float and an int.
-    bool floats = producers && PyValue_FloatOperandsCheck(lhs_st, rhs_st);
-
-    switch (oparg) {
-        /* NB_ADD is the Add family's (add.rop adapt_before_use_add) */
-        case NB_INPLACE_ADD:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_ADD_INT);
-                return;
-            }
-            if (floats) {
-                specialize(instr, BINARY_OP_ADD_FLOAT);
-                return;
-            }
-            if (lhs_type != rhs_type) {
-                break;
-            }
-            if (lhs_type == &PyUnicode_Type) {
-                // A STORE_FAST folded into the word: its dst names the local
-                _PyInterpreterFrame *frame = current_frame();
-                int local = _PyCode_InstrStoredLocal(
-                    _PyFrame_GetCode(frame), _PyFrame_InstrOffset(frame, instr));
-                bool to_store = local >= 0;
-                if (to_store && PyValue_IsObject(locals[local]) &&
-                    PyValue_AsKnownObjectBorrow(locals[local]) == lhs)
-                {
-                    specialize(instr, BINARY_OP_INPLACE_ADD_UNICODE);
-                    return;
-                }
-                specialize(instr, BINARY_OP_ADD_UNICODE);
-                return;
-            }
-            break;
-        case NB_MULTIPLY:
-        case NB_INPLACE_MULTIPLY:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_MULTIPLY_INT);
-                return;
-            }
-            if (floats) {
-                specialize(instr, BINARY_OP_MULTIPLY_FLOAT);
-                return;
-            }
-            break;
-        case NB_SUBTRACT:
-        case NB_INPLACE_SUBTRACT:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_SUBTRACT_INT);
-                return;
-            }
-            if (floats) {
-                specialize(instr, BINARY_OP_SUBTRACT_FLOAT);
-                return;
-            }
-            break;
-        case NB_TRUE_DIVIDE:
-        case NB_INPLACE_TRUE_DIVIDE:
-            if (floats && PyValue_NumberAsDouble(rhs_st) != 0.0) {
-                specialize(instr, BINARY_OP_TRUEDIV_FLOAT);
-                return;
-            }
-            break;
-        case NB_FLOOR_DIVIDE:
-        case NB_INPLACE_FLOOR_DIVIDE:
-            if (inline_ints && PyValue_InlineInt64(rhs_st) != 0) {
-                specialize(instr, BINARY_OP_FLOOR_DIVIDE_INT);
-                return;
-            }
-            break;
-        case NB_REMAINDER:
-        case NB_INPLACE_REMAINDER:
-            if (inline_ints && PyValue_InlineInt64(rhs_st) != 0) {
-                specialize(instr, BINARY_OP_REMAINDER_INT);
-                return;
-            }
-            break;
-        case NB_AND:
-        case NB_INPLACE_AND:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_AND_INT);
-                return;
-            }
-            break;
-        case NB_OR:
-        case NB_INPLACE_OR:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_OR_INT);
-                return;
-            }
-            break;
-        case NB_XOR:
-        case NB_INPLACE_XOR:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_XOR_INT);
-                return;
-            }
-            break;
-        case NB_LSHIFT:
-        case NB_INPLACE_LSHIFT:
-            if (inline_ints && PyValue_InlineInt64(rhs_st) >= 0) {
-                specialize(instr, BINARY_OP_LSHIFT_INT);
-                return;
-            }
-            break;
-        case NB_RSHIFT:
-        case NB_INPLACE_RSHIFT:
-            if (inline_ints && PyValue_InlineInt64(rhs_st) >= 0) {
-                specialize(instr, BINARY_OP_RSHIFT_INT);
-                return;
-            }
-            break;
-    }
-
-    _PyBinaryOpSpecializationDescr *descr;
-    if (lhs != NULL && rhs != NULL &&
-        binary_op_extended_specialization(lhs, rhs, oparg, &descr)) {
-        fb->descr = descr;
-        specialize(instr, BINARY_OP_EXTEND);
-        return;
-    }
-
-    SPECIALIZATION_FAIL(BINARY_OP, binary_op_fail_kind(oparg, lhs_st, rhs_st));
-    unspecialize(instr);
-}
-
-Py_NO_INLINE void
-(_Py_Specialize_BinaryOp)(PyValueBorrow lhs_st, PyValueBorrow rhs_st, _PyInstr *instr,
-                        int oparg, PyValue *locals)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[BINARY_OP] == INLINE_CACHE_ENTRIES_BINARY_OP);
-    PyObject *lhs = PyValue_IsObject(lhs_st) ? PyValue_AsKnownObjectBorrow(lhs_st) : NULL;
-    PyObject *rhs = PyValue_IsObject(rhs_st) ? PyValue_AsKnownObjectBorrow(rhs_st) : NULL;
-    specialize_binary_op(lhs, rhs, lhs_st, rhs_st, instr, oparg, locals);
-}
-
-
-#ifdef Py_STATS
-static int
-unpack_sequence_fail_kind(PyObject *seq)
-{
-    if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(seq))) {
-        return SPEC_FAIL_UNPACK_SEQUENCE_SEQUENCE;
-    }
-    if (PyIter_Check(seq)) {
-        return SPEC_FAIL_UNPACK_SEQUENCE_ITERATOR;
-    }
-    return SPEC_FAIL_OTHER;
-}
-#endif   // Py_STATS
-
-Py_NO_INLINE void
-_Py_Specialize_UnpackSequence(PyValue seq_st, _PyInstr *instr, int oparg)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[UNPACK_SEQUENCE] ==
-           INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE);
-    fb_begin_unary(instr, PyValue_TYPE(seq_st));
-    if (PyValue_IsInline(seq_st)) {
-        SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *seq = PyValue_AsKnownObjectBorrow(seq_st);
-    if (PyTuple_CheckExact(seq)) {
-        if (PyTuple_GET_SIZE(seq) != oparg) {
-            SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
-            unspecialize(instr);
-            return;
-        }
-        specialize(instr, UNPACK_SEQUENCE_TUPLE);
-        return;
-    }
-    if (PyList_CheckExact(seq)) {
-        if (PyList_GET_SIZE(seq) != oparg) {
-            SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
-            unspecialize(instr);
-            return;
-        }
-        specialize(instr, UNPACK_SEQUENCE_LIST);
-        return;
-    }
-    SPECIALIZATION_FAIL(UNPACK_SEQUENCE, unpack_sequence_fail_kind(seq));
-    unspecialize(instr);
-}
-
 #ifdef Py_STATS
 int
  _PySpecialization_ClassifyIterator(PyObject *iter)
@@ -3270,16 +2936,15 @@ int
 
 /* Whether the word after the FOR_ITER at instr unpacks its item, which this
  * word leaves in a temporary, into two locals: the loop of
- * `for key, value in d.items()`. */
+ * `for key, value in d.items()`.  Unpack publishes into the homes of its
+ * targets, so a word that does is an Unpack with two element homes that are
+ * both locals; the translator does not yet fold the target stores into the
+ * Unpack word, so none is. */
 static inline int
 for_iter_unpacks_pair(_PyInstr *instr)
 {
-    _PyIRWord for_iter = FT_ATOMIC_LOAD_UINT64_RELAXED(instr[0]);
-    _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(instr[1]);
-    int handler = IR_HANDLER(unpack);
-    return (handler == UNPACK_SEQUENCE || handler == UNPACK_SEQUENCE_TUPLE) &&
-           IR_B(unpack) == 2 && IR_A(unpack) == IR_A(for_iter) &&
-           (unpack & IR_F_LOCAL_D) != 0;
+    (void)instr;
+    return 0;
 }
 
 Py_NO_INLINE void

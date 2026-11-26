@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from rop_catalog import (CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
+from rop_catalog import (HEAD_FLAG_ENUMS, CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
                          EVIDENCE_REQUIRED, FEEDBACK_ROOTS, HOME_GROUPS, INDEX_BITS, LINEAR_HANDLES,
                          TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
@@ -301,6 +301,8 @@ def field_kind(t: Type) -> FieldKind | None:
     if (isinstance(t, WrapType) and t.wrap == Wrap.Span and isinstance(t.arg, HandleType)
             and t.arg.handle in HOME_HANDLES):
         return FieldKind.vector
+    if isinstance(t, EnumType) and t.name in HEAD_FLAG_ENUMS:
+        return FieldKind.flag
     if isinstance(inner, (ScalarType, EnumType)) and imm_bits(inner, {}) is not None:
         return FieldKind.imm
     return None
@@ -343,6 +345,13 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
         if kind is None:
             problems.append((p, f"operand {p.name}:{type_text(p.type)} has no field "
                              "kind"))
+            continue
+        if kind == FieldKind.flag:
+            # A flag of the handler field takes no field of the word
+            if len(enums[p.type.name].members) != 2:
+                problems.append((p, f"operand {p.name}: a flag enum has two members"))
+                continue
+            placements.append(Placement(p.name, kind, 1, (), shift=HEAD_FLAG_ENUMS[p.type.name]))
             continue
         bits = operand_bits(p.type, kind, enums)
         if bits > WIDEST_IMMEDIATE:

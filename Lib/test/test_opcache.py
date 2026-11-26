@@ -25,7 +25,7 @@ int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
 # Instances with inline values and no __dict__ get the shape handlers
 # under --with-shapes.
 LOAD_ATTR_INSTANCE = "GetAttr.Shape" if Py_SHAPES else "GetAttr.Instance"
-STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE" if Py_SHAPES else "STORE_ATTR_INSTANCE_VALUE"
+STORE_ATTR_INSTANCE = "AttrWrite.Shape" if Py_SHAPES else "AttrWrite.Instance"
 
 
 def have_dict_key_versions():
@@ -1148,7 +1148,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "STORE_ATTR_INSTANCE_VALUE"
+        opname = "AttrWrite.Instance"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1174,7 +1174,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "STORE_ATTR_WITH_HINT"
+        opname = "AttrWrite.Hint"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1200,7 +1200,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "STORE_ATTR_WITH_HINT"
+        opname = "AttrWrite.Hint"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1248,7 +1248,7 @@ class TestRacesDoNotCrash(TestBase):
                 item.clear()
                 item.append(None)
 
-        opname = "UNPACK_SEQUENCE_LIST"
+        opname = "Unpack.List"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
 class C:
@@ -1435,8 +1435,8 @@ class TestSpecializer(TestBase):
         binary_op_int_wide_inline()
         if int_producers:
             self.assert_specialized(binary_op_int_wide_inline, "Add.Int")
-            self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_SUBTRACT_INT")
-            self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_MULTIPLY_INT")
+            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int")
+            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int")
 
         def binary_op_int_boxed():
             # Outside the inline int51 range, so the int is a box, which the
@@ -1452,8 +1452,8 @@ class TestSpecializer(TestBase):
 
         binary_op_int_boxed()
         self.assert_no_opcode(binary_op_int_boxed, "Add.Int")
-        self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_SUBTRACT_INT")
-        self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_MULTIPLY_INT")
+        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int")
+        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int")
 
         def binary_op_add_unicode():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1512,11 +1512,10 @@ class TestSpecializer(TestBase):
         binary_op_add_extend()
         # Float arithmetic takes an int operand.
         if int_producers:
-            for opname in ("Add.Float", "BINARY_OP_SUBTRACT_FLOAT",
-                           "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
+            for opname in ("Add.Float", "Binary.Float"):
                 self.assert_specialized(binary_op_add_extend, opname)
             self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
-        self.assert_no_opcode(binary_op_add_extend, "BINARY_OP_EXTEND")
+        self.assert_no_opcode(binary_op_add_extend, "Binary.Extended")
 
         def binary_op_add_extend_sequences():
             l1 = [1, 2]
@@ -1548,8 +1547,8 @@ class TestSpecializer(TestBase):
             with self.assertRaises(ZeroDivisionError):
                 float_lhs(0)
 
-            self.assert_no_opcode(compactlong_lhs, "BINARY_OP_EXTEND")
-            self.assert_no_opcode(float_lhs, "BINARY_OP_EXTEND")
+            self.assert_no_opcode(compactlong_lhs, "Binary.Extended")
+            self.assert_no_opcode(float_lhs, "Binary.Extended")
 
         binary_op_zero_division()
 
@@ -1578,8 +1577,8 @@ class TestSpecializer(TestBase):
             for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
                 self.assertTrue(all(filter(lambda x: x is nan, compactlong_rhs(nan))))
 
-            self.assert_no_opcode(compactlong_lhs, "BINARY_OP_EXTEND")
-            self.assert_no_opcode(compactlong_rhs, "BINARY_OP_EXTEND")
+            self.assert_no_opcode(compactlong_lhs, "Binary.Extended")
+            self.assert_no_opcode(compactlong_rhs, "Binary.Extended")
 
         binary_op_nan()
 
@@ -1604,10 +1603,10 @@ class TestSpecializer(TestBase):
 
         binary_op_bitwise_extend()
         if int_producers:
-            for opname in ("BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT"):
+            for opname in ("Binary.Int",):
                 self.assert_specialized(binary_op_bitwise_extend, opname)
             self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
-        self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP_EXTEND")
+        self.assert_no_opcode(binary_op_bitwise_extend, "Binary.Extended")
 
         def binary_op_int_division_and_shifts():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1619,8 +1618,7 @@ class TestSpecializer(TestBase):
 
         binary_op_int_division_and_shifts()
         if int_producers:
-            for opname in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
-                           "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
+            for opname in ("Binary.Int",):
                 self.assert_specialized(binary_op_int_division_and_shifts, opname)
             self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
 
@@ -1637,8 +1635,9 @@ class TestSpecializer(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             A()
 
-        self.assert_specialized(A.__init__, "LOAD_SUPER_ATTR_ATTR")
-        self.assert_specialized(A.__init__, "LOAD_SUPER_ATTR_METHOD")
+        # The method form is this family followed by the vacant self; the
+        # unbound-method arm (SuperMethod) is a later step
+        self.assert_specialized(A.__init__, "SuperAttr.Builtin")
         self.assert_no_opcode(A.__init__, "LOAD_SUPER_ATTR")
 
         # Temporarily replace super() with something else.
@@ -1659,9 +1658,8 @@ class TestSpecializer(TestBase):
         finally:
             globals()['super'] = real_super
 
-        # Ensure the specialized instructions are not present
-        self.assert_no_opcode(A.__init__, "LOAD_SUPER_ATTR_ATTR")
-        self.assert_no_opcode(A.__init__, "LOAD_SUPER_ATTR_METHOD")
+        # The arm stays installed and misses to Generic while super is
+        # replaced; the guard, not unspecialization, keeps A() correct.
 
     @cpython_only
     @requires_specialization
@@ -1793,13 +1791,16 @@ class TestSpecializer(TestBase):
 
         set_slot(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
-        self.assert_specialized(set_slot, "STORE_ATTR_SLOT")
+        self.assert_specialized(set_slot, "AttrWrite.Slot")
         self.assert_no_opcode(set_slot, "STORE_ATTR")
 
-        # Adding a property for 'x' should unspecialize it.
-        C.x = property(lambda self: None, lambda self, x: None)
+        # Adding a property for 'x' must make the stores reach its setter.
+        # The arm stays installed and misses to Generic until the site is
+        # nominated again, as the load arms do.
+        calls = []
+        C.x = property(lambda self: None, lambda self, x: calls.append(x))
         set_slot(_testinternalcapi.SPECIALIZATION_COOLDOWN)
-        self.assert_no_opcode(set_slot, "STORE_ATTR_SLOT")
+        self.assertEqual(len(calls), _testinternalcapi.SPECIALIZATION_COOLDOWN)
 
     @cpython_only
     @requires_specialization
@@ -1818,10 +1819,11 @@ class TestSpecializer(TestBase):
         self.assert_specialized(set_value, STORE_ATTR_INSTANCE)
         self.assert_no_opcode(set_value, "STORE_ATTR")
 
-        # Adding a property for 'x' should unspecialize it.
-        C.x = property(lambda self: None, lambda self, x: None)
+        # Adding a property for 'x' must make the stores reach its setter.
+        calls = []
+        C.x = property(lambda self: None, lambda self, x: calls.append(x))
         set_value(_testinternalcapi.SPECIALIZATION_COOLDOWN)
-        self.assert_no_opcode(set_value, STORE_ATTR_INSTANCE)
+        self.assertEqual(len(calls), _testinternalcapi.SPECIALIZATION_COOLDOWN)
 
     @cpython_only
     @requires_specialization
@@ -1840,13 +1842,14 @@ class TestSpecializer(TestBase):
 
         set_value(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
-        self.assert_specialized(set_value, "STORE_ATTR_WITH_HINT")
+        self.assert_specialized(set_value, "AttrWrite.Hint")
         self.assert_no_opcode(set_value, "STORE_ATTR")
 
-        # Adding a property for 'x' should unspecialize it.
-        C.x = property(lambda self: None, lambda self, x: None)
+        # Adding a property for 'x' must make the stores reach its setter.
+        calls = []
+        C.x = property(lambda self: None, lambda self, x: calls.append(x))
         set_value(_testinternalcapi.SPECIALIZATION_COOLDOWN)
-        self.assert_no_opcode(set_value, "STORE_ATTR_WITH_HINT")
+        self.assertEqual(len(calls), _testinternalcapi.SPECIALIZATION_COOLDOWN)
 
     @cpython_only
     @requires_specialization
@@ -1875,7 +1878,7 @@ class TestSpecializer(TestBase):
         self.assert_no_opcode(get_value, "LOAD_ATTR")
 
         set_value(n)
-        self.assert_specialized(set_value, "STORE_ATTR_WITH_HINT")
+        self.assert_specialized(set_value, "AttrWrite.Hint")
         self.assert_no_opcode(set_value, "STORE_ATTR")
         self.assertTrue(_testinternalcapi.has_inline_values(c))
         self.assertIs(vars(c), d)
@@ -1983,8 +1986,8 @@ class TestSpecializer(TestBase):
 
         unpack_sequence_two_tuple()
         self.assert_specialized(unpack_sequence_two_tuple,
-                                "UNPACK_SEQUENCE_TUPLE")
-        self.assert_no_opcode(unpack_sequence_two_tuple, "UNPACK_SEQUENCE")
+                                "Unpack.Tuple")
+        self.assert_no_opcode(unpack_sequence_two_tuple, "Unpack.Generic")
 
         def unpack_sequence_tuple():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1995,8 +1998,8 @@ class TestSpecializer(TestBase):
                 self.assertEqual(d, 4)
 
         unpack_sequence_tuple()
-        self.assert_specialized(unpack_sequence_tuple, "UNPACK_SEQUENCE_TUPLE")
-        self.assert_no_opcode(unpack_sequence_tuple, "UNPACK_SEQUENCE")
+        self.assert_specialized(unpack_sequence_tuple, "Unpack.Tuple")
+        self.assert_no_opcode(unpack_sequence_tuple, "Unpack.Generic")
 
         def unpack_sequence_list():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2005,8 +2008,8 @@ class TestSpecializer(TestBase):
                 self.assertEqual(b, 2)
 
         unpack_sequence_list()
-        self.assert_specialized(unpack_sequence_list, "UNPACK_SEQUENCE_LIST")
-        self.assert_no_opcode(unpack_sequence_list, "UNPACK_SEQUENCE")
+        self.assert_specialized(unpack_sequence_list, "Unpack.List")
+        self.assert_no_opcode(unpack_sequence_list, "Unpack.Generic")
 
     @cpython_only
     @requires_specialization
@@ -2431,7 +2434,7 @@ class TestFeedback(TestBase):
         "GET_ITER": "UNARY", "SEND": "UNARY",
         "BINARY_OP": "BINARY", "COMPARE_OP": "COMPARE",
         "CONTAINS_OP": "CONTAINS", "STORE_SUBSCR": "BINARY",
-        "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",
+        "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "UNARY",
         "LOAD_GLOBAL": "GLOBAL",
         "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
         "POP_JUMP": "UNARY",

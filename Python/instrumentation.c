@@ -2001,6 +2001,9 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     }
     if (prev_line == line) {
         int prev_opcode = word_opcode(frame->ir_words, prev_index);
+        if (_PyIR_OriginOpcode(code, prev_index) == RESUME) {
+            prev_opcode = RESUME;
+        }
         /* RESUME and INSTRUMENTED_RESUME are needed for the operation of
             * instrumentation, so must never be hidden by an INSTRUMENTED_LINE.
             */
@@ -3875,6 +3878,10 @@ branch_word(PyCodeObject *code, int offset)
         first--;
     }
     int start = _PyCode_WordOffset(code, first);
+    // The last word that starts before the jump may be an operand word
+    while (first > 0 && _PyCode_WordOffset(code, first - 1) == start) {
+        first--;
+    }
     for (int w = first; w < (int)code->_co_exec->nwords &&
                         _PyCode_WordOffset(code, w) == start; w += _PyCode_InstrLength(code, w)) {
         int base = base_opcode(code, w);

@@ -124,8 +124,6 @@ _LOC_AB = _opcode.IR_LOC_AB
 _LOC_FBARG = _opcode.IR_LOC_FBARG
 _IR_JUMPS = _opcode.IR_JUMPS
 _IR_FORWARD = _opcode.IR_FORWARD
-_BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
-_BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
 _FEEDBACK_KINDS = ("COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL",
                    "COMPARE", "CONTAINS")
 _FEEDBACK_STATES = ("COLD", "MONO", "POLY", "MEGA", "OFF")
@@ -540,10 +538,7 @@ def _decode_word(handler, fields, fbinit=None):
     elif imm == _LOC_NONE:
         arg = 0
     elif imm == _LOC_FBARG:
-        if _BINARY_OP_FIRST <= handler <= _BINARY_OP_LAST:
-            arg = handler - _BINARY_OP_FIRST
-        else:
-            arg = _feedback_arg(fbinit, fb)
+        arg = _feedback_arg(fbinit, fb)
     else:
         arg = _field(fields, imm)
         if row.flags & _IR_FORWARD and arg >= 0x800:
@@ -907,11 +902,12 @@ class ArgResolver:
                 _, argrepr = _nb_ops[arg]
             elif deop == CALL_INTRINSIC_1:
                 # The word holds the IntrinsicId index; the compiler's number
-                # is one more (unary) or 11 less (binary), and 3 more for
-                # GETATTR and SETATTR (ids 8 to 21 are unused)
-                argrepr = _intrinsic_1_descs[arg + 1]
+                # is one more (unary, below unary plus, which is the Unary
+                # family), two more above it, or 10 less (binary), and 4 more
+                # for GETATTR and SETATTR (ids 8 to 21 are unused)
+                argrepr = _intrinsic_1_descs[arg + 1 if arg < 4 else arg + 2]
             elif deop == CALL_INTRINSIC_2:
-                argrepr = _intrinsic_2_descs[arg - 11 if arg < 19 else arg + 3]
+                argrepr = _intrinsic_2_descs[arg - 10 if arg < 18 else arg + 4]
             elif deop == LOAD_COMMON_CONSTANT:
                 obj = _common_constants[arg]
                 argval = obj
@@ -1094,7 +1090,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # the code object's
             runs = int.from_bytes(code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
                                   sys.byteorder) & _HANDLER_MASK
-            # A handler of the IR only, such as BINARY_OP_ADD,
+            # A handler of the IR only, such as IR_JUMP,
             # shows as the instruction that it runs; a specialisation shows
             # as itself
             if runs in _ir_only_handlers:

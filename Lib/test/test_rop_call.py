@@ -523,6 +523,55 @@ def generator(n):
     return n + 1
 
 
+class UninterruptedTests(unittest.TestCase):
+    """The call after a special-method lookup does not poll: the Call family's
+    declared interrupt operand (IR flag bit 15) is set on that word only"""
+
+    @cpython_only
+    def test_flag_is_set_after_a_special_lookup_only(self):
+        import _testinternalcapi as capi
+
+        class Manager:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+
+        def with_call(m):
+            with m:
+                pass
+
+        def plain_call(f):
+            return f()
+
+        def calls(fn):
+            return [row[0] for row in capi.get_ir(fn.__code__, True)
+                    if row[0].startswith("Call.")]
+
+        with_call(Manager())
+        plain_call(dict)
+        self.assertTrue(any("+UNINTERRUPTED" in n for n in calls(with_call)),
+                        calls(with_call))
+        self.assertFalse(any("+UNINTERRUPTED" in n for n in calls(plain_call)),
+                         calls(plain_call))
+
+    def test_with_still_runs(self):
+        events = []
+
+        class Manager:
+            def __enter__(self):
+                events.append("enter")
+                return self
+            def __exit__(self, *args):
+                events.append("exit")
+                return False
+
+        for _ in range(3):
+            with Manager():
+                events.append("body")
+        self.assertEqual(events, ["enter", "body", "exit"] * 3)
+
+
 class Spot:
     def __init__(self, x):
         self.x = x

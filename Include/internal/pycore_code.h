@@ -194,18 +194,6 @@ extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 /* Specialization functions, these are exported only for other re-generated
  * interpreters to call */
 
-PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(PyValue global_super, PyValue cls,
-                                         _PyInstr *instr, int load_method);
-PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValueBorrow owner, _PyInstr *instr,
-                                     PyObject *name);
-#define _Py_Specialize_StoreAttr(V0, V1, V2) \
-    (_Py_Specialize_StoreAttr)(PyValue_Borrow(V0), V1, V2)
-PyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyValueBorrow lhs, PyValueBorrow rhs, _PyInstr *instr,
-                                    int oparg, PyValue *locals);
-#define _Py_Specialize_BinaryOp(V0, V1, V2, V3, V4) \
-    (_Py_Specialize_BinaryOp)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2, V3, V4)
-PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(PyValue seq, _PyInstr *instr,
-                                          int oparg);
 PyAPI_FUNC(void) _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg);
 PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(PyValue iterable);

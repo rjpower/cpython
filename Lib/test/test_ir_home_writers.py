@@ -208,7 +208,7 @@ class HomeWriterTests(unittest.TestCase):
             namespace = {}
             exec(f"def unpack(values):\n    {target} = values\n    return {result}\n", namespace)
             code = namespace["unpack"].__code__
-            self.assertTrue(any(row[0] == "UNPACK_SEQUENCE"
+            self.assertTrue(any(row[0] == "Unpack.Generic"
                                 for row in _testinternalcapi.get_ir(code)))
             values = tuple(object() for _ in range(count))
             for admitted in routes(code):
@@ -351,7 +351,7 @@ class HomeWriterTests(unittest.TestCase):
                 pass
             return current
 
-        self.assertTrue(any(row[0] == "LOAD_SPECIAL"
+        self.assertTrue(any(row[0].startswith("SpecialLookup.")
                             for row in _testinternalcapi.get_ir(invoke.__code__)))
         for code in routes(invoke.__code__):
             function = types.FunctionType(code, globals())

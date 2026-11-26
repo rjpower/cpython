@@ -774,10 +774,6 @@ _PyIR_DefinesOf(_PyIRWord word, int arg)
     }
     int through = _PyIR_Extent(fmt->through, arg);
     int writes = _PyIR_Extent(fmt->writes, arg);
-    if (fmt->flags & _PyIR_UNPACKS) {
-        int first = dst == IR_NO_DST ? window + through : dst;
-        return (_PyIRDefines){first, first + writes - through, INT_MIN, INT_MIN};
-    }
     switch (fmt->output_kind) {
         case _PyIR_OUTPUT_REGISTER_DST:
             if (dst >= 0 && dst != IR_NO_DST) {
@@ -923,7 +919,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
                 return;
             }
             if (dst == IR_NO_DST &&
-                !(fmt->flags & (_PyIR_DISCARDS | _PyIR_UNPACKS))) {
+                !(fmt->flags & _PyIR_DISCARDS)) {
                 return;
             }
         }

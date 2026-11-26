@@ -373,6 +373,18 @@ def _base_handler(op):
         return base - _HANDLER_OP
     return _STACK_HANDLER.get(base, op)
 
+def specialized_arms(code):
+    """The names of the arms that the words of code run in place of their
+    family's generic arm.  A family with a Generic arm specializes by
+    leaving it; the rest of the arms (Return.Empty, Resume.Poll) are not
+    specializations."""
+    arms = _testinternalcapi.arm_handlers()
+    names = {word[0].partition("+")[0]
+             for word in _testinternalcapi.get_ir(code, True)}
+    return {name for name in names
+            if not name.endswith(".Generic")
+            and name.rpartition(".")[0] + ".Generic" in arms}
+
 def _get_code_array(co, adaptive):
     return co._co_code_adaptive if adaptive else co.co_code
 

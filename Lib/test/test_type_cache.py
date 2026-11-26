@@ -236,7 +236,7 @@ class TypeCacheWithSpecializationTests(unittest.TestCase):
         def store_bar_1(type_):
             type_.bar = 10
 
-        self._check_specialization(store_bar_1, B(), "STORE_ATTR", should_specialize=True)
+        self._check_specialization(store_bar_1, B(), "AttrWrite.Generic", should_specialize=True)
         del store_bar_1
 
         self._no_more_versions(B)
@@ -244,7 +244,7 @@ class TypeCacheWithSpecializationTests(unittest.TestCase):
         def store_bar_2(type_):
             type_.bar = 10
 
-        self._check_specialization(store_bar_2, B(), "STORE_ATTR", should_specialize=False)
+        self._check_specialization(store_bar_2, B(), "AttrWrite.Generic", should_specialize=False)
 
     @requires_specialization
     def test_class_call_specialization_user_type(self):

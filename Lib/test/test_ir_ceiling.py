@@ -143,7 +143,11 @@ class HandlerIdTests(unittest.TestCase):
 
     def test_ids_are_dense(self):
         ids = metadata._ir_handlers
-        self.assertEqual(sorted(ids.values()), list(range(_opcode.IR_NUM_HANDLERS)))
+        # A guard build (PYJIT_IR_ID_BASE) starts the ids above 0, so the
+        # ids end at IR_NUM_HANDLERS
+        self.assertEqual(sorted(ids.values()),
+                         list(range(_opcode.IR_NUM_HANDLERS - len(ids),
+                                    _opcode.IR_NUM_HANDLERS)))
         old = {name for name, h in ids.items() if h < _opcode.IR_NUM_OLD_HANDLERS}
         self.assertFalse(old & arm_names())
         self.assertTrue(arm_names() <= set(ids))

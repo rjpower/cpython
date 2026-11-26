@@ -35,13 +35,14 @@
  */
 
 #if Py_STATS
+/* opcode is the stack opcode of the instruction family */
 #define SPECIALIZATION_FAIL(opcode, kind) \
 do { \
     PyStats *s = _PyStats_GET(); \
     if (s) { \
         int _kind = (kind); \
         assert(_kind < SPECIALIZATION_FAILURE_KINDS); \
-        s->opcode_stats[opcode].specialization.failure_kinds[_kind]++; \
+        s->family_stats[opcode].failure_kinds[_kind]++; \
     } \
 } while (0)
 #else
@@ -686,12 +687,12 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
         return;
     }
     if (!set_opcode(instr, handler)) {
-        STAT_INC(_PyIR_BaseOpcode(specialized_opcode), failure);
+        FAMILY_STAT_INC(_PyIR_BaseOpcode(specialized_opcode), failure);
         SPECIALIZATION_FAIL(_PyIR_BaseOpcode(specialized_opcode),
                             SPEC_FAIL_OTHER);
         return;
     }
-    STAT_INC(_PyIR_BaseOpcode(specialized_opcode), success);
+    FAMILY_STAT_INC(_PyIR_BaseOpcode(specialized_opcode), success);
     _PyFbHeader *h = instr_fb(instr);
     if (h == NULL) {
         // RESUME specialises without an entry
@@ -716,7 +717,7 @@ unspecialize(_PyInstr *instr)
         // The row reports the failure; the macro backs off
         return;
     }
-    STAT_INC(instr_base_opcode(instr), failure);
+    FAMILY_STAT_INC(instr_base_opcode(instr), failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
     int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),

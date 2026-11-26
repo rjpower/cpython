@@ -1133,7 +1133,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
                 # Execution-only variants preserve their specialization in
                 # the adaptive view; structural IR handlers keep their base.
                 shadow = _ir_contract[runs].shadow
-                op = shadow if shadow else _deoptop(runs)
+                op = shadow if shadow is not None else _deoptop(runs)
             else:
                 op = _HANDLER_STACK.get(runs, _HANDLER_OP + runs)
         if arg_resolver:

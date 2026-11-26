@@ -133,7 +133,7 @@ print(json.dumps(results))
 # An arm with a fixed operand word, planted in a branch that never runs, over
 # the word of the second load of a chain of three on one line, which no
 # source edge names.  argv[1] is the word's low 16 bits: "decoy" is
-# the handler of RETURN_VALUE, which a walker that reads the word as an
+# the handler of Return.Ordinary, which a walker that reads the word as an
 # instruction would misread or rewrite, and "marker" is the inert IR_OPERANDS
 # handler that the operand words of calls carry.
 OPERAND_SCRIPT = """
@@ -146,7 +146,7 @@ import _testinternalcapi as capi
 MON = sys.monitoring
 from _opcode_metadata import _ir_handlers
 
-LOW = {"decoy": dis.opmap["RETURN_VALUE"], "marker": _ir_handlers["IR_OPERANDS"]}
+LOW = {"decoy": _ir_handlers["Return.Ordinary"], "marker": _ir_handlers["IR_OPERANDS"]}
 
 
 def gen(flag, o):

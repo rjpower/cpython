@@ -149,7 +149,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
                        contract: HandlerContract, events: list[str],
                        stack_only: frozenset[str],
                        owner_program: tuple[int, int] = (0, 0),
-                       twin: str = "0") -> str:
+                       twin: str = "_PyIR_NO_HANDLER") -> str:
     if fmt.operands != "_PyIR_OPERANDS_NONE":
         fmt = operand_metadata(fmt)
     # A STACK_ONLY opcode has a format for the CFG but no handler to run
@@ -258,7 +258,8 @@ def arm_row(analysis: Analysis, arm: ir_arms.ArmEntry,
     if arm.observes is not None:
         twin = own
     else:
-        twin = 0 if arm.twin is None else num_old_handlers(analysis) + arm.twin
+        twin = ("_PyIR_NO_HANDLER" if arm.twin is None
+                else num_old_handlers(analysis) + arm.twin)
     fb_kind, fb_size = "0", "0"
     if fmt.fb_schema is not None:
         fb_kind = f"FB_{fmt.fb_schema.upper()}"
@@ -403,12 +404,12 @@ def generate_ir_metadata(
                       if event_handler in insts else [])
             shadow = shadow_of(name, analysis)
             return format_initializer(
-                formats[name], shadow if shadow in numbers else "0",
+                formats[name], shadow if shadow in numbers else "_PyIR_NO_OPCODE",
                 contracts[name], events, stack_only,
                 programs[contracts[name].ownership_events,
                          contracts[name].error_checkpoints,
                          contracts[name].normal_storage],
-                f"IR_H_{twin}" if twin in ids else "0")
+                f"IR_H_{twin}" if twin in ids else "_PyIR_NO_HANDLER")
 
         for name in sorted(ids, key=ids.get):
             out.emit(f"[{ids[name]}] = {row(name)},  /* {name} */\n")
@@ -435,7 +436,6 @@ def generate_ir_metadata(
         none = "_PyIR_NO_HANDLER"
         out.emit("/* The stack opcode that a handler is, or _PyIR_NO_OPCODE; the "
                  "handler of a\n * stack opcode, or _PyIR_NO_HANDLER */\n")
-        out.emit("#define _PyIR_NO_HANDLER 0xffff\n#define _PyIR_NO_OPCODE 0xffff\n")
         out.emit("PyAPI_DATA(const uint16_t) _PyIR_HandlerOpcode[IR_NUM_HANDLERS];\n")
         out.emit("PyAPI_DATA(const uint16_t) _PyIR_OpcodeHandler[256];\n")
         out.emit("PyAPI_DATA(const uint16_t) _PyIR_OpcodeBase[256];\n")

@@ -95,7 +95,7 @@ class AddIntTemplateTests(unittest.TestCase):
 
 
 SHARED = """\
-family F(dst:Dst, x:Src) exits(next, miss);
+family F(dst:Dst, x:Src) exits(next, miss) generic(Any);
 point F.Done(current, next_head, clear) keep() spent(x) defs(dst);
 extern primitive is_int(v:B) -> Bool
   effects()
@@ -111,7 +111,23 @@ arm F.Copy shared effects(writes, releases) feedback() exits(next, miss)
     publish [dst = z] retire [spent(x), old(dst)] at F.Done;
     exit next();
 }
+arm F.Any shared effects(writes, releases) feedback() exits(next)
+{
+  entry():
+    let v:B = use(x);
+    let z:O = dup(v);
+    publish [dst = z] retire [spent(x), old(dst)] at F.Done;
+    exit next();
+}
 """
+
+
+# SHARED whose generic arm is split, as one that can enter a frame is
+SPLIT_GENERIC = SHARED.replace("arm F.Any shared", "arm F.Any split")
+
+
+# SHARED with no generic arm: nothing runs the word when F.Copy misses
+NO_GENERIC = SHARED.replace(" generic(Any)", "").partition("arm F.Any")[0]
 
 
 # SHARED with a guard whose fact leaves the value counted
@@ -213,9 +229,38 @@ class StubTests(unittest.TestCase):
         self.assertEqual(p.left_out, {})
         self.assertIn("_PyIR_Rop_Stub_F_Copy", text)
         self.assertIn("return ir_status", text)
-        (entry,) = rop_generator.arm_entries(p)
-        self.assertEqual((entry.name, entry.region, entry.stub),
-                         ("F_Copy", "shared", "_PyIR_Rop_Stub_F_Copy"))
+        entry, _ = rop_generator.arm_entries(p)
+        self.assertEqual((entry.name, entry.region, entry.stub, entry.generic),
+                         ("F_Copy", "shared", "_PyIR_Rop_Stub_F_Copy",
+                          "_PyIR_Rop_Stub_F_Any"))
+
+    def test_an_arm_that_misses_to_a_split_generic_is_unplanned(self):
+        # A split generic arm has no stub for a miss of compiled code to run:
+        # the arms that can miss run their function forms (GetItem.ListSlice)
+        program = rop_check.check([rop_syntax.parse(SPLIT_GENERIC, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        copy, generic = rop_generator.arm_entries(p)
+        self.assertEqual((copy.region, copy.generic), ("none", None))
+        self.assertEqual(generic.region, "none")
+
+    def test_a_planned_arm_that_misses_without_a_generic_stub_is_refused(self):
+        program = rop_check.check([rop_syntax.parse(NO_GENERIC, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        with self.assertRaisesRegex(rop_generator.GenerateError,
+                                    "F.Copy is planned for the JIT and can miss"):
+            rop_generator.arm_entries(p)
+
+    def test_the_arms_of_families_with_a_split_generic_are_unplanned(self):
+        # GetItem.Generic and GetAttr.Generic can enter a frame; the shared
+        # GetItem.ListSlice once kept its stub with no generic for its miss
+        entries = rop_generator.load_arm_entries()
+        for entry in entries:
+            if entry.dotted.startswith(("GetItem.", "GetAttr.")) and entry.emitted:
+                with self.subTest(arm=entry.dotted):
+                    self.assertEqual((entry.region, entry.generic), ("none", None))
 
     def test_publish_takes_inputs_then_reads_old_values_then_writes_then_closes(self):
         # A publish home may be a spent input's home (dst and x name the same
@@ -696,7 +741,7 @@ class MemberArmTests(unittest.TestCase):
 
 
 ENVIRONMENT = """\
-family F(dst:Dst, x:Src) exits(next, miss);
+family F(dst:Dst, x:Src) exits(next, miss) generic(Any);
 extern helper probe(t:Thread, f:Frame, s:Site, h:Head) -> Bool
   effects(reads)
   c probe_c as bool
@@ -705,6 +750,11 @@ arm F.Probe shared effects() feedback() exits(next, miss)
 {
   entry():
     guard probe(thread, frame, site, next_head) else miss;
+    exit next();
+}
+arm F.Any shared effects() feedback() exits(next)
+{
+  entry():
     exit next();
 }
 """

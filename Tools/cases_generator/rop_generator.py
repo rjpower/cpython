@@ -880,15 +880,25 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
         emitted = name in p.lowered
         generic = p.generic.get(arm.family)
         runs = observed_by(p.program, name)
-        # A generic arm that is split (it can enter a frame) has no stub for a
-        # miss to run: the family's inline arms are unplanned too, and a miss
-        # of their compiled code runs their function form, which reaches it
-        if region == "inline" and generic and generic not in shared:
+        generic_stub = stub_name(generic) if generic in shared else None
+        # A miss of a planned arm's compiled code runs its family's generic
+        # stub (resolve_status() in Python/jit.c).  A generic arm that is
+        # split (it can enter a frame) has no stub: the family's arms that
+        # can miss, inline or shared, are unplanned, and a miss of their
+        # compiled code runs their function form, which goes on in the
+        # generic arm's form on the same word
+        misses = "miss" in arm.contract.exits
+        if (region != "none" and misses and generic
+                and p.program.arms[generic].region.name == "split"):
             region = "none"
+        if emitted and region != "none" and misses and generic_stub is None:
+            raise GenerateError(
+                f"{name} is planned for the JIT and can miss, but its family "
+                f"{arm.family} has no generic stub for the miss to run")
         entries.append(ir_arms.ArmEntry(
             c_name(name), p.numbers[name], region, declares_escape(arm),
             stub_name(name) if name in shared else None,
-            stub_name(generic) if generic and generic in shared else None,
+            generic_stub,
             name,
             () if arm.trailing else tuple(e.value for e in fam.events),
             "again" in fam.exits, is_generic(p.program, arm),

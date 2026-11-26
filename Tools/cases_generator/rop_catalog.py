@@ -100,6 +100,8 @@ class Wrap(enum.Enum):
     Maybe = "Maybe"
     Span = "Span"
     InOut = "InOut"
+    # A home group the word defines and does not read (a loop's open)
+    Out = "Out"
 
 
 class SchemaCtor(enum.Enum):

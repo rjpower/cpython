@@ -230,7 +230,7 @@ arm YieldFrom.Observed split observes
 // place; when its frame returns, the completion arm runs in this frame.
 family Send(completed:Dst, send:SendWindow, fb:Fb<Iter>, done:NearHead)
   exits(next, branch, enter, raise, redirect, miss, again) generic(Generic) ops(SEND)
-  events(STOP_ITERATION, BRANCH_LEFT);
+  events(STOP_ITERATION, BRANCH_LEFT) vacant(send.cursor);
 
 // The receiver, entered in place, has yielded: the sent value moved into its
 // frame, and the yielded value is the send's value

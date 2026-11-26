@@ -86,8 +86,30 @@ PART = T(Handle.Part)
 
 
 def group_parts(t: Type | None) -> tuple[str, ...]:
-    """The projections of a home group type; () for any other type"""
+    """The projections of a home group type, or of Out<G>; () for any other
+    type"""
+    if is_out(t):
+        t = t.arg
     return HOME_GROUPS.get(t.handle, ()) if isinstance(t, HandleType) else ()
+
+
+def is_out(t: Type | None) -> bool:
+    """Out<G>: a home group the word defines and does not read"""
+    return isinstance(t, WrapType) and t.wrap is Wrap.Out
+
+
+def out_groups(params: Iterable[Param]) -> tuple[str, ...]:
+    """The operands of type Out<G>"""
+    return tuple(p.name for p in params if is_out(p.type))
+
+
+def vacant_homes(fam: Family) -> tuple[str, ...]:
+    """The homes that may hold nothing when the family's word starts: the
+    names of `vacant(...)`, a group standing for its projections, and every
+    optional source (Maybe<Src>)"""
+    operands = {p.name: p.type for p in fam.params}
+    named = [h for n in fam.vacant for h in expand_group(n, operands)]
+    return tuple(dict.fromkeys(named + optional_sources(fam)))
 
 
 def home_params(params: Iterable[Param]) -> tuple[Param, ...]:
@@ -170,6 +192,10 @@ class Program:
     diagnostics: tuple[Diagnostic, ...]
     # Completion arms (`completion(P)`), which have no word and no handler
     completions: Mapping[str, Arm] = field(default_factory=dict)
+    # Each arm's (edge, point) pairs: the point in force on each normal edge
+    # it takes (rop_verify.load fills it)
+    exit_points: Mapping[str, frozenset[tuple[int, str | None]]] = field(
+        default_factory=dict)
 
     @property
     def pending(self) -> tuple[str, ...]:
@@ -283,6 +309,8 @@ HOME_HANDLES = frozenset({Handle.Src, Handle.Dst, Handle.Local, Handle.Cell,
 def field_kind(t: Type) -> FieldKind | None:
     """The kind of field an operand of type t takes, or None if t is no
     operand type."""
+    if is_out(t):
+        return FieldKind.home if group_parts(t) else None
     inner = t.arg if isinstance(t, WrapType) and t.wrap == Wrap.Maybe else t
     if isinstance(inner, HandleType):
         h = inner.handle
@@ -550,6 +578,7 @@ def check_family(c: Checker, fam: Family) -> None:
     if len(set(fam.events)) != len(fam.events):
         c.report(fam.span, fam.name, "an event is listed twice")
     check_generic(c, fam)
+    check_homes(c, fam)
     schemas = feedback_schemas(fam.params)
     if len(schemas) > 1:
         c.report(fam.span, fam.name, "a family has at most one feedback operand")
@@ -561,6 +590,37 @@ def check_family(c: Checker, fam: Family) -> None:
         c.report(p.span, fam.name, message)
     if not problems:
         c.encodings[fam.name] = encoding
+
+
+def check_homes(c: Checker, fam: Family) -> None:
+    """At most one home group, the six homes a word format describes (four
+    fields and two more projections); `vacant(...)` names source homes of
+    the family; Out<G> wraps a home group."""
+    groups = [p for p in fam.params if group_parts(p.type)]
+    if len(groups) > 1:
+        c.report(fam.span, fam.name, f"a family has at most one home group: "
+                 f"{', '.join(p.name for p in groups)}")
+    for p in fam.params:
+        if is_out(p.type) and not group_parts(p.type):
+            c.report(p.span, fam.name, f"operand {p.name}:{type_text(p.type)}: Out "
+                     "wraps a home group")
+    operands = {q.name: q.type for q in fam.params + home_params(fam.params)}
+    if len(set(fam.vacant)) != len(fam.vacant):
+        c.report(fam.span, fam.name, "a vacant home is listed twice")
+    for n in fam.vacant:
+        t = operands.get(n)
+        if t is None:
+            c.report(fam.span, fam.name, f"vacant({n}): {fam.name} has no operand {n}")
+            continue
+        root = n.split(".")[0]
+        if is_out(operands.get(root)):
+            c.report(fam.span, fam.name, f"vacant({n}): {root} is defined, not read")
+            continue
+        inner = t.arg if isinstance(t, WrapType) and t.wrap is Wrap.Maybe else t
+        if not (isinstance(inner, HandleType) and inner.handle in SOURCE_HANDLES
+                and inner.handle is not Handle.Args):
+            c.report(fam.span, fam.name, f"vacant({n}): operand {n} is "
+                     f"{type_text(t)}, not a source home")
 
 
 def check_generic(c: Checker, fam: Family) -> None:

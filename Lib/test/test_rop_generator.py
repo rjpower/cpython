@@ -22,6 +22,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import rop_leaf
     import rop_model
     import rop_syntax
+    import rop_verify
 
 ROOT = Path(test_tools.basepath)
 
@@ -409,6 +410,81 @@ arm F.B shared effects() feedback() exits(next, miss)
     exit next();
 }
 """
+
+
+class HomeStateTests(unittest.TestCase):
+    """The homes of a family's word and their state on each normal edge,
+    from the points its arms publish there (rop_generator.family_homes)"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.program = rop_verify.load(
+            sorted((ROOT / "Python" / "register_ops").glob("*.rop")))
+        assert not cls.program.diagnostics
+
+    def states(self, family):
+        h = rop_generator.family_homes(self.program, family)
+        return tuple(" ".join(f"{k}={v.value[0]}" for k, v in e.items()) for e in h.edges)
+
+    def test_the_families_with_a_home_group(self):
+        # P preserve, V vacate, D define, U unknown (the arms differ)
+        expected = {
+            "ForIter": ("item=D pair.receiver=P pair.cursor=U",
+                        "item=P pair.receiver=V pair.cursor=V"),
+            "Send": ("completed=P send.receiver=P send.cursor=U send.value=D",
+                     "completed=D send.receiver=V send.cursor=V send.value=V"),
+            "CleanupThrow": ("completed=P send.receiver=P send.cursor=P send.value=P exc=P",
+                             "completed=D send.receiver=V send.cursor=V send.value=V exc=V"),
+            "IterOpen": ("pair.receiver=D pair.cursor=D source=V",
+                         "pair.receiver=P pair.cursor=P source=P"),
+            "IterClose": ("pair.receiver=V pair.cursor=V", "pair.receiver=P pair.cursor=P"),
+        }
+        for family, edges in expected.items():
+            with self.subTest(family):
+                self.assertEqual(self.states(family), edges)
+
+    def test_groups_reads_and_vacant_homes(self):
+        expected = {
+            "ForIter": (2, False, {"pair.receiver", "pair.cursor"}, {"pair.cursor"}),
+            "Send": (3, False, {"send.receiver", "send.cursor", "send.value"},
+                     {"send.cursor"}),
+            "CleanupThrow": (3, False, {"send.receiver", "send.cursor", "send.value", "exc"},
+                             {"send.cursor", "send.value"}),
+            "IterOpen": (2, True, {"source"}, set()),
+            "IterClose": (2, False, {"pair.receiver", "pair.cursor"}, {"pair.cursor"}),
+            # A Maybe<Src> operand may be vacant by its type
+            "WithExit": (0, False, {"exit_fn", "self", "exc"}, {"self"}),
+        }
+        for family, (group, out, read, vacant) in expected.items():
+            with self.subTest(family):
+                h = rop_generator.family_homes(self.program, family)
+                self.assertEqual((h.group, h.out, set(h.read), set(h.vacant)),
+                                 (group, out, read, vacant))
+
+    def test_every_family_states_each_home_from_its_points(self):
+        for family in self.program.families:
+            with self.subTest(family):
+                h = rop_generator.family_homes(self.program, family)
+                self.assertLessEqual(h.vacant, h.read)
+                for edge in h.edges:
+                    self.assertEqual(tuple(edge), h.homes)
+                    if h.out:
+                        group = [n for n in h.homes if "." in n]
+                        taken = any(e == rop_verify.EDGE_NEXT
+                                    for a in self.program.arms_of(family)
+                                    for e, _ in self.program.exit_points[a.name])
+                        if taken and edge is h.edges[0]:
+                            self.assertEqual({edge[n] for n in group},
+                                             {rop_generator.HomeState.DEFINE})
+
+    def test_every_normal_exit_names_a_point_of_its_family(self):
+        for name, pairs in self.program.exit_points.items():
+            family = rop_verify.arm_of(self.program, name).family
+            for edge, point in pairs:
+                with self.subTest(name, edge=edge):
+                    self.assertIn(edge, (rop_verify.EDGE_NEXT, rop_verify.EDGE_TAKEN))
+                    if point is not None:
+                        self.assertEqual(self.program.points[point].family, family)
 
 
 def wrapped_entries():

@@ -167,6 +167,8 @@ def decl_lines(d: Decl) -> list[str]:
             tail += f" ops{_names(d.ops)}"
         if d.events:
             tail += f" events{_names(tuple(e.value for e in d.events))}"
+        if d.vacant:
+            tail += f" vacant{_names(d.vacant)}"
         return [f"family {d.name}{_params(d.params)}", tail + ";"]
     if isinstance(d, Point):
         return [f"point {d.name}({d.frame.value}, {d.pc.value}, {d.exc.value}) "

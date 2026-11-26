@@ -1,0 +1,714 @@
+// 2B: iteration.  GET_ITER, FOR_ITER and the early-exit POP_ITER (the
+// exhaustion edge's END_FOR and POP_ITER are the completion of ForIter and
+// have no word).  The receiver and the cursor of one loop are an IterPair:
+// two adjacent temporaries for the life of the loop.  The cursor holds a
+// tagged index (an index-protocol receiver) or nothing; closing it is a
+// no-op.
+
+// The oparg of GET_ITER: 0, or for `yield from` the code's flags settle
+// whether a coroutine is allowed (Objects/codeobject.c)
+enum IterMode(ORDINARY_ITER, DELEGATE_COROUTINE_OK, DELEGATE_NO_COROUTINE);
+
+family IterOpen(pair:IterPair, source:Src, fb:Fb<Iter>, mode:Enum<IterMode>)
+  exits(next, raise, miss, again) generic(Generic) ops(GET_ITER);
+
+family ForIter(item:Dst, pair:IterPair, fb:Fb<Iter>, done:NearHead)
+  exits(next, branch, raise, miss, again, redirect) generic(Generic) ops(FOR_ITER)
+  events(BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION);
+
+family IterClose(pair:IterPair)
+  exits(next, raise, redirect) ops(POP_ITER)
+  events(BRANCH_RIGHT);
+
+// The iterator and its cursor are published; the source is gone
+point IterOpen.Done(current, next_head, clear) keep() spent(source, pair) defs(pair);
+// The source was closed by the failed open
+point IterOpen.Failed(current, site, pending) keep(pair) spent(source) defs();
+
+// A step that leaves the cursor as it is (the iterator keeps its own position)
+point ForIter.Advanced(current, next_head, clear) keep(pair) spent() defs(item);
+
+// A step delivers the item and the next cursor
+point ForIter.Stepped(current, next_head, clear)
+  keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor);
+// The iterator is exhausted: the pair is retired and the loop goes to its exit
+point ForIter.Exhausted(current, target, clear) keep() spent(pair) defs();
+// The step raised: the iterator stays in its home for the unwinder
+point ForIter.Failed(current, site, pending) keep(pair) spent() defs();
+// A callback of the observed word raised after the item was delivered
+point ForIter.StepEvent(current, site, pending) keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor);
+// The completion value was closed before a failed or redirecting
+// STOP_ITERATION callback; the pair stays
+point ForIter.Closed(current, site, pending) keep(pair) spent() defs();
+// A callback of the exhausted loop raised after the pair was retired
+point ForIter.ExitEvent(current, site, pending) keep() spent(pair) defs();
+
+point IterClose.Done(current, next_head, clear) keep() spent(pair) defs();
+point IterClose.Event(current, site, pending) keep() spent(pair) defs();
+
+// GET_ITER's open: the iterator of the source, and whether it is indexed
+// (a tagged cursor) or not (no cursor).  The source is borrowed, from the
+// anchor of the call; the iterator is a new owner, which for a source that
+// is its own iterator, or is indexed, is a second owner of the source.
+extern helper open_iter(f:Frame, s:B, mode:Enum<IterMode>)
+  cases(plain(r:O), indexed(r:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_OpenIter as status_value
+  evidence(
+    review: "FI. ceval.c: the body of _PyEval_GetIter, which GET_ITER ran and the"
+            "generator prologue still runs.",
+    contract: "The source is borrowed and left as it is, on every path, including the"
+              "failed ones (the coroutine refusal, a type with no __iter__). The"
+              "iterator is a new owner. plain: no cursor; indexed: a tagged 0.");
+
+// The cursor of a receiver that iterates by index starts at the first item
+extern helper tagged_zero() -> O
+  effects()
+  c _PyRop_TaggedZero as value
+  evidence(
+    review: "FI. pycore_value.h: PyValue_TagIndex(0), an inline value.",
+    contract: "No memory, no owner: closing it is a no-op.");
+
+// One step of the iterator: an item and the cursor that follows it, the
+// completion value (None or a generator's return value), or an error.  A
+// StopIteration is the end (and is reported to monitoring as RAISE).  The
+// cursor is read, not taken: it stays in its home until the arm publishes
+// the next one.
+extern helper generic_step(t:Thread, f:Frame, it:B, c:B)
+  cases(item(v:O, next:O), end(v:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_ForIterStep as step_out
+  evidence(
+    review: "FI. ceval.c: _PyForIter_VirtualIteratorNextInline and"
+            "_PyForIter_StopIsExhaustion, as _FOR_ITER used them.",
+    contract: "item: a new owner of the item and the next cursor (a tagged index"
+              "or NULL), the iterator unchanged in its home. end: a new owner of"
+              "the completion value. err: the exception is set.");
+
+// The STOP_ITERATION event of a generator or coroutine receiver, before the
+// loop is retired.  A receiver of another kind reports nothing.
+extern helper stop_iteration_event(t:Thread, f:Frame, at:Site, receiver:B, v:O)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises, releases)
+  requires(instrumented(at))
+  c _PyRop_StopIterationEvent as int_redirect
+  evidence(
+    review: "FI. instrumentation.c _PyIR_ObserveStep phase 0: the StopIteration"
+            "of the completion value, delivered to the tools of the site.",
+    contract: "The value is taken and closed on every path. A callback may raise, or"
+              "move the frame, whose return_pc then names the word to run.");
+
+
+// The adaptation of IterOpen and ForIter (design 3.3, 4.3): the receiver's
+// type and the cursor's kind decide the arm.
+
+// Whether the type of an object iterates by index (a tagged cursor)
+extern primitive iter_by_index(v:B) -> Bool
+  effects(reads)
+  requires(object(v))
+  c _PyRop_IterByIndex as bool
+  evidence(
+    review: "FI. specialize.c _Py_Specialize_GetIter and _GUARD_ITER_VIRTUAL: _PyType_IteratesByIndex.",
+    contract: "Reads the type's slots: no memory, no failure.",
+    lowering: "none yet: a type load and a compare",
+    test: "test_rop_iter");
+
+// Whether the type is its own iterator
+extern primitive iter_self(v:B) -> Bool
+  effects(reads)
+  requires(object(v))
+  c _PyRop_IterSelf as bool
+  evidence(
+    review: "FI. _GUARD_ITERATOR: tp_iter == PyObject_SelfIter.",
+    contract: "Reads the type's slot: no memory, no failure.",
+    lowering: "none yet: a type load and a compare",
+    test: "test_rop_iter");
+
+// An exact list that this thread may step: with free threading, one that it
+// owns or that is shared (_ITER_CHECK_LIST); otherwise any exact list
+extern primitive exact_list_iter(v:B) -> Bool
+  effects(reads)
+  test(exact<list>(v))
+  c _PyRop_ExactListIter as bool
+  evidence(
+    review: "FI. _ITER_CHECK_LIST (6027eeaedf4): PyList_CheckExact, and under Py_GIL_DISABLED _Py_IsOwnedByCurrentThread or _PyObject_GC_IS_SHARED.",
+    contract: "Reads the type and the owner: no memory, no failure.",
+    lowering: "none yet: a type compare",
+    test: "test_rop_iter");
+
+extern primitive exact_range_iter(v:B) -> Bool
+  effects(reads)
+  c _PyRop_ExactRangeIter as bool
+  evidence(
+    review: "FI. _ITER_CHECK_RANGE: the type is range_iterator.",
+    contract: "Reads the type: no memory, no failure.",
+    lowering: "none yet: a type load and a compare",
+    test: "test_rop_iter");
+
+// The cursor's kind: a tagged index or nothing
+extern primitive cursor_is_index(c:B) -> Bool
+  effects()
+  c _PyRop_CursorIsIndex as bool
+  evidence(
+    review: "FI. _FOR_ITER_VIRTUAL: PyValue_IsTaggedIndex(index).",
+    contract: "A comparison of the word: no memory, no failure.",
+    lowering: "none yet: a type load and a compare",
+    test: "test_rop_iter");
+
+extern primitive cursor_is_vacant(c:B) -> Bool
+  effects()
+  c _PyRop_CursorIsVacant as bool
+  evidence(
+    review: "FI. _FOR_ITER_VIRTUAL: PyValue_IsNull(index).",
+    contract: "A comparison of the word: no memory, no failure.",
+    lowering: "none yet: a type load and a compare",
+    test: "test_rop_iter");
+
+// Whether the type has the iternext value slot
+extern primitive has_iternext_value(v:B) -> Bool
+  effects(reads)
+  c _PyRop_HasIternextValue as bool
+  evidence(
+    review: "FI. specialize.c _Py_Specialize_ForIter: _PyType_VALUE_SLOT(tp, iternext) != NULL.",
+    contract: "Reads the type's slot: no memory, no failure.",
+    lowering: "none yet: a type load and a compare",
+    test: "test_rop_iter");
+
+// The step of an exact list or tuple at its tagged cursor: the item and the
+// next cursor, or the end (None).  The receiver is borrowed and not changed.
+extern helper list_step(it:B, c:B)
+  cases(item(v:O, next:O), end(v:O))
+  effects(reads, allocates)
+  requires(exact<list>(it))
+  c _PyRop_ListStep as step_pair
+  evidence(
+    review: "FI. bytecodes.c (6027eeaedf4) _ITER_JUMP_LIST and _ITER_NEXT_LIST.",
+    contract: "item: a new owner of the element and the cursor after it; end: None. No Python.");
+
+extern helper tuple_step(it:B, c:B)
+  cases(item(v:O, next:O), end(v:O))
+  effects(reads, allocates)
+  requires(exact<tuple>(it))
+  c _PyRop_TupleStep as step_pair
+  evidence(
+    review: "FI. bytecodes.c (6027eeaedf4) _ITER_JUMP_TUPLE and _ITER_NEXT_TUPLE.",
+    contract: "item: a new owner of the element and the cursor after it; end: None. No Python.");
+
+// The step of a range iterator: the next int (it may be a heap int), or the
+// end.  start and len change before the int is made, as _ITER_NEXT_RANGE did.
+extern helper range_step(it:B)
+  cases(item(v:O), end(v:O), err(e:Err))
+  effects(reads, writes, allocates, raises)
+  c _PyRop_RangeStep as status_value
+  evidence(
+    review: "FI. bytecodes.c (6027eeaedf4) _ITER_JUMP_RANGE and _ITER_NEXT_RANGE.",
+    contract: "item: the int; end: None; err: the int was not made. No Python.");
+
+// The step of an index-protocol iterator that is not a list or tuple
+extern helper indexed_step(it:B, c:B)
+  cases(item(v:O, next:O), end(v:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_IndexedStep as step_out
+  evidence(
+    review: "FI. _PyForIter_VirtualIteratorNextInline, the tagged branch.",
+    contract: "item: a new owner of the item and the next cursor; end: None; err: set.");
+
+// The step of an iterator with the iternext value slot, or the generic
+// iterator step; a StopIteration is the end
+extern helper slot_step(t:Thread, f:Frame, it:B)
+  cases(item(v:O), end(v:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_SlotStep as status_value
+  evidence(
+    review: "FI. _PyForIter_VirtualIteratorNextInline, the value-slot branch.",
+    contract: "item: a new owner of the item; end: the completion value; err: set.");
+
+// The type defines __iter__ as a generator function of one argument, and the
+// iterator is that generator, made at once with the source as its argument
+extern helper iter_gen_method(v:B) -> Bool
+  effects(reads)
+  c _PyRop_IterGenMethod as bool
+  evidence(
+    review: "FI. _GUARD_ITER_PY_GENERATOR: a heap type whose cached __iter__ is at its version.",
+    contract: "Reads the type's cache: no memory, no failure.",
+    lowering: "none yet: loads and a compare",
+    test: "test_ir_generator_create");
+
+extern helper validate_gen_method(v:B)
+  cases(hit(), absent())
+  effects(reads, writes)
+  c _PyRop_ValidateGenMethod as bool_cases
+  evidence(
+    review: "FI. specialize.c specialize_iter_generator (6027eeaedf4): the checks and the cache of the function.",
+    contract: "No Python. May assign a type version and fill the type's __iter__ cache.");
+
+// The generator for the source: the source is borrowed and the generator's
+// frame holds a new owner of it; a failed prologue discards the generator
+extern helper new_iter_generator(t:Thread, f:Frame, s:B)
+  cases(ok(g:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_NewIterGenerator as value_or_null
+  evidence(
+    review: "FI. _GET_ITER_PY_GENERATOR (6027eeaedf4): _PyGen_NewCall, the iterable moved into the frame, gen_prologue.",
+    contract: "ok: a new owner of the generator and the source untouched. err: the generator is discarded.");
+
+macro adapt_before_use_iter(f:Fb<Iter>, v:Src)
+  cases(run(), changed(tk:Ticket<Iter>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    goto Tick();
+  Tick():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    branch is_object(use(v)) -> TryIndexed(), Backoff();
+  TryIndexed():
+    branch iter_by_index(use(v)) -> PickIndexed(), TrySelf();
+  TrySelf():
+    branch iter_self(use(v)) -> PickSelf(), TryGenMethod();
+  TryGenMethod():
+    call validate_gen_method(use(v)) {
+      hit -> PickGenMethod();
+      absent -> Backoff();
+    }
+  PickGenMethod():
+    let c_gen:Candidate<Iter> = candidate(IterOpen.GenMethod);
+    call install(site, f, c_gen) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickIndexed():
+    let c_indexed:Candidate<Iter> = candidate(IterOpen.Indexed);
+    call install(site, f, c_indexed) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickSelf():
+    let c_self:Candidate<Iter> = candidate(IterOpen.Self);
+    call install(site, f, c_self) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Backoff():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(tk:Ticket<Iter>):
+    exit changed(tk);
+  Run():
+    exit run();
+}
+
+macro adapt_before_use_for_iter(f:Fb<Iter>, r:B, c:B)
+  cases(run(), changed(tk:Ticket<Iter>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    goto Tick();
+  Tick():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    branch cursor_is_index(c) -> TryList(), TryRange();
+  TryList():
+    branch exact_list_iter(r) -> PickList(), TryTuple();
+  TryTuple():
+    branch exact_tuple(r) -> PickTuple(), PickIndexed();
+  TryRange():
+    branch exact_range_iter(r) -> PickRange(), TrySlot();
+  TrySlot():
+    branch has_iternext_value(r) -> PickSlot(), Backoff();
+  PickList():
+    let c_list:Candidate<Iter> = candidate(ForIter.List);
+    call install(site, f, c_list) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickTuple():
+    let c_tuple:Candidate<Iter> = candidate(ForIter.Tuple);
+    call install(site, f, c_tuple) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickIndexed():
+    let c_indexed:Candidate<Iter> = candidate(ForIter.Indexed);
+    call install(site, f, c_indexed) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickRange():
+    let c_range:Candidate<Iter> = candidate(ForIter.Range);
+    call install(site, f, c_range) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickSlot():
+    let c_slot:Candidate<Iter> = candidate(ForIter.Slot);
+    call install(site, f, c_slot) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Backoff():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(tk:Ticket<Iter>):
+    exit changed(tk);
+  Run():
+    exit run();
+}
+
+arm IterOpen.Generic shared
+  effects(allocates, runs_python, raises, writes, releases)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, raise, again)
+{
+  entry():
+    call adapt_before_use_iter(fb, source) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Iter>):
+    exit again(tk);
+  Run():
+    let a:Anchors = anchor_for_call([source]);
+    call open_iter(frame, arg(a, 0), mode) {
+      plain -> Plain();
+      indexed -> Indexed();
+      err -> Failed();
+    }
+  Plain(pr:O):
+    publish [pair.receiver = pr, pair.cursor = null] retire [roots(a), spent(source), old(pair.receiver), old(pair.cursor)] at IterOpen.Done;
+    exit next();
+  Indexed(ir:O):
+    let z:O = tagged_zero();
+    publish [pair.receiver = ir, pair.cursor = z] retire [roots(a), spent(source), old(pair.receiver), old(pair.cursor)] at IterOpen.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [source], e);
+    exit raise(IterOpen.Failed, saved);
+}
+
+arm ForIter.Generic shared
+  effects(reads, writes, allocates, runs_python, raises, releases on (item))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, branch, raise, again, redirect)
+{
+  entry():
+    call adapt_before_use_for_iter(fb, use(pair.receiver), use(pair.cursor)) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Iter>):
+    exit again(tk);
+  Run():
+    let a:Anchors = anchor_for_call([pair.receiver, pair.cursor]);
+    call generic_step(thread, frame, arg(a, 0), arg(a, 1)) {
+      item -> Item();
+      end -> Exhausted();
+      err -> Failed();
+    }
+  Item(iv:O, nc:O):
+    call redirect_status(frame) {
+      running -> Stepped();
+      redirected -> ItemGone();
+    }
+  Stepped():
+    publish [item = iv, pair.cursor = nc] retire [roots(a), old(item), old(pair.cursor)] at ForIter.Stepped;
+    exit next();
+  ItemGone(ir:Route):
+    let _:Unit = discard_result(iv);
+    let _:Unit = discard_result(nc);
+    let item_route:Route = retire_abandoned(a, ir);
+    exit redirect(item_route);
+  Exhausted(ev:O):
+    call redirect_status(frame) {
+      running -> Finished();
+      redirected -> EndGone();
+    }
+  Finished():
+    publish [] retire [roots(a), spent(pair), owned(ev)] at ForIter.Exhausted;
+    exit branch(done);
+  EndGone(er:Route):
+    let _:Unit = discard_result(ev);
+    let current_route:Route = retire_abandoned(a, er);
+    exit redirect(current_route);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(ForIter.Failed, saved);
+}
+
+// The source is its own iterator, or iterates by index: the source is the
+// receiver and the cursor is vacant or the first index
+arm IterOpen.Self inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, miss)
+{
+  entry():
+    let v:B = use(source);
+    guard is_object(v) else miss;
+    guard iter_self(v) else miss;
+    let moved:O = acquire(source);
+    publish [pair.receiver = moved, pair.cursor = null] retire [spent(source), old(pair.receiver), old(pair.cursor)] at IterOpen.Done;
+    exit next();
+}
+
+arm IterOpen.Indexed inline
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, miss)
+{
+  entry():
+    let v:B = use(source);
+    guard is_object(v) else miss;
+    guard iter_by_index(v) else miss;
+    let z:O = tagged_zero();
+    let moved:O = acquire(source);
+    publish [pair.receiver = moved, pair.cursor = z] retire [spent(source), old(pair.receiver), old(pair.cursor)] at IterOpen.Done;
+    exit next();
+}
+
+// The type's __iter__ is a generator function of one argument: the generator
+// is the iterator, and the source moves into its frame
+arm IterOpen.GenMethod split
+  effects(reads, writes, allocates, runs_python, raises, releases)
+  feedback()
+  exits(next, miss, raise)
+{
+  entry():
+    let v:B = use(source);
+    guard default_eval_frame(thread) else miss;
+    guard iter_gen_method(v) else miss;
+    let a:Anchors = anchor_for_call([source]);
+    call new_iter_generator(thread, frame, arg(a, 0)) {
+      ok -> Made();
+      err -> Failed();
+    }
+  Made(g:O):
+    publish [pair.receiver = g, pair.cursor = null] retire [roots(a), spent(source), old(pair.receiver), old(pair.cursor)] at IterOpen.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [source], e);
+    exit raise(IterOpen.Failed, saved);
+}
+
+// The exact list, tuple or range iterator; the pair invariant gives the
+// cursor's kind.  The exhaustion edge retires the pair, as Generic does.
+arm ForIter.List inline
+  effects(reads, writes, allocates, releases on (item))
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let r:B = use(pair.receiver);
+    guard exact_list_iter(r) else miss;
+    call list_step(r, use(pair.cursor)) {
+      item -> Item();
+      end -> Exhausted();
+    }
+  Item(iv:O, nc:O):
+    publish [item = iv, pair.cursor = nc] retire [old(item), old(pair.cursor)] at ForIter.Stepped;
+    exit next();
+  Exhausted(ev:O):
+    publish [] retire [spent(pair), owned(ev)] at ForIter.Exhausted;
+    exit branch(done);
+}
+
+arm ForIter.Tuple inline
+  effects(reads, writes, allocates, releases on (item))
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let r:B = use(pair.receiver);
+    guard exact_tuple(r) else miss;
+    call tuple_step(r, use(pair.cursor)) {
+      item -> Item();
+      end -> Exhausted();
+    }
+  Item(iv:O, nc:O):
+    publish [item = iv, pair.cursor = nc] retire [old(item), old(pair.cursor)] at ForIter.Stepped;
+    exit next();
+  Exhausted(ev:O):
+    publish [] retire [spent(pair), owned(ev)] at ForIter.Exhausted;
+    exit branch(done);
+}
+
+arm ForIter.Range inline
+  effects(reads, writes, allocates, raises, releases on (item))
+  feedback()
+  exits(next, branch, miss, raise)
+{
+  entry():
+    let r:B = use(pair.receiver);
+    guard is_object(r) else miss;
+    guard exact_range_iter(r) else miss;
+    call range_step(r) {
+      item -> Item();
+      end -> Exhausted();
+      err -> Failed();
+    }
+  Item(iv:O):
+    publish [item = iv] retire [old(item)] at ForIter.Advanced;
+    exit next();
+  Exhausted(ev:O):
+    publish [] retire [spent(pair), owned(ev)] at ForIter.Exhausted;
+    exit branch(done);
+  Failed(e:Err):
+    exit raise(ForIter.Failed, e);
+}
+
+// An index-protocol receiver that is not a list or a tuple
+arm ForIter.Indexed split
+  effects(reads, writes, allocates, runs_python, raises, releases on (item))
+  feedback()
+  exits(next, branch, miss, raise)
+{
+  entry():
+    guard cursor_is_index(use(pair.cursor)) else miss;
+    let a:Anchors = anchor_for_call([pair.receiver, pair.cursor]);
+    call indexed_step(arg(a, 0), arg(a, 1)) {
+      item -> Item();
+      end -> Exhausted();
+      err -> Failed();
+    }
+  Item(iv:O, nc:O):
+    publish [item = iv, pair.cursor = nc] retire [roots(a), old(item), old(pair.cursor)] at ForIter.Stepped;
+    exit next();
+  Exhausted(ev:O):
+    publish [] retire [roots(a), spent(pair), owned(ev)] at ForIter.Exhausted;
+    exit branch(done);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(ForIter.Failed, saved);
+}
+
+// A receiver with the iternext value slot, and a vacant cursor
+arm ForIter.Slot split
+  effects(reads, writes, allocates, runs_python, raises, releases on (item))
+  feedback()
+  exits(next, branch, miss, raise)
+{
+  entry():
+    guard cursor_is_vacant(use(pair.cursor)) else miss;
+    guard is_object(use(pair.receiver)) else miss;
+    guard has_iternext_value(use(pair.receiver)) else miss;
+    let a:Anchors = anchor_for_call([pair.receiver]);
+    call slot_step(thread, frame, arg(a, 0)) {
+      item -> Item();
+      end -> Exhausted();
+      err -> Failed();
+    }
+  Item(iv:O):
+    publish [item = iv] retire [roots(a), old(item)] at ForIter.Advanced;
+    exit next();
+  Exhausted(ev:O):
+    publish [] retire [roots(a), spent(pair), owned(ev)] at ForIter.Exhausted;
+    exit branch(done);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(ForIter.Failed, saved);
+}
+
+// The observed wrapper of every ForIter arm: the step as Generic makes it,
+// BRANCH_LEFT after an item is delivered, and at the end STOP_ITERATION
+// before the pair is retired and BRANCH_RIGHT after.
+arm ForIter.Observed split observes
+  effects(reads, writes, allocates, runs_python, raises, releases on (item))
+  feedback()
+  exits(next, branch, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([pair.receiver, pair.cursor]);
+    call generic_step(thread, frame, arg(a, 0), arg(a, 1)) {
+      item -> Item();
+      end -> Exhausted();
+      err -> Failed();
+    }
+  Item(iv:O, nc:O):
+    publish [item = iv, pair.cursor = nc] retire [roots(a), old(item), old(pair.cursor)] at ForIter.Stepped;
+    call branch_event(thread, frame, site, false) {
+      ok -> Next();
+      moved -> Moved();
+      err -> StepEventFailed();
+    }
+  Next():
+    exit next();
+  Moved(mr:Route):
+    exit redirect(mr);
+  StepEventFailed(se:Err):
+    exit raise(ForIter.StepEvent, se);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(ForIter.Failed, saved);
+  Exhausted(ev:O):
+    call stop_iteration_event(thread, frame, site, arg(a, 0), ev) {
+      ok -> Retire();
+      moved -> StopMoved();
+      err -> StopFailed();
+    }
+  Retire():
+    publish [] retire [roots(a), spent(pair)] at ForIter.Exhausted;
+    call branch_event(thread, frame, site, true) {
+      ok -> Exit();
+      moved -> ExitMoved();
+      err -> ExitEventFailed();
+    }
+  Exit():
+    exit branch(done);
+  ExitMoved(xr:Route):
+    exit redirect(xr);
+  ExitEventFailed(xe:Err):
+    exit raise(ForIter.ExitEvent, xe);
+  StopMoved(sr:Route):
+    publish [] retire [roots(a)] at ForIter.Closed;
+    exit redirect(sr);
+  StopFailed(sf:Err):
+    publish [] retire [roots(a)] at ForIter.Closed;
+    exit raise(ForIter.Closed, sf);
+}
+
+arm IterClose.Retire split
+  effects(writes, releases, runs_python)
+  feedback()
+  exits(next)
+{
+  entry():
+    publish [] retire [spent(pair)] at IterClose.Done;
+    exit next();
+}
+
+// The BRANCH_RIGHT event of the early exit, after the iterator is retired
+arm IterClose.Observed split observes
+  effects(writes, releases, runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    publish [] retire [spent(pair)] at IterClose.Done;
+    call branch_event(thread, frame, site, true) {
+      ok -> Next();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Next():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  Failed(e:Err):
+    exit raise(IterClose.Event, e);
+}

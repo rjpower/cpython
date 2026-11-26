@@ -52,7 +52,7 @@ OPARGS = (0, 1, 2, 3, 7, 0x102)
 # instructions of Python/bytecodes.c
 IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
+                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP")
 
 
 def extent(e, oparg):
@@ -122,17 +122,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(transfer("Move.Retire", retire, 0, 1, 4), unknown)
 
         for_iter = (6, 4, 0, 1)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 4), set_null)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 5), set_null)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 0, 5), unknown)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 0, 7), unknown)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 7), unknown)
-        self.assertEqual(transfer("FOR_ITER", (7, 4, 0, 1), 1, 1, 4), unknown)
-        if "FOR_ITER_RANGE" in named:
-            self.assertEqual(transfer("FOR_ITER_RANGE", for_iter, 1, 1, 4), set_null)
-        if "FOR_ITER_GEN" in named:
-            self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 1, 4), set_null)
-            self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 0, 7), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 4), set_null)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 5), set_null)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 0, 5), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 0, 7), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 7), unknown)
+        self.assertEqual(transfer("ForIter.Generic", (7, 4, 0, 1), 1, 1, 4), unknown)
 
     def test_call_family(self):
         # The words that name their operands carry the transfers of their
@@ -223,10 +218,7 @@ class ContractTests(unittest.TestCase):
         # (null_or_index of FOR_ITER and SEND), nor one that it replaces
         # with its result
         expected = {
-            "FOR_ITER": 1, "FOR_ITER_LIST": 1, "FOR_ITER_TUPLE": 1,
-            "FOR_ITER_VIRTUAL": 1, "INSTRUMENTED_FOR_ITER": 1, "SEND": 1,
-            "SEND_VIRTUAL": 1, "FOR_ITER_RANGE": 2, "FOR_ITER_GEN": 2,
-            "SEND_GEN": 2,
+            "SEND": 1, "SEND_VIRTUAL": 1, "SEND_GEN": 2,
         }
         for name in present(*expected):
             count = expected[name]
@@ -331,7 +323,8 @@ class ContractTests(unittest.TestCase):
              if CONTRACT[op] is not None
              and op not in opcode._ir_only_handlers
              and CONTRACT[op].effects & _opcode.IR_SPECIALIZES},
-            set(FEEDBACK))
+            # GET_ITER and FOR_ITER specialise again at step 3
+            set(FEEDBACK) - {"GET_ITER", "FOR_ITER"})
 
     def test_feedback_tables(self):
         # The assembler writes each entry's kind into the code object's
@@ -384,8 +377,6 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
             "INSTRUMENTED_YIELD_DELEGATED": {"PY_YIELD"},
             "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
-            "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
-            "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
             "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
         }
         for name in present(*expected):

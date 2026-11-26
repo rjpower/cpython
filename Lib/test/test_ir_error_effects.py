@@ -346,9 +346,6 @@ class ErrorEffectTests(unittest.TestCase):
                 self.assertIn("_PyIR_ERROR_COMPLETE", contracts[name].error_routes)
                 self.assertIn("_PyIR_ERROR_DIRECT", contracts[name].error_routes)
                 self.assertTrue(contracts[name].abrupt_operands)
-        for name in ("GET_LEN",):
-            with self.subTest(uncovered=name):
-                self.assertFalse(contracts[name].error_routes)
         with mock.patch.object(ir_generator.IREmitter, "operand_error_flush", lambda *args: None):
             incomplete = ir_generator.handler_contracts(analysis, formats)
         self.assertFalse(incomplete["GET_ANEXT"].error_routes)

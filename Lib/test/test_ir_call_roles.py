@@ -67,10 +67,11 @@ class CallRoleTests(unittest.TestCase):
         def method(owner, value):
             return owner.method(value)
         no_self, no_kw = _opcode.IR_F_NO_SELF, _opcode.IR_F_NO_KW
+        kw, ex_flags = _opcode.IR_F_KW, _opcode.IR_F_EX
         cases = ((vector, "Call.Generic+NO_SELF", no_self),
-                 (keywords, "CALL_KW+NO_SELF", no_self),
-                 (ex, "CALL_FUNCTION_EX+NO_KW", no_kw),
-                 (ex_kw, "CALL_FUNCTION_EX", 0),
+                 (keywords, "CallKw.Generic+NO_SELF", no_self | kw),
+                 (ex, "CallEx.Generic+NO_KW", no_kw | ex_flags),
+                 (ex_kw, "CallEx.Generic", ex_flags),
                  (method, "Call.Generic", 0))
         for function, name, flags in cases:
             for admitted in routes(function.__code__):
@@ -78,7 +79,9 @@ class CallRoleTests(unittest.TestCase):
                     rows = call_rows(admitted)
                     self.assertEqual(len(rows), 1)
                     self.assertEqual(rows[0][0], name)
-                    self.assertEqual(role_flags(name), flags)
+                    # The family name carries the kind; the name's flags are
+                    # the bits that remain
+                    self.assertEqual(role_flags(name), flags & ~ex_flags)
                     row = contract_of(name)
                     self.assertEqual(row.word_flags & flags, flags)
                     # The callable is an input; the operands follow the head
@@ -150,7 +153,7 @@ class CallRoleTests(unittest.TestCase):
                 fn(value)
             return fn(17)
         rows = _testinternalcapi.get_ir(invoke.__code__)
-        self.assertTrue(any(row[0] == "FOR_ITER" for row in rows))
+        self.assertTrue(any(row[0] == "ForIter.Generic" for row in rows))
         self.assertGreaterEqual(sum("NO_SELF" in row[0] for row in rows), 2)
         for admitted in routes(invoke.__code__):
             function = types.FunctionType(admitted, globals())
@@ -179,7 +182,7 @@ class CallRoleTests(unittest.TestCase):
                     continue
             return fn(17)
         rows = _testinternalcapi.get_ir(invoke.__code__)
-        self.assertTrue(any(row[0] == "FOR_ITER" and
+        self.assertTrue(any(row[0] == "ForIter.Generic" and
                             row[1] < invoke.__code__.co_nlocals for row in rows))
         for admitted in routes(invoke.__code__):
             function = types.FunctionType(admitted, globals())
@@ -240,7 +243,7 @@ class CallRoleTests(unittest.TestCase):
         bound = types.MethodType(namespace["method"], receiver)
         for name in ("plain", "bound"):
             self.assertEqual(call_rows(namespace[name].__code__)[0][0],
-                             "CALL_FUNCTION_EX+NO_KW")
+                             "CallEx.Generic+NO_KW")
         for _ in range(200):
             self.assertEqual(namespace["plain"](namespace["target"], values), values)
             actual = namespace["bound"](bound, values)
@@ -248,9 +251,9 @@ class CallRoleTests(unittest.TestCase):
             self.assertEqual(actual[1], values)
         if not support.Py_GIL_DISABLED:
             self.assertEqual(call_rows(namespace["plain"].__code__, True)[0][0],
-                             "CALL_EX_PY+NO_KW")
+                             "CallEx.Generic+NO_KW")
             self.assertEqual(call_rows(namespace["bound"].__code__, True)[0][0],
-                             "CALL_EX_NON_PY_GENERAL+NO_KW")
+                             "CallEx.Generic+NO_KW")
 
     def test_native_prepend_uses_owned_copy_without_arena_offset(self):
         receiver = object()
@@ -278,7 +281,7 @@ class CallRoleTests(unittest.TestCase):
             return namespace["invoke"]
         for count in (0, 1, 16):
             invoke = wrapper(count)
-            self.assertEqual(call_rows(invoke.__code__)[0][0], "CALL_KW+NO_SELF")
+            self.assertEqual(call_rows(invoke.__code__)[0][0], "CallKw.Generic+NO_SELF")
             result, replaced = invoke(provider, payloads)
             self.assertIsNone(replaced)
             self.assertIs(result[0], receiver)

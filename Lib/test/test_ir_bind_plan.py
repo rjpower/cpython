@@ -56,7 +56,7 @@ class TestDefaultsAndKeywords(PlanTestCase):
             return f(x, b=9)
         call = reset_code(call)
         self.assertEqual(warm(call, 0), (0, 1, 9))
-        self.assertIn("CALL_KW_PY", handlers(call))
+        self.assertIn("CallKw.Plan", handlers(call))
 
     def test_defaults_changed_after_specialization(self):
         def f(x, a=1, b=2):
@@ -517,7 +517,7 @@ class TestGeneratorCallees(PlanTestCase):
                     [(1, 2, 3, 10), 3])
         self.assertEqual(warm(call, 1), expected)
         self.assertEqual(call(1), expected)
-        self.assertIn("CALL_KW_PY", handlers(call))
+        self.assertIn("CallKw.Generic", handlers(call))
 
     def test_generator_cell_argument_with_default(self):
         def gen(x=3):

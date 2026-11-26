@@ -1,0 +1,290 @@
+// 1G: text.  BuildText joins the pieces of an f-string and builds the
+// interpolation and template objects; Convert applies a conversion flag;
+// Format applies format().  The arm is chosen by the lowering (`select`).
+// Nothing is adaptive: the old handlers had no inline cache and no
+// specialized form.  A family that runs Python anchors its sources and
+// checks the frame on return, as Add.Generic does.
+
+// BuildText: the span is the pieces (Join), `value, str[, format]`
+// (Interpolation, whose count says whether a format is present) or
+// `strings, interpolations` (Template).  `flags` is the operand of the bytecode:
+// an interpolation's conversion is `flags >> 2` and its format flag bit 0,
+// as the compiler wrote them.  Every piece is spent on every outcome.
+family BuildText(dst:Dst, parts:Span<Src>, flags:U8)
+  exits(next, raise) ops(BUILD_STRING, BUILD_INTERPOLATION, BUILD_TEMPLATE);
+
+point BuildText.Failed(current, site, pending) keep() spent(parts) defs();
+point BuildText.Done(current, next_head, clear) keep() spent(parts) defs(dst);
+
+extern helper join_text(parts:Span<Src>)
+  cases(ok(z:O), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  spends(parts)
+  ensures(ok.exact<str>(z))
+  c _PyRop_JoinText as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_JoinText: each piece's owner is taken out of its home (a local's gets a count of its own), then _PyUnicode_JoinArray over the objects, as _Py_BuildString_ValueSteal did.",
+    contract: "Every piece is spent on every outcome and closed after the join, which may run a finalizer. NULL with an exception set when a piece is not a str or memory runs out.");
+
+extern helper build_interpolation(parts:Span<Src>, flags:U8)
+  cases(ok(z:O), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  spends(parts)
+  c _PyRop_BuildInterpolation as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_BuildInterpolation: the owners of the parts, then _PyInterpolation_BuildValue(value, str, flags >> 2, format or the empty string), as BUILD_INTERPOLATION did.",
+    contract: "Every part is spent on every outcome. The value may be an inline number: the interpolation holds its box. NULL with an exception set on failure.");
+
+extern helper build_template(parts:Span<Src>)
+  cases(ok(z:O), err(e:Err))
+  effects(writes, allocates, raises, releases, runs_python)
+  spends(parts)
+  c _PyRop_BuildTemplate as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_BuildTemplate: the owners of the two tuples, then _PyTemplate_Build, as BUILD_TEMPLATE did.",
+    contract: "Both parts are spent on every outcome; both are tuples the compiler built (asserted). NULL with an exception set on failure.");
+
+arm BuildText.Join shared select(join)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
+  feedback()
+  exits(next, raise)
+  ensures(next.exact<str>(dst))
+{
+  entry():
+    call join_text(parts) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(BuildText.Failed, e);
+  Finish(z:O):
+    publish [dst = z] retire [old(dst)] at BuildText.Done;
+    exit next();
+}
+
+arm BuildText.Interpolation shared select(interpolation)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call build_interpolation(parts, flags) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(BuildText.Failed, e);
+  Finish(z:O):
+    publish [dst = z] retire [old(dst)] at BuildText.Done;
+    exit next();
+}
+
+arm BuildText.Template shared select(template)
+  effects(writes, allocates, raises, releases on (dst), runs_python)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call build_template(parts) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(BuildText.Failed, e);
+  Finish(z:O):
+    publish [dst = z] retire [old(dst)] at BuildText.Done;
+    exit next();
+}
+
+// Convert: str(), repr() or ascii() of the value, which is spent
+
+family Convert(dst:Dst, value:Src, kind:Enum<ConvertKind>)
+  exits(next, raise, redirect) ops(CONVERT_VALUE);
+
+point Convert.Failed(current, site, pending) keep() spent(value) defs();
+point Convert.Done(current, next_head, clear) keep() spent(value) defs(dst);
+
+extern helper convert_value(kind:Enum<ConvertKind>, v:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, allocates, raises)
+  ensures(ok.exact<str>(z))
+  c _PyRop_ConvertValue as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_ConvertValue: _PyValue_Str, _PyValue_Repr or _PyValue_ASCII by kind, as CONVERT_VALUE did.",
+    contract: "v is borrowed on every path; the result is a new owner, or NULL with an exception set. A __str__ or __repr__ may run Python.");
+
+macro convert_at_origin(kind:Enum<ConvertKind>, a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call convert_value(kind, arg(a, 0)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm Convert.Text shared
+  effects(runs_python, writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([value]);
+    call convert_at_origin(kind, a) {
+      ok -> Finish();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(value), old(dst)] at Convert.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [value], e);
+    exit raise(Convert.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// Format: format(value) or format(value, spec).  An exact str formats as
+// itself, which the format row returns as the new owner.
+
+family Format(dst:Dst, value:Src)
+  exits(next, raise, redirect) ops(FORMAT_SIMPLE);
+
+family FormatSpec(dst:Dst, value:Src, spec:Src)
+  exits(next, raise, redirect) ops(FORMAT_WITH_SPEC);
+
+point Format.Failed(current, site, pending) keep() spent(value) defs();
+point Format.Done(current, next_head, clear) keep() spent(value) defs(dst);
+point FormatSpec.Failed(current, site, pending) keep() spent(value, spec) defs();
+point FormatSpec.Done(current, next_head, clear) keep() spent(value, spec) defs(dst);
+
+extern helper format_plain(v:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, allocates, raises)
+  ensures(ok.exact<str>(z))
+  c _PyRop_FormatPlain as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_FormatPlain: _PyValue_Str for a value that is not an object, _PyValue_Format(v, NULL) otherwise, as FORMAT_SIMPLE did.",
+    contract: "v is borrowed on every path; the result is a new owner, or NULL with an exception set. A __format__ may run Python.");
+
+extern helper format_value(v:B, s:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, allocates, raises)
+  ensures(ok.exact<str>(z))
+  c _PyRop_FormatValue as value_or_null
+  evidence(
+    review: "ceval.c _PyRop_FormatValue: _PyValue_Format(v, s), as FORMAT_WITH_SPEC did.",
+    contract: "Both are borrowed on every path; the result is a new owner, or NULL with an exception set. A __format__ may run Python.");
+
+macro format_plain_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call format_plain(arg(a, 0)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro format_value_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call format_value(arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm Format.Simple shared
+  effects(runs_python, writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([value]);
+    call format_plain_at_origin(a) {
+      ok -> Finish();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(value), old(dst)] at Format.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [value], e);
+    exit raise(Format.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm FormatSpec.Value shared
+  effects(runs_python, writes, allocates, raises, releases on (dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([value, spec]);
+    call format_value_at_origin(a) {
+      ok -> Finish();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(spec), spent(value), old(dst)] at FormatSpec.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [spec, value], e);
+    exit raise(FormatSpec.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}

@@ -873,6 +873,20 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
               const int *uses, int nuses, const int *defs, int ndefs,
               _PyRegOp **result)
 {
+    return _PyRegTr_EmitTaking(t, src, opcode, uses, nuses, nuses, defs, ndefs,
+                               result);
+}
+
+/* Emit, for an op that takes only the last ntaken of its nuses inputs and
+ * leaves the others where they are.  The parameters that it holds and takes
+ * (note_op) follow the taken inputs: an op that only reads a parameter
+ * keeps it held, so that no later rename gives its home to another
+ * identity. */
+int
+_PyRegTr_EmitTaking(_PyRegTr *t, const _PyRegOp *src, int opcode,
+                    const int *uses, int nuses, int ntaken, const int *defs,
+                    int ndefs, _PyRegOp **result)
+{
     _PyRegCfg *cfg = t->cfg;
 #ifndef NDEBUG
     for (int k = 0; k < nuses; k++) {
@@ -892,7 +906,8 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
         RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, nrec, &op->recipe));
     }
     op->opcode = opcode;
-    op->nread = op->npop = (int16_t)nuses;
+    op->nread = (int16_t)nuses;
+    op->npop = (int16_t)ntaken;
     int *in = _PyReg_IN(cfg, op);
     if (nuses > 0) {
         memcpy(in, uses, nuses * sizeof(int));
@@ -1277,9 +1292,8 @@ rule_copy(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_Move_copy,
-                                  &v, 1, &dst, 1, &op));
-    op->npop = 0;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, ROP_SELECT_Move_copy,
+                                        &v, 1, 0, &dst, 1, &op));
     op->oparg = 0;
     RETURN_IF_ERROR(grow((void **)&t->copies, &t->acopies, t->ncopies + 1,
                          sizeof(int)));
@@ -1802,6 +1816,55 @@ rule_branch(_PyRegTr *t, const _PyRegOp *src)
     assert(op->opcode == src->opcode);
     op->opcode = handler;
     op->oparg = imm;
+    return SUCCESS;
+}
+
+/* The loop words.  GET_ITER opens the iterator and its cursor, FOR_ITER
+ * steps them, and an early exit's POP_ITER closes them (the exhaustion
+ * edge's END_FOR and POP_ITER are FOR_ITER's completion and get no word):
+ * Python/register_ops/iteration.rop.  The stack op's translation is the
+ * arm's: the pair is the window of FOR_ITER and the outputs of GET_ITER. */
+static int
+rule_get_iter(_PyRegTr *t, const _PyRegOp *src)
+{
+    int mode;
+    switch (src->oparg) {
+        case 0:
+            mode = ITER_ORDINARY;
+            break;
+        case GET_ITER_YIELD_FROM_NO_CHECK:
+            mode = ITER_DELEGATE_COROUTINE_OK;
+            break;
+        default:
+            assert(src->oparg == GET_ITER_YIELD_FROM_CORO_CHECK);
+            mode = ITER_DELEGATE_NO_COROUTINE;
+            break;
+    }
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == GET_ITER);
+    op->opcode = ROP_HANDLER_IterOpen_Generic;
+    op->oparg = mode;
+    return SUCCESS;
+}
+
+static int
+rule_for_iter(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == FOR_ITER);
+    op->opcode = ROP_HANDLER_ForIter_Generic;
+    return SUCCESS;
+}
+
+static int
+rule_pop_iter(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == POP_ITER);
+    op->opcode = ROP_HANDLER_IterClose_Retire;
     return SUCCESS;
 }
 
@@ -2496,9 +2559,9 @@ rule_import_from(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_ImportFrom_module_kept,
-                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
-    op->npop = 0;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, ROP_SELECT_ImportFrom_module_kept,
+                                        &t->stack[t->sp - 1], 1, 0, &dst, 1,
+                                        &op));
     op->oparg = src->oparg;
     return _PyRegTr_Push(t, dst);
 }
@@ -2605,10 +2668,135 @@ rule_insert(_PyRegTr *t, const _PyRegOp *src)
     for (int k = 0; k < popped; k++) {
         uses[n++] = t->stack[t->sp - popped + k];
     }
-    _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, uses, n, NULL, 0, &op));
-    op->npop = (int16_t)popped;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, handler, uses, n, popped, NULL,
+                                        0, NULL));
     return _PyRegTr_Pop(t, popped, NULL);
+}
+
+/* The text families (Python/register_ops/text.rop).  BUILD_STRING,
+ * BUILD_INTERPOLATION and BUILD_TEMPLATE are BuildText: the parts are the
+ * top identities, the stack op's operand is the word's flags (a conversion
+ * and a format bit for an interpolation, which says how many parts), and
+ * the arm is the kind of text. */
+static int
+rule_build_text(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n, handler, flags = 0;
+    switch (src->opcode) {
+        case BUILD_STRING:
+            n = src->oparg;
+            handler = ROP_SELECT_BuildText_join;
+            break;
+        case BUILD_INTERPOLATION:
+            n = 2 + (src->oparg & 1);
+            handler = ROP_SELECT_BuildText_interpolation;
+            flags = src->oparg;
+            break;
+        default:
+            assert(src->opcode == BUILD_TEMPLATE);
+            n = 2;
+            handler = ROP_SELECT_BuildText_template;
+            break;
+    }
+    if (n > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - n], n,
+                                  &dst, 1, &op));
+    op->oparg = flags;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* CONVERT_VALUE: one use; its operand is FVC_STR, FVC_REPR or FVC_ASCII,
+ * the family's kind counted from 0 */
+static int
+rule_convert_value(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    assert(src->oparg >= FVC_STR && src->oparg <= FVC_ASCII);
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Convert_Text,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = src->oparg - FVC_STR;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* FORMAT_SIMPLE has the value as its one use, FORMAT_WITH_SPEC the value
+ * and then the specification */
+static int
+rule_format(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->opcode == FORMAT_WITH_SPEC ? 2 : 1;
+    if (n > t->sp) {
+        return stack_underflow(src);
+    }
+    int handler = n == 2 ? ROP_HANDLER_FormatSpec_Value : ROP_HANDLER_Format_Simple;
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - n], n,
+                                  &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* GET_LEN, MATCH_MAPPING, MATCH_SEQUENCE, MATCH_KEYS and MATCH_CLASS: the
+ * word reads the top nuses stack positions and leaves them, except that
+ * MATCH_CLASS spends them, and defines the value that the stack op pushed.
+ * imm is the word's immediate. */
+static int
+peek_rule(_PyRegTr *t, const _PyRegOp *src, int handler, int nuses, int npop,
+          int imm)
+{
+    if (t->sp < nuses) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    // What the word leaves on the stack it only reads
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, handler,
+                                        &t->stack[t->sp - nuses], nuses, npop,
+                                        &dst, 1, &op));
+    op->oparg = imm;
+    if (npop > 0) {
+        RETURN_IF_ERROR(_PyRegTr_Pop(t, npop, NULL));
+    }
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_get_len(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_HANDLER_Length_Size, 1, 0, 0);
+}
+
+static int
+rule_match_flag(_PyRegTr *t, const _PyRegOp *src)
+{
+    // The family's kind: Mapping is 0, Sequence 1
+    int kind = src->opcode == MATCH_MAPPING ? 0 : 1;
+    return peek_rule(t, src, ROP_HANDLER_Pattern_Flag, 1, 0, kind);
+}
+
+static int
+rule_match_keys(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_HANDLER_PatternKeys_Match, 2, 0, 0);
+}
+
+static int
+rule_match_class(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_HANDLER_PatternClass_Match, 3, 3, src->oparg);
 }
 
 /* The exception stack ops (Python/register_ops/exceptions.rop) */
@@ -2790,6 +2978,9 @@ static const _PyRegRule rules[256] = {
     [POP_JUMP_IF_TRUE] = rule_branch,
     [POP_JUMP_IF_NONE] = rule_branch,
     [POP_JUMP_IF_NOT_NONE] = rule_branch,
+    [GET_ITER] = rule_get_iter,
+    [FOR_ITER] = rule_for_iter,
+    [POP_ITER] = rule_pop_iter,
     [RESUME] = rule_resume,
     [JUMP_FORWARD] = rule_jump,
     [JUMP_BACKWARD] = rule_jump,
@@ -2858,6 +3049,17 @@ static const _PyRegRule rules[256] = {
     [DICT_UPDATE] = rule_insert,
     [DICT_MERGE] = rule_insert,
     [LOAD_GLOBAL] = rule_load_global,
+    [BUILD_STRING] = rule_build_text,
+    [BUILD_INTERPOLATION] = rule_build_text,
+    [BUILD_TEMPLATE] = rule_build_text,
+    [CONVERT_VALUE] = rule_convert_value,
+    [FORMAT_SIMPLE] = rule_format,
+    [FORMAT_WITH_SPEC] = rule_format,
+    [GET_LEN] = rule_get_len,
+    [MATCH_MAPPING] = rule_match_flag,
+    [MATCH_SEQUENCE] = rule_match_flag,
+    [MATCH_KEYS] = rule_match_keys,
+    [MATCH_CLASS] = rule_match_class,
     [RAISE_VARARGS] = rule_raise_varargs,
     [RERAISE] = rule_reraise,
     [PUSH_EXC_INFO] = rule_push_exc_info,
@@ -4014,46 +4216,6 @@ window_base(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int *base)
     return SUCCESS;
 }
 
-/* GET_ITER's specialisations keep the iterable in its slot as the
- * iterator: its outputs go from its input's slot, which staging gives a
- * vacant place first where it has none. */
-static int
-in_place_dst(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int *dst)
-{
-    int nl = cfg->nlocalsplus;
-    const int *in = _PyReg_IN(cfg, op);
-    const int *out = _PyReg_OUT(cfg, op);
-    int required = -1;
-    for (int j = 0; j < op->nout; j++) {
-        if (_PyReg_IS_CANON(cfg, out[j])) {
-            required = _PyRegCfg_Slot(cfg, out[j]) - j;
-            break;
-        }
-    }
-    int s = in[0] >= nl ? _PyRegCfg_Slot(cfg, in[0]) : -1;
-    if (required >= 0) {
-        RETURN_IF_ERROR(evict(cfg, o, op, i, required, required + op->nout));
-    }
-    if (s >= nl && (required >= 0 ? s == required
-                    : window_vacant(cfg, o, op, i, s, op->nout)))
-    {
-        *dst = s;
-        return SUCCESS;
-    }
-    if (required >= 0) {
-        s = required;
-    }
-    else {
-        s = nl + o->top;
-        while (!window_vacant(cfg, o, op, i, s, op->nout)) {
-            s++;
-        }
-    }
-    RETURN_IF_ERROR(stage_input(cfg, o, op, i, 0, s));
-    *dst = s;
-    return SUCCESS;
-}
-
 /* A vacant slot below the top for the one new output of op i, or -1.  A
  * temporary that an op takes below others leaves its slot vacant (SWAP
  * reorders the stack and emits no word), and without reuse the next output
@@ -4207,18 +4369,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
     }
     else {
         int through = _PyRegOp_Through(op, fmt);
-        if (op->opcode == GET_ITER && op->dst < 0 && through == 0 &&
-            op->nread == 1 && op->npop == 1 && op->nout > 0 && out[0] >= nl)
-        {
-            int dst;
-            RETURN_IF_ERROR(in_place_dst(cfg, o, op, i, &dst));
-            in = _PyReg_IN(cfg, op);
-            out = _PyReg_OUT(cfg, op);
-            for (int j = 0; j < op->nout; j++) {
-                RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
-            }
-        }
-        else if (through < op->nout && any_temp_output(cfg, op, through)) {
+        if (through < op->nout && any_temp_output(cfg, op, through)) {
             int dst;
             // An output that is a parameter has a fixed home, whichever of
             // the outputs it is: the others follow it

@@ -1699,6 +1699,63 @@ record_line_landing(_PyInterpreterFrame *frame, _PyInstr *next, int previous_lin
     return 0;
 }
 
+/* The STOP_ITERATION event of a loop or delegation word whose receiver is a
+ * generator or coroutine, for the completion value.  Returns 0 (nothing
+ * reported, or reported), 1 when a callback moved the frame, and -1 with an
+ * exception set. */
+int
+_PyIR_ObserveStopIteration(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                           _PyInstr *site, _PyInstr *next,
+                           PyValueBorrow receiver, PyValueBorrow value)
+{
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    if (code->_co_monitoring == NULL || tstate->tracing ||
+        (code->co_flags & CO_NO_MONITORING_EVENTS))
+    {
+        return 0;
+    }
+    int from = instr_offset(frame, site);
+    if (!get_tools_for_instruction(code, tstate->interp, from,
+                                   PY_MONITORING_EVENT_STOP_ITERATION))
+    {
+        return 0;
+    }
+    if (!PyValue_GenCheck(receiver) &&
+        !(PyValue_IsObject(receiver) &&
+          PyCoro_CheckExact(PyValue_AsKnownObjectBorrow(receiver))))
+    {
+        return 0;
+    }
+    ObserverRedirectState before = observer_redirect_state(frame);
+    assert(before.instruction == site);
+    if (_PyGen_SetStopIterationValue(
+            PyValue_IsNone(value) ? PyValue_Borrow(PyValue_NULL) : value) < 0) {
+        return -1;
+    }
+    PyObject *exc = _PyErr_GetRaisedException(tstate);
+    if (exc == NULL) {
+        PyErr_SetString(PyExc_SystemError, "missing completion exception");
+        return -1;
+    }
+    if (!PyErr_GivenExceptionMatches(exc, PyExc_StopIteration)) {
+        _PyErr_SetRaisedException(tstate, exc);
+        return -1;
+    }
+    _PyIRObserverSpec context = {frame, site, next, before.generation,
+        PY_MONITORING_EVENT_STOP_ITERATION, _PY_IR_OBSERVER_STEP_READY,
+        _PyIR_EDGE_TAKEN, UINT32_MAX};
+    PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                      PyValue_DUP(PyValue_FromObjectBorrow(exc))};
+    int err = call_instrumentation_vector_context(site, tstate,
+        PY_MONITORING_EVENT_STOP_ITERATION, frame, site, 3, args, &context);
+    PyValue_XCLOSE(args[3]);
+    Py_DECREF(exc);
+    if (err < 0) {
+        return -1;
+    }
+    return observer_redirected(frame, before) ? 1 : 0;
+}
+
 _PyIRStepResult
 _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   _PyInstr *site, _PyInstr *next, PyValueBorrow value,
@@ -1715,42 +1772,12 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
     ObserverRedirectState before = observer_redirect_state(frame);
     assert(before.instruction == site);
     if (phase == 0) {
-        if (kind == _PY_IR_SEND_THROW ||
-            !get_tools_for_instruction(code, tstate->interp, from,
-                                       PY_MONITORING_EVENT_STOP_ITERATION))
-        {
+        if (kind == _PY_IR_SEND_THROW) {
             return result;
         }
         PyValueBorrow receiver = PyValue_Borrow(frame->base[IR_B(*site)]);
-        if (!PyValue_GenCheck(receiver) &&
-            !(PyValue_IsObject(receiver) &&
-              PyCoro_CheckExact(PyValue_AsKnownObjectBorrow(receiver))))
-        {
-            return result;
-        }
-        if (_PyGen_SetStopIterationValue(
-                PyValue_IsNone(value) ? PyValue_Borrow(PyValue_NULL) : value) < 0) {
-            goto error;
-        }
-        PyObject *exc = _PyErr_GetRaisedException(tstate);
-        if (exc == NULL) {
-            PyErr_SetString(PyExc_SystemError, "missing completion exception");
-            goto error;
-        }
-        if (!PyErr_GivenExceptionMatches(exc, PyExc_StopIteration)) {
-            _PyErr_SetRaisedException(tstate, exc);
-            goto error;
-        }
-        _PyIRObserverSpec context = {frame, site, next, before.generation,
-            PY_MONITORING_EVENT_STOP_ITERATION, _PY_IR_OBSERVER_STEP_READY,
-            _PyIR_EDGE_TAKEN, UINT32_MAX};
-        PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
-                          PyValue_DUP(PyValue_FromObjectBorrow(exc))};
-        int err = call_instrumentation_vector_context(site, tstate,
-            PY_MONITORING_EVENT_STOP_ITERATION, frame, site, 3, args, &context);
-        PyValue_XCLOSE(args[3]);
-        Py_DECREF(exc);
-        if (err < 0) {
+        if (_PyIR_ObserveStopIteration(tstate, frame, site, next, receiver,
+                                       value) < 0) {
             goto error;
         }
     }

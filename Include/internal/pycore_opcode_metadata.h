@@ -112,16 +112,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 2;
         case FOR_ITER:
             return 2;
-        case FOR_ITER_GEN:
-            return 2;
-        case FOR_ITER_LIST:
-            return 2;
-        case FOR_ITER_RANGE:
-            return 2;
-        case FOR_ITER_TUPLE:
-            return 2;
-        case FOR_ITER_VIRTUAL:
-            return 2;
         case GET_AITER:
             return 1;
         case GET_ANEXT:
@@ -129,10 +119,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
         case GET_AWAITABLE:
             return 1;
         case GET_ITER:
-            return 1;
-        case GET_ITER_SELF:
-            return 1;
-        case GET_ITER_VIRTUAL:
             return 1;
         case GET_LEN:
             return 1;
@@ -449,16 +435,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 1;
         case FOR_ITER:
             return 3;
-        case FOR_ITER_GEN:
-            return 2;
-        case FOR_ITER_LIST:
-            return 3;
-        case FOR_ITER_RANGE:
-            return 3;
-        case FOR_ITER_TUPLE:
-            return 3;
-        case FOR_ITER_VIRTUAL:
-            return 3;
         case GET_AITER:
             return 1;
         case GET_ANEXT:
@@ -466,10 +442,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
         case GET_AWAITABLE:
             return 1;
         case GET_ITER:
-            return 2;
-        case GET_ITER_SELF:
-            return 2;
-        case GET_ITER_VIRTUAL:
             return 2;
         case GET_LEN:
             return 2;
@@ -779,13 +751,13 @@ PyAPI_DATA(const struct opcode_metadata) _PyOpcode_opcode_metadata[267];
 const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [BINARY_OP] = { true, INSTR_FMT_IBC0000, HAS_ARG_FLAG },
     [BINARY_SLICE] = { true, INSTR_FMT_IX, 0 },
-    [BUILD_INTERPOLATION] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [BUILD_INTERPOLATION] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [BUILD_LIST] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [BUILD_MAP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [BUILD_SET] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [BUILD_SLICE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
-    [BUILD_STRING] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [BUILD_TEMPLATE] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [BUILD_STRING] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [BUILD_TEMPLATE] = { true, INSTR_FMT_IX, 0 },
     [BUILD_TUPLE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [CACHE] = { true, INSTR_FMT_IX, 0 },
     [CALL] = { true, INSTR_FMT_IBC00, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
@@ -798,7 +770,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [CLEANUP_THROW] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [COMPARE_OP] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [CONTAINS_OP] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
-    [CONVERT_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [CONVERT_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [COPY] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [COPY_FREE_VARS] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [DELETE_DEREF] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_LOCAL_FLAG | HAS_ESCAPES_FLAG },
@@ -811,21 +783,14 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [END_SEND] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG },
     [EXIT_INIT_CHECK] = { true, INSTR_FMT_IX, 0 },
     [EXTENDED_ARG] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
-    [FORMAT_SIMPLE] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [FORMAT_WITH_SPEC] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [FORMAT_SIMPLE] = { true, INSTR_FMT_IX, 0 },
+    [FORMAT_WITH_SPEC] = { true, INSTR_FMT_IX, 0 },
     [FOR_ITER] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [FOR_ITER_GEN] = { true, INSTR_FMT_IXC, HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [FOR_ITER_LIST] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [FOR_ITER_RANGE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [FOR_ITER_TUPLE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [FOR_ITER_VIRTUAL] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [GET_AITER] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [GET_ANEXT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [GET_AWAITABLE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [GET_ITER] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [GET_ITER_SELF] = { true, INSTR_FMT_IXC, HAS_EXIT_FLAG },
-    [GET_ITER_VIRTUAL] = { true, INSTR_FMT_IXC, HAS_EXIT_FLAG },
-    [GET_LEN] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [GET_LEN] = { true, INSTR_FMT_IX, 0 },
     [IMPORT_FROM] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_NAME_FLAG },
     [IMPORT_NAME] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_NAME_FLAG },
     [INSTRUMENTED_CALL] = { true, INSTR_FMT_IBC00, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
@@ -838,7 +803,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [INSTRUMENTED_INSTRUCTION] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [INSTRUMENTED_JUMP_BACKWARD] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
     [INSTRUMENTED_JUMP_FORWARD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
-    [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IX, HAS_ARG_FLAG },
     [INSTRUMENTED_JUMP_IF_TRUE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [INSTRUMENTED_LINE] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INSTRUMENTED_LOAD_SUPER_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG },
@@ -881,8 +846,8 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [MAKE_CELL] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_LOCAL_FLAG | HAS_ESCAPES_FLAG },
     [MAKE_FUNCTION] = { true, INSTR_FMT_IX, 0 },
     [MAP_ADD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
-    [MATCH_CLASS] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
-    [MATCH_KEYS] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [MATCH_CLASS] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [MATCH_KEYS] = { true, INSTR_FMT_IX, 0 },
     [MATCH_MAPPING] = { true, INSTR_FMT_IX, 0 },
     [MATCH_SEQUENCE] = { true, INSTR_FMT_IX, 0 },
     [MATERIALIZE_KWARGS] = { true, INSTR_FMT_IB, 0 },
@@ -943,7 +908,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
 };
 #endif
 
-#define MAX_UOP_PER_EXPANSION 4
+#define MAX_UOP_PER_EXPANSION 3
 struct opcode_macro_expansion {
     int nuops;
     struct { int16_t uop; int8_t size; int8_t offset; } uops[MAX_UOP_PER_EXPANSION];
@@ -953,36 +918,19 @@ extern const struct opcode_macro_expansion _PyOpcode_macro_expansion[256];
 #ifdef NEED_OPCODE_METADATA
 const struct opcode_macro_expansion
 _PyOpcode_macro_expansion[256] = {
-    [BUILD_INTERPOLATION] = { .nuops = 1, .uops = { { _BUILD_INTERPOLATION, OPARG_SIMPLE, 0 } } },
-    [BUILD_STRING] = { .nuops = 1, .uops = { { _BUILD_STRING, OPARG_SIMPLE, 0 } } },
-    [BUILD_TEMPLATE] = { .nuops = 1, .uops = { { _BUILD_TEMPLATE, OPARG_SIMPLE, 0 } } },
-    [CONVERT_VALUE] = { .nuops = 1, .uops = { { _CONVERT_VALUE, OPARG_SIMPLE, 0 } } },
     [END_FOR] = { .nuops = 1, .uops = { { _END_FOR, OPARG_SIMPLE, 0 } } },
     [END_SEND] = { .nuops = 1, .uops = { { _END_SEND, OPARG_SIMPLE, 0 } } },
-    [FORMAT_SIMPLE] = { .nuops = 1, .uops = { { _FORMAT_SIMPLE, OPARG_SIMPLE, 0 } } },
-    [FORMAT_WITH_SPEC] = { .nuops = 1, .uops = { { _FORMAT_WITH_SPEC, OPARG_SIMPLE, 0 } } },
     [FOR_ITER] = { .nuops = 1, .uops = { { _FOR_ITER, OPARG_REPLACED, 1 } } },
-    [FOR_ITER_LIST] = { .nuops = 3, .uops = { { _ITER_CHECK_LIST, OPARG_SIMPLE, 1 }, { _ITER_JUMP_LIST, OPARG_REPLACED, 1 }, { _ITER_NEXT_LIST, OPARG_REPLACED, 1 } } },
-    [FOR_ITER_RANGE] = { .nuops = 3, .uops = { { _ITER_CHECK_RANGE, OPARG_SIMPLE, 1 }, { _ITER_JUMP_RANGE, OPARG_REPLACED, 1 }, { _ITER_NEXT_RANGE, OPARG_SIMPLE, 1 } } },
-    [FOR_ITER_TUPLE] = { .nuops = 3, .uops = { { _ITER_CHECK_TUPLE, OPARG_SIMPLE, 1 }, { _ITER_JUMP_TUPLE, OPARG_REPLACED, 1 }, { _ITER_NEXT_TUPLE, OPARG_SIMPLE, 1 } } },
-    [FOR_ITER_VIRTUAL] = { .nuops = 1, .uops = { { _FOR_ITER_VIRTUAL, OPARG_REPLACED, 1 } } },
     [GET_AITER] = { .nuops = 1, .uops = { { _GET_AITER, OPARG_SIMPLE, 0 } } },
     [GET_ANEXT] = { .nuops = 1, .uops = { { _GET_ANEXT, OPARG_SIMPLE, 0 } } },
     [GET_AWAITABLE] = { .nuops = 1, .uops = { { _GET_AWAITABLE, OPARG_SIMPLE, 0 } } },
     [GET_ITER] = { .nuops = 1, .uops = { { _GET_ITER, OPARG_SIMPLE, 1 } } },
-    [GET_ITER_SELF] = { .nuops = 2, .uops = { { _GUARD_ITERATOR, OPARG_SIMPLE, 1 }, { _PUSH_NULL, OPARG_SIMPLE, 1 } } },
-    [GET_ITER_VIRTUAL] = { .nuops = 2, .uops = { { _GUARD_ITER_VIRTUAL, OPARG_SIMPLE, 1 }, { _PUSH_TAGGED_ZERO, OPARG_SIMPLE, 1 } } },
-    [GET_LEN] = { .nuops = 1, .uops = { { _GET_LEN, OPARG_SIMPLE, 0 } } },
     [JUMP_BACKWARD] = { .nuops = 2, .uops = { { _CHECK_PERIODIC, OPARG_SIMPLE, 1 }, { _JUMP_BACKWARD_NO_INTERRUPT, OPARG_SIMPLE, 1 } } },
     [JUMP_BACKWARD_NO_INTERRUPT] = { .nuops = 1, .uops = { { _JUMP_BACKWARD_NO_INTERRUPT, OPARG_SIMPLE, 0 } } },
     [JUMP_FORWARD] = { .nuops = 1, .uops = { { _JUMP_FORWARD, OPARG_SIMPLE, 0 } } },
     [JUMP_IF_FALSE_OR_POP] = { .nuops = 1, .uops = { { _JUMP_IF_FALSE_OR_POP, OPARG_SIMPLE, 0 } } },
     [JUMP_IF_TRUE_OR_POP] = { .nuops = 1, .uops = { { _JUMP_IF_TRUE_OR_POP, OPARG_SIMPLE, 0 } } },
     [LOAD_COMMON_CONSTANT] = { .nuops = 1, .uops = { { _LOAD_COMMON_CONSTANT, OPARG_SIMPLE, 0 } } },
-    [MATCH_CLASS] = { .nuops = 4, .uops = { { _MATCH_CLASS, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 } } },
-    [MATCH_KEYS] = { .nuops = 1, .uops = { { _MATCH_KEYS, OPARG_SIMPLE, 0 } } },
-    [MATCH_MAPPING] = { .nuops = 1, .uops = { { _MATCH_MAPPING, OPARG_SIMPLE, 0 } } },
-    [MATCH_SEQUENCE] = { .nuops = 1, .uops = { { _MATCH_SEQUENCE, OPARG_SIMPLE, 0 } } },
     [NOP] = { .nuops = 1, .uops = { { _NOP, OPARG_SIMPLE, 0 } } },
     [POP_ITER] = { .nuops = 1, .uops = { { _POP_ITER, OPARG_SIMPLE, 0 } } },
     [POP_JUMP_IF_FALSE] = { .nuops = 1, .uops = { { _POP_JUMP_IF_FALSE, OPARG_SIMPLE, 1 } } },
@@ -1042,17 +990,10 @@ const char *_PyOpcode_OpName[267] = {
     [FORMAT_SIMPLE] = "FORMAT_SIMPLE",
     [FORMAT_WITH_SPEC] = "FORMAT_WITH_SPEC",
     [FOR_ITER] = "FOR_ITER",
-    [FOR_ITER_GEN] = "FOR_ITER_GEN",
-    [FOR_ITER_LIST] = "FOR_ITER_LIST",
-    [FOR_ITER_RANGE] = "FOR_ITER_RANGE",
-    [FOR_ITER_TUPLE] = "FOR_ITER_TUPLE",
-    [FOR_ITER_VIRTUAL] = "FOR_ITER_VIRTUAL",
     [GET_AITER] = "GET_AITER",
     [GET_ANEXT] = "GET_ANEXT",
     [GET_AWAITABLE] = "GET_AWAITABLE",
     [GET_ITER] = "GET_ITER",
-    [GET_ITER_SELF] = "GET_ITER_SELF",
-    [GET_ITER_VIRTUAL] = "GET_ITER_VIRTUAL",
     [GET_LEN] = "GET_LEN",
     [IMPORT_FROM] = "IMPORT_FROM",
     [IMPORT_NAME] = "IMPORT_NAME",
@@ -1192,9 +1133,9 @@ const uint8_t _PyOpcode_Caches[256] = {
     [CALL_FUNCTION_EX] = 1,
     [BINARY_OP] = 5,
     [SEND] = 1,
-    [FOR_ITER] = 1,
     [JUMP_BACKWARD] = 1,
     [GET_ITER] = 1,
+    [FOR_ITER] = 1,
 };
 #endif
 
@@ -1218,6 +1159,7 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
+    [121] = 121,
     [122] = 122,
     [123] = 123,
     [124] = 124,
@@ -1269,6 +1211,13 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [171] = 171,
     [172] = 172,
     [173] = 173,
+    [174] = 174,
+    [175] = 175,
+    [176] = 176,
+    [177] = 177,
+    [178] = 178,
+    [179] = 179,
+    [180] = 180,
     [181] = 181,
     [182] = 182,
     [183] = 183,
@@ -1321,7 +1270,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [239] = 239,
     [254] = 254,
     [255] = 255,
-    [3] = 3,
     [BINARY_OP] = BINARY_OP,
     [BINARY_SLICE] = BINARY_SLICE,
     [BUILD_INTERPOLATION] = BUILD_INTERPOLATION,
@@ -1359,17 +1307,10 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [FORMAT_SIMPLE] = FORMAT_SIMPLE,
     [FORMAT_WITH_SPEC] = FORMAT_WITH_SPEC,
     [FOR_ITER] = FOR_ITER,
-    [FOR_ITER_GEN] = FOR_ITER,
-    [FOR_ITER_LIST] = FOR_ITER,
-    [FOR_ITER_RANGE] = FOR_ITER,
-    [FOR_ITER_TUPLE] = FOR_ITER,
-    [FOR_ITER_VIRTUAL] = FOR_ITER,
     [GET_AITER] = GET_AITER,
     [GET_ANEXT] = GET_ANEXT,
     [GET_AWAITABLE] = GET_AWAITABLE,
     [GET_ITER] = GET_ITER,
-    [GET_ITER_SELF] = GET_ITER,
-    [GET_ITER_VIRTUAL] = GET_ITER,
     [GET_LEN] = GET_LEN,
     [IMPORT_FROM] = IMPORT_FROM,
     [IMPORT_NAME] = IMPORT_NAME,
@@ -1479,7 +1420,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
-    case 3: \
+    case 121: \
     case 122: \
     case 123: \
     case 124: \
@@ -1531,6 +1472,13 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 171: \
     case 172: \
     case 173: \
+    case 174: \
+    case 175: \
+    case 176: \
+    case 177: \
+    case 178: \
+    case 179: \
+    case 180: \
     case 181: \
     case 182: \
     case 183: \

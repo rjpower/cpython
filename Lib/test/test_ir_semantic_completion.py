@@ -46,7 +46,7 @@ class SemanticCompletionTests(unittest.TestCase):
             names = [word[0] for word, unit in
                      zip(_testinternalcapi.get_ir(code, True), ir._pcmap)
                      if unit == offset // 2]
-            self.assertIn('INSTRUMENTED_FOR_ITER', names)
+            self.assertIn('ForIter.Generic.Observed', names)
             self.assertIs(type(exception), StopIteration)
             self.assertIs(exception.value, returned)
             stopped.append(offset)

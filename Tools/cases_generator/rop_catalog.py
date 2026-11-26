@@ -234,6 +234,8 @@ FB_LAYOUT: dict[Schema, CLayout] = {
     # versions that it records
     Schema.Item: CLayout("_PyFbBinary", {
         "kind": _NONE, "type_version": _NONE, "func_version": _NONE}),
+    Schema.Iter: CLayout("_PyFbUnary", {
+        "kind": _NONE, "type_version": _NONE, "func_version": _NONE}),
     Schema.Call: CLayout("_PyFbCall", {
         "kind": _NONE, "func_version": CField("func_version", _U32),
         "type_version": CField("type_version", _U32),
@@ -416,6 +418,9 @@ class Select(enum.Enum):
     extend = "extend"                      # UpdateContainer: a list takes an iterable
     union = "union"                        # UpdateContainer: a set takes an iterable
     overlay = "overlay"                    # UpdateContainer: a dict takes a mapping
+    join = "join"                          # BuildText: the pieces of an f-string
+    interpolation = "interpolation"        # BuildText: one `{value!c:spec}` of a template
+    template = "template"                  # BuildText: the strings and interpolations of a template
     present = "present"                    # the family's optional operands hold values
     absent = "absent"                      # its optional operands are vacant
 
@@ -438,6 +443,7 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "display": (Select.tuple, Select.list, Select.set, Select.map),
     "element": (Select.append, Select.add),
     "update": (Select.extend, Select.union, Select.overlay),
+    "text": (Select.join, Select.interpolation, Select.template),
     "operand": (Select.present, Select.absent),
 }
 
@@ -802,6 +808,18 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (_VAL,), False),
           COutcome(CTest.zero, _RES, (), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # A loop step as _PyStatusValue: positive an item, its value the first
+    # payload and the next cursor written through the last parameter; zero
+    # the end, its value the payload; negative raised
+    _conv("step_out", CReturn.status_value,
+          COutcome(CTest.positive, _RES, (_VAL, CSource.out), False),
+          COutcome(CTest.zero, _RES, (_VAL,), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # _PyStatusValue: status 1 an item (the next cursor written through the last
+    # parameter), 0 the end; neither raises
+    _conv("step_pair", CReturn.status_value,
+          COutcome(CTest.positive, _RES, (_VAL, CSource.out), False),
+          COutcome(CTest.zero, _RES, (_VAL,), False)),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,
           COutcome(CTest.zero, _RES, (_VAL,), False),

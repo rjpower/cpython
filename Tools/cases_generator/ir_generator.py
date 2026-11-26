@@ -821,7 +821,6 @@ OBJECT_READERS = {
     "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
     "PyUnicode_CheckExact",
-    "_PyTemplate_Build",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -1221,7 +1220,10 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 STACK_ONLY_WITH_BODY = (
     "PUSH_NULL", "TO_BOOL", "UNARY_NOT", "POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
     "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE", "JUMP_FORWARD", "JUMP_BACKWARD",
-    "JUMP_BACKWARD_NO_INTERRUPT", "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP")
+    "JUMP_BACKWARD_NO_INTERRUPT", "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
+    # The loop stubs keep the bodies that name their exits (FOR_ITER is a jump)
+    "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER", "INSTRUMENTED_FOR_ITER",
+    "INSTRUMENTED_END_FOR", "INSTRUMENTED_POP_ITER")
 
 # Abort stubs that still have a handler and an id (the cell ops that CE
 # ported were left out of the old list; IR_OPERANDS is a word, not an op).
@@ -3461,7 +3463,6 @@ class IREmitter(Emitter):
         self._replacers["IR_UNPACK_ITEMS"] = self.unpack_items_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_CLOSE_INPUTS"] = self.close_input_homes
-        self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
         self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
@@ -3598,8 +3599,7 @@ class IREmitter(Emitter):
             helper = IR_HELPER_CALLEES[tkn.text]
             expression = f"{helper}({local.name}, oparg)"
         else:
-            helper = {"IR_BUILD_STRING": "_Py_BuildString_ValueSteal",
-                      "IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
+            helper = {"IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
                       "IR_BUILD_SET": "_Py_BuildSet_ValueSteal"}[tkn.text]
             expression = f"{helper}(frame, {local.name}, oparg)"
         self.out.emit_at(expression, tkn)
@@ -6360,7 +6360,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("home drain needs its sole owning array and unconditional handoff", token)
                 index = 0
                 covered.add(id(args[0][0]))
-            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", "IR_BUILD_SET",
+            elif token.text in {"IR_BUILD_MAP", "IR_BUILD_SET",
                                 *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)

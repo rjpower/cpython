@@ -10,14 +10,14 @@ extern "C" {
 #endif
 
 /* Register handler ids; not stack opcodes */
-#define INSTRUMENTED_JUMP_IF_FALSE_OR_POP      117
-#define INSTRUMENTED_JUMP_IF_TRUE_OR_POP       118
-#define JUMP_IF_FALSE_OR_POP                   119
-#define JUMP_IF_TRUE_OR_POP                    120
-#define MATERIALIZE_KWARGS                     121
+#define INSTRUMENTED_JUMP_IF_FALSE_OR_POP        3
+#define INSTRUMENTED_JUMP_IF_TRUE_OR_POP       117
+#define JUMP_IF_FALSE_OR_POP                   118
+#define JUMP_IF_TRUE_OR_POP                    119
+#define MATERIALIZE_KWARGS                     120
 
-#define IR_NUM_OLD_HANDLERS                    280
-#define IR_NUM_HANDLERS                        505
+#define IR_NUM_OLD_HANDLERS                    256
+#define IR_NUM_HANDLERS                        511
 
 #ifdef __cplusplus
 }

@@ -21,67 +21,59 @@ with test_tools.imports_under_tool("cases_generator"):
 
 ROOT = Path(test_tools.basepath)
 
+# Every runtime source is scanned, so that a new file is scanned by default;
+# the files that stay on the stack side are excluded by name, one reason each
 SCANNED = (
-    "Python/ceval*.c", "Python/ceval*.h", "Python/ir*.c",
-    "Python/instrumentation.c", "Python/legacy_tracing.c",
-    "Objects/frameobject.c", "Objects/codeobject.c",
-    "Include/internal/pycore_ir*.h", "Python/generated_rop_*.c.h",
-    "Python/ir_targets.h", "Python/register_ops/*.rop",
+    "Python/*.c", "Python/*.h", "Objects/*.c", "Objects/*.h",
+    "Include/internal/*.h", "Python/generated_rop_*.c.h",
+    "Python/register_ops/*.rop",
 )
+
+EXCLUDED = {
+    "Python/compile.c": "the compiler emits stack bytecode",
+    "Python/codegen.c": "the compiler emits stack bytecode",
+    "Python/flowgraph.c": "the compiler's flow graph is stack bytecode",
+    "Python/assemble.c": "the compiler's assembler writes co_code",
+    "Python/ast_preprocess.c": "the compiler",
+    "Python/ir_assemble.c": "the translator's assembler",
+    "Python/regcfg.c": "the translator",
+    "Python/regcfg_passes.c": "the translator",
+    "Include/internal/pycore_regcfg.h": "the translator",
+    "Include/internal/pycore_regcfg_passes.h": "the translator",
+    "Include/internal/pycore_opcode_metadata.h": "the opcode schema",
+    "Include/internal/pycore_opcode_utils.h": "the opcode schema",
+    "Include/internal/pycore_opcode_ids.h": "the opcode schema",
+    "Include/opcode_ids.h": "the opcode schema",
+    "Include/internal/pycore_flowgraph.h": "the compiler",
+    "Include/internal/pycore_compile.h": "the compiler",
+    "Include/internal/pycore_instruction_sequence.h": "the compiler",
+    "Python/instruction_sequence.c": "the compiler",
+    "Python/symtable.c": "the compiler",
+    "Python/Python-ast.c": "the generated parser",
+    "Include/internal/pycore_ast.h": "the generated parser",
+    "Include/internal/pycore_ast_state.h": "the generated parser",
+}
 
 # Stack-shaped names that are no opcode: the tables and fields that map a
 # handler to a stack op, and the opcode-space helpers of the old design
 SHAPED = (
     r"_PyIR_BaseOpcode", r"_PyIR_OpcodeBase", r"_PyIR_HandlerBase",
     r"_PyIR_OpcodeHandler", r"_PyIR_HandlerOpcode", r"_PyIR_StackOnlyFormats",
-    r"_PyIR_EventOpcode", r"\bshadow\b", r"_PyOpcode_Deopt",
-    r"_PyOpcode_Caches", r"_PyOpcode_OpName", r"MIN_INSTRUMENTED_OPCODE",
-    r"IS_SCOPE_EXIT_OPCODE", r"\bINSTRUMENTED_[A-Z_]+",
+    r"_PyIR_EventOpcode", r"_PyIR_OriginOpcode", r"\bshadow\b", r"\b_PyStack(?:Format|Op|Opcode)\w*",
+    r"_PyOpcode_Deopt", r"_PyOpcode_Caches", r"_PyOpcode_OpName",
+    r"MIN_INSTRUMENTED_OPCODE", r"IS_SCOPE_EXIT_OPCODE", r"\bINSTRUMENTED_[A-Z_]+",
 )
 
 
 @dataclass(frozen=True)
 class Allowed:
-    files: str      # a glob, relative to the source root
-    pattern: str    # a regex, searched in a line; ".*" for the whole file
+    files: str                      # a glob, relative to the source root
+    functions: tuple[str, ...] | None   # the top-level functions, or None for the file
+    pattern: str                    # a regex, searched in a line
     reason: str
 
 
-ALLOWED = (
-    # The translator lowers stack bytecode: it is the stack side
-    Allowed("Python/ir_assemble.c", r".*",
-            "the translator's assembler reads and writes stack opcodes"),
-    # The tables that map a handler to its stack op, and their definitions
-    Allowed("Include/internal/pycore_ir_metadata.h", r"\.shadow = ",
-            "the format's shadow column, which the translator reads (WF4 moves it)"),
-    Allowed("Include/internal/pycore_ir_metadata.h",
-            r"_PyIR_(HandlerBase|OpcodeBase|OpcodeHandler|HandlerOpcode|StackOnlyFormats)\b",
-            "the handler-to-stack-op maps and the stack-only rows, for the translator"),
-    Allowed("Include/internal/pycore_ir_metadata.h", r"^\[\d+\] = \{ \.flags = ",
-            "stack-only format rows, which name their stack op in .shadow"),
-    Allowed("Include/internal/pycore_ir.h", r"\bshadow\b",
-            "the field of the format that holds the stack op"),
-    Allowed("Include/internal/pycore_ir.h", r"_PyIR_BaseOpcode",
-            "the map from a handler to its stack op, for the translator and the public views"),
-    # Public transport: co_code, dis and the pcmap
-    Allowed("Python/ir.c", r"_PyIR_BaseOpcode|_PyOpcode_Deopt|_PyOpcode_OpName|_PyIR_HandlerOpcode|\bshadow\b|return CACHE",
-            "the handler-to-opcode map and the pcmap origin, for _opcode and dis"),
-    Allowed("Objects/codeobject.c", r"_PyOpcode_Caches|EXTENDED_ARG|LOAD_FAST_AND_CLEAR|GET_ITER|LOAD_ATTR|LOAD_GLOBAL|LOAD_CONST|LOAD_COMMON_CONSTANT|RESUME|CACHE|RAISE_VARARGS|CONSTANT_ASSERTIONERROR",
-            "validates, quickens and rewrites the public co_code, which stays stack bytecode"),
-    Allowed("Python/instrumentation.c", r"_PyOpcode_Deopt|_PyOpcode_Caches|IS_CONDITIONAL_JUMP_OPCODE",
-            "event_offset() reads the public co_code through the pcmap"),
-    Allowed("Python/instrumentation.c", r'\[PY_MONITORING_EVENT_\w+\] = "',
-            "sys.monitoring event names, which share spellings with stack ops"),
-    Allowed("Python/ceval_macros.h", r"#define INSTRUMENTED_JUMP",
-            "a macro named for the event of the stack op it replaced"),
-    # The .rop sources declare the stack ops their families lower
-    Allowed("Python/register_ops/*.rop", r"\bops\(",
-            "the family's declaration of the stack ops that it lowers"),
-    Allowed("Python/register_ops/*.rop", r"\bevents\(",
-            "sys.monitoring event names, which share spellings with stack ops"),
-    Allowed("Python/register_ops/*.rop", r'^\s*(review|contract|lowering|test):|^\s*"',
-            "review evidence and prose in strings, sealed history"),
-)
+ALLOWED: tuple[Allowed, ...] = ()
 
 
 def stack_names() -> set[str]:
@@ -104,43 +96,61 @@ def scanned_files() -> list[Path]:
     files = set()
     for pattern in SCANNED:
         files.update(ROOT.glob(pattern))
-    return sorted(files)
+    return sorted(f for f in files if f.relative_to(ROOT).as_posix() not in EXCLUDED)
 
 
-def hits() -> list[tuple[str, int, str]]:
+# A top-level C function starts at column 0 with its name and an open
+# parenthesis (the return type is on the line before, or leads the line)
+FUNCTION = re.compile(r"^(?:[A-Za-z_][\w \*]*?[ \*])?(\w+)\([^;]*$")
+
+
+def hits() -> list[tuple[str, str, int, str]]:
+    """(file, enclosing top-level function, line number, line)"""
     pattern = hit_pattern()
     found = []
     for path in scanned_files():
         rel = path.relative_to(ROOT).as_posix()
         text = strip_comments(path.read_text(errors="replace"), rel.endswith(".rop"))
+        function = ""
         for number, line in enumerate(text.split("\n"), 1):
+            match = FUNCTION.match(line)
+            if match and not line.startswith(("#", "if", "for", "while", "switch", "return")):
+                function = match.group(1)
             if pattern.search(line):
-                found.append((rel, number, line.strip()))
+                found.append((rel, function, number, line.strip()))
     return found
 
 
-def allowed_by(rel: str, line: str) -> list[Allowed]:
+def allowed_by(rel: str, function: str, line: str) -> list[Allowed]:
     return [a for a in ALLOWED
-            if (ROOT / rel).match(str(ROOT / a.files)) and re.search(a.pattern, line)]
+            if (ROOT / rel).match(str(ROOT / a.files))
+            and (a.functions is None or function in a.functions)
+            and re.search(a.pattern, line)]
 
 
 class NoStackTests(unittest.TestCase):
     def test_scanned_sources_exist(self):
-        files = scanned_files()
-        self.assertGreater(len(files), 40)
+        self.assertGreater(len(scanned_files()), 100)
         for pattern in SCANNED:
             with self.subTest(pattern=pattern):
                 self.assertTrue(list(ROOT.glob(pattern)))
 
+    def test_exclusions_are_files_with_reasons(self):
+        for name, reason in EXCLUDED.items():
+            with self.subTest(name=name):
+                self.assertTrue((ROOT / name).is_file())
+                self.assertTrue(reason.strip())
+
     def test_no_unlisted_stack_reference(self):
-        unlisted = [f"{rel}:{number}: {line}" for rel, number, line in hits()
-                    if not allowed_by(rel, line)]
+        unlisted = [f"{rel}:{number} ({function}): {line}"
+                    for rel, function, number, line in hits()
+                    if not allowed_by(rel, function, line)]
         self.assertEqual(unlisted, [], "a stack reference outside the allowlist")
 
     def test_allowances_are_used_and_reasoned(self):
         used = set()
-        for rel, number, line in hits():
-            used.update(allowed_by(rel, line))
+        for rel, function, number, line in hits():
+            used.update(allowed_by(rel, function, line))
         for allowance in ALLOWED:
             with self.subTest(files=allowance.files, pattern=allowance.pattern):
                 self.assertTrue(allowance.reason.strip())

@@ -94,6 +94,13 @@ HOME_GROUPS = {
     Handle.SendWindow: ("receiver", "cursor", "value"),
 }
 
+# The projections whose declared type admits a tagged index (a loop's cursor
+# is "a tagged index or nothing"); a store to one is checked as a temporary
+INDEX_PARTS = frozenset({
+    (Handle.IterPair, "cursor"),
+    (Handle.SendWindow, "cursor"),
+})
+
 
 class Wrap(enum.Enum):
     """One-argument type constructors over types."""

@@ -91,6 +91,13 @@ def group_parts(t: Type | None) -> tuple[str, ...]:
     return HOME_GROUPS.get(t.handle, ()) if isinstance(t, HandleType) else ()
 
 
+def group_handle(t: Type | None) -> Handle | None:
+    """The handle of a home group type, or of Out<G>"""
+    if is_out(t):
+        t = t.arg
+    return t.handle if isinstance(t, HandleType) else None
+
+
 def is_out(t: Type | None) -> bool:
     """Out<G>: a home group the word defines and does not read"""
     return isinstance(t, WrapType) and t.wrap is Wrap.Out

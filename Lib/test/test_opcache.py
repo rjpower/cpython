@@ -871,7 +871,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).__getattribute__ = lambda self, name: None
 
-        opname = "GetAttr.Generic"
+        opname = "GetAttr.GetattributeOverridden"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1041,7 +1041,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).a = property(lambda self: None)
 
-        opname = "GetAttr.Generic"
+        opname = "GetAttr.Property"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -2258,7 +2258,7 @@ class TestSpecializer(TestBase):
         holder.item = item = object()
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             list_append([], holder)
-        self.assert_specialized(list_append, "Call.Generic")
+        self.assert_specialized(list_append, "Call.ListAppend")
 
         refcount = sys.getrefcount(item) if not Py_GC else None
         # An empty list has no spare capacity, so append() must resize it.

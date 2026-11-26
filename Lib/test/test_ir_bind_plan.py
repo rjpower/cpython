@@ -538,7 +538,7 @@ class TestGeneratorCallees(PlanTestCase):
         call = reset_code(call)
         g = warm(call, 1)
         self.assertEqual(list(g), [1, 5])
-        self.assertIn("Call.Generic", handlers(call))
+        self.assertIn("Call.PlanGenerator", handlers(call))
         self.assertEqual(list(call(2)), [2, 5])
 
     def test_generator_keywords_and_kwargs(self):

@@ -45,9 +45,9 @@ class HomeWriterTests(unittest.TestCase):
 
                 for _ in range(150):
                     self.assertEqual(run(lambda index: index), (2, 17))
-                # max, a native callee, runs Call.Generic's native call; the
+                # max, a native callee, runs Call.BuiltinFastKeywords; the
                 # factory calls are exact
-                self.assertIn("Call.Generic+NO_SELF",
+                self.assertIn("Call.BuiltinFastKeywords+NO_SELF",
                               [row[0] for row in _testinternalcapi.get_ir(code, True)])
                 observations = []
                 references = []

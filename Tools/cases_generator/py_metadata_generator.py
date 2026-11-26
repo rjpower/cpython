@@ -10,7 +10,7 @@ from cwriter import CWriter
 from collections.abc import Sequence
 
 import ir_arms
-from handler_table import WORD_KINDS
+from handler_table import first_arm, handler_ids
 from stack_ops import HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE, PSEUDOS, STACK_OPS
 from typing import TextIO
 
@@ -41,10 +41,11 @@ def generate_ir_opmap(out: CWriter,
     """The register IR's handlers by name and id: the word kinds, then the register instruction arms by their dotted names.  The
     ids are no opcodes; the translator-only ops are no handlers"""
     out.emit("_ir_handlers = frozendict(\n")
-    ids = {name: number for number, name in enumerate(WORD_KINDS)}
+    # The ids follow the C header's, which a guard build shifts
+    ids = handler_ids()
     for name, handler in ids.items():
         out.emit(f"{name}={handler},\n")
-    first = len(WORD_KINDS)
+    first = first_arm()
     if arms:
         out.emit(") | frozendict({\n")
         for arm in arms:

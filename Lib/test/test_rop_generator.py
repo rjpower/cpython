@@ -513,6 +513,9 @@ class ArmRowTests(unittest.TestCase):
 
     def test_too_many_handlers_name_the_overflow(self):
         arms = [None] * 512
+        # The limit at the checked-in base 0, also under a guard build
+        env = self.enterContext(os_helper.EnvironmentVarGuard())
+        env.unset("PYJIT_IR_ID_BASE")
         with self.assertRaisesRegex(handler_table.ir_arms.HandlerLimitError,
                                     "1 word kinds and 512 arms and wrappers need "
                                     "513 handler ids, past the 512"):

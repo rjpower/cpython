@@ -12,7 +12,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
 #include "pycore_ir_source.h"
 #include "pycore_ir_outcomes.h"
-#include "pycore_rop_metadata.h"   // ROP_HANDLER_Line_Hook
+#include "pycore_rop_metadata.h"   // ROP_HANDLER_SaveLocal_Take
 #include "pycore_ir_exception.h"
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
@@ -1524,7 +1524,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
         current >= 0 && current < _PyCode_IRSize(_PyFrame_GetCode(frame)) &&
         frame->instr_ptr == _PyFrame_InstrAt(frame, current) &&
-        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == ROP_HANDLER_Line_Hook)
+        (_PyFrame_Observed(frame, frame->instr_ptr) & _PyIR_OBSERVE_LINE))
     {
         phase.kind = REGISTER_RESUME_PRE_WORD;
     }
@@ -2084,10 +2084,11 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 register_resume_error_needs(analysis, lane_live, work, handler.target,
                                             handler.slot, handler.lasti,
                                             _PyIR_Recipe(_PyCode_IR(code), handler.recipe));
-                /* Transparent observation can hide the runtime reader. Use its
-                 * recovered handler, never a family-wide NULL capability. */
+                /* The runtime reader is the executing copy's handler, which
+                 * may be specialised: use its capability, never a
+                 * family-wide NULL one. */
                 _PyInstr *instr = _PyFrame_InstrAt(frame, i);
-                int real_handler = _PyIR_RealHandler(frame, instr);
+                int real_handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
                 _PyIRWord actual = (word & ~(_PyIRWord)IR_HANDLER_MASK) | real_handler;
                 const _PyIRWord *wp = &_PyCode_IRWords(code)[i];
                 int is_move = _PyIR_IsMoveWord(*wp);
@@ -3475,6 +3476,11 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
 
     bool is_suspended = frame_is_suspended(self);
+    /* The jump reads and writes the frame's resume point, which a monitoring
+     * change may have sent to the switch word */
+    if (!is_suspended) {
+        _PyEval_SwitchResolve(PyThreadState_GET(), self->f_frame);
+    }
     /* Event eligibility permits a request; the phase and owner proofs below
      * still decide whether this particular transfer can be performed. */
     int what_event = PyThreadState_GET()->what_event;

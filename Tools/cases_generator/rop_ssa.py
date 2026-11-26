@@ -469,11 +469,6 @@ class Expander:
                               self.current_homes())
         if kind in ("raise", "unwind"):
             return _with(self.point_state(t.args[0].name, t.span), args)
-        if kind == "dispatch":
-            if changed:
-                self.fail(t.span, "dispatch after the homes changed")
-            return FrameState(FrameRole.current.value, PcRole.site.value, ExcRole.clear.value,
-                              self.current_homes(), None, args)
         if kind == "again":
             if changed:
                 self.fail(t.span, "again after the homes changed")

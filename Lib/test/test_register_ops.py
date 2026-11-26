@@ -542,47 +542,37 @@ def check_source(src: str) -> list[tuple[int, str]]:
     return [(d.span.line, d.span.column, d.message) for d in program.diagnostics]
 
 
-DISPLACING_BASE = """\
-family F() exits(dispatch);
-arm F.A split displacing effects() feedback() exits(dispatch)
-{
-  entry():
-    exit dispatch(h);
-}
-"""
-
-
-class DisplacingTests(unittest.TestCase):
-    """Only a displacing arm names another handler to run (`dispatch`) and
-    the instruction pointer before the word (`prev_head`); a trailing arm is
-    neither selected nor observed."""
+class ArmKindTests(unittest.TestCase):
+    """Only an observer gates its family; no arm names another handler to
+    run or the instruction pointer before the word, which monitoring no
+    longer puts words over; a trailing arm is neither selected nor
+    observed."""
 
     def messages(self, src: str) -> list[str]:
         return [message for _, _, message in check_source(src)]
 
-    def test_displacing_arm_is_clean(self):
-        src = ('extern primitive hook(p:Head) -> Handler effects() c hook as value '
-               'evidence(review: "r", contract: "c", lowering: "none", test: "t");\n'
-               + DISPLACING_BASE.replace(
-                   "exit dispatch(h);",
-                   "let h:Handler = hook(prev_head);\n    exit dispatch(h);"))
+    def test_observer_gates(self):
+        src = ("family F() exits(next) events(CALL);\n"
+               "arm F.A inline effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n"
+               "arm F.Observed split observes gates effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n")
         self.assertEqual(self.messages(src), [])
 
-    def test_dispatch_needs_displacing(self):
-        src = DISPLACING_BASE.replace("split displacing", "split")
-        self.assertIn("only a displacing arm has the exit dispatch",
+    def test_gates_needs_observes(self):
+        src = ("family F() exits(next);\n"
+               "arm F.A split gates effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n")
+        self.assertIn("only an observer (observes) gates its family",
                       self.messages(src))
 
-    def test_displacing_needs_dispatch(self):
-        src = DISPLACING_BASE.replace("exits(dispatch)\n{", "exits(next)\n{", 1)
-        self.assertIn("a displacing arm exits by dispatch", self.messages(src))
+    def test_no_dispatch_exit(self):
+        src = ("family F() exits(dispatch);\n"
+               "arm F.A split effects() feedback() exits(dispatch)\n"
+               "{ entry(): exit next(); }\n")
+        self.assertTrue(self.messages(src))
 
-    def test_displacing_is_split(self):
-        src = DISPLACING_BASE.replace("split displacing", "inline displacing")
-        self.assertIn("a displacing arm is split, and neither selected, observed, "
-                      "trailing nor adaptive", self.messages(src))
-
-    def test_prev_head_needs_displacing(self):
+    def test_no_prev_head(self):
         src = ("family F() exits(next);\n"
                "arm F.A inline effects() feedback() exits(next)\n"
                "{ entry(): let p:Head = prev_head; exit next(); }\n")

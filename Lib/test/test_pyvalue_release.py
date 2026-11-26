@@ -1,14 +1,15 @@
 """Releasing a value can run Python (__del__), which the interpreter must
 allow for: the release keeps the handled exception, and a change to tracing
-or monitoring that it makes takes effect at the next instruction.
+or monitoring that it makes reaches the running frame.
 
 The register IR keeps a local that an instruction's result displaces
 (``x = a + b`` with ``x`` bound) until the instruction has finished, and a
-native call releases its arguments after the call returns.  Setting events
-re-instruments every executing code object, as upstream does, so the
-instruction after the release dispatches through the new instrumentation;
-a debug build checks that the code is current (Python/ceval.c,
-instrumentation_is_current)."""
+native call releases its arguments after the call returns.  Observed code
+runs in the observing evaluator (Python/ceval_observing.c): a frame that is
+running when events are set switches to it at its next switch point (a
+call's return, a poll, a RESUME), not at the next instruction, so a release
+in straight-line code may leave the rest of the call unobserved.  Every
+later call of the code is observed."""
 
 import sys
 import textwrap
@@ -97,6 +98,25 @@ class ReleaseChangesInstrumentation(unittest.TestCase):
         sys.monitoring.set_events(TOOL, 0)
         return relative_lines(function.__code__, seen)
 
+    def lines_of_two_calls(self, function, *args):
+        """The lines of function that LINE events report for a call that
+        turns the events on, and for the call after it"""
+        seen = []
+
+        def on_line(code, line):
+            if code is function.__code__:
+                seen.append(line)
+
+        sys.monitoring.register_callback(TOOL, LINE, on_line)
+        sys.monitoring.set_events(TOOL, 0)
+        first = function(*args)
+        lines = relative_lines(function.__code__, seen)
+        seen.clear()
+        second = function(*args)
+        sys.monitoring.set_events(TOOL, 0)
+        self.assertEqual(first, second)
+        return lines, relative_lines(function.__code__, seen)
+
     def test_monitoring_from_displaced_local(self):
         class Enables:
             def __del__(self):
@@ -111,7 +131,11 @@ class ReleaseChangesInstrumentation(unittest.TestCase):
         for a, b in ((1, 2), (1.5, 2.5)):
             for _ in range(20):
                 with self.subTest(a=a, b=b):
-                    self.assertEqual(self.monitored_lines(function, a, b), [3, 4])
+                    first, second = self.lines_of_two_calls(function, a, b)
+                    # The running call switches at its next switch point,
+                    # here its return: what it reports is a tail of [3, 4]
+                    self.assertIn(first, ([], [4], [3, 4]))
+                    self.assertEqual(second, [1, 2, 3, 4])
 
     def test_monitoring_from_native_call_argument(self):
         class Enables:
@@ -152,9 +176,16 @@ class ReleaseChangesInstrumentation(unittest.TestCase):
                     seen.clear()
                     try:
                         function(a, b)
+                        first = relative_lines(function.__code__, seen)
+                        seen.clear()
+                        function(a, b)
                     finally:
                         sys.settrace(None)
-                    self.assertEqual(relative_lines(function.__code__, seen), [3, 4])
+                    # As for monitoring: the running call reports a tail of
+                    # its lines, the next call all of them
+                    self.assertIn(first, ([], [4], [3, 4]))
+                    self.assertEqual(relative_lines(function.__code__, seen),
+                                     [1, 2, 3, 4])
 
 
 class FailedInstrumentation(unittest.TestCase):

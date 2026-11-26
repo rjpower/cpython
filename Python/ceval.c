@@ -1597,7 +1597,7 @@ _PyRop_StopIterationEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                           _PyInstr *site, PyValueBorrow receiver,
                           PyValue value)
 {
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
     frame->return_pc = dest;
     int status = _PyIR_ObserveStopIteration(tstate, frame, site, dest,
@@ -1617,21 +1617,20 @@ _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return _PyRop_EdgeEvent(tstate, frame, site, true, PY_MONITORING_EVENT_JUMP);
 }
 
-/* A positive result is a callback that moved the frame: return_pc names the
- * word to run */
+/* LINE, then INSTRUCTION, as monitoring observes them at site; none while
+ * the thread traces.  The LINE event compares the word with the one that
+ * ran before it, which instr_ptr still names. */
 Py_NO_INLINE int
-_PyRop_LineEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                 _PyInstr *site, _PyInstr *prev, int *handler)
+_PyEval_LocationEvents(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       _PyInstr *site)
 {
-    int displaced;
+    _PyInstr *prev = frame->instr_ptr;
+    frame->instr_ptr = site;
     if (tstate->tracing) {
-        PyCodeObject *code = _PyFrame_GetCode(frame);
-        int index = _PyFrame_InstrOffset(frame, site);
-        displaced = _PyCode_LineDisplaced(code, index);
+        return 0;
     }
-    else {
-        displaced = _Py_call_instrumentation_line(tstate, frame, site, prev);
-        if (displaced < 0) {
+    if (_PyFrame_Observed(frame, site) & _PyIR_OBSERVE_LINE) {
+        if (_Py_call_instrumentation_line(tstate, frame, site, prev) < 0) {
             return -1;
         }
         if (frame->instr_ptr != site) {
@@ -1639,28 +1638,169 @@ _PyRop_LineEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
             return 1;
         }
     }
-    _PyRop_Displaced(frame, site, displaced, handler);
+    if (_PyFrame_Observed(frame, site) & _PyIR_OBSERVE_INSTRUCTION) {
+        if (_Py_call_instrumentation_instruction(tstate, frame, site) < 0) {
+            return -1;
+        }
+    }
     return 0;
 }
 
-Py_NO_INLINE int
-_PyRop_InstructionEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        _PyInstr *site, int *handler)
+/* The switch word (IR_H_SWITCH): its handler, in either evaluator, goes on at
+ * the word that the thread's switch list keeps for the frame, in the
+ * evaluator that the frame's code asks for (Python/ceval_evaluator.h) */
+_PyInstr _PyEval_SwitchWord = IR_H_SWITCH;
+
+static int
+switch_push(_PyThreadStateImpl *impl, _PyInterpreterFrame *frame, _PyInstr *real)
 {
-    int displaced = _Py_call_instrumentation_instruction(tstate, frame, site);
-    if (displaced < 0) {
+    if (impl->eval_switches.count == impl->eval_switches.size) {
+        int size = impl->eval_switches.size ? 2 * impl->eval_switches.size : 16;
+        struct _PyEvalSwitch *items = PyMem_RawRealloc(
+            impl->eval_switches.items, (size_t)size * sizeof(*items));
+        if (items == NULL) {
+            return -1;
+        }
+        impl->eval_switches.items = items;
+        impl->eval_switches.size = size;
+    }
+    impl->eval_switches.items[impl->eval_switches.count++] =
+        (struct _PyEvalSwitch){frame, real};
+    frame->return_pc = &_PyEval_SwitchWord;
+    return 0;
+}
+
+/* Remove the newest entry of frame and return its word.  The entries are in
+ * the order of their frames on the stack, so the newest is usually last. */
+static _PyInstr *
+switch_pop(_PyThreadStateImpl *impl, _PyInterpreterFrame *frame)
+{
+    for (int i = impl->eval_switches.count - 1; i >= 0; i--) {
+        if (impl->eval_switches.items[i].frame == frame) {
+            _PyInstr *real = impl->eval_switches.items[i].real;
+            memmove(&impl->eval_switches.items[i], &impl->eval_switches.items[i + 1],
+                    (size_t)(impl->eval_switches.count - i - 1) *
+                    sizeof(struct _PyEvalSwitch));
+            impl->eval_switches.count--;
+            return real;
+        }
+    }
+    Py_FatalError("a frame at the switch word has no switch entry");
+}
+
+int
+_PyEval_SwitchAt(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *real)
+{
+    if (switch_push((_PyThreadStateImpl *)tstate, frame, real) < 0) {
+        PyErr_NoMemory();
         return -1;
     }
-    _PyRop_Displaced(frame, site, displaced, handler);
+    return 1;
+}
+
+_PyInstr *
+_PyEval_SwitchLoop(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    assert(frame->return_pc == &_PyEval_SwitchWord);
+    _PyInstr *real = switch_pop((_PyThreadStateImpl *)tstate, frame);
+    frame->return_pc = real;
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        /* The activation ends; the frame that called it switches at its
+         * next poll */
+        _Py_set_eval_breaker_bit(tstate, _PY_EVAL_LOOP_SWITCH_BIT);
+    }
+    return real;
+}
+
+void
+_PyEval_SwitchDrop(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    if (frame->return_pc == &_PyEval_SwitchWord) {
+        (void)_PyEval_SwitchLoop(tstate, frame);
+    }
+}
+
+void
+_PyEval_SwitchResolve(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    if (frame->return_pc == &_PyEval_SwitchWord) {
+        (void)_PyEval_SwitchLoop(tstate, frame);
+        _Py_set_eval_breaker_bit(tstate, _PY_EVAL_LOOP_SWITCH_BIT);
+    }
+}
+
+/* Send every frame of ts that waits on a child to the switch word, so that
+ * it goes on in the evaluator its code asks for when the child returns, and
+ * have the frame on top switch at its next poll.  A frame below an entry
+ * frame goes on when the C code that called the activation returns, without
+ * its resume point: the entry frame's switch passes the switch on to it, at
+ * its next poll.  The list is rebuilt, which drops the entries of frames
+ * that left the stack without going on at the switch word: a consumer that
+ * a generator returned to by its completion (gen_return) leaves one. */
+static int
+redirect_thread(PyThreadState *ts)
+{
+    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)ts;
+    _PyInterpreterFrame *top = ts->current_frame;
+    if (top == NULL) {
+        return 0;
+    }
+    _Py_set_eval_breaker_bit(ts, _PY_EVAL_LOOP_SWITCH_BIT);
+    int depth = 0;
+    for (_PyInterpreterFrame *f = top; f->previous != NULL; f = f->previous) {
+        if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
+            depth++;
+        }
+    }
+    struct _PyEvalSwitch *items = depth ? PyMem_RawMalloc(
+        (size_t)depth * sizeof(*items)) : NULL;
+    if (depth && items == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    /* Fill from the end: the frames nearest the top come last */
+    int n = depth;
+    for (_PyInterpreterFrame *child = top, *f = top->previous; f != NULL;
+         child = f, f = f->previous)
+    {
+        _PyInstr *real = f->return_pc == &_PyEval_SwitchWord
+            ? switch_pop(impl, f) : f->return_pc;
+        f->return_pc = real;
+        if (child->owner == FRAME_OWNED_BY_INTERPRETER || _PyEval_SwitchSkips(f)) {
+            continue;
+        }
+        items[--n] = (struct _PyEvalSwitch){f, real};
+        f->return_pc = &_PyEval_SwitchWord;
+    }
+    memmove(items, items + n, (size_t)(depth - n) * sizeof(*items));
+    PyMem_RawFree(impl->eval_switches.items);
+    impl->eval_switches.items = items;
+    impl->eval_switches.count = depth - n;
+    impl->eval_switches.size = depth;
     return 0;
 }
 
-/* Instrument the code if its version is out of date, as _MAYBE_INSTRUMENT.
- * A positive result means the word runs again: return_pc names it, and it
- * now has the handler that instrumentation installed. */
-Py_NO_INLINE int
-_PyRop_InstrumentIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                         _PyInstr *site)
+int
+_PyEval_RedirectFrames(PyInterpreterState *interp)
+{
+    int err = 0;
+    _Py_FOR_EACH_TSTATE_BEGIN(interp, ts) {
+        if (redirect_thread(ts) < 0) {
+            err = -1;
+            break;
+        }
+    }
+    _Py_FOR_EACH_TSTATE_END(interp);
+    return err;
+}
+
+/* Instrument the code if its version is out of date, as _MAYBE_INSTRUMENT,
+ * and switch the frame to the other evaluator if it goes on there
+ * (_PyEval_SwitchesLoop()): the RESUME word runs again there.  The caller
+ * then goes on in the evaluator that it ran in, through the switch word. */
+static int
+instrument_if_stale(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    _PyInstr *site, int observing)
 {
 #ifdef Py_GIL_DISABLED
     // For thread-safety, the instrumentation version is checked even when
@@ -1669,29 +1809,58 @@ _PyRop_InstrumentIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #else
     int check_instrumentation = (tstate->tracing == 0);
 #endif
-    if (!check_instrumentation) {
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    if (check_instrumentation) {
+        uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
+                                   & ~_PY_EVAL_EVENTS_MASK;
+        uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+            code->_co_instrumentation_version) & ~_PyCode_OBSERVED_MARK;
+        if (code_version != global_version && _Py_Instrument(code, tstate->interp)) {
+            return -1;
+        }
+    }
+    if (!_PyEval_SwitchesLoop(frame, observing)) {
         return 0;
     }
-    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
-                               & ~_PY_EVAL_EVENTS_MASK;
-    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
-        _PyFrame_GetCode(frame)->_co_instrumentation_version);
-    if (code_version == global_version) {
-        return 0;
-    }
-    if (_Py_Instrument(_PyFrame_GetCode(frame), tstate->interp)) {
+    _PyInterpreterFrame *caller = frame->previous;
+    if (caller->owner != FRAME_OWNED_BY_INTERPRETER &&
+        caller->return_pc != &_PyEval_SwitchWord &&
+        !_PyEval_SwitchSkips(caller) &&
+        !_PyEval_SwitchesLoop(caller, observing) &&
+        _PyEval_SwitchAt(tstate, caller, caller->return_pc) < 0)
+    {
         return -1;
     }
-    frame->return_pc = site;
-    return 1;
+    return _PyEval_SwitchAt(tstate, frame, site);
 }
 
-/* PY_START at a frame's start, PY_RESUME at any other resume point.  A
- * callback that moves the frame leaves the word to run in return_pc. */
+/* A positive result means the frame goes on in the other evaluator:
+ * return_pc is the switch word */
+Py_NO_INLINE int
+_PyRop_InstrumentIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *site)
+{
+    return instrument_if_stale(tstate, frame, site, 0);
+}
+
+Py_NO_INLINE int
+_PyRop_ObserveIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *site)
+{
+    return instrument_if_stale(tstate, frame, site, 1);
+}
+
+/* PY_START at a frame's start, PY_RESUME at any other resume point, where
+ * a tool listens (the observing evaluator runs every Resume word's observer
+ * for its switch).  A callback that moves the frame leaves the word to run
+ * in return_pc. */
 Py_NO_INLINE int
 _PyRop_ResumeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                    _PyInstr *site, uint32_t kind)
 {
+    if (!(_PyFrame_Observed(frame, site) & _PyIR_OBSERVE_EVENTS)) {
+        return 0;
+    }
     int err = _Py_call_instrumentation(
         tstate, kind == RESUME_AT_FUNC_START ? PY_MONITORING_EVENT_PY_START
                                              : PY_MONITORING_EVENT_PY_RESUME,
@@ -1713,11 +1882,7 @@ static int
 _PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  _PyInstr *site, bool taken, int event)
 {
-    // An instruction event may have made the word transparent: its target is
-    // in the format of the handler it wraps
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
-    // The wrapper's own length is one word; the fall-through continues past
-    // the fixed operand words of the word it wraps
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *dest = taken ? site + 1 + _PyIR_FormatDistance(fmt, *site)
                            : site + 1 + fmt->fixed_words;
     frame->return_pc = dest;
@@ -2231,7 +2396,7 @@ Py_NO_INLINE _PyStatusValue
 _PyRop_SendStopEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *site, PyValueBorrow receiver, PyValue value)
 {
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
     frame->instr_ptr = site;
     frame->return_pc = dest;
@@ -2256,7 +2421,7 @@ Py_NO_INLINE int
 _PyRop_SendExitEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *site)
 {
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
     frame->instr_ptr = site;
     frame->return_pc = dest;
@@ -3054,6 +3219,8 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _Py_LeaveRecursiveCallPy(tstate);
         _PyInterpreterFrame *dying = frame;
         frame = tstate->current_frame = dying->previous;
+        /* The frame does not go on at its resume point */
+        _PyEval_SwitchDrop(tstate, frame);
         frame->pending_redirect = 0;
         clear_error_frame(tstate, dying);
         frame->pending_redirect = 0;
@@ -3200,59 +3367,14 @@ jit_resume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next)
 #endif
 
 
-/* The interpreter is compiled one of two ways (a prototype's choice, rir90
- * TI): Py_IR_TAIL_CALL 0, ir_evaluate() below, one function that
- * dispatches by computed goto; 1, the tail-calling interpreter, a function
- * per handler, label and routine that dispatches by guaranteed tail call
- * (Python/ceval_tail.h).  Both compile the same bodies. */
-#ifndef Py_IR_TAIL_CALL
-#  define Py_IR_TAIL_CALL 1
-#endif
+/* The normal evaluator (Python/ceval_evaluator.h): a function per handler,
+ * label and routine, which dispatch by guaranteed tail call */
+#include "ceval_evaluator.h"
 
-/* IR_TARGETS(X): the handler of every id */
-#include "ir_targets.h"
-
-#if Py_IR_TAIL_CALL
-
-#define IR_TAIL_CALLS
-#include "ceval_tail.h"
-
-/* Every function of the interpreter, declared before the table and the
- * functions, which tail-call one another (an id without a handler repeats
- * its declaration) */
-#define IR_TAIL_DECLARE(ID, NAME) IR_TAIL_HEAD(ir_tail_##NAME);
-IR_TARGETS(IR_TAIL_DECLARE)
-#undef IR_TAIL_DECLARE
-IR_TAIL_FN(start_frame);
-IR_TAIL_FN(throw_error);
-IR_TAIL_FN(process_error);
-IR_TAIL_FN(gen_return);
-
-static const _PyIRTailFn ir_tail_table[IR_TARGETS_COUNT] = {
-#define IR_TAIL_TARGET(ID, NAME) [ID] = ir_tail_##NAME,
-    IR_TARGETS(IR_TAIL_TARGET)
-#undef IR_TAIL_TARGET
-};
-
-/* The bodies read some locals that only the evaluator's bindings use (an
- * `int opcode` before a dispatch) */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
-/* GCC warns of every local whose address an arm passed to a helper, such as
- * a checked sum's out-parameter: the helper has returned before the tail
- * call, and no tail call passes such an address. */
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 15
-#pragma GCC diagnostic ignored "-Wmaybe-musttail-local-addr"
-#endif
-#include "ceval_labels.h"
-#include "generated_rop_cases.c.h"
-#include "ceval_routines.h"
-#pragma GCC diagnostic pop
-#undef IR_TAIL_CALLS
-
-/* The driver: runs the frame to its end, as the evaluator below does.  The
- * functions return only when the activation ends. */
+/* The driver: runs the frame to its end, the value that INTERPRETER_EXIT
+ * takes, or NULL with an exception set.  The functions return only when the
+ * activation ends.  The activation record and the entry frame, whose
+ * addresses are taken, are in the caller, _PyEval_EvalFrameLoop(). */
 static Py_NO_INLINE PyValue
 ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
@@ -3263,80 +3385,23 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     return ir_tail_start_frame(tstate, frame, next_instr, 0);
 }
 
-#else
-
-/* The evaluator: every handler and label of the interpreter in one
- * function, which dispatches by computed goto (Python/ceval_macros.h).  Its
- * locals are the interpreter's state and are never address-taken; the
- * activation record and the entry frame, whose addresses are taken, are in
- * the caller, _PyEval_EvalFrameLoop().  It runs the frame to its end: the
- * value that INTERPRETER_EXIT takes, or NULL with an exception set.
- * start_frame takes the word from frame. */
-static Py_NO_INLINE PyValue
-ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+#ifdef _PY_JIT_SUPPORTED
+/* The baseline JIT's hand-offs for the observing evaluator
+ * (Python/ceval_observing.c), where a frame that ran in its unit goes back
+ * to it when its child returns */
+_PyIRTransfer
+_PyEval_JitRun(PyThreadState *tstate, _PyJitUnit *unit,
+               _PyInterpreterFrame *frame, _PyInstr *next)
 {
-    static void *const opcode_targets[IR_TARGETS_COUNT] = {
-#define IR_LABEL_TARGET(ID, NAME) [ID] = &&TARGET_##NAME,
-        IR_TARGETS(IR_LABEL_TARGET)
-#undef IR_LABEL_TARGET
-    };
-    _PyInstr *next_instr = frame->instr_ptr;
-    _PyIRWord ir_word = 0;
-    /* The operands of the shared bodies that the labels below read: the
-     * VM routines' (Python/ceval_routines.h), which the transfer macros set.
-     * None is live across a dispatch. */
-    _PyInstr *exit_next;
-    uint32_t exit_entry;
-    PyValue gen_value;
-    _PyInterpreterFrame *gen_dying;
-    int gen_empty;
-    _PyIRTransfer gen_transfer;
-
-    if (throwflag) {
-        goto LABEL_throw_error;
-    }
-    /* Enter through a computed goto, as dispatch does.  GCC's static profile
-     * then reaches the handler labels from here; a plain goto carries a
-     * "predicted unlikely" estimate and leaves every handler at count 0, so
-     * it is optimised for size and its closes stay out of line. */
-    goto *&&LABEL_start_frame;
-
-#include "ceval_labels.h"
-#include "generated_rop_cases.c.h"
-
-    /* A function form returned no word: it raised (_PyEval_ExecuteForms() has the
-     * same contract), and process_error resolves it. */
-    LABEL_outlined_exit:
-    {
-        _PyEvalActivation *activation = IR_ACTIVATION();
-        assert(activation->exit_kind == _PyIR_EXIT_RAISE);
-        exit_next = activation->exit_next;
-        exit_entry = activation->exit_entry;
-        goto LABEL_process_error;
-    }
-
-    /* The shared dispatch blocks of the generator routines: gen_dispatch runs
-     * the word at next_instr, and gen_stepped runs what a step returned. */
-    HOT_LABEL(gen_dispatch)
-    {
-        int opcode;
-        DISPATCH();
-    }
-
-    HOT_LABEL(gen_stepped)
-    {
-        frame = gen_transfer.frame;
-        next_instr = gen_transfer.next;
-        if (next_instr == NULL) {
-            goto LABEL_outlined_exit;
-        }
-        goto LABEL_gen_dispatch;
-    }
-
-#include "ceval_routines.h"
+    return jit_run(tstate, unit, frame, next);
 }
 
-#endif  /* Py_IR_TAIL_CALL */
+_PyIRTransfer
+_PyEval_JitResume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next)
+{
+    return jit_resume(tstate, frame, next);
+}
+#endif
 
 void
 _PyEval_RecordSourceError(PyThreadState *tstate, _PyInterpreterFrame *frame,
@@ -7047,7 +7112,7 @@ _PyRop_EndAsyncForEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (tstate->tracing) {
         return 0;
     }
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *send = site + 1 + _PyIR_FormatDistance(fmt, *site);
     _PyInstr *dest = site + 1 + fmt->fixed_words;
     frame->return_pc = dest;

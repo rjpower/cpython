@@ -105,6 +105,20 @@ typedef struct _PyThreadStateImpl {
     /* Frame whose observer callback is running; callback frames themselves
      * are not suspended semantic children of this frame. */
     struct _PyInterpreterFrame *observed_frame;
+    /* The frames of this thread that monitoring sent to the switch word
+     * (IR_H_SWITCH, _PyEval_SwitchLoop() in Python/ceval.c): the frame's
+     * return_pc is the switch word and real is the word it stands for.  An
+     * entry is removed when its frame goes on at the switch word, or is
+     * unwound or handles an exception; a monitoring change drops the entries
+     * of frames no longer on the stack. */
+    struct {
+        struct _PyEvalSwitch {
+            struct _PyInterpreterFrame *frame;
+            _PyInstr *real;
+        } *items;
+        int count;
+        int size;
+    } eval_switches;
 
     // Distinguishes between yield and return from PyEval_EvalFrame().
     // See gen_send_ex2() in Objects/genobject.c

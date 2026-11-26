@@ -858,6 +858,7 @@ class Monitor:
         # A function whose words to list when target starts
         self.snapshot = snapshot
         self.words = None
+        self.observed = None
         self.tool = sys.monitoring.DEBUGGER_ID
         sys.monitoring.use_tool_id(self.tool, "test_rop_call")
         test.addCleanup(sys.monitoring.free_tool_id, self.tool)
@@ -883,6 +884,8 @@ class Monitor:
         self.log.append(event)
         if name == "PY_START" and code is target.__code__ and self.snapshot:
             self.words = word_names(self.snapshot.__code__)
+            self.observed = _testinternalcapi.code_is_observed(
+                self.snapshot.__code__)
         if self.raising == name and self.callee in (None, event[2]):
             raise KeyError(name)
 
@@ -922,14 +925,17 @@ class ObservationTests(unittest.TestCase):
         self.assertEqual(word_names(sample.__code__), names)
 
     def test_observed_wrappers_run_while_monitoring(self):
+        # The code runs in the observing evaluator, whose table runs the
+        # observers Call.Observed and Return.Observed for the words; the
+        # words keep the arms that they adapted to
         warm(sample)
+        names = word_names(sample.__code__)
         monitor = Monitor(self, snapshot=sample)
         monitor.run(sample)
+        self.assertTrue(monitor.observed)
+        self.assertEqual(monitor.words, names)
         calls = [n for n in monitor.words if n.startswith("Call.")]
-        returns = [n for n in monitor.words if n.startswith("Return.")]
-        self.assertEqual(set(calls), {"Call.Generic.Observed"})
         self.assertEqual(len(calls), 9)
-        self.assertEqual(returns, ["Return.Empty.Observed"])
 
     def test_forced_arms_under_monitoring(self):
         def g(a):

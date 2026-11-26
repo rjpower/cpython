@@ -35,7 +35,7 @@ from handler_table import first_arm, handler_ids
 from rop_cgen import (ESCAPING, Lowering, Unsupported, inline_rows, lower_arm,
                       outlined_name, pending_blockers, row_signature)
 from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, FieldKind,
-                         Handle, Slot, Wrap)
+                         Handle, Select, Slot, Wrap)
 from rop_check import Program, enum_c_name, select_dimension
 from rop_model import Arm, Encoding, HandleType, Param, WrapType
 from rop_print import type_text
@@ -49,6 +49,9 @@ ROP_DIR = ROOT / "Python" / "register_ops"
 # are private: nothing outside the generated files names one.
 HANDLER_LIMIT = 512
 IR_OPERANDS_ID = handler_ids()["IR_OPERANDS"]
+# The id of the switch word (IR_H_SWITCH in Include/internal/pycore_ir.h):
+# the last id the handler field holds, which no arm or word kind takes
+IR_SWITCH_ID = ir_arms.IR_LIMIT - 1
 FORM_PARAMETERS = "PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr"
 
 
@@ -102,6 +105,7 @@ def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
     points = point_numbers(program)
     if len(points) > 255:
         raise GenerateError("more than 255 checkpoints: the entry has 8 bits")
+    check_observer_layouts(program)
     lowered: dict[str, Lowering] = {}
     left_out: dict[str, str] = {}
     # The family's miss adapter is its generic arm (`generic(Arm)`), when
@@ -145,7 +149,7 @@ int opcode = {handler};
 (void)opcode;
 _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
-{prev}{save_ip}IR_HOLD_NEXT();
+{save_ip}IR_HOLD_NEXT();
 next_instr += {advance};
 INSTRUCTION_STATS({handler});"""
 
@@ -159,8 +163,6 @@ def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
         advance = low.spans
     lines += PROLOGUE.format(
         handler=handler(arm.name), advance=advance,
-        prev=("_PyIRWord *const prev_instr = frame->instr_ptr;\n(void)prev_instr;\n"
-              if arm.displacing else ""),
         save_ip="" if arm.trailing else "frame->instr_ptr = next_instr;\n").splitlines()
     lines += low.decls
     lines += low.body
@@ -265,20 +267,17 @@ def emitted_arm_ids(p: Products) -> dict[int, ir_arms.ArmEntry]:
 
 
 def write_form_table(out: TextIO, p: Products) -> None:
-    """The function form of every handler id, as the target table has its
-    label: ir_handler_forms[IR_HANDLER(word)] runs the word.  Python/ceval.c
-    defines the forms of the operand words and of the unknown ids."""
+    """The function form of every handler id, as the target tables have
+    their functions: ir_handler_forms[IR_HANDLER(word)] runs the word, and
+    ir_observing_forms runs it as the observing evaluator does.
+    Python/ceval.c defines the forms of the operand words, of the switch
+    word and of the unknown ids."""
     by_arm = emitted_arm_ids(p)
-    out.write(f"\nstatic const _PyIRForm ir_handler_forms[{ir_arms.IR_LIMIT}] = {{\n")
-    for i in range(ir_arms.IR_LIMIT):
-        if i in by_arm:
-            name = f"ir_run_{by_arm[i].name}"
-        elif i == IR_OPERANDS_ID:
-            name = "ir_run_IR_OPERANDS"
-        else:
-            name = "ir_run_UNKNOWN_OPCODE"
-        out.write(f"    [{i}] = {name},\n")
-    out.write("};\n")
+    for table, observing in (("ir_handler_forms", False), ("ir_observing_forms", True)):
+        out.write(f"\nstatic const _PyIRForm {table}[{ir_arms.IR_LIMIT}] = {{\n")
+        for i in range(ir_arms.IR_LIMIT):
+            out.write(f"    [{i}] = ir_run_{target_name(i, by_arm, observing)},\n")
+        out.write("};\n")
 
 
 def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
@@ -416,27 +415,39 @@ def write_stub_plans(out: TextIO, p: Products) -> None:
     out.write("};\n")
 
 
+def target_name(i: int, by_arm: Mapping[int, ir_arms.ArmEntry], observing: bool) -> str:
+    """The function that dispatch of handler id i tail-calls: in the
+    observing table an arm of a family whose observer gates runs the
+    observer.  An observer that does not gate runs where the word's location
+    is observed (_PyIR_ObservingHandler, Python/ceval_evaluator.h)."""
+    if i in by_arm:
+        arm = by_arm[i]
+        gated = observing and arm.observer and arm.observer_gates
+        return arm.observer if gated else arm.name
+    if i == IR_OPERANDS_ID:
+        return "operand_words"
+    if i == IR_SWITCH_ID:
+        return "switch_loop"
+    return "UNKNOWN_OPCODE"
+
+
 def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
-    """The dispatch targets of the interpreter, IR_TARGETS(X): X(ID, ARM)
-    for every handler id, from which Python/ceval.c builds its dispatch
-    table (the labels of ir_evaluate() or the arm functions of the
-    tail-calling interpreter).  Dispatch masks the word with
-    IR_HANDLER_MASK, so the list covers every id the mask yields."""
+    """The dispatch targets of the two tables of the tail-calling
+    interpreter (Python/ceval_evaluator.h), X(ID, NAME) for every handler
+    id: IR_TARGETS(X), the normal table, and IR_OBSERVING_TARGETS(X), the
+    observing one (IR_OBSERVING), which sends the words of each family whose
+    observer gates to the observer.  Dispatch masks the word with
+    IR_HANDLER_MASK, so a table covers every id the mask yields."""
     write_header(__file__, sources, out)
     by_arm = emitted_arm_ids(p)
     out.write(f"\n#define IR_TARGETS_COUNT {ir_arms.IR_LIMIT}\n")
     out.write("static_assert(IR_TARGETS_COUNT == IR_HANDLER_MASK + 1,\n"
               '              "dispatch covers every id that IR_HANDLER yields");\n')
-    out.write("\n#define IR_TARGETS(X) \\\n")
-    for i in range(ir_arms.IR_LIMIT):
-        if i in by_arm:
-            name = by_arm[i].name
-        elif i == IR_OPERANDS_ID:
-            name = "IR_OPERANDS"
-        else:
-            name = "UNKNOWN_OPCODE"
-        out.write(f"    X({i}, {name}) \\\n")
-    out.write("\n")
+    for macro, observing in (("IR_TARGETS", False), ("IR_OBSERVING_TARGETS", True)):
+        out.write(f"\n#define {macro}(X) \\\n")
+        for i in range(ir_arms.IR_LIMIT):
+            out.write(f"    X({i}, {target_name(i, by_arm, observing)}) \\\n")
+        out.write("\n")
 
 
 def completion_name(arm: str) -> str:
@@ -446,8 +457,9 @@ def completion_name(arm: str) -> str:
 def write_completions(out: TextIO, p: Products) -> None:
     """Each completion arm as a function with the stubs' status ABI, which
     generator_return calls in the consumer's frame with the child's value,
-    and the table from every handler of a family that has one to its
-    completion: the observed completion for the instrumented twins.  The
+    and the tables from every handler of a family that has one to its
+    completion, the normal evaluator's and the observing evaluator's,
+    which runs the family's observed completion.  The
     consumer word's handler is read when the child returns, so a word
     respecialized or instrumented meanwhile completes as it now is."""
     if not p.completions:
@@ -467,16 +479,20 @@ def write_completions(out: TextIO, p: Products) -> None:
     out.write("\ntypedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,\n"
               "                                 _PyIRWord *, PyValue);\n\n"
               "const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS] = {\n")
-    for handler_name, arm in completion_table(p):
+    for handler_name, arm in completion_table(p, observing=False):
+        out.write(f"    [{handler_name} - ROP_FIRST_HANDLER] = {completion_name(arm)},\n")
+    out.write("};\n\n/* The completions of the observing evaluator */\n"
+              "const _PyRopCompletion _PyRop_ObservingCompletions[ROP_NUM_HANDLERS] = {\n")
+    for handler_name, arm in completion_table(p, observing=True):
         out.write(f"    [{handler_name} - ROP_FIRST_HANDLER] = {completion_name(arm)},\n")
     out.write("};\n")
 
 
-def completion_table(p: Products) -> list[tuple[str, str]]:
+def completion_table(p: Products, observing: bool) -> list[tuple[str, str]]:
     """(handler, completion arm) for every handler of a family with an
-    emitted completion"""
+    emitted completion: in the observing evaluator, the family's observed
+    completion where it has one"""
     prog = p.program
-    wrapped = set(wrapped_arms(prog))
     table = []
     for name, arm in prog.arms.items():
         plain = rop_check.completion_of(prog, arm.family)
@@ -485,9 +501,8 @@ def completion_table(p: Products) -> list[tuple[str, str]]:
         observed = rop_check.completion_of(prog, arm.family, observes=True)
         if observed is None or observed.name not in p.completions:
             observed = plain
-        table.append((handler(name), (observed if arm.observes else plain).name))
-        if name in wrapped:
-            table.append((handler(name) + "_Observed", observed.name))
+        runs_observer = arm.observes or (observing and observed_by(prog, name) is not None)
+        table.append((handler(name), (observed if runs_observer else plain).name))
     return table
 
 
@@ -644,9 +659,6 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         flags.append("_PyIR_VACANT_SPAN")
     if "_PyIR_RUNS_PYTHON" in effects:
         flags.append("_PyIR_RUNS_CODE")
-    if arm.displacing:
-        # It runs another handler on the same fields
-        flags.append("_PyIR_TRANSPARENT")
     if has_target:
         flags.append("_PyIR_FORWARD")
         if not exits & {"next", "branch"}:
@@ -815,31 +827,52 @@ def word_homes(program: Program, family: str, enc: Encoding,
 
 
 def observer(program: Program, family: str) -> str | None:
-    """The family's observed wrapper (the arm that `observes`), if it has
-    one: every twin of the family's other arms runs it."""
+    """The family's observer arm (the arm that `observes`), if it has one:
+    the observing evaluator runs it for every word of the family."""
     arm = rop_check.observer_of(program.arms.values(), family)
     return None if arm is None else arm.name
 
 
-def wrapped_arms(program: Program) -> list[str]:
-    """The arms that have a twin: those of a family that declares events,
-    but for the family's observed wrapper"""
-    return [name for name, arm in program.arms.items()
-            if program.families[arm.family].events and not arm.trailing
-            and name != observer(program, arm.family)]
+def observed_by(program: Program, name: str) -> str | None:
+    """The arm that the observing evaluator runs for the words of arm
+    `name`: its family's observer, or None for the arm itself (an arm of a
+    family without events, a trailing jump, an arm of the evaluator's entry
+    frame, which runs no code, or the observer).  The observer runs where
+    the word's location is observed, or for every word if it gates."""
+    arm = program.arms[name]
+    if (not program.families[arm.family].events or arm.trailing
+            or Select.entry_frame in arm.select):
+        return None
+    runs = observer(program, arm.family)
+    return None if runs == name else runs
+
+
+# The ArmFormat fields that say where a word's operands are: an observer
+# reads the word of any arm of its family with its own view of them
+LAYOUT_FIELDS = ("roles", "imm", "fb", "fb_schema", "operands", "fixed_words",
+                 "target", "group", "vacant")
+
+
+def check_observer_layouts(program: Program) -> None:
+    """Every arm that its family's observer runs for has the observer's
+    operand layout: the observer decodes the word as its own."""
+    for name in program.arms:
+        runs = observed_by(program, name)
+        if runs is None:
+            continue
+        mine = arm_format(program, program.arms[name])
+        theirs = arm_format(program, program.arms[runs])
+        diff = [f for f in LAYOUT_FIELDS if getattr(mine, f) != getattr(theirs, f)]
+        if diff:
+            raise GenerateError(f"{name}: the observer {runs} reads its words with "
+                                f"another layout ({', '.join(diff)})")
 
 
 def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
-    """Every arm, in handler order, for the per-handler tables, then the
-    observed wrapper (twin) of each arm of a family that declares events.
-    The forms, targets and stub plans list the emitted ones after the word
-    kinds.  A twin runs its family's
-    observed wrapper (`observes`), whose case and form it names; without one it
-    has neither."""
+    """Every arm, in handler order, for the per-handler tables.  The forms,
+    targets and stub plans list the emitted ones after the word kinds."""
     shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
     entries = []
-    wrapped = wrapped_arms(p.program)
-    twin_index = {name: len(p.program.arms) + k for k, name in enumerate(wrapped)}
     for name, arm in p.program.arms.items():
         fam = p.program.families[arm.family]
         # A split arm has no stub and no template: compiled code calls its
@@ -847,6 +880,7 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
         region = "none" if arm.region.name == "split" else arm.region.name
         emitted = name in p.lowered
         generic = p.generic.get(arm.family)
+        runs = observed_by(p.program, name)
         # A generic arm that is split (it can enter a frame) has no stub for a
         # miss to run: the family's inline arms are unplanned too, and a miss
         # of their compiled code runs their function form, which reaches it
@@ -859,23 +893,9 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
             name,
             () if arm.trailing else tuple(e.value for e in fam.events),
             "again" in fam.exits, is_generic(p.program, arm),
-            arm_format(p.program, arm), twin_index.get(name), None, emitted,
-            arm.trailing, arm.displacing))
-    for name in wrapped:
-        base = entries[p.numbers[name]]
-        runs = observer(p.program, p.program.arms[name].family)
-        if runs is None:
-            entries.append(dataclasses.replace(
-                base, name=base.name + "_Observed", index=twin_index[name],
-                dotted=base.dotted + ".Observed", stub=None, generic=None,
-                twin=None, observes=base.index, emitted=False))
-            continue
-        wrapper = entries[p.numbers[runs]]
-        entries.append(dataclasses.replace(
-            base, name=wrapper.name, index=twin_index[name],
-            dotted=base.dotted + ".Observed", region=wrapper.region,
-            escapes=wrapper.escapes, stub=wrapper.stub, generic=None,
-            twin=None, observes=base.index, emitted=wrapper.emitted))
+            arm_format(p.program, arm), None if runs is None else c_name(runs),
+            emitted, arm.trailing,
+            runs is not None and p.program.arms[runs].gates))
     return entries
 
 
@@ -1002,27 +1022,21 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     families = sorted(prog.families)
     out.write("\n#ifndef Py_INTERNAL_ROP_METADATA_H\n#define Py_INTERNAL_ROP_METADATA_H\n")
     out.write('\n#include "ir_handler_ids.h"     // IR_FIRST_ARM\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
-    wrapped = wrapped_arms(prog)
-    twins = len(wrapped)
-    out.write("\n/* The arms' handler ids follow the word kinds, in definition order; the\n"
-              " * observed wrappers of the arms of families that declare events follow them */\n")
+    out.write("\n/* The arms' handler ids follow the word kinds, in definition order */\n")
     out.write("#define ROP_FIRST_HANDLER IR_FIRST_ARM\n")
-    out.write(f"#define ROP_NUM_HANDLERS {len(prog.arms) + twins}\n")
+    out.write(f"#define ROP_NUM_HANDLERS {len(prog.arms)}\n")
     out.write('static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,\n'
               '              "the arms\' handler ids fit the handler field");\n')
     out.write(f"#define ROP_NUM_FAMILIES {len(families)}\n")
     out.write(f"#define ROP_NUM_ARMS {len(prog.arms)}\n")
     out.write("static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,\n"
-              '              "the handler count is the word kinds, the arms and their wrappers");\n\n')
+              '              "the handler count is the word kinds and the arms");\n\n')
     out.write("/* Family numbers, in name order */\nenum {\n")
     for i, f in enumerate(families):
         out.write(f"    ROP_FAMILY_{f} = {i},\n")
     out.write("};\n\n/* Handler numbers of the arms */\n")
     for name in prog.arms:
         out.write(f"#define {handler(name)} (ROP_FIRST_HANDLER + {p.numbers[name]})\n")
-    for k, name in enumerate(wrapped):
-        out.write(f"#define {handler(name)}_Observed "
-                  f"(ROP_FIRST_HANDLER + {len(prog.arms) + k})\n")
     out.write("\n/* The translator's CFG holds stack opcodes below 256 in its ops, so an op\n"
               " * that names an arm is tagged: ROP_OP_<arm> is ROP_CFG_BASE plus the arm's\n"
               " * handler offset, and ROP_CFG_HANDLER() takes it back to the handler id */\n")
@@ -1033,9 +1047,6 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("#define ROP_CFG_HANDLER(op) ((op) - ROP_CFG_BASE + ROP_FIRST_HANDLER)\n")
     for name in prog.arms:
         out.write(f"#define ROP_OP_{c_name(name)} (ROP_CFG_BASE + {p.numbers[name]})\n")
-    for k, name in enumerate(wrapped):
-        out.write(f"#define ROP_OP_{c_name(name)}_Observed "
-                  f"(ROP_CFG_BASE + {len(prog.arms) + k})\n")
     out.write("\n/* ROP_ARM(name) is the arm's handler id; the translator's CFG files\n"
               " * (regcfg*.c, ir_assemble.c) redefine it as the tagged ROP_OP_<name> */\n")
     out.write("#ifndef ROP_ARM\n#define ROP_ARM(name) ROP_HANDLER_##name\n#endif\n")

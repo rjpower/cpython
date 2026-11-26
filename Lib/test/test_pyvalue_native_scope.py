@@ -590,12 +590,15 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
         self.addCleanup(monitoring.free_tool_id, tool)
         monitoring.register_callback(tool, monitoring.events.CALL,
                                      lambda *args: None)
-        for site, handler in ((positional_site, 'Call.Generic.Observed+NO_SELF'),
-                              (star_site, 'CallEx.Generic.Observed+NO_KW')):
+        # Observed code keeps its words and runs each family's observer in
+        # the observing evaluator
+        for site, handler in ((positional_site, 'Call.Generic+NO_SELF'),
+                              (star_site, 'CallEx.Generic+NO_KW')):
             support.reset_code(site)
             monitoring.set_local_events(tool, site.__code__,
                                         monitoring.events.CALL)
             try:
+                self.assertTrue(_testinternalcapi.code_is_observed(site.__code__))
                 self.check_site(site, handler)
             finally:
                 monitoring.set_local_events(tool, site.__code__, 0)

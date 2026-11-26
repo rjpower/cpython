@@ -399,9 +399,9 @@ get_awaited_coro_address(
         return -1;
     }
     /* Every canonical delegated site passed positive role admission.
-     * The reached marker and the matched word of the executing copy (an
-     * instrumented variant maps to its ordinary handler below) retain that
-     * finite certificate; the words' contents are never inferred from homes. */
+     * The reached marker and the matched word of the executing copy, which
+     * monitoring never rewrites, retain that finite certificate; the words'
+     * contents are never inferred from homes. */
     uintptr_t word_addr = pc - sizeof(_PyIRWord);
     if (word_addr >= Py_PTR_LIMIT) {
         PyErr_SetString(PyExc_RuntimeError, "Invalid awaited instruction address");
@@ -417,9 +417,7 @@ get_awaited_coro_address(
     // A delegated yield: the value and the sent value share the home of the
     // SEND's window, whose receiver is two homes below
     int receiver = (int)IR_B(word) - 2;
-    if ((handler != ROP_HANDLER_YieldFrom_Delegated &&
-         handler != ROP_HANDLER_YieldFrom_Delegated_Observed &&
-         handler != ROP_HANDLER_YieldFrom_Observed) ||
+    if (handler != ROP_HANDLER_YieldFrom_Delegated ||
         IR_B(word) != return_slot ||
         IR_A(word) != IR_B(word) ||
         IR_B(word) >= (uint32_t)slots ||

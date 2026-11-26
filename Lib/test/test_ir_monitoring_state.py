@@ -1,6 +1,7 @@
 """Monitoring displaces the handlers of a word with the LINE and INSTRUCTION
-wrappers and swaps in observed twins.  The code object's own words are what
-comes back, whatever order the events are removed in."""
+wrappers, and observed code runs in the observing evaluator.  The code
+object's own words are what comes back, whatever order the events are
+removed in."""
 
 import sys
 import unittest

@@ -103,6 +103,15 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
               "handler ids must fit in IR_HANDLER_BITS");
 
 #define IR_HANDLER(W)   ((int)((W) & IR_HANDLER_MASK))
+
+/* The id of the switch word: the last id the field holds, which no arm or
+ * word kind takes.  No code object's words hold it.  A frame that must go on
+ * in the other compilation of the evaluator (Python/ceval_observing.c) is
+ * sent to a static word with this id, and the real word is kept with the
+ * frame (_PyEval_SwitchLoop). */
+#define IR_H_SWITCH IR_HANDLER_MASK
+static_assert(IR_NUM_HANDLERS <= IR_H_SWITCH,
+              "the switch word's id is free");
 #define IR_FLAGS(W)     ((int)((W) & IR_FLAGS_MASK))
 
 /* Slot-class flags: field X of the word names a local, a cell or a free
@@ -125,12 +134,11 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
  * the family reads them from its word, so specialisation and instrumentation
  * keep them by keeping the flags (_PyIRFormat.word_flags). */
 #define IR_F_NO_SELF    (1 << 13)
-/* The kind of a CALL_KW or CALL_FUNCTION_EX word, which its handler id does
- * not tell: INSTRUMENTED_LINE runs the word's own handler with the id of the
- * line handler in head[0].  IR_F_KW marks CALL_KW, whose last operand is the
- * names.  IR_F_EX marks CALL_FUNCTION_EX, which has no self operand: both
- * bits 14 and 15, which no other word carries together.  On an EX word, bit
- * 13 is IR_F_NO_KW.
+/* The kind of a CALL_KW or CALL_FUNCTION_EX word, for the readers that
+ * decode a call word without its handler.  IR_F_KW marks CALL_KW, whose
+ * last operand is the names.  IR_F_EX marks CALL_FUNCTION_EX, which has no
+ * self operand: both bits 14 and 15, which no other word carries together.
+ * On an EX word, bit 13 is IR_F_NO_KW.
  *
  * IR_F_UNINTERRUPTED, on CALL: the call does not poll for signals and
  * collection when it returns.  The translator sets it on the call that
@@ -248,8 +256,8 @@ enum {
     _PyIR_LOC_BC,       // B and C, 24 bits
 };
 
-/* _PyIRFormat.flags: the format, shared by a family, its instrumented twins
- * and the IR-only handlers named after a member.  What a flag says holds
+/* _PyIRFormat.flags: the format, shared by a family and the IR-only
+ * handlers named after a member.  What a flag says holds
  * for a word of the format whichever of them runs.  The translator's rows
  * (Include/internal/pycore_regcfg.h) have flags of their own in the bits
  * that are free here: 0x2, 0x10, 0x40, 0x800. */
@@ -258,7 +266,6 @@ enum {
                                     // words, in CD
 #define _PyIR_FORWARD       0x8     // the oparg is a signed distance in
                                     // words from the next word, in D
-#define _PyIR_TRANSPARENT   0x20    // runs another handler on the same fields
 #define _PyIR_RUNS_CODE     0x80    // a member may run Python code, which may
                                     // rebind a local through frame.f_locals
 #define _PyIR_JUMP_ALWAYS   0x100   // a jump with one successor, its target;
@@ -352,9 +359,7 @@ typedef struct _PyIRFormat {
                             // may carry: IR_F_CALL_ROLES or a subset
     uint32_t edges;         // _PyIR_HOME_* of home h after edge e, in the two
                             // bits at 2 * (_PyIR_HOMES * e + h)
-    uint16_t twin;          // the handler that instrumentation runs on the
-                            // word (itself for a twin), or _PyIR_NO_HANDLER
-    uint32_t events;        // bit e: semantic handler or twin can fire event e
+    uint32_t events;        // bit e: the family's observer can fire event e
 } _PyIRFormat;
 
 
@@ -564,6 +569,11 @@ typedef struct _PyCodeExec {
     uint16_t const_first;
     uint16_t nconst;
     uint64_t call_plan_shape;
+    /* What monitoring observes at each word (_PyIR_OBSERVE_*), which the
+     * observing evaluator tests before it runs the word, or NULL while
+     * nothing is observed.  Owned by the copy; monitoring writes it
+     * (Python/instrumentation.c) and never rewrites a word. */
+    uint8_t *observe;
     /* The baseline JIT (Include/internal/pycore_jit.h): the newest unit
      * compiled from these words, valid or not, which chains the older ones;
      * the warm-up events since the last compile attempt; and the compiles. */
@@ -573,6 +583,14 @@ typedef struct _PyCodeExec {
     uint32_t first_traceable;   // word index of the entry RESUME
     uint32_t nfixed;        // slots below the temporaries, which IR_IS_LOCAL() reads
 } _PyCodeExec;
+
+/* The bits of _PyCodeExec.observe: the word's LINE and INSTRUCTION events
+ * run before it, and its family's observer runs it in place of its own arm
+ * (_PyIR_ObservingHandler): a tool listens there for an event of the
+ * family, or a source edge of LINE needs the branch's observer. */
+#define _PyIR_OBSERVE_LINE          1
+#define _PyIR_OBSERVE_INSTRUCTION   2
+#define _PyIR_OBSERVE_EVENTS        4
 
 /* The feedback table of a code object, which follows its words: per entry, a
  * word of the kind (4 bits), the field of the entry (12 bits, see
@@ -695,12 +713,13 @@ PyAPI_DATA(int) _PyIR_MaxSlots;
 
 /* Decoding the words of a code object (its IR), by word index.  These
  * read the code object only, never its executing copy, whose handler ids
- * specialisation and instrumentation rewrite and whose slot-class flags
- * the copy derives, but whose fields are the same. */
+ * specialisation rewrites and whose slot-class flags the copy derives, but
+ * whose fields are the same.  Monitoring rewrites no word of either. */
 
 /* The generic handler of the instruction at index i: the head of its
  * family, the handler of a BINARY_OP operation, or an inline constant form,
- * as the assembler chose it. */
+ * as the assembler chose it.  The executing copy starts with it, and
+ * deoptimisation restores it. */
 static inline int
 _PyCode_InstrHandler(PyCodeObject *co, int i)
 {
@@ -715,11 +734,6 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
 {
     return _PyIR_WordLength(_PyCode_IRWords(co)[i]);
 }
-
-/* The handler that the executing copy of co starts with at index i: the
- * generic handler.
- * Deoptimisation and de-instrumentation restore it. */
-PyAPI_FUNC(int) _PyCode_GenericHandler(PyCodeObject *co, int i);
 
 /* The oparg of word, whose format keeps it in a field or has none. */
 PyAPI_FUNC(int) _PyIR_FieldOparg(_PyIRWord word);
@@ -742,23 +756,6 @@ PyAPI_FUNC(int) _PyCode_InstrTarget(PyCodeObject *co, int i);
 PyAPI_FUNC(_PyFbHeader *) _PyIR_InstrFeedback(PyCodeObject *co,
                                               const _PyCodeExec *exec,
                                               const _PyIRWord *instr);
-
-/* The handler with the format of the word at instr, a word of frame's
- * executing copy: its handler field, or while INSTRUMENTED_LINE or
- * INSTRUMENTED_INSTRUCTION has displaced it, the code object's. */
-struct _PyInterpreterFrame;
-PyAPI_FUNC(int) _PyIR_RealHandler(struct _PyInterpreterFrame *frame,
-                                  const _PyIRWord *instr);
-
-/* The handler that the word at instr runs once a LINE or INSTRUCTION wrapper
- * has passed it on; the observed one if monitoring displaced it. */
-PyAPI_FUNC(int) _PyIR_DispatchedHandler(struct _PyInterpreterFrame *frame,
-                                          const _PyIRWord *instr);
-
-/* The handler of the word at index i of co while monitoring runs it: the
- * code object's handler, or when observed is true the observed twin that
- * its family declares (events(...)).  Specialisation is not kept. */
-PyAPI_FUNC(int) _PyCode_HandlerFor(PyCodeObject *co, int i, int observed);
 
 /* Whether the word at index i of co is a jump that the assembler adds after
  * a relaxed FOR_ITER, SEND or conditional branch (_PyIR_H_TRAILING). */
@@ -799,7 +796,7 @@ _PyIR_CanonicalFlagsValid(_PyIRWord word)
 }
 
 /* Whether the handler is a member of the CALL, CALL_KW or CALL_FUNCTION_EX
- * family or one of their instrumented twins: its words have operand words. */
+ * family: its words have operand words. */
 static inline int
 _PyIR_HandlerHasOperands(int handler)
 {
@@ -807,9 +804,8 @@ _PyIR_HandlerHasOperands(int handler)
 }
 
 /* The words of the call whose head is word: the head and its operand words.
- * The head's handler is not consulted, so it is right for a head that an
- * INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION word has replaced in the
- * executing copy (which keeps every other field). */
+ * The head's handler is not consulted, so it is right for any arm of the
+ * call families, which keep every other field. */
 static inline int
 _PyIR_CallWordLength(_PyIRWord word)
 {

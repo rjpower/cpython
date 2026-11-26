@@ -1341,7 +1341,7 @@ def do_exit(w: Walk, st: State, t: Exit, transfer: bool = False) -> None:
             # The sent value defines P's home when the generator resumes
             check_point(w, st, p, t.span, f"exit yield resume {p.name}", resume=True)
     leaves = transfer and kind in ("redirect", "exit")
-    if kind in ("next", "branch", "jump", "redirect", "exit", "dispatch") and not leaves:
+    if kind in ("next", "branch", "jump", "redirect", "exit") and not leaves:
         check_completion(w, st, t, what, accounted)
     record_edge(w, st, t)
     if kind in DEPARTING_EXITS:

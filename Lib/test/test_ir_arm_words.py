@@ -272,13 +272,12 @@ class ForceArmTests(unittest.TestCase):
     def test_the_contract_export_has_a_row_for_each_arm(self):
         contract = _opcode.get_ir_contract()
         handlers = capi.arm_handlers()
-        # An arm of a family with events has an observed twin after the arms
-        twins = {contract[h].twin for h in handlers.values()} - {None}
-        self.assertEqual(len(contract), max(twins.union(handlers.values())) + 1)
+        self.assertEqual(len(contract), max(handlers.values()) + 1)
         row = contract[handlers["Add.Int"]]
         self.assertEqual(row.roles[1:3],
                          (_opcode.IR_ROLE_SRC, _opcode.IR_ROLE_SRC + 1))
-        self.assertIsNone(row.twin)
+        # A family without events: the observing evaluator runs the arm
+        self.assertEqual(row.observer, handlers["Add.Int"])
         self.assertTrue(contract[handlers["Add.Generic"]].effects & 0x1)
 
     def test_word_length_follows_the_arms_derived_operand_words(self):

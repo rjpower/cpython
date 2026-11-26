@@ -2761,10 +2761,12 @@ class GetAttroPairTests(unittest.TestCase):
                 return object.__getattribute__(self, name)
         c = C()
         c.x = 1000
-        # update_one_slot() installs the hook pair; a read that finds no
-        # __getattr__ replaces it with the simpler pair.
+        # update_one_slot() installs the hook pair; a read through the slot
+        # that finds no __getattr__ replaces it with the simpler pair.  The
+        # reads go through getattr(): GetAttr's arms enter __getattribute__'s
+        # frame without calling the slot.
         self.assertEqual(getattro_pair_names(C), hook)
-        self.assertEqual(c.x, 1000)
+        self.assertEqual(getattr(c, 'x'), 1000)
         self.assertEqual(getattro_pair_names(C), plain)
         self.assertEqual(value_getattr(c, 'x')[0], 1000)
 
@@ -2777,9 +2779,9 @@ class GetAttroPairTests(unittest.TestCase):
 
         del C.__getattr__
         self.assertEqual(getattro_pair_names(C), hook)
-        self.assertEqual(c.x, 1000)
+        self.assertEqual(getattr(c, 'x'), 1000)
         with self.assertRaises(AttributeError):
-            c.missing
+            getattr(c, 'missing')
         self.assertEqual(getattro_pair_names(C), plain)
         self.assertEqual(value_getattr(c, 'x')[0], 1000)
 

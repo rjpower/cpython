@@ -48,9 +48,7 @@ class ArmFormat:
 @dataclass(frozen=True)
 class ArmEntry:
     """A register instruction arm (Python/register_ops) as the tables of
-    this generator list it: its handler id is first_arm() + index.  An
-    observed wrapper (a twin) is listed after the arms, with `observes` the
-    index of the arm it wraps."""
+    this generator list it: its handler id is first_arm() + index."""
     name: str                 # the C name: Add_Int
     index: int                # among all arms, in definition order
     region: str               # the plan: "inline", "shared" or "none" (split)
@@ -62,8 +60,11 @@ class ArmEntry:
     adaptive: bool = False    # the family adapts: its generic arm specializes
     is_generic: bool = False
     format: ArmFormat | None = None
-    twin: int | None = None   # the index of this arm's observed wrapper
-    observes: int | None = None  # for a wrapper: the index of its arm
+    # The C name of the arm that the observing evaluator runs for this arm's
+    # words: its family's observer arm, or None for the arm itself
+    observer: str | None = None
     emitted: bool = True      # the interpreter has a case for it
-    trailing: bool = False  # a jump of the assembler: no twin, keeps the IP
-    displacing: bool = False  # the word that monitoring puts over another
+    trailing: bool = False  # a jump of the assembler: not observed, keeps the IP
+    # The observer gates the family (`observes gates`): the observing
+    # evaluator's table sends every word of the family to it
+    observer_gates: bool = False

@@ -496,8 +496,22 @@ _PyEval_SpecialMethodCanSuggest(PyTypeObject *type, int oparg);
 /* Entries on the borrow stack above the eval loop's floor (pycore_borrow.h) */
 #define _PY_BORROW_RELEASE_BIT (1U << 7)
 
+/* A monitoring change: the frame that polls next may have to go on in the
+ * other compilation of the evaluator (_PyRop_HandlePoll()) */
+#define _PY_EVAL_LOOP_SWITCH_BIT (1U << 8)
+
+/* Send the frames on every thread's stack to the switch word, after a
+ * monitoring change with the world stopped (Python/ceval.c) */
+extern int _PyEval_RedirectFrames(PyInterpreterState *interp);
+
+/* Give frame of tstate's stack back its real resume point if it is at the
+ * switch word, for a reader of the resume point outside the evaluator; the
+ * thread's next poll switches the frame that makes it */
+extern void _PyEval_SwitchResolve(PyThreadState *tstate,
+                                  struct _PyInterpreterFrame *frame);
+
 /* Reserve a few bits for future use */
-#define _PY_EVAL_EVENTS_BITS 8
+#define _PY_EVAL_EVENTS_BITS 9
 #define _PY_EVAL_EVENTS_MASK ((1 << _PY_EVAL_EVENTS_BITS)-1)
 
 static inline void

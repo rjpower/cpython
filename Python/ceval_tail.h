@@ -1,16 +1,19 @@
-/* The tail-calling binding of the interpreter (Py_IR_TAIL_CALL, Python/ceval.c).
+/* The tail-calling binding of the interpreter (Python/ceval_evaluator.h),
+ * which Python/ceval.c compiles for the normal evaluator and
+ * Python/ceval_observing.c, with IR_OBSERVING set, for the observing one.
  *
  * Every handler, label and VM routine is a function of one type,
  * _PyIRTailFn: (tstate, frame, next_instr, ir_word), returning the
  * activation's result.  Dispatch is a guaranteed tail call of the next word's
- * function through ir_tail_table, so every arm has its own register
- * allocation and no dispatch grows the C stack.  The bodies are the
- * generated arms (Python/generated_rop_cases.c.h), the labels
- * (Python/ceval_labels.h) and the routines (Python/ceval_routines.h), as in
- * ir_evaluate(); this file rebinds the macros through which they leave
- * (Python/ceval_macros.h has the evaluator's bindings):
+ * function through the compilation's table, ir_tail_table, so every arm has
+ * its own register allocation and no dispatch grows the C stack.  The
+ * bodies are the generated arms (Python/generated_rop_cases.c.h), the labels
+ * (Python/ceval_labels.h) and the routines (Python/ceval_routines.h); this
+ * file rebinds the macros through which they leave (Python/ceval_macros.h
+ * has the bindings that the bodies share with the function forms):
  *
- *   dispatch, a deoptimisation, a frame entry, an error, a routine
+ *   dispatch, a deoptimisation, a frame entry, an error, a routine, a switch
+ *   to the other evaluator
  *       a tail call (Py_MUSTTAIL), of a function of the same type;
  *   the end of the activation (IR_EXIT)
  *       a return of the value, to the driver, ir_evaluate();
@@ -20,7 +23,9 @@
  *       result.
  *
  * A routine's operands, and the error routine's origin and entry, travel in
- * the activation (IR_ROUTINE_OPERAND), as for the function forms.
+ * the activation (IR_ROUTINE_OPERAND), as for the function forms.  The
+ * functions of the normal evaluator are ir_tail_<name>, those of the
+ * observing one ir_observe_<name>.
  *
  * The functions save no register for their caller, which is what keeps an
  * arm from saving registers it uses at its entry.  Clang
@@ -29,7 +34,8 @@
  * calls without saving it.  GCC 15 has no preserve_none, but
  * no_callee_saved_registers (x86-64) gives the first property: the arguments
  * stay in the SysV registers.  Only the driver, ir_evaluate(), saves its
- * caller's registers, once per activation. */
+ * caller's registers, once per activation.  configure requires a compiler
+ * with musttail (GCC 15 or clang). */
 
 #if defined(__clang__) && __has_attribute(preserve_none)
 #  define Py_IR_TAIL_CC __attribute__((preserve_none))
@@ -46,21 +52,51 @@
 
 typedef PyValue (Py_IR_TAIL_CC *_PyIRTailFn)(Py_IR_TAIL_PARAMS);
 
-/* The head of the function ir_tail_NAME of the set.  A macro that takes the
- * name as its own argument pastes it itself (IR_TAIL_HEAD(ir_tail_##NAME)):
- * passed on unpasted, it would be expanded first, and some names, such as
- * IR_OPERANDS, are macros. */
+/* The function of NAME in this compilation: ir_tail_NAME, or
+ * ir_observe_NAME in the observing evaluator */
+#if IR_OBSERVING
+#  define IR_TAIL_PREFIX ir_observe_
+#else
+#  define IR_TAIL_PREFIX ir_tail_
+#endif
+#define IR_TAIL_CAT_(A, B) A##B
+#define IR_TAIL_CAT(A, B) IR_TAIL_CAT_(A, B)
+#define IR_TAIL_ID(NAME) IR_TAIL_CAT(IR_TAIL_PREFIX, NAME)
+
 #define IR_TAIL_HEAD(FN) \
     static Py_NO_INLINE Py_IR_TAIL_CC PyValue FN(Py_IR_TAIL_PARAMS)
-#define IR_TAIL_FN(NAME) IR_TAIL_HEAD(ir_tail_##NAME)
+#define IR_TAIL_FN(NAME) IR_TAIL_HEAD(IR_TAIL_ID(NAME))
 
 #define IR_TAIL_GOTO(NAME) \
     do { \
-        Py_MUSTTAIL return ir_tail_##NAME(tstate, frame, next_instr, ir_word); \
+        Py_MUSTTAIL return IR_TAIL_ID(NAME)(tstate, frame, next_instr, ir_word); \
+    } while (0)
+
+/* The entries of the two evaluators, where a frame goes on at next_instr
+ * after the other one switched it (the switch word, IR_H_SWITCH, or an
+ * error that unwinds into a frame of the other evaluator) */
+extern Py_IR_TAIL_CC PyValue _PyEval_EnterNormal(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_EnterObserving(Py_IR_TAIL_PARAMS);
+#if IR_OBSERVING
+#  define IR_THIS_EVALUATOR _PyEval_EnterObserving
+#  define IR_OTHER_EVALUATOR _PyEval_EnterNormal
+#else
+#  define IR_THIS_EVALUATOR _PyEval_EnterNormal
+#  define IR_OTHER_EVALUATOR _PyEval_EnterObserving
+#endif
+
+/* The evaluator's switch where an error routine resumes frame at
+ * next_instr: to the other evaluator if the frame goes on there */
+#undef IR_ERROR_SWITCH
+#define IR_ERROR_SWITCH() \
+    do { \
+        if (_PyEval_SwitchesLoop(frame, IR_OBSERVING)) { \
+            Py_MUSTTAIL return IR_OTHER_EVALUATOR(tstate, frame, next_instr, ir_word); \
+        } \
     } while (0)
 
 #undef TARGET
-#define TARGET(op) IR_TAIL_HEAD(ir_tail_##op)
+#define TARGET(op) IR_TAIL_FN(op)
 
 #undef DISPATCH_GOTO
 #define DISPATCH_GOTO() \
@@ -74,7 +110,7 @@ typedef PyValue (Py_IR_TAIL_CC *_PyIRTailFn)(Py_IR_TAIL_PARAMS);
 #undef JUMP_TO_PREDICTED
 #define JUMP_TO_PREDICTED(name) \
     do { \
-        Py_MUSTTAIL return ir_tail_##name(tstate, frame, this_instr, ir_word); \
+        Py_MUSTTAIL return IR_TAIL_ID(name)(tstate, frame, this_instr, ir_word); \
     } while (0)
 
 #undef PROCESS_ERROR_AT
@@ -121,9 +157,9 @@ typedef PyValue (Py_IR_TAIL_CC *_PyIRTailFn)(Py_IR_TAIL_PARAMS);
     } while (0)
 
 #undef IR_ROUTINE
-#define IR_ROUTINE(NAME) IR_TAIL_HEAD(ir_tail_##NAME)
+#define IR_ROUTINE(NAME) IR_TAIL_FN(NAME)
 #undef IR_HOT_ROUTINE
-#define IR_HOT_ROUTINE(NAME) IR_TAIL_HEAD(ir_tail_##NAME)
+#define IR_HOT_ROUTINE(NAME) IR_TAIL_FN(NAME)
 #undef IR_ROUTINE_OPERAND
 #define IR_ROUTINE_OPERAND(NAME) (IR_ACTIVATION()->NAME)
 

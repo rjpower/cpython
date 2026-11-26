@@ -176,7 +176,7 @@ class ContractTests(unittest.TestCase):
         kinds = dis._FEEDBACK_KINDS
         tables = _testinternalcapi.arm_operands()
         for h, row in ROWS.items():
-            # A twin shares the format, and so the entry, of its family
+            # An observer shares the format, and so the entry, of its family
             family = dis._all_opname[h].split(".")[0]
             with self.subTest(handler=dis._all_opname[h]):
                 # A family has an entry if and only if it declares a
@@ -211,22 +211,37 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(seen, set(dis._FEEDBACK_KINDS) - {"COUNTER", "BRANCH"})
 
     def test_monitoring(self):
+        # The observing evaluator's table (Python/ceval_observing.c) sends
+        # every arm of a family that declares events to the family's
+        # observer, which reads the word with the same format.  The
+        # exceptions run themselves: the observers, the trailing jumps, the
+        # LINE and INSTRUCTION wrappers and the entry frame's Return.
         events = sys.monitoring.events
+        selves = {"Return.External"}
         for h, row in ROWS.items():
             name = dis._all_opname[h]
             with self.subTest(handler=name):
-                twin = row.twin
-                if twin is None:
-                    # Only an observed wrapper of a whole family has events
-                    # and no twin
-                    self.assertTrue(row.events == 0 or name.endswith(".Observed"))
+                observer = row.observer
+                if observer == h:
+                    self.assertTrue(row.events == 0
+                                    or name.endswith(".Observed")
+                                    or name.endswith(".Trailing")
+                                    or name in selves, name)
                     continue
-                self.assertTrue(dis._all_opname[twin].endswith(".Observed"))
+                self.assertTrue(row.events, name)
+                observer_name = dis._all_opname[observer]
+                self.assertEqual(observer_name,
+                                 name.split(".")[0] + ".Observed")
                 if row.effects & (_opcode.IR_PUSHES_FRAME | _opcode.IR_SUSPENDS):
-                    self.assertTrue(ROWS[twin].effects & _opcode.IR_RUNS_PYTHON)
-                self.assertEqual(ROWS[twin].twin, twin)
-                self.assertEqual(row.events, ROWS[twin].events)
-                self.assertEqual(row.flags, ROWS[twin].flags)
+                    self.assertTrue(ROWS[observer].effects & _opcode.IR_RUNS_PYTHON)
+                self.assertEqual(ROWS[observer].observer, observer)
+                self.assertEqual(row.events, ROWS[observer].events)
+                # The observer reads the word with its own view of the
+                # operands (rop_generator.check_observer_layouts)
+                for field in ("roles", "imm", "fb", "group", "vacant",
+                              "operands", "fixed_words"):
+                    self.assertEqual(getattr(row, field),
+                                     getattr(ROWS[observer], field), field)
         expected = {
             "CallKw.Generic": {"CALL", "C_RETURN", "C_RAISE"},
             "Yield.Ordinary": {"PY_YIELD"},
@@ -237,8 +252,8 @@ class ContractTests(unittest.TestCase):
                 bits = BY_NAME[name].events
                 for event in names:
                     self.assertTrue(bits & getattr(events, event), event)
-        self.assertEqual(BY_NAME["CallKw.Generic"].twin,
-                         _ir_handlers["CallKw.Generic.Observed"])
+        self.assertEqual(BY_NAME["CallKw.Generic"].observer,
+                         _ir_handlers["CallKw.Observed"])
 
     def test_monitoring_run(self):
         # Every declared event observed in a code object belongs to one of
@@ -246,14 +261,14 @@ class ContractTests(unittest.TestCase):
         # This is a code-object check: branch callbacks identify the semantic
         # branch site even when another handler reports the outcome.
         events = sys.monitoring.events
-        twin_events = 0
+        family_events = 0
         for row in CONTRACT:
             if row is not None:
-                twin_events |= row.events
-        # LINE and INSTRUCTION are every word's: the displacing arms of the
-        # Line and Instruction families report them
+                family_events |= row.events
+        # LINE and INSTRUCTION are every word's: the observing evaluator
+        # reports them before a word where monitoring observes them
         added = events.LINE | events.INSTRUCTION
-        twin_events |= added
+        family_events |= added
 
         def gen():
             yield 1
@@ -282,7 +297,7 @@ class ContractTests(unittest.TestCase):
         mask = 0
         for name in dir(events):
             bit = getattr(events, name)
-            if (name.isupper() and bit & twin_events and bit & (bit - 1) == 0):
+            if (name.isupper() and bit & family_events and bit & (bit - 1) == 0):
                 mask |= bit
                 def record(code, *args, bit=bit):
                     fired.setdefault(code, 0)

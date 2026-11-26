@@ -648,9 +648,8 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
         return (resolved_status){frame, frame->instr_ptr};
     }
     /* The length is that of the word as compiled: a stub that ran Python may
-     * have enabled monitoring, which replaces the head's handler by an
-     * INSTRUMENTED_ one that keeps its other fields, and a span word's length
-     * depends on its format */
+     * have specialised the word elsewhere, which keeps its other fields, and
+     * a span word's length depends on its format */
     _PyIRWord as_compiled = (*site & ~(_PyIRWord)COMPILED_HANDLER_BITS)
                             | (compiled & COMPILED_HANDLER_BITS);
     _PyIRWord *next = (status & _PyIR_AGAIN) ? site
@@ -1024,18 +1023,16 @@ free_unit(_PyJitUnit *unit)
 }
 
 /* Compile the words of exec, the executing copy of code, into a new unit
- * and make it the exec's.  Returns NULL if the words hold an instrumented
- * handler or the code cannot be placed. */
+ * and make it the exec's.  Returns NULL if the code is observed, which runs
+ * in the observing evaluator, or cannot be placed. */
 static _PyJitUnit *
 compile(PyCodeObject *code, _PyCodeExec *exec)
 {
+    if (_PyCode_IsObserved(code)) {
+        return NULL;
+    }
     const _PyIRWord *words = exec->words;
     uint32_t nwords = exec->nwords;
-    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
-        if (_PyIR_HandlerFlags[IR_HANDLER(words[i])] & _PyIR_H_INSTRUMENTED) {
-            return NULL;
-        }
-    }
     _PyJitUnit *unit = PyMem_RawCalloc(1, sizeof(_PyJitUnit));
     _PyJitLabel *labels = PyMem_RawMalloc(nwords * sizeof(_PyJitLabel));
     if (unit == NULL || labels == NULL) {

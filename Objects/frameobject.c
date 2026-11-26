@@ -1354,12 +1354,8 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
         next[1] = fmt->flags & _PyIR_FORWARD
             ? i + 1 + _PyIR_FormatDistance(fmt, word) : (int)IR_CD(word);
     }
-    /* Project optimized forms through their frontend shadow before removing
-     * instrumentation. Encoded family identity alone is not a CFG opcode. */
-    int opcode = _PyIR_OpcodeBase[_PyIR_BaseOpcode(IR_HANDLER(word))];
-    if (IS_SCOPE_EXIT_OPCODE(opcode) ||
-        (fmt->flags & _PyIR_JUMP_ALWAYS))
-    {
+    // The word has no fall-through edge: a jump that always goes, or an exit
+    if (!(fmt->normal & 1)) {
         next[0] = -1;
     }
 }
@@ -2305,15 +2301,15 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
         PyMem_Free(moved);
         return context;
     }
-    int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+    int family = _PyIR_HandlerFamily[IR_HANDLER(word)];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int base = -1;
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] == _PyIR_ROLE_BASE ||
-            (opcode == POP_EXCEPT && fmt->roles[f] == _PyIR_ROLE_IN0) ||
+            (family == IR_FAMILY_ExceptLeave && fmt->roles[f] == _PyIR_ROLE_IN0) ||
             // The saved exception: ExceptEnter's first destination
-            (opcode == PUSH_EXC_INFO && fmt->roles[f] == _PyIR_ROLE_DST &&
+            (family == IR_FAMILY_ExceptEnter && fmt->roles[f] == _PyIR_ROLE_DST &&
              base < 0))
         {
             base = (int)fields[f] - analysis->nl;
@@ -2335,8 +2331,8 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
     local = register_local_of(IR_HANDLER(word), fields, local);
     int input_origin = input >= 0 && input < analysis->nt ? origins[input] : 0;
     int old = base >= 0 && base < analysis->nt ? origins[base] : 0;
-    if (opcode == POP_EXCEPT) {
-        /* Use POP_EXCEPT's actual explicit register input. */
+    if (family == IR_FAMILY_ExceptLeave) {
+        /* Use the ExceptLeave's actual explicit register input. */
         if (context <= 0 || old != context ||
             !register_context_chain(analysis, context, -1))
         {
@@ -2346,14 +2342,14 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
             context = analysis->parents[context - 1];
         }
     }
-    if (opcode == STORE_FAST && input_origin < 0) {
+    if (family == IR_FAMILY_LocalWrite && input_origin < 0) {
         int col = local >= 0 && local < analysis->nl ? analysis->save_columns[local] : -1;
         if (col >= 0) {
             int top = save_tops[col];
             if (top <= 0 || input_origin != -top ||
                 !register_origin_chain(analysis->save_parents, analysis->n, top, -1,
                                         analysis->n) ||
-                _PyIR_BaseOpcode(IR_HANDLER(_PyCode_IRWords(code)[top - 1])) != LOAD_FAST_AND_CLEAR ||
+                _PyIR_HandlerFamily[IR_HANDLER(_PyCode_IRWords(code)[top - 1])] != IR_FAMILY_SaveLocal ||
                 local != (int)IR_B(_PyCode_IRWords(code)[top - 1]))
             {
                 /* Independent locals commute. Only a younger save of this
@@ -2378,7 +2374,7 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
             origins[j] = 0;
         }
     }
-    if (opcode == PUSH_EXC_INFO) {
+    if (family == IR_FAMILY_ExceptEnter) {
         int node = pc + 1;
         int *parent = &analysis->parents[pc];
         if (context < 0 || !register_context_chain(analysis, context, node)) {
@@ -2395,7 +2391,7 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
             origins[base] = context > 0 ? node : 0;
         }
     }
-    if (opcode == LOAD_FAST_AND_CLEAR) {
+    if (family == IR_FAMILY_SaveLocal) {
         int node = pc + 1;
         int col = analysis->save_columns[local];
         int *parent = &analysis->save_parents[pc];
@@ -2453,7 +2449,7 @@ register_stopped_state_bind(PyFrameObject *self, RegisterResumeAnalysis *analysi
     PyCodeObject *code = _PyFrame_GetCode(frame);
     _PyIRWord word = _PyCode_IRWords(code)[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (_PyIR_HandlerBase[IR_HANDLER(word)] == PUSH_EXC_INFO) {
+    if (_PyIR_HandlerFamily[IR_HANDLER(word)] == IR_FAMILY_ExceptEnter) {
         return 0;
     }
     for (int f = 0; f < 4; f++) {
@@ -2623,7 +2619,7 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
     }
     for (int i = 0; i < n; i += _PyCode_InstrLength(code, i)) {
         _PyIRWord word = _PyCode_IRWords(code)[i];
-        if (_PyIR_BaseOpcode(IR_HANDLER(word)) == LOAD_FAST_AND_CLEAR) {
+        if (_PyIR_HandlerFamily[IR_HANDLER(word)] == IR_FAMILY_SaveLocal) {
             int local = (int)IR_B(word);
             if (local < 0 || local >= analysis->nl) {
                 PyErr_SetString(PyExc_ValueError, "jump requires valid saved-local operands");
@@ -2905,7 +2901,7 @@ register_resume_recipe(_PyInterpreterFrame *frame, int current, int target,
     int result = 0;
     for (int header = 0; header < n; header += _PyCode_InstrLength(code, header)) {
         _PyIRWord word = _PyCode_IRWords(code)[header];
-        if (_PyIR_BaseOpcode(IR_HANDLER(word)) != FOR_ITER) {
+        if (_PyIR_HandlerFamily[IR_HANDLER(word)] != IR_FAMILY_ForIter) {
             continue;
         }
         int base = (int)IR_B(word);
@@ -2974,8 +2970,8 @@ register_context_cut(PyCodeObject *code, RegisterResumeAnalysis *analysis,
                       RegisterResumePlan *plan, int pc)
 {
     _PyIRWord word = _PyCode_IRWords(code)[pc];
-    int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-    if (opcode == PUSH_EXC_INFO || opcode == POP_EXCEPT) {
+    int family = _PyIR_HandlerFamily[IR_HANDLER(word)];
+    if (family == IR_FAMILY_ExceptEnter || family == IR_FAMILY_ExceptLeave) {
         return true;
     }
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
@@ -3250,7 +3246,7 @@ register_saved_locals_plan(_PyInterpreterFrame *frame, int target,
         int selected = -1;
         for (int node = top; node > 0; node = analysis->save_parents[node - 1]) {
             _PyIRWord word = _PyCode_IRWords(code)[node - 1];
-            if (_PyIR_BaseOpcode(IR_HANDLER(word)) != LOAD_FAST_AND_CLEAR ||
+            if (_PyIR_HandlerFamily[IR_HANDLER(word)] != IR_FAMILY_SaveLocal ||
                 (int)IR_B(word) != local)
             {
                 return 0;
@@ -3666,10 +3662,10 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         child = NULL;
     }
     if (child != NULL) {
-        int opcode = _PyIR_EventOpcode(_PyCode_InstrHandler(code, current));
+        int family = _PyIR_HandlerFamily[_PyCode_InstrHandler(code, current)];
         if (child->external || _PyIRSemantic_Stored(code).exceptions_size ||
             self->f_frame->return_slot != _PyFrame_DiscardSlot(self->f_frame) ||
-            (opcode != CALL && opcode != CALL_KW))
+            (family != IR_FAMILY_Call && family != IR_FAMILY_CallKw))
         {
             PyMem_Free(lines);
             PyErr_SetString(PyExc_ValueError,

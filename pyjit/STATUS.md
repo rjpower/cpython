@@ -246,7 +246,7 @@ Interpreter timing after wave 2 (`25e88d21f6e`, measure.py, both JIT off,
 all-29, two rounds, CPU 15): **1.191 of golden87's time**, from 1.340.
 unpack_sequence 2.96 to 1.85, nbody 1.85 to 1.37, generators 1.82 to 1.39,
 spectral_norm 1.79 to 1.41, comprehensions 1.47 to 1.16, nqueens 1.49 to
-1.12.  Nine benchmarks are within 10% of golden87; json_dumps (1.03 to
+1.12.  Eight benchmarks are within 10% of golden87; json_dumps (1.03 to
 1.13) and logging_simple (1.15 to 1.20) are slower than after wave 1.
 The full suites of the wave join are running.
 

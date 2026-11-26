@@ -157,7 +157,7 @@ extern helper yield_event(t:Thread, f:Frame, at:Site, v:Src)
               "Python. A callback may raise or move the frame. Nothing is spent.");
 
 arm Yield.Ordinary split
-  effects(reads, writes, releases, switches_frame)
+  effects(runs_python, reads, writes, releases, switches_frame)
   feedback()
   exits(yield)
 {
@@ -168,7 +168,7 @@ arm Yield.Ordinary split
 }
 
 arm YieldFrom.Delegated split
-  effects(reads, writes, releases, switches_frame)
+  effects(runs_python, reads, writes, releases, switches_frame)
   feedback()
   exits(yield)
 {
@@ -495,7 +495,7 @@ arm Send.Generic split
 // in place.  Free-threaded, another thread can claim it between the guard and
 // the claim: that is the ValueError of an executing generator.
 arm Send.Gen split
-  effects(reads, writes, raises, switches_frame)
+  effects(runs_python, reads, writes, raises, switches_frame)
   feedback()
   exits(enter, raise, miss)
 {

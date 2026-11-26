@@ -676,6 +676,11 @@ def check_contract(c: Checker, contract: Contract, definition: str,
         c.report(contract.span, definition, f"releases on ({', '.join(on_other)}) "
                  "closes an operand's binding, which may run Python: declare "
                  "runs_python")
+    # An arm that switches frames (pushes a frame or suspends) runs Python: running the frame
+    # is an escape.  The checker verifies the declaration, it never adds it.
+    if Effect.switches_frame in effects and Effect.runs_python not in effects:
+        c.report(contract.span, definition, "switches_frame pushes or "
+                 "suspends a frame, which runs Python: declare runs_python")
     names = {p.name for p in params}
     for e in contract.effects:
         for n in e.on:

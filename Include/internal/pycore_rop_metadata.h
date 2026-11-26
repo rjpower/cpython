@@ -998,6 +998,13 @@ typedef struct {
     const _PyRopOperand *operands;
 } _PyRopFamily;
 
+/* A declared enum: its members in declaration order, which are the numbers
+ * the handlers use for the enum's names */
+typedef struct {
+    const char *name;
+    const char *const *members;     /* NULL-terminated */
+} _PyRopEnum;
+
 typedef struct {
     const char *name;
     uint16_t handler;
@@ -1552,6 +1559,43 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
     [ROP_FAMILY_WithExit] = {"WithExit", 4, 0, _PyRop_Operands_WithExit},
     [ROP_FAMILY_Yield] = {"Yield", 2, 0, _PyRop_Operands_Yield},
     [ROP_FAMILY_YieldFrom] = {"YieldFrom", 2, 0, _PyRop_Operands_YieldFrom},
+};
+
+static const char *const _PyRop_EnumMembers_AwaitOrigin[] = {"AWAIT", "AWAIT_AENTER", "AWAIT_AEXIT", NULL};
+static const char *const _PyRop_EnumMembers_BranchMode[] = {"BRANCH_IF_FALSE", "BRANCH_IF_TRUE", "BRANCH_KEEP_IF_FALSE", "BRANCH_KEEP_IF_TRUE", NULL};
+static const char *const _PyRop_EnumMembers_BranchTest[] = {"IDENTITY", "CONTAINS", "TEST_LT", "TEST_LE", "TEST_EQ", "TEST_NE", "TEST_GT", "TEST_GE", NULL};
+static const char *const _PyRop_EnumMembers_CompareResult[] = {"RICH", "TRUTH", NULL};
+static const char *const _PyRop_EnumMembers_ConvertKind[] = {"STR", "REPR", "ASCII", NULL};
+static const char *const _PyRop_EnumMembers_ImportKind[] = {"IMPORT_EAGER", "IMPORT_POLICY", "IMPORT_LAZY", NULL};
+static const char *const _PyRop_EnumMembers_Interrupt[] = {"INTERRUPTIBLE", "UNINTERRUPTED", NULL};
+static const char *const _PyRop_EnumMembers_IntrinsicId[] = {"INTRINSIC_PRINT", "INTRINSIC_IMPORT_STAR", "INTRINSIC_STOPITERATION_ERROR", "INTRINSIC_ASYNC_GEN_WRAP", "INTRINSIC_LIST_TO_TUPLE", "INTRINSIC_TYPEVAR", "INTRINSIC_PARAMSPEC", "INTRINSIC_TYPEVARTUPLE", "INTRINSIC_SUBSCRIPT_GENERIC", "INTRINSIC_TYPEALIAS", "INTRINSIC_BUILD_FROZENSET", "INTRINSIC_PREP_RERAISE_STAR", "INTRINSIC_TYPEVAR_WITH_BOUND", "INTRINSIC_TYPEVAR_WITH_CONSTRAINTS", "INTRINSIC_SET_FUNCTION_TYPE_PARAMS", "INTRINSIC_SET_TYPEPARAM_DEFAULT", "INTRINSIC_ADD_CONDITIONAL_ANNOTATION", "INTRINSIC_MATCH_CLASS_ISINSTANCE", "INTRINSIC_GETATTR", "INTRINSIC_SETATTR", NULL};
+static const char *const _PyRop_EnumMembers_IterMode[] = {"ORDINARY_ITER", "DELEGATE_COROUTINE_OK", "DELEGATE_NO_COROUTINE", NULL};
+static const char *const _PyRop_EnumMembers_Numeric[] = {"NB_ADD", "NB_AND", "NB_FLOOR_DIVIDE", "NB_LSHIFT", "NB_MATRIX_MULTIPLY", "NB_MULTIPLY", "NB_REMAINDER", "NB_OR", "NB_POWER", "NB_RSHIFT", "NB_SUBTRACT", "NB_TRUE_DIVIDE", "NB_XOR", "NB_INPLACE_ADD", "NB_INPLACE_AND", "NB_INPLACE_FLOOR_DIVIDE", "NB_INPLACE_LSHIFT", "NB_INPLACE_MATRIX_MULTIPLY", "NB_INPLACE_MULTIPLY", "NB_INPLACE_REMAINDER", "NB_INPLACE_OR", "NB_INPLACE_POWER", "NB_INPLACE_RSHIFT", "NB_INPLACE_SUBTRACT", "NB_INPLACE_TRUE_DIVIDE", "NB_INPLACE_XOR", NULL};
+static const char *const _PyRop_EnumMembers_PatternKind[] = {"Mapping", "Sequence", NULL};
+static const char *const _PyRop_EnumMembers_PollMode[] = {"POLL", "NO_POLL", NULL};
+static const char *const _PyRop_EnumMembers_Relation[] = {"LT", "LE", "EQ", "NE", "GT", "GE", NULL};
+static const char *const _PyRop_EnumMembers_ResumeKind[] = {"FUNC_START", "AFTER_YIELD", "AFTER_YIELD_FROM", "AFTER_AWAIT", "GEN_EXPR_START", NULL};
+static const char *const _PyRop_EnumMembers_Special[] = {"ENTER", "EXIT", "AENTER", "AEXIT", NULL};
+static const char *const _PyRop_EnumMembers_UnaryOp[] = {"NEGATIVE", "POSITIVE", "INVERT", NULL};
+
+static const _PyRopEnum _PyRop_Enums[] = {
+    {"AwaitOrigin", _PyRop_EnumMembers_AwaitOrigin},
+    {"BranchMode", _PyRop_EnumMembers_BranchMode},
+    {"BranchTest", _PyRop_EnumMembers_BranchTest},
+    {"CompareResult", _PyRop_EnumMembers_CompareResult},
+    {"ConvertKind", _PyRop_EnumMembers_ConvertKind},
+    {"ImportKind", _PyRop_EnumMembers_ImportKind},
+    {"Interrupt", _PyRop_EnumMembers_Interrupt},
+    {"IntrinsicId", _PyRop_EnumMembers_IntrinsicId},
+    {"IterMode", _PyRop_EnumMembers_IterMode},
+    {"Numeric", _PyRop_EnumMembers_Numeric},
+    {"PatternKind", _PyRop_EnumMembers_PatternKind},
+    {"PollMode", _PyRop_EnumMembers_PollMode},
+    {"Relation", _PyRop_EnumMembers_Relation},
+    {"ResumeKind", _PyRop_EnumMembers_ResumeKind},
+    {"Special", _PyRop_EnumMembers_Special},
+    {"UnaryOp", _PyRop_EnumMembers_UnaryOp},
+    {NULL, NULL},
 };
 
 static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {

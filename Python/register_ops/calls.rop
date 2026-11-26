@@ -476,7 +476,7 @@ extern helper deliver(c:Frame, v:O) -> Head
 // A transfer row: the callee performs the exit.
 extern helper generator_return(c:Frame, v:O, d:DeadFrame)
   cases(return(f:Frame, h:Head), redirect(r:Route), raise(e:Err))
-  effects(writes, releases, raises, switches_frame)
+  effects(runs_python, writes, releases, raises, switches_frame)
   c ROP_GEN_RETURN as transfer
   evidence(
     review: "P4. ceval.c and ceval_routines.h: IR_GEN_RETURN(v, d, 0) with frame the"
@@ -495,7 +495,7 @@ extern helper leave_activation(t:Thread, f:Frame) -> Unit
 // Arms
 
 arm Call.Exact split
-  effects(reads, writes, releases, switches_frame)
+  effects(runs_python, reads, writes, releases, switches_frame)
   feedback(read(entry.func_version))
   exits(enter, miss)
 {
@@ -510,7 +510,7 @@ arm Call.Exact split
 }
 
 arm Call.BoundExact split
-  effects(reads, writes, releases, switches_frame)
+  effects(runs_python, reads, writes, releases, switches_frame)
   feedback(read(entry.func_version))
   exits(enter, miss)
 {
@@ -527,7 +527,7 @@ arm Call.BoundExact split
 }
 
 arm Call.Init split
-  effects(reads, writes, allocates, releases, raises, switches_frame)
+  effects(runs_python, reads, writes, allocates, releases, raises, switches_frame)
   feedback(read(entry.type_version))
   exits(enter, raise, miss)
 {
@@ -681,7 +681,7 @@ arm Call.Observed split observes
 }
 
 arm Return.Ordinary split select(thread_frame, live_scratch)
-  effects(reads, writes, releases, switches_frame)
+  effects(runs_python, reads, writes, releases, switches_frame)
   feedback()
   exits(return)
 {
@@ -697,7 +697,7 @@ arm Return.Ordinary split select(thread_frame, live_scratch)
 }
 
 arm Return.Empty split select(thread_frame, vacant_scratch)
-  effects(reads, writes, releases, switches_frame)
+  effects(runs_python, reads, writes, releases, switches_frame)
   feedback()
   exits(return)
 {
@@ -713,7 +713,7 @@ arm Return.Empty split select(thread_frame, vacant_scratch)
 }
 
 arm Return.Generator split select(generator_frame)
-  effects(reads, writes, releases, raises, switches_frame)
+  effects(runs_python, reads, writes, releases, raises, switches_frame)
   feedback()
   exits(return, raise, redirect)
 {

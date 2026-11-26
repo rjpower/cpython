@@ -226,7 +226,7 @@ arm H.Cont split
     exit raise(H.Kept, e);
 }
 arm H.Enter split
-  effects(allocates, raises, writes, releases, switches_frame)
+  effects(runs_python, allocates, raises, writes, releases, switches_frame)
   feedback()
   exits(enter, raise)
 {
@@ -946,7 +946,7 @@ point K.Early(current, next_head, clear) keep(fn, a) spent() defs(dst);
 extern primitive admits(v:B) -> Bool effects() pending;
 extern helper push(t:Thread, fn:Src, a:Args) -> NewFrame effects(writes, releases) spends(fn, a) pending;
 arm K.Exact split
-  effects(writes, releases, switches_frame)
+  effects(runs_python, writes, releases, switches_frame)
   feedback()
   exits(enter, miss)
 {
@@ -964,10 +964,10 @@ extern helper unlink(t:Thread, f:Frame) -> DeadFrame effects(writes) pending;
 extern helper retire_frame(t:Thread, d:DeadFrame) -> Unit effects(releases) pending;
 extern helper deliver(c:Frame, v:O) -> Head effects(writes) pending;
 extern helper gen_return(t:Thread, v:O) cases(return(f:Frame, h:Head), raise(e:Err))
-  effects(writes, releases, raises, switches_frame) c GEN_RETURN as transfer
+  effects(runs_python, writes, releases, raises, switches_frame) c GEN_RETURN as transfer
   evidence(review: "r", contract: "c");
 arm R.Ordinary split select(thread_frame)
-  effects(reads, writes, releases, switches_frame)
+  effects(runs_python, reads, writes, releases, switches_frame)
   feedback()
   exits(return)
 {
@@ -982,7 +982,7 @@ arm R.Ordinary split select(thread_frame)
     exit return(caller, h);
 }
 arm R.Generator split select(generator_frame)
-  effects(writes, releases, raises, switches_frame)
+  effects(runs_python, writes, releases, raises, switches_frame)
   feedback()
   exits(return, raise)
 {
@@ -1390,7 +1390,7 @@ extern helper enter_generator(t:Thread, f:Frame, g:B, v:O)
   ensures(entered.generator_frame(c))
   c ENTER_GENERATOR as pointer_or_raised
   evidence(review: "r", contract: "c");
-arm S.Generator split effects(reads, writes, raises, switches_frame) feedback() exits(enter, raise)
+arm S.Generator split effects(runs_python, reads, writes, raises, switches_frame) feedback() exits(enter, raise)
 {
   entry():
     let g:B = use(window.receiver);
@@ -1507,7 +1507,7 @@ extern helper pin_departing() -> Unit
   effects()
   c PIN as unit
   evidence(review: "r", contract: "c");
-arm Y.Value split effects(writes, switches_frame) feedback() exits(yield)
+arm Y.Value split effects(runs_python, writes, switches_frame) feedback() exits(yield)
 {
   entry():
     let v:O = acquire(value);

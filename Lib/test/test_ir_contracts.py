@@ -1458,10 +1458,6 @@ class VerifierTests(unittest.TestCase):
         """
         self.assertEqual(self.verify(source % "OP_B").families["OP"].baseline, "OP_B")
         self.refuses(source % "OP_C", r"family\(OP\): its baseline\(OP_C\) is not a member")
-        # RESUME's words compile to RESUME_CHECK
-        self.assertEqual(analysis.families["RESUME"].baseline, "RESUME_CHECK")
-        plan = ir_generator.stub_plans(analysis)["RESUME"]
-        self.assertEqual((plan.region, plan.arm, plan.family), ("inline", "RESUME_CHECK", "RESUME"))
 
     def test_modelled_primitive_needs_a_lowering(self):
         # V11 against the tree: every modelled PRIMITIVE row is lowered

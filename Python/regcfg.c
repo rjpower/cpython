@@ -1846,6 +1846,23 @@ rule_jump(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* RESUME: the Resume family (Python/register_ops/resume.rop).  With the
+ * baseline JIT on, the gate is also the code's warm-up event: the arm that
+ * the JIT's setting selects. */
+static int
+rule_resume(_PyRegTr *t, const _PyRegOp *src)
+{
+    int jit = _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF
+                  ? ROP_SELECT_JIT_ON : ROP_SELECT_JIT_OFF;
+    int handler = _PyRop_SelectResume(jit);
+    assert(handler >= 0);
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == src->opcode);
+    op->opcode = handler;
+    return SUCCESS;
+}
+
 /* Whether identity v may hold an absent binding (a Maybe value): one that
  * SaveLocal took, or a parameter of a position where one has been.  The
  * positions over-approximate the edges, which is safe: a Restore of a
@@ -2489,6 +2506,7 @@ static const _PyRegRule rules[256] = {
     [POP_JUMP_IF_TRUE] = rule_branch,
     [POP_JUMP_IF_NONE] = rule_branch,
     [POP_JUMP_IF_NOT_NONE] = rule_branch,
+    [RESUME] = rule_resume,
     [JUMP_FORWARD] = rule_jump,
     [JUMP_BACKWARD] = rule_jump,
     [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,

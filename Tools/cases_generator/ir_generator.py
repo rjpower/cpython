@@ -381,12 +381,9 @@ def generator_boundary_source_closed(boundary: GeneratorBoundary,
                                      formats: dict[str, "IRFormat"]) -> bool:
     """Only complete audited sources may publish an executable shape."""
     insts = all_instructions(analysis)
-    resume = insts.get("RESUME")
-    # The yield-from loop's jump is a Jump word (Jump.Direct), whose source
-    # the family's rows hold; no handler of the stack op remains to audit.
-    if resume is None or normal_transfer_kind(
-            resume, formats["RESUME"]) != "_PyIR_TRANSFER_PRESERVE":
-        return False
+    # The yield-from loop's jump is a Jump word (Jump.Direct) and the resume
+    # point a Resume word, whose sources the families' rows hold; no handler
+    # of those stack ops remains to audit.
     # A new family member without the same source contract closes no shape;
     # eligibility is never recovered by declining its specialization later.
     send_members = [inst for name, inst in insts.items()
@@ -1224,7 +1221,7 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
+STACK_ONLY = ("RESUME", "INSTRUMENTED_RESUME", "CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "INSTRUMENTED_RETURN_VALUE", "BINARY_OP", "UNARY_NEGATIVE", "UNARY_INVERT", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
               "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
               "LOAD_FAST_LOAD_FAST",
@@ -5618,7 +5615,7 @@ class IREmitter(Emitter):
             self.emit("}\n")
             self.emit("_PyFrame_SetResumeValue(frame, ir_resume_input);\n")
             self.emit("LOAD_IP(0);\n")
-            self.emit("IR_SKIP_RESUME();\n")
+            self.emit("ROP_ENTER_GATE();\n")
             self.emit("DTRACE_FUNCTION_ENTRY();\n")
             self.emit("LLTRACE_RESUME_FRAME();\n")
             self.emit("DISPATCH();\n")
@@ -6551,7 +6548,7 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
         tstate->py_recursion_remaining--;
         RELOAD_STACK();
         LOAD_IP(0);
-        IR_SKIP_RESUME();
+        ROP_ENTER_GATE();
         DTRACE_FUNCTION_ENTRY();
         LLTRACE_RESUME_FRAME();
     }"""
@@ -8282,48 +8279,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             [token.text for token in part.body.tokens() if token.kind != "COMMENT"]
             == [token.text for token in tokenize(body)]
             for part, body in zip(parts, bodies))
-
-    if inst.name in ("RESUME", "RESUME_JIT") and scalar_shape(0, 0):
-        # These audited helper contracts may poll/instrument and change
-        # control flow; ordinary completion writes no scratch. Require the
-        # complete bodies, not a token blacklist that can miss pointer stores.
-        # Callback/error phases remain uncovered.  RESUME_JIT ends in the
-        # JIT's warm-up event, which moves no value.
-        expected_parts = ["_MAYBE_INSTRUMENT", "_CHECK_PERIODIC_IF_NOT_YIELD_FROM"]
-        if inst.name == "RESUME_JIT":
-            expected_parts.append("_JIT_EVENT")
-        if [part.name for part in parts] != expected_parts:
-            return unknown
-        instrument = """{
-            #ifdef Py_GIL_DISABLED
-            int check_instrumentation = 1;
-            #else
-            int check_instrumentation = (tstate->tracing == 0);
-            #endif
-            if (check_instrumentation) {
-                uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
-                uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                if (code_version != global_version) {
-                    int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-                    if (err) { ERROR_NO_POP(); }
-                    next_instr = this_instr;
-                    DISPATCH_SAME_OPARG();
-                }
-            }
-        }"""
-        periodic = """{
-            if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
-                int err = check_periodics(tstate);
-                ERROR_IF(err != 0);
-            }
-        }"""
-        event = "{ IR_JIT_EVENT(); }"
-        if (any(part.stack.inputs or part.stack.outputs for part in parts)
-                or any(statement_shape(part.body)
-                       != statement_shape(Parser(body, "<RESUME contract>").block())
-                       for part, body in zip(parts, (instrument, periodic, event)))):
-            return unknown
-        return "_PyIR_TRANSFER_PRESERVE"
 
     scalar = {
         "LOAD_COMMON_CONSTANT": ("{ assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "

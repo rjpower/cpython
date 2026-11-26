@@ -180,116 +180,23 @@ dummy_func(
             ERROR_IF(err != 0);
         }
 
-        op(_CHECK_PERIODIC_IF_NOT_YIELD_FROM, (--))
-            effects(runs_python, polls) exits(next, raise)
+        /* Stack ops only: RESUME is the Resume family (Python/register_ops/resume.rop);
+         * its instrumented form runs Resume.Observed. */
+        eval_break tier1 inst(RESUME, (unused/1 --))
+            exits(abort)
         {
-            if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
-                int err = check_periodics(tstate);
-                ERROR_IF(err != 0);
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        // After instrumenting the code it runs its word again, now with its
-        // instrumented handler: a jump to the word
-        tier1 op(_MAYBE_INSTRUMENT, (--))
-            effects(runs_python) exits(next, jump, raise)
+        eval_break tier1 inst(INSTRUMENTED_RESUME, (unused/1 --))
+            exits(abort)
         {
-            #ifdef Py_GIL_DISABLED
-            // For thread-safety, we need to check instrumentation version
-            // even when tracing. Otherwise, another thread may concurrently
-            // re-write the bytecode while we are executing this function.
-            int check_instrumentation = 1;
-            #else
-            int check_instrumentation = (tstate->tracing == 0);
-            #endif
-            if (check_instrumentation) {
-                uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
-                uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                if (code_version != global_version) {
-                    int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-                    if (err) {
-                        ERROR_NO_POP();
-                    }
-                    next_instr = this_instr;
-                    DISPATCH_SAME_OPARG();
-                }
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        // A frame that starts or resumes at a RESUME skips it when it has
-        // nothing to do (IR_SKIP_RESUME); it runs only after the words that
-        // make cells and copy free variables, at a generator's first start,
-        // and when the eval breaker or instrumentation needs it.
-        // The family's generic arm: compiled code runs it as a stub after
-        // RESUME_CHECK's miss
-        macro(RESUME) region(shared) =
-            unused/1 +
-            _MAYBE_INSTRUMENT +
-            _CHECK_PERIODIC_IF_NOT_YIELD_FROM;
-
-        // The baseline JIT's check at a frame's entry (g3/design.md section
-        // 1): a RESUME has nothing to do while no event is pending and the
-        // code is instrumented as the interpreter is.  Otherwise it misses,
-        // and the generic RESUME polls or instruments.
-        leaf ir_only op(_RESUME_CHECK, (--))
-            effects(reads) exits(next, miss)
-        {
-            EXIT_IF(_Py_EvalBreaker(tstate) != FRAME_CODE_INSTRUMENTATION_VERSION(),
-                    "an event is pending, or the code's instrumentation is out of date");
-        }
-
-        // The arm that the baseline compiles for RESUME's words; the
-        // interpreter never writes it (it skips RESUME, IR_SKIP_RESUME())
-        macro(RESUME_CHECK) region(inline) =
-            unused/1 +
-            _RESUME_CHECK;
-
-        // Under -X jit=on and always the lowering gives every RESUME and
-        // JUMP_BACKWARD the form that ends in _JIT_EVENT
-        // (Python/ir_assemble.c): a warm-up event of the code, which enters
-        // the code's compiled unit at the next word once it has one
-        // (IR_JIT_EVENT(), Python/jit.c).  Compiled code runs the forms,
-        // where the event does nothing.
-        // Contract (G0d1): IR_JIT_EVENT's row (EFFECTS(... runs_python),
-        // EXITS(redirect, raise, exit)): the unit it starts runs this frame's
-        // words, which enter and leave frames by their own records; the frame
-        // goes on where the unit stopped (redirect). Otherwise the word
-        // continues (next).
-        ir_only op(_JIT_EVENT, (--))
-            effects(runs_python) exits(next, redirect, raise, exit)
-        {
-            IR_JIT_EVENT();
-        }
-
-        family(RESUME, 1) baseline(RESUME_CHECK) = {
-            RESUME_JIT,
-            RESUME_CHECK,
-        };
-
-        macro(RESUME_JIT) =
-            unused/1 +
-            _MAYBE_INSTRUMENT +
-            _CHECK_PERIODIC_IF_NOT_YIELD_FROM +
-            _JIT_EVENT;
-
-        op(_MONITOR_RESUME, (--))
-            effects(runs_python) exits(next, raise, redirect)
-        {
-            int err = _Py_call_instrumentation(
-                    tstate, oparg == 0 ? PY_MONITORING_EVENT_PY_START : PY_MONITORING_EVENT_PY_RESUME, frame, this_instr);
-            RELOAD_STACK();
-            ERROR_IF(err);
-            if (frame->instr_ptr != this_instr) {
-                /* Instrumentation has jumped */
-                DISPATCH_REDIRECT();
-            }
-        }
-
-        macro(INSTRUMENTED_RESUME) =
-            unused/1 +
-            _MAYBE_INSTRUMENT +
-            _CHECK_PERIODIC_IF_NOT_YIELD_FROM +
-            _MONITOR_RESUME;
 
         pseudo(LOAD_CLOSURE, (-- unused)) = {
             LOAD_FAST,
@@ -2896,7 +2803,7 @@ dummy_func(
             tstate->py_recursion_remaining--;
             RELOAD_STACK();
             LOAD_IP(0);
-            IR_SKIP_RESUME();
+            ROP_ENTER_GATE();
             DTRACE_FUNCTION_ENTRY();
             LLTRACE_RESUME_FRAME();
         }
@@ -3600,7 +3507,7 @@ dummy_func(
             }
             DTRACE_FUNCTION_ENTRY();
             next_instr = frame->instr_ptr;
-            IR_SKIP_RESUME();
+            ROP_ENTER_GATE();
         #ifdef Py_DEBUG
             int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
             if (lltrace < 0) {

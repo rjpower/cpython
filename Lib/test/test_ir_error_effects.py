@@ -268,10 +268,6 @@ class ErrorEffectTests(unittest.TestCase):
             previous.may_fail, previous.callback)
         with mock.patch.dict(ir_error_effects.HELPERS, {"check_periodics": unknown}):
             contracts = ir_generator.handler_contracts(analysis, formats)
-        for name in ("RESUME", "INSTRUMENTED_RESUME"):
-            self.assertFalse(contracts[name].error_routes)
-            self.assertFalse(contracts[name].abrupt_operands)
-
         original = ir_generator.IREmitter.complete_step
 
         def missing_step_error_receipt(emitter, token, *args):
@@ -286,8 +282,6 @@ class ErrorEffectTests(unittest.TestCase):
 
         text = source.read_text()
         changes = (
-            ("&tstate->eval_breaker", "&frame->base[0]", "RESUME"),
-            ("FT_ATOMIC_LOAD_UINTPTR_ACQUIRE", "opaque_metadata_reader", "RESUME"),
             ("IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT)",
              "int changed_target = IR_EXIT; "
              "IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, changed_target)", "CLEANUP_THROW"),
@@ -333,7 +327,7 @@ class ErrorEffectTests(unittest.TestCase):
         self.assertEqual(contracts["IR_JUMP"].error_routes, ("_PyIR_ERROR_COMPLETE",))
         self.assertIn("_PyIR_ERROR_LOCAL_DST", contracts["LOAD_COMMON_CONSTANT"].error_routes)
         self.assertIn("_PyIR_ERROR_DIRECT", contracts["GET_ANEXT"].error_routes)
-        for name in ("RESUME", "INSTRUMENTED_RESUME", "CLEANUP_THROW"):
+        for name in ("CLEANUP_THROW",):
             with self.subTest(handler=name):
                 self.assertIn("_PyIR_ERROR_COMPLETE", contracts[name].error_routes)
                 self.assertIn("_PyIR_ERROR_DIRECT", contracts[name].error_routes)

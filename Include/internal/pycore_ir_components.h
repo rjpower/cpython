@@ -2842,14 +2842,14 @@
      * call handler's register local (the `call_state` STATE row, which the uop names in \
      * its state(...) clause).  No heap access. */ \
     MACRO(IR_BEGIN_CALL_EFFECTS, ARGS(), NONE, EFFECTS(), EXITS()) \
-    /* Evidence (IR_SKIP_RESUME_IF, Python/ceval_macros.h; G0c batch 6): \
+    /* Evidence (ROP_ENTER_GATE_IF, Python/ceval_macros.h; G0c batch 6): \
      * when the word at next_instr is a RESUME, loads the eval breaker, \
      * the code's instrumentation version (and, free-threaded, the tlbc \
      * index) and advances the evaluator's local next_instr past it.  It \
      * stores nothing to the heap and the frame: `reads` only (the seed \
      * also declared `writes`, for the local).  No call, no failure, no \
      * callback. */ \
-    MACRO(IR_SKIP_RESUME, ARGS(), NONE, EFFECTS(reads), EXITS()) \
+    MACRO(ROP_ENTER_GATE, ARGS(), NONE, EFFECTS(reads), EXITS()) \
     /* IR_JIT_EVENT (ceval_macros.h): counts heat, may call _PyJit_Event and \
      * jit_run through IR_STEP_DONE, which runs the unit, which runs Python, \
      * and dispatches or leaves the evaluator; no table entry, so the larger \

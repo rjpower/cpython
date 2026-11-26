@@ -497,6 +497,10 @@ SCENARIOS = {
     "ImportFrom": Scenario("ImportFrom", {
         "from": "def f(a):\n    from os import path, sep\n    return a\n"},
         [{"module": __import__("os")}], warm=(1,)),
+    "Resume": Scenario("Resume", {
+        "entry": "def f(a):\n    return a\n",
+        "monitored": "def f(a):\n    return a\n"},
+        [{}], warm=(0,), monitored=("monitored",)),
     "Jump": Scenario("Jump", {
         "loop": "def f(n):\n    while n:\n        n -= 1\n    return n\n",
         "forward": "def f(a):\n    x = 1 if a else 2\n    y = (x, x)\n    return y\n",
@@ -942,7 +946,7 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
     arm_name = arm.name
     handler = capi.arm_handlers()[arm_name]
     run = CRun(f, index, slots, mode, handler)
-    jump_kind = "jump" if arm.family == "Jump" else "branch"
+    jump_kind = "jump" if arm.family in ("Jump", "Resume") else "branch"
     exit = classify(run, mode, index, length, jump_kind)
     if arm.family == "NamespaceWrite" and "value" in inputs and exit == "next":
         # The value's new owner is the globals dict, which the count of the
@@ -1044,6 +1048,8 @@ NOT_RUN = {
                           "to one on a word",
     "Jump.Poll" if sys._jit.is_enabled() else "Jump.Warm": "the JIT's state selects the "
                                                            "other loop jump",
+    "Resume.Poll" if sys._jit.is_enabled() else "Resume.Warm": "the JIT's state selects "
+                                                               "the other resume",
 }
 
 

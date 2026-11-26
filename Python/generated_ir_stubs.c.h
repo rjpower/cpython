@@ -105,60 +105,6 @@ _PyIR_StubWindowDropsLast(const PyValue *window, int n)
 #define PyValue_XCLOSE(V) _PyIR_STUB_RELEASE(PyValue_XCLOSE, V)
 #define _PyValue_CLOSE_POINTER(V) _PyIR_STUB_RELEASE(_PyValue_CLOSE_POINTER, V)
 #define _PyValue_XCLOSE_POINTER(V) _PyIR_STUB_RELEASE(_PyValue_XCLOSE_POINTER, V)
-
-        
-static Py_NO_INLINE int
-_PyIR_Stub_RESUME(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
-{
-    _PyInstr *next_instr = site;
-    _PyIRWord ir_word = *site;
-    int ir_status = 0;
-
-            int opcode = RESUME;
-            (void)(opcode);
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(RESUME);
-            _PyIRWord* const this_instr = next_instr - 1;
-            (void)this_instr;
-            int oparg = (int)IR_A(ir_word);
-            (void)oparg;
-            // _MAYBE_INSTRUMENT
-            {
-                IR_STUB_ESCAPE();
-                #ifdef Py_GIL_DISABLED
-
-                int check_instrumentation = 1;
-                #else
-                int check_instrumentation = (tstate->tracing == 0);
-                #endif
-                if (check_instrumentation) {
-                    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
-                    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                    if (code_version != global_version) {
-                        int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-                        if (err) {
-                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                        }
-                        next_instr = this_instr;
-                        DISPATCH_SAME_OPARG();
-                    }
-                }
-            }
-            // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
-            {
-                IR_STUB_ESCAPE();
-                if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
-                    int err = check_periodics(tstate);
-                    if (err != 0) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                }
-            }
-            DISPATCH();
-        }
 #pragma pop_macro("_PyValue_XCLOSE_POINTER")
 #pragma pop_macro("_PyValue_CLOSE_POINTER")
 #pragma pop_macro("PyValue_XCLOSE")
@@ -279,6 +225,7 @@ static int _PyIR_Rop_Stub_Unary_Generic(PyThreadState *, _PyInterpreterFrame *, 
 static int _PyIR_Rop_Stub_AppendText_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_AppendText_Text(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_AppendText_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Resume_Poll(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Compare_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Compare_Int(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Compare_Float(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
@@ -430,86 +377,89 @@ const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [350] = {_PyIR_PLAN_SHARED, 1, 350, (const void *)_PyIR_Rop_Stub_Unary_Generic, NULL},  // Unary_Generic
     [351] = {_PyIR_PLAN_SHARED, 1, 351, (const void *)_PyIR_Rop_Stub_AppendText_Text, (const void *)_PyIR_Rop_Stub_AppendText_Generic},  // AppendText_Text
     [352] = {_PyIR_PLAN_SHARED, 1, 352, (const void *)_PyIR_Rop_Stub_AppendText_Generic, (const void *)_PyIR_Rop_Stub_AppendText_Generic},  // AppendText_Generic
-    [353] = {_PyIR_PLAN_SHARED, 0, 353, (const void *)_PyIR_Rop_Stub_Compare_Int, (const void *)_PyIR_Rop_Stub_Compare_Generic},  // Compare_Int
-    [354] = {_PyIR_PLAN_SHARED, 0, 354, (const void *)_PyIR_Rop_Stub_Compare_Float, (const void *)_PyIR_Rop_Stub_Compare_Generic},  // Compare_Float
-    [355] = {_PyIR_PLAN_SHARED, 0, 355, (const void *)_PyIR_Rop_Stub_Compare_Str, (const void *)_PyIR_Rop_Stub_Compare_Generic},  // Compare_Str
-    [356] = {_PyIR_PLAN_SHARED, 1, 356, (const void *)_PyIR_Rop_Stub_Compare_Generic, (const void *)_PyIR_Rop_Stub_Compare_Generic},  // Compare_Generic
-    [357] = {_PyIR_PLAN_INLINE, 1, 357, NULL, NULL},  // Identity_Test
-    [358] = {_PyIR_PLAN_SHARED, 1, 358, (const void *)_PyIR_Rop_Stub_Contains_Set, (const void *)_PyIR_Rop_Stub_Contains_Generic},  // Contains_Set
-    [359] = {_PyIR_PLAN_SHARED, 1, 359, (const void *)_PyIR_Rop_Stub_Contains_Dict, (const void *)_PyIR_Rop_Stub_Contains_Generic},  // Contains_Dict
-    [360] = {_PyIR_PLAN_SHARED, 1, 360, (const void *)_PyIR_Rop_Stub_Contains_Generic, (const void *)_PyIR_Rop_Stub_Contains_Generic},  // Contains_Generic
-    [361] = {_PyIR_PLAN_INLINE, 1, 361, NULL, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Identity
-    [362] = {_PyIR_PLAN_SHARED, 0, 362, (const void *)_PyIR_Rop_Stub_TestBranch_Int, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Int
-    [363] = {_PyIR_PLAN_SHARED, 0, 363, (const void *)_PyIR_Rop_Stub_TestBranch_Float, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Float
-    [364] = {_PyIR_PLAN_SHARED, 0, 364, (const void *)_PyIR_Rop_Stub_TestBranch_Str, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Str
-    [365] = {_PyIR_PLAN_SHARED, 1, 365, (const void *)_PyIR_Rop_Stub_TestBranch_Set, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Set
-    [366] = {_PyIR_PLAN_SHARED, 1, 366, (const void *)_PyIR_Rop_Stub_TestBranch_Dict, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Dict
-    [367] = {_PyIR_PLAN_SHARED, 1, 367, (const void *)_PyIR_Rop_Stub_TestBranch_Sequence, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Sequence
-    [368] = {_PyIR_PLAN_SHARED, 1, 368, (const void *)_PyIR_Rop_Stub_TestBranch_Generic, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Generic
-    [369] = {_PyIR_PLAN_NONE, 1, 369, NULL, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Observed
-    [370] = {_PyIR_PLAN_INLINE, 0, 370, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Bool
-    [371] = {_PyIR_PLAN_INLINE, 0, 371, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Int
-    [372] = {_PyIR_PLAN_INLINE, 0, 372, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_List
-    [373] = {_PyIR_PLAN_INLINE, 0, 373, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_None
-    [374] = {_PyIR_PLAN_INLINE, 0, 374, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Str
-    [375] = {_PyIR_PLAN_INLINE, 0, 375, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Plain
-    [376] = {_PyIR_PLAN_SHARED, 1, 376, (const void *)_PyIR_Rop_Stub_Truth_Slot, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Slot
-    [377] = {_PyIR_PLAN_SHARED, 1, 377, (const void *)_PyIR_Rop_Stub_Truth_Generic, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Generic
-    [378] = {_PyIR_PLAN_INLINE, 0, 378, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Bool
-    [379] = {_PyIR_PLAN_INLINE, 0, 379, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Int
-    [380] = {_PyIR_PLAN_INLINE, 0, 380, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_List
-    [381] = {_PyIR_PLAN_INLINE, 0, 381, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_None
-    [382] = {_PyIR_PLAN_INLINE, 0, 382, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Str
-    [383] = {_PyIR_PLAN_INLINE, 0, 383, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Plain
-    [384] = {_PyIR_PLAN_SHARED, 1, 384, (const void *)_PyIR_Rop_Stub_BranchTruth_Slot, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Slot
-    [385] = {_PyIR_PLAN_SHARED, 1, 385, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Generic
-    [386] = {_PyIR_PLAN_INLINE, 0, 386, NULL, NULL},  // BranchNone_Test
-    [387] = {_PyIR_PLAN_NONE, 1, 387, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Observed
-    [388] = {_PyIR_PLAN_NONE, 1, 388, NULL, NULL},  // BranchNone_Observed
-    [389] = {_PyIR_PLAN_INLINE, 0, 389, NULL, NULL},  // Jump_Direct
-    [390] = {_PyIR_PLAN_INLINE, 1, 390, NULL, NULL},  // Jump_Poll
-    [391] = {_PyIR_PLAN_NONE, 1, 391, NULL, NULL},  // Jump_Warm
-    [392] = {_PyIR_PLAN_NONE, 1, 392, NULL, NULL},  // Jump_Observed
-    [393] = {_PyIR_PLAN_INLINE, 0, 393, NULL, NULL},  // Const_Pool
-    [394] = {_PyIR_PLAN_INLINE, 0, 394, NULL, NULL},  // Const_Small
-    [395] = {_PyIR_PLAN_INLINE, 0, 395, NULL, NULL},  // Const_Common
-    [396] = {_PyIR_PLAN_INLINE, 0, 396, NULL, NULL},  // LocalRead_Bound
-    [397] = {_PyIR_PLAN_SHARED, 0, 397, (const void *)_PyIR_Rop_Stub_LocalRead_Checked, NULL},  // LocalRead_Checked
-    [398] = {_PyIR_PLAN_INLINE, 1, 398, NULL, NULL},  // LocalWrite_Store
-    [399] = {_PyIR_PLAN_SHARED, 1, 399, (const void *)_PyIR_Rop_Stub_LocalWrite_Restore, NULL},  // LocalWrite_Restore
-    [400] = {_PyIR_PLAN_SHARED, 0, 400, (const void *)_PyIR_Rop_Stub_SaveLocal_Take, NULL},  // SaveLocal_Take
-    [401] = {_PyIR_PLAN_SHARED, 1, 401, (const void *)_PyIR_Rop_Stub_LocalDelete_Checked, NULL},  // LocalDelete_Checked
-    [402] = {_PyIR_PLAN_SHARED, 0, 402, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
-    [403] = {_PyIR_PLAN_SHARED, 1, 403, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
-    [404] = {_PyIR_PLAN_SHARED, 0, 404, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
-    [405] = {_PyIR_PLAN_NONE, 1, 405, NULL, NULL},  // Call_Observed
-    [406] = {_PyIR_PLAN_NONE, 1, 406, NULL, NULL},  // Call_Observed
-    [407] = {_PyIR_PLAN_NONE, 1, 407, NULL, NULL},  // Call_Observed
+    [353] = {_PyIR_PLAN_SHARED, 1, 353, (const void *)_PyIR_Rop_Stub_Resume_Poll, NULL},  // Resume_Poll
+    [354] = {_PyIR_PLAN_NONE, 1, 354, NULL, NULL},  // Resume_Warm
+    [355] = {_PyIR_PLAN_NONE, 1, 355, NULL, NULL},  // Resume_Observed
+    [356] = {_PyIR_PLAN_SHARED, 0, 356, (const void *)_PyIR_Rop_Stub_Compare_Int, (const void *)_PyIR_Rop_Stub_Compare_Generic},  // Compare_Int
+    [357] = {_PyIR_PLAN_SHARED, 0, 357, (const void *)_PyIR_Rop_Stub_Compare_Float, (const void *)_PyIR_Rop_Stub_Compare_Generic},  // Compare_Float
+    [358] = {_PyIR_PLAN_SHARED, 0, 358, (const void *)_PyIR_Rop_Stub_Compare_Str, (const void *)_PyIR_Rop_Stub_Compare_Generic},  // Compare_Str
+    [359] = {_PyIR_PLAN_SHARED, 1, 359, (const void *)_PyIR_Rop_Stub_Compare_Generic, (const void *)_PyIR_Rop_Stub_Compare_Generic},  // Compare_Generic
+    [360] = {_PyIR_PLAN_INLINE, 1, 360, NULL, NULL},  // Identity_Test
+    [361] = {_PyIR_PLAN_SHARED, 1, 361, (const void *)_PyIR_Rop_Stub_Contains_Set, (const void *)_PyIR_Rop_Stub_Contains_Generic},  // Contains_Set
+    [362] = {_PyIR_PLAN_SHARED, 1, 362, (const void *)_PyIR_Rop_Stub_Contains_Dict, (const void *)_PyIR_Rop_Stub_Contains_Generic},  // Contains_Dict
+    [363] = {_PyIR_PLAN_SHARED, 1, 363, (const void *)_PyIR_Rop_Stub_Contains_Generic, (const void *)_PyIR_Rop_Stub_Contains_Generic},  // Contains_Generic
+    [364] = {_PyIR_PLAN_INLINE, 1, 364, NULL, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Identity
+    [365] = {_PyIR_PLAN_SHARED, 0, 365, (const void *)_PyIR_Rop_Stub_TestBranch_Int, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Int
+    [366] = {_PyIR_PLAN_SHARED, 0, 366, (const void *)_PyIR_Rop_Stub_TestBranch_Float, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Float
+    [367] = {_PyIR_PLAN_SHARED, 0, 367, (const void *)_PyIR_Rop_Stub_TestBranch_Str, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Str
+    [368] = {_PyIR_PLAN_SHARED, 1, 368, (const void *)_PyIR_Rop_Stub_TestBranch_Set, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Set
+    [369] = {_PyIR_PLAN_SHARED, 1, 369, (const void *)_PyIR_Rop_Stub_TestBranch_Dict, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Dict
+    [370] = {_PyIR_PLAN_SHARED, 1, 370, (const void *)_PyIR_Rop_Stub_TestBranch_Sequence, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Sequence
+    [371] = {_PyIR_PLAN_SHARED, 1, 371, (const void *)_PyIR_Rop_Stub_TestBranch_Generic, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Generic
+    [372] = {_PyIR_PLAN_NONE, 1, 372, NULL, (const void *)_PyIR_Rop_Stub_TestBranch_Generic},  // TestBranch_Observed
+    [373] = {_PyIR_PLAN_INLINE, 0, 373, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Bool
+    [374] = {_PyIR_PLAN_INLINE, 0, 374, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Int
+    [375] = {_PyIR_PLAN_INLINE, 0, 375, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_List
+    [376] = {_PyIR_PLAN_INLINE, 0, 376, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_None
+    [377] = {_PyIR_PLAN_INLINE, 0, 377, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Str
+    [378] = {_PyIR_PLAN_INLINE, 0, 378, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Plain
+    [379] = {_PyIR_PLAN_SHARED, 1, 379, (const void *)_PyIR_Rop_Stub_Truth_Slot, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Slot
+    [380] = {_PyIR_PLAN_SHARED, 1, 380, (const void *)_PyIR_Rop_Stub_Truth_Generic, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Generic
+    [381] = {_PyIR_PLAN_INLINE, 0, 381, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Bool
+    [382] = {_PyIR_PLAN_INLINE, 0, 382, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Int
+    [383] = {_PyIR_PLAN_INLINE, 0, 383, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_List
+    [384] = {_PyIR_PLAN_INLINE, 0, 384, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_None
+    [385] = {_PyIR_PLAN_INLINE, 0, 385, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Str
+    [386] = {_PyIR_PLAN_INLINE, 0, 386, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Plain
+    [387] = {_PyIR_PLAN_SHARED, 1, 387, (const void *)_PyIR_Rop_Stub_BranchTruth_Slot, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Slot
+    [388] = {_PyIR_PLAN_SHARED, 1, 388, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Generic
+    [389] = {_PyIR_PLAN_INLINE, 0, 389, NULL, NULL},  // BranchNone_Test
+    [390] = {_PyIR_PLAN_NONE, 1, 390, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Observed
+    [391] = {_PyIR_PLAN_NONE, 1, 391, NULL, NULL},  // BranchNone_Observed
+    [392] = {_PyIR_PLAN_INLINE, 0, 392, NULL, NULL},  // Jump_Direct
+    [393] = {_PyIR_PLAN_INLINE, 1, 393, NULL, NULL},  // Jump_Poll
+    [394] = {_PyIR_PLAN_NONE, 1, 394, NULL, NULL},  // Jump_Warm
+    [395] = {_PyIR_PLAN_NONE, 1, 395, NULL, NULL},  // Jump_Observed
+    [396] = {_PyIR_PLAN_INLINE, 0, 396, NULL, NULL},  // Const_Pool
+    [397] = {_PyIR_PLAN_INLINE, 0, 397, NULL, NULL},  // Const_Small
+    [398] = {_PyIR_PLAN_INLINE, 0, 398, NULL, NULL},  // Const_Common
+    [399] = {_PyIR_PLAN_INLINE, 0, 399, NULL, NULL},  // LocalRead_Bound
+    [400] = {_PyIR_PLAN_SHARED, 0, 400, (const void *)_PyIR_Rop_Stub_LocalRead_Checked, NULL},  // LocalRead_Checked
+    [401] = {_PyIR_PLAN_INLINE, 1, 401, NULL, NULL},  // LocalWrite_Store
+    [402] = {_PyIR_PLAN_SHARED, 1, 402, (const void *)_PyIR_Rop_Stub_LocalWrite_Restore, NULL},  // LocalWrite_Restore
+    [403] = {_PyIR_PLAN_SHARED, 0, 403, (const void *)_PyIR_Rop_Stub_SaveLocal_Take, NULL},  // SaveLocal_Take
+    [404] = {_PyIR_PLAN_SHARED, 1, 404, (const void *)_PyIR_Rop_Stub_LocalDelete_Checked, NULL},  // LocalDelete_Checked
+    [405] = {_PyIR_PLAN_SHARED, 0, 405, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
+    [406] = {_PyIR_PLAN_SHARED, 1, 406, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
+    [407] = {_PyIR_PLAN_SHARED, 0, 407, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
     [408] = {_PyIR_PLAN_NONE, 1, 408, NULL, NULL},  // Call_Observed
-    [409] = {_PyIR_PLAN_NONE, 1, 409, NULL, NULL},  // Return_Observed
-    [410] = {_PyIR_PLAN_NONE, 1, 410, NULL, NULL},  // Return_Observed
-    [411] = {_PyIR_PLAN_NONE, 1, 411, NULL, NULL},  // Return_Observed
+    [409] = {_PyIR_PLAN_NONE, 1, 409, NULL, NULL},  // Call_Observed
+    [410] = {_PyIR_PLAN_NONE, 1, 410, NULL, NULL},  // Call_Observed
+    [411] = {_PyIR_PLAN_NONE, 1, 411, NULL, NULL},  // Call_Observed
     [412] = {_PyIR_PLAN_NONE, 1, 412, NULL, NULL},  // Return_Observed
-    [413] = {_PyIR_PLAN_NONE, 1, 413, NULL, NULL},  // TestBranch_Observed
-    [414] = {_PyIR_PLAN_NONE, 1, 414, NULL, NULL},  // TestBranch_Observed
-    [415] = {_PyIR_PLAN_NONE, 1, 415, NULL, NULL},  // TestBranch_Observed
-    [416] = {_PyIR_PLAN_NONE, 1, 416, NULL, NULL},  // TestBranch_Observed
-    [417] = {_PyIR_PLAN_NONE, 1, 417, NULL, NULL},  // TestBranch_Observed
+    [413] = {_PyIR_PLAN_NONE, 1, 413, NULL, NULL},  // Return_Observed
+    [414] = {_PyIR_PLAN_NONE, 1, 414, NULL, NULL},  // Return_Observed
+    [415] = {_PyIR_PLAN_NONE, 1, 415, NULL, NULL},  // Return_Observed
+    [416] = {_PyIR_PLAN_NONE, 1, 416, NULL, NULL},  // Resume_Observed
+    [417] = {_PyIR_PLAN_NONE, 1, 417, NULL, NULL},  // Resume_Observed
     [418] = {_PyIR_PLAN_NONE, 1, 418, NULL, NULL},  // TestBranch_Observed
     [419] = {_PyIR_PLAN_NONE, 1, 419, NULL, NULL},  // TestBranch_Observed
     [420] = {_PyIR_PLAN_NONE, 1, 420, NULL, NULL},  // TestBranch_Observed
-    [421] = {_PyIR_PLAN_NONE, 1, 421, NULL, NULL},  // BranchTruth_Observed
-    [422] = {_PyIR_PLAN_NONE, 1, 422, NULL, NULL},  // BranchTruth_Observed
-    [423] = {_PyIR_PLAN_NONE, 1, 423, NULL, NULL},  // BranchTruth_Observed
-    [424] = {_PyIR_PLAN_NONE, 1, 424, NULL, NULL},  // BranchTruth_Observed
-    [425] = {_PyIR_PLAN_NONE, 1, 425, NULL, NULL},  // BranchTruth_Observed
+    [421] = {_PyIR_PLAN_NONE, 1, 421, NULL, NULL},  // TestBranch_Observed
+    [422] = {_PyIR_PLAN_NONE, 1, 422, NULL, NULL},  // TestBranch_Observed
+    [423] = {_PyIR_PLAN_NONE, 1, 423, NULL, NULL},  // TestBranch_Observed
+    [424] = {_PyIR_PLAN_NONE, 1, 424, NULL, NULL},  // TestBranch_Observed
+    [425] = {_PyIR_PLAN_NONE, 1, 425, NULL, NULL},  // TestBranch_Observed
     [426] = {_PyIR_PLAN_NONE, 1, 426, NULL, NULL},  // BranchTruth_Observed
     [427] = {_PyIR_PLAN_NONE, 1, 427, NULL, NULL},  // BranchTruth_Observed
     [428] = {_PyIR_PLAN_NONE, 1, 428, NULL, NULL},  // BranchTruth_Observed
-    [429] = {_PyIR_PLAN_NONE, 1, 429, NULL, NULL},  // BranchNone_Observed
-    [430] = {_PyIR_PLAN_NONE, 1, 430, NULL, NULL},  // Jump_Observed
-    [431] = {_PyIR_PLAN_NONE, 1, 431, NULL, NULL},  // Jump_Observed
-    [432] = {_PyIR_PLAN_NONE, 1, 432, NULL, NULL},  // Jump_Observed
-    [124] = {_PyIR_PLAN_INLINE, 0, 124, NULL, (const void *)_PyIR_Stub_RESUME},  // RESUME_CHECK
-    [128] = {_PyIR_PLAN_INLINE, 0, 124, NULL, (const void *)_PyIR_Stub_RESUME},  // RESUME
+    [429] = {_PyIR_PLAN_NONE, 1, 429, NULL, NULL},  // BranchTruth_Observed
+    [430] = {_PyIR_PLAN_NONE, 1, 430, NULL, NULL},  // BranchTruth_Observed
+    [431] = {_PyIR_PLAN_NONE, 1, 431, NULL, NULL},  // BranchTruth_Observed
+    [432] = {_PyIR_PLAN_NONE, 1, 432, NULL, NULL},  // BranchTruth_Observed
+    [433] = {_PyIR_PLAN_NONE, 1, 433, NULL, NULL},  // BranchTruth_Observed
+    [434] = {_PyIR_PLAN_NONE, 1, 434, NULL, NULL},  // BranchNone_Observed
+    [435] = {_PyIR_PLAN_NONE, 1, 435, NULL, NULL},  // Jump_Observed
+    [436] = {_PyIR_PLAN_NONE, 1, 436, NULL, NULL},  // Jump_Observed
+    [437] = {_PyIR_PLAN_NONE, 1, 437, NULL, NULL},  // Jump_Observed
 };

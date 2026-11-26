@@ -1,0 +1,179 @@
+// 2F: Resume, the gate of a frame's start and of a generator's resume point.
+// Every arm first tests that the code's instrumentation is current (the
+// eval breaker equals the code's version), instruments if it is not, polls
+// where the kind polls, and then, by arm, counts a warm-up event of the
+// baseline JIT or reports PY_START or PY_RESUME.  The evaluator skips a
+// Resume.Poll word at a frame start when the test passes and nothing is
+// pending (ROP_ENTER_GATE, Python/ceval_macros.h).
+
+enum ResumeKind(FUNC_START, AFTER_YIELD, AFTER_YIELD_FROM, AFTER_AWAIT, GEN_EXPR_START);
+
+// The kind and the exception-depth flag are the oparg of RESUME: the kind
+// in bits 0-2 and the depth flag in bit 3
+family Resume(kind:Enum<ResumeKind>, depth1:Bool)
+  exits(next, jump, raise, redirect) ops(RESUME)
+  events(PY_START, PY_RESUME);
+
+point Resume.PollFailed(current, site, pending) keep() spent() defs();
+point Resume.InstrumentFailed(current, site, pending) keep() spent() defs();
+point Resume.EventFailed(current, site, pending) keep() spent() defs();
+
+// Whether the code's instrumentation is current and no event is pending:
+// the eval breaker equals the code's instrumentation version
+extern primitive instrumentation_current(t:Thread, f:Frame) -> Bool
+  effects(reads)
+  c _PyRop_InstrumentationCurrent as bool
+  evidence(
+    review: "RS. bytecodes.c _RESUME_CHECK: _Py_EvalBreaker(tstate) !="
+            "FRAME_CODE_INSTRUMENTATION_VERSION().",
+    contract: "Two relaxed or acquire loads and a compare: no failure, no callback.",
+    lowering: "none yet",
+    test: "test_rop_resume");
+
+// Whether the kind of resume point polls: not the delegation loops or a
+// generator expression's start
+extern primitive resume_polls(kind:Enum<ResumeKind>) -> Bool
+  effects()
+  c _PyRop_ResumePolls as bool
+  evidence(
+    review: "RS. bytecodes.c _CHECK_PERIODIC_IF_NOT_YIELD_FROM: the location is below"
+            "RESUME_AFTER_YIELD_FROM.",
+    contract: "A function of the immediate: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_resume");
+
+// _MAYBE_INSTRUMENT: when the code's version is not the global one and the
+// thread is not tracing, instrument the code.  The word then runs again, now
+// under the handler that instrumentation installed: the redirect names this
+// word.  A thread that is tracing never instruments here.
+extern helper instrument_if_stale(t:Thread, f:Frame, at:Site)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises, writes)
+  c _PyRop_InstrumentIfStale as int_redirect
+  evidence(
+    review: "RS. bytecodes.c _MAYBE_INSTRUMENT: _Py_Instrument, then"
+            "next_instr = this_instr; DISPATCH_SAME_OPARG().",
+    contract: "_Py_Instrument rewrites the code's words, which may run Python"
+              "(it takes the world's attention); an error is -1 with an"
+              "exception set. A positive status names this word in return_pc.");
+
+// The PY_START event of a frame's start, the PY_RESUME of any other resume
+extern helper resume_event(t:Thread, f:Frame, at:Site, kind:Enum<ResumeKind>)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  requires(instrumented(at))
+  c _PyRop_ResumeEvent as int_redirect
+  evidence(
+    review: "RS. bytecodes.c _MONITOR_RESUME: _Py_call_instrumentation with"
+            "PY_START for oparg 0, PY_RESUME otherwise; a callback that moves"
+            "instr_ptr redirects.",
+    contract: "The callback may raise, or move the frame, whose return_pc then"
+              "names the word to run.");
+
+// The generic arm: the interpreter's, with the baseline JIT off
+arm Resume.Poll shared select(jit_off)
+  effects(runs_python, polls, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    branch instrumentation_current(thread, frame) -> Current(), Stale();
+  Stale():
+    call instrument_if_stale(thread, frame, site) {
+      ok -> Current();
+      moved -> Moved();
+      err -> InstrumentFailed();
+    }
+  Current():
+    branch resume_polls(kind) -> Pending(), Done();
+  Pending():
+    call poll(thread, site) {
+      ok -> Done();
+      err -> PollFailed();
+    }
+  Done():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  InstrumentFailed(ie:Err):
+    exit raise(Resume.InstrumentFailed, ie);
+  PollFailed(pe:Err):
+    exit raise(Resume.PollFailed, pe);
+}
+
+// With the baseline JIT on, the gate is also the code's warm-up event
+arm Resume.Warm split select(jit_on)
+  effects(runs_python, polls, raises)
+  feedback()
+  exits(jump, raise, redirect)
+{
+  entry():
+    branch instrumentation_current(thread, frame) -> Current(), Stale();
+  Stale():
+    call instrument_if_stale(thread, frame, site) {
+      ok -> Current();
+      moved -> Moved();
+      err -> InstrumentFailed();
+    }
+  Current():
+    branch resume_polls(kind) -> Pending(), Warm();
+  Pending():
+    call poll(thread, site) {
+      ok -> Warm();
+      err -> PollFailed();
+    }
+  Warm():
+    call jit_warm(next_head) {
+      jump -> Warmed();
+      redirect -> Ran();
+    }
+  Warmed(h:Head):
+    exit jump(h);
+  Ran(r:Route):
+    exit redirect(r);
+  Moved(mr:Route):
+    exit redirect(mr);
+  InstrumentFailed(ie:Err):
+    exit raise(Resume.InstrumentFailed, ie);
+  PollFailed(pe:Err):
+    exit raise(Resume.PollFailed, pe);
+}
+
+// The twin of every Resume arm
+arm Resume.Observed split observes
+  effects(runs_python, polls, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    branch instrumentation_current(thread, frame) -> Current(), Stale();
+  Stale():
+    call instrument_if_stale(thread, frame, site) {
+      ok -> Current();
+      moved -> Moved();
+      err -> InstrumentFailed();
+    }
+  Current():
+    branch resume_polls(kind) -> Pending(), Event();
+  Pending():
+    call poll(thread, site) {
+      ok -> Event();
+      err -> PollFailed();
+    }
+  Event():
+    call resume_event(thread, frame, site, kind) {
+      ok -> Done();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Done():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  InstrumentFailed(ie:Err):
+    exit raise(Resume.InstrumentFailed, ie);
+  PollFailed(pe:Err):
+    exit raise(Resume.PollFailed, pe);
+  EventFailed(ee:Err):
+    exit raise(Resume.EventFailed, ee);
+}

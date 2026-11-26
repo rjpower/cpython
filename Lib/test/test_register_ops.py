@@ -743,7 +743,7 @@ class DefinitionTests(unittest.TestCase):
         Function Intrinsic IntrinsicPair
         Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
         AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
-        CleanupThrow EndAsyncFor WithExit Resume Poll
+        CleanupThrow EndAsyncFor WithExit Resume
     """.split()
 
     def test_appendix_a_families(self):

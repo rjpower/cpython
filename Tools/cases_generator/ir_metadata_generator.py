@@ -46,7 +46,7 @@ from ir_generator import (
     handler_instructions,
     ir_only_handler_names,
     monitoring_events,
-    STACK_ONLY,
+    stack_only_names,
     num_handlers,
     num_old_handlers,
     uses_feedback,
@@ -143,11 +143,12 @@ def extent_initializer(e: Extent) -> str:
 
 def format_initializer(fmt: IRFormat, shadow: str,
                        contract: HandlerContract, events: list[str],
+                       stack_only: frozenset[str],
                        owner_program: tuple[int, int] = (0, 0)) -> str:
     if fmt.operands != "_PyIR_OPERANDS_NONE":
         fmt = operand_metadata(fmt)
     # A STACK_ONLY opcode has a format for the CFG but no handler to run
-    flags = [] if fmt.group in STACK_ONLY else ["_PyIR_VALID"]
+    flags = [] if fmt.group in stack_only else ["_PyIR_VALID"]
     for present, flag in (
             (fmt.window, "_PyIR_WINDOW"),
             (fmt.jumps, "_PyIR_JUMPS"),
@@ -402,7 +403,8 @@ def generate_ir_metadata(
         indices = dict(ids)
         rows = dict(contracts)
         # The STACK_ONLY opcodes have a format, which the CFG reads
-        for name in STACK_ONLY:
+        stack_only = stack_only_names(analysis)
+        for name in stack_only:
             if name in analysis.instructions:
                 indices[name] = analysis.instructions[name].opcode
         for name in sorted(indices, key=lambda name: indices[name]):
@@ -413,7 +415,7 @@ def generate_ir_metadata(
             events = (monitoring_events(event_handler, insts[event_handler])
                       if event_handler in insts else [])
             init = format_initializer(formats[name], shadow_of(name, analysis),
-                                      rows[name], events,
+                                      rows[name], events, stack_only,
                                       programs[rows[name].ownership_events, rows[name].error_checkpoints,
                                                rows[name].normal_storage])
             out.emit(f"[{name}] = {init},\n")

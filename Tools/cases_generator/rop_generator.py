@@ -410,6 +410,13 @@ LOC_NAMES = {Slot.A: "_PyIR_LOC_A", Slot.B: "_PyIR_LOC_B", Slot.C: "_PyIR_LOC_C"
              Slot.D: "_PyIR_LOC_D"}
 
 
+# The layout of an argument descriptor (Args) by the stack op that the
+# family's words stand for: CALL_KW's last operand is the constant tuple of
+# the names, CALL_FUNCTION_EX has no self operand
+ARGS_OPERANDS = {"CALL_KW": "_PyIR_OPERANDS_KW",
+                 "CALL_FUNCTION_EX": "_PyIR_OPERANDS_EX"}
+
+
 def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     """The fields of the arm's _PyIRFormat row.  Which homes a word reads and
     defines come from the family's derived encoding: a Src operand is an
@@ -545,7 +552,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         imm, fb, ninputs,
         2 if window else -ninputs if writes or pair_writes else None,
         (1 << ninputs) - 1,
-        fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
+        fb_schema, (ARGS_OPERANDS.get(fam.ops[0], "_PyIR_OPERANDS_CALL") if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
         0 if has_args else enc.words, writes + pair_writes, arm_transfer(exits, ninputs, arm.family, writes or pair_writes > 0 or bool(
             {e.name for e in arm.contract.effect_set} & HOME_EFFECTS)), target,

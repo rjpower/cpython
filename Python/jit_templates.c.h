@@ -77,7 +77,7 @@ jit_template_STORE_FAST(_PyJitWordCx *cx)
 
 const _PyJitTemplate _PyJit_Templates[512] = {
     [9] = jit_template_END_SEND,
-    [24] = jit_template_NOP,
+    [25] = jit_template_NOP,
     [110] = jit_template_STORE_FAST,
     [120] = jit_template_IR_JUMP,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,

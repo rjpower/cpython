@@ -400,14 +400,14 @@ operand_word_count(int n)
 static int
 call_has_self(const _PyRegOp *op)
 {
-    return op->opcode != CALL_FUNCTION_EX &&
+    return op->opcode != ROP_HANDLER_CallEx_Generic &&
            !(op->flags & _PyReg_CALL_NO_SELF);
 }
 
 static int
 call_noperands(const _PyRegOp *op)
 {
-    if (op->opcode == CALL_FUNCTION_EX) {
+    if (op->opcode == ROP_HANDLER_CallEx_Generic) {
         return 1 + !(op->flags & _PyReg_CALL_NO_KWARGS);
     }
     return op->nread - 1 - !call_has_self(op);
@@ -418,11 +418,11 @@ call_noperands(const _PyRegOp *op)
 static uint32_t
 call_operand_field(_PyRegCfg *cfg, const _PyRegOp *op, int k, int n)
 {
-    if (op->opcode == CALL_KW && k == n - 1) {
+    if (op->opcode == ROP_HANDLER_CallKw_Generic && k == n - 1) {
         return op->kwnames > 0 ? (uint32_t)(op->kwnames - 1) : 0;
     }
     const int *in = _PyReg_IN(cfg, op);
-    int first = op->opcode == CALL_FUNCTION_EX ? 2 : 2 - call_has_self(op);
+    int first = op->opcode == ROP_HANDLER_CallEx_Generic ? 2 : 2 - call_has_self(op);
     return (uint32_t)_PyRegCfg_Slot(cfg, in[first + k]);
 }
 
@@ -473,12 +473,8 @@ span_elems(_PyRegCfg *cfg, const _PyRegOp *op, int counts[2], int *elems)
         span_out = 1;
     }
     else {
-        // The span is the outputs unless the word has a destination of its own
-        int has_dst = 0;
-        for (int f = 0; f < 4; f++) {
-            has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
-        }
-        span_out = !has_dst;
+        // The span is the outputs unless the word reads it (_PyIR_SingleSpanReads())
+        span_out = !_PyIR_SingleSpanReads(fmt);
         counts[0] = span_out ? op->nout : op->nread - nfixed_in;
     }
     int n = 0;
@@ -513,12 +509,11 @@ span_nelems(_PyRegCfg *cfg, const _PyRegOp *op)
     if (_PyIR_SpanCountFields(fmt) == 2) {
         return op->nout + op->nread;
     }
-    int nfixed_in = 0, has_dst = 0;
+    int nfixed_in = 0;
     for (int f = 0; f < 4; f++) {
         nfixed_in += fmt->roles[f] >= _PyIR_ROLE_IN0;
-        has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
     }
-    return has_dst ? op->nread - nfixed_in : op->nout;
+    return _PyIR_SingleSpanReads(fmt) ? op->nread - nfixed_in : op->nout;
 }
 
 /* The words of a span instruction (pycore_ir.h, _PyIR_SpanElement()): the
@@ -594,13 +589,15 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
 static int
 call_role_flags(const _PyRegOp *op)
 {
-    if (op->opcode == CALL_FUNCTION_EX) {
-        return (op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0;
+    if (op->opcode == ROP_HANDLER_CallEx_Generic) {
+        return IR_F_EX | ((op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0);
     }
-    if (op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW) {
+    if (op->opcode == ROP_HANDLER_CallKw_Generic) {
+        return IR_F_KW | ((op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0);
+    }
+    if (op->opcode == ROP_HANDLER_Call_Generic) {
         int flags = (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
-        if (op->opcode == ROP_HANDLER_Call_Generic &&
-            (op->flags & _PyReg_CALL_UNINTERRUPTED)) {
+        if (op->flags & _PyReg_CALL_UNINTERRUPTED) {
             flags |= IR_F_UNINTERRUPTED;
         }
         return flags;
@@ -1001,7 +998,7 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             if (op->noperands > IR_FIELD_MAX) {
                 return too_large("call operands", op->noperands);
             }
-            if (op->opcode == CALL_KW && op->kwnames - 1 >= IR_FIELD_MAX) {
+            if (op->opcode == ROP_HANDLER_CallKw_Generic && op->kwnames - 1 >= IR_FIELD_MAX) {
                 return too_large("call keyword names constant", op->kwnames - 1);
             }
             op->nwords += operand_word_count(op->noperands);

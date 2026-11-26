@@ -394,9 +394,8 @@ Known values:
           the has-argument and specialized opcodes shift
    64448: rir90 BN: BINARY_OP and the unary ops are stack-only stubs, so
           BINARY_OP and the opcodes after it take new numbers
-   64449: rir90 FI: the iteration specializations are arms, so the
-          specialized opcodes after the FOR_ITER and GET_ITER ones take new
-          numbers */
+   64449: rir90 KC: the CALL_KW and CALL_FUNCTION_EX specializations are
+          deleted, so the base opcodes take new numbers */
 #define PYC_MAGIC_NUMBER 64449
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */

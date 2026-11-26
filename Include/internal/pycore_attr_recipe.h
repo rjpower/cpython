@@ -255,9 +255,14 @@ _PyAttr_BorrowValueSlot(PyObject *o, _PyAttrRecipe r)
     return PyValue_Borrow(*_PyObject_ValueSlot(o, r.offset));
 }
 
-/* Stores.  The guards and the store of an arm run under the GIL with nothing
-   between them; the free-threaded build's object lock of the old handlers is
-   not carried over. */
+/* Stores.  The arms guard first, without the lock, so that a word that
+   cannot hit leaves early.  The Locked stores below then take the lock the
+   old handler took (the owner, or the dictionary for a hinted entry), check
+   again what the old handler checked under it, store and unlock; they are
+   in Python/ceval.c, where the lock macros are.  They
+   return false, having changed nothing and not counted x, when the lock is
+   not taken or a check fails; the arm then runs the generic store.  With the
+   GIL the lock is always taken and the checks cannot fail. */
 
 /* The owner has no dictionary, its inline values are valid and, under
    shapes, a store that fills a vacant slot has its transition */

@@ -7,16 +7,6 @@
 #include "pycore_ir.h"
 #include "pycore_rop_metadata.h"   // ROP_SELECT_Move_copy
 
-/* Cold consumers must distinguish an edge's definitions from the frontend
- * stack shape. A definition or a retired NULL home needs no incoming owner.
- * Ordinary handlers implement these fixed outcomes directly. */
-typedef struct {
-    int semantic;
-    int first;
-    int count;
-    int dst;
-} _PyIRSlotOutcome;
-
 enum {
     _PyIR_SEMANTIC_UNKNOWN,
     _PyIR_SEMANTIC_PRESERVE,
@@ -98,23 +88,196 @@ _PyIR_NormalSemanticTransfer(_PyIRWord word, int arg, int home, int nl)
     }
 }
 
-static inline _PyIRSlotOutcome _PyIR_Outcome(_PyIRWord word, int taken);
-static inline int _PyIR_DefinesHome(_PyIRWord word, int arg, int home);
+/* The homes of a register instruction.  A word names up to six homes: its
+ * fields with a home role and the further parts of its home group, part i
+ * at the group's field plus i.  For each the format declares whether the
+ * word reads it, whether it may be NULL when read, and what each normal
+ * edge leaves there (_PyIR_HOME_*), the meet of the points its family's
+ * arms publish at that edge.  The readers below answer from these, and
+ * from the spans, moves and call operands that no head field names; a home
+ * the word does not name is preserved. */
+typedef struct {
+    const _PyIRFormat *fmt;
+    int slot[_PyIR_HOMES];  // the home's slot, or -1 if the word names none
+    uint8_t read;           // bit h: the word reads home h
+    uint8_t dst;            // bit h: home h is a destination field
+} _PyIRHomes;
 
-/* Constructor words are pristine; monitoring runs their twin. Resolve the
- * single generated provider fact from that twin, or from a direct no-twin
- * helper such as SEND. This is a cold declaration, not a success inference. */
+static inline void
+_PyIR_WordHomes(_PyIRWord word, _PyIRHomes *v)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    v->fmt = fmt;
+    v->read = v->dst = 0;
+    for (int h = 0; h < _PyIR_HOMES; h++) {
+        v->slot[h] = -1;
+    }
+    for (int f = 0; f < 4; f++) {
+        int role = fmt->roles[f];
+        int group = fmt->group && f == fmt->group_at;
+        if (role == _PyIR_ROLE_DST) {
+            /* A group in a destination field is defined, not read (Out) */
+            if (fields[f] != IR_NO_DST) {
+                v->slot[f] = (int)fields[f];
+            }
+            if (!group) {
+                v->dst |= 1u << f;
+            }
+        }
+        else if (role == _PyIR_ROLE_BASE || role == _PyIR_ROLE_CELL ||
+                 role >= _PyIR_ROLE_IN0)
+        {
+            v->slot[f] = (int)fields[f];
+            v->read |= 1u << f;
+        }
+    }
+    if (fmt->group) {
+        int first = v->slot[fmt->group_at];
+        for (int i = 1; i < fmt->group && 3 + i < _PyIR_HOMES; i++) {
+            v->slot[3 + i] = first < 0 ? -1 : first + i;
+            if (v->read & (1u << fmt->group_at)) {
+                v->read |= 1u << (3 + i);
+            }
+        }
+    }
+}
+
 static inline int
-_PyIR_ObserverOutcome(_PyIRWord word, int edge)
+_PyIR_HomeCode(const _PyIRFormat *fmt, int edge, int h)
+{
+    return (int)((fmt->edges >> (2 * (_PyIR_HOMES * edge + h))) & 3);
+}
+
+/* What edge leaves in home: -1 if the word names no such home.  Two
+ * operands can name one home (a completion value in its receiver's home):
+ * a definition is stored after the operands retire, so it wins; any other
+ * disagreement is unknown.  Edge -1 is every normal edge the word takes. */
+static inline int
+_PyIR_HomeAfter(const _PyIRHomes *v, int edge, int home)
+{
+    if (edge < 0) {
+        int state = -2;
+        for (int e = 0; e < 2; e++) {
+            if (v->fmt->normal & (1u << e)) {
+                int after = _PyIR_HomeAfter(v, e, home);
+                state = state == -2 || state == after ? after : _PyIR_HOME_UNKNOWN;
+            }
+        }
+        return state == -2 ? _PyIR_HOME_UNKNOWN : state;
+    }
+    int state = -1;
+    for (int h = 0; h < _PyIR_HOMES; h++) {
+        if (v->slot[h] != home) {
+            continue;
+        }
+        int code = _PyIR_HomeCode(v->fmt, edge, h);
+        /* A source the points keep is not yet taken to stay in place */
+        if (code == _PyIR_HOME_PRESERVE && (v->read & (1u << h))) {
+            code = _PyIR_HOME_UNKNOWN;
+        }
+        if (state < 0 || code == _PyIR_HOME_DEFINE) {
+            state = code;
+        }
+        else if (state != code && state != _PyIR_HOME_DEFINE) {
+            state = _PyIR_HOME_UNKNOWN;
+        }
+    }
+    return state;
+}
+
+/* Whether the word reads home through a home operand; *vacant: whether
+ * every such read accepts NULL */
+static inline int
+_PyIR_HomeRead(const _PyIRHomes *v, int home, int *vacant)
+{
+    int seen = 0;
+    *vacant = 1;
+    for (int h = 0; h < _PyIR_HOMES; h++) {
+        if (v->slot[h] == home && (v->read & (1u << h))) {
+            seen = 1;
+            *vacant &= (v->fmt->vacant >> h) & 1;
+        }
+    }
+    *vacant &= seen;
+    return seen;
+}
+
+/* Whether some edge leaves home other than it was.  An edge the word does
+ * not take leaves every home as it was. */
+static inline int
+_PyIR_HomeWritten(const _PyIRHomes *v, int home)
+{
+    for (int e = 0; e < 2; e++) {
+        int after = _PyIR_HomeAfter(v, e, home);
+        if (after >= 0 && after != _PyIR_HOME_PRESERVE) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Whether the word reads home through a home operand, or writes it */
+static inline int
+_PyIR_HomeTouched(const _PyIRHomes *v, int home)
+{
+    int vacant;
+    return _PyIR_HomeRead(v, home, &vacant) || _PyIR_HomeWritten(v, home);
+}
+
+/* The first home of the word's group, or -1 */
+static inline int
+_PyIR_HomeGroup(const _PyIRHomes *v)
+{
+    return v->fmt->group ? v->slot[v->fmt->group_at] : -1;
+}
+
+/* The word's home operands lie in the frame: a destination below limit or
+ * none, a read home below limit, a group's parts in scratch, a cell among
+ * the locals */
+static inline int
+_PyIR_HomesInFrame(_PyIRWord word, const _PyIRHomes *v, int nl, int limit)
+{
+    const _PyIRFormat *fmt = v->fmt;
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    for (int f = 0; f < 4; f++) {
+        int role = fmt->roles[f];
+        if (fmt->group && f == fmt->group_at) {
+            int first = v->slot[f];
+            if (first < nl || first > limit - fmt->group) {
+                return 0;
+            }
+        }
+        else if (role == _PyIR_ROLE_DST) {
+            if (fields[f] != IR_NO_DST && fields[f] >= (uint32_t)limit) {
+                return 0;
+            }
+        }
+        else if (role == _PyIR_ROLE_CELL) {
+            if (fields[f] >= (uint32_t)nl) {
+                return 0;
+            }
+        }
+        else if (role >= _PyIR_ROLE_IN0 && fields[f] >= (uint32_t)limit) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* Whether edge publishes its homes before its callbacks run.  Constructor
+ * words are pristine; monitoring runs their twin, which declares it. */
+static inline int
+_PyIR_Committed(_PyIRWord word, int edge)
 {
     if (edge < 0 || edge > 1) {
-        return _PyIR_OBSERVER_NONE;
+        return 0;
     }
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (fmt->twin != _PyIR_NO_HANDLER) {
         fmt = _PyIR_FormatOf(fmt->twin);
     }
-    return fmt->observer_outcome[edge];
+    return (fmt->committed >> edge) & 1;
 }
 
 enum {
@@ -161,143 +324,64 @@ _PyIR_ObserveHome(_PyIRObservedHomes *observed, int home, int nl, int limit,
     return 1;
 }
 
-/* Decode only a positively declared, committed observer edge. This records
- * physical publication separately from an old input's retired provenance:
- * storing a replacement into the same home never revives the old owner. */
+/* The homes a committed edge leaves, each with its physical state and
+ * whether the owner read there is retired (old_cut): storing a replacement
+ * into the same home never revives the old owner.  A home read and kept
+ * holds its owner (unknown, not retired); a vacated one is missing and
+ * retired; a destination defined holds a value; any other definition (a
+ * group part, which may be published NULL) or unknown state is unknown,
+ * and retires the owner read there. */
 static inline int
 _PyIR_ObservedHomes(_PyIRWord word, int edge, int nl, int limit,
                     _PyIRObservedHomes *observed)
 {
-    int kind = _PyIR_ObserverOutcome(word, edge);
-    if (kind == _PyIR_OBSERVER_NONE || nl < 0 || limit < nl) {
+    if (!_PyIR_Committed(word, edge) || nl < 0 || limit < nl) {
         return 0;
     }
     *observed = (_PyIRObservedHomes){0};
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int base = -1, dst = -1;
-    for (int f = 0; f < 4; f++) {
-        int role = fmt->roles[f];
-        if (role == _PyIR_ROLE_BASE) {
-            base = (int)fields[f];
-        }
-        else if (role == _PyIR_ROLE_DST) {
-            dst = dst < 0 ? (int)fields[f] : dst;
-        }
-        else if (role >= _PyIR_ROLE_IN0 &&
-                 !_PyIR_ObserveHome(observed, (int)fields[f], nl, limit,
-                                    _PyIR_OBSERVED_MISSING, 1))
-        {
-            return 0;
-        }
-    }
-    int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS
-                                              : _PyIR_FieldOparg(word);
-    int reads = _PyIR_Extent(fmt->reads, arg);
-    int writes = _PyIR_Extent(fmt->writes, arg);
-    int through = _PyIR_Extent(fmt->through, arg);
-    if (reads < 0 || writes < 0 || through < 0 || through > reads ||
-        writes < through || reads > 8 || writes > 8)
-    {
+    _PyIRHomes v;
+    _PyIR_WordHomes(word, &v);
+    if (!_PyIR_HomesInFrame(word, &v, nl, limit)) {
         return 0;
     }
-    if (base >= 0) {
-        if (base < nl || base > limit - Py_MAX(reads, writes)) {
-            return 0;
-        }
-        for (int k = 0; k < reads; k++) {
-            if (!_PyIR_ObserveHome(observed, base + k, nl, limit,
-                                   k < through ? _PyIR_OBSERVED_UNKNOWN
-                                               : _PyIR_OBSERVED_MISSING,
-                                   k >= through))
-            {
-                return 0;
+    for (int h = 0; h < _PyIR_HOMES; h++) {
+        int home = v.slot[h];
+        int first = 1, read = 0, dst = 0;
+        for (int k = 0; k < _PyIR_HOMES; k++) {
+            if (v.slot[k] == home) {
+                first &= k >= h;
+                read |= (v.read >> k) & 1;
+                dst |= (v.dst >> k) & 1;
             }
         }
-    }
-    if (kind == _PyIR_OBSERVER_FOR_BODY) {
-        if (base < 0 || reads != 2 || writes != 3 || fmt->dst != 2 ||
-            (dst >= nl && dst != IR_NO_DST && dst != base + 2))
-        {
-            return 0;
+        if (home < 0 || !first) {
+            continue;
         }
-        if (!_PyIR_ObserveHome(observed, base + 1, nl, limit,
-                               _PyIR_OBSERVED_UNKNOWN, 1) ||
-            !_PyIR_ObserveHome(observed, base + 2, nl, limit,
-                dst == IR_NO_DST || dst < nl ? _PyIR_OBSERVED_NULL
-                                            : _PyIR_OBSERVED_VALUE, 0))
-        {
-            return 0;
-        }
-    }
-    else if (kind == _PyIR_OBSERVER_COMPLETION) {
-        _PyIRSlotOutcome outcome = _PyIR_Outcome(word, edge);
-        if (!outcome.semantic || outcome.first < nl || outcome.count > 8 ||
-            outcome.first > limit - outcome.count)
-        {
-            return 0;
-        }
-        for (int k = 0; k < outcome.count; k++) {
-            if (!_PyIR_ObserveHome(observed, outcome.first + k, nl, limit,
-                                   _PyIR_OBSERVED_MISSING, 1))
-            {
-                return 0;
-            }
-        }
-        if (outcome.dst != IR_NO_DST &&
-            !_PyIR_ObserveHome(observed, outcome.dst, nl, limit,
-                               _PyIR_OBSERVED_VALUE, 0))
-        {
-            return 0;
-        }
-    }
-    else if (kind == _PyIR_OBSERVER_FORMAT_VALUE ||
-             kind == _PyIR_OBSERVER_FORMAT_NULL_FIRST)
-    {
-        int first_null = kind == _PyIR_OBSERVER_FORMAT_NULL_FIRST;
-        if (fmt->output_kind == _PyIR_OUTPUT_REGISTER_DST) {
-            if (writes - through > 0 && dst < 0) {
-                return 0;
-            }
-            for (int k = 0; k < writes - through; k++) {
-                if (dst == IR_NO_DST) {
-                    break;
+        int physical, cut;
+        switch (_PyIR_HomeAfter(&v, edge, home)) {
+            case _PyIR_HOME_PRESERVE:
+                if (!read) {
+                    continue;
                 }
-                if (!_PyIR_ObserveHome(observed, dst + k, nl, limit,
-                        first_null && k == 0 ? _PyIR_OBSERVED_NULL
-                                             : _PyIR_OBSERVED_VALUE, 0))
-                {
-                    return 0;
-                }
-            }
+                physical = _PyIR_OBSERVED_UNKNOWN;
+                cut = 0;
+                break;
+            case _PyIR_HOME_VACATE:
+                physical = _PyIR_OBSERVED_MISSING;
+                cut = 1;
+                break;
+            case _PyIR_HOME_DEFINE:
+                physical = dst ? _PyIR_OBSERVED_VALUE : _PyIR_OBSERVED_UNKNOWN;
+                cut = read;
+                break;
+            default:
+                physical = _PyIR_OBSERVED_UNKNOWN;
+                cut = read;
+                break;
         }
-        else if (fmt->output_kind == _PyIR_OUTPUT_WINDOW ||
-                 fmt->output_kind == _PyIR_OUTPUT_WINDOW_DST_FIRST)
-        {
-            if (base < 0 ||
-                (fmt->output_kind == _PyIR_OUTPUT_WINDOW_DST_FIRST &&
-                 (fmt->dst < through || fmt->dst >= writes ||
-                  (dst >= nl && dst != IR_NO_DST && dst != base + fmt->dst))))
-            {
-                return 0;
-            }
-            for (int k = through; k < writes; k++) {
-                int moved = fmt->output_kind == _PyIR_OUTPUT_WINDOW_DST_FIRST &&
-                            k == fmt->dst && (dst == IR_NO_DST || dst < nl);
-                if (!_PyIR_ObserveHome(observed, base + k, nl, limit,
-                        moved || (first_null && k == fmt->dst)
-                            ? _PyIR_OBSERVED_NULL : _PyIR_OBSERVED_VALUE, 0))
-                {
-                    return 0;
-                }
-            }
-        }
-        else {
+        if (!_PyIR_ObserveHome(observed, home, nl, limit, physical, cut)) {
             return 0;
         }
-    }
-    else {
-        return 0;
     }
     return 1;
 }
@@ -342,94 +426,6 @@ _PyIR_CallReadsOperandHome(const _PyIRWord *wp, int home, int *nullable)
         }
     }
     return found;
-}
-
-/* Inputs whose ABI accepts NULL: window-relative positions for WINDOW rows,
- * semantic IN0+k positions for register rows. This is a read capability,
- * not a definition or retirement: cold consumers must independently prove
- * the home is NULL. A call's callable is not nullable; its operands are
- * judged by _PyIR_CallOperandNullable(). */
-static inline uint32_t
-_PyIR_NullableInputs(_PyIRWord word)
-{
-    switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
-        case CALL:
-        case CALL_KW:
-        case CALL_FUNCTION_EX:
-            return 0;  /* Only operands accept NULL: see above. */
-        case FOR_ITER:
-        case SEND:
-        case POP_ITER:
-        case END_SEND:
-            return 1u << 1;  /* Optional virtual-iterator cursor. */
-        case CLEANUP_THROW:
-            /* VM child entry has already taken the last sent value. */
-            return (1u << 1) | (1u << 2);
-        case WITH_EXCEPT_START:
-            return 1u << 1;  /* Optional bound exit-method receiver. */
-        default:
-            return 0;
-    }
-}
-
-static inline _PyIRSlotOutcome
-_PyIR_Outcome(_PyIRWord word, int taken)
-{
-    int base = (int)IR_B(word);
-    int dst = (int)IR_A(word);
-    switch (_PyIR_HandlerBase[IR_HANDLER(word)]) {
-        case FOR_ITER:
-            return taken ? (_PyIRSlotOutcome){1, base, 2, IR_NO_DST}
-                         : (_PyIRSlotOutcome){1, base + 1, 1, dst};
-        case SEND:
-            return taken ? (_PyIRSlotOutcome){1, base, 3, dst}
-                         : (_PyIRSlotOutcome){1, base + 2, 1, IR_NO_DST};
-        case CLEANUP_THROW:
-            return (_PyIRSlotOutcome){1, base, 4, dst};
-        default:
-            return (_PyIRSlotOutcome){0, 0, 0, IR_NO_DST};
-    }
-}
-
-/* Physical input windows include untouched stack holes. They preserve owners
- * but do not read them. Keep explicit input fields independent of this audit:
- * collection updates can encode their trailing values outside the window.
- * Opaque call/activation adapters retain the conservative full-window rule. */
-static inline int
-_PyIR_ReadsWindowHome(_PyIRWord word, int arg, int home)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int window = -1;
-    for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-            window = (int)fields[f];
-        }
-    }
-    int relative = home - window;
-    if (window < 0 || relative < 0 || relative >= _PyIR_Extent(fmt->reads, arg)) {
-        return 0;
-    }
-    switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
-        case LIST_APPEND:
-        case SET_ADD:
-        case MAP_ADD:
-            return relative == 0;
-        case LIST_EXTEND:
-        case SET_UPDATE:
-        case DICT_UPDATE:
-            return relative == 0 || relative == arg;
-        case DICT_MERGE:
-            return relative == 0 || relative == 3 || relative == arg + 3;
-        case COPY:
-            return relative == 0;
-        case SWAP:
-            return relative == 0 || relative == arg - 1;
-        case WITH_EXCEPT_START:
-            return relative != 3;
-        default:
-            return 1;
-    }
 }
 
 /* A Move word (Python/register_ops/values.rop): its destination count, its
@@ -498,10 +494,12 @@ _PyIR_MoveReads(const _PyIRWord *wp, int home)
     return _PyIR_MoveSourceOf(wp, home, &extra) >= 0 || extra;
 }
 
-/* A physical home can alias several semantic inputs. Every actual read,
- * including an independent window use, must accept NULL. */
+/* Whether the word at wp, read with the format of handler word (its own,
+ * except where transparent observation hides the real handler), reads home
+ * and every read accepts NULL: a home operand declared vacant (vacant(...)
+ * or Maybe<Src>), a call operand that may be NULL, or a move's source */
 static inline int
-_PyIR_NullableHomeAs(_PyIRWord word, const _PyIRWord *wp, int arg, int home)
+_PyIR_NullableHomeAs(_PyIRWord word, const _PyIRWord *wp, int home)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (_PyIR_IsMoveFormat(fmt)) {
@@ -510,991 +508,6 @@ _PyIR_NullableHomeAs(_PyIRWord word, const _PyIRWord *wp, int arg, int home)
     }
     if (_PyIR_SpanReadsHome(wp, home)) {
         // The elements of a span are values that the word takes
-        return 0;
-    }
-    uint32_t inputs = _PyIR_NullableInputs(word);
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int seen = 0;
-    for (int f = 0; f < 4; f++) {
-        int role = fmt->roles[f];
-        if (role >= _PyIR_ROLE_IN0 && (int)fields[f] == home) {
-            int input = role - _PyIR_ROLE_IN0;
-            if (input >= 32 || !(inputs & (1u << input))) {
-                return 0;
-            }
-            seen = 1;
-        }
-        if (role == _PyIR_ROLE_BASE && _PyIR_ReadsWindowHome(word, arg, home)) {
-            int relative = home - (int)fields[f];
-            // A swap moves what it finds, NULL too: resolution moves a
-            // value to a vacant home by one
-            int moves = _PyIR_BaseOpcode(IR_HANDLER(word)) == SWAP;
-            if (relative < 0 || relative >= 32 ||
-                (!moves && !(inputs & (1u << relative))))
-            {
-                return 0;
-            }
-            seen = 1;
-        }
-    }
-    if (_PyIR_IsCallWord(word)) {
-        int nullable;
-        if (_PyIR_CallReadsOperandHome(wp, home, &nullable)) {
-            if (!nullable) {
-                return 0;
-            }
-            seen = 1;
-        }
-    }
-    return seen;
-}
-
-/* The head of the word at wp as it would read with handler word, which is
- * wp's own except where transparent observation hides the real handler */
-static inline int
-_PyIR_NullableHome(const _PyIRWord *wp, int arg, int home)
-{
-    return _PyIR_NullableHomeAs(*wp, wp, arg, home);
-}
-
-static inline int
-_PyIR_ReadsHome(const _PyIRWord *wp, int arg, int home)
-{
-    _PyIRWord word = *wp;
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (_PyIR_IsMoveFormat(fmt)) {
-        return _PyIR_MoveReads(wp, home);
-    }
-    if (_PyIR_SpanReadsHome(wp, home)) {
-        return 1;
-    }
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] >= _PyIR_ROLE_IN0 && (int)fields[f] == home) {
-            return 1;
-        }
-    }
-    if (_PyIR_IsCallWord(word)) {
-        int nullable;
-        return _PyIR_CallReadsOperandHome(wp, home, &nullable);
-    }
-    return _PyIR_ReadsWindowHome(word, arg, home);
-}
-
-/* The homes [*lo, *hi) that contain every home the word reads, so that a
- * caller testing each home for _PyIR_ReadsHome() can skip the rest. */
-static inline void
-_PyIR_ReadBounds(const _PyIRWord *wp, int arg, int *lo, int *hi)
-{
-    _PyIRWord word = *wp;
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int low = INT_MAX, high = INT_MIN;
-    int window = -1;
-    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
-        int nspans = _PyIR_SpanCountFields(fmt);
-        for (int s = 0; s < nspans; s++) {
-            int first, is_source;
-            int count = _PyIR_SpanBounds(wp, IR_HANDLER(word), s, &first,
-                                         &is_source);
-            for (int k = 0; is_source && k < count; k++) {
-                int src = _PyIR_SpanElement(wp, IR_HANDLER(word), first + k);
-                low = Py_MIN(low, src);
-                high = Py_MAX(high, src + 1);
-            }
-        }
-    }
-    for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] >= _PyIR_ROLE_IN0) {
-            low = Py_MIN(low, (int)fields[f]);
-            high = Py_MAX(high, (int)fields[f] + 1);
-        }
-        if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-            window = (int)fields[f];
-        }
-    }
-    int reads = _PyIR_Extent(fmt->reads, arg);
-    if (window >= 0 && reads > 0) {
-        low = Py_MIN(low, window);
-        high = Py_MAX(high, window + reads);
-    }
-    if (_PyIR_IsCallWord(word)) {
-        int n = _PyIR_CallNumSlots(word);
-        for (int k = 0; k < n; k++) {
-            int operand = _PyIR_CallOperand(wp, k);
-            low = Py_MIN(low, operand);
-            high = Py_MAX(high, operand + 1);
-        }
-    }
-    *lo = low;
-    *hi = high;
-}
-
-/* The successful final stack commit consumes inputs outside its unchanged
- * window prefix. Through homes retain their logical values even when they
- * are read; fresh outputs are handled independently by the caller. */
-static inline int
-_PyIR_ConsumesNormalInput(const _PyIRWord *wp, int arg, int home)
-{
-    _PyIRWord word = *wp;
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int through = _PyIR_Extent(fmt->through, arg);
-    for (int f = 0; f < 4; f++) {
-        if (!(fmt->flags & _PyIR_WINDOW) && fmt->roles[f] >= _PyIR_ROLE_IN0 &&
-            fmt->roles[f] - _PyIR_ROLE_IN0 < through &&
-            (int)fields[f] == home)
-        {
-            return 0;
-        }
-        if (fmt->roles[f] == _PyIR_ROLE_BASE &&
-            home >= (int)fields[f] && home - (int)fields[f] < through)
-        {
-            return 0;
-        }
-    }
-    return _PyIR_ReadsHome(wp, arg, home);
-}
-
-enum {
-    _PyIR_BINDING_NO_READ,
-    _PyIR_BINDING_CHECKED_NULL,
-    _PyIR_BINDING_REQUIRES_VALUE,
-};
-
-/* A saved NULL fast-local can reach a checked read, but not an unchecked
- * local borrow or any other physical alias that requires a value. */
-static inline int
-_PyIR_BindingRead(const _PyIRWord *wp, int arg, int home)
-{
-    _PyIRWord word = *wp;
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-    int result = _PyIR_BINDING_NO_READ;
-    for (int f = 0; f < 4; f++) {
-        if ((int)fields[f] != home) {
-            continue;
-        }
-        switch (fmt->roles[f]) {
-            case _PyIR_ROLE_LOCAL_IN:
-                if (opcode == LOAD_FAST_CHECK) {
-                    result = Py_MAX(result, _PyIR_BINDING_CHECKED_NULL);
-                }
-                else {
-                    return _PyIR_BINDING_REQUIRES_VALUE;
-                }
-                break;
-            case _PyIR_ROLE_LOCAL_CLEAR:
-                if (opcode == DELETE_FAST) {
-                    result = Py_MAX(result, _PyIR_BINDING_CHECKED_NULL);
-                }
-                else {
-                    return _PyIR_BINDING_REQUIRES_VALUE;
-                }
-                break;
-            case _PyIR_ROLE_LOCAL_MOVE:
-            case _PyIR_ROLE_CELL:
-                return _PyIR_BINDING_REQUIRES_VALUE;
-        }
-    }
-    // The checked arms of the local families test the local first
-    if ((IR_HANDLER(word) == ROP_HANDLER_LocalRead_Checked &&
-         (int)IR_B(word) == home) ||
-        (IR_HANDLER(word) == ROP_HANDLER_LocalDelete_Checked &&
-         (int)IR_A(word) == home))
-    {
-        return _PyIR_BINDING_CHECKED_NULL;
-    }
-    if (_PyIR_ReadsHome(wp, arg, home)) {
-        return _PyIR_BINDING_REQUIRES_VALUE;
-    }
-    return result;
-}
-
-/* A physical write need not bind a value: STORE_FAST can receive a saved
- * NULL, and DELETE_FAST deliberately clears its local. Only a checked
- * committed output that guarantees a value can discharge this obligation. */
-static inline int
-_PyIR_DefinesBinding(_PyIRWord word, int arg, int edge, int home)
-{
-    (void)arg;
-    int kind = _PyIR_ObserverOutcome(word, edge);
-    if ((kind == _PyIR_OBSERVER_FOR_BODY ||
-         kind == _PyIR_OBSERVER_COMPLETION) &&
-        _PyIR_Outcome(word, edge).dst == home)
-    {
-        return 1;
-    }
-    return 0;
-}
-
-/* Ordinary fresh definitions use the emitter's physical output mapping.
- * Edge-specific semantic outcomes take precedence in callers. Permutations
- * preserve owner provenance; they cannot reconstruct an unavailable input.
- * The homes of a word are the range [lo, hi) but for except, and single.
- * Callers that test many homes of one word decode it once. */
-typedef struct {
-    int lo, hi, single, except;
-} _PyIRDefines;
-
-static inline _PyIRDefines
-_PyIR_DefinesOf(_PyIRWord word, int arg)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    const _PyIRDefines none = {0, 0, INT_MIN, INT_MIN};
-    // A swap or a move transports values: it makes none
-    if (_PyIR_Outcome(word, 0).semantic ||
-        _PyIR_BaseOpcode(IR_HANDLER(word)) == SWAP)
-    {
-        return none;
-    }
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int dst = -1, window = -1;
-    for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] == _PyIR_ROLE_DST) {
-            if (dst < 0) {
-                dst = (int)fields[f];
-            }
-        }
-        if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-            window = (int)fields[f];
-        }
-    }
-    int through = _PyIR_Extent(fmt->through, arg);
-    int writes = _PyIR_Extent(fmt->writes, arg);
-    switch (fmt->output_kind) {
-        case _PyIR_OUTPUT_REGISTER_DST:
-            if (dst >= 0 && dst != IR_NO_DST) {
-                return (_PyIRDefines){dst, dst + writes - through,
-                                      INT_MIN, INT_MIN};
-            }
-            return none;
-        case _PyIR_OUTPUT_WINDOW:
-            if (window >= 0) {
-                return (_PyIRDefines){window + through, window + writes,
-                                      INT_MIN, INT_MIN};
-            }
-            return none;
-        case _PyIR_OUTPUT_WINDOW_DST_FIRST: {
-            _PyIRDefines defines = none;
-            if (dst >= 0 && dst != IR_NO_DST) {
-                defines.single = dst;
-            }
-            if (window >= 0) {
-                defines.lo = window + through;
-                defines.hi = window + writes;
-                defines.except = window + fmt->dst;
-            }
-            return defines;
-        }
-        default:
-            return none;
-    }
-}
-
-static inline int
-_PyIR_DefinesAt(const _PyIRDefines *defines, int home)
-{
-    return home == defines->single ||
-           (home >= defines->lo && home < defines->hi &&
-            home != defines->except);
-}
-
-static inline int
-_PyIR_DefinesHome(_PyIRWord word, int arg, int home)
-{
-    _PyIRDefines defines = _PyIR_DefinesOf(word, arg);
-    return _PyIR_DefinesAt(&defines, home);
-}
-
-enum {
-    _PyIR_PHYSICAL_PRESERVE,
-    _PyIR_PHYSICAL_SET_NULL,
-    _PyIR_PHYSICAL_UNKNOWN,
-    _PyIR_PHYSICAL_TRANSPORT,
-};
-
-typedef struct {
-    int kind;
-    int source;
-} _PyIRPhysicalTransfer;
-
-enum {
-    /* Every home is unknown */
-    _PyIR_PHYS_UNKNOWN,
-    _PyIR_PHYS_OPERANDS,
-    /* Only the home of A is cleared */
-    _PyIR_PHYS_CLEAR_A,
-    /* Only the home of B is cleared: a store takes its value's owner */
-    _PyIR_PHYS_CLEAR_B,
-    _PyIR_PHYS_COPY,
-    _PyIR_PHYS_SWAP,
-    _PyIR_PHYS_MOVE,
-    _PyIR_PHYS_FOR_ITER,
-    _PyIR_PHYS_COMPLETE,
-    _PyIR_PHYS_GENERIC,
-};
-
-/* What a word does to the physical homes of its frame, decoded once for the
- * homes that _PyIR_PhysicalAt() then tests one at a time. */
-typedef struct {
-    int mode, nl, limit, edge, arg;
-    int base, dst, through, writes, window_reads;
-    int completion;
-    uint32_t fields[4];
-    const _PyIRWord *wp;
-    const _PyIRFormat *fmt;
-    _PyIRSlotOutcome outcome;
-    _PyIRDefines defines;
-} _PyIRPhysicalWord;
-
-static inline void
-_PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
-                   _PyIRPhysicalWord *p)
-{
-    _PyIRWord word = *wp;
-    p->mode = _PyIR_PHYS_UNKNOWN;
-    int handler = IR_HANDLER(word);
-    if (handler >= IR_NUM_HANDLERS || nl < 0 || limit > IR_MAX_SLOTS ||
-        limit < nl || edge < 0 || edge > 1)
-    {
-        return;
-    }
-    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    if (!(fmt->flags & _PyIR_VALID) ||
-        (edge && !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD))))
-    {
-        return;
-    }
-    if (_PyIR_IsMoveFormat(fmt)) {
-        if (edge) {
-            return;
-        }
-        p->wp = wp;
-        p->fmt = fmt;
-        p->nl = nl;
-        p->limit = limit;
-        p->edge = edge;
-        p->arg = arg;
-        p->mode = _PyIR_PHYS_MOVE;
-        return;
-    }
-    p->fields[0] = IR_A(word);
-    p->fields[1] = IR_B(word);
-    p->fields[2] = IR_C(word);
-    p->fields[3] = IR_D(word);
-    if (handler == ROP_HANDLER_LocalWrite_Store ||
-        handler == ROP_HANDLER_LocalWrite_Restore)
-    {
-        // The local (A) is no scratch home; the value's (B) is left vacant
-        p->nl = nl;
-        p->limit = limit;
-        p->mode = _PyIR_PHYS_CLEAR_B;
-        return;
-    }
-    const uint32_t *fields = p->fields;
-    int base = -1;
-    int dst = -1;
-    for (int f = 0; f < 4; f++) {
-        int role = fmt->roles[f];
-        if (role == _PyIR_ROLE_BASE) {
-            base = (int)fields[f];
-        }
-        else if (role == _PyIR_ROLE_DST) {
-            dst = dst < 0 ? (int)fields[f] : dst;
-            if (dst != IR_NO_DST && dst >= limit) {
-                return;
-            }
-            if (dst == IR_NO_DST &&
-                !(fmt->flags & _PyIR_DISCARDS)) {
-                return;
-            }
-        }
-        else if (role >= _PyIR_ROLE_IN0 && fields[f] >= (uint32_t)limit) {
-            return;
-        }
-        else if (role >= _PyIR_ROLE_LOCAL_IN &&
-                 role <= _PyIR_ROLE_CELL && fields[f] >= (uint32_t)nl)
-        {
-            return;
-        }
-    }
-    /* Extent arithmetic uses int; reject malformed arguments before it. */
-    if (arg < -IR_FIELD_MAX || arg > IR_CD_MAX) {
-        return;
-    }
-    int reads = _PyIR_Extent(fmt->reads, arg);
-    int writes = _PyIR_Extent(fmt->writes, arg);
-    int through = _PyIR_Extent(fmt->through, arg);
-    if (reads < 0 || writes < 0 || through < 0 || through > reads ||
-        writes < through ||
-        (base >= 0 && (base < nl || base > limit - Py_MAX(reads, writes))))
-    {
-        return;
-    }
-    p->wp = wp;
-    p->fmt = fmt;
-    p->nl = nl;
-    p->limit = limit;
-    p->edge = edge;
-    p->arg = arg;
-    p->base = base;
-    p->dst = dst;
-    p->through = through;
-    p->writes = writes;
-
-    if (_PyIR_CALL_SHAPED(fmt->operands)) {
-        /* Every successful call route takes its callable and operand
-         * homes: native retirement clears them, and a Python child moves
-         * them into its frame, which lies above the parent's.  Only the
-         * result's home is rewritten besides, and it is no NULL fact. */
-        if (edge || fmt->roles[0] != _PyIR_ROLE_DST ||
-            fmt->roles[1] != _PyIR_ROLE_IN0 || arg < 0 ||
-            (dst >= nl && dst != IR_NO_DST && dst >= limit))
-        {
-            return;
-        }
-        int n = _PyIR_CallNumSlots(word);
-        for (int k = 0; k < n; k++) {
-            if (_PyIR_CallOperand(wp, k) >= limit) {
-                return;
-            }
-        }
-        p->mode = _PyIR_PHYS_OPERANDS;
-        return;
-    }
-    switch (_PyIR_BaseOpcode(handler)) {
-        case COPY:
-            if (edge || fmt->roles[0] != _PyIR_ROLE_BASE ||
-                fmt->roles[1] != _PyIR_ROLE_IMM || arg != (int)IR_B(word) ||
-                arg < 1 || reads != arg || writes != arg + 1 ||
-                through != arg || base < 0)
-            {
-                return;
-            }
-            p->mode = _PyIR_PHYS_COPY;
-            return;
-        case SWAP:
-            if (edge || fmt->roles[0] != _PyIR_ROLE_BASE ||
-                fmt->roles[1] != _PyIR_ROLE_IMM || arg != (int)IR_B(word) ||
-                arg < 2 || reads != arg || writes != arg || base < 0)
-            {
-                return;
-            }
-            p->mode = _PyIR_PHYS_SWAP;
-            return;
-        case STORE_FAST:
-            if (edge || fmt->roles[0] != _PyIR_ROLE_IN0 ||
-                fmt->roles[1] != _PyIR_ROLE_LOCAL_OUT ||
-                arg != (int)IR_B(word) || IR_B(word) >= (uint32_t)nl ||
-                reads != 1 || writes != 0)
-            {
-                return;
-            }
-            p->mode = _PyIR_PHYS_CLEAR_A;
-            return;
-        case POP_EXCEPT:
-            /* It detaches scratch A, the saved exception */
-            if (edge || handler != ROP_HANDLER_ExceptLeave_Restore ||
-                fmt->roles[0] != _PyIR_ROLE_IN0 ||
-                fmt->roles[1] != _PyIR_ROLE_NONE ||
-                fmt->roles[2] != _PyIR_ROLE_NONE ||
-                fmt->roles[3] != _PyIR_ROLE_NONE ||
-                IR_A(word) < (uint32_t)nl)
-            {
-                return;
-            }
-            p->mode = _PyIR_PHYS_CLEAR_A;
-            return;
-        case SEND:
-        case CLEANUP_THROW:
-            /* A completion that discards its value retires the whole window
-             * (the Send completions): the receiver, the cursor, the sent value and,
-             * for a throw, the exception. */
-            if (edge == 1 && base >= 0 && (fmt->flags & _PyIR_DISCARDS) &&
-                fmt->roles[1] == _PyIR_ROLE_BASE)
-            {
-                p->completion = _PyIR_BaseOpcode(handler) == SEND ? 3 : 4;
-                if (base > limit - p->completion) {
-                    return;
-                }
-                p->mode = _PyIR_PHYS_COMPLETE;
-                return;
-            }
-            break;
-        case FOR_ITER:
-            if (fmt->roles[0] != _PyIR_ROLE_DST ||
-                fmt->roles[1] != _PyIR_ROLE_BASE || base < 0 ||
-                reads != 2 || fmt->dst != 2 ||
-                !((writes == 3 && through <= 2) ||
-                  (writes == 2 && through == 2 &&
-                   (fmt->effects & _PyIR_PUSHES_FRAME))) ||
-                (dst >= nl && dst != IR_NO_DST && dst != base + 2))
-            {
-                return;
-            }
-            /* A pristine FOR word can run the child-entering GEN variant.
-             * Only the completed receiver/cursor pair has a shared fact. */
-            p->completion = edge == 1 &&
-                _PyIR_ObserverOutcome(word, edge) == _PyIR_OBSERVER_COMPLETION;
-            p->mode = _PyIR_PHYS_FOR_ITER;
-            return;
-    }
-
-    /* A send enters the receiver generator's own frame, never this frame's
-     * arena, so homes outside its window survive like any window word's. */
-    if ((fmt->effects & _PyIR_PUSHES_FRAME) &&
-        !(_PyIR_BaseOpcode(handler) == SEND && base >= 0))
-    {
-        return;
-    }
-    p->window_reads = reads;
-    p->outcome = _PyIR_Outcome(word, edge);
-    p->defines = _PyIR_DefinesOf(word, arg);
-    p->mode = _PyIR_PHYS_GENERIC;
-}
-
-/* A normal successor's physical scratch-home update. TRANSPORT reads the
- * incoming row: callers must calculate all destinations before changing it.
- * This does not prove that a source is a valid executable input owner. */
-static inline _PyIRPhysicalTransfer
-_PyIR_PhysicalAt(const _PyIRPhysicalWord *p, int home)
-{
-    const _PyIRPhysicalTransfer unknown = {_PyIR_PHYSICAL_UNKNOWN, -1};
-    const _PyIRPhysicalTransfer preserve = {_PyIR_PHYSICAL_PRESERVE, -1};
-    const _PyIRPhysicalTransfer set_null = {_PyIR_PHYSICAL_SET_NULL, -1};
-    if (p->mode == _PyIR_PHYS_UNKNOWN || home < p->nl || home >= p->limit) {
-        return unknown;
-    }
-    switch (p->mode) {
-        case _PyIR_PHYS_OPERANDS: {
-            if (home == p->dst) {
-                return unknown;
-            }
-            int nullable;
-            if (home == (int)p->fields[1] ||
-                _PyIR_CallReadsOperandHome(p->wp, home, &nullable))
-            {
-                return set_null;
-            }
-            return preserve;
-        }
-        case _PyIR_PHYS_CLEAR_A:
-            return home == (int)p->fields[0] ? set_null : preserve;
-        case _PyIR_PHYS_CLEAR_B:
-            return home == (int)p->fields[1] ? set_null : preserve;
-        case _PyIR_PHYS_COPY:
-            if (home == p->base + p->arg) {
-                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, p->base};
-            }
-            return preserve;
-        case _PyIR_PHYS_MOVE: {
-            /* A destination takes its source's value; a source that no
-             * pair writes is left vacant by Transfer and Retire, and keeps
-             * its value under Copy */
-            int from = _PyIR_MoveGives(p->wp, home);
-            if (from >= 0) {
-                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, from};
-            }
-            if (_PyIR_MoveReads(p->wp, home)) {
-                return IR_HANDLER(*p->wp) == ROP_SELECT_Move_copy
-                    ? preserve : set_null;
-            }
-            return preserve;
-        }
-        case _PyIR_PHYS_SWAP:
-            if (home == p->base) {
-                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT,
-                                               p->base + p->arg - 1};
-            }
-            if (home == p->base + p->arg - 1) {
-                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, p->base};
-            }
-            return preserve;
-        case _PyIR_PHYS_FOR_ITER:
-            if (p->completion && (home == p->base || home == p->base + 1)) {
-                return set_null;
-            }
-            return unknown;
-        case _PyIR_PHYS_COMPLETE:
-            return home >= p->base && home - p->base < p->completion
-                ? set_null : preserve;
-    }
-    assert(p->mode == _PyIR_PHYS_GENERIC);
-    /* In every other format, a read outside the unchanged prefix or a
-     * published result may replace the old physical value. An untouched
-     * home, including LOAD_GLOBAL's unrequested optional-self slot, survives. */
-    const _PyIRFormat *fmt = p->fmt;
-    for (int f = 0; f < 4; f++) {
-        int role = fmt->roles[f];
-        if (role >= _PyIR_ROLE_IN0 && (int)p->fields[f] == home) {
-            return unknown;
-        }
-        if (role >= _PyIR_ROLE_LOCAL_IN && role <= _PyIR_ROLE_CELL &&
-            (int)p->fields[f] == home)
-        {
-            return unknown;
-        }
-    }
-    if (p->base >= 0 && home >= p->base + p->through &&
-        home - p->base < Py_MAX(p->window_reads, p->writes))
-    {
-        return unknown;
-    }
-    if (p->outcome.semantic &&
-        ((home >= p->outcome.first &&
-          home - p->outcome.first < p->outcome.count) ||
-         home == p->outcome.dst))
-    {
-        return unknown;
-    }
-    if (_PyIR_DefinesAt(&p->defines, home)) {
-        return unknown;
-    }
-    return preserve;
-}
-
-static inline _PyIRPhysicalTransfer
-_PyIR_NormalPhysicalTransfer(const _PyIRWord *wp, int arg, int edge, int home,
-                             int nl, int limit)
-{
-    _PyIRPhysicalWord word;
-    _PyIR_PhysicalWord(wp, arg, edge, nl, limit, &word);
-    return _PyIR_PhysicalAt(&word, home);
-}
-
-enum {
-    _PyIR_ABSENCE_UNKNOWN,
-    _PyIR_ABSENCE_PRESERVE,
-    _PyIR_ABSENCE_SET_EMPTY,
-    _PyIR_ABSENCE_SET_VALUE,
-};
-
-/* Successful CALL cleanup is a logical contract. A returned child can leave
- * nonowning header bytes in the arena; they are not physical NULL facts.
- * Native calls touch only their own window, so outside it this can preserve
- * a prior absence fact but cannot create one. */
-static inline int
-_PyIR_NormalCallAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limit)
-{
-    _PyIRWord word = *wp;
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (home < nl || home >= limit) {
-        return _PyIR_ABSENCE_UNKNOWN;
-    }
-    int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-    int is_call = _PyIR_CALL_SHAPED(fmt->operands);
-    int base = (int)IR_B(word), dst = (int)IR_A(word);
-    if (!is_call) {
-        /* Reached suspension/child outcomes leave their new recipient live.
-         * Cursor/receiver updates have their own protocols, so the whole
-         * affected window loses absence; no completion slot is guessed empty.
-         * A prior empty tail stays owner-free after a completed child cleanup. */
-        if (opcode != SEND && opcode != FOR_ITER && opcode != CLEANUP_THROW)
-        {
-            return _PyIR_ABSENCE_UNKNOWN;
-        }
-        int reads = _PyIR_Extent(fmt->reads, arg);
-        int writes = _PyIR_Extent(fmt->writes, arg);
-        if (base < nl || reads < 0 || writes < 0 ||
-            base > limit - Py_MAX(reads, writes) ||
-            fmt->roles[0] != _PyIR_ROLE_DST || fmt->roles[1] != _PyIR_ROLE_BASE)
-        {
-            return _PyIR_ABSENCE_UNKNOWN;
-        }
-        if (home == dst) {
-            return _PyIR_ABSENCE_SET_VALUE;
-        }
-        if (home >= base && home - base < Py_MAX(reads, writes)) {
-            return _PyIR_ABSENCE_UNKNOWN;
-        }
-        return _PyIR_ABSENCE_PRESERVE;
-    }
-    return _PyIR_ABSENCE_UNKNOWN;
-}
-
-/* The homes of a register instruction (WF).  A word names up to six homes:
- * its fields with a home role and the further parts of its home group, part
- * i at the group's field plus i.  For each the format declares whether the
- * word reads it, whether it may be NULL when read, and what each normal
- * edge leaves there (_PyIR_HOME_*), the meet of the points its family's
- * arms publish at that edge.  The readers below answer from these alone;
- * a home the word does not name is preserved.  They hold for register
- * instructions (handler >= IR_NUM_OLD_HANDLERS). */
-typedef struct {
-    const _PyIRFormat *fmt;
-    int slot[_PyIR_HOMES];  // the home's slot, or -1 if the word names none
-    uint8_t read;           // bit h: the word reads home h
-    uint8_t dst;            // bit h: home h is a destination field
-} _PyIRHomes;
-
-static inline void
-_PyIR_WordHomes(_PyIRWord word, _PyIRHomes *v)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    v->fmt = fmt;
-    v->read = v->dst = 0;
-    for (int h = 0; h < _PyIR_HOMES; h++) {
-        v->slot[h] = -1;
-    }
-    for (int f = 0; f < 4; f++) {
-        int role = fmt->roles[f];
-        int group = fmt->group && f == fmt->group_at;
-        if (role == _PyIR_ROLE_DST) {
-            /* A group in a destination field is defined, not read (Out) */
-            if (fields[f] != IR_NO_DST) {
-                v->slot[f] = (int)fields[f];
-            }
-            if (!group) {
-                v->dst |= 1u << f;
-            }
-        }
-        else if (role == _PyIR_ROLE_BASE || role == _PyIR_ROLE_CELL ||
-                 role >= _PyIR_ROLE_IN0)
-        {
-            v->slot[f] = (int)fields[f];
-            v->read |= 1u << f;
-        }
-    }
-    if (fmt->group) {
-        int first = v->slot[fmt->group_at];
-        for (int i = 1; i < fmt->group && 3 + i < _PyIR_HOMES; i++) {
-            v->slot[3 + i] = first < 0 ? -1 : first + i;
-            if (v->read & (1u << fmt->group_at)) {
-                v->read |= 1u << (3 + i);
-            }
-        }
-    }
-}
-
-static inline int
-_PyIR_HomeCode(const _PyIRFormat *fmt, int edge, int h)
-{
-    return (int)((fmt->edges >> (2 * (_PyIR_HOMES * edge + h))) & 3);
-}
-
-/* What edge leaves in home: -1 if the word names no such home.  Two
- * operands can name one home (a completion value in its receiver's home):
- * a definition is stored after the operands retire, so it wins; any other
- * disagreement is unknown.  Edge -1 is every normal edge the word takes;
- * the caller checks that it takes the edge it asks about (fmt->normal). */
-static inline int
-_PyIR_HomeAfter(const _PyIRHomes *v, int edge, int home)
-{
-    if (edge < 0) {
-        int state = -2;
-        for (int e = 0; e < 2; e++) {
-            if (v->fmt->normal & (1u << e)) {
-                int after = _PyIR_HomeAfter(v, e, home);
-                state = state == -2 || state == after ? after : _PyIR_HOME_UNKNOWN;
-            }
-        }
-        return state == -2 ? _PyIR_HOME_UNKNOWN : state;
-    }
-    int state = -1;
-    for (int h = 0; h < _PyIR_HOMES; h++) {
-        if (v->slot[h] != home) {
-            continue;
-        }
-        int code = _PyIR_HomeCode(v->fmt, edge, h);
-        if (state < 0 || code == _PyIR_HOME_DEFINE) {
-            state = code;
-        }
-        else if (state != code && state != _PyIR_HOME_DEFINE) {
-            state = _PyIR_HOME_UNKNOWN;
-        }
-    }
-    return state;
-}
-
-/* Whether the word reads home through a home operand; *vacant: whether
- * every such read accepts NULL */
-static inline int
-_PyIR_HomeRead(const _PyIRHomes *v, int home, int *vacant)
-{
-    int seen = 0;
-    *vacant = 1;
-    for (int h = 0; h < _PyIR_HOMES; h++) {
-        if (v->slot[h] == home && (v->read & (1u << h))) {
-            seen = 1;
-            *vacant &= (v->fmt->vacant >> h) & 1;
-        }
-    }
-    *vacant &= seen;
-    return seen;
-}
-
-/* Whether the word reads home, or leaves it other than it was on an edge */
-static inline int
-_PyIR_HomeTouched(const _PyIRHomes *v, int home)
-{
-    int vacant;
-    if (_PyIR_HomeRead(v, home, &vacant)) {
-        return 1;
-    }
-    int after = _PyIR_HomeAfter(v, 0, home);
-    int taken = _PyIR_HomeAfter(v, 1, home);
-    return (after >= 0 && after != _PyIR_HOME_PRESERVE) ||
-           (taken >= 0 && taken != _PyIR_HOME_PRESERVE);
-}
-
-/* The word's home operands lie in the frame: a destination below limit or
- * none, a read home below limit, a group's parts in scratch, a cell among
- * the locals */
-static inline int
-_PyIR_HomesInFrame(_PyIRWord word, const _PyIRHomes *v, int nl, int limit)
-{
-    const _PyIRFormat *fmt = v->fmt;
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    for (int f = 0; f < 4; f++) {
-        int role = fmt->roles[f];
-        if (fmt->group && f == fmt->group_at) {
-            int first = v->slot[f];
-            if (first < nl || first > limit - fmt->group) {
-                return 0;
-            }
-        }
-        else if (role == _PyIR_ROLE_DST) {
-            if (fields[f] != IR_NO_DST && fields[f] >= (uint32_t)limit) {
-                return 0;
-            }
-        }
-        else if (role == _PyIR_ROLE_CELL) {
-            if (fields[f] >= (uint32_t)nl) {
-                return 0;
-            }
-        }
-        else if (role >= _PyIR_ROLE_IN0 && fields[f] >= (uint32_t)limit) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-/* _PyIR_NormalPhysicalTransfer() from the homes: a move and a call keep
- * their own transfer; any other word preserves a home it does not name,
- * leaves a vacated one NULL and one it defines or leaves unknown unknown */
-static inline _PyIRPhysicalTransfer
-_PyIR_HomesPhysicalAt(const _PyIRWord *wp, int arg, int edge, int home,
-                      int nl, int limit)
-{
-    const _PyIRPhysicalTransfer unknown = {_PyIR_PHYSICAL_UNKNOWN, -1};
-    const _PyIRPhysicalTransfer preserve = {_PyIR_PHYSICAL_PRESERVE, -1};
-    const _PyIRPhysicalTransfer set_null = {_PyIR_PHYSICAL_SET_NULL, -1};
-    _PyIRWord word = *wp;
-    int handler = IR_HANDLER(word);
-    if (handler >= IR_NUM_HANDLERS || nl < 0 || limit > IR_MAX_SLOTS ||
-        limit < nl || edge < -1 || edge > 1 || home < nl || home >= limit)
-    {
-        return unknown;
-    }
-    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    if (!(fmt->flags & _PyIR_VALID) ||
-        (edge > 0 && !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD))))
-    {
-        return unknown;
-    }
-    if (_PyIR_IsMoveFormat(fmt) || _PyIR_CALL_SHAPED(fmt->operands)) {
-        return _PyIR_NormalPhysicalTransfer(wp, arg, edge < 0 ? 0 : edge,
-                                            home, nl, limit);
-    }
-    /* No arm of the family takes the edge (a return, a raise) */
-    if (edge >= 0 ? !(fmt->normal & (1u << edge)) : !fmt->normal) {
-        return unknown;
-    }
-    _PyIRHomes v;
-    _PyIR_WordHomes(word, &v);
-    if (!_PyIR_HomesInFrame(word, &v, nl, limit)) {
-        return unknown;
-    }
-    switch (_PyIR_HomeAfter(&v, edge, home)) {
-        case -1:
-        case _PyIR_HOME_PRESERVE:
-            return preserve;
-        case _PyIR_HOME_VACATE:
-            return set_null;
-        default:
-            return unknown;
-    }
-}
-
-/* _PyIR_ObservedHomes() from the homes, on a committed edge: a home read
- * and kept holds its owner (unknown, not retired); a vacated one is
- * missing and retired; a destination defined holds a value; any other
- * definition (a group part, which may be published NULL) or unknown state
- * is unknown, and retires the owner read there. */
-static inline int
-_PyIR_HomesObserved(_PyIRWord word, int edge, int nl, int limit,
-                    _PyIRObservedHomes *observed)
-{
-    if (edge < 0 || edge > 1 || nl < 0 || limit < nl) {
-        return 0;
-    }
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    const _PyIRFormat *declared = fmt->twin != _PyIR_NO_HANDLER
-        ? _PyIR_FormatOf(fmt->twin) : fmt;
-    if (!(declared->committed & (1u << edge))) {
-        return 0;
-    }
-    *observed = (_PyIRObservedHomes){0};
-    _PyIRHomes v;
-    _PyIR_WordHomes(word, &v);
-    if (!_PyIR_HomesInFrame(word, &v, nl, limit)) {
-        return 0;
-    }
-    for (int h = 0; h < _PyIR_HOMES; h++) {
-        int home = v.slot[h];
-        int first = 1, read = 0, dst = 0;
-        for (int k = 0; k < _PyIR_HOMES; k++) {
-            if (v.slot[k] == home) {
-                first &= k >= h;
-                read |= (v.read >> k) & 1;
-                dst |= (v.dst >> k) & 1;
-            }
-        }
-        if (home < 0 || !first) {
-            continue;
-        }
-        int physical, cut;
-        switch (_PyIR_HomeAfter(&v, edge, home)) {
-            case _PyIR_HOME_PRESERVE:
-                if (!read) {
-                    continue;
-                }
-                physical = _PyIR_OBSERVED_UNKNOWN;
-                cut = 0;
-                break;
-            case _PyIR_HOME_VACATE:
-                physical = _PyIR_OBSERVED_MISSING;
-                cut = 1;
-                break;
-            case _PyIR_HOME_DEFINE:
-                physical = dst ? _PyIR_OBSERVED_VALUE : _PyIR_OBSERVED_UNKNOWN;
-                cut = read;
-                break;
-            default:
-                physical = _PyIR_OBSERVED_UNKNOWN;
-                cut = read;
-                break;
-        }
-        if (!_PyIR_ObserveHome(observed, home, nl, limit, physical, cut)) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-/* _PyIR_NullableHomeAs() from the homes */
-static inline int
-_PyIR_HomesNullableAs(_PyIRWord word, const _PyIRWord *wp, int home)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (_PyIR_IsMoveFormat(fmt)) {
-        return _PyIR_MoveReads(wp, home);
-    }
-    if (_PyIR_SpanReadsHome(wp, home)) {
         return 0;
     }
     _PyIRHomes v;
@@ -1516,24 +529,290 @@ _PyIR_HomesNullableAs(_PyIRWord word, const _PyIRWord *wp, int home)
     return seen;
 }
 
-/* _PyIR_NormalCallAbsence() from the homes: on every normal edge, a home
- * left as it was keeps its absence, a vacated one is empty, a defined one
- * holds a value.  A call keeps its own contract. */
 static inline int
-_PyIR_HomesAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limit)
+_PyIR_NullableHome(const _PyIRWord *wp, int home)
+{
+    return _PyIR_NullableHomeAs(*wp, wp, home);
+}
+
+static inline int
+_PyIR_ReadsHome(const _PyIRWord *wp, int home)
+{
+    _PyIRWord word = *wp;
+    if (_PyIR_IsMoveWord(word)) {
+        return _PyIR_MoveReads(wp, home);
+    }
+    if (_PyIR_SpanReadsHome(wp, home)) {
+        return 1;
+    }
+    _PyIRHomes v;
+    _PyIR_WordHomes(word, &v);
+    int vacant;
+    if (_PyIR_HomeRead(&v, home, &vacant)) {
+        return 1;
+    }
+    int nullable;
+    return _PyIR_IsCallWord(word) &&
+           _PyIR_CallReadsOperandHome(wp, home, &nullable);
+}
+
+/* The homes [*lo, *hi) that contain every home the word reads, so that a
+ * caller testing each home for _PyIR_ReadsHome() can skip the rest. */
+static inline void
+_PyIR_ReadBounds(const _PyIRWord *wp, int *lo, int *hi)
 {
     _PyIRWord word = *wp;
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (home < nl || home >= limit) {
-        return _PyIR_ABSENCE_UNKNOWN;
+    int low = INT_MAX, high = INT_MIN;
+    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+        int nspans = _PyIR_SpanCountFields(fmt);
+        for (int s = 0; s < nspans; s++) {
+            int first, is_source;
+            int count = _PyIR_SpanBounds(wp, IR_HANDLER(word), s, &first,
+                                         &is_source);
+            for (int k = 0; is_source && k < count; k++) {
+                int src = _PyIR_SpanElement(wp, IR_HANDLER(word), first + k);
+                low = Py_MIN(low, src);
+                high = Py_MAX(high, src + 1);
+            }
+        }
     }
-    if (_PyIR_CALL_SHAPED(fmt->operands)) {
-        return _PyIR_NormalCallAbsence(wp, arg, home, nl, limit);
+    _PyIRHomes v;
+    _PyIR_WordHomes(word, &v);
+    for (int h = 0; h < _PyIR_HOMES; h++) {
+        if (v.read & (1u << h)) {
+            low = Py_MIN(low, v.slot[h]);
+            high = Py_MAX(high, v.slot[h] + 1);
+        }
     }
-    if (_PyIR_IsMoveFormat(fmt)) {
-        return _PyIR_ABSENCE_UNKNOWN;
+    if (_PyIR_IsCallWord(word)) {
+        int n = _PyIR_CallNumSlots(word);
+        for (int k = 0; k < n; k++) {
+            int operand = _PyIR_CallOperand(wp, k);
+            low = Py_MIN(low, operand);
+            high = Py_MAX(high, operand + 1);
+        }
     }
-    if (!fmt->normal) {
+    *lo = low;
+    *hi = high;
+}
+
+enum {
+    _PyIR_BINDING_NO_READ,
+    _PyIR_BINDING_CHECKED_NULL,
+    _PyIR_BINDING_REQUIRES_VALUE,
+};
+
+/* A saved NULL fast-local can reach a checked read, but not an unchecked
+ * local borrow or any other physical alias that requires a value. */
+static inline int
+_PyIR_BindingRead(const _PyIRWord *wp, int home)
+{
+    _PyIRWord word = *wp;
+    // The checked arms of the local families test the local first
+    if ((IR_HANDLER(word) == ROP_HANDLER_LocalRead_Checked &&
+         (int)IR_B(word) == home) ||
+        (IR_HANDLER(word) == ROP_HANDLER_LocalDelete_Checked &&
+         (int)IR_A(word) == home))
+    {
+        return _PyIR_BINDING_CHECKED_NULL;
+    }
+    return _PyIR_ReadsHome(wp, home) ? _PyIR_BINDING_REQUIRES_VALUE
+                                     : _PyIR_BINDING_NO_READ;
+}
+
+/* A physical write need not bind a value: a local store can receive a
+ * saved NULL, and a delete deliberately clears its local. Only a destination
+ * that a committed edge defines guarantees a value. */
+static inline int
+_PyIR_DefinesBinding(_PyIRWord word, int edge, int home)
+{
+    if (!_PyIR_Committed(word, edge)) {
+        return 0;
+    }
+    _PyIRHomes v;
+    _PyIR_WordHomes(word, &v);
+    for (int h = 0; h < _PyIR_HOMES; h++) {
+        if (v.slot[h] == home && (v.dst & (1u << h)) &&
+            _PyIR_HomeCode(v.fmt, edge, h) == _PyIR_HOME_DEFINE)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+enum {
+    _PyIR_PHYSICAL_PRESERVE,
+    _PyIR_PHYSICAL_SET_NULL,
+    _PyIR_PHYSICAL_UNKNOWN,
+    _PyIR_PHYSICAL_TRANSPORT,
+};
+
+typedef struct {
+    int kind;
+    int source;
+} _PyIRPhysicalTransfer;
+
+enum {
+    /* Every home is unknown */
+    _PyIR_PHYS_UNKNOWN,
+    /* A call: its callable and operands are taken, its result stored */
+    _PyIR_PHYS_OPERANDS,
+    _PyIR_PHYS_MOVE,
+    /* The word's homes */
+    _PyIR_PHYS_HOMES,
+};
+
+/* What a word does to the physical homes of its frame on a normal edge, or
+ * on every one (edge -1), decoded once for the homes that _PyIR_PhysicalAt()
+ * then tests one at a time. */
+typedef struct {
+    int mode, nl, limit, edge;
+    const _PyIRWord *wp;
+    _PyIRHomes v;
+} _PyIRPhysicalWord;
+
+static inline void
+_PyIR_PhysicalWord(const _PyIRWord *wp, int edge, int nl, int limit,
+                   _PyIRPhysicalWord *p)
+{
+    _PyIRWord word = *wp;
+    int handler = IR_HANDLER(word);
+    p->mode = _PyIR_PHYS_UNKNOWN;
+    p->v.fmt = NULL;
+    p->wp = wp;
+    p->nl = nl;
+    p->limit = limit;
+    p->edge = edge;
+    if (handler >= IR_NUM_HANDLERS || nl < 0 || limit > IR_MAX_SLOTS ||
+        limit < nl || edge < -1 || edge > 1)
+    {
+        return;
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (_PyIR_IsMoveFormat(fmt) || _PyIR_CALL_SHAPED(fmt->operands)) {
+        /* Neither jumps: its one normal edge is the next word */
+        if (edge > 0) {
+            return;
+        }
+        if (_PyIR_IsMoveFormat(fmt)) {
+            p->mode = _PyIR_PHYS_MOVE;
+            return;
+        }
+        /* Every successful call route takes its callable and operand
+         * homes: native retirement clears them, and a Python child moves
+         * them into its frame, which lies above the parent's.  Only the
+         * result's home is rewritten besides, and it is no NULL fact. */
+        if (fmt->roles[0] != _PyIR_ROLE_DST || fmt->roles[1] != _PyIR_ROLE_IN0 ||
+            (IR_A(word) != IR_NO_DST && IR_A(word) >= (uint32_t)limit) ||
+            IR_B(word) >= (uint32_t)limit)
+        {
+            return;
+        }
+        int n = _PyIR_CallNumSlots(word);
+        for (int k = 0; k < n; k++) {
+            if (_PyIR_CallOperand(wp, k) >= limit) {
+                return;
+            }
+        }
+        p->mode = _PyIR_PHYS_OPERANDS;
+        return;
+    }
+    /* No arm of the family takes the edge (a return, a raise) */
+    if (edge >= 0 ? !(fmt->normal & (1u << edge)) : !fmt->normal) {
+        return;
+    }
+    _PyIR_WordHomes(word, &p->v);
+    if (!_PyIR_HomesInFrame(word, &p->v, nl, limit)) {
+        return;
+    }
+    p->mode = _PyIR_PHYS_HOMES;
+}
+
+/* A normal successor's physical scratch-home update. TRANSPORT reads the
+ * incoming row: callers must calculate all destinations before changing it.
+ * A home the word keeps or does not name is preserved, one it vacates is
+ * NULL (the owner was taken), and one it defines or leaves unknown is
+ * unknown.  This does not prove that a source is a valid executable input
+ * owner. */
+static inline _PyIRPhysicalTransfer
+_PyIR_PhysicalAt(const _PyIRPhysicalWord *p, int home)
+{
+    const _PyIRPhysicalTransfer unknown = {_PyIR_PHYSICAL_UNKNOWN, -1};
+    const _PyIRPhysicalTransfer preserve = {_PyIR_PHYSICAL_PRESERVE, -1};
+    const _PyIRPhysicalTransfer set_null = {_PyIR_PHYSICAL_SET_NULL, -1};
+    if (p->mode == _PyIR_PHYS_UNKNOWN || home < p->nl || home >= p->limit) {
+        return unknown;
+    }
+    switch (p->mode) {
+        case _PyIR_PHYS_OPERANDS: {
+            if (home == (int)IR_A(*p->wp)) {
+                return unknown;
+            }
+            int nullable;
+            if (home == (int)IR_B(*p->wp) ||
+                _PyIR_CallReadsOperandHome(p->wp, home, &nullable))
+            {
+                return set_null;
+            }
+            return preserve;
+        }
+        case _PyIR_PHYS_MOVE: {
+            /* A destination takes its source's value; a source that no
+             * pair writes is left vacant by Transfer and Retire, and keeps
+             * its value under Copy */
+            int from = _PyIR_MoveGives(p->wp, home);
+            if (from >= 0) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, from};
+            }
+            if (_PyIR_MoveReads(p->wp, home)) {
+                return IR_HANDLER(*p->wp) == ROP_SELECT_Move_copy
+                    ? preserve : set_null;
+            }
+            return preserve;
+        }
+    }
+    assert(p->mode == _PyIR_PHYS_HOMES);
+    switch (_PyIR_HomeAfter(&p->v, p->edge, home)) {
+        case -1:
+        case _PyIR_HOME_PRESERVE:
+            return preserve;
+        case _PyIR_HOME_VACATE:
+            return set_null;
+        default:
+            return unknown;
+    }
+}
+
+static inline _PyIRPhysicalTransfer
+_PyIR_NormalPhysicalTransfer(const _PyIRWord *wp, int edge, int home,
+                             int nl, int limit)
+{
+    _PyIRPhysicalWord word;
+    _PyIR_PhysicalWord(wp, edge, nl, limit, &word);
+    return _PyIR_PhysicalAt(&word, home);
+}
+
+enum {
+    _PyIR_ABSENCE_UNKNOWN,
+    _PyIR_ABSENCE_PRESERVE,
+    _PyIR_ABSENCE_SET_EMPTY,
+    _PyIR_ABSENCE_SET_VALUE,
+};
+
+/* What every normal edge does to the logical absence of home: a home left
+ * as it was keeps its absence, a vacated one is empty, a defined one holds
+ * a value.  A returned child can leave nonowning header bytes in the arena,
+ * so a call states no absence; nor does a move. */
+static inline int
+_PyIR_NormalAbsence(const _PyIRWord *wp, int home, int nl, int limit)
+{
+    _PyIRWord word = *wp;
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (home < nl || home >= limit || _PyIR_CALL_SHAPED(fmt->operands) ||
+        _PyIR_IsMoveFormat(fmt) || !fmt->normal)
+    {
         return _PyIR_ABSENCE_UNKNOWN;
     }
     _PyIRHomes v;

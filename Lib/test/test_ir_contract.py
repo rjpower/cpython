@@ -101,30 +101,37 @@ class ContractTests(unittest.TestCase):
         set_null = (1, -1)
         unknown = (2, -1)
 
-        def transfer(name, fields, arg, edge, home, nl=2, limit=10):
+        def transfer(name, fields, edge, home, nl=2, limit=10):
             return testapi.ir_normal_physical_transfer(
-                named[name], *fields, arg, edge, home, nl, limit)
-
-        # COPY, SWAP, POP_TOP and STORE_FAST are stack ops that regcfg.c
-        # lowers by their own rules
+                named[name], *fields, edge, home, nl, limit)
 
         # POP_TOP lowers to a retirement: Move.Retire([], [src]) is
         # A = 0 destinations, B = 1 source, the source in C
         retire = (0, 1, 4, 4095)
-        self.assertEqual(transfer("Move.Retire", retire, 0, 0, 4), set_null)
-        self.assertEqual(transfer("Move.Retire", retire, 0, 0, 5), preserve)
+        self.assertEqual(transfer("Move.Retire", retire, 0, 4), set_null)
+        self.assertEqual(transfer("Move.Retire", retire, 0, 5), preserve)
         # Successive retirements retain each other's NULL facts.
-        self.assertEqual(transfer("Move.Retire", (0, 1, 5, 4095), 0, 0, 4), preserve)
-        self.assertEqual(transfer("Move.Retire", (0, 1, 5, 4095), 0, 0, 5), set_null)
-        self.assertEqual(transfer("Move.Retire", retire, 0, 1, 4), unknown)
+        self.assertEqual(transfer("Move.Retire", (0, 1, 5, 4095), 0, 4), preserve)
+        self.assertEqual(transfer("Move.Retire", (0, 1, 5, 4095), 0, 5), set_null)
+        self.assertEqual(transfer("Move.Retire", retire, 1, 4), unknown)
 
+        # ForIter(item, pair): the next edge keeps the receiver and
+        # rewrites the cursor and the item; the taken edge retires the pair.
+        # A home the word does not name is preserved on both.
         for_iter = (6, 4, 0, 1)
-        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 4), set_null)
-        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 5), set_null)
-        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 0, 5), unknown)
-        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 0, 7), unknown)
-        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 7), unknown)
-        self.assertEqual(transfer("ForIter.Generic", (7, 4, 0, 1), 1, 1, 4), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 4), set_null)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 5), set_null)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 6), preserve)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 4), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 5), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 6), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 7), preserve)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 7), preserve)
+        # Every normal edge: the meet
+        self.assertEqual(transfer("ForIter.Generic", for_iter, -1, 4), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, -1, 7), preserve)
+        # The item's home is an operand of its own, anywhere in the frame
+        self.assertEqual(transfer("ForIter.Generic", (8, 4, 0, 1), 1, 4), set_null)
 
     def test_call_family(self):
         # The words that name their operands carry the transfers of their

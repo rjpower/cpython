@@ -877,9 +877,9 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
     int nl = image->nl;
     if (fmt->transfer_kind == _PyIR_TRANSFER_UNKNOWN) {
         *complete = 0;
-        int arg = admitted_word_arg(word, image->fbinit, image->nfb);
+        /* The facts hold on every normal successor */
         _PyIRPhysicalWord physical_word;
-        _PyIR_PhysicalWord(&image->words[pc], arg, 0, nl, nl + image->scratch,
+        _PyIR_PhysicalWord(&image->words[pc], -1, nl, nl + image->scratch,
                            &physical_word);
         for (int bit = 0; bit < image->scratch; bit++) {
             uint64_t mask = UINT64_C(1) << (bit % 64);
@@ -888,8 +888,8 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
             if (physical.kind != _PyIR_PHYSICAL_PRESERVE) {
                 state[SEM_NULL * work->nwords + bit / 64] &= ~mask;
             }
-            int absence = _PyIR_NormalCallAbsence(
-                &image->words[pc], arg, nl + bit, nl, nl + image->scratch);
+            int absence = _PyIR_NormalAbsence(
+                &image->words[pc], nl + bit, nl, nl + image->scratch);
             uint64_t *empty = &state[SEM_NO_HOME * work->nwords + bit / 64];
             if (absence == _PyIR_ABSENCE_SET_EMPTY) {
                 *empty |= mask;
@@ -906,23 +906,15 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
         return 0;
     }
     int arg = admitted_word_arg(word, image->fbinit, image->nfb);
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int homes[8], nhomes = 0;
-    for (int f = 0; f < 4; f++) {
-        int role = fmt->roles[f];
-        if (role == _PyIR_ROLE_DST || role == _PyIR_ROLE_BASE ||
-            role >= _PyIR_ROLE_IN0)
-        {
-            homes[nhomes++] = (int)fields[f];
-        }
-        if (role == _PyIR_ROLE_BASE && fmt->transfer_kind == _PyIR_TRANSFER_COPY) {
-            homes[nhomes++] = (int)fields[f] + arg;
-        }
-        if (role == _PyIR_ROLE_BASE && fmt->transfer_kind == _PyIR_TRANSFER_SWAP) {
-            homes[nhomes++] = (int)fields[f] + arg - 1;
+    _PyIRHomes view;
+    _PyIR_WordHomes(word, &view);
+    int homes[_PyIR_HOMES], nhomes = 0;
+    for (int h = 0; h < _PyIR_HOMES; h++) {
+        if (view.slot[h] >= 0) {
+            homes[nhomes++] = view.slot[h];
         }
     }
-    unsigned int next[8];
+    unsigned int next[_PyIR_HOMES];
     for (int h = 0; h < nhomes; h++) {
         int home = homes[h];
         next[h] = 0;
@@ -936,15 +928,15 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
         int accepts_empty =
             (fmt->transfer_kind == _PyIR_TRANSFER_LOCAL_STORE &&
              (old & (1u << SEM_INITIALIZED)));
-        if (_PyIR_ReadsHome(&image->words[pc], arg, home) && !accepts_empty &&
-            !_PyIR_NullableHome(&image->words[pc], arg, home) &&
+        if (_PyIR_ReadsHome(&image->words[pc], home) && !accepts_empty &&
+            !_PyIR_NullableHome(&image->words[pc], home) &&
             !(old & (1u << SEM_INITIALIZED)))
         {
             *complete = 0;
         }
         if (inspect && semantic_absent(old) &&
-            _PyIR_ReadsHome(&image->words[pc], arg, home) && !accepts_empty &&
-            !_PyIR_NullableHome(&image->words[pc], arg, home))
+            _PyIR_ReadsHome(&image->words[pc], home) && !accepts_empty &&
+            !_PyIR_NullableHome(&image->words[pc], home))
         {
             PyErr_Format(PyExc_ValueError,
                          "code: word %d reads unavailable scratch home %d", pc, home);

@@ -325,7 +325,7 @@ class HomeWriterTests(unittest.TestCase):
         def build(first, second):
             return f"before:{first}:between:{second}:after"
 
-        self.assertTrue(any(row[0] == "BUILD_STRING"
+        self.assertTrue(any(row[0] == "BuildText.Join"
                             for row in _testinternalcapi.get_ir(build.__code__)))
         for code in routes(build.__code__):
             function = types.FunctionType(code, globals())

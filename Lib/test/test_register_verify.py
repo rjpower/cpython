@@ -1598,6 +1598,10 @@ class PilotTests(unittest.TestCase):
                     f"{point} lists {name} in spent, but {name} is intact"
                     for name in attr_spent[point])
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
+        pattern_class = at("patterns.rop", "exit raise(PatternClass.Failed, saved);", 5)
+        convert = at("text.rop", "exit raise(Convert.Failed, saved);", 5)
+        format_ = at("text.rop", "exit raise(Format.Failed, saved);", 5)
+        format_spec = at("text.rop", "exit raise(FormatSpec.Failed, saved);", 5)
         binary_extended = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5)
         binary_raise = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5, last=True)
         append_text = at("numeric.rop", "exit raise(AppendText.Failed, saved);", 5)
@@ -1688,7 +1692,18 @@ class PilotTests(unittest.TestCase):
               "AppendText.OpFailed lists x in spent, but x is intact",
               f"{append_raise}: AppendText.Generic: points: raise at AppendText.OpFailed: "
               "AppendText.OpFailed lists y in spent, but y is intact",
+              f"{pattern_class}: PatternClass.Match: points: raise at "
+              "PatternClass.Failed: PatternClass.Failed lists parts in spent, but "
+              "parts is intact",
               *tests_raises,
+              f"{convert}: Convert.Text: points: raise at Convert.Failed: "
+              "Convert.Failed lists value in spent, but value is intact",
+              f"{format_}: Format.Simple: points: raise at Format.Failed: "
+              "Format.Failed lists value in spent, but value is intact",
+              f"{format_spec}: FormatSpec.Value: points: raise at FormatSpec.Failed: "
+              "FormatSpec.Failed lists spec in spent, but spec is intact",
+              f"{format_spec}: FormatSpec.Value: points: raise at FormatSpec.Failed: "
+              "FormatSpec.Failed lists value in spent, but value is intact",
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "

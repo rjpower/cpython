@@ -26,7 +26,7 @@ class AbruptOperandTests(unittest.TestCase):
         self.assertEqual(match([1, 2, 3]), (1, [2, 3]))
         self.assertIsNone(match(5))
         names = {row[0] for row in _testinternalcapi.get_ir(match.__code__, True)}
-        self.assertIn("GET_LEN", names)
+        self.assertIn("Length.Size", names)
         # The subject outlives the peek of its length
         subject = [1, 2]
         for code in routes(match.__code__):

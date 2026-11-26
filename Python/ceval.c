@@ -8,6 +8,7 @@
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
 #include "pycore_jit_lower.h"     // _PyEval_JitRaiseExit
 #include "pycore_jit.h"           // _PyJitUnit
+#include "pycore_interpolation.h" // _PyInterpolation_BuildValue()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"
 #include "pycore_long_value.h"    // _PyValue_AsInt()
@@ -16,6 +17,7 @@
 #include "pycore_rop_rows.h"      // _PyRop_AnchorForCall()
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_template.h"      // _PyTemplate_Build()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 #include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
 
@@ -900,6 +902,81 @@ value_subscript(PyValueBorrow container, PyValueBorrow key)
     return _PyValue_GetItem(container, key);
 }
 
+/* The rows of Convert and Format (Python/register_ops/text.rop): the value
+ * is borrowed, the result a new owner or NULL with an exception set. */
+static PyValue
+_PyRop_ConvertValue(int kind, PyValueBorrow v)
+{
+    PyObject *res_o = kind == 0 ? (_PyValue_Str)(v)
+                    : kind == 1 ? (_PyValue_Repr)(v)
+                                : (_PyValue_ASCII)(v);
+    return res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+}
+
+static PyValue
+_PyRop_FormatPlain(PyValueBorrow v)
+{
+    // An inline int or float formats as it prints: format(x, "") is str(x)
+    PyObject *res_o = PyValue_IsObject(v) ? _PyValue_Format(v, PyValue_NULL)
+                                          : (_PyValue_Str)(v);
+    return res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+}
+
+static PyValue
+_PyRop_FormatValue(PyValueBorrow v, PyValueBorrow spec)
+{
+    PyObject *res_o = (_PyValue_Format)(v, spec);
+    return res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+}
+
+/* The rows of Length and the patterns (Python/register_ops/patterns.rop):
+ * the operands are borrowed, the result a new owner or NULL with an
+ * exception set. */
+static PyValue
+_PyRop_ValueLength(PyValueBorrow v)
+{
+    Py_ssize_t len = _PyValue_Size(v);
+    if (len < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromInt64(len);
+}
+
+static int
+_PyRop_TypeHasFlag(int kind, PyValueBorrow v)
+{
+    unsigned long flag = kind == 0 ? Py_TPFLAGS_MAPPING : Py_TPFLAGS_SEQUENCE;
+    return (PyValue_TYPE(v)->tp_flags & flag) != 0;
+}
+
+static PyValue
+_PyRop_MatchClass(int count, PyValueBorrow subject, PyValueBorrow type,
+                  PyValueBorrow names)
+{
+    assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *attrs_o = _PyEval_MatchClass(tstate, subject, type, count,
+                                           PyValue_AsKnownObjectBorrow(names));
+    if (attrs_o != NULL) {
+        assert(PyTuple_CheckExact(attrs_o));
+        return PyValue_FromObjectSteal(attrs_o);
+    }
+    if (_PyErr_Occurred(tstate)) {
+        return PyValue_NULL;
+    }
+    return PyValue_None;
+}
+
+static PyValue
+_PyRop_MatchKeys(PyValueBorrow subject, PyValueBorrow keys)
+{
+    assert(PyValue_IsObject(subject));
+    assert(PyValue_IsObject(keys));
+    PyObject *values_o = _PyEval_MatchKeys(_PyThreadState_GET(),
+        PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
+    return values_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(values_o);
+}
+
 /* lhs op rhs for BINARY_OP's operation oparg; both operands are borrowed. */
 static PyValue
 value_binary_op(int oparg, PyValueBorrow lhs, PyValueBorrow rhs)
@@ -959,29 +1036,6 @@ value_exception_group_match(_PyInterpreterFrame *frame, PyObject *exc_value,
 
 
 /* Helper functions to keep the size of the largest uops down */
-
-PyObject *
-_Py_BuildString_ValueSteal(
-    _PyInterpreterFrame *frame,
-    PyValue *arguments,
-    int total_args)
-{
-    /* The pieces are str objects (constants and the results of FORMAT_*),
-     * never inline words: the join reads the window's objects in place on
-     * the borrow stack. */
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    _PyValue_RecheckWindow(arguments, total_args);
-    PyObject **objects = _PyBorrow_ValueVector(arguments, total_args);
-    PyObject *res = NULL;
-    if (objects != NULL) {
-        res = _PyUnicode_JoinArray(&_Py_STR(empty), objects, total_args);
-    }
-    _PyBorrowScope_Exit(tstate, mark);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-    clear_value_arguments(frame, arguments, total_args);
-    return res;
-}
 
 PyObject *
 _Py_BuildMap_ValueSteal(
@@ -3779,6 +3833,21 @@ rop_take_items(const _PyRopSpan *span, PyValue *vals)
     }
 }
 
+_PyRopSrcs
+_PyRop_SrcsOfSpan(const _PyRopSpan *span)
+{
+    _PyInterpreterFrame *frame = span->frame;
+    int nlocals = _PyCode_IRFixed(_PyFrame_GetCode(frame));
+    assert(span->count <= _PY_ROP_MAX_SRCS);
+    _PyRopSrcs s = {.frame = frame, .n = (uint8_t)span->count};
+    for (int i = 0; i < span->count; i++) {
+        int slot = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+        s.home[i] = &frame->base[slot];
+        s.local[i] = slot < nlocals;
+    }
+    return s;
+}
+
 static void
 rop_close_items(PyValue *vals, int n)
 {
@@ -3852,6 +3921,58 @@ _PyRop_BuildMap(const _PyRopSpan *items)
         return PyValue_NULL;
     }
     return PyValue_FromObjectSteal(map);
+}
+
+/* The rows of BuildText (Python/register_ops/text.rop).  Every piece is
+ * spent on every outcome. */
+PyValue
+_PyRop_JoinText(const _PyRopSpan *parts)
+{
+    int n = parts->count;
+    PyValue vals[n + 1];
+    PyObject *objects[n + 1];
+    rop_take_items(parts, vals);
+    // The pieces are str objects (constants and the results of Format),
+    // never inline words
+    for (int i = 0; i < n; i++) {
+        assert(PyValue_IsObject(vals[i]));
+        objects[i] = PyValue_AsKnownObjectBorrow(vals[i]);
+    }
+    PyObject *res = _PyUnicode_JoinArray(&_Py_STR(empty), objects, n);
+    rop_close_items(vals, n);
+    return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
+}
+
+PyValue
+_PyRop_BuildInterpolation(const _PyRopSpan *parts, int flags)
+{
+    int n = parts->count;
+    assert(n == 2 + (flags & 1));
+    PyValue vals[n + 1];
+    rop_take_items(parts, vals);
+    PyObject *str_o = PyValue_AsKnownObjectBorrow(vals[1]);
+    PyObject *format_o = (flags & 1) ? PyValue_AsKnownObjectBorrow(vals[2])
+                                     : &_Py_STR(empty);
+    // The value may be a number: the interpolation holds its box
+    PyObject *res = _PyInterpolation_BuildValue(vals[0], str_o, flags >> 2,
+                                                format_o);
+    rop_close_items(vals, n);
+    return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
+}
+
+PyValue
+_PyRop_BuildTemplate(const _PyRopSpan *parts)
+{
+    assert(parts->count == 2);
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    // Both are tuples that the compiler built
+    assert(PyValue_IsObject(vals[0]));
+    assert(PyValue_IsObject(vals[1]));
+    PyObject *res = _PyTemplate_Build(PyValue_AsKnownObjectBorrow(vals[0]),
+                                      PyValue_AsKnownObjectBorrow(vals[1]));
+    rop_close_items(vals, 2);
+    return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
 }
 
 int

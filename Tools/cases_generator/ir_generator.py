@@ -820,7 +820,6 @@ OBJECT_READERS = {
     "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
     "PyUnicode_CheckExact",
-    "_PyTemplate_Build",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -3471,7 +3470,6 @@ class IREmitter(Emitter):
         self._replacers["IR_UNPACK_ITEMS"] = self.unpack_items_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_CLOSE_INPUTS"] = self.close_input_homes
-        self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
         self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
@@ -3608,8 +3606,7 @@ class IREmitter(Emitter):
             helper = IR_HELPER_CALLEES[tkn.text]
             expression = f"{helper}({local.name}, oparg)"
         else:
-            helper = {"IR_BUILD_STRING": "_Py_BuildString_ValueSteal",
-                      "IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
+            helper = {"IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
                       "IR_BUILD_SET": "_Py_BuildSet_ValueSteal"}[tkn.text]
             expression = f"{helper}(frame, {local.name}, oparg)"
         self.out.emit_at(expression, tkn)
@@ -6370,7 +6367,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("home drain needs its sole owning array and unconditional handoff", token)
                 index = 0
                 covered.add(id(args[0][0]))
-            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", "IR_BUILD_SET",
+            elif token.text in {"IR_BUILD_MAP", "IR_BUILD_SET",
                                 *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)

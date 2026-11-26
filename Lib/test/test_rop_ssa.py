@@ -199,6 +199,21 @@ class RaisesBool:
         raise ZeroDivisionError("bool")
 
 
+class BadStr:
+    def __str__(self):
+        return 1
+
+    def __repr__(self):
+        return "bad"
+
+    def __format__(self, spec):
+        raise ZeroDivisionError("format")
+
+
+class StrSub(str):
+    pass
+
+
 class Point:
     def __init__(self):
         self.x = 1
@@ -459,7 +474,23 @@ PAIR_SOURCE = (
     "f = types.FunctionType(scope, globals())\n")
 
 
+TEXTS = [1, 2**50, 2**60, 1.5, True, None, "", "s", "\u00e9", StrSub("t"), Plain(), BadStr(), [1]]
+SPECS = [(1, "5"), (2**60, ">30"), (1.5, ".1f"), ("s", ">4"), (Plain(), ""), (BadStr(), "x"),
+         (1, "zz"), (None, ""), (StrSub("t"), "<3")]
+
 SCENARIOS = {
+    "Convert": Scenario("Convert", {
+        "locals": "def f(a):\n    return f'{a!r}'\n",
+        "temporaries": "def f(a):\n    return f'{(a * 1)!s}'\n",
+        "ascii": "def f(a):\n    return f'{a!a}'\n"},
+        [{"value": v, "kind": k} for v in TEXTS for k in (0, 1, 2)], warm=(1,)),
+    "Format": Scenario("Format", {
+        "plain": "def f(a):\n    return f'{a}'\n",
+        "temporaries": "def f(a):\n    return f'{(a * 1)}'\n"},
+        [{"value": v} for v in TEXTS], warm=(1,)),
+    "FormatSpec": Scenario("FormatSpec", {
+        "spec": "def f(a, b):\n    return f'{a:{b}}'\n"},
+        [{"value": v, "spec": sp} for v, sp in SPECS], warm=(1,)),
     "Add": Scenario("Add", {
         "locals": "def f(a, b):\n    return a + b\n",
         "temporaries": "def f(a, b):\n    return (a * 1) + (b * 1)\n",
@@ -1152,6 +1183,15 @@ NOT_RUN = {
     "IterOpen.GenMethod": "covered by test_rop_iter",
     "IterOpen.Indexed": "covered by test_rop_iter",
     "IterOpen.Self": "covered by test_rop_iter",
+    # BuildText's rows take spans of homes, as the display rows do
+    "BuildText.Join": "no scenario; test_rop_text runs it",
+    "BuildText.Interpolation": "no scenario; test_rop_text runs it",
+    "BuildText.Template": "no scenario; test_rop_text runs it",
+    # The tracer's view of the pattern and length arms waits for the interpreter
+    "Length.Size": "no scenario yet; test_rop_patterns runs it",
+    "Pattern.Flag": "no scenario yet; test_rop_patterns runs it",
+    "PatternClass.Match": "no scenario yet; test_rop_patterns runs it",
+    "PatternKeys.Match": "no scenario yet; test_rop_patterns runs it",
     # The tracer's view of the keyword and expanded calls is deferred while the
     # interpreter ports finish (rir90 interpreter-first rule)
     "CallKw.Plan": "deferred: binds keywords by a site's plan",

@@ -3,9 +3,6 @@
 # the generated classification against this file.  New instructions are written
 # in Python/register_ops/*.rop, never added here.  A port deletes its lines; the
 # file is empty at step D.
-inherited BUILD_INTERPOLATION
-inherited BUILD_STRING
-inherited BUILD_TEMPLATE
 inherited CLEANUP_THROW
 inherited CLEANUP_THROW_XFER_DISCARD
 inherited CLEANUP_THROW_XFER_HOME
@@ -13,15 +10,11 @@ inherited CLEANUP_THROW_XFER_POP_TOP
 inherited CLEANUP_THROW_XFER_RETURN
 inherited CLEANUP_THROW_XFER_STORE_FAST
 inherited CLEANUP_THROW_XFER_STORE_LOCAL
-inherited CONVERT_VALUE
 inherited END_ASYNC_FOR
 inherited END_SEND
-inherited FORMAT_SIMPLE
-inherited FORMAT_WITH_SPEC
 inherited GET_AITER
 inherited GET_ANEXT
 inherited GET_AWAITABLE
-inherited GET_LEN
 inherited INSTRUMENTED_END_ASYNC_FOR
 inherited INSTRUMENTED_END_SEND
 inherited INSTRUMENTED_INSTRUCTION
@@ -34,10 +27,6 @@ inherited INSTRUMENTED_YIELD_VALUE_XFER_SEND
 inherited INSTRUMENTED_YIELD_VALUE_XFER_STORE_LOCAL
 inherited IR_JUMP
 inherited LOAD_COMMON_CONSTANT
-inherited MATCH_CLASS
-inherited MATCH_KEYS
-inherited MATCH_MAPPING
-inherited MATCH_SEQUENCE
 inherited NOP
 inherited RETURN_GENERATOR
 inherited SEND
@@ -78,10 +67,13 @@ inherited YIELD_VALUE_XFER_SEND
 inherited YIELD_VALUE_XFER_STORE_LOCAL
 stub BINARY_OP
 stub BINARY_SLICE
+stub BUILD_INTERPOLATION
 stub BUILD_LIST
 stub BUILD_MAP
 stub BUILD_SET
 stub BUILD_SLICE
+stub BUILD_STRING
+stub BUILD_TEMPLATE
 stub BUILD_TUPLE
 stub CACHE
 stub CALL
@@ -93,6 +85,7 @@ stub CHECK_EG_MATCH
 stub CHECK_EXC_MATCH
 stub COMPARE_OP
 stub CONTAINS_OP
+stub CONVERT_VALUE
 stub COPY
 stub COPY_FREE_VARS
 stub DELETE_DEREF
@@ -103,8 +96,11 @@ stub DICT_UPDATE
 stub END_FOR
 stub EXIT_INIT_CHECK
 stub EXTENDED_ARG
+stub FORMAT_SIMPLE
+stub FORMAT_WITH_SPEC
 stub FOR_ITER
 stub GET_ITER
+stub GET_LEN
 stub IMPORT_FROM
 stub IMPORT_NAME
 stub INSTRUMENTED_CALL
@@ -155,6 +151,10 @@ stub LOAD_SUPER_ATTR
 stub MAKE_CELL
 stub MAKE_FUNCTION
 stub MAP_ADD
+stub MATCH_CLASS
+stub MATCH_KEYS
+stub MATCH_MAPPING
+stub MATCH_SEQUENCE
 stub MATERIALIZE_KWARGS
 stub NOT_TAKEN
 stub POP_EXCEPT

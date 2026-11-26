@@ -555,7 +555,7 @@ class RecordTests(unittest.TestCase):
 
     def test_annotated_uops_have_leaf_ir(self):
         annotated = {name for name, uop in self.uops.items() if "leaf" in uop.annotations}
-        self.assertGreater(len(annotated), 30)
+        self.assertGreater(len(annotated), 25)
         for uop in self.record_uops():
             if uop.name in annotated:
                 self.assertIsNotNone(uop.leaf, uop.name)
@@ -574,9 +574,9 @@ class RecordTests(unittest.TestCase):
     def test_record_dump_prints_the_leaf(self):
         with test_tools.imports_under_tool("cases_generator"):
             import ir_records
-        text = ir_records.format_record(self.records["BINARY_OP_ADD_INT"])
-        self.assertIn("  uop 2 _BINARY_OP_ADD_INT", text)
-        self.assertIn("call _PyValue_BoxInt64", text)
+        text = ir_records.format_record(self.records["COMPARE_OP_FLOAT"])
+        self.assertIn("  uop 2 _COMPARE_OP_FLOAT", text)
+        self.assertIn("prim COMPARISON_BIT", text)
         self.assertRegex(text, r"exit_if EXIT %\d+ \[")
 
 
@@ -670,15 +670,6 @@ def _type_version(tp):
 
 # Handler: (inputs, a function of the inputs giving the cache operands, opargs)
 HANDLERS = {
-    **{name: (int_domain, None, [0]) for name in (
-        "BINARY_OP_ADD_INT", "BINARY_OP_SUBTRACT_INT", "BINARY_OP_MULTIPLY_INT",
-        "BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT")},
-    **{name: (float_domain, None, [0]) for name in (
-        "BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
-        "BINARY_OP_TRUEDIV_FLOAT")},
-    "COMPARE_OP_JUMP_INT": (mixed_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
-    "COMPARE_OP_JUMP_FLOAT": (float_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
-    "IS_OP_JUMP": (mixed_domain, None, [0, 1]),
     "FOR_ITER_LIST": (lambda: iterator_domain(lambda: [(l, len(l)) for l in LISTS]), None, [0]),
     "FOR_ITER_TUPLE": (lambda: iterator_domain(lambda: [(t, len(t)) for t in TUPLES]), None, [0]),
     "FOR_ITER_RANGE": (lambda: [(word(it), 0) for it in
@@ -703,7 +694,7 @@ class LeafUopTests(unittest.TestCase):
     def setUpClass(cls):
         RecordTests.setUpClass.__func__(cls)
 
-    def check_uop(self, uop, part, env, caches, oparg, fused, keep):
+    def check_uop(self, uop, part, env, caches, oparg, keep):
         """Run uop on env's words in C and in the evaluator; compare.  Returns
         the outcome, or None if the inputs make the C undefined."""
         for guard in uop.guards:
@@ -722,12 +713,12 @@ class LeafUopTests(unittest.TestCase):
             expected = ir_leaf_eval.evaluate(
                 uop.leaf, cx, {i.name: w for i, w in zip(uop.inputs, words)},
                 {fb.name: caches[fb.name] for fb in uop.feedback}, oparg,
-                {"fused_if_false": fused})
+                {})
         except ir_leaf_eval.UndefinedBehavior:
             for w in consumed:
                 ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
             return None
-        got = capi.leaf_probe(uop.name, tuple(words), oparg, tuple(cache_words), fused)
+        got = capi.leaf_probe(uop.name, tuple(words), oparg, tuple(cache_words))
         outcome, outputs, branch, edge, completed = got
         where = (uop.name, [hex(w) for w in words], oparg, caches)
         self.assertEqual(ir_leaf_eval.OUTCOMES[outcome], expected.outcome, where)
@@ -777,7 +768,7 @@ class LeafUopTests(unittest.TestCase):
                 ctypes.pythonapi.Py_IncRef(ctypes.py_object(value))
             cx = context(frame=capi.leaf_frame())
             expected = ir_leaf_eval.evaluate(leaf, cx, {"value": w}, {}, home)
-            outcome, outputs, *_ = capi.leaf_probe("_SWAP_FAST", (w,), home, (), False)
+            outcome, outputs, *_ = capi.leaf_probe("_SWAP_FAST", (w,), home, ())
             writes = [(ir_leaf_eval.RealMemory().load(addr, t), after)
                       for addr, t, before, after in cx.mem.writes()]
             # The old value is the probe's output now, an owned count
@@ -799,19 +790,18 @@ class LeafUopTests(unittest.TestCase):
             for inputs in domain():
                 for caches in (make_caches(inputs) if make_caches else [{}]):
                     for oparg in opargs:
-                        for fused in (False, True):
-                            env = dict(zip(externals, inputs))
-                            keep = []
-                            try:
-                                for uop in record.uops:
-                                    outcome = self.check_uop(uop, parts[uop.name], env,
-                                                             caches, oparg, fused, keep)
-                                    outcomes.add(outcome)
-                                    if outcome != "NEXT":
-                                        break
-                            finally:
-                                for w in keep:
-                                    ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
+                        env = dict(zip(externals, inputs))
+                        keep = []
+                        try:
+                            for uop in record.uops:
+                                outcome = self.check_uop(uop, parts[uop.name], env,
+                                                         caches, oparg, keep)
+                                outcomes.add(outcome)
+                                if outcome != "NEXT":
+                                    break
+                        finally:
+                            for w in keep:
+                                ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
             with self.subTest(handler=handler):
                 self.assertIn("NEXT", outcomes)
 

@@ -1689,7 +1689,7 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen)
 static PyValue
 encoder_marker_key(const void *obj)
 {
-    assert((uintptr_t)obj < Py_PTR_LIMIT);
+    assert((uintptr_t)obj < ((uintptr_t)1 << 48));
     return PyValue_FromInlineInt((int64_t)(uintptr_t)obj);
 }
 

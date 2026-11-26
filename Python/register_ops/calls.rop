@@ -6,8 +6,6 @@ enum IterMode(ORDINARY_ITER, YIELD_FROM_ITER);
 enum AsyncIterMode(AITER, ANEXT);
 enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
 enum YieldMode(ORDINARY_YIELD, DELEGATED_YIELD);
-enum ResumeKind(FUNC_START, AFTER_YIELD, AFTER_YIELD_FROM, AFTER_AWAIT, GEN_EXPR_START);
-enum PollKind(BACKEDGE, CALL_END, RESUME_POLL, JIT_EVENT);
 
 // P4: positional calls, init cleanup, return
 
@@ -778,11 +776,3 @@ family EndAsyncFor(exc:Src, target:NearHead, send:NearHead)
 
 family WithExit(dst:Dst, exit_fn:Src, self:Maybe<Src>, exc:Src, context:Src)
   exits(next, raise) ops(WITH_EXCEPT_START);
-
-// 2F: resume and polls
-
-family Resume(kind:Enum<ResumeKind>)
-  exits(next, jump, raise, redirect, exit) ops(RESUME);
-
-family Poll(kind:Enum<PollKind>)
-  exits(next, raise, redirect, exit);

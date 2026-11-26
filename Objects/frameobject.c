@@ -1350,7 +1350,7 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
     if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
         !(fmt->flags & _PyIR_NAMES_TARGET))
     {
-        next[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
+        next[1] = fmt->flags & _PyIR_FORWARD
             ? i + 1 + _PyIR_FormatDistance(fmt, word) : (int)IR_CD(word);
     }
     /* Project optimized forms through their frontend shadow before removing

@@ -36,9 +36,9 @@ extern "C" {
  *     | fb   | an index into the feedback vector of the executing copy      |
  *     | imm  | the oparg: a count or a local in a 12-bit field, a constant  |
  *     |      | or name index in CD; for a jump the absolute word index of   |
- *     |      | its target in CD, and for FOR_ITER, SEND and the fused       |
- *     |      | compare-and-jumps the signed distance in words from the next |
- *     |      | word to the target in D                                      |
+ *     |      | its target in CD, and for FOR_ITER, SEND and the conditional |
+ *     |      | register instructions the signed distance in words from the  |
+ *     |      | next word to the target in D                                 |
  *
  * Slots are numbered as in localsplus, so locals, cells, free variables and
  * temporaries share one numbering; the temporaries take the slots from
@@ -128,9 +128,7 @@ extern int _PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords,
 /* A target in a 12-bit field is a signed distance in words from the next
  * word, -2048 to 2047.  FOR_ITER and SEND reach at most IR_MAX_FORWARD, the
  * non-negative half (2^11 - 1), and the assembler relaxes a loop whose exit
- * is further away.  The fused compare-and-jumps go forward only; the
- * assembler leaves the pair unfused where the target is further
- * (Python/assemble.c). */
+ * is further away.  */
 #define IR_MAX_FORWARD  2047
 #define IR_MIN_DISTANCE (-2048)
 
@@ -293,17 +291,6 @@ enum {
 #define _PyIR_NAMES_TARGET  0x200   // the oparg names a word for monitoring
                                     // only, which control never reaches
                                     // (END_ASYNC_FOR names its END_SEND)
-#define _PyIR_FUSED         0x400   // a compare, containment or identity test
-                                    // fused with the conditional jump after
-                                    // it: FORWARD, with the operation in the
-                                    // arg of the entry (bits 0 to 7) and the
-                                    // sense of the jump (_PyIR_FUSED_IF_FALSE)
-
-/* The arg of the entry of a fused word: the operation of the compare (its
- * oparg, or the invert bit of CONTAINS_OP and IS_OP) and the sense of the
- * jump. */
-#define IR_FUSED_OP_MASK    0xFF
-#define _PyIR_FUSED_IF_FALSE 0x100  // jump where the condition is false
 #define _PyIR_DISCARDS      0x800   // dst may be IR_NO_DST: the handler
                                     // releases the result (the calls)
 #define _PyIR_UNPACKS       0x1000  // dst names the first of a run of locals
@@ -904,9 +891,13 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
-/* The opcode that sys.monitoring sees the word as: the base opcode, except
- * for a fused compare-and-jump, which is a conditional jump
- * (POP_JUMP_IF_FALSE, or INSTRUMENTED_ for its twin). */
+/* The stack opcode that the translator lowered into the word at index
+ * `word` of co: the first stack instruction the word covers, from the
+ * public offset that pcmap records.  Instrumentation and the generator
+ * machinery read a word's origin here, whatever handler the word has. */
+PyAPI_FUNC(int) _PyIR_OriginOpcode(PyCodeObject *co, int word);
+
+/* The opcode that sys.monitoring sees the word as: the base opcode. */
 PyAPI_FUNC(int) _PyIR_EventOpcode(int handler);
 
 /* The handler that the executing copy of co starts with at index i: the
@@ -958,7 +949,6 @@ PyAPI_FUNC(int) _PyCode_InstrDiscards(PyCodeObject *co, int i);
 /* The number of elements that the unpack at index i stores to locals (its
  * dst names a run of them), where its stack instruction pushed them; 0 if
  * its elements stay in the window or it is no unpack. */
-PyAPI_FUNC(int) _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */
@@ -1103,6 +1093,22 @@ _PyIR_SingleSpanReads(const _PyIRFormat *fmt)
         has_input |= fmt->roles[f] >= _PyIR_ROLE_IN0;
     }
     return has_dst || !has_input;
+}
+
+/* A span format whose one span is destinations (Unpack's): it has no DST
+ * role of its own and the span is not counted twice as Move's are */
+static inline int
+_PyIR_IsDstSpanFormat(const _PyIRFormat *fmt)
+{
+    if (fmt->operands != _PyIR_OPERANDS_SPANS || _PyIR_SpanCountFields(fmt) != 1) {
+        return 0;
+    }
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static inline int

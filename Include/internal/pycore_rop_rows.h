@@ -18,6 +18,10 @@ extern "C" {
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
+#include "pycore_dict.h"          // _PyDict_ContainsValue()
+#include "pycore_setobject.h"     // _PySet_Contains()
+#include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value_slots.h"   // _PyType_VALUE_SLOT()
 
 /* The C bodies of the call-boundary rows of Python/register_ops/core.rop.
  * The generated handlers build the arguments from the word: a `Span<Src>`
@@ -76,6 +80,13 @@ typedef struct {
     Py_ssize_t count;
 } _PyRopOwners;
 
+PyAPI_FUNC(int) _PyRop_UnpackIterable(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
+PyAPI_FUNC(int) _PyRop_UnpackStar(PyValue *source, Py_ssize_t shape, _PyRopOwners *out);
+PyAPI_FUNC(int) _PyRop_UnpackTuple(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
+PyAPI_FUNC(int) _PyRop_UnpackList(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
+PyAPI_FUNC(int) _PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n);
+PyAPI_FUNC(bool) _PyRop_TupleHasLength(PyValueBorrow v, Py_ssize_t n);
+PyAPI_FUNC(bool) _PyRop_ListHasLength(PyValueBorrow v, Py_ssize_t n);
 PyAPI_FUNC(void) _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v);
 PyAPI_FUNC(void) _PyRop_CloseOwners(_PyRopOwners *v);
 
@@ -222,6 +233,183 @@ _PyRop_RunExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
     return PyValue_FromObjectSteal(res);
 }
 
+/* Binary: the operations other than ordinary addition (numeric.rop).  An
+ * `applies` test is the guard of an arm and the test the adaptation macro
+ * samples with, so a site never installs an arm it would miss at once. */
+
+static inline bool
+_PyRop_IntBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+{
+    if (!PyValue_BothInlineInt(a, b)) {
+        return false;
+    }
+    switch (op) {
+        case NB_INPLACE_ADD:
+        case NB_MULTIPLY:
+        case NB_INPLACE_MULTIPLY:
+        case NB_SUBTRACT:
+        case NB_INPLACE_SUBTRACT:
+        case NB_AND:
+        case NB_INPLACE_AND:
+        case NB_OR:
+        case NB_INPLACE_OR:
+        case NB_XOR:
+        case NB_INPLACE_XOR:
+            return true;
+        case NB_FLOOR_DIVIDE:
+        case NB_INPLACE_FLOOR_DIVIDE:
+        case NB_REMAINDER:
+        case NB_INPLACE_REMAINDER:
+            return PyValue_InlineInt64(b) != 0;
+        case NB_LSHIFT:
+        case NB_INPLACE_LSHIFT:
+        case NB_RSHIFT:
+        case NB_INPLACE_RSHIFT:
+            return PyValue_InlineInt64(b) >= 0;
+        default:
+            return false;
+    }
+}
+
+/* The result of an admitted pair: inline unless it leaves the int51 range,
+ * where it is boxed.  Python's // rounds towards minus infinity and % takes
+ * the sign of the divisor, where C truncates; int51 operands do not trap in
+ * int64 division. */
+static inline PyValue
+_PyRop_IntBinary(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+{
+    int64_t x = PyValue_InlineInt64(a);
+    int64_t y = PyValue_InlineInt64(b);
+    switch (op) {
+        case NB_INPLACE_ADD: {
+            int64_t sum;
+            if (__builtin_add_overflow(_PyValue_IntScaled(a),
+                                       _PyValue_IntScaled(b), &sum)) {
+                return _PyValue_BoxInt64(x + y);
+            }
+            return _PyValue_FromIntScaled(sum);
+        }
+        case NB_SUBTRACT:
+        case NB_INPLACE_SUBTRACT: {
+            int64_t difference;
+            if (__builtin_sub_overflow(_PyValue_IntScaled(a),
+                                       _PyValue_IntScaled(b), &difference)) {
+                return _PyValue_BoxInt64(x - y);
+            }
+            return _PyValue_FromIntScaled(difference);
+        }
+        case NB_MULTIPLY:
+        case NB_INPLACE_MULTIPLY: {
+            int64_t product;
+            if (__builtin_mul_overflow(_PyValue_IntScaled(a), y, &product)) {
+                return _PyValue_MultiplyInt64(x, y);
+            }
+            return _PyValue_FromIntScaled(product);
+        }
+        case NB_FLOOR_DIVIDE:
+        case NB_INPLACE_FLOOR_DIVIDE: {
+            int64_t quotient = x / y;
+            if (quotient * y != x && (x ^ y) < 0) {
+                quotient--;
+            }
+            return PyValue_FromInt64(quotient);
+        }
+        case NB_REMAINDER:
+        case NB_INPLACE_REMAINDER: {
+            int64_t remainder = x % y;
+            if (remainder != 0 && (remainder ^ y) < 0) {
+                remainder += y;
+            }
+            return PyValue_FromInlineInt(remainder);
+        }
+        /* Ints behave as infinite two's complement under &, | and ^, so the
+         * result for int51 operands is the int51 result. */
+        case NB_AND:
+        case NB_INPLACE_AND:
+            return PyValue_FromInlineInt(x & y);
+        case NB_OR:
+        case NB_INPLACE_OR:
+            return PyValue_FromInlineInt(x | y);
+        case NB_XOR:
+        case NB_INPLACE_XOR:
+            return PyValue_FromInlineInt(x ^ y);
+        case NB_LSHIFT:
+        case NB_INPLACE_LSHIFT: {
+            /* A shift whose result fits in int64 is made there; a longer
+             * shift of anything but 0 makes a long int. */
+            int64_t shifted = y < 63 ? (int64_t)((uint64_t)x << y) : 0;
+            if (x == 0) {
+                return PyValue_FromInlineInt(0);
+            }
+            if (y < 63 && Py_ARITHMETIC_RIGHT_SHIFT(int64_t, shifted, y) == x) {
+                return PyValue_FromInt64(shifted);
+            }
+            return _PyValue_LshiftInt64(x, y);
+        }
+        case NB_RSHIFT:
+        case NB_INPLACE_RSHIFT:
+            /* An int51 shifted by 63 places or more keeps its sign. */
+            return PyValue_FromInlineInt(
+                Py_ARITHMETIC_RIGHT_SHIFT(int64_t, x, y < 63 ? y : 63));
+        default:
+            Py_UNREACHABLE();
+    }
+}
+
+static inline bool
+_PyRop_FloatBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+{
+    double x, y;
+    if (!PyValue_FloatOperandValues(a, b, &x, &y)) {
+        return false;
+    }
+    switch (op) {
+        case NB_INPLACE_ADD:
+        case NB_MULTIPLY:
+        case NB_INPLACE_MULTIPLY:
+        case NB_SUBTRACT:
+        case NB_INPLACE_SUBTRACT:
+            return true;
+        case NB_TRUE_DIVIDE:
+        case NB_INPLACE_TRUE_DIVIDE:
+            return y != 0.0;
+        default:
+            return false;
+    }
+}
+
+static inline PyValue
+_PyRop_FloatBinary(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+{
+    double x, y;
+    bool admitted = PyValue_FloatOperandValues(a, b, &x, &y);
+    assert(admitted);
+    (void)admitted;
+    switch (op) {
+        case NB_INPLACE_ADD:
+            return PyValue_FromDouble(x + y);
+        case NB_MULTIPLY:
+        case NB_INPLACE_MULTIPLY:
+            return PyValue_FromDouble(x * y);
+        case NB_SUBTRACT:
+        case NB_INPLACE_SUBTRACT:
+            return PyValue_FromDouble(x - y);
+        case NB_TRUE_DIVIDE:
+        case NB_INPLACE_TRUE_DIVIDE:
+            return PyValue_FromDouble(x / y);
+        default:
+            Py_UNREACHABLE();
+    }
+}
+
+/* Text: only the in-place add of two exact strings reaches Binary; the
+ * plain add is Add's. */
+static inline bool
+_PyRop_TextBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+{
+    return op == NB_INPLACE_ADD && _PyRop_BothExactStr(a, b);
+}
+
 /* The rows of the constants and locals (Python/register_ops/values.rop).
  * A home operand is passed as the address of its home. */
 static inline PyValue
@@ -332,6 +520,7 @@ void _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home);
 /* The local's binding taken out of its home, or NULL with UnboundLocalError
  * set when it is unbound */
 PyValue _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
+PyValue _PyRop_AppendText(PyValue *home, PyValueBorrow right);
 
 
 /* The members of ImportKind in declaration order */
@@ -363,6 +552,15 @@ PyAPI_FUNC(PyValue) _PyRop_ImportName(PyThreadState *, _PyInterpreterFrame *,
                                       PyObject *, PyValue, PyValue, uint32_t);
 PyAPI_FUNC(PyValue) _PyRop_ImportFrom(PyThreadState *, _PyInterpreterFrame *,
                                       PyValue, uint32_t);
+
+/* Unary (Python/register_ops/numeric.rop).  The members of UnaryOp in
+ * declaration order, the numbers the generated handlers use for the enum's
+ * names. */
+enum {
+    NEGATIVE,
+    POSITIVE,
+    INVERT,
+};
 
 /* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The
  * members of BranchMode in declaration order, the numbers the generated
@@ -496,9 +694,182 @@ _PyRop_SlotTruth(PyValueBorrow v)
     return _PyValue_IsTrueSlow(v);
 }
 
+/* Python/register_ops/tests.rop: Compare, Identity, Contains, TestBranch */
+
+/* The enums of tests.rop, in declaration order */
+enum {
+    ROP_RELATION_LT, ROP_RELATION_LE, ROP_RELATION_EQ, ROP_RELATION_NE,
+    ROP_RELATION_GT, ROP_RELATION_GE,
+};
+enum { ROP_RESULT_RICH, ROP_RESULT_TRUTH };
+enum {
+    ROP_TEST_IDENTITY, ROP_TEST_CONTAINS, ROP_TEST_LT, ROP_TEST_LE, ROP_TEST_EQ,
+    ROP_TEST_NE, ROP_TEST_GT, ROP_TEST_GE,
+};
+
+static inline bool
+_PyRop_TestIsIdentity(int test)
+{
+    return test == ROP_TEST_IDENTITY;
+}
+
+static inline bool
+_PyRop_TestIsContains(int test)
+{
+    return test == ROP_TEST_CONTAINS;
+}
+
+static inline int
+_PyRop_RelationOf(int test)
+{
+    return test >= ROP_TEST_LT ? test - ROP_TEST_LT : ROP_RELATION_LT;
+}
+
+static inline bool
+_PyRop_ResultIsTruth(int result)
+{
+    return result == ROP_RESULT_TRUTH;
+}
+
+static inline bool
+_PyRop_EqualityRelation(int relation)
+{
+    return relation == ROP_RELATION_EQ || relation == ROP_RELATION_NE;
+}
+
+static inline bool
+_PyRop_BothInlineFloat(PyValueBorrow a, PyValueBorrow b)
+{
+    return PyValue_IsInlineFloat(a) && PyValue_IsInlineFloat(b);
+}
+
+static inline bool
+_PyRop_CompareScaled(int relation, int64_t a, int64_t b)
+{
+    switch (relation) {
+        case ROP_RELATION_LT: return a < b;
+        case ROP_RELATION_LE: return a <= b;
+        case ROP_RELATION_EQ: return a == b;
+        case ROP_RELATION_NE: return a != b;
+        case ROP_RELATION_GT: return a > b;
+        default: return a >= b;
+    }
+}
+
+/* IEEE: every relation but NE is false when either is NaN */
+static inline bool
+_PyRop_CompareFloats(int relation, PyValueBorrow a, PyValueBorrow b)
+{
+    double x = PyValue_InlineFloat(a);
+    double y = PyValue_InlineFloat(b);
+    switch (relation) {
+        case ROP_RELATION_LT: return x < y;
+        case ROP_RELATION_LE: return x <= y;
+        case ROP_RELATION_EQ: return x == y;
+        case ROP_RELATION_NE: return x != y;
+        case ROP_RELATION_GT: return x > y;
+        default: return x >= y;
+    }
+}
+
+static inline bool
+_PyRop_EqualStrings(int relation, PyValueBorrow a, PyValueBorrow b)
+{
+    assert(relation == ROP_RELATION_EQ || relation == ROP_RELATION_NE);
+    int eq = _PyUnicode_Equal(PyValue_AsKnownObjectBorrow(a),
+                              PyValue_AsKnownObjectBorrow(b));
+    return (relation == ROP_RELATION_EQ) == (eq != 0);
+}
+
+static inline PyValue
+_PyRop_RichCompare(int relation, PyValueBorrow a, PyValueBorrow b)
+{
+    return _PyValue_RichCompare(a, b, relation);
+}
+
+/* The comparison as a truth value: the rich result is closed before the
+ * conversion's failure is reported */
+static inline int
+_PyRop_CompareTruth(int relation, PyValueBorrow a, PyValueBorrow b)
+{
+    PyValue cmp = _PyValue_RichCompare(a, b, relation);
+    if (PyValue_IsNull(cmp)) {
+        return -1;
+    }
+    int res = _PyValue_IsTrue(cmp);
+    PyValue_CLOSE(cmp);
+    return res;
+}
+
+static inline bool
+_PyRop_ExactAnySet(PyValueBorrow c)
+{
+    return PyValue_IsObject(c) && PyAnySet_CheckExact(PyValue_AsKnownObjectBorrow(c));
+}
+
+static inline bool
+_PyRop_ExactAnyDict(PyValueBorrow c)
+{
+    return PyValue_IsObject(c) && PyAnyDict_CheckExact(PyValue_AsKnownObjectBorrow(c));
+}
+
+static inline bool
+_PyRop_ExactSequence(PyValueBorrow c)
+{
+    if (!PyValue_IsObject(c)) {
+        return false;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(c);
+    return PyUnicode_CheckExact(o) || PyTuple_CheckExact(o) || PyList_CheckExact(o);
+}
+
+static inline int
+_PyRop_SetContains(PyValueBorrow c, PyValueBorrow item)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(c);
+    assert(PyAnySet_CheckExact(o));
+    return _PySet_Contains((PySetObject *)o, item);
+}
+
+static inline int
+_PyRop_DictContains(PyValueBorrow c, PyValueBorrow item)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(c);
+    assert(PyAnyDict_CheckExact(o));
+    return _PyDict_ContainsValue((PyDictObject *)o, item);
+}
+
+static inline int
+_PyRop_SequenceContains(PyValueBorrow c, PyValueBorrow item)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(c);
+    _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(o), contains);
+    return contains_slot(o, item);
+}
+
+static inline int
+_PyRop_ValueContains(PyValueBorrow c, PyValueBorrow item)
+{
+    return _PyValue_Contains(c, item);
+}
+
+/* The case of cases(set, dict, sequence, none) */
+static inline int
+_PyRop_ClassifyContains(PyValueBorrow c)
+{
+    if (_PyRop_ExactAnyDict(c)) {
+        return 1;
+    }
+    if (_PyRop_ExactAnySet(c)) {
+        return 0;
+    }
+    return _PyRop_ExactSequence(c) ? 2 : 3;
+}
+
 /* Python/specialize.c: the adaptation rows */
-bool _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b);
+bool _PyRop_FindExtension(_PyFbBinary *fb, uint32_t op, PyValueBorrow a, PyValueBorrow b);
 void _PyRop_Backoff(_PyFbHeader *fb);
+void _PyRop_RecordOperands(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b);
 int _PyRop_Install(_PyInstr *site, _PyFbHeader *fb, int handler);
 void _PyRop_BeginTruth(_PyFbUnary *fb, PyValueBorrow v);
 bool _PyRop_ValidatePlain(_PyFbUnary *fb, PyValueBorrow v);

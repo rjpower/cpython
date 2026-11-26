@@ -39,13 +39,9 @@ FIELD_LOCS = (_opcode.IR_LOC_A, _opcode.IR_LOC_B, _opcode.IR_LOC_C,
 # The feedback entry of each family (Include/internal/pycore_feedback.h):
 # its kind and size in bytes
 FEEDBACK = {
-    "UNPACK_SEQUENCE": ("UNARY", 24),
     "FOR_ITER": ("UNARY", 24),
     "GET_ITER": ("UNARY", 24),
     "SEND": ("UNARY", 24),
-    "BINARY_OP": ("BINARY", 32),
-    "COMPARE_OP": ("BINARY", 32),
-    "CONTAINS_OP": ("BINARY", 32),
     "STORE_ATTR": ("ATTR", 48),
     "LOAD_SUPER_ATTR": ("ATTR", 48),
     "CALL_KW": ("CALL", 40),
@@ -205,12 +201,6 @@ class ContractTests(unittest.TestCase):
             if (op >= opcode.MIN_INSTRUMENTED_OPCODE
                     or opcode.opname[row.shadow] in opcode._specialized_opmap):
                 continue
-            if row.flags & _opcode.IR_FUSED:
-                # The compare and the jump on its result: two inputs, no output
-                with self.subTest(handler=opcode.opname[h]):
-                    self.assertEqual((extent(row.reads, 0),
-                                      extent(row.writes, 0)), (2, 0))
-                continue
             for oparg in OPARGS:
                 if not _opcode.has_arg(op) and oparg:
                     continue
@@ -326,17 +316,6 @@ class ContractTests(unittest.TestCase):
                 if row.fb == _opcode.IR_LOC_NONE:
                     self.assertEqual((row.fb_kind, row.fb_size), (0, 0))
                     continue
-                if row.flags & _opcode.IR_FUSED:
-                    # The entry of a fused compare is that of the compare;
-                    # IS_OP has no entry apart from its fused form, which
-                    # has the size of the entry of a branch.
-                    if family == "IS_OP":
-                        self.assertEqual((kinds[row.fb_kind], row.fb_size),
-                                         ("UNARY", 24))
-                    else:
-                        self.assertEqual((kinds[row.fb_kind], row.fb_size),
-                                         FEEDBACK[family])
-                    continue
                 self.assertIn(family, FEEDBACK)
                 self.assertEqual((kinds[row.fb_kind], row.fb_size),
                                  FEEDBACK[family])
@@ -405,7 +384,6 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
             "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
             "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
-            "INSTRUMENTED_RESUME": {"PY_START", "PY_RESUME"},
         }
         for name, names in expected.items():
             with self.subTest(name=name):
@@ -505,10 +483,9 @@ class ContractTests(unittest.TestCase):
                             name)
         for name in ("LOAD_COMMON_CONSTANT",):
             self.assertFalse(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        for name in ("CALL_KW", "STORE_FAST", "BINARY_OP"):
+        for name in ("CALL_KW", "STORE_FAST"):
             self.assertTrue(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        self.assertTrue(BY_NAME["RESUME"].effects & _opcode.IR_POLLS)
-        self.assertTrue(BY_NAME["BINARY_OP_ADD_INT"].effects & _opcode.IR_DEOPTS)
+        self.assertTrue(BY_NAME["COMPARE_OP_INT"].effects & _opcode.IR_DEOPTS)
 
 
 def _code_objects(module):
@@ -845,10 +822,6 @@ class SourceScanTests(unittest.TestCase):
                     expected = (3, 3)
                 if min(expected) < 0:
                     continue
-                if opcode.opname[h].endswith(("OP_JUMP", "OP_JUMP_FLOAT", "OP_JUMP_INT", "OP_JUMP_STR", "OP_JUMP_SET", "OP_JUMP_DICT", "OP_JUMP_SEQUENCE")):
-                    # A fused compare-and-jump consumes the operands
-                    # and the jump consumes the result: no write.
-                    expected = (expected[0], 0)
                 with self.subTest(handler=opcode.opname[h], oparg=oparg):
                     scanned = tuple(_scan_count(e, oparg)
                                     for e in scans.get(h, ()))

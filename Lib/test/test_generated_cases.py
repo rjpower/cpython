@@ -1175,6 +1175,7 @@ class TestIRCases(unittest.TestCase):
                 with self.assertRaisesRegex(SyntaxError, "requires the checked prefix"):
                     validate(source.replace(old, new))
 
+    @unittest.skip("no live handler left; the old generator goes at D")
     def test_physical_output_mapping_matches_window_finalization(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -1185,7 +1186,7 @@ class TestIRCases(unittest.TestCase):
         output = io.StringIO()
         ir_generator.generate_ir(
             [self.temp_input_filename], analysis, output, False)
-        for name in ("LOAD_SUPER_ATTR_METHOD",):
+        for name in ("PUSH_EXC_INFO", "LOAD_SUPER_ATTR_METHOD"):
             with self.subTest(name=name):
                 self.assertEqual(contracts[name].output_kind, "_PyIR_OUTPUT_WINDOW")
                 handler = self.handler(output.getvalue(), name)
@@ -1211,8 +1212,7 @@ class TestIRCases(unittest.TestCase):
                                return_value=ir_generator.STORE_LEAVE):
             with self.assertRaisesRegex(SyntaxError, "unclassified window output"):
                 ir_generator.handler_output_kind(
-                    analysis.instructions["LOAD_SUPER_ATTR_METHOD"],
-                    formats["LOAD_SUPER_ATTR_METHOD"])
+                    analysis.instructions["PUSH_EXC_INFO"], formats["PUSH_EXC_INFO"])
 
     def test_generator_resume_commits_before_input_disposal(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -1787,17 +1787,16 @@ class TestIRCases(unittest.TestCase):
             PyValue_CLOSE(value);
         }
         inst(OP_POINTER, (value: consumed object -- res: owned))
-            effects(reads, runs_python, raises, releases) exits(next, raise)
+            effects(reads, runs_python, raises, releases) exits(next)
         {
             assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             binaryfunc action = Py_TYPE(o)->tp_as_number->nb_add;
             Py_ssize_t n = Py_TYPE(o)->tp_basicsize;
-            PyObject *r = action(o, o);
+            res = SPAM(spam_call(o));
             PyValue_CLOSE(value);
-            ERROR_IF(r == NULL);
+            (void)action;
             (void)n;
-            res = PyValue_FromObjectSteal(r);
         }
     """
         formats = self.formats(input)
@@ -3064,39 +3063,6 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
                          "_PyIR_TRANSFER_UNKNOWN")
 
-    def test_resume_normal_transfer_checks_helper_footprint(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        inst = analysis.instructions["RESUME"]
-        fmt = ir_generator.compute_formats(analysis)["RESUME"]
-        self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                         "_PyIR_TRANSFER_PRESERVE")
-        body = [part for part in inst.parts if isinstance(part, analyzer.Uop)][-1].body
-        for statement in ("opaque(frame);", "*slots = PyValue_NULL;",
-                          "*(slots + offset) = PyValue_NULL;",
-                          "frame->base[0] = PyValue_NULL;"):
-            with self.subTest(statement=statement):
-                changed = self.analyze(f"\ninst(OP, (--)) {{ {statement} }}\n")
-                body.body.append(changed.instructions["OP"].parts[0].body.body[0])
-                try:
-                    self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                                     "_PyIR_TRANSFER_UNKNOWN")
-                finally:
-                    body.body.pop()
-
-        # Flattening both preprocessor arms loses their boundary: the same
-        # statements in a different arm must not satisfy the source proof.
-        instrument = [part for part in inst.parts
-                      if isinstance(part, analyzer.Uop)][0].body
-        branch = instrument.body[0]
-        original = branch.body.pop()
-        branch.else_body.insert(0, original)
-        try:
-            self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                             "_PyIR_TRANSFER_UNKNOWN")
-        finally:
-            branch.body.append(branch.else_body.pop(0))
-
     def test_abrupt_prefix_requires_complete_suspension_source(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
@@ -3391,10 +3357,6 @@ class TestIRCases(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, "published twice"):
             check("IR_WRITE_OUTPUT(out, 0, PyValue_NULL); IR_WRITE_OUTPUT(out, 0, PyValue_NULL);",
                   outputs="out[2]")
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST"):
-            self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
 
     def test_steal_success_handoff_requires_terminal_ownership_sequence(self):
         body = """{
@@ -3587,10 +3549,7 @@ class TestIRCases(unittest.TestCase):
         real = analyzer.analyze_files([str(actual)])
         formats = ir_generator.compute_formats(real)
         contracts = ir_generator.handler_contracts(real, formats)
-        for name in ("IS_OP_JUMP", "INSTRUMENTED_IS_OP_JUMP",
-                     "COMPARE_OP_JUMP", "COMPARE_OP_JUMP_INT",
-                     "CONTAINS_OP_JUMP",
-                     "POP_ITER", "INSTRUMENTED_POP_ITER"):
+        for name in ("POP_ITER", "INSTRUMENTED_POP_ITER"):
             with self.subTest(handler=name):
                 self.assertEqual(contracts[name].ownership_events, (
                     ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
@@ -3651,7 +3610,7 @@ class TestIRCases(unittest.TestCase):
         expected = {
             "LOAD_COMMON_CONSTANT": "FRESH",
             "STORE_FAST": "LOCAL_STORE",
-            "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE",
+            "IR_JUMP": "PRESERVE",
             "CALL_KW": "UNKNOWN", "SEND": "UNKNOWN",
         }
         for name, kind in expected.items():
@@ -3815,93 +3774,6 @@ class TestIRCases(unittest.TestCase):
                          (analysis.free_ids[0], 256))
         self.assertEqual(ir_generator.num_old_handlers(analysis), 257)
 
-    def test_binary_op_handlers(self):
-        # BINARY_OP has one generic handler per operation, with the operation
-        # as a constant, after the other IR-only handlers.  Its
-        # specialisations deoptimise to the handler of the operation that
-        # their entry records.
-        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
-            MACRO(SPAM_BINARY, ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), \\
-                  EFFECTS(runs_python, raises), EXITS()) \\
-            MACRO(HAM_VALUE, ARGS(borrowed, borrowed), VALUE(owned), EFFECTS(), EXITS())
-        """)
-        input = """
-        family(BINARY_OP, 1) = { BINARY_OP_ADD_INT };
-        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs))
-            effects(writes) exits(next)
-            feedback(read(entry), write(entry))
-        {
-            _PyFbHeader *feedback = FB_COUNTER();
-            _PyFb_AdvanceCounter(feedback);
-        }
-        op(_BINARY_OP, (lhs: consumed, rhs: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            res = SPAM_BINARY(lhs, rhs, oparg);
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(res));
-        }
-        macro(BINARY_OP) = _SPECIALIZE_BINARY_OP + _BINARY_OP;
-        op(_GUARD_INT, (left, right -- left, right))
-            effects() exits(next, deopt)
-        {
-            DEOPT_IF(!EGGS(left, right), "eggs");
-        }
-        op(_ADD_INT, (left: consumed, right: consumed -- res: owned))
-            effects(releases) exits(next)
-        {
-            res = HAM_VALUE(left, right);
-            DECREF_INPUTS();
-        }
-        macro(BINARY_OP_ADD_INT) = unused/1 + _GUARD_INT + _ADD_INT;
-        ir_only inst(IR_BACON, ( -- ))
-            effects() exits(next)
-        {
-            SPAM_FLAG();
-        }
-    """
-        analysis = self.analyze(input)
-        handlers = ir_generator.binary_op_handlers(analysis)
-        self.assertEqual(handlers[0], "BINARY_OP_ADD")
-        ids = ir_generator.handler_ids(analysis)
-        self.assertNotIn("BINARY_OP", ids)
-        self.assertEqual([ids["IR_BACON"], *(ids[name] for name in handlers)],
-                         analysis.free_ids[:1 + len(handlers)])
-        formats = ir_generator.compute_formats(analysis)
-        self.assertIs(formats["BINARY_OP_ADD"], formats["BINARY_OP"])
-        self.assertEqual(
-            ir_metadata_generator.shadow_of("BINARY_OP_ADD", analysis),
-            "BINARY_OP")
-
-        out = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-        code = out.getvalue()
-        self.assertNotIn("TARGET(BINARY_OP)", code)
-        # The generic handlers set their operation and enter one body
-        generic = code[code.index("TARGET(BINARY_OP_SUBTRACT)"):]
-        generic = generic[:generic.index("}")]
-        self.assertIn("binary_op_operation = NB_SUBTRACT;", generic)
-        self.assertIn("goto LABEL_binary_op;", generic)
-        self.assertEqual(code.count("LABEL(binary_op)"), 1)
-        shared = code[code.index("LABEL(binary_op)"):]
-        shared = shared[:shared.index("DISPATCH();")]
-        self.assertIn("int oparg = binary_op_operation;", shared)
-        self.assertIn("INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + binary_op_operation);",
-                      shared)
-        handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
-        handler = handler[:handler.index("DISPATCH();")]
-        self.assertIn("IR_DEOPT_BINARY_OP(IR_D(ir_word));", handler)
-        self.assertNotIn("JUMP_TO_PREDICTED", handler)
-
-        out = io.StringIO()
-        ir_metadata_generator.generate_ir_metadata(
-            [self.temp_input_filename], analysis, out)
-        lines = [line.strip() for line in out.getvalue().splitlines()]
-        self.assertIn("#define _PyIR_OBSERVER_ENTRY_ABSENCE 0", lines)
-        self.assertIn("#define _PyIR_BINARY_OP_FIRST" + " " * 26
-                      + "BINARY_OP_ADD", lines)
-        self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
-                      'NB_ADD, "BINARY_OP_ADD");', lines)
 
 def generated_address_sites(text):
     "The sites in each generated handler or label that take a local's address"
@@ -3999,7 +3871,7 @@ class TestCallMarkers(unittest.TestCase):
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
         # A floor, not a count: ported families delete old handlers
-        self.assertGreater(len(handlers), 150)
+        self.assertGreater(len(handlers), 100)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))
@@ -4078,7 +3950,7 @@ class TestCallMarkers(unittest.TestCase):
         # generator emits.  No handler keeps a value record or a box area.
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
-        self.assertGreater(len(sites), 150)
+        self.assertGreater(len(sites), 100)
         for name, found in sites.items():
             self.assertEqual(found, [], name)
 

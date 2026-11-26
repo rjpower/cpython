@@ -38,18 +38,14 @@ A wide oparg of an instruction with an entry takes CD if two fields are free
 and otherwise the one free field, as D (LOAD_ATTR, STORE_ATTR and
 LOAD_SUPER_ATTR; the compiler lowers an access whose oparg does not fit,
 Python/codegen.c); only an oparg that has no field left stays in the entry
-(COMPARE_OP, CONTAINS_OP and BINARY_OP), so that the sites past the
+(COMPARE_OP and CONTAINS_OP), so that the sites past the
 feedback limit, which share entry 0 and never specialise, need no second
-handler.  BINARY_OP has one handler per operation (BINARY_OP_ADD, ...), each
-with its operation as a constant, and its specialisations deoptimise to the
-handler of the operation that the entry records.
+handler.
 
 Invariants:
 
 - The handler index of an instruction with an opcode is its opcode. IR-only
-  handlers (annotation `ir_only`) follow the pseudo-instructions, then the
-  handlers of the
-  BINARY_OP operations in the order of their NB_ constants.
+  handlers (annotation `ir_only`) follow the pseudo-instructions.
 - Members of a family share the format of the family, and INSTRUMENTED_X that
   of X, so specialisation and instrumentation rewrite only the handler field.
   INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION take no format: they run
@@ -385,12 +381,9 @@ def generator_boundary_source_closed(boundary: GeneratorBoundary,
                                      formats: dict[str, "IRFormat"]) -> bool:
     """Only complete audited sources may publish an executable shape."""
     insts = all_instructions(analysis)
-    resume = insts.get("RESUME")
-    # The yield-from loop's jump is a Jump word (Jump.Direct), whose source
-    # the family's rows hold; no handler of the stack op remains to audit.
-    if resume is None or normal_transfer_kind(
-            resume, formats["RESUME"]) != "_PyIR_TRANSFER_PRESERVE":
-        return False
+    # The yield-from loop's jump is a Jump word (Jump.Direct) and the resume
+    # point a Resume word, whose sources the families' rows hold; no handler
+    # of those stack ops remains to audit.
     # A new family member without the same source contract closes no shape;
     # eligibility is never recovered by declining its specialization later.
     send_members = [inst for name, inst in insts.items()
@@ -528,13 +521,6 @@ FIELD_LOCS = {"A": LOC_A, "B": LOC_B, "C": LOC_C, "D": LOC_D}
 # an absolute target: the loops, whose bodies jump relative to the next word.
 FORWARD_JUMPS = ("FOR_ITER", "SEND")
 
-# The IR-only families that fuse a compare with the conditional jump after
-# it: the distance is in D, as for the loops, and the entry's arg holds the
-# operation and the sense of the jump.  The handlers stand for the compare.
-FUSED_JUMPS = ("COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP")
-FUSED_SHADOWS = {"COMPARE_OP_JUMP": "COMPARE_OP",
-                 "CONTAINS_OP_JUMP": "CONTAINS_OP", "IS_OP_JUMP": "IS_OP"}
-
 # The unpacks: their dst field names the first of a run of locals that
 # receive the elements in order (the STORE_FASTs folded in), or is IR_NO_DST.
 # The count of elements as a function of the oparg.
@@ -552,32 +538,6 @@ APPEND_SOURCES = {"LIST_APPEND": 1, "SET_ADD": 1, "MAP_ADD": 2}
 # name no constant or name table, see wide_oparg().
 WIDE_OPARGS = ("UNPACK_EX",)
 
-# The operations of BINARY_OP, by their NB_ constants in Include/opcode.h.
-BINARY_OP_FAMILY = "BINARY_OP"
-
-
-def binary_ops() -> list[str]:
-    "The NB_ operations, in the order of their values"
-    ops: dict[int, str] = {}
-    with open(ROOT / "Include/opcode.h") as f:
-        for line in f:
-            m = re.match(r"#define NB_(\w+)\s+(\d+)", line)
-            # NB_SUBSCR is the GetItem family's (register_ops/items.rop), not
-            # a handler of BINARY_OP
-            if m and m.group(1) not in ("OPARG_LAST", "SUBSCR"):
-                ops[int(m.group(2))] = m.group(1)
-    assert sorted(ops) == list(range(len(ops))), ops
-    return [ops[i] for i in range(len(ops))]
-
-
-def binary_op_handlers(analysis: Analysis) -> list[str]:
-    """The generic handlers of BINARY_OP, one per operation, or none if the
-    input defines no BINARY_OP"""
-    if BINARY_OP_FAMILY not in analysis.instructions:
-        return []
-    return [f"{BINARY_OP_FAMILY}_{op}" for op in binary_ops()]
-
-
 @dataclass
 class IRFormat:
     "The word layout shared by a family, see the module docstring"
@@ -593,7 +553,6 @@ class IRFormat:
     fb: str                         # where the feedback index lives
     jumps: bool                     # the oparg is an absolute target
     forward: bool = False           # the oparg is a forward distance
-    fused: bool = False             # see FUSED_JUMPS
     no_fold: bool = False
     transparent: bool = False       # see is_transparent()
     store_dst: bool = False         # dst may name a local, see
@@ -836,7 +795,7 @@ INPLACE_READERS = {
     "monitor_stop_iteration", "PyValue_Borrow",
     "_PyEval_FormatKwargsError",
     # Python/specialize.c: they read types and values
-    "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
+    "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp",
     "_Py_Specialize_StoreAttr",
 }
@@ -861,23 +820,12 @@ OBJECT_READERS = {
     # Statements
     "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
-    "Py_TYPE", "PyAnyDict_CheckExact", "PyAnySet_CheckExact",
+    "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
-    "PyList_CheckExact",
-    "PyTuple_CheckExact", "PyUnicode_CheckExact",
+    "PyUnicode_CheckExact",
     "_PyObject_GetManagedDict", "_PyObject_InlineValues",
     "_PyObject_Shape", "_PyObject_ValueSlot",
-    # The value-form container calls (they read the container object and
-    # the key as a value)
-    "_PyDict_ContainsValue",
-    "PyUnicode_Concat",
-    "_PySet_Contains", "_PyTemplate_Build",
-    "_PyUnicode_Equal",
-    # The indirect calls of BINARY_OP_EXTEND, through a table of functions
-    # that read their operands
-    "action",
-    # CONTAINS_OP_JUMP_SEQUENCE: the contains function of the container's type
-    "contains_slot",
+    "_PyTemplate_Build",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -1269,8 +1217,8 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
-              "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
+STACK_ONLY = ("RESUME", "INSTRUMENTED_RESUME", "CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
+              "INSTRUMENTED_RETURN_VALUE", "BINARY_OP", "UNARY_NEGATIVE", "UNARY_INVERT", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
               "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
               "LOAD_FAST_LOAD_FAST",
               "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
@@ -1291,10 +1239,12 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM",
               "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
               "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
+              "COMPARE_OP", "IS_OP", "CONTAINS_OP",
               "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
               "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
               "RAISE_VARARGS", "RERAISE", "PUSH_EXC_INFO", "POP_EXCEPT",
-              "CHECK_EXC_MATCH", "CHECK_EG_MATCH")
+              "CHECK_EXC_MATCH", "CHECK_EG_MATCH",
+              "UNPACK_SEQUENCE", "UNPACK_EX")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -1307,7 +1257,7 @@ IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
 
 def ir_only_handler_names(analysis: Analysis) -> list[str]:
     "The IR-only handlers, in the order that numbers them"
-    return (sorted(analysis.ir_only) + binary_op_handlers(analysis)
+    return (sorted(analysis.ir_only)
             + list(execution_variants(analysis))
             + sorted(generator_boundaries(analysis)))
 
@@ -1325,7 +1275,7 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     has no handler, so its number is free to name one.  BINARY_OP itself has
     none: its operations do, and a STACK_ONLY opcode has none."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
-           if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
+           if name not in STACK_ONLY}
     names = ir_only_handler_names(analysis)
     for number, name in zip(ir_only_numbers(analysis, len(names)), names):
         ids[name] = number
@@ -1337,8 +1287,6 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
     insts = all_instructions(analysis)
     result = {name: insts[name] for name in handler_ids(analysis)
               if name in insts}
-    for name in binary_op_handlers(analysis):
-        result[name] = insts[BINARY_OP_FAMILY]
     for name, variant in execution_variants(analysis).items():
         if variant.base in result:
             result[name] = result[variant.base]
@@ -1617,10 +1565,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     array_inputs = completes_step or any(m.properties.window for m in members) or any(
         item.is_array() for m in members for item in io[m.name][0])
     jumps = completes_step or any(m.properties.jumps for m in members)
-    fused = group in FUSED_JUMPS
-    forward = jumps and (group in FORWARD_JUMPS or fused)
-    # A fused word's entry holds its operation and the sense of its jump
-    has_fb = fused or any(uses_feedback(m) for m in members)
+    forward = jumps and group in FORWARD_JUMPS
+    has_fb = any(uses_feedback(m) for m in members)
     # CLEANUP_THROW has no operand in co_code, but its word names the exit
     has_imm = any(m.properties.oparg for m in members) or group == "CLEANUP_THROW"
     if not has_imm:
@@ -1741,7 +1687,6 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
-        fused=fused,
         no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
         discards=(store_dst and store_mode(head, io[head.name][1]) in
@@ -1778,10 +1723,6 @@ FEEDBACK_LAYOUTS = {
     "CALL": "_PyFbCall",
     "CALL_KW": "_PyFbCall",
     "CALL_FUNCTION_EX": "_PyFbCall",
-    "COMPARE_OP_JUMP": "_PyFbBinary",
-    "CONTAINS_OP_JUMP": "_PyFbBinary",
-    # No specialisation; the entry is as large as that of a branch
-    "IS_OP_JUMP": "_PyFbUnary",
 }
 LAYOUT_KINDS = {
     FB_HEADER: "FB_COUNTER",
@@ -1837,10 +1778,8 @@ def observer_terminal_arguments(tokens: list[Token]) -> tuple[list[str], int]:
     if len(args[3]) != 1 or args[3][0] not in edges:
         raise analysis_error("terminal observer requires a literal owner edge", tokens[0])
     edge = edges[args[3][0]]
-    targets = (["JUMP_TARGET", "(", "oparg", ")"],
-               ["next_instr", "+", "IR_FUSED_DISTANCE", "(", ")"])
     if (edge == 0 and args[1] != ["next_instr"] or
-            edge == 1 and args[1] not in targets):
+            edge == 1 and args[1] != ["JUMP_TARGET", "(", "oparg", ")"]):
         raise analysis_error("terminal observer owner edge disagrees with destination", tokens[0])
     return [" ".join(arg) for arg in args], edge
 
@@ -2417,8 +2356,6 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
         fmt = compute_format(group, members)
         for m in members:
             formats[m.name] = fmt
-    for name in binary_op_handlers(analysis):
-        formats[name] = formats[BINARY_OP_FAMILY]
     for name in sorted(transparent):
         # INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION call a monitoring
         # callback before they run the word's own handler
@@ -3481,8 +3418,6 @@ class IREmitter(Emitter):
         self.observer_errors = set()
         self.observer_terminals = set()
         self.observer_calls = set()
-        # Emitting the one body that every generic BINARY_OP operation shares
-        self.shared_binary_op = False
         # The uops of the handler being printed whose entry sets the stub's
         # ESCAPED bit (stub_escapes()), or None if it has no stub
         self.stub_escapes: frozenset[str] | None = None
@@ -5497,16 +5432,6 @@ class IREmitter(Emitter):
         deopt = self.record.deopt if self.record is not None else ""
         kind, _, head = deopt.partition("(")
         head = head.rstrip(")")
-        if kind == "BINARY_OP_BY_ENTRY":
-            # The handler of the operation that the entry records
-            self.emit(f"UPDATE_MISS_STATS({BINARY_OP_FAMILY});\n")
-            self.emit(f"IR_DEOPT_BINARY_OP({field_expr(fmt.fb)});\n")
-            return
-        if kind == "FUSED_HEAD":
-            # The head has no opcode: the miss counts for the compare
-            self.emit(f"UPDATE_MISS_STATS({FUSED_SHADOWS[head]});\n")
-            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{head});\n")
-            return
         if kind == "GENERATOR_SHAPE":
             if not head:
                 raise analysis_error("generator deopt has no complete source shape", inst.where)
@@ -5688,7 +5613,7 @@ class IREmitter(Emitter):
             self.emit("}\n")
             self.emit("_PyFrame_SetResumeValue(frame, ir_resume_input);\n")
             self.emit("LOAD_IP(0);\n")
-            self.emit("IR_SKIP_RESUME();\n")
+            self.emit("ROP_ENTER_GATE();\n")
             self.emit("DTRACE_FUNCTION_ENTRY();\n")
             self.emit("LLTRACE_RESUME_FRAME();\n")
             self.emit("DISPATCH();\n")
@@ -5874,10 +5799,6 @@ def deopt_target(inst: Instruction, boundary: GeneratorBoundary | None,
     if inst.family is None:
         return ""
     family = inst.family.name
-    if family == BINARY_OP_FAMILY:
-        return "BINARY_OP_BY_ENTRY"
-    if family in FUSED_JUMPS:
-        return f"FUSED_HEAD({family})"
     if boundary is not None:
         head = f"{family}_XFER_{boundary.completed}"
         if head not in generator_boundaries(analysis):
@@ -5896,8 +5817,6 @@ def oparg_source(inst: Instruction, fmt: IRFormat, operation: str | None) -> str
         return ""
     if operation is not None:
         return "OPERATION"
-    if fmt.fused:
-        return "FUSED_OP"           # the entry's arg holds the operation
     if fmt.imm == LOC_FBARG and is_specialization(inst):
         return "FBARG_ENTRY"
     if fmt.imm == LOC_FBARG:
@@ -6051,8 +5970,6 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
     "The record of handler name, which runs inst in a word of format fmt"
     boundary = closed_generator_boundary(name, analysis, formats)
     operation = None
-    if name != inst.name and name not in EXECUTION_VARIANTS and boundary is None:
-        operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     oparg = oparg_source(inst, fmt, operation)
     walk = walk_values(inst)
     outputs = [Entry(external, item, aliased)
@@ -6115,7 +6032,7 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
         operands=operands, values=tuple(walk.values), uops=tuple(uops),
         results=tuple(results), store_mode=mode, layout=layout, feedback=schema,
         uses_feedback=fmt.fb != LOC_NONE and (
-            uses_feedback(inst) or reads_fb_arg(inst, fmt, operation) or fmt.fused),
+            uses_feedback(inst) or reads_fb_arg(inst, fmt, operation)),
         operation=operation, oparg=oparg, call=call,
         generator_boundary=boundary, deopt=deopt,
         inputs=tuple(walk.inputs), outputs=tuple(walk.outputs),
@@ -6131,7 +6048,6 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
 def build_records(analysis: Analysis,
                   formats: dict[str, IRFormat]) -> dict[str, OperationRecord]:
     "The record of every handler, by name"
-    shared = set(binary_op_handlers(analysis))
     records = {}
     for name, inst in handler_instructions(analysis).items():
         record = build_record(name, inst, formats[name], analysis, formats)
@@ -6139,8 +6055,6 @@ def build_records(analysis: Analysis,
             record = replace(record, form=f"EDGE_TWIN({EDGE_TWINS[name][0]})")
         elif name in EVENT_TWINS:
             record = replace(record, form=f"EVENT_TWIN({EVENT_TWINS[name][1]})")
-        elif name in shared:
-            record = replace(record, form="SHARED_BODY(binary_op)")
         elif generator_word_entry(name, analysis) != name:
             record = replace(record, form=f"SHARED_BODY({generator_word_entry(name, analysis)})")
         check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
@@ -6632,7 +6546,7 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
         tstate->py_recursion_remaining--;
         RELOAD_STACK();
         LOAD_IP(0);
-        IR_SKIP_RESUME();
+        ROP_ENTER_GATE();
         DTRACE_FUNCTION_ENTRY();
         LLTRACE_RESUME_FRAME();
     }"""
@@ -7084,18 +6998,14 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     emitter.call_finished = False
     is_target = inst.is_target and name == inst.name
     out.emit("\n")
-    if emitter.shared_binary_op:
-        out.emit("LABEL(binary_op) {\n")
-        handler_id = "_PyIR_BINARY_OP_FIRST + binary_op_operation"
-    else:
-        out.emit(f"TARGET({name}) {{\n")
-        handler_id = canonical_handler(name)
+    out.emit(f"TARGET({name}) {{\n")
+    handler_id = canonical_handler(name)
     out.emit(f"int opcode = {handler_id};\n")
     out.emit(f"(void)(opcode);\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR",
                                    "STORE_ATTR_WITH_HINT", "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
@@ -7112,7 +7022,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
              else "next_instr += 1;\n")
     out.emit(f"INSTRUCTION_STATS({handler_id});\n")
     if is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
+        qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         back = ("IR_CALL_LENGTH(ir_word)" if fmt.operands != "_PyIR_OPERANDS_NONE"
                 else "1")
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - {back};\n")
@@ -7132,11 +7042,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                  f"IR_FB({field_expr(fmt.fb)});\n")
     if record.oparg:
         if record.oparg == "OPERATION":
-            out.emit("int oparg = binary_op_operation;\n" if emitter.shared_binary_op
-                     else f"int oparg = {operation};\n")
-        elif record.oparg == "FUSED_OP":
-            # D is the distance; the arg of the entry holds the operation
-            out.emit("int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);\n")
+            out.emit(f"int oparg = {operation};\n")
         elif record.oparg == "FBARG_ENTRY":
             out.emit("int oparg = (int)((_PyFbHeader *)fb)->arg;\n")
         elif record.oparg == "FBARG":
@@ -7299,15 +7205,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     out.emit("}")
     out.emit("\n")
     assert isinstance(stack, IRStack)
-    if not emitter.ownership_events and inst.name == "BINARY_OP":
-        # The generic operation reads both inputs, detaches them and writes
-        # a fresh result: the program that the verifier proves homes with
-        for index in range(2):
-            emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_READ", src=index))
-            emitter.ownership_events.append(OwnershipEvent(
-                "_PyIR_OWNER_TAKE", dst=index, src=index))
-        emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_FRESH"))
-        emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_NORMAL_EXIT"))
     if not emitter.ownership_events:
         kind = normal_transfer_kind(inst, fmt)
         if kind != "_PyIR_TRANSFER_UNKNOWN":
@@ -7359,7 +7256,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
 EVALUATOR_ONLY = re.compile(
     r"\bgoto\b|\bLABEL_\w+|\bTARGET_\w+|\bopcode_targets\b|\bJUMP_TO_LABEL\b|"
     r"\blastopcode\b|\b(?:process_error_origin|process_error_entry|gen_value|"
-    r"gen_dying|gen_empty|gen_transfer|binary_op_operation)\b")
+    r"gen_dying|gen_empty|gen_transfer)\b")
 
 
 def check_body(name: str, text: str, where: object, routine_operand: str = "") -> None:
@@ -7378,8 +7275,6 @@ def check_body(name: str, text: str, where: object, routine_operand: str = "") -
 # that reports its edge (a loop step has an event only for its next item, and
 # its edge is the word that the base returns).
 EDGE_TWINS = {
-    "INSTRUMENTED_COMPARE_OP_JUMP": ("COMPARE_OP_JUMP", True),
-    "INSTRUMENTED_CONTAINS_OP_JUMP": ("CONTAINS_OP_JUMP", True),
     "INSTRUMENTED_FOR_ITER": ("FOR_ITER", False),
 }
 
@@ -7446,27 +7341,6 @@ def function_form(name: str, text: str) -> str:
     marker = f"TARGET({name}) {{"
     assert marker in text
     return text.replace(marker, form_header(f"ir_run_{name}"), 1)
-
-
-# The operation of the shared BINARY_OP body: the operand of its routine,
-# ir_binary_op(), which the generic handlers pass from their number and the
-# specialisations' deopts from their entry
-BINARY_OP_OPERAND = "binary_op_operation"
-
-
-def binary_op_routine(text: str) -> str:
-    "The function form of the shared BINARY_OP body"
-    marker = "LABEL(binary_op) {"
-    assert marker in text
-    return text.replace(marker, form_header(
-        "ir_binary_op", f", _PyIRWord ir_word, int {BINARY_OP_OPERAND}"), 1)
-
-
-def binary_op_function(name: str, operation: str) -> str:
-    "The function form of the generic BINARY_OP handler `name`"
-    return (form_header(f"ir_run_{name}") +
-            f"\n    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, "
-            f"{operation});\n}}\n")
 
 
 def event_twin_function(name: str, event: str, base: str) -> str:
@@ -7652,34 +7526,12 @@ def stub_function(function: str, text: str, marker: str, extra: str = "") -> str
     return text.replace(marker, stub_header(function, extra), 1)
 
 
-BINARY_OP_STUB = stub_function_name("binary_op")
-
-
-def binary_op_stub(name: str, operation: str) -> str:
-    "The stub of the generic BINARY_OP handler `name`"
-    return (f"\nstatic Py_NO_INLINE int\n{stub_function_name(name)}({STUB_PARAMETERS})\n{{\n"
-            f"    Py_MUSTTAIL return {BINARY_OP_STUB}(tstate, frame, site, {operation});\n}}\n")
-
-
-def binary_op_family_stub(fb: str) -> str:
-    """BINARY_OP's generic stub after a specialised arm's miss: the shared
-    body with the word's operation, which its entry keeps (as the forms'
-    IR_DEOPT_BINARY_OP)"""
-    return (f"\nstatic Py_NO_INLINE int\n{stub_function_name(BINARY_OP_FAMILY)}"
-            f"({STUB_PARAMETERS})\n{{\n"
-            "    _PyIRWord ir_word = *site;\n"
-            f"    Py_MUSTTAIL return {BINARY_OP_STUB}(tstate, frame, site,\n"
-            f"        (int)((_PyFbHeader *)IR_FB({fb}))->arg);\n}}\n")
-
-
 # The transfer macros that a stub binds (g1a/abi.md).  The others that the
 # forms bind are left undefined, so that a stub using one does not compile.
 STUB_BINDINGS = {
     "DISPATCH()": "return ir_status",
     "DISPATCH_SAME_OPARG()": "return ir_status | _PyIR_AGAIN",
     "JUMP_TO_PREDICTED(name)":
-        "do { assert(ir_status == 0); return _PyIR_MISS; } while (0)",
-    "IR_DEOPT_BINARY_OP(F)":
         "do { assert(ir_status == 0); return _PyIR_MISS; } while (0)",
     "PROCESS_ERROR_AT(ingress, checkpoint, origin)": (
         "do { \\\n"
@@ -7765,13 +7617,9 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
     write_header(__file__, [], outfile)
     prologue, names = stub_prologue()
     outfile.write(prologue)
-    # The shared BINARY_OP body first: the operations' stubs call it
-    for function in sorted(stubs, key=lambda f: (f != BINARY_OP_STUB, f)):
+    for function in sorted(stubs):
         outfile.write(stubs[function])
     families = sorted({plan.family for plan in plans.values()})
-    if BINARY_OP_FAMILY in families:
-        fmt = formats[binary_op_handlers(analysis)[0]]
-        outfile.write(binary_op_family_stub(field_expr(fmt.fb)))
     for name in reversed(names):
         outfile.write(f'#pragma pop_macro("{name}")\n')
     outfile.write("\n/* The plan of each handler that has one: its region, whether "
@@ -7814,11 +7662,6 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     functions: list[str] = []
     twin_functions: list[str] = []
     outlined_names: set[str] = set()
-    # The generic handlers of BINARY_OP differ only in the operation.  Each
-    # sets it and enters the one body, which handles any operation, so that
-    # the body is in the evaluator once, not once per operation.
-    binary_ops = frozenset(binary_op_handlers(analysis))
-    shared_binary_op_done = False
     family_heads = {inst.family.name for inst in all_instructions(analysis).values()
                     if inst.family is not None} | set(analysis.families)
     plans = stub_plans(analysis)
@@ -7829,19 +7672,6 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         # The shared arms' stubs, and each family's generic (its head's)
         stub = (plan is not None and stubs is not None
                 and (plan.region == "shared" or name == plan.family))
-        if name in binary_ops:
-            operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
-            out.emit(f"TARGET({name}) {{\n")
-            out.emit(f"{BINARY_OP_OPERAND} = {operation};\n")
-            out.emit("goto LABEL_binary_op;\n")
-            out.emit("}\n")
-            functions.append(binary_op_function(name, operation))
-            if stub:
-                stubs[stub_function_name(name)] = binary_op_stub(name, operation)
-            if shared_binary_op_done:
-                continue
-            shared_binary_op_done = True
-            emitter.shared_binary_op = True
         if name in EDGE_TWINS:
             base, taken_event = EDGE_TWINS[name]
             twin_functions.append(edge_twin_function(name, base, taken_event))
@@ -7867,41 +7697,30 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                         and any(isinstance(part, Uop) and
                                 "specializing" in part.annotations
                                 for part in inst.parts))
-        outlined = ((inst.outlined or inst.properties.outlined or generic_head)
-                    and not emitter.shared_binary_op)
+        outlined = inst.outlined or inst.properties.outlined or generic_head
         buffer = io.StringIO()
         emitter.out = CWriter(buffer, 2, lines)
         generate_handler(name, inst, formats[name], emitter, emitter.out)
         emitter.out = out
         text = buffer.getvalue()
-        if emitter.shared_binary_op:
-            check_body("binary_op", text, inst.where, BINARY_OP_OPERAND)
-            functions.append(binary_op_routine(text))
-            outfile.write(text)
-            if stub:
-                stubs[BINARY_OP_STUB] = stub_function(
-                    BINARY_OP_STUB, text, "LABEL(binary_op) {",
-                    f", int {BINARY_OP_OPERAND}")
+        check_body(name, text, inst.where)
+        functions.append(function_form(name, text))
+        if stub:
+            stubs[stub_function_name(name)] = stub_function(
+                stub_function_name(name), text, f"TARGET({name}) {{")
+        if outlined:
+            outlined_names.add(name)
+            out.emit(f"TARGET({name}) {{\n")
+            out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
+            out.emit("}\n")
         else:
-            check_body(name, text, inst.where)
-            functions.append(function_form(name, text))
-            if stub:
-                stubs[stub_function_name(name)] = stub_function(
-                    stub_function_name(name), text, f"TARGET({name}) {{")
-            if outlined:
-                outlined_names.add(name)
-                out.emit(f"TARGET({name}) {{\n")
-                out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
-                out.emit("}\n")
-            else:
-                outfile.write(text)
+            outfile.write(text)
         for checkpoint in (checkpoints or {}).get(name, ()):
             if emitter.error_checkpoint_sites.get(checkpoint.id) != checkpoint:
                 raise analysis_error("error checkpoint changed during final emission", inst.where)
         emitter.handler_format = None
         emitter.execution_variant = None
         emitter.stub_escapes = None
-        emitter.shared_binary_op = False
     handlers = handler_instructions(analysis)
     for twin, (base, _) in EDGE_TWINS.items():
         if twin in handlers and base not in outlined_names:
@@ -7997,8 +7816,6 @@ def form_declarations(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ())
                    | {"UNKNOWN_OPCODE"} | {arm.name for arm in arms if arm.emitted})
     lines = [f"static _PyIRTransfer ir_run_{name}({FORM_PARAMETERS}, _PyIRWord ir_word);\n"
              for name in names]
-    lines.append(f"static _PyIRTransfer ir_binary_op({FORM_PARAMETERS}, _PyIRWord ir_word, "
-                 f"int {BINARY_OP_OPERAND});\n")
     lines += [f"static _PyIRTransfer ir_{name}({FORM_PARAMETERS});\n"
               for name in entry_labels(analysis)]
     lines.append(f"static const _PyIRForm ir_handler_forms[{ir_arms.IR_LIMIT}];\n")
@@ -8460,48 +8277,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             [token.text for token in part.body.tokens() if token.kind != "COMMENT"]
             == [token.text for token in tokenize(body)]
             for part, body in zip(parts, bodies))
-
-    if inst.name in ("RESUME", "RESUME_JIT") and scalar_shape(0, 0):
-        # These audited helper contracts may poll/instrument and change
-        # control flow; ordinary completion writes no scratch. Require the
-        # complete bodies, not a token blacklist that can miss pointer stores.
-        # Callback/error phases remain uncovered.  RESUME_JIT ends in the
-        # JIT's warm-up event, which moves no value.
-        expected_parts = ["_MAYBE_INSTRUMENT", "_CHECK_PERIODIC_IF_NOT_YIELD_FROM"]
-        if inst.name == "RESUME_JIT":
-            expected_parts.append("_JIT_EVENT")
-        if [part.name for part in parts] != expected_parts:
-            return unknown
-        instrument = """{
-            #ifdef Py_GIL_DISABLED
-            int check_instrumentation = 1;
-            #else
-            int check_instrumentation = (tstate->tracing == 0);
-            #endif
-            if (check_instrumentation) {
-                uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
-                uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                if (code_version != global_version) {
-                    int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-                    if (err) { ERROR_NO_POP(); }
-                    next_instr = this_instr;
-                    DISPATCH_SAME_OPARG();
-                }
-            }
-        }"""
-        periodic = """{
-            if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
-                int err = check_periodics(tstate);
-                ERROR_IF(err != 0);
-            }
-        }"""
-        event = "{ IR_JIT_EVENT(); }"
-        if (any(part.stack.inputs or part.stack.outputs for part in parts)
-                or any(statement_shape(part.body)
-                       != statement_shape(Parser(body, "<RESUME contract>").block())
-                       for part, body in zip(parts, (instrument, periodic, event)))):
-            return unknown
-        return "_PyIR_TRANSFER_PRESERVE"
 
     scalar = {
         "LOAD_COMMON_CONSTANT": ("{ assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "

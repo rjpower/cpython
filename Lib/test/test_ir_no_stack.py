@@ -8,7 +8,6 @@ that matches no line is stale and fails, so the list shrinks as the
 references go.  The translator and the public co_code, dis and pcmap
 transport are allowed by file."""
 
-import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -88,6 +87,14 @@ ALLOWED: tuple[Allowed, ...] = (
 )
 
 
+# Families that no translator rule emits: code that is not translated holds them
+NOT_TRANSLATED = {
+    "InitResult": "the static init-cleanup code object holds it already lowered",
+    "Line": "instrumentation puts it over a word; no stack op lowers to it",
+    "Instruction": "instrumentation puts it over a word; no stack op lowers to it",
+}
+
+
 def stack_names() -> set[str]:
     return {op.name for op in stack_ops.STACK_OPS}
 
@@ -141,16 +148,21 @@ def allowed_by(rel: str, function: str, line: str) -> list[Allowed]:
 
 
 class NoStackTests(unittest.TestCase):
-    def test_every_family_is_reached_by_a_stack_op_or_declared(self):
-        with test_tools.imports_under_tool("cases_generator"):
-            import regcfg_metadata_generator
-            import rop_generator
-        arms = rop_generator.load_arm_entries()
-        self.assertEqual(regcfg_metadata_generator.check_families(arms), [])
-        # A family that nothing reaches is refused
-        stray = [dataclasses.replace(arms[0], dotted="Stray.Arm")]
-        self.assertIn("Stray: no stack op lowers to it and it is not a rule family",
-                      regcfg_metadata_generator.check_families(arms + stray))
+    def test_every_family_is_emitted_by_a_translator_rule(self):
+        families = set(re.findall(
+            r"ROP_FAMILY_(\w+)",
+            (ROOT / "Include/internal/pycore_rop_metadata.h").read_text()))
+        translator = "".join((ROOT / name).read_text() for name in (
+            "Python/regcfg.c", "Python/regcfg_passes.c", "Python/ir_assemble.c"))
+
+        def emitted(family):
+            return re.search(rf"ROP_OP_{family}_|ROP_SELECT_{family}_"
+                             rf"|_PyRop_Select{family}\b", translator)
+
+        unreached = {f for f in families if not emitted(f)}
+        self.assertEqual(unreached, set(NOT_TRANSLATED), "a family no rule emits")
+        for family, reason in NOT_TRANSLATED.items():
+            self.assertTrue(reason.strip(), family)
 
     def test_scanned_sources_exist(self):
         self.assertGreater(len(scanned_files()), 100)

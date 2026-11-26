@@ -29,7 +29,6 @@
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_ir_source.h"     // _PyIR_POSITION_RECORD
-#include "pycore_regcfg_metadata.h" // _PyStack_Lowering
 #include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
 #include "pycore_rop_metadata.h"  // _PyRop_Arms
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
@@ -2112,72 +2111,14 @@ arm_handlers(PyObject *self, PyObject *Py_UNUSED(ignored))
     return result;
 }
 
-/* stack_families() -> {family name: its first stack op}: the families that the
- * translator lowers a stack op to, and those a translator rule picks.  The
- * disassembler shows a word of a family as that op. */
-static PyObject *
-stack_families(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyObject *result = PyDict_New();
-    if (result == NULL) {
-        return NULL;
-    }
-    for (int op = 255; op >= 0; op--) {
-        if (_PyStack_Lowering[op].family == _PyStack_NO_FAMILY ||
-            !_PyStack_Lowering[op].canonical)
-        {
-            continue;
-        }
-        const char *name = _PyIR_FamilyNames[_PyStack_Lowering[op].family];
-        PyObject *number = PyLong_FromLong(op);
-        if (number == NULL || PyDict_SetItemString(result, name, number) < 0) {
-            Py_XDECREF(number);
-            Py_DECREF(result);
-            return NULL;
-        }
-        Py_DECREF(number);
-    }
-    for (size_t k = 0; k < Py_ARRAY_LENGTH(_PyStack_RuleFamilies); k++) {
-        PyObject *key = PyUnicode_FromString(
-            _PyIR_FamilyNames[_PyStack_RuleFamilies[k].family]);
-        PyObject *number = PyLong_FromLong(_PyStack_RuleFamilies[k].op);
-        /* The first op of a rule family stands for it */
-        int err = key == NULL || number == NULL ||
-                  PyDict_SetDefaultRef(result, key, number, NULL) < 0;
-        Py_XDECREF(key);
-        Py_XDECREF(number);
-        if (err) {
-            Py_DECREF(result);
-            return NULL;
-        }
-    }
-    return result;
-}
-
-/* The stack op of co_code at byte offset `offset`, without specialisation */
+/* Whether an arm of family `want` may stand in a word of family `have`: the
+ * same family, or a method load, which the translator writes as a GetAttr
+ * word that a GetMethod arm replaces. */
 static int
-word_stack_op(PyCodeObject *code, int offset)
+same_family(const char *have, const char *want)
 {
-    return _PyOpcode_Deopt[_PyCode_CODE(code)[offset / 2].op.code];
-}
-
-/* Whether the stack op `op` lowers to `family`, by the table or by a rule */
-static int
-family_has_op(const _PyRopFamily *family, int op)
-{
-    if (_PyStack_Lowering[op].family != _PyStack_NO_FAMILY &&
-        strcmp(_PyIR_FamilyNames[_PyStack_Lowering[op].family], family->name) == 0)
-    {
-        return 1;
-    }
-    for (size_t k = 0; k < Py_ARRAY_LENGTH(_PyStack_RuleFamilies); k++) {
-        if (_PyStack_RuleFamilies[k].op == op &&
-            strcmp(_PyIR_FamilyNames[_PyStack_RuleFamilies[k].family], family->name) == 0)
-        {
-            return 1;
-        }
-    }
-    return 0;
+    return strcmp(have, want) == 0 ||
+           (strcmp(have, "GetAttr") == 0 && strcmp(want, "GetMethod") == 0);
 }
 
 /* force_arm(code, offset, arm): make the word of the executing copy of code
@@ -2210,9 +2151,8 @@ force_arm(PyObject *self, PyObject *args)
          i += _PyIR_WordLength(_PyCode_IRWords(code)[i]))
     {
         int generic = _PyCode_InstrHandler(code, i);
-        int base = word_stack_op(code, offset);
-        const char *head = _PyOpcode_OpName[base];
-        if (family_has_op(family, base)) {
+        const char *head = _PyIR_FamilyNames[_PyIR_HandlerFamily[generic]];
+        if (same_family(head, family->name)) {
             const _PyIRFormat *old = _PyIR_FormatOf(generic);
             const _PyIRFormat *fmt = _PyIR_FormatOf(arm->handler);
             if (memcmp(old->roles, fmt->roles, sizeof(fmt->roles)) != 0 ||
@@ -2283,7 +2223,8 @@ plant_arm_words(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "no room for the operand words");
         return NULL;
     }
-    if (family_has_op(family, word_stack_op(code, offset))) {
+    int generic = _PyCode_InstrHandler(code, i);
+    if (same_family(_PyIR_FamilyNames[_PyIR_HandlerFamily[generic]], family->name)) {
         /* The lowered words too: instrumentation restores a word to its
          * canonical handler, which must be the arm to keep its operand words. */
         _PyIRWord *canonical = (_PyIRWord *)_PyCode_IRWords(code);
@@ -5720,7 +5661,6 @@ static PyMethodDef module_functions[] = {
     {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
-    {"stack_families", stack_families, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
     {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},
     {"ir_edge_homes", ir_edge_homes, METH_VARARGS, NULL},

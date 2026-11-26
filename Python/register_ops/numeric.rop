@@ -46,6 +46,7 @@ extern helper int_binary(op:Enum<Numeric>, a:B, b:B)
 
 extern primitive float_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
   effects()
+  test(inline_number(a), inline_number(b))
   c _PyRop_FloatBinaryApplies as bool
   evidence(
     review: "Reviewed BN. pycore_rop_rows.h: the float operand pair, and an"

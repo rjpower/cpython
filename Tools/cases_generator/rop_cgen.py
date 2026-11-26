@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
-                         PcRole, Slot, Wrap)
+                         PcRole, Slot, UNCOUNTED_FACTS, Wrap)
 from rop_check import GraphInfo, Program, expand_debts, expand_group, group_parts, is_args
 from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
@@ -186,6 +186,10 @@ class Facts:
     def has(self, name: str, fact: Fact) -> bool:
         return any(f is fact for f, _ in self.by_name.get(name, ()))
 
+    def uncounted(self, name: str) -> bool:
+        """The value owns no count (UNCOUNTED_FACTS)"""
+        return bool(self.by_name.get(name, frozenset()) & UNCOUNTED_FACTS)
+
 
 def intersect(facts: list[dict[str, frozenset]]) -> dict[str, frozenset]:
     first, *rest = facts
@@ -346,6 +350,16 @@ def arm_facts(program: Program, flat: FlatGraph) -> dict[str, Facts]:
             out.update(extra)
             incoming[target.label].append(out)
     return facts_in
+
+
+def facts_at(program: Program, entry: Facts, block: Block, index: int) -> Facts:
+    """The facts before statement `index` of a block: those on entry, and
+    those that each earlier guard's test grants"""
+    known = dict(entry.by_name)
+    for s in block.stmts[:index]:
+        if isinstance(s, Guard):
+            add_test_facts(program, known, s.cond)
+    return Facts(known)
 
 
 def arg_facts(program: Program, e: Expr, known: Mapping[str, frozenset]) -> frozenset:
@@ -913,10 +927,10 @@ class ArmLowerer:
     def lower_block(self, block, label: str) -> None:
         if label != "entry":
             self.emit(f"{self.label(label)}:")
-        self.current_facts = self.facts_in[label]
         # An acquire() takes the owner on its own path only
         self.acquired = set(self.acquired_in[label])
-        for s in block.stmts:
+        for i, s in enumerate(block.stmts):
+            self.current_facts = facts_at(self.program, self.facts_in[label], block, i)
             self.lower_stmt(s)
         self.lower_term(block, label)
 
@@ -996,8 +1010,8 @@ class ArmLowerer:
                 continue
             home, flag = self.home(d.subject), self.local_flag(d.subject)
             view = self.views.get(d.subject)
-            if view is not None and facts.has(view, Fact.inline_int):
-                # An inline int owns no count: clearing the home retires it
+            if view is not None and facts.uncounted(view):
+                # A value that owns no count: clearing the home retires it
                 owners[d.subject] = None
                 self.emit_temporary(flag, f"_PyFrame_WriteHome(frame, {home}, PyValue_NULL);")
                 continue
@@ -1058,7 +1072,6 @@ class ArmLowerer:
     # Terminators
 
     def lower_term(self, block, label: str) -> None:
-        self.current_facts = self.facts_in[label]
         t = block.term
         if isinstance(t, Goto):
             self.jump(t.target)

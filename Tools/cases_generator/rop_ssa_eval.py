@@ -167,6 +167,8 @@ def fact_holds(cx: Context, fact: str, type_arg, w) -> bool | None:
         return None
     if fact == "inline_int":
         return bool(spec("PyValue_IsInlineInt")(cx, w))
+    if fact == "inline_number":
+        return bool(spec("PyValue_IsInlineInt")(cx, w) or spec("PyValue_IsInlineFloat")(cx, w))
     if fact == "object":
         return is_object(cx, w)
     if fact in ("nonnull", "present"):

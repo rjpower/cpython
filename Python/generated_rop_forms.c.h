@@ -4113,8 +4113,6 @@ ir_run_Add_Float(
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
     PyValue ret1;
-    PyValue own_x = PyValue_NULL;
-    PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -4129,16 +4127,14 @@ ir_run_Add_Float(
     }
     z = ret1;
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_Add_Float_Failed:
@@ -8606,7 +8602,6 @@ ir_run_GetItem_ListIndex(
     PyValueBorrow item;
     PyValue result;
     PyValue own_obj = PyValue_NULL;
-    PyValue own_key = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     l = PyValue_Borrow(*home_obj);
@@ -8626,12 +8621,11 @@ ir_run_GetItem_ListIndex(
         own_obj = _PyFrame_TakeHome(frame, home_obj);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_key = _PyFrame_TakeHome(frame, home_key);
+        _PyFrame_WriteHome(frame, home_key, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_key);
     PyValue_XCLOSE(own_obj);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
@@ -8657,7 +8651,6 @@ ir_run_GetItem_TupleIndex(
     PyValueBorrow item;
     PyValue result;
     PyValue own_obj = PyValue_NULL;
-    PyValue own_key = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     l = PyValue_Borrow(*home_obj);
@@ -8677,12 +8670,11 @@ ir_run_GetItem_TupleIndex(
         own_obj = _PyFrame_TakeHome(frame, home_obj);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_key = _PyFrame_TakeHome(frame, home_key);
+        _PyFrame_WriteHome(frame, home_key, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_key);
     PyValue_XCLOSE(own_obj);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
@@ -8708,7 +8700,6 @@ ir_run_GetItem_Ascii(
     PyValueBorrow item;
     PyValue result;
     PyValue own_obj = PyValue_NULL;
-    PyValue own_key = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     l = PyValue_Borrow(*home_obj);
@@ -8728,12 +8719,11 @@ ir_run_GetItem_Ascii(
         own_obj = _PyFrame_TakeHome(frame, home_obj);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_key = _PyFrame_TakeHome(frame, home_key);
+        _PyFrame_WriteHome(frame, home_key, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_key);
     PyValue_XCLOSE(own_obj);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
@@ -8759,7 +8749,6 @@ ir_run_GetItem_UnicodeAsciiChar(
     PyValueBorrow item;
     PyValue result;
     PyValue own_obj = PyValue_NULL;
-    PyValue own_key = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     l = PyValue_Borrow(*home_obj);
@@ -8782,12 +8771,11 @@ ir_run_GetItem_UnicodeAsciiChar(
         own_obj = _PyFrame_TakeHome(frame, home_obj);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_key = _PyFrame_TakeHome(frame, home_key);
+        _PyFrame_WriteHome(frame, home_key, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_key);
     PyValue_XCLOSE(own_obj);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
@@ -10369,8 +10357,6 @@ ir_run_Binary_Float(
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
     PyValue ret1;
-    PyValue own_x = PyValue_NULL;
-    PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -10385,16 +10371,14 @@ ir_run_Binary_Float(
     }
     z = ret1;
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_Binary_Float_Failed:
@@ -11552,8 +11536,6 @@ ir_run_Compare_Float(
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
-    PyValue own_x = PyValue_NULL;
-    PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -11564,16 +11546,14 @@ ir_run_Compare_Float(
     }
     z = _PyRop_TruthObject(_PyRop_CompareFloats((((uint32_t)IR_D(ir_word) >> 0) & 0x7), l, r), false);
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
 }
@@ -11934,8 +11914,6 @@ ir_run_TestBranch_Float(
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow r;
-    PyValue own_x = PyValue_NULL;
-    PyValue own_y = PyValue_NULL;
     bool hit;
     l = PyValue_Borrow(*home_x);
     r = PyValue_Borrow(*home_y);
@@ -11949,23 +11927,19 @@ ir_run_TestBranch_Float(
     goto rop_TestBranch_Float_Fall;
     rop_TestBranch_Float_Taken:
     if (!(ir_word & IR_F_LOCAL_A)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
     rop_TestBranch_Float_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     DISPATCH();
 }
 
@@ -12788,7 +12762,6 @@ ir_run_Truth_Bool(
     INSTRUCTION_STATS(ROP_HANDLER_Truth_Bool);
     PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow v;
-    PyValue own_value = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -12798,12 +12771,11 @@ ir_run_Truth_Bool(
     }
     z = _PyRop_TruthObject(PyValue_IsTrue(v), (uint32_t)IR_C(ir_word));
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_value = _PyFrame_TakeHome(frame, home_value);
+        _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_value);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
 }
@@ -12893,7 +12865,6 @@ ir_run_Truth_None(
     INSTRUCTION_STATS(ROP_HANDLER_Truth_None);
     PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow v;
-    PyValue own_value = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -12903,12 +12874,11 @@ ir_run_Truth_None(
     }
     z = _PyRop_TruthObject(false, (uint32_t)IR_C(ir_word));
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_value = _PyFrame_TakeHome(frame, home_value);
+        _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_value);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
 }
@@ -13076,7 +13046,6 @@ ir_run_BranchTruth_Bool(
     INSTRUCTION_STATS(ROP_HANDLER_BranchTruth_Bool);
     PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
     PyValueBorrow v;
-    PyValue own_value = PyValue_NULL;
     bool hit;
     v = PyValue_Borrow(*home_value);
     if (!PyValue_BoolCheck(v)) {
@@ -13092,15 +13061,13 @@ ir_run_BranchTruth_Bool(
     goto rop_BranchTruth_Bool_Fall;
     rop_BranchTruth_Bool_Taken:
     if (!(ir_word & IR_F_LOCAL_A)) {
-        own_value = _PyFrame_TakeHome(frame, home_value);
+        _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
-    PyValue_XCLOSE(own_value);
     IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
     rop_BranchTruth_Bool_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
-        own_value = _PyFrame_TakeHome(frame, home_value);
+        _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
-    PyValue_XCLOSE(own_value);
     DISPATCH();
 }
 
@@ -13205,7 +13172,6 @@ ir_run_BranchTruth_None(
     INSTRUCTION_STATS(ROP_HANDLER_BranchTruth_None);
     PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
     PyValueBorrow v;
-    PyValue own_value = PyValue_NULL;
     bool hit;
     v = PyValue_Borrow(*home_value);
     if (!PyValue_IsNone(v)) {
@@ -13221,15 +13187,13 @@ ir_run_BranchTruth_None(
     goto rop_BranchTruth_None_Fall;
     rop_BranchTruth_None_Taken:
     if (!(ir_word & IR_F_LOCAL_A)) {
-        own_value = _PyFrame_TakeHome(frame, home_value);
+        _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
-    PyValue_XCLOSE(own_value);
     IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
     rop_BranchTruth_None_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
-        own_value = _PyFrame_TakeHome(frame, home_value);
+        _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
-    PyValue_XCLOSE(own_value);
     DISPATCH();
 }
 

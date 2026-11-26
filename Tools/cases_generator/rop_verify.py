@@ -121,7 +121,7 @@ def implied(f: FactT) -> set[FactT]:
             out.add(FactT(Fact.object, None, one))
     elif f.fact in (Fact.type_version, Fact.has_values):
         out |= {FactT(Fact.object, None, one), FactT(Fact.nonnull, None, one)}
-    elif f.fact in (Fact.object, Fact.tagged_index, Fact.present):
+    elif f.fact in (Fact.object, Fact.tagged_index, Fact.present, Fact.inline_number):
         out.add(FactT(Fact.nonnull, None, one))
     return out
 

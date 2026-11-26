@@ -116,6 +116,7 @@ macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
 
 extern helper float_operands(a:B, b:B) -> Bool
   effects()
+  test(inline_number(a), inline_number(b))
   c _PyRop_FloatOperands as bool inline
   evidence(
     review: "Reviewed P2. pycore_value.h PyValue_FloatOperandsCheck.",

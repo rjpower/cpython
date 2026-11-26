@@ -3230,8 +3230,6 @@ _PyIR_Rop_Stub_Add_Float(
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
     PyValue ret1;
-    PyValue own_x = PyValue_NULL;
-    PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -3246,16 +3244,14 @@ _PyIR_Rop_Stub_Add_Float(
     }
     z = ret1;
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_Add_Float_Failed:
@@ -5170,8 +5166,6 @@ _PyIR_Rop_Stub_Binary_Float(
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
     PyValue ret1;
-    PyValue own_x = PyValue_NULL;
-    PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -5186,16 +5180,14 @@ _PyIR_Rop_Stub_Binary_Float(
     }
     z = ret1;
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_Binary_Float_Failed:
@@ -5842,8 +5834,6 @@ _PyIR_Rop_Stub_Compare_Float(
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
-    PyValue own_x = PyValue_NULL;
-    PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -5854,16 +5844,14 @@ _PyIR_Rop_Stub_Compare_Float(
     }
     z = _PyRop_TruthObject(_PyRop_CompareFloats((((uint32_t)IR_D(ir_word) >> 0) & 0x7), l, r), false);
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_C)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
 }
@@ -6155,8 +6143,6 @@ _PyIR_Rop_Stub_TestBranch_Float(
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow r;
-    PyValue own_x = PyValue_NULL;
-    PyValue own_y = PyValue_NULL;
     bool hit;
     l = PyValue_Borrow(*home_x);
     r = PyValue_Borrow(*home_y);
@@ -6170,23 +6156,19 @@ _PyIR_Rop_Stub_TestBranch_Float(
     goto rop_TestBranch_Float_Fall;
     rop_TestBranch_Float_Taken:
     if (!(ir_word & IR_F_LOCAL_A)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
     rop_TestBranch_Float_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
-        own_x = _PyFrame_TakeHome(frame, home_x);
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
     if (!(ir_word & IR_F_LOCAL_B)) {
-        own_y = _PyFrame_TakeHome(frame, home_y);
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
     DISPATCH();
 }
 

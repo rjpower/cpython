@@ -28,9 +28,9 @@ from typing import Callable
 import rop_primitives
 import jit_backend
 from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLayout,
-                         CSource, CTest, DebtKind, Fact, FieldKind, Handle, Scalar,
+                         CSource, CTest, DebtKind, FieldKind, Handle, Scalar,
                          Schema, SchemaCtor, Wrap)
-from rop_cgen import Unsupported, arm_facts, flatten, home_views
+from rop_cgen import Unsupported, arm_facts, facts_at, flatten, home_views
 from rop_check import Program
 from rop_model import (Arm, EnumType, Extern, HandleType, Publish, ScalarType, SchemaType,
                        Type, WrapType)
@@ -159,8 +159,8 @@ class ArmLeaf:
     plan: PublishPlan | None
     # Home operands the body reads, in order of first use
     inputs: tuple[str, ...]
-    # Operands whose values are known inline ints on every path to the publish
-    inline: frozenset[str]
+    # Operands whose values own no count at every publish
+    uncounted: frozenset[str]
     # The source homes whose owner the arm acquires, in order
     acquired: tuple[str, ...] = ()
     # The feedback entry's C type when the body reads the entry
@@ -376,20 +376,20 @@ class LeafBuilder:
         body = rop_primitives.LeafBody(
             self.arm.name, self.block_list, self.types, tuple(self.inputs), outputs,
             frozenset(self.effects), tuple(self.helpers))
-        return ArmLeaf(body, self.plan, tuple(self.inputs), self.inline(),
+        return ArmLeaf(body, self.plan, tuple(self.inputs), self.uncounted(),
                        tuple(self.acquired), self.entry)
 
-    def inline(self) -> frozenset[str]:
-        """The homes whose value the arm's facts show an inline int on every
-        path that publishes (rop_cgen's analysis, as the interpreter's C)"""
+    def uncounted(self) -> frozenset[str]:
+        """The homes whose value the arm's facts show owns no count at every
+        publish (rop_cgen's analysis, as the interpreter's C)"""
         flat = flatten(self.program, self.arm)
         facts = arm_facts(self.program, flat)
         views = home_views(flat)
-        publishes = [label for label, b in flat.blocks.items()
-                     if any(isinstance(s, Publish) for s in b.stmts)]
+        publishes = [facts_at(self.program, facts[label], b, i)
+                     for label, b in flat.blocks.items() if label in facts
+                     for i, s in enumerate(b.stmts) if isinstance(s, Publish)]
         return frozenset(home for home, view in views.items()
-                         if all(facts[label].has(view, Fact.inline_int)
-                                for label in publishes if label in facts))
+                         if all(f.uncounted(view) for f in publishes))
 
     # Ops
 
@@ -1165,7 +1165,7 @@ class TemplateBuilder:
         taken = sorted((s.home for s in plan.steps if s.op == "take"), key=order.index)
         for name in taken:
             home = self.homes[name]
-            if name not in self.leaf.inline:
+            if name not in self.leaf.uncounted:
                 # A temporary's owner closes after the stores; one the body
                 # never read is loaded before its home is detached
                 v = views.get(name)

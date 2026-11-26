@@ -993,7 +993,8 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
         // generator, with its frame at the entry RESUME
         if (op->opcode == NOP || op->opcode == RETURN_GENERATOR ||
             (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
-            op->handler = IR_H_NOP;
+            // No word, so no handler
+            op->handler = _PyIR_NO_HANDLER;
             op->nwords = 0;
             continue;
         }

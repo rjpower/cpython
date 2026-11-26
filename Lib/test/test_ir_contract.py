@@ -373,12 +373,13 @@ class ContractTests(unittest.TestCase):
         # branch site even when another handler reports the outcome.
         events = sys.monitoring.events
         twin_events = 0
-        for row in ROWS.values():
-            twin_events |= row.events
-        added = 0
-        for name in ("INSTRUMENTED_LINE", "INSTRUMENTED_INSTRUCTION"):
-            if name in BY_NAME:
-                added |= BY_NAME[name].events
+        for row in CONTRACT:
+            if row is not None:
+                twin_events |= row.events
+        # LINE and INSTRUCTION are every word's: the displacing arms of the
+        # Line and Instruction families report them
+        added = events.LINE | events.INSTRUCTION
+        twin_events |= added
 
         def gen():
             yield 1

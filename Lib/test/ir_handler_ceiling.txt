@@ -3,9 +3,6 @@
 # the generated classification against this file.  New instructions are written
 # in Python/register_ops/*.rop, never added here.  A port deletes its lines; the
 # file is empty at step D.
-inherited INSTRUMENTED_INSTRUCTION
-inherited INSTRUMENTED_LINE
-inherited NOP
 stub BINARY_OP
 stub BINARY_SLICE
 stub BUILD_INTERPOLATION
@@ -57,10 +54,12 @@ stub INSTRUMENTED_END_ASYNC_FOR
 stub INSTRUMENTED_END_FOR
 stub INSTRUMENTED_END_SEND
 stub INSTRUMENTED_FOR_ITER
+stub INSTRUMENTED_INSTRUCTION
 stub INSTRUMENTED_JUMP_BACKWARD
 stub INSTRUMENTED_JUMP_FORWARD
 stub INSTRUMENTED_JUMP_IF_FALSE_OR_POP
 stub INSTRUMENTED_JUMP_IF_TRUE_OR_POP
+stub INSTRUMENTED_LINE
 stub INSTRUMENTED_LOAD_SUPER_ATTR
 stub INSTRUMENTED_POP_ITER
 stub INSTRUMENTED_POP_JUMP_IF_FALSE
@@ -107,6 +106,7 @@ stub MATCH_KEYS
 stub MATCH_MAPPING
 stub MATCH_SEQUENCE
 stub MATERIALIZE_KWARGS
+stub NOP
 stub NOT_TAKEN
 stub POP_EXCEPT
 stub POP_ITER

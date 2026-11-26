@@ -28,9 +28,9 @@ from typing import Callable
 import rop_primitives
 import jit_backend
 from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLayout,
-                         CSource, CTest, DebtKind, Fact, FieldKind, Handle, Scalar,
+                         CSource, CTest, DebtKind, FieldKind, Handle, Scalar,
                          Schema, SchemaCtor, Wrap)
-from rop_cgen import Unsupported, arm_facts, flatten, home_views
+from rop_cgen import Unsupported, arm_facts, facts_at, flatten, home_views
 from rop_check import Program
 from rop_model import (Arm, EnumType, Extern, HandleType, Publish, ScalarType, SchemaType,
                        Type, WrapType)
@@ -159,8 +159,8 @@ class ArmLeaf:
     plan: PublishPlan | None
     # Home operands the body reads, in order of first use
     inputs: tuple[str, ...]
-    # Operands whose values are known inline ints on every path to the publish
-    inline: frozenset[str]
+    # Operands whose values own no count at every publish
+    uncounted: frozenset[str]
     # The source homes whose owner the arm acquires, in order
     acquired: tuple[str, ...] = ()
     # The feedback entry's C type when the body reads the entry
@@ -376,20 +376,20 @@ class LeafBuilder:
         body = rop_primitives.LeafBody(
             self.arm.name, self.block_list, self.types, tuple(self.inputs), outputs,
             frozenset(self.effects), tuple(self.helpers))
-        return ArmLeaf(body, self.plan, tuple(self.inputs), self.inline(),
+        return ArmLeaf(body, self.plan, tuple(self.inputs), self.uncounted(),
                        tuple(self.acquired), self.entry)
 
-    def inline(self) -> frozenset[str]:
-        """The homes whose value the arm's facts show an inline int on every
-        path that publishes (rop_cgen's analysis, as the interpreter's C)"""
+    def uncounted(self) -> frozenset[str]:
+        """The homes whose value the arm's facts show owns no count at every
+        publish (rop_cgen's analysis, as the interpreter's C)"""
         flat = flatten(self.program, self.arm)
         facts = arm_facts(self.program, flat)
         views = home_views(flat)
-        publishes = [label for label, b in flat.blocks.items()
-                     if any(isinstance(s, Publish) for s in b.stmts)]
+        publishes = [facts_at(self.program, facts[label], b, i)
+                     for label, b in flat.blocks.items() if label in facts
+                     for i, s in enumerate(b.stmts) if isinstance(s, Publish)]
         return frozenset(home for home, view in views.items()
-                         if all(facts[label].has(view, Fact.inline_int)
-                                for label in publishes if label in facts))
+                         if all(f.uncounted(view) for f in publishes))
 
     # Ops
 
@@ -663,6 +663,10 @@ def _branch_taken(b, mode, hit):
 
 def _same_bool(b, sense, hit):
     return (b.emit1("xorb", "bool", (b.leaf(hit),), f"!({_imm(b, sense)})"),)
+
+
+def _events_pending(b, thread):
+    return (b.prim1("_Py_EvalBreakerHasEvents"),)
 
 
 def _borrow_present(b, m):
@@ -951,6 +955,8 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     "_PyRop_BranchTaken": _branch_taken,
     "_PyRop_SameBool": _same_bool,
     "_PyValue_BorrowPresent": _borrow_present,
+    # The poll's flag test
+    "_PyRop_EventsPending": _events_pending,
     # Truth
     "_PyRop_ExactInt": _exact_int,
     "_PyRop_IntNonzero": _int_nonzero,
@@ -990,18 +996,12 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
 
 
 def _poll(b: LeafBuilder, args, edges) -> None:
-    """_PyRop_Poll: a load and a test of the eval breaker, and only when an
-    event is pending the call that handles it"""
+    """_PyRop_Poll: the call that handles the pending events.  The arm tests
+    the eval breaker before it (events_pending)."""
     if not b.raise_block(edges["err"].target):
         b.refuse("the error edge of poll is not a raise")
     b.helpers.append("_Py_HandlePending")
     b.effects |= set(rop_primitives.HELPERS["_Py_HandlePending"].effects)
-    events = b.prim1("_Py_EvalBreakerHasEvents")
-    here = b.cur
-    handle = b.new_block()
-    quiet = b.edge_block(edges["ok"].target)
-    here.term = ("br", events, handle.id, quiet)
-    b.cur = handle
     status = b.emit1("call", "i32", (), "_Py_HandlePending")
     failed = b.cmp("ne", status, b.const("i32", 0))
     b.emit("raise_if", (), (failed,))
@@ -1165,7 +1165,7 @@ class TemplateBuilder:
         taken = sorted((s.home for s in plan.steps if s.op == "take"), key=order.index)
         for name in taken:
             home = self.homes[name]
-            if name not in self.leaf.inline:
+            if name not in self.leaf.uncounted:
                 # A temporary's owner closes after the stores; one the body
                 # never read is loaded before its home is detached
                 v = views.get(name)

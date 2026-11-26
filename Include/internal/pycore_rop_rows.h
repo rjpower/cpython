@@ -195,6 +195,16 @@ _PyRop_AnchorArg(const _PyRopAnchors *a, size_t i)
     return a->view[i];
 }
 
+/* The poll's fast path (truth.rop, events_pending): an event is pending for
+ * _Py_HandlePending(), by the one relaxed load and test of the eval breaker
+ * that check_periodics() makes first */
+static inline bool
+_PyRop_EventsPending(PyThreadState *tstate)
+{
+    return (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
+            & _PY_EVAL_EVENTS_MASK) != 0;
+}
+
 static inline bool
 _PyRop_RedirectPending(_PyInterpreterFrame *frame)
 {
@@ -226,12 +236,8 @@ _PyRop_FloatOperands(PyValueBorrow a, PyValueBorrow b)
 }
 
 static inline PyValue
-_PyRop_AddFloats(PyValueBorrow a, PyValueBorrow b)
+_PyRop_AddFloats(double x, double y)
 {
-    double x, y;
-    bool admitted = PyValue_FloatOperandValues(a, b, &x, &y);
-    assert(admitted);
-    (void)admitted;
     return PyValue_FromDouble(x + y);
 }
 
@@ -279,15 +285,15 @@ _PyRop_RunExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
 }
 
 /* Binary: the operations other than ordinary addition (numeric.rop).  An
- * `applies` test is the guard of an arm and the test the adaptation macro
- * samples with, so a site never installs an arm it would miss at once. */
+ * arm tests the operand kinds, decodes the operands once, and tests that
+ * the operator admits them (`op_admits`); the compute takes the decoded
+ * values.  The adaptation macro samples with `applies`, the same two tests,
+ * so a site never installs an arm it would miss at once. */
 
+/* b is the scaled right operand: zero or negative exactly when its int is */
 static inline bool
-_PyRop_IntBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+_PyRop_IntOpAdmits(uint32_t op, int64_t b)
 {
-    if (!PyValue_BothInlineInt(a, b)) {
-        return false;
-    }
     switch (op) {
         case NB_INPLACE_ADD:
         case NB_MULTIPLY:
@@ -305,15 +311,21 @@ _PyRop_IntBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
         case NB_INPLACE_FLOOR_DIVIDE:
         case NB_REMAINDER:
         case NB_INPLACE_REMAINDER:
-            return PyValue_InlineInt64(b) != 0;
+            return b != 0;
         case NB_LSHIFT:
         case NB_INPLACE_LSHIFT:
         case NB_RSHIFT:
         case NB_INPLACE_RSHIFT:
-            return PyValue_InlineInt64(b) >= 0;
+            return b >= 0;
         default:
             return false;
     }
+}
+
+static inline bool
+_PyRop_IntBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+{
+    return PyValue_BothInlineInt(a, b) && _PyRop_IntOpAdmits(op, _PyValue_IntScaled(b));
 }
 
 /* The result of an admitted pair: inline unless it leaves the int51 range,
@@ -321,15 +333,15 @@ _PyRop_IntBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
  * the sign of the divisor, where C truncates; int51 operands do not trap in
  * int64 division. */
 static inline PyValue
-_PyRop_IntBinary(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+_PyRop_IntBinary(uint32_t op, int64_t a, int64_t b)
 {
-    int64_t x = PyValue_InlineInt64(a);
-    int64_t y = PyValue_InlineInt64(b);
+    assert(_PyRop_IntOpAdmits(op, b));
+    int64_t x = Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, Py_INT_SHIFT);
+    int64_t y = Py_ARITHMETIC_RIGHT_SHIFT(int64_t, b, Py_INT_SHIFT);
     switch (op) {
         case NB_INPLACE_ADD: {
             int64_t sum;
-            if (__builtin_add_overflow(_PyValue_IntScaled(a),
-                                       _PyValue_IntScaled(b), &sum)) {
+            if (__builtin_add_overflow(a, b, &sum)) {
                 return _PyValue_BoxInt64(x + y);
             }
             return _PyValue_FromIntScaled(sum);
@@ -337,8 +349,7 @@ _PyRop_IntBinary(uint32_t op, PyValueBorrow a, PyValueBorrow b)
         case NB_SUBTRACT:
         case NB_INPLACE_SUBTRACT: {
             int64_t difference;
-            if (__builtin_sub_overflow(_PyValue_IntScaled(a),
-                                       _PyValue_IntScaled(b), &difference)) {
+            if (__builtin_sub_overflow(a, b, &difference)) {
                 return _PyValue_BoxInt64(x - y);
             }
             return _PyValue_FromIntScaled(difference);
@@ -346,7 +357,7 @@ _PyRop_IntBinary(uint32_t op, PyValueBorrow a, PyValueBorrow b)
         case NB_MULTIPLY:
         case NB_INPLACE_MULTIPLY: {
             int64_t product;
-            if (__builtin_mul_overflow(_PyValue_IntScaled(a), y, &product)) {
+            if (__builtin_mul_overflow(a, y, &product)) {
                 return _PyValue_MultiplyInt64(x, y);
             }
             return _PyValue_FromIntScaled(product);
@@ -402,12 +413,8 @@ _PyRop_IntBinary(uint32_t op, PyValueBorrow a, PyValueBorrow b)
 }
 
 static inline bool
-_PyRop_FloatBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+_PyRop_FloatOpAdmits(uint32_t op, double y)
 {
-    double x, y;
-    if (!PyValue_FloatOperandValues(a, b, &x, &y)) {
-        return false;
-    }
     switch (op) {
         case NB_INPLACE_ADD:
         case NB_MULTIPLY:
@@ -423,13 +430,17 @@ _PyRop_FloatBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
     }
 }
 
-static inline PyValue
-_PyRop_FloatBinary(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+static inline bool
+_PyRop_FloatBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
 {
     double x, y;
-    bool admitted = PyValue_FloatOperandValues(a, b, &x, &y);
-    assert(admitted);
-    (void)admitted;
+    return PyValue_FloatOperandValues(a, b, &x, &y) && _PyRop_FloatOpAdmits(op, y);
+}
+
+static inline PyValue
+_PyRop_FloatBinary(uint32_t op, double x, double y)
+{
+    assert(_PyRop_FloatOpAdmits(op, y));
     switch (op) {
         case NB_INPLACE_ADD:
             return PyValue_FromDouble(x + y);

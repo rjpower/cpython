@@ -113,6 +113,11 @@ arm F.Copy shared effects(writes, releases) feedback() exits(next, miss)
 """
 
 
+# SHARED with a guard whose fact leaves the value counted
+COUNTED = SHARED.replace("test(inline_int(v))\n  c PyValue_IsInlineInt",
+                         "test(object(v))\n  c PyValue_IsObject")
+
+
 # An arm rop_check accepts and rop_verify refuses: the owner it acquires
 # leaks and no publish names a point (RV's g01)
 UNVERIFIED = """\
@@ -214,7 +219,7 @@ class StubTests(unittest.TestCase):
         # A publish home may be a spent input's home (dst and x name the same
         # slot): the home is emptied first, so the old value read after it is
         # empty and the input is released once, after the output is written
-        program = rop_check.check([rop_syntax.parse(SHARED, "t.rop")])
+        program = rop_check.check([rop_syntax.parse(COUNTED, "t.rop")])
         self.assertEqual(program.diagnostics, ())
         p = rop_generator.lower_all(program, rop_generator.number_arms(program))
         text = "\n".join(p.lowered["F.Copy"].body)
@@ -224,6 +229,16 @@ class StubTests(unittest.TestCase):
         self.assertEqual(order, sorted(order))
         self.assertEqual(text.count("PyValue_XCLOSE(own_x)"), 1)
 
+    def test_a_guarded_uncounted_input_is_cleared_and_not_closed(self):
+        # The guard in the publish's own block proves x an inline int, which
+        # owns no count: a temporary's home is cleared, nothing is closed
+        program = rop_check.check([rop_syntax.parse(SHARED, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        text = "\n".join(p.lowered["F.Copy"].body)
+        self.assertIn("_PyFrame_WriteHome(frame, home_x, PyValue_NULL);", text)
+        self.assertNotIn("own_x", text)
+        self.assertEqual(text.count("PyValue_XCLOSE("), 1)
 
     def test_an_owners_binding_stores_then_closes_the_displaced_owners(self):
         # d[] = v exchanges each item with the owner its home displaces;
@@ -236,9 +251,25 @@ class StubTests(unittest.TestCase):
         self.assertIn("v = _PyRop_Split(", text)
         self.assertRegex(text, r"n = \(Py_ssize_t\)IR_\w+\(ir_word\);")
         order = [text.index(mark) for mark in (
-            "_PyRop_StoreOwners(&(_PyRopSpan){", "IR_STUB_ESCAPE();",
+            "_PyRop_StoreOwners(&span", "IR_STUB_ESCAPE();",
             "_PyRop_CloseOwners(&v);")]
         self.assertEqual(order, sorted(order))
+
+    def test_anchors_of_a_literal_span_are_scalars(self):
+        # Binary.Generic anchors [x, y]: a view and an owner per source on
+        # the hot path; the aggregate exists only on the exits whose rows
+        # consume the whole anchor, and no aggregate is a compound literal
+        # taken by address
+        text = "\n".join(products().lowered["Binary.Generic"].body)
+        self.assertNotIn("_PyRop_AnchorForCall(", text)
+        self.assertNotIn("_PyRop_AnchorArg(", text)
+        self.assertNotIn("&(_PyRop", text)
+        self.assertIn("a_view0 = PyValue_Borrow(*home_x);", text)
+        self.assertIn("a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) "
+                      ": PyValue_NULL;", text)
+        hot = text[:text.index("DISPATCH();")]
+        self.assertNotIn("_PyRopAnchors", hot)
+        self.assertIn("PyValue_XCLOSE(a_owned0);\nPyValue_XCLOSE(a_owned1);", hot)
 
     def test_unwind_enters_the_unwinder_without_a_raise_event(self):
         program = rop_check.check([rop_syntax.parse(UNWIND, "t.rop")])

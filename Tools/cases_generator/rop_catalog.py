@@ -508,6 +508,8 @@ class Fact(enum.Enum):
     object = "object"
     inline_int = "inline_int"
     inline_float = "inline_float"
+    # An inline int or an inline float: what PyValue_FloatOperandsCheck admits
+    inline_number = "inline_number"
     exact = "exact"
     outside_i51 = "outside_i51"
     incrementable = "incrementable"
@@ -595,6 +597,15 @@ class BuiltinType(enum.Enum):
     module = "PyModule_Type"
     super = "PySuper_Type"
     object = "PyBaseObject_Type"
+
+
+# A value with one of these facts owns no count: an inline word, or an
+# immortal object, whose references always carry Py_TAG_REFCNT
+# (pycore_value.h).  Retiring it closes nothing.
+UNCOUNTED_FACTS = frozenset({
+    (Fact.inline_int, None), (Fact.inline_float, None), (Fact.inline_number, None),
+    (Fact.exact, BuiltinType.bool), (Fact.exact, BuiltinType.NoneType),
+})
 
 
 # Encoding.  A family's encoding is derived from its operand types (V8

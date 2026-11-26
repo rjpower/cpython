@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `c2071606f67` (pushed) holds:
+`pyjit/rir90` at `05612771f4c` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -133,6 +133,15 @@ Interpreter-performance wave 1 is merged:
   compile in their own unit, and the hot helpers are declared always
   inline, with no global compiler flag.
 
+From wave 2, SP's first part is merged: `Call.PyGeneral` and `ForIter.Gen`
+are the ports of CALL_PY_GENERAL and FOR_ITER_GEN (a `for` over a generator
+enters its frame in the same activation), and SP's coverage list names the
+arm that covers each of golden87's specializations.  Twenty have no arm, a
+breach of the port rule; SP's item 4 ports them, except floats' power, which
+AR ports.  The id-shifted guard build had stopped importing
+`test.support.ir_dis`, because the handler-name export assumed that every
+id below the shift had a name; an id with no handler now has the name None.
+
 A refleak run (`-R 3:3`, 16 modules) finds no reference leak, and the same
 memory-block growth before and after TB (a backlog item).
 
@@ -189,8 +198,9 @@ Running, interpreter performance wave 2 (timing recorded, never gated):
   the generator emits span geometry as constants;
 - MV: no parallel move is solved at run time; a generator return runs no
   solver;
-- SP: the specializations that have no arm yet (`Call.PyGeneral`,
-  `ForIter.Gen`), and a list of the arm that covers each of golden87's.
+- SP item 4: the remaining specializations with no arm (the native calls,
+  the bound-method and generator-function calls, property, overridden
+  `__getattribute__` and `__getitem__` frames, dict-items iteration).
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

@@ -847,7 +847,9 @@ arm TestBranch.Identity inline
     exit next();
 }
 
-arm TestBranch.Int shared
+// The compare tests: an arm per test (`over(test: ...)`), the test its
+// constant; the sense stays the word's
+arm TestBranch.Int shared over(test: TEST_LT, TEST_LE, TEST_EQ, TEST_NE, TEST_GT, TEST_GE)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -867,7 +869,8 @@ arm TestBranch.Int shared
     exit next();
 }
 
-arm TestBranch.Float shared
+arm TestBranch.Float shared over(test: TEST_LT, TEST_LE, TEST_EQ, TEST_NE, TEST_GT,
+                                  TEST_GE)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -887,7 +890,8 @@ arm TestBranch.Float shared
     exit next();
 }
 
-arm TestBranch.Str shared
+// Only the equality tests: the order of strings is the generic arm's
+arm TestBranch.Str shared over(test: TEST_EQ, TEST_NE)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -896,7 +900,6 @@ arm TestBranch.Str shared
     let l:B = use(x);
     let r:B = use(y);
     guard both_exact_str(l, r) else miss;
-    guard equality_relation(relation_of(test)) else miss;
     goto Test(equal_strings(relation_of(test), l, r));
   Test(hit:Bool):
     branch same_bool(sense, hit) -> Taken(), Fall();

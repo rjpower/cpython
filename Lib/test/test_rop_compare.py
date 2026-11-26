@@ -228,9 +228,16 @@ class AdaptationTests(unittest.TestCase):
 
     def test_test_branch_arms(self):
         template = "def f(a, b):\n    if a {} b:\n        return 1\n    return 2\n"
-        self.assertIn("TestBranch.Int", self.arms(template.format("<"), 1, 2))
-        self.assertIn("TestBranch.Float", self.arms(template.format("<"), 1.5, 2.5))
-        self.assertIn("TestBranch.Str", self.arms(template.format("=="), "a", "b"))
+        # An arm per test (`over(test: ...)`)
+        for op, relation in RELATION_MEMBERS.items():
+            with self.subTest(op=op):
+                self.assertIn(f"TestBranch.Int_TEST_{relation}",
+                              self.arms(template.format(op), 1, 2))
+                self.assertIn(f"TestBranch.Float_TEST_{relation}",
+                              self.arms(template.format(op), 1.5, 2.5))
+        self.assertIn("TestBranch.Str_TEST_EQ", self.arms(template.format("=="), "a", "b"))
+        self.assertIn("TestBranch.Str_TEST_NE", self.arms(template.format("!="), "a", "b"))
+        self.assertIn("TestBranch.Generic", self.arms(template.format("<"), "a", "b"))
         self.assertIn("TestBranch.Set", self.arms(template.format("in"), 1, {1}))
         self.assertIn("TestBranch.Dict", self.arms(template.format("in"), 1, {1: 2}))
         self.assertIn("TestBranch.Sequence", self.arms(template.format("in"), 1, [1]))
@@ -238,7 +245,7 @@ class AdaptationTests(unittest.TestCase):
     def test_a_miss_runs_the_generic_arm_and_adapts(self):
         f = make("def f(a, b):\n    if a < b:\n        return 1\n    return 2\n")
         warm(f, 1, 2)
-        self.assertIn("TestBranch.Int", words(f))
+        self.assertIn("TestBranch.Int_TEST_LT", words(f))
         for _ in range(3):
             self.assertEqual(f("a", "b"), 1)
             self.assertEqual(f(1.5, 0.5), 2)

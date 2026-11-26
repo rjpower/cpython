@@ -565,7 +565,9 @@ class AssemblerTest(unittest.TestCase):
                 expected = xs.count(y) + 10 * (len(xs) - xs.count(y))
                 self.assertEqual(f(xs, y), expected)
                 ir = handlers(f)
-                self.assertEqual(ir.count(handler), 3)
+                # An arm per test: two equalities and one inequality
+                self.assertEqual(ir.count(f"{handler}_TEST_EQ"), 2)
+                self.assertEqual(ir.count(f"{handler}_TEST_NE"), 1)
                 self.assertFalse([h for h in ir if h.startswith("BranchTruth.Bool")])
                 self.assertEqual(f(xs, y), expected)
                 # Operands of another type deoptimise the compare
@@ -583,7 +585,7 @@ class AssemblerTest(unittest.TestCase):
 
         xs = [1, 2, 3] * _testinternalcapi.SPECIALIZATION_THRESHOLD
         self.assertEqual(f(xs), len(xs) // 3)
-        self.assertIn("TestBranch.Int", handlers(f))
+        self.assertIn("TestBranch.Int_TEST_LT", handlers(f))
         jump = [instr for instr in dis.get_instructions(f)
                 if instr.family == "TestBranch"][0]
         if_true = bool(jump.get("sense"))
@@ -3685,7 +3687,8 @@ class FusedJumpTest(AssemblerTestCase):
                                       (1.0, nan), (nan, nan)],
             "TestBranch.Str": [("a", "b"), ("b", "b"), ("c", "b")],
         }
-        for op in ("<", "<=", ">", ">=", "==", "!="):
+        relations = {"<": "LT", "<=": "LE", ">": "GT", ">=": "GE", "==": "EQ", "!=": "NE"}
+        for op, relation in relations.items():
             for negated in ("", "not "):
                 for family, cases in families.items():
                     if family.endswith("Str") and op not in ("==", "!="):
@@ -3694,7 +3697,8 @@ class FusedJumpTest(AssemblerTestCase):
                     with self.subTest(test=test, family=family):
                         f = self.run_cases(test, cases)
                         if SPECIALIZES:
-                            self.assertEqual(fused_names(f), [family])
+                            # An arm per test; `not` is the word's sense
+                            self.assertEqual(fused_names(f), [f"{family}_TEST_{relation}"])
                         # Operands of another type deoptimise the site
                         for a, b in ((None, None), (1, 2.5), (1.5, 2),
                                      ("a", "b")):

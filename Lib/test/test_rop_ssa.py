@@ -493,6 +493,12 @@ COMPARE_MEMBER_SOURCES = [
     ("str", "eq", "=="),
 ]
 COMPARE_WARM = {"int": (1, 2), "float": (1.5, 2.5), "str": ("a", "b")}
+TEST_MEMBER_SOURCES = [
+    ("int", "le", "<="), ("int", "ne", "!="), ("int", "gt", ">"),
+    ("float", "lt", "<"), ("float", "le", "<="), ("float", "eq", "=="),
+    ("float", "ne", "!="), ("float", "ge", ">="),
+    ("str", "eq", "=="),
+]
 
 SCENARIOS = {
     "Convert": Scenario("Convert", {
@@ -886,7 +892,11 @@ SCENARIOS = {
         "sequence": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
         "monitored": "def f(a, b):\n    if a < b:\n        return 1\n    return 2\n",
         "monitored_is": "def f(a, b):\n    if a is b:\n        return 1\n    return 2\n",
-        "monitored_in": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n"},
+        "monitored_in": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        # A word adapts to the arm of its test (`over(test: ...)`): one source
+        # for each member arm the sources above leave out
+        **{f"{kind}_{name}": f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 2\n"
+           for kind, name, op in TEST_MEMBER_SOURCES}},
         [{"x": x, "y": y} for x, y in COMPARE_PAIRS + CONTAINS_PAIRS],
         warm_by_source={"compare": (Args((1, 2)),), "compare_not": (Args((1, 2)),),
                         "int": (Args((1, 2)),), "float": (Args((1.5, 2.5)),),
@@ -894,6 +904,8 @@ SCENARIOS = {
                         "is_not": (Args((1, 2)),), "in": (Args((1, [1, 2])),),
                         "not_in": (Args((1, (1, 2))),), "set": (Args((1, {1, 2})),),
                         "dict": (Args((1, {1: 2})),), "sequence": (Args(("a", "abc")),),
+                        **{f"{kind}_{name}": (Args(COMPARE_WARM[kind]),)
+                           for kind, name, _ in TEST_MEMBER_SOURCES},
                         "monitored": (Args((1, 2)),), "monitored_is": (Args((1, 2)),),
                         "monitored_in": (Args((1, [1, 2])),)},
         warmups=200, coherent=True,

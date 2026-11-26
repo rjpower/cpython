@@ -84,6 +84,8 @@ class HomeState:
 
 
 INTACT = HomeState("intact")
+# A temporary whose owner an acquire() took: spent, with nothing left to take
+ACQUIRED = HomeState("spent", -1)
 # The checkpoint after a join of paths that published different points
 JOINED = "<joined>"
 
@@ -227,7 +229,6 @@ class Expander:
         self.states: dict[str, tuple[dict[str, HomeState], str | None]] = {}
         self.homes: dict[str, HomeState] = {}
         self.point: str | None = None
-        self.acquired: set[str] = set()
         self.count = 0
 
     def fail(self, span: SrcSpan, message: str):
@@ -297,7 +298,9 @@ class Expander:
             return self.emit(OpKind.read, HandleType(Handle.B), (), home.name, name)
         if c == "acquire":
             (home,) = e.args
-            self.acquired.add(home.name)
+            # The owner leaves the home on this path only: a branch that
+            # does not acquire still finds it there
+            self.homes[home.name] = ACQUIRED
             return self.emit(OpKind.acquire, O_TYPE, (), home.name, name)
         if c in ("dup", "move"):
             (arg,) = e.args
@@ -372,6 +375,7 @@ class Expander:
         """Change 21's four steps: take the spent inputs (a vector move's
         sources among them), read the olds, write, then close"""
         s = replace(s, debts=expand_debts(s.debts, self.groups))
+        acquired_here = {h for h, state in self.homes.items() if state == ACQUIRED}
         owners = WrapType(Wrap.Span, O_TYPE)
         values: list[tuple[str, int]] = []
         taken: dict[str, int] = {}
@@ -396,8 +400,8 @@ class Expander:
             values.append((b.target, taken[src]))
         for d in s.debts:
             # An acquired source's owner already left its home with the acquire
-            if (d.kind is DebtKind.spent and d.subject not in self.acquired
-                    and d.subject not in taken):
+            if (d.kind is DebtKind.spent and d.subject not in taken
+                    and not (d.subject in acquired_here)):
                 t = owners if self.operands.get(d.subject) is FieldKind.vector else O_TYPE
                 taken[d.subject] = self.emit(OpKind.take, t, (), d.subject, f"own_{d.subject}")
         olds: dict[str, int] = {}

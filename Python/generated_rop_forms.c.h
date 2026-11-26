@@ -2610,6 +2610,7 @@ ir_run_Send_Generic(
     PyValue old_send_value;
     PyValue own_send_receiver = PyValue_NULL;
     PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
     PyValue old_completed;
     PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
     PyValue y;
@@ -2721,12 +2722,14 @@ ir_run_Send_Generic(
     }
     own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
     own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
+    own_send_value = _PyFrame_TakeHome(frame, home_send_value);
     old_completed = *home_completed;
     _PyFrame_WriteHome(frame, home_completed, rv);
     _PyValue_CheckHome(*home_completed);
     _PyRop_CloseAnchors(&a);
     PyValue_XCLOSE(own_send_receiver);
     PyValue_XCLOSE(own_send_cursor);
+    PyValue_XCLOSE(own_send_value);
     PyValue_XCLOSE(old_completed);
     IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
     rop_Send_Generic_DoneGone:
@@ -10823,6 +10826,7 @@ ir_run_Send_Observed(
     _PyStatusValue ret5;
     PyValue own_send_receiver = PyValue_NULL;
     PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
     PyValue old_completed;
     PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
     int ret6;
@@ -10881,12 +10885,14 @@ ir_run_Send_Observed(
     w = ret5.value;
     own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
     own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
+    own_send_value = _PyFrame_TakeHome(frame, home_send_value);
     old_completed = *home_completed;
     _PyFrame_WriteHome(frame, home_completed, w);
     _PyValue_CheckHome(*home_completed);
     _PyRop_CloseAnchors(&a);
     PyValue_XCLOSE(own_send_receiver);
     PyValue_XCLOSE(own_send_cursor);
+    PyValue_XCLOSE(own_send_value);
     PyValue_XCLOSE(old_completed);
     IR_STUB_ESCAPE();
     ret6 = _PyRop_SendExitEvent(tstate, frame, this_instr);
@@ -10904,9 +10910,11 @@ ir_run_Send_Observed(
     rop_Send_Observed_Moved:
     own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
     own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
+    own_send_value = _PyFrame_TakeHome(frame, home_send_value);
     _PyRop_CloseAnchors(&a);
     PyValue_XCLOSE(own_send_receiver);
     PyValue_XCLOSE(own_send_cursor);
+    PyValue_XCLOSE(own_send_value);
     IR_REDIRECT();
     rop_Send_Observed_ExitFailed:
     PROCESS_ERROR_AT(RAISE, 155, this_instr);

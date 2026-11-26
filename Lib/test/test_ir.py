@@ -3302,8 +3302,8 @@ class MoveResolutionTest(unittest.TestCase):
 class UnpackToLocalsTest(unittest.TestCase):
     """Unpacks whose targets are locals publish into them themselves: the
     store of an output names it the local (Python/regcfg_passes.c,
-    _PyRegPass_StoreElim).  The word's destinations are in stack order, so
-    the last target is first."""
+    _PyRegPass_StoreElim).  The word names its destinations in target
+    order, the first target first."""
 
     def run_specialized(self, check):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
@@ -3326,7 +3326,7 @@ class UnpackToLocalsTest(unittest.TestCase):
 
     def locals_of(self, func, targets):
         varnames = func.__code__.co_varnames
-        return [varnames.index(c) for c in reversed(targets)]
+        return [varnames.index(c) for c in targets]
 
     def test_locals_are_the_destinations(self):
         def two(p):

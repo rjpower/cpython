@@ -390,6 +390,62 @@ class Unpack(unittest.TestCase):
             f(list(items))
         self.assertEqual(sys.getrefcount(items[0]), before)
 
+    def test_targets_are_named_in_order(self):
+        # The word names the destinations first target first, the order the
+        # rows give the items in: nothing is reversed at run time
+        import io
+        from test.support import ir_dis
+        def f(p):
+            a, b, c = p
+            return a, b, c
+        f((1, 2, 3))
+        out = io.StringIO()
+        ir_dis.dis(f, file=out)
+        line = next(l for l in out.getvalue().splitlines() if "Unpack." in l)
+        self.assertIn("dsts=[r1, r2, r3]", line)
+
+    def test_every_item_is_written_before_a_finalizer_runs(self):
+        # A finalizer of a displaced value finds the right side unpacked:
+        # changing or emptying the list changes nothing in this unpack
+        for mutate in (lambda s: s.__setitem__(1, "changed"), list.clear):
+            source = None
+
+            class Old:
+                def __del__(self):
+                    mutate(source)
+
+            def f(p):
+                a = Old()
+                b = Old()
+                a, b = p
+                return a, b
+            for _ in range(300):
+                source = [1, 2]
+                self.assertEqual(f(source), (1, 2))
+            self.assertIn("Unpack.List", self.arms(f))
+
+    def test_a_span_longer_than_one_park(self):
+        # More targets than a park (16): a tuple is held across the parks'
+        # closes, a list is copied, and a local source that a target
+        # displaces lives until every item is written
+        n = 20
+        names = ", ".join(f"a{i}" for i in range(n))
+        aliased = names.replace("a0", "x", 1)
+        ns = {}
+        exec(f"def f(p):\n    {names} = p\n    return [{names}]\n"
+             f"def g(make, m):\n    x = make([str(i) for i in range(m)])\n"
+             f"    {aliased} = x\n    return [{aliased}]\n", ns)
+        f, g = ns["f"], ns["g"]
+        strs = [str(i) for i in range(n)]
+        for _ in range(300):
+            self.assertEqual(f(tuple(range(n))), list(range(n)))
+            self.assertEqual(f(list(range(n))), list(range(n)))
+            # x holds the only count of the source
+            self.assertEqual(g(tuple, n), strs)
+            self.assertEqual(g(list, n), strs)
+        with self.assertRaisesRegex(ValueError, "not enough values to unpack"):
+            f(list(range(n - 1)))
+
 
 if __name__ == "__main__":
     unittest.main()

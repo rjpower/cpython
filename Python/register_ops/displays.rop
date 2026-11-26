@@ -329,8 +329,11 @@ arm MergeKeywords.Merge shared
 }
 
 // Unpack: the values of the source, in the order of the targets, go to the
-// destination homes.  The row makes them (a vector of owners) and one
-// publish moves them in, closing what the homes held.
+// destination homes, whose order the translator fixes (the first target
+// first).  The row gives the items (a Span<O>: those of a tuple or list the
+// arm holds); one publish writes a count of each into its home, and only
+// then closes what the homes held (_PyRop_PublishItems).  Every row that can
+// fail does so before the publish, so a failure leaves every home as it was.
 
 family Unpack(dsts:Span<Dst>, source:Src, fb:Fb<Unpack>)
   exits(next, raise, miss, again) generic(Generic);
@@ -341,10 +344,10 @@ point Unpack.Done(current, next_head, clear) keep() spent(source) defs(dsts);
 extern helper unpack_iterable(source:Src, n:Size)
   cases(ok(vals:Span<O>), err(e:Err))
   effects(allocates, raises, runs_python)
-  c _PyRop_UnpackIterable as owners_or_raised
+  c _PyRop_UnpackIterable as items_or_raised
   evidence(
     review: "ceval.c _PyRop_UnpackIterable: _PyEval_UnpackIterableValue on a count held across the call; a number raises the cannot-unpack text.",
-    contract: "Reads the source home and keeps it. On success n owners in reverse target order (the first target last), in storage the publish frees; on failure the exception is set and nothing is made. Iterating the source runs Python.");
+    contract: "Reads the source home and keeps it. On success the n values in target order, staged in a new tuple the items hold; on failure, including a wrong count part-way, the exception is set and nothing is made. Iterating the source runs Python.");
 
 // The guards of the specialized arms: an exact tuple or list of n items
 extern helper tuple_has_length(v:B, n:Size) -> Bool
@@ -361,24 +364,23 @@ extern helper list_has_length(v:B, n:Size) -> Bool
     review: "ceval.c _PyRop_ListHasLength: the old _GUARD_TOS_LIST and the length test of _UNPACK_SEQUENCE_LIST.",
     contract: "Reads the type and the size. True for an object that is an exact list of n items.");
 
-// The items, duplicated, in reverse target order.  The list's length is checked again
-// in the critical section that copies it; a list that changed since the guard
-// goes the generic way, which raises what the generic arm raises.
-extern helper tuple_items(source:Src, n:Size)
-  cases(ok(vals:Span<O>), err(e:Err))
-  effects(reads, allocates, raises, runs_python)
-  c _PyRop_UnpackTuple as owners_or_raised
+// The items, in target order.  The list's length is checked again in the
+// critical section that reads it; a list that changed since the guard goes
+// the generic way, which raises what the generic arm raises.
+extern helper tuple_items(source:Src, n:Size) -> Span<O>
+  effects(reads)
+  c _PyRop_UnpackTuple as handle inline
   evidence(
-    review: "ceval.c _PyRop_UnpackTuple: the old _UNPACK_SEQUENCE_TUPLE: the items are duplicated.",
-    contract: "Reads the source home and keeps it. n owners in reverse target order, in storage the publish frees; err: the allocation failed, MemoryError set.");
+    review: "pycore_rop_rows.h _PyRop_UnpackTuple: the old _UNPACK_SEQUENCE_TUPLE: the tuple's items, which the publish duplicates.",
+    contract: "Reads the source home and keeps it. The n items of the tuple, held by the source (and by a count of the tuple when n is more than a park). No memory, no failure, no callback.");
 
 extern helper list_items(source:Src, n:Size)
   cases(ok(vals:Span<O>), err(e:Err))
   effects(reads, allocates, raises, runs_python)
-  c _PyRop_UnpackList as owners_or_raised
+  c _PyRop_UnpackList as items_or_raised
   evidence(
     review: "ceval.c _PyRop_UnpackList: the old _UNPACK_SEQUENCE_LIST: the length check and the copy are one critical section of the list.",
-    contract: "As tuple_items, for an exact list; a list whose length changed since the guard unpacks as any iterable.");
+    contract: "Reads the source home and keeps it. The n items of the exact list, read in its critical section: its own items when n is at most a park (no code runs until the publish has written them), else, and in the free-threaded build, a tuple copied under the lock that the items hold; err: that copy failed, MemoryError set. A list whose length changed since the guard unpacks as any iterable.");
 
 // The specializer's evidence: an inline int or an exact tuple or list of
 // another length is not nominated
@@ -449,26 +451,20 @@ arm Unpack.Generic shared
   Failed(e:Err):
     exit raise(Unpack.Failed, e);
   Finish(vals:Span<O>):
-    publish [dsts[] = vals] retire [spent(source), old(dsts)] at Unpack.Done;
+    publish [dsts[] = vals] retire [old(dsts), spent(source)] at Unpack.Done;
     exit next();
 }
 
 arm Unpack.Tuple shared entry(tuple)
-  effects(reads, allocates, raises, releases on (dsts), runs_python)
+  effects(reads, releases on (dsts), runs_python)
   feedback()
-  exits(next, miss, raise)
+  exits(next, miss)
 {
   entry():
     let v:B = use(source);
     guard tuple_has_length(v, count(dsts)) else miss;
-    call tuple_items(source, count(dsts)) {
-      ok -> Finish();
-      err -> Failed();
-    }
-  Failed(e:Err):
-    exit raise(Unpack.Failed, e);
-  Finish(vals:Span<O>):
-    publish [dsts[] = vals] retire [spent(source), old(dsts)] at Unpack.Done;
+    let vals:Span<O> = tuple_items(source, count(dsts));
+    publish [dsts[] = vals] retire [old(dsts), spent(source)] at Unpack.Done;
     exit next();
 }
 
@@ -487,7 +483,7 @@ arm Unpack.List shared entry(list)
   Failed(e:Err):
     exit raise(Unpack.Failed, e);
   Finish(vals:Span<O>):
-    publish [dsts[] = vals] retire [spent(source), old(dsts)] at Unpack.Done;
+    publish [dsts[] = vals] retire [old(dsts), spent(source)] at Unpack.Done;
     exit next();
 }
 
@@ -503,7 +499,7 @@ point UnpackStar.Done(current, next_head, clear) keep() spent(source) defs(dsts)
 extern helper unpack_star(source:Src, shape:U16)
   cases(ok(vals:Span<O>), err(e:Err))
   effects(allocates, raises, runs_python)
-  c _PyRop_UnpackStar as owners_or_raised
+  c _PyRop_UnpackStar as items_or_raised
   evidence(
     review: "ceval.c _PyRop_UnpackStar: _PyEval_UnpackIterableValue with the variable target; the middle value is a list.",
     contract: "As unpack_iterable, with before + 1 + after owners.");
@@ -521,6 +517,6 @@ arm UnpackStar.Iterable shared
   Failed(e:Err):
     exit raise(UnpackStar.Failed, e);
   Finish(vals:Span<O>):
-    publish [dsts[] = vals] retire [spent(source), old(dsts)] at UnpackStar.Done;
+    publish [dsts[] = vals] retire [old(dsts), spent(source)] at UnpackStar.Done;
     exit next();
 }

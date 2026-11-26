@@ -126,7 +126,7 @@ def c_type(t: Type) -> str | None:
     if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Candidate:
         return "int"
     if t == WrapType(Wrap.Span, HandleType(Handle.O)):
-        return "_PyRopOwners"
+        return "_PyRopItems"
     if isinstance(t, EnumType):
         # A member that a primitive computes from another operand
         return "uint32_t"
@@ -163,7 +163,7 @@ def row_signature(x: Extern) -> tuple[str, list[str]]:
                               "inline row's out-of-line copy")
     if conv.returns is CReturn.void:
         ret = "void"
-    elif conv.returns is CReturn.pointer:
+    elif conv.returns in (CReturn.pointer, CReturn.handle):
         if not isinstance(x.result, Returns) or c_type(x.result.type) is None:
             raise Unsupported(f"{x.name}: no C result type for an inline row")
         ret = c_type(x.result.type)
@@ -514,7 +514,9 @@ class Lowering:
     # The C expression of the payload words that follow them (an argument
     # descriptor's homes, four to a word), if the family has a payload
     payload: str | None = None
-    spans: bool = False      # span operands: the counts give the length
+    # A span instruction's word count, from its counts and the constant
+    # geometry of its layout (span_words())
+    spans: str | None = None
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
 
@@ -723,9 +725,11 @@ class ArmLowerer:
         return isinstance(e, Name) and self.is_span_operand(e.name)
 
     def span(self, operand: str) -> str:
-        """A span operand: its count, and the index of its first element
-        among the elements of the word's spans, which follow in
-        declaration order (pycore_ir.h, _PyIR_SpanElement())"""
+        """A span operand: its count, the index of its first element among
+        the elements of the word's spans, which follow in declaration order,
+        and the layout's constant geometry: the elements in the head's
+        trailing fields and the fixed operand words before the rest
+        (pycore_ir.h, _PyIR_SpanElementAt())"""
         before = []
         for name, p in self.placements.items():
             if name == operand:
@@ -734,8 +738,8 @@ class ArmLowerer:
                 before.append(self.field(name))
         first = " + ".join(before) or "0"
         span = self.new_temp("_PyRopSpan", "span")
-        self.emit(f"{span} = (_PyRopSpan){{frame, this_instr, opcode, {first}, "
-                  f"{self.field(operand)}}};")
+        self.emit(f"{span} = (_PyRopSpan){{frame, this_instr, {first}, "
+                  f"{self.field(operand)}, {len(self.enc.elements)}, {self.enc.words}}};")
         return f"&{span}"
 
     def row_symbol(self, x: Extern) -> str:
@@ -932,7 +936,7 @@ class ArmLowerer:
         for line in self.lines:
             body.append(line)
         return Lowering(self.arm.name, self.enc.words, self.payload_words(),
-                        any(self.is_span_operand(n) for n in self.placements),
+                        self.span_words(),
                         self.decls,
                         self.drop_unused_labels(body))
 
@@ -946,6 +950,20 @@ class ArmLowerer:
         (p,) = args
         return (f"(({self.field(p.operand)} + IR_OPERANDS_PER_WORD - 1) / "
                 "IR_OPERANDS_PER_WORD)")
+
+    def span_words(self) -> str | None:
+        """The words of a span instruction: the head, its fixed operand
+        words, and the elements past the head's free fields, four to a word.
+        The head holds at most three elements, so the dividend is never
+        negative."""
+        counts = [self.field(n) for n in self.placements if self.is_span_operand(n)]
+        if not counts:
+            return None
+        nhead = len(self.enc.elements)
+        assert nhead <= 3, self.arm.name
+        total = " + ".join(counts)
+        return (f"{1 + self.enc.words} + ({total} + {3 - nhead}) / "
+                "IR_OPERANDS_PER_WORD")
 
     def drop_unused_labels(self, lines: list[str]) -> list[str]:
         text = "\n".join(lines)
@@ -1042,8 +1060,9 @@ class ArmLowerer:
         spent = sorted((d for d in s.debts if d.kind is DebtKind.spent),
                        key=lambda d: order.index(d.subject))
         olds = [d for d in s.debts if d.kind is DebtKind.old]
-        # d[] = v: StoreOwners exchanges each item of v with its home's
-        # displaced owner, which old(d) closes with the storage
+        # d[] = v: the items of v are written into d's homes before the
+        # values they displace are closed (_PyRop_PublishItems), which
+        # discharges old(d) too; the debts after it close what it read from
         stored = {b.target: b.value.name for b in s.bindings if b.owners}
         vectors = [b for b in s.bindings if b.vector and not b.owners]
         moved = {b.value.name for b in vectors if isinstance(b.value, Name)}
@@ -1086,7 +1105,9 @@ class ArmLowerer:
             self.declare("old_" + cname(d.subject), "PyValue")
             self.emit(f"old_{cname(d.subject)} = *{self.home(d.subject)};")
         for target, value in stored.items():
-            self.emit(f"_PyRop_StoreOwners({self.span(target)}, &{value});")
+            # The closes may run finalizers, which a stub reports
+            self.emit("IR_STUB_ESCAPE();")
+            self.emit(f"_PyRop_PublishItems({self.span(target)}, &{value});")
         for b in s.bindings:
             if b.vector:
                 continue
@@ -1113,9 +1134,7 @@ class ArmLowerer:
             elif d.kind is DebtKind.spent and owners[d.subject] is not None:
                 self.emit(f"PyValue_XCLOSE({owners[d.subject]});")
             elif d.kind is DebtKind.old and d.subject in stored:
-                # The closes may run finalizers, which a stub reports
-                self.emit("IR_STUB_ESCAPE();")
-                self.emit(f"_PyRop_CloseOwners(&{stored[d.subject]});")
+                pass
             elif d.kind is DebtKind.old:
                 self.emit(f"PyValue_XCLOSE(old_{cname(d.subject)});")
             elif d.kind is DebtKind.roots and d.subject in self.anchors:

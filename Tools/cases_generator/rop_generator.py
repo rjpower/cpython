@@ -153,10 +153,10 @@ INSTRUCTION_STATS({handler});"""
 def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     lines = [f"// {arm.name} ({arm.region.name})"]
     advance = str(1 + low.words) if low.payload is None else f"{1 + low.words} + {low.payload}"
-    if low.spans:
+    if low.spans is not None:
         # A span instruction's length depends on its counts
         assert low.payload is None, arm.name
-        advance = "_PyIR_SpanWordLength(opcode, ir_word)"
+        advance = low.spans
     lines += PROLOGUE.format(
         handler=handler(arm.name), advance=advance,
         prev=("_PyIRWord *const prev_instr = frame->instr_ptr;\n(void)prev_instr;\n"

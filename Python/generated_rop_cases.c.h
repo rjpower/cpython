@@ -365,7 +365,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperAttr_Generic);
             _PyRopSpan span1;
             PyValue ret2;
@@ -381,7 +381,7 @@
             }
             rop_SuperAttr_Generic_adapt_before_use_super1_Run:
             rop_SuperAttr_Generic_Run:
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_SuperLookup(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
             if (PyValue_IsNull(ret2)) {
@@ -394,7 +394,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_SuperAttr_Generic_adapt_before_use_super1_Sample:
-            span3 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span3 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             ret4 = _PyRop_ClassifySuper(&span3, this_instr, ((_PyFbUnary *)IR_FB(IR_D(ir_word))));
             if (ret4 == 1) {
                 goto rop_SuperAttr_Generic_adapt_before_use_super1_Other;
@@ -424,7 +424,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperAttrExplicit_Generic);
             _PyRopSpan span1;
             PyValue ret2;
@@ -440,7 +440,7 @@
             }
             rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Run:
             rop_SuperAttrExplicit_Generic_Run:
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_SuperLookupExplicit(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
             if (PyValue_IsNull(ret2)) {
@@ -453,7 +453,7 @@
             PyValue_XCLOSE(old_dst);
             DISPATCH();
             rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Sample:
-            span3 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span3 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             ret4 = _PyRop_ClassifySuper(&span3, this_instr, ((_PyFbUnary *)IR_FB(IR_D(ir_word))));
             if (ret4 == 1) {
                 goto rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Other;
@@ -483,7 +483,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 2 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperMethod_Generic);
             _PyRopSpan span1;
             PyValue out2;
@@ -505,7 +505,7 @@
             }
             rop_SuperMethod_Generic_adapt_before_use_super_method1_Run:
             rop_SuperMethod_Generic_Run:
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             IR_STUB_ESCAPE();
             ret3 = _PyRop_SuperMethod(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out2);
             if (PyValue_IsNull(ret3)) {
@@ -525,7 +525,7 @@
             PyValue_XCLOSE(old_self_dst);
             DISPATCH();
             rop_SuperMethod_Generic_adapt_before_use_super_method1_Sample:
-            span6 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span6 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             ret7 = _PyRop_ClassifySuper(&span6, this_instr, ((_PyFbUnary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))));
             if (ret7 == 1) {
                 goto rop_SuperMethod_Generic_adapt_before_use_super_method1_Other;
@@ -555,7 +555,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 2 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperMethodExplicit_Generic);
             _PyRopSpan span1;
             PyValue out2;
@@ -577,7 +577,7 @@
             }
             rop_SuperMethodExplicit_Generic_adapt_before_use_super_method_explicit1_Run:
             rop_SuperMethodExplicit_Generic_Run:
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             IR_STUB_ESCAPE();
             ret3 = _PyRop_SuperMethodExplicit(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out2);
             if (PyValue_IsNull(ret3)) {
@@ -597,7 +597,7 @@
             PyValue_XCLOSE(old_self_dst);
             DISPATCH();
             rop_SuperMethodExplicit_Generic_adapt_before_use_super_method_explicit1_Sample:
-            span6 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span6 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             ret7 = _PyRop_ClassifySuper(&span6, this_instr, ((_PyFbUnary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))));
             if (ret7 == 1) {
                 goto rop_SuperMethodExplicit_Generic_adapt_before_use_super_method_explicit1_Other;
@@ -1081,11 +1081,11 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Unpack_Generic);
             size_t adapt_before_use_unpack1_n;
             PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-            _PyRopOwners out1;
+            _PyRopItems out1;
             int ret2;
             PyValue own_source = PyValue_NULL;
             _PyRopSpan span3;
@@ -1094,7 +1094,7 @@
             int ret5;
             int adapt_before_use_unpack1_cl;
             int ret6;
-            _PyRopOwners vals;
+            _PyRopItems vals;
             adapt_before_use_unpack1_n = (Py_ssize_t)IR_A(ir_word);
             if (!_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h)) {
                 goto rop_Unpack_Generic_adapt_before_use_unpack1_Sample;
@@ -1110,11 +1110,10 @@
             if (!(ir_word & IR_F_LOCAL_B)) {
                 own_source = _PyFrame_TakeHome(frame, home_source);
             }
-            span3 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
-            _PyRop_StoreOwners(&span3, &vals);
-            PyValue_XCLOSE(own_source);
             IR_STUB_ESCAPE();
-            _PyRop_CloseOwners(&vals);
+            span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+            _PyRop_PublishItems(&span3, &vals);
+            PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_Unpack_Generic_adapt_before_use_unpack1_Sample:
             ret4 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), adapt_before_use_unpack1_n);
@@ -4527,7 +4526,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperAttr_Builtin);
             _PyRopSpan span1;
             _PyRopSpan span2;
@@ -4535,11 +4534,11 @@
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             if (!_PyRop_SuperBuiltinReady(&span1)) {
                 JUMP_TO_PREDICTED(SuperAttr_Generic);
             }
-            span2 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span2 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             IR_STUB_ESCAPE();
             ret3 = _PyRop_SuperLookupBuiltin(&span2, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
             if (PyValue_IsNull(ret3)) {
@@ -4563,14 +4562,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperAttr_Observed);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_SuperLookupObserved(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
             if (PyValue_IsNull(ret2)) {
@@ -4594,7 +4593,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperAttrExplicit_Builtin);
             _PyRopSpan span1;
             _PyRopSpan span2;
@@ -4602,11 +4601,11 @@
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             if (!_PyRop_SuperBuiltinReady(&span1)) {
                 JUMP_TO_PREDICTED(SuperAttrExplicit_Generic);
             }
-            span2 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span2 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             IR_STUB_ESCAPE();
             ret3 = _PyRop_SuperLookupBuiltin(&span2, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
             if (PyValue_IsNull(ret3)) {
@@ -4630,14 +4629,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperAttrExplicit_Observed);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_SuperLookupExplicitObserved(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
             if (PyValue_IsNull(ret2)) {
@@ -4661,7 +4660,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 2 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperMethod_Builtin);
             _PyRopSpan span1;
             _PyRopSpan span2;
@@ -4675,11 +4674,11 @@
             PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
             PyValue f;
             PyValue s;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             if (!_PyRop_SuperBuiltinReady(&span1)) {
                 JUMP_TO_PREDICTED(SuperMethod_Generic);
             }
-            span2 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span2 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             IR_STUB_ESCAPE();
             ret4 = _PyRop_SuperLookupBuiltinMethod(&span2, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out3);
             if (PyValue_IsNull(ret4)) {
@@ -4710,7 +4709,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 2 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperMethod_Observed);
             _PyRopSpan span1;
             PyValue out2;
@@ -4723,7 +4722,7 @@
             PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
             PyValue f;
             PyValue s;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             IR_STUB_ESCAPE();
             ret3 = _PyRop_SuperMethodObserved(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out2);
             if (PyValue_IsNull(ret3)) {
@@ -4754,7 +4753,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 2 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperMethodExplicit_Builtin);
             _PyRopSpan span1;
             _PyRopSpan span2;
@@ -4768,11 +4767,11 @@
             PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
             PyValue f;
             PyValue s;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             if (!_PyRop_SuperBuiltinReady(&span1)) {
                 JUMP_TO_PREDICTED(SuperMethodExplicit_Generic);
             }
-            span2 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span2 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             IR_STUB_ESCAPE();
             ret4 = _PyRop_SuperLookupBuiltinMethod(&span2, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out3);
             if (PyValue_IsNull(ret4)) {
@@ -4803,7 +4802,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 2 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_SuperMethodExplicit_Observed);
             _PyRopSpan span1;
             PyValue out2;
@@ -4816,7 +4815,7 @@
             PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
             PyValue f;
             PyValue s;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
             IR_STUB_ESCAPE();
             ret3 = _PyRop_SuperMethodExplicitObserved(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out2);
             if (PyValue_IsNull(ret3)) {
@@ -6507,14 +6506,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Build_Tuple);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 2, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_BuildTuple(&span1);
             if (PyValue_IsNull(ret2)) {
@@ -6538,14 +6537,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Build_List);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 2, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_BuildList(&span1);
             if (PyValue_IsNull(ret2)) {
@@ -6569,14 +6568,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Build_Set);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 2, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_BuildSet(&span1);
             if (PyValue_IsNull(ret2)) {
@@ -6600,14 +6599,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Build_Map);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 2, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_BuildMap(&span1);
             if (PyValue_IsNull(ret2)) {
@@ -6822,36 +6821,26 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Unpack_Tuple);
             PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
             PyValueBorrow v;
-            _PyRopOwners out1;
-            int ret2;
+            _PyRopItems vals;
             PyValue own_source = PyValue_NULL;
-            _PyRopSpan span3;
-            _PyRopOwners vals;
+            _PyRopSpan span1;
             v = PyValue_Borrow(*home_source);
             if (!_PyRop_TupleHasLength(v, (Py_ssize_t)IR_A(ir_word))) {
                 JUMP_TO_PREDICTED(Unpack_Generic);
             }
-            IR_STUB_ESCAPE();
-            ret2 = _PyRop_UnpackTuple(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
-            if (ret2 < 0) {
-                goto rop_Unpack_Tuple_Failed;
-            }
-            vals = out1;
+            vals = _PyRop_UnpackTuple(home_source, (Py_ssize_t)IR_A(ir_word));
             if (!(ir_word & IR_F_LOCAL_B)) {
                 own_source = _PyFrame_TakeHome(frame, home_source);
             }
-            span3 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
-            _PyRop_StoreOwners(&span3, &vals);
-            PyValue_XCLOSE(own_source);
             IR_STUB_ESCAPE();
-            _PyRop_CloseOwners(&vals);
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+            _PyRop_PublishItems(&span1, &vals);
+            PyValue_XCLOSE(own_source);
             DISPATCH();
-            rop_Unpack_Tuple_Failed:
-            PROCESS_ERROR_AT(RAISE, 194, this_instr);
         }
 
         TARGET(Unpack_List) {
@@ -6862,15 +6851,15 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Unpack_List);
             PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
             PyValueBorrow v;
-            _PyRopOwners out1;
+            _PyRopItems out1;
             int ret2;
             PyValue own_source = PyValue_NULL;
             _PyRopSpan span3;
-            _PyRopOwners vals;
+            _PyRopItems vals;
             v = PyValue_Borrow(*home_source);
             if (!_PyRop_ListHasLength(v, (Py_ssize_t)IR_A(ir_word))) {
                 JUMP_TO_PREDICTED(Unpack_Generic);
@@ -6884,11 +6873,10 @@
             if (!(ir_word & IR_F_LOCAL_B)) {
                 own_source = _PyFrame_TakeHome(frame, home_source);
             }
-            span3 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
-            _PyRop_StoreOwners(&span3, &vals);
-            PyValue_XCLOSE(own_source);
             IR_STUB_ESCAPE();
-            _PyRop_CloseOwners(&vals);
+            span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+            _PyRop_PublishItems(&span3, &vals);
+            PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_Unpack_List_Failed:
             PROCESS_ERROR_AT(RAISE, 194, this_instr);
@@ -6902,14 +6890,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_A(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_UnpackStar_Iterable);
             PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-            _PyRopOwners out1;
+            _PyRopItems out1;
             int ret2;
             PyValue own_source = PyValue_NULL;
             _PyRopSpan span3;
-            _PyRopOwners vals;
+            _PyRopItems vals;
             IR_STUB_ESCAPE();
             ret2 = _PyRop_UnpackStar(home_source, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)), &out1);
             if (ret2 < 0) {
@@ -6919,11 +6907,10 @@
             if (!(ir_word & IR_F_LOCAL_B)) {
                 own_source = _PyFrame_TakeHome(frame, home_source);
             }
-            span3 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
-            _PyRop_StoreOwners(&span3, &vals);
-            PyValue_XCLOSE(own_source);
             IR_STUB_ESCAPE();
-            _PyRop_CloseOwners(&vals);
+            span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 0, 0};
+            _PyRop_PublishItems(&span3, &vals);
+            PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UnpackStar_Iterable_Failed:
             PROCESS_ERROR_AT(RAISE, 196, this_instr);
@@ -6937,11 +6924,11 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_A(ir_word) + 0) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Raise_Throw);
             _PyRopSpan span1;
             int ret2;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 3, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_RaiseArgs(tstate, &span1);
             if (ret2 < 0) {
@@ -7142,7 +7129,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Function_Make);
             PyValue *const home_code = &IR_SLOT(IR_B(ir_word));
             PyValue held;
@@ -7152,7 +7139,7 @@
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue fn;
             held = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_code) : _PyFrame_TakeHome(frame, home_code));
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_C(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_FunctionMake(frame, held, &span1, (uint32_t)IR_D(ir_word));
             if (PyValue_IsNull(ret2)) {
@@ -8381,14 +8368,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_BuildSlice_Generic);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 2, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_SliceFromParts(&span1);
             if (PyValue_IsNull(ret2)) {
@@ -10550,7 +10537,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_PatternClass_Match);
             _PyRopSpan span1;
             _PyRopAnchors a;
@@ -10563,7 +10550,7 @@
             PyValue match_class_at_origin1_value;
             PyValue match_class_at_origin1_kept;
             PyValue match_class_at_origin1_dropped;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             a = _PyRop_AnchorForCall(&span1);
             IR_STUB_ESCAPE();
             ret2 = _PyRop_MatchClass(((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)), _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), _PyRop_AnchorArg(&a, 2));
@@ -10578,7 +10565,7 @@
             match_class_at_origin1_kept = match_class_at_origin1_value;
             z = match_class_at_origin1_kept;
             IR_STUB_ESCAPE();
-            span3 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span3 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             _PyRop_RetireSources(&span3);
             old_dst = *home_dst;
             _PyFrame_WriteHome(frame, home_dst, z);
@@ -10588,7 +10575,7 @@
             DISPATCH();
             rop_PatternClass_Match_match_class_at_origin1_Failed:
             IR_STUB_ESCAPE();
-            span4 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span4 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
             _PyRop_RetireFailedCall(&a, &span4);
             PROCESS_ERROR_AT(RAISE, 146, this_instr);
             rop_PatternClass_Match_match_class_at_origin1_Moved:
@@ -12429,14 +12416,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 2) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_BuildText_Join);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 1, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_JoinText(&span1);
             if (PyValue_IsNull(ret2)) {
@@ -12460,14 +12447,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 2) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_BuildText_Interpolation);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 1, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_BuildInterpolation(&span1, (uint32_t)IR_C(ir_word));
             if (PyValue_IsNull(ret2)) {
@@ -12491,14 +12478,14 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_B(ir_word) + 2) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_BuildText_Template);
             _PyRopSpan span1;
             PyValue ret2;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 1, 0};
             IR_STUB_ESCAPE();
             ret2 = _PyRop_BuildTemplate(&span1);
             if (PyValue_IsNull(ret2)) {
@@ -13869,12 +13856,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_A(ir_word) + IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Move_Transfer);
             _PyRopSpan span1;
             _PyRopSpan span2;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
-            span2 = (_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 2, 0};
+            span2 = (_PyRopSpan){frame, this_instr, IR_A(ir_word), IR_B(ir_word), 2, 0};
             _PyRop_ParallelMove(&span1, &span2);
             DISPATCH();
         }
@@ -13887,18 +13874,18 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_A(ir_word) + IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Move_Retire);
             _PyRopSpan span1;
             _PyRopSpan span2;
             _PyRopSpan span3;
             _PyRopSpan span4;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
-            span2 = (_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 2, 0};
+            span2 = (_PyRopSpan){frame, this_instr, IR_A(ir_word), IR_B(ir_word), 2, 0};
             _PyRop_ParallelMove(&span1, &span2);
             IR_STUB_ESCAPE();
-            span3 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
-            span4 = (_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)};
+            span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 2, 0};
+            span4 = (_PyRopSpan){frame, this_instr, IR_A(ir_word), IR_B(ir_word), 2, 0};
             _PyRop_CloseRest(&span3, &span4);
             DISPATCH();
         }
@@ -13911,12 +13898,12 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
-            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            next_instr += 1 + (IR_A(ir_word) + IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
             INSTRUCTION_STATS(ROP_HANDLER_Move_Copy);
             _PyRopSpan span1;
             _PyRopSpan span2;
-            span1 = (_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)};
-            span2 = (_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)};
+            span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 2, 0};
+            span2 = (_PyRopSpan){frame, this_instr, IR_A(ir_word), IR_B(ir_word), 2, 0};
             _PyRop_CopyHomes(&span1, &span2);
             DISPATCH();
         }

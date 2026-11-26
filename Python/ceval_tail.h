@@ -22,13 +22,20 @@
  * A routine's operands, and the error routine's origin and entry, travel in
  * the activation (IR_ROUTINE_OPERAND), as for the function forms.
  *
- * Clang passes the four arguments of a preserve_none function in r12-r15,
- * which ordinary C functions preserve, so an arm keeps the interpreter's
- * state across its calls without saving it.  GCC has no preserve_none: the
- * arguments are the SysV ones. */
+ * The functions save no register for their caller, which is what keeps an
+ * arm from saving registers it uses at its entry.  Clang
+ * (preserve_none) also passes the four arguments in r12-r15, which ordinary
+ * C functions preserve, so an arm keeps the interpreter's state across its
+ * calls without saving it.  GCC 15 has no preserve_none, but
+ * no_callee_saved_registers (x86-64) gives the first property: the arguments
+ * stay in the SysV registers.  Only the driver, ir_evaluate(), saves its
+ * caller's registers, once per activation. */
 
 #if defined(__clang__) && __has_attribute(preserve_none)
 #  define Py_IR_TAIL_CC __attribute__((preserve_none))
+#elif !defined(__clang__) && defined(__x86_64__) && \
+      __has_attribute(no_callee_saved_registers)
+#  define Py_IR_TAIL_CC __attribute__((no_callee_saved_registers))
 #else
 #  define Py_IR_TAIL_CC
 #endif

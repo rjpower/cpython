@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `0808a8115f4` (pushed) holds:
+`pyjit/rir90` at `1814fcead66` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -112,11 +112,17 @@ interpreter hold no reference to the stack at step D, and tests check it.
 - D's item 7: the test disassembler (`test.support.ir_dis`) yields one
   record per word, with the arm, its operands by declared name, kind and
   role, its edges and its origin offset, decoded from declared exports;
-  its 26 test modules check arms, and `test_ir_no_stack` scans it.
+  its 26 test modules check arms, and `test_ir_no_stack` scans it;
+- D's item 8: the checker refuses an arm that switches frames without
+  declaring that it runs Python (ten definitions had lost that fact in
+  their ports), and tests read the IR's declared enums by name.
+
+D is closed: the register IR and the interpreter hold no reference to the
+stack, which is transport only.
 
 No word runs an inherited handler. The last merge check passed the smoke set
 on release and assert, and the verifier reports no error over 108,949 code
-objects (108,923 at the last merge). The full suites at `0a81f42d9bf` (release and assert, JIT off)
+objects (108,925 at the last merge). The full suites at `0a81f42d9bf` (release and assert, JIT off)
 failed only the three stale specialization tests PAR then fixed, and the
 id-shifted guard build passes at `d8cb2109192`. Ports keep the old handlers' object locks and turn every old
 specialization into an arm.
@@ -163,8 +169,6 @@ Running, interpreter performance wave 1 (timing recorded, never gated):
   checks every home store as a value though an iteration cursor home holds
   a tagged index; the check follows the declared type, and the Py_STATS
   build's nested-activation crash is fixed;
-- D's item 8: the arms that push a frame declare that they run Python,
-  which the checker enforces, and tests read declared enums.
 
 Wave 2, after these merge: one arm per operator and branch sense, unpack
 and moves placed at lowering, and the missing arms.

@@ -6,7 +6,7 @@
 #ifndef Py_INTERNAL_ROP_METADATA_H
 #define Py_INTERNAL_ROP_METADATA_H
 
-#include "opcode_ids.h"        // IR_NUM_OLD_HANDLERS
+#include "ir_handler_ids.h"     // IR_NUM_OLD_HANDLERS
 #include "pycore_ir.h"          // IR_F_LOCAL_A
 
 /* The arms' handler ids follow the old handlers, in definition order; the
@@ -367,56 +367,324 @@ enum {
 #define ROP_HANDLER_Jump_Poll_Observed (ROP_FIRST_HANDLER + 253)
 #define ROP_HANDLER_Jump_Warm_Observed (ROP_FIRST_HANDLER + 254)
 
+/* The translator's CFG holds stack opcodes below 256 in its ops, so an op
+ * that names an arm is tagged: ROP_OP_<arm> is ROP_CFG_BASE plus the arm's
+ * handler offset, and ROP_CFG_HANDLER() takes it back to the handler id */
+#define ROP_CFG_BASE 512
+#define ROP_CFG_IS_ARM(op) ((op) >= ROP_CFG_BASE)
+#define ROP_CFG_HANDLER(op) ((op) - ROP_CFG_BASE + ROP_FIRST_HANDLER)
+#define ROP_OP_Add_Int (ROP_CFG_BASE + 0)
+#define ROP_OP_Add_Float (ROP_CFG_BASE + 1)
+#define ROP_OP_Add_Text (ROP_CFG_BASE + 2)
+#define ROP_OP_Add_Extended (ROP_CFG_BASE + 3)
+#define ROP_OP_Add_Generic (ROP_CFG_BASE + 4)
+#define ROP_OP_AttrWrite_Generic (ROP_CFG_BASE + 5)
+#define ROP_OP_AttrWrite_Instance (ROP_CFG_BASE + 6)
+#define ROP_OP_AttrWrite_Shape (ROP_CFG_BASE + 7)
+#define ROP_OP_AttrWrite_ShapeAdd (ROP_CFG_BASE + 8)
+#define ROP_OP_AttrWrite_Hint (ROP_CFG_BASE + 9)
+#define ROP_OP_AttrWrite_Slot (ROP_CFG_BASE + 10)
+#define ROP_OP_SuperAttr_Generic (ROP_CFG_BASE + 11)
+#define ROP_OP_SuperAttr_Builtin (ROP_CFG_BASE + 12)
+#define ROP_OP_SuperAttr_Observed (ROP_CFG_BASE + 13)
+#define ROP_OP_SuperAttrExplicit_Generic (ROP_CFG_BASE + 14)
+#define ROP_OP_SuperAttrExplicit_Builtin (ROP_CFG_BASE + 15)
+#define ROP_OP_SuperAttrExplicit_Observed (ROP_CFG_BASE + 16)
+#define ROP_OP_SuperMethod_Generic (ROP_CFG_BASE + 17)
+#define ROP_OP_SuperMethod_Builtin (ROP_CFG_BASE + 18)
+#define ROP_OP_SuperMethod_Observed (ROP_CFG_BASE + 19)
+#define ROP_OP_SuperMethodExplicit_Generic (ROP_CFG_BASE + 20)
+#define ROP_OP_SuperMethodExplicit_Builtin (ROP_CFG_BASE + 21)
+#define ROP_OP_SuperMethodExplicit_Observed (ROP_CFG_BASE + 22)
+#define ROP_OP_SpecialLookup_Generic (ROP_CFG_BASE + 23)
+#define ROP_OP_Call_Exact (ROP_CFG_BASE + 24)
+#define ROP_OP_Call_BoundExact (ROP_CFG_BASE + 25)
+#define ROP_OP_Call_Init (ROP_CFG_BASE + 26)
+#define ROP_OP_Call_Generic (ROP_CFG_BASE + 27)
+#define ROP_OP_InitResult_Check (ROP_CFG_BASE + 28)
+#define ROP_OP_Call_Observed (ROP_CFG_BASE + 29)
+#define ROP_OP_Return_Ordinary (ROP_CFG_BASE + 30)
+#define ROP_OP_Return_Empty (ROP_CFG_BASE + 31)
+#define ROP_OP_Return_Generator (ROP_CFG_BASE + 32)
+#define ROP_OP_Return_Observed (ROP_CFG_BASE + 33)
+#define ROP_OP_Return_External (ROP_CFG_BASE + 34)
+#define ROP_OP_MaterializeKwargs_Pending (ROP_CFG_BASE + 35)
+#define ROP_OP_CallKw_Plan (ROP_CFG_BASE + 36)
+#define ROP_OP_CallKw_Generic (ROP_CFG_BASE + 37)
+#define ROP_OP_CallKw_Observed (ROP_CFG_BASE + 38)
+#define ROP_OP_CallEx_Generic (ROP_CFG_BASE + 39)
+#define ROP_OP_CallEx_Observed (ROP_CFG_BASE + 40)
+#define ROP_OP_CellMake_Wrap (ROP_CFG_BASE + 41)
+#define ROP_OP_CellRead_Get (ROP_CFG_BASE + 42)
+#define ROP_OP_CellMapRead_Lookup (ROP_CFG_BASE + 43)
+#define ROP_OP_CellStore_Set (ROP_CFG_BASE + 44)
+#define ROP_OP_CellDelete_Unbind (ROP_CFG_BASE + 45)
+#define ROP_OP_Build_Tuple (ROP_CFG_BASE + 46)
+#define ROP_OP_Build_List (ROP_CFG_BASE + 47)
+#define ROP_OP_Build_Set (ROP_CFG_BASE + 48)
+#define ROP_OP_Build_Map (ROP_CFG_BASE + 49)
+#define ROP_OP_AddElement_Append (ROP_CFG_BASE + 50)
+#define ROP_OP_AddElement_Add (ROP_CFG_BASE + 51)
+#define ROP_OP_AddEntry_Put (ROP_CFG_BASE + 52)
+#define ROP_OP_UpdateContainer_Extend (ROP_CFG_BASE + 53)
+#define ROP_OP_UpdateContainer_Union (ROP_CFG_BASE + 54)
+#define ROP_OP_UpdateContainer_Overlay (ROP_CFG_BASE + 55)
+#define ROP_OP_MergeKeywords_Merge (ROP_CFG_BASE + 56)
+#define ROP_OP_Unpack_Generic (ROP_CFG_BASE + 57)
+#define ROP_OP_Unpack_Tuple (ROP_CFG_BASE + 58)
+#define ROP_OP_Unpack_List (ROP_CFG_BASE + 59)
+#define ROP_OP_UnpackStar_Iterable (ROP_CFG_BASE + 60)
+#define ROP_OP_Raise_Throw (ROP_CFG_BASE + 61)
+#define ROP_OP_Reraise_Plain (ROP_CFG_BASE + 62)
+#define ROP_OP_Reraise_Origin (ROP_CFG_BASE + 63)
+#define ROP_OP_ExceptEnter_Install (ROP_CFG_BASE + 64)
+#define ROP_OP_ExceptLeave_Restore (ROP_CFG_BASE + 65)
+#define ROP_OP_ExceptMatch_Match (ROP_CFG_BASE + 66)
+#define ROP_OP_ExceptGroupMatch_Split (ROP_CFG_BASE + 67)
+#define ROP_OP_Function_Make (ROP_CFG_BASE + 68)
+#define ROP_OP_Intrinsic_Unary (ROP_CFG_BASE + 69)
+#define ROP_OP_Intrinsic_ImportStar (ROP_CFG_BASE + 70)
+#define ROP_OP_Intrinsic_StopIteration (ROP_CFG_BASE + 71)
+#define ROP_OP_IntrinsicPair_Binary (ROP_CFG_BASE + 72)
+#define ROP_OP_IntrinsicPair_Attr (ROP_CFG_BASE + 73)
+#define ROP_OP_GetAttr_Instance (ROP_CFG_BASE + 74)
+#define ROP_OP_GetAttr_GetSet (ROP_CFG_BASE + 75)
+#define ROP_OP_GetAttr_Generic (ROP_CFG_BASE + 76)
+#define ROP_OP_GetAttr_Shape (ROP_CFG_BASE + 77)
+#define ROP_OP_GetAttr_PolyShape (ROP_CFG_BASE + 78)
+#define ROP_OP_GetAttr_Module (ROP_CFG_BASE + 79)
+#define ROP_OP_GetAttr_Hint (ROP_CFG_BASE + 80)
+#define ROP_OP_GetAttr_ValueSlot (ROP_CFG_BASE + 81)
+#define ROP_OP_GetAttr_PointerSlot (ROP_CFG_BASE + 82)
+#define ROP_OP_GetAttr_Class (ROP_CFG_BASE + 83)
+#define ROP_OP_GetAttr_NonDescriptorValues (ROP_CFG_BASE + 84)
+#define ROP_OP_GetAttr_NonDescriptorNoDict (ROP_CFG_BASE + 85)
+#define ROP_OP_GetMethod_MethodValues (ROP_CFG_BASE + 86)
+#define ROP_OP_GetMethod_Generic (ROP_CFG_BASE + 87)
+#define ROP_OP_GetMethod_PolyMethod (ROP_CFG_BASE + 88)
+#define ROP_OP_GetMethod_NoDict (ROP_CFG_BASE + 89)
+#define ROP_OP_GetMethod_LazyDict (ROP_CFG_BASE + 90)
+#define ROP_OP_GetMethod_ClassMethod (ROP_CFG_BASE + 91)
+#define ROP_OP_GetItem_Generic (ROP_CFG_BASE + 92)
+#define ROP_OP_SetItem_Generic (ROP_CFG_BASE + 93)
+#define ROP_OP_DelItem_Generic (ROP_CFG_BASE + 94)
+#define ROP_OP_SliceRead_Generic (ROP_CFG_BASE + 95)
+#define ROP_OP_SliceWrite_Generic (ROP_CFG_BASE + 96)
+#define ROP_OP_BuildSlice_Generic (ROP_CFG_BASE + 97)
+#define ROP_OP_GetItem_ListIndex (ROP_CFG_BASE + 98)
+#define ROP_OP_GetItem_TupleIndex (ROP_CFG_BASE + 99)
+#define ROP_OP_GetItem_Ascii (ROP_CFG_BASE + 100)
+#define ROP_OP_GetItem_UnicodeAsciiChar (ROP_CFG_BASE + 101)
+#define ROP_OP_GetItem_ListSlice (ROP_CFG_BASE + 102)
+#define ROP_OP_GetItem_Dict (ROP_CFG_BASE + 103)
+#define ROP_OP_SetItem_ListIndex (ROP_CFG_BASE + 104)
+#define ROP_OP_SetItem_Dict (ROP_CFG_BASE + 105)
+#define ROP_OP_IterOpen_Generic (ROP_CFG_BASE + 106)
+#define ROP_OP_ForIter_Generic (ROP_CFG_BASE + 107)
+#define ROP_OP_IterOpen_Self (ROP_CFG_BASE + 108)
+#define ROP_OP_IterOpen_Indexed (ROP_CFG_BASE + 109)
+#define ROP_OP_IterOpen_GenMethod (ROP_CFG_BASE + 110)
+#define ROP_OP_ForIter_List (ROP_CFG_BASE + 111)
+#define ROP_OP_ForIter_Tuple (ROP_CFG_BASE + 112)
+#define ROP_OP_ForIter_Range (ROP_CFG_BASE + 113)
+#define ROP_OP_ForIter_Indexed (ROP_CFG_BASE + 114)
+#define ROP_OP_ForIter_Slot (ROP_CFG_BASE + 115)
+#define ROP_OP_ForIter_Observed (ROP_CFG_BASE + 116)
+#define ROP_OP_IterClose_Retire (ROP_CFG_BASE + 117)
+#define ROP_OP_IterClose_Observed (ROP_CFG_BASE + 118)
+#define ROP_OP_GlobalRead_Generic (ROP_CFG_BASE + 119)
+#define ROP_OP_GlobalRead_Module (ROP_CFG_BASE + 120)
+#define ROP_OP_GlobalRead_Builtin (ROP_CFG_BASE + 121)
+#define ROP_OP_NamespaceRead_Name (ROP_CFG_BASE + 122)
+#define ROP_OP_NamespaceRead_Locals (ROP_CFG_BASE + 123)
+#define ROP_OP_NamespaceRead_BuildClass (ROP_CFG_BASE + 124)
+#define ROP_OP_NamespaceReadFrom_Mapping (ROP_CFG_BASE + 125)
+#define ROP_OP_NamespaceWrite_Name (ROP_CFG_BASE + 126)
+#define ROP_OP_NamespaceWrite_Global (ROP_CFG_BASE + 127)
+#define ROP_OP_SetupAnnotations_Setup (ROP_CFG_BASE + 128)
+#define ROP_OP_Import_Eager (ROP_CFG_BASE + 129)
+#define ROP_OP_Import_Policy (ROP_CFG_BASE + 130)
+#define ROP_OP_Import_Lazy (ROP_CFG_BASE + 131)
+#define ROP_OP_ImportFrom_From (ROP_CFG_BASE + 132)
+#define ROP_OP_ImportFrom_FromLast (ROP_CFG_BASE + 133)
+#define ROP_OP_Binary_Int (ROP_CFG_BASE + 134)
+#define ROP_OP_Binary_Float (ROP_CFG_BASE + 135)
+#define ROP_OP_Binary_Text (ROP_CFG_BASE + 136)
+#define ROP_OP_Binary_Extended (ROP_CFG_BASE + 137)
+#define ROP_OP_Binary_Generic (ROP_CFG_BASE + 138)
+#define ROP_OP_Unary_Generic (ROP_CFG_BASE + 139)
+#define ROP_OP_AppendText_Text (ROP_CFG_BASE + 140)
+#define ROP_OP_AppendText_Generic (ROP_CFG_BASE + 141)
+#define ROP_OP_Length_Size (ROP_CFG_BASE + 142)
+#define ROP_OP_Pattern_Flag (ROP_CFG_BASE + 143)
+#define ROP_OP_PatternClass_Match (ROP_CFG_BASE + 144)
+#define ROP_OP_PatternKeys_Match (ROP_CFG_BASE + 145)
+#define ROP_OP_Resume_Poll (ROP_CFG_BASE + 146)
+#define ROP_OP_Resume_Warm (ROP_CFG_BASE + 147)
+#define ROP_OP_Resume_Observed (ROP_CFG_BASE + 148)
+#define ROP_OP_Compare_Int (ROP_CFG_BASE + 149)
+#define ROP_OP_Compare_Float (ROP_CFG_BASE + 150)
+#define ROP_OP_Compare_Str (ROP_CFG_BASE + 151)
+#define ROP_OP_Compare_Generic (ROP_CFG_BASE + 152)
+#define ROP_OP_Identity_Test (ROP_CFG_BASE + 153)
+#define ROP_OP_Contains_Set (ROP_CFG_BASE + 154)
+#define ROP_OP_Contains_Dict (ROP_CFG_BASE + 155)
+#define ROP_OP_Contains_Generic (ROP_CFG_BASE + 156)
+#define ROP_OP_TestBranch_Identity (ROP_CFG_BASE + 157)
+#define ROP_OP_TestBranch_Int (ROP_CFG_BASE + 158)
+#define ROP_OP_TestBranch_Float (ROP_CFG_BASE + 159)
+#define ROP_OP_TestBranch_Str (ROP_CFG_BASE + 160)
+#define ROP_OP_TestBranch_Set (ROP_CFG_BASE + 161)
+#define ROP_OP_TestBranch_Dict (ROP_CFG_BASE + 162)
+#define ROP_OP_TestBranch_Sequence (ROP_CFG_BASE + 163)
+#define ROP_OP_TestBranch_Generic (ROP_CFG_BASE + 164)
+#define ROP_OP_TestBranch_Observed (ROP_CFG_BASE + 165)
+#define ROP_OP_BuildText_Join (ROP_CFG_BASE + 166)
+#define ROP_OP_BuildText_Interpolation (ROP_CFG_BASE + 167)
+#define ROP_OP_BuildText_Template (ROP_CFG_BASE + 168)
+#define ROP_OP_Convert_Text (ROP_CFG_BASE + 169)
+#define ROP_OP_Format_Simple (ROP_CFG_BASE + 170)
+#define ROP_OP_FormatSpec_Value (ROP_CFG_BASE + 171)
+#define ROP_OP_Truth_Bool (ROP_CFG_BASE + 172)
+#define ROP_OP_Truth_Int (ROP_CFG_BASE + 173)
+#define ROP_OP_Truth_List (ROP_CFG_BASE + 174)
+#define ROP_OP_Truth_None (ROP_CFG_BASE + 175)
+#define ROP_OP_Truth_Str (ROP_CFG_BASE + 176)
+#define ROP_OP_Truth_Plain (ROP_CFG_BASE + 177)
+#define ROP_OP_Truth_Slot (ROP_CFG_BASE + 178)
+#define ROP_OP_Truth_Generic (ROP_CFG_BASE + 179)
+#define ROP_OP_BranchTruth_Bool (ROP_CFG_BASE + 180)
+#define ROP_OP_BranchTruth_Int (ROP_CFG_BASE + 181)
+#define ROP_OP_BranchTruth_List (ROP_CFG_BASE + 182)
+#define ROP_OP_BranchTruth_None (ROP_CFG_BASE + 183)
+#define ROP_OP_BranchTruth_Str (ROP_CFG_BASE + 184)
+#define ROP_OP_BranchTruth_Plain (ROP_CFG_BASE + 185)
+#define ROP_OP_BranchTruth_Slot (ROP_CFG_BASE + 186)
+#define ROP_OP_BranchTruth_Generic (ROP_CFG_BASE + 187)
+#define ROP_OP_BranchNone_Test (ROP_CFG_BASE + 188)
+#define ROP_OP_BranchTruth_Observed (ROP_CFG_BASE + 189)
+#define ROP_OP_BranchNone_Observed (ROP_CFG_BASE + 190)
+#define ROP_OP_Jump_Direct (ROP_CFG_BASE + 191)
+#define ROP_OP_Jump_Poll (ROP_CFG_BASE + 192)
+#define ROP_OP_Jump_Warm (ROP_CFG_BASE + 193)
+#define ROP_OP_Jump_Observed (ROP_CFG_BASE + 194)
+#define ROP_OP_Const_Pool (ROP_CFG_BASE + 195)
+#define ROP_OP_Const_Small (ROP_CFG_BASE + 196)
+#define ROP_OP_Const_Common (ROP_CFG_BASE + 197)
+#define ROP_OP_LocalRead_Bound (ROP_CFG_BASE + 198)
+#define ROP_OP_LocalRead_Checked (ROP_CFG_BASE + 199)
+#define ROP_OP_LocalWrite_Store (ROP_CFG_BASE + 200)
+#define ROP_OP_LocalWrite_Restore (ROP_CFG_BASE + 201)
+#define ROP_OP_SaveLocal_Take (ROP_CFG_BASE + 202)
+#define ROP_OP_LocalDelete_Checked (ROP_CFG_BASE + 203)
+#define ROP_OP_Move_Transfer (ROP_CFG_BASE + 204)
+#define ROP_OP_Move_Retire (ROP_CFG_BASE + 205)
+#define ROP_OP_Move_Copy (ROP_CFG_BASE + 206)
+#define ROP_OP_SuperAttr_Generic_Observed (ROP_CFG_BASE + 207)
+#define ROP_OP_SuperAttr_Builtin_Observed (ROP_CFG_BASE + 208)
+#define ROP_OP_SuperAttrExplicit_Generic_Observed (ROP_CFG_BASE + 209)
+#define ROP_OP_SuperAttrExplicit_Builtin_Observed (ROP_CFG_BASE + 210)
+#define ROP_OP_SuperMethod_Generic_Observed (ROP_CFG_BASE + 211)
+#define ROP_OP_SuperMethod_Builtin_Observed (ROP_CFG_BASE + 212)
+#define ROP_OP_SuperMethodExplicit_Generic_Observed (ROP_CFG_BASE + 213)
+#define ROP_OP_SuperMethodExplicit_Builtin_Observed (ROP_CFG_BASE + 214)
+#define ROP_OP_Call_Exact_Observed (ROP_CFG_BASE + 215)
+#define ROP_OP_Call_BoundExact_Observed (ROP_CFG_BASE + 216)
+#define ROP_OP_Call_Init_Observed (ROP_CFG_BASE + 217)
+#define ROP_OP_Call_Generic_Observed (ROP_CFG_BASE + 218)
+#define ROP_OP_Return_Ordinary_Observed (ROP_CFG_BASE + 219)
+#define ROP_OP_Return_Empty_Observed (ROP_CFG_BASE + 220)
+#define ROP_OP_Return_Generator_Observed (ROP_CFG_BASE + 221)
+#define ROP_OP_Return_External_Observed (ROP_CFG_BASE + 222)
+#define ROP_OP_CallKw_Plan_Observed (ROP_CFG_BASE + 223)
+#define ROP_OP_CallKw_Generic_Observed (ROP_CFG_BASE + 224)
+#define ROP_OP_CallEx_Generic_Observed (ROP_CFG_BASE + 225)
+#define ROP_OP_ForIter_Generic_Observed (ROP_CFG_BASE + 226)
+#define ROP_OP_ForIter_List_Observed (ROP_CFG_BASE + 227)
+#define ROP_OP_ForIter_Tuple_Observed (ROP_CFG_BASE + 228)
+#define ROP_OP_ForIter_Range_Observed (ROP_CFG_BASE + 229)
+#define ROP_OP_ForIter_Indexed_Observed (ROP_CFG_BASE + 230)
+#define ROP_OP_ForIter_Slot_Observed (ROP_CFG_BASE + 231)
+#define ROP_OP_IterClose_Retire_Observed (ROP_CFG_BASE + 232)
+#define ROP_OP_Resume_Poll_Observed (ROP_CFG_BASE + 233)
+#define ROP_OP_Resume_Warm_Observed (ROP_CFG_BASE + 234)
+#define ROP_OP_TestBranch_Identity_Observed (ROP_CFG_BASE + 235)
+#define ROP_OP_TestBranch_Int_Observed (ROP_CFG_BASE + 236)
+#define ROP_OP_TestBranch_Float_Observed (ROP_CFG_BASE + 237)
+#define ROP_OP_TestBranch_Str_Observed (ROP_CFG_BASE + 238)
+#define ROP_OP_TestBranch_Set_Observed (ROP_CFG_BASE + 239)
+#define ROP_OP_TestBranch_Dict_Observed (ROP_CFG_BASE + 240)
+#define ROP_OP_TestBranch_Sequence_Observed (ROP_CFG_BASE + 241)
+#define ROP_OP_TestBranch_Generic_Observed (ROP_CFG_BASE + 242)
+#define ROP_OP_BranchTruth_Bool_Observed (ROP_CFG_BASE + 243)
+#define ROP_OP_BranchTruth_Int_Observed (ROP_CFG_BASE + 244)
+#define ROP_OP_BranchTruth_List_Observed (ROP_CFG_BASE + 245)
+#define ROP_OP_BranchTruth_None_Observed (ROP_CFG_BASE + 246)
+#define ROP_OP_BranchTruth_Str_Observed (ROP_CFG_BASE + 247)
+#define ROP_OP_BranchTruth_Plain_Observed (ROP_CFG_BASE + 248)
+#define ROP_OP_BranchTruth_Slot_Observed (ROP_CFG_BASE + 249)
+#define ROP_OP_BranchTruth_Generic_Observed (ROP_CFG_BASE + 250)
+#define ROP_OP_BranchNone_Test_Observed (ROP_CFG_BASE + 251)
+#define ROP_OP_Jump_Direct_Observed (ROP_CFG_BASE + 252)
+#define ROP_OP_Jump_Poll_Observed (ROP_CFG_BASE + 253)
+#define ROP_OP_Jump_Warm_Observed (ROP_CFG_BASE + 254)
+
+/* ROP_ARM(name) is the arm's handler id; the translator's CFG files
+ * (regcfg*.c, ir_assemble.c) redefine it as the tagged ROP_OP_<name> */
+#ifndef ROP_ARM
+#define ROP_ARM(name) ROP_HANDLER_##name
+#endif
+
 /* The arm of a statically selected family that each selection admits
  * (its `select`): ROP_SELECT_<Family>_<member>... */
-#define ROP_SELECT_Return_thread_frame_live_scratch ROP_HANDLER_Return_Ordinary
-#define ROP_SELECT_Return_thread_frame_vacant_scratch ROP_HANDLER_Return_Empty
-#define ROP_SELECT_Return_generator_frame ROP_HANDLER_Return_Generator
-#define ROP_SELECT_Return_entry_frame ROP_HANDLER_Return_External
-#define ROP_SELECT_Build_tuple ROP_HANDLER_Build_Tuple
-#define ROP_SELECT_Build_list ROP_HANDLER_Build_List
-#define ROP_SELECT_Build_set ROP_HANDLER_Build_Set
-#define ROP_SELECT_Build_map ROP_HANDLER_Build_Map
-#define ROP_SELECT_AddElement_append ROP_HANDLER_AddElement_Append
-#define ROP_SELECT_AddElement_add ROP_HANDLER_AddElement_Add
-#define ROP_SELECT_UpdateContainer_extend ROP_HANDLER_UpdateContainer_Extend
-#define ROP_SELECT_UpdateContainer_union ROP_HANDLER_UpdateContainer_Union
-#define ROP_SELECT_UpdateContainer_overlay ROP_HANDLER_UpdateContainer_Overlay
-#define ROP_SELECT_Reraise_absent ROP_HANDLER_Reraise_Plain
-#define ROP_SELECT_Reraise_present ROP_HANDLER_Reraise_Origin
-#define ROP_SELECT_Intrinsic_unary ROP_HANDLER_Intrinsic_Unary
-#define ROP_SELECT_Intrinsic_import_star ROP_HANDLER_Intrinsic_ImportStar
-#define ROP_SELECT_Intrinsic_stopiteration ROP_HANDLER_Intrinsic_StopIteration
-#define ROP_SELECT_IntrinsicPair_binary ROP_HANDLER_IntrinsicPair_Binary
-#define ROP_SELECT_IntrinsicPair_attr ROP_HANDLER_IntrinsicPair_Attr
-#define ROP_SELECT_NamespaceRead_named ROP_HANDLER_NamespaceRead_Name
-#define ROP_SELECT_NamespaceRead_locals_scope ROP_HANDLER_NamespaceRead_Locals
-#define ROP_SELECT_NamespaceRead_build_class_scope ROP_HANDLER_NamespaceRead_BuildClass
-#define ROP_SELECT_NamespaceWrite_name_scope ROP_HANDLER_NamespaceWrite_Name
-#define ROP_SELECT_NamespaceWrite_global_scope ROP_HANDLER_NamespaceWrite_Global
-#define ROP_SELECT_Import_eager_import ROP_HANDLER_Import_Eager
-#define ROP_SELECT_Import_policy_import ROP_HANDLER_Import_Policy
-#define ROP_SELECT_Import_lazy_import ROP_HANDLER_Import_Lazy
-#define ROP_SELECT_ImportFrom_module_kept ROP_HANDLER_ImportFrom_From
-#define ROP_SELECT_ImportFrom_module_spent ROP_HANDLER_ImportFrom_FromLast
-#define ROP_SELECT_Resume_jit_off ROP_HANDLER_Resume_Poll
-#define ROP_SELECT_Resume_jit_on ROP_HANDLER_Resume_Warm
-#define ROP_SELECT_BuildText_join ROP_HANDLER_BuildText_Join
-#define ROP_SELECT_BuildText_interpolation ROP_HANDLER_BuildText_Interpolation
-#define ROP_SELECT_BuildText_template ROP_HANDLER_BuildText_Template
-#define ROP_SELECT_Jump_uninterrupted ROP_HANDLER_Jump_Direct
-#define ROP_SELECT_Jump_interruptible_jit_off ROP_HANDLER_Jump_Poll
-#define ROP_SELECT_Jump_interruptible_jit_on ROP_HANDLER_Jump_Warm
-#define ROP_SELECT_Const_pool ROP_HANDLER_Const_Pool
-#define ROP_SELECT_Const_small ROP_HANDLER_Const_Small
-#define ROP_SELECT_Const_common ROP_HANDLER_Const_Common
-#define ROP_SELECT_LocalRead_bound ROP_HANDLER_LocalRead_Bound
-#define ROP_SELECT_LocalRead_checked ROP_HANDLER_LocalRead_Checked
-#define ROP_SELECT_LocalWrite_store ROP_HANDLER_LocalWrite_Store
-#define ROP_SELECT_LocalWrite_restore ROP_HANDLER_LocalWrite_Restore
-#define ROP_SELECT_Move_transfer ROP_HANDLER_Move_Transfer
-#define ROP_SELECT_Move_retire ROP_HANDLER_Move_Retire
-#define ROP_SELECT_Move_copy ROP_HANDLER_Move_Copy
+#define ROP_SELECT_Return_thread_frame_live_scratch ROP_ARM(Return_Ordinary)
+#define ROP_SELECT_Return_thread_frame_vacant_scratch ROP_ARM(Return_Empty)
+#define ROP_SELECT_Return_generator_frame ROP_ARM(Return_Generator)
+#define ROP_SELECT_Return_entry_frame ROP_ARM(Return_External)
+#define ROP_SELECT_Build_tuple ROP_ARM(Build_Tuple)
+#define ROP_SELECT_Build_list ROP_ARM(Build_List)
+#define ROP_SELECT_Build_set ROP_ARM(Build_Set)
+#define ROP_SELECT_Build_map ROP_ARM(Build_Map)
+#define ROP_SELECT_AddElement_append ROP_ARM(AddElement_Append)
+#define ROP_SELECT_AddElement_add ROP_ARM(AddElement_Add)
+#define ROP_SELECT_UpdateContainer_extend ROP_ARM(UpdateContainer_Extend)
+#define ROP_SELECT_UpdateContainer_union ROP_ARM(UpdateContainer_Union)
+#define ROP_SELECT_UpdateContainer_overlay ROP_ARM(UpdateContainer_Overlay)
+#define ROP_SELECT_Reraise_absent ROP_ARM(Reraise_Plain)
+#define ROP_SELECT_Reraise_present ROP_ARM(Reraise_Origin)
+#define ROP_SELECT_Intrinsic_unary ROP_ARM(Intrinsic_Unary)
+#define ROP_SELECT_Intrinsic_import_star ROP_ARM(Intrinsic_ImportStar)
+#define ROP_SELECT_Intrinsic_stopiteration ROP_ARM(Intrinsic_StopIteration)
+#define ROP_SELECT_IntrinsicPair_binary ROP_ARM(IntrinsicPair_Binary)
+#define ROP_SELECT_IntrinsicPair_attr ROP_ARM(IntrinsicPair_Attr)
+#define ROP_SELECT_NamespaceRead_named ROP_ARM(NamespaceRead_Name)
+#define ROP_SELECT_NamespaceRead_locals_scope ROP_ARM(NamespaceRead_Locals)
+#define ROP_SELECT_NamespaceRead_build_class_scope ROP_ARM(NamespaceRead_BuildClass)
+#define ROP_SELECT_NamespaceWrite_name_scope ROP_ARM(NamespaceWrite_Name)
+#define ROP_SELECT_NamespaceWrite_global_scope ROP_ARM(NamespaceWrite_Global)
+#define ROP_SELECT_Import_eager_import ROP_ARM(Import_Eager)
+#define ROP_SELECT_Import_policy_import ROP_ARM(Import_Policy)
+#define ROP_SELECT_Import_lazy_import ROP_ARM(Import_Lazy)
+#define ROP_SELECT_ImportFrom_module_kept ROP_ARM(ImportFrom_From)
+#define ROP_SELECT_ImportFrom_module_spent ROP_ARM(ImportFrom_FromLast)
+#define ROP_SELECT_Resume_jit_off ROP_ARM(Resume_Poll)
+#define ROP_SELECT_Resume_jit_on ROP_ARM(Resume_Warm)
+#define ROP_SELECT_BuildText_join ROP_ARM(BuildText_Join)
+#define ROP_SELECT_BuildText_interpolation ROP_ARM(BuildText_Interpolation)
+#define ROP_SELECT_BuildText_template ROP_ARM(BuildText_Template)
+#define ROP_SELECT_Jump_uninterrupted ROP_ARM(Jump_Direct)
+#define ROP_SELECT_Jump_interruptible_jit_off ROP_ARM(Jump_Poll)
+#define ROP_SELECT_Jump_interruptible_jit_on ROP_ARM(Jump_Warm)
+#define ROP_SELECT_Const_pool ROP_ARM(Const_Pool)
+#define ROP_SELECT_Const_small ROP_ARM(Const_Small)
+#define ROP_SELECT_Const_common ROP_ARM(Const_Common)
+#define ROP_SELECT_LocalRead_bound ROP_ARM(LocalRead_Bound)
+#define ROP_SELECT_LocalRead_checked ROP_ARM(LocalRead_Checked)
+#define ROP_SELECT_LocalWrite_store ROP_ARM(LocalWrite_Store)
+#define ROP_SELECT_LocalWrite_restore ROP_ARM(LocalWrite_Restore)
+#define ROP_SELECT_Move_transfer ROP_ARM(Move_Transfer)
+#define ROP_SELECT_Move_retire ROP_ARM(Move_Retire)
+#define ROP_SELECT_Move_copy ROP_ARM(Move_Copy)
 
 /* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */
 #define ROP_POINT_Add_BoxFailed 1
@@ -1672,122 +1940,122 @@ enum { ROP_SELECT_PRESENT, ROP_SELECT_ABSENT };  /* operand */
 
 /* The arm of AddElement that holds for (element) */
 #define _PyRop_SelectAddElement(element) ( \
-    ((element) == ROP_SELECT_APPEND) ? ROP_HANDLER_AddElement_Append : \
-    ((element) == ROP_SELECT_ADD) ? ROP_HANDLER_AddElement_Add : \
+    ((element) == ROP_SELECT_APPEND) ? ROP_ARM(AddElement_Append) : \
+    ((element) == ROP_SELECT_ADD) ? ROP_ARM(AddElement_Add) : \
     -1)
 
 /* The arm of Build that holds for (display) */
 #define _PyRop_SelectBuild(display) ( \
-    ((display) == ROP_SELECT_TUPLE) ? ROP_HANDLER_Build_Tuple : \
-    ((display) == ROP_SELECT_LIST) ? ROP_HANDLER_Build_List : \
-    ((display) == ROP_SELECT_SET) ? ROP_HANDLER_Build_Set : \
-    ((display) == ROP_SELECT_MAP) ? ROP_HANDLER_Build_Map : \
+    ((display) == ROP_SELECT_TUPLE) ? ROP_ARM(Build_Tuple) : \
+    ((display) == ROP_SELECT_LIST) ? ROP_ARM(Build_List) : \
+    ((display) == ROP_SELECT_SET) ? ROP_ARM(Build_Set) : \
+    ((display) == ROP_SELECT_MAP) ? ROP_ARM(Build_Map) : \
     -1)
 
 /* The arm of BuildText that holds for (text) */
 #define _PyRop_SelectBuildText(text) ( \
-    ((text) == ROP_SELECT_JOIN) ? ROP_HANDLER_BuildText_Join : \
-    ((text) == ROP_SELECT_INTERPOLATION) ? ROP_HANDLER_BuildText_Interpolation : \
-    ((text) == ROP_SELECT_TEMPLATE) ? ROP_HANDLER_BuildText_Template : \
+    ((text) == ROP_SELECT_JOIN) ? ROP_ARM(BuildText_Join) : \
+    ((text) == ROP_SELECT_INTERPOLATION) ? ROP_ARM(BuildText_Interpolation) : \
+    ((text) == ROP_SELECT_TEMPLATE) ? ROP_ARM(BuildText_Template) : \
     -1)
 
 /* The arm of Const that holds for (const) */
 #define _PyRop_SelectConst(const) ( \
-    ((const) == ROP_SELECT_POOL) ? ROP_HANDLER_Const_Pool : \
-    ((const) == ROP_SELECT_SMALL) ? ROP_HANDLER_Const_Small : \
-    ((const) == ROP_SELECT_COMMON) ? ROP_HANDLER_Const_Common : \
+    ((const) == ROP_SELECT_POOL) ? ROP_ARM(Const_Pool) : \
+    ((const) == ROP_SELECT_SMALL) ? ROP_ARM(Const_Small) : \
+    ((const) == ROP_SELECT_COMMON) ? ROP_ARM(Const_Common) : \
     -1)
 
 /* The arm of Import that holds for (import_kind) */
 #define _PyRop_SelectImport(import_kind) ( \
-    ((import_kind) == ROP_SELECT_EAGER_IMPORT) ? ROP_HANDLER_Import_Eager : \
-    ((import_kind) == ROP_SELECT_POLICY_IMPORT) ? ROP_HANDLER_Import_Policy : \
-    ((import_kind) == ROP_SELECT_LAZY_IMPORT) ? ROP_HANDLER_Import_Lazy : \
+    ((import_kind) == ROP_SELECT_EAGER_IMPORT) ? ROP_ARM(Import_Eager) : \
+    ((import_kind) == ROP_SELECT_POLICY_IMPORT) ? ROP_ARM(Import_Policy) : \
+    ((import_kind) == ROP_SELECT_LAZY_IMPORT) ? ROP_ARM(Import_Lazy) : \
     -1)
 
 /* The arm of ImportFrom that holds for (module_use) */
 #define _PyRop_SelectImportFrom(module_use) ( \
-    ((module_use) == ROP_SELECT_MODULE_KEPT) ? ROP_HANDLER_ImportFrom_From : \
-    ((module_use) == ROP_SELECT_MODULE_SPENT) ? ROP_HANDLER_ImportFrom_FromLast : \
+    ((module_use) == ROP_SELECT_MODULE_KEPT) ? ROP_ARM(ImportFrom_From) : \
+    ((module_use) == ROP_SELECT_MODULE_SPENT) ? ROP_ARM(ImportFrom_FromLast) : \
     -1)
 
 /* The arm of Intrinsic that holds for (intrinsic1) */
 #define _PyRop_SelectIntrinsic(intrinsic1) ( \
-    ((intrinsic1) == ROP_SELECT_UNARY) ? ROP_HANDLER_Intrinsic_Unary : \
-    ((intrinsic1) == ROP_SELECT_IMPORT_STAR) ? ROP_HANDLER_Intrinsic_ImportStar : \
-    ((intrinsic1) == ROP_SELECT_STOPITERATION) ? ROP_HANDLER_Intrinsic_StopIteration : \
+    ((intrinsic1) == ROP_SELECT_UNARY) ? ROP_ARM(Intrinsic_Unary) : \
+    ((intrinsic1) == ROP_SELECT_IMPORT_STAR) ? ROP_ARM(Intrinsic_ImportStar) : \
+    ((intrinsic1) == ROP_SELECT_STOPITERATION) ? ROP_ARM(Intrinsic_StopIteration) : \
     -1)
 
 /* The arm of IntrinsicPair that holds for (intrinsic2) */
 #define _PyRop_SelectIntrinsicPair(intrinsic2) ( \
-    ((intrinsic2) == ROP_SELECT_BINARY) ? ROP_HANDLER_IntrinsicPair_Binary : \
-    ((intrinsic2) == ROP_SELECT_ATTR) ? ROP_HANDLER_IntrinsicPair_Attr : \
+    ((intrinsic2) == ROP_SELECT_BINARY) ? ROP_ARM(IntrinsicPair_Binary) : \
+    ((intrinsic2) == ROP_SELECT_ATTR) ? ROP_ARM(IntrinsicPair_Attr) : \
     -1)
 
 /* The arm of Jump that holds for (interrupt, jit) */
 #define _PyRop_SelectJump(interrupt, jit) ( \
-    ((interrupt) == ROP_SELECT_UNINTERRUPTED) ? ROP_HANDLER_Jump_Direct : \
-    ((interrupt) == ROP_SELECT_INTERRUPTIBLE && (jit) == ROP_SELECT_JIT_OFF) ? ROP_HANDLER_Jump_Poll : \
-    ((interrupt) == ROP_SELECT_INTERRUPTIBLE && (jit) == ROP_SELECT_JIT_ON) ? ROP_HANDLER_Jump_Warm : \
+    ((interrupt) == ROP_SELECT_UNINTERRUPTED) ? ROP_ARM(Jump_Direct) : \
+    ((interrupt) == ROP_SELECT_INTERRUPTIBLE && (jit) == ROP_SELECT_JIT_OFF) ? ROP_ARM(Jump_Poll) : \
+    ((interrupt) == ROP_SELECT_INTERRUPTIBLE && (jit) == ROP_SELECT_JIT_ON) ? ROP_ARM(Jump_Warm) : \
     -1)
 
 /* The arm of LocalRead that holds for (read) */
 #define _PyRop_SelectLocalRead(read) ( \
-    ((read) == ROP_SELECT_BOUND) ? ROP_HANDLER_LocalRead_Bound : \
-    ((read) == ROP_SELECT_CHECKED) ? ROP_HANDLER_LocalRead_Checked : \
+    ((read) == ROP_SELECT_BOUND) ? ROP_ARM(LocalRead_Bound) : \
+    ((read) == ROP_SELECT_CHECKED) ? ROP_ARM(LocalRead_Checked) : \
     -1)
 
 /* The arm of LocalWrite that holds for (write) */
 #define _PyRop_SelectLocalWrite(write) ( \
-    ((write) == ROP_SELECT_STORE) ? ROP_HANDLER_LocalWrite_Store : \
-    ((write) == ROP_SELECT_RESTORE) ? ROP_HANDLER_LocalWrite_Restore : \
+    ((write) == ROP_SELECT_STORE) ? ROP_ARM(LocalWrite_Store) : \
+    ((write) == ROP_SELECT_RESTORE) ? ROP_ARM(LocalWrite_Restore) : \
     -1)
 
 /* The arm of Move that holds for (move) */
 #define _PyRop_SelectMove(move) ( \
-    ((move) == ROP_SELECT_TRANSFER) ? ROP_HANDLER_Move_Transfer : \
-    ((move) == ROP_SELECT_RETIRE) ? ROP_HANDLER_Move_Retire : \
-    ((move) == ROP_SELECT_COPY) ? ROP_HANDLER_Move_Copy : \
+    ((move) == ROP_SELECT_TRANSFER) ? ROP_ARM(Move_Transfer) : \
+    ((move) == ROP_SELECT_RETIRE) ? ROP_ARM(Move_Retire) : \
+    ((move) == ROP_SELECT_COPY) ? ROP_ARM(Move_Copy) : \
     -1)
 
 /* The arm of NamespaceRead that holds for (name_read) */
 #define _PyRop_SelectNamespaceRead(name_read) ( \
-    ((name_read) == ROP_SELECT_NAMED) ? ROP_HANDLER_NamespaceRead_Name : \
-    ((name_read) == ROP_SELECT_LOCALS_SCOPE) ? ROP_HANDLER_NamespaceRead_Locals : \
-    ((name_read) == ROP_SELECT_BUILD_CLASS_SCOPE) ? ROP_HANDLER_NamespaceRead_BuildClass : \
+    ((name_read) == ROP_SELECT_NAMED) ? ROP_ARM(NamespaceRead_Name) : \
+    ((name_read) == ROP_SELECT_LOCALS_SCOPE) ? ROP_ARM(NamespaceRead_Locals) : \
+    ((name_read) == ROP_SELECT_BUILD_CLASS_SCOPE) ? ROP_ARM(NamespaceRead_BuildClass) : \
     -1)
 
 /* The arm of NamespaceWrite that holds for (namespace) */
 #define _PyRop_SelectNamespaceWrite(namespace) ( \
-    ((namespace) == ROP_SELECT_NAME_SCOPE) ? ROP_HANDLER_NamespaceWrite_Name : \
-    ((namespace) == ROP_SELECT_GLOBAL_SCOPE) ? ROP_HANDLER_NamespaceWrite_Global : \
+    ((namespace) == ROP_SELECT_NAME_SCOPE) ? ROP_ARM(NamespaceWrite_Name) : \
+    ((namespace) == ROP_SELECT_GLOBAL_SCOPE) ? ROP_ARM(NamespaceWrite_Global) : \
     -1)
 
 /* The arm of Reraise that holds for (operand) */
 #define _PyRop_SelectReraise(operand) ( \
-    ((operand) == ROP_SELECT_ABSENT) ? ROP_HANDLER_Reraise_Plain : \
-    ((operand) == ROP_SELECT_PRESENT) ? ROP_HANDLER_Reraise_Origin : \
+    ((operand) == ROP_SELECT_ABSENT) ? ROP_ARM(Reraise_Plain) : \
+    ((operand) == ROP_SELECT_PRESENT) ? ROP_ARM(Reraise_Origin) : \
     -1)
 
 /* The arm of Resume that holds for (jit) */
 #define _PyRop_SelectResume(jit) ( \
-    ((jit) == ROP_SELECT_JIT_OFF) ? ROP_HANDLER_Resume_Poll : \
-    ((jit) == ROP_SELECT_JIT_ON) ? ROP_HANDLER_Resume_Warm : \
+    ((jit) == ROP_SELECT_JIT_OFF) ? ROP_ARM(Resume_Poll) : \
+    ((jit) == ROP_SELECT_JIT_ON) ? ROP_ARM(Resume_Warm) : \
     -1)
 
 /* The arm of Return that holds for (frame, scratch) */
 #define _PyRop_SelectReturn(frame, scratch) ( \
-    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_LIVE_SCRATCH) ? ROP_HANDLER_Return_Ordinary : \
-    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_VACANT_SCRATCH) ? ROP_HANDLER_Return_Empty : \
-    ((frame) == ROP_SELECT_GENERATOR_FRAME) ? ROP_HANDLER_Return_Generator : \
-    ((frame) == ROP_SELECT_ENTRY_FRAME) ? ROP_HANDLER_Return_External : \
+    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_LIVE_SCRATCH) ? ROP_ARM(Return_Ordinary) : \
+    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_VACANT_SCRATCH) ? ROP_ARM(Return_Empty) : \
+    ((frame) == ROP_SELECT_GENERATOR_FRAME) ? ROP_ARM(Return_Generator) : \
+    ((frame) == ROP_SELECT_ENTRY_FRAME) ? ROP_ARM(Return_External) : \
     -1)
 
 /* The arm of UpdateContainer that holds for (update) */
 #define _PyRop_SelectUpdateContainer(update) ( \
-    ((update) == ROP_SELECT_EXTEND) ? ROP_HANDLER_UpdateContainer_Extend : \
-    ((update) == ROP_SELECT_UNION) ? ROP_HANDLER_UpdateContainer_Union : \
-    ((update) == ROP_SELECT_OVERLAY) ? ROP_HANDLER_UpdateContainer_Overlay : \
+    ((update) == ROP_SELECT_EXTEND) ? ROP_ARM(UpdateContainer_Extend) : \
+    ((update) == ROP_SELECT_UNION) ? ROP_ARM(UpdateContainer_Union) : \
+    ((update) == ROP_SELECT_OVERLAY) ? ROP_ARM(UpdateContainer_Overlay) : \
     -1)
 
 #endif

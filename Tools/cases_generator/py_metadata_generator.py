@@ -77,15 +77,14 @@ def generate_opmap(analysis: Analysis, out: CWriter) -> None:
 
 def generate_ir_opmap(analysis: Analysis, out: CWriter,
                       arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
-    """The handlers of the register IR that are not opcodes, by name: the
-    old ones, then the register instruction arms by their dotted names"""
-    out.emit("_ir_opmap = frozendict(\n")
-    ids = handler_ids(analysis) | {
-        name: inst.opcode for name, inst in analysis.translator_only.items()}
+    """The register IR's handlers by name and id: the ones that bytecodes.c
+    defines, then the register instruction arms by their dotted names.  The
+    ids are no opcodes; the translator-only ops are no handlers"""
+    out.emit("_ir_handlers = frozendict(\n")
+    ids = handler_ids(analysis)
     only = set(ir_only_handler_names(analysis))
     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
-        if name in only or name in analysis.translator_only:
-            out.emit(f"{name}={handler},\n")
+        out.emit(f"{name}={handler},\n")
     first = num_old_handlers(analysis)
     if arms:
         out.emit(") | frozendict({\n")
@@ -94,8 +93,11 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter,
         out.emit("})\n\n")
     else:
         out.emit(")\n\n")
-    # Some of these numbers are below 256: a number says nothing about
-    # whether the handler is an opcode.
+    out.emit("_ir_translator_only = frozendict(\n")
+    for name, inst in sorted(analysis.translator_only.items(),
+                             key=lambda item: item[1].opcode):
+        out.emit(f"{name}={inst.opcode},\n")
+    out.emit(")\n\n")
     numbers = sorted([ids[name] for name in only]
                      + [first + arm.index for arm in arms])
     out.emit("_ir_only_handlers = frozenset((\n")

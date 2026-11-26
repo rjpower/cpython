@@ -1401,14 +1401,17 @@ def analyze_forest(
     for uop in uops.values():
         uop.instruction_size = get_instruction_size_for_uop(instructions, uop)
     opmap, first_arg, min_instrumented = assign_opcodes(instructions, pseudos)
-    # A hole (a pinned name that bytecodes.c no longer defines) holds no
-    # stack opcode, so a register handler may take its number
-    held = set(opmap.values())
+    # The numbers of the translator-only ops lie in the gap that no pinned
+    # name holds, so that the CFG never meets a stack opcode of that number
+    held = {*PINNED_OPCODES.values(), *PINNED_PSEUDOS.values()}
     free_ids = [number for number in range(256) if number not in held]
     handler_only = {**translator_only, **{
         name: inst for name, inst in instructions.items()
         if name not in PINNED_OPCODES}}
-    for name, number in zip(sorted(handler_only), free_ids):
+    # Past the gap, synthetic sources of the generator's tests get numbers
+    # beyond every pseudo-instruction
+    numbers = [*free_ids, *range(1000, 1000 + len(handler_only))]
+    for name, number in zip(sorted(handler_only), numbers):
         handler_only[name].opcode = number
     free_ids = free_ids[len(handler_only):]
     return Analysis(

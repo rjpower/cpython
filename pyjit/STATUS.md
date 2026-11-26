@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `04a20a7d76e` (pushed) holds:
+`pyjit/rir90` at `f82408a2990` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -165,6 +165,20 @@ instructions and about 7% fewer cycles; IP's estimate for this cause was
 five times too high, and generators' excess (1.62 of golden87's
 instructions) is still inside `ir_evaluate`.
 
+AR is merged: a mode operand selects its arm.  The `.rop` language states
+an arm over the members of an enum operand (`over(...)`), and the checker
+expands it into one arm per member, so every product sees ordinary arms.
+BranchTruth has an arm per sense, Binary.Float one per operator (power
+among them, admitted for a positive finite base and a normal result),
+Binary.Int one per hot operator and a rest arm, and Compare and TestBranch
+one per relation.  The generator emits a C enum for every declared `.rop`
+enum, and the hand-written duplicates are deleted.  There are 366
+handler ids; the id-shifted guard build passes at base 96.  Measured on
+CPU 0 (cycles of golden87's): nbody 1.90 to 1.76, spectral_norm 1.83 to
+1.67; the float and branch micro-loops run 7-12% fewer instructions.
+nbody still takes 1.58M branch misses per run against golden87's 1.08M,
+from some other cause.
+
 A refleak run (`-R 3:3`, 16 modules) finds no reference leak, and the same
 memory-block growth before and after TB (a backlog item).
 
@@ -215,8 +229,6 @@ nbody 3.18 to 1.85, chaos 1.86 to 1.37, float 1.79 to 1.34; unpack_sequence
 (2.96) and generators (1.82) wait for wave 2.
 
 Running, interpreter performance wave 2 (timing recorded, never gated):
-- AR: a mode operand selects its arm (one arm per operator of the integer
-  and float families, one per branch sense), from a declared enum;
 - SP item 4: the remaining specializations with no arm (the native calls,
   the bound-method and generator-function calls, property, overridden
   `__getattribute__` and `__getitem__` frames, dict-items iteration).

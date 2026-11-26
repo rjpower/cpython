@@ -106,6 +106,37 @@ def twin_by_tools(arm: ir_arms.ArmEntry) -> bool:
     return bool(arm.events) and f"INSTRUMENTED_{arm.base}" not in STACK_NAMES
 
 
+# The events that a word of an instrumented family can carry in tools[]
+# (sys.monitoring's grouped events); C_RETURN and C_RAISE are fired by CALL
+# and have no tools of their own
+LOCAL_EVENTS = ("PY_START", "PY_RESUME", "PY_RETURN", "PY_YIELD", "CALL", "JUMP",
+                "BRANCH_RIGHT", "STOP_ITERATION")
+
+
+def monitor_events(arm: ir_arms.ArmEntry) -> tuple[str | None, bool, bool]:
+    """The (primary event, has BRANCH_LEFT, has a separate STOP_ITERATION
+    slot) of an arm, derived from its family's events(...) by one rule:
+    BRANCH_LEFT is the left flag; the one local event that remains is the
+    primary.  The pair PY_START, PY_RESUME is one primary, whose event the
+    word's operand picks.  A STOP_ITERATION beside another primary has its own
+    slot (FOR_ITER's completion).  Any other combination is refused."""
+    left = "BRANCH_LEFT" in arm.events
+    rest = [e for e in arm.events if e in LOCAL_EVENTS]
+    stop = False
+    if len(rest) == 2 and rest[1] == "STOP_ITERATION" and rest[0] != rest[1]:
+        stop = True
+        rest = rest[:1]
+    elif rest == ["PY_START", "PY_RESUME"]:
+        rest = rest[:1]
+    if len(rest) > 1:
+        raise ValueError(f"{arm.dotted}: events({', '.join(arm.events)}) "
+                         "have more than one primary event")
+    if rest == [] and (left or stop):
+        raise ValueError(f"{arm.dotted}: events({', '.join(arm.events)}) "
+                         "have no primary event")
+    return (rest[0] if rest else None), left, stop
+
+
 def arm_flags(arm: ir_arms.ArmEntry) -> str:
     parts = ["_PyIR_H_METADATA"]
     if arm.emitted:
@@ -120,6 +151,11 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
         parts.append("_PyIR_H_TWIN_BY_TOOLS")
     if arm.trailing:
         parts.append("_PyIR_H_TRAILING")
+    _, left, stop = monitor_events(arm)
+    if left:
+        parts.append("_PyIR_H_BRANCH_LEFT")
+    if stop:
+        parts.append("_PyIR_H_STOP_SLOT")
     parts.append("_PyIR_H_IR_ONLY")
     return " | ".join(parts)
 
@@ -212,7 +248,8 @@ def generate_ir_metadata(
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
                           ("SAVES_IP", 1024), ("JIT_EVENT", 2048),
-                          ("TWIN_BY_TOOLS", 4096), ("TRAILING", 8192)):
+                          ("TWIN_BY_TOOLS", 4096), ("TRAILING", 8192),
+                          ("BRANCH_LEFT", 16384), ("STOP_SLOT", 32768)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
         for table in ("_PyIR_HandlerFlags", "_PyIR_HandlerBase"):
@@ -298,6 +335,18 @@ def generate_ir_metadata(
         out.emit("const char *const _PyIR_FamilyNames[IR_NUM_FAMILIES] = {\n")
         for family in families:
             out.emit(f'[IR_FAMILY_{family}] = "{family}",\n')
+        out.emit("};\n#endif\n\n")
+
+        # The primary sys.monitoring event of a handler, or -1: the slot of
+        # tools[] that its word's tools live in.  PY_START stands for a
+        # Resume's pair, whose operand picks the event.
+        out.emit("PyAPI_DATA(const int8_t) _PyIR_PrimaryEvent[IR_NUM_HANDLERS];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const int8_t _PyIR_PrimaryEvent[IR_NUM_HANDLERS] = {\n")
+        primaries = {arm_id(arm): monitor_events(arm)[0] for arm in arms}
+        for handler in range(n):
+            primary = primaries.get(handler)
+            out.emit(f"[{handler}] = {-1 if primary is None else 'PY_MONITORING_EVENT_' + primary},\n")
         out.emit("};\n#endif\n\n")
 
         out.emit("PyAPI_DATA(const char *const) _PyIR_OnlyNames[IR_NUM_HANDLERS];\n")

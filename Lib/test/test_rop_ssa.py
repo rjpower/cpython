@@ -1138,6 +1138,14 @@ def cx():
 UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
               "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
+    # The tracer's view of the keyword and expanded calls is deferred while the
+    # interpreter ports finish (rir90 interpreter-first rule)
+    "CallKw.Plan": "deferred: binds keywords by a site's plan",
+    "CallKw.Generic": "deferred: the keyword call that adapts, then binds or calls",
+    "CallKw.Observed": "deferred: the keyword call under monitoring",
+    "CallEx.Generic": "deferred: the call with the star tuple (its owner is a block parameter)",
+    "CallEx.Observed": "deferred: the star call under monitoring",
+    "MaterializeKwargs.Pending": "deferred: the pending **kwargs dict of a frame",
     "AttrWrite.Instance": "needs a warmed recipe in the entry; scenarios are not extended in the interpreter-first batch",
     "AttrWrite.Shape": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",
     "AttrWrite.ShapeAdd": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",

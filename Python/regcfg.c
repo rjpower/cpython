@@ -2106,6 +2106,55 @@ rule_call(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* The pseudo op that PrepareKwargs puts before a read of a lazy **kwargs
+ * local is MaterializeKwargs: the home it may write is the local's. */
+static int
+rule_materialize_kwargs(_PyRegTr *t, const _PyRegOp *src)
+{
+    int local = src->oparg;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_MaterializeKwargs_Pending,
+                                  NULL, 0, &local, 1, &op));
+    op->oparg = local;
+    op->dst = local;
+    return SUCCESS;
+}
+
+/* CALL_KW is CallKw (Python/register_ops/calls.rop): fn, self, the arguments
+ * and the constant tuple of the names (which pass f0 reads off the load
+ * before it) in; dst out. */
+static int
+rule_call_kw(_PyRegTr *t, const _PyRegOp *src)
+{
+    int nuses = 3 + src->oparg;
+    if (nuses > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CallKw_Generic,
+                                  &t->stack[t->sp - nuses], nuses, &dst, 1,
+                                  NULL));
+    t->sp -= nuses;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* CALL_FUNCTION_EX is CallEx: fn, the reserved NULL, the positional
+ * arguments and the kwargs (virtual NULL for none) in; dst out. */
+static int
+rule_call_function_ex(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (4 > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CallEx_Generic,
+                                  &t->stack[t->sp - 4], 4, &dst, 1, NULL));
+    t->sp -= 4;
+    return _PyRegTr_Push(t, dst);
+}
+
 /* MAKE_FUNCTION is Function.Make: the code in, the function out.  The
  * SET_FUNCTION_ATTRIBUTEs after it add their attributes to the word
  * (rule_set_function_attribute). */
@@ -2746,6 +2795,9 @@ static const _PyRegRule rules[256] = {
     [JUMP_BACKWARD] = rule_jump,
     [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,
     [CALL] = rule_call,
+    [CALL_KW] = rule_call_kw,
+    [MATERIALIZE_KWARGS] = rule_materialize_kwargs,
+    [CALL_FUNCTION_EX] = rule_call_function_ex,
     [COPY] = rule_copy,
     [DELETE_FAST] = rule_delete_fast,
     [MAKE_CELL] = rule_make_cell,

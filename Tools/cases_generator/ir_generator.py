@@ -446,8 +446,8 @@ OPERAND_CALLS = {
 # specialisation and instrumentation keep them by keeping the flags.
 CALL_ROLE_FLAGS = {
     "CALL": ("IR_F_NO_SELF", "IR_F_UNINTERRUPTED"),
-    "CALL_KW": ("IR_F_NO_SELF",),
-    "CALL_FUNCTION_EX": ("IR_F_NO_KW",),
+    "CALL_KW": ("IR_F_NO_SELF", "IR_F_KW"),
+    "CALL_FUNCTION_EX": ("IR_F_NO_KW", "IR_F_EX"),
 }
 
 
@@ -1252,7 +1252,7 @@ def stack_only_names(analysis: Analysis) -> frozenset[str]:
 # co_code can hold.
 IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
+                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP")
 
 
 def ir_only_handler_names(analysis: Analysis) -> list[str]:

@@ -153,13 +153,13 @@ dummy_func(
         {
         }
 
-        outlined inst(MATERIALIZE_KWARGS, (--))
-            effects(writes, allocates, raises) exits(next, raise)
+        /* A stack op only: the pseudo op that PrepareKwargs puts before a read of
+         * a lazy **kwargs local is the MaterializeKwargs family. */
+        tier1 inst(MATERIALIZE_KWARGS, (--))
+            exits(abort)
         {
-            assert(frame->pending_kwargs == IR_NO_DST ||
-                   frame->pending_kwargs == oparg);
-            int err = _PyFrame_MaterializeKwargs(frame);
-            ERROR_IF(err < 0);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         leaf op(_CHECK_PERIODIC, (--))
@@ -2335,272 +2335,41 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        // Feedback: func_version
-        family(CALL_KW, INLINE_CACHE_ENTRIES_CALL_KW) = {
-            CALL_KW_BOUND_METHOD,
-            CALL_KW_PY,
-            CALL_KW_NON_PY,
-        };
-
-        inline_ok op(_MONITOR_CALL_KW,
-                (callable, self_or_null, args[oparg], unused
-                 -- callable, self_or_null, args[oparg], unused))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: CALL_KW is the CallKw family (Python/register_ops/calls.rop). */
+        eval_break tier1 inst(CALL_KW,
+                (unused/3, callable: consumed, self_or_null: consumed, args[oparg]: consumed, kwnames: consumed -- res: owned))
+            exits(abort)
         {
-            IR_MONITOR_CALL();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok op(_MAYBE_EXPAND_METHOD_KW,
-                (callable, self_or_null, unused[oparg], unused
-                 -- callable, self_or_null, unused[oparg], unused))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: CALL_KW's instrumented form: the CallKw family's twins run CallKw.Observed. */
+        eval_break tier1 inst(INSTRUMENTED_CALL_KW,
+                (unused/3, callable: consumed, self_or_null: consumed, args[oparg]: consumed, kwnames: consumed -- res: owned))
+            exits(abort)
         {
-            IR_PREPARE_CALL_METHOD();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok op(_DO_CALL_KW,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
-                 -- res: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
+        /* A stack op only: CALL_FUNCTION_EX is the CallEx family (Python/register_ops/calls.rop). */
+        eval_break tier1 inst(CALL_FUNCTION_EX,
+                (unused/1, func_st: consumed, null: consumed, callargs_st: consumed, kwargs_st: consumed -- result: owned))
+            exits(abort)
         {
-            IR_INVOKE_CALL();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok op(_PY_FRAME_KW,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
-                 -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
+        /* A stack op only: CALL_FUNCTION_EX's instrumented form: CallEx.Observed. */
+        eval_break tier1 inst(INSTRUMENTED_CALL_FUNCTION_EX,
+                (unused/1, func_st: consumed, null: consumed, callargs_st: consumed, kwargs_st: consumed -- result: owned))
+            exits(abort)
         {
-            IR_INVOKE_CALL();
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        inline_ok op(_PY_FRAME_KW_GUARDED,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
-                 -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_GUARDED_PYTHON_CALL();
-        }
-
-        op(_CHECK_FUNCTION_VERSION_KW,
-                (func_version/2, callable: object, unused, unused[oparg], unused
-                 -- callable: exact(PyFunction_Type) func_version(func_version), unused, unused[oparg], unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(!PyFunction_Check(callable_o));
-            PyFunctionObject *func = (PyFunctionObject *)callable_o;
-            EXIT_IF(func->func_version != func_version);
-        }
-
-        macro(CALL_KW_PY) =
-            unused/1 + // Skip over the entry distance
-            _CHECK_PEP_523 +
-            _CHECK_FUNCTION_VERSION_KW +
-            _CHECK_RECURSION_REMAINING +
-            _PY_FRAME_KW_GUARDED +
-            _SAVE_RETURN_SLOT +
-            _PUSH_FRAME;
-
-        op(_CHECK_METHOD_VERSION_KW,
-                (func_version/2, callable: object, null, unused[oparg], unused
-                 -- callable: exact(PyMethod_Type), null, unused[oparg], unused))
-            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
-            paths(callable.im_func: exact(PyFunction_Type) func_version(func_version))
-        {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-
-            EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
-            PyObject *func = ((PyMethodObject *)callable_o)->im_func;
-            EXIT_IF(!PyFunction_Check(func));
-            EXIT_IF(((PyFunctionObject *)func)->func_version != func_version);
-            EXIT_IF(call_state & CALL_SELF_PRESENT);
-        }
-
-        inline_ok op(_EXPAND_METHOD_KW,
-                (callable, self_or_null, unused[oparg], unused
-                 -- callable, self_or_null, unused[oparg], unused))
-            effects(runs_python) exits(next, raise)
-        {
-            IR_PREPARE_CALL_METHOD();
-        }
-
-        macro(CALL_KW_BOUND_METHOD) =
-            unused/1 + // Skip over the entry distance
-            _CHECK_PEP_523 +
-            _CHECK_METHOD_VERSION_KW +
-            _EXPAND_METHOD_KW +
-            _PY_FRAME_KW +
-            _SAVE_RETURN_SLOT +
-            _PUSH_FRAME;
-
-        specializing op(_SPECIALIZE_CALL_KW,
-                (callable, self_or_null, unused[oparg], kwnames
-                 -- callable, self_or_null, unused[oparg], kwnames))
-            effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                /* As in _SPECIALIZE_CALL */
-                IR_BEGIN_CALL_EFFECTS();
-                _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
-                IR_REFRESH_CALL();
-            }
-            else {
-                OPCODE_DEFERRED_INC(CALL_KW);
-                _PyFb_AdvanceCounter(feedback);
-            }
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        macro(CALL_KW) =
-            unused/1 + _SPECIALIZE_CALL_KW +
-            unused/2 +
-            _MAYBE_EXPAND_METHOD_KW +
-            _DO_CALL_KW;
-
-        macro(INSTRUMENTED_CALL_KW) =
-            unused/1 +
-            unused/2 +
-            _MAYBE_EXPAND_METHOD_KW +
-            _MONITOR_CALL_KW +
-            _DO_CALL_KW;
-
-        inline_ok op(_CHECK_IS_NOT_PY_CALLABLE_KW,
-                (callable, unused, unused[oparg], unused -- callable, unused, unused[oparg], unused))
-            effects(reads) exits(next, miss)
-        {
-            if (PyValue_IsObject(callable)) {
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                EXIT_IF(PyFunction_Check(callable_o),
-                        "the callable is a Python function");
-                EXIT_IF(Py_TYPE(callable_o) == &PyMethod_Type,
-                        "the callable is a bound method");
-            }
-        }
-
-
-        inline_ok op(_CALL_KW_NON_PY,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
-                 -- res: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_CALL();
-        }
-
-        macro(CALL_KW_NON_PY) =
-            unused/1 + // Skip over the entry distance
-            unused/2 +
-            _CHECK_IS_NOT_PY_CALLABLE_KW +
-            _CALL_KW_NON_PY;
-
-        family(CALL_FUNCTION_EX, INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX) = {
-            CALL_EX_PY,
-            CALL_EX_NON_PY_GENERAL,
-        };
-
-        inline_ok op(_MAKE_CALLARGS_A_TUPLE,
-                (func, unused, callargs, kwargs -- func, unused, callargs, kwargs))
-            effects(runs_python) exits(next, raise)
-        {
-            IR_PREPARE_CALL_TUPLE();
-        }
-
-        inline_ok op(_DO_CALL_FUNCTION_EX,
-                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
-                 -- result: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_CALL();
-        }
-
-        specializing op(_SPECIALIZE_CALL_FUNCTION_EX,
-                (func, unused, callargs, unused -- func, unused, callargs, unused))
-            effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-        #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                /* As in _SPECIALIZE_CALL */
-                IR_BEGIN_CALL_EFFECTS();
-                _Py_Specialize_CallFunctionEx(func, callargs, this_instr);
-                IR_REFRESH_CALL();
-            }
-            else {
-                OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
-                _PyFb_AdvanceCounter(feedback);
-            }
-        #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        macro(CALL_FUNCTION_EX) =
-            unused/1 + _SPECIALIZE_CALL_FUNCTION_EX +
-            _MAKE_CALLARGS_A_TUPLE +
-            _DO_CALL_FUNCTION_EX +
-            _CHECK_PERIODIC_AT_END;
-
-        op(_CHECK_IS_PY_CALLABLE_EX,
-                (func_st: object, unused, unused, unused
-                 -- func_st: exact(PyFunction_Type), unused, unused, unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
-            EXIT_IF(!PyFunction_Check(func));
-            EXIT_IF(((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall,
-                    "the function has its own vectorcall");
-        }
-
-        inline_ok op(_PY_FRAME_EX,
-                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
-                 -- ex_frame: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_CALL();
-        }
-
-        // call_run_ex() makes the argument tuple, which may run Python, and
-        // then derives the kind of call from the callable again: the guard
-        // before it is the only one
-        macro(CALL_EX_PY) =
-            unused/1 +
-            _CHECK_PEP_523 +
-            _CHECK_IS_PY_CALLABLE_EX +
-            _MAKE_CALLARGS_A_TUPLE +
-            _PY_FRAME_EX +
-            _SAVE_RETURN_SLOT +
-            _PUSH_FRAME;
-
-        op(_CHECK_IS_NOT_PY_CALLABLE_EX,
-                (func_st: object, unused, unused, unused
-                 -- func_st, unused, unused, unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
-            EXIT_IF(Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall,
-                    "not a Python function with the standard vectorcall");
-        }
-
-        inline_ok op(_CALL_FUNCTION_EX_NON_PY_GENERAL,
-                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
-                 -- result: owned))
-            effects(runs_python, switches_frame) exits(next, raise, enter)
-        {
-            IR_INVOKE_CALL();
-        }
-
-        macro(CALL_EX_NON_PY_GENERAL) =
-            unused/1 +
-            _CHECK_IS_NOT_PY_CALLABLE_EX +
-            _MAKE_CALLARGS_A_TUPLE +
-            _CALL_FUNCTION_EX_NON_PY_GENERAL +
-            _CHECK_PERIODIC_AT_END;
-
-        macro(INSTRUMENTED_CALL_FUNCTION_EX) =
-            unused/1 +
-            _MAKE_CALLARGS_A_TUPLE +
-            _DO_CALL_FUNCTION_EX +
-            _CHECK_PERIODIC_AT_END;
 
         /* A stack op only: its words are Function.Make. */
         tier1 inst(MAKE_FUNCTION, (codeobj_st: consumed -- func: owned))

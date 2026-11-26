@@ -2459,8 +2459,8 @@ _PyBindPlan_ForCall(_PyBindPlan *plan, PyCodeObject *code, int positional,
  * name is, so that no other spelling of it names a parameter.  The binding
  * rests on the code, which every function of the guarded version shares. */
 static void
-specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb, _PyInstr *instr,
-                           int nargs, bool has_self, PyValueBorrow names)
+specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
+                           int positional, int skip, PyValueBorrow names)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     if (!(code->co_flags & CO_OPTIMIZED) ||
@@ -2474,7 +2474,7 @@ specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb, _PyInstr *inst
     if (kwcount < 1 || kwcount > _Py_CALL_BIND_KEYWORD_CAPACITY) {
         return;
     }
-    int positional = nargs + has_self - (int)kwcount;
+    positional -= (int)kwcount;
     int total = code->co_argcount + code->co_kwonlyargcount;
     if (positional < 0 || total >= _Py_CALL_BIND_TO_KWARGS) {
         return;
@@ -2518,7 +2518,6 @@ specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb, _PyInstr *inst
         }
         destinations[i] = (uint16_t)destination;
     }
-    int skip = !has_self && (int)IR_C(*instr) - 1 > nargs;
     if (!_PyBindPlan_Init(&fb->plan, code, positional, skip, 0, destinations,
                           (int)kwcount))
     {
@@ -2527,45 +2526,6 @@ specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb, _PyInstr *inst
     for (int i = 0; i < kwcount; i++) {
         fb->plan.keyword_dest[i] = destinations[i];
     }
-}
-
-static int
-specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
-                     bool bound_method, bool has_self, PyValueBorrow kwnames)
-{
-    _PyFbCall *fb = instr_entry(instr);
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
-    FunctionSignature signature = function_signature(code);
-    /* Don't specialize if PEP 523 is active */
-    if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_PEP_523);
-        return -1;
-    }
-    if (func->vectorcall != _PyFunction_Vectorcall) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_VECTORCALL);
-        return -1;
-    }
-    if (signature == UNOPTIMIZED_SIGNATURE) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CODE_NOT_OPTIMIZED);
-        return -1;
-    }
-    // A generator function's call binds into its object (_Py_CALL_BIND_GENERATOR)
-    if (!prepare_function_exec(code)) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
-        return -1;
-    }
-    int version = _PyFunction_GetVersionForCurrentState(func);
-    if (!_PyFunction_IsVersionValid(version)) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OUT_OF_VERSIONS);
-        return -1;
-    }
-    fb->func_version = version;
-    memset(&fb->plan, 0, sizeof(fb->plan));
-    if (!bound_method) {
-        specialize_keyword_binding(func, fb, instr, nargs, has_self, kwnames);
-    }
-    specialize(instr, bound_method ? CALL_KW_BOUND_METHOD : CALL_KW_PY);
-    return 0;
 }
 
 /* The evidence rows of GetItem and SetItem (classify_getitem and
@@ -2726,47 +2686,59 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
     return CALL_CASE_OTHER;
 }
 
-Py_NO_INLINE void
-_Py_Specialize_CallKw(PyValue callable_st, PyValue self_or_null,
-                     PyValue kwnames, _PyInstr *instr, int nargs)
+/* The evidence row of CallKw (classify_call_kw, Python/register_ops/calls.rop):
+ * whether the call of fn at site takes CallKw.Plan, which binds the keywords
+ * from the plan that this fills in the site's entry.  A function that the
+ * old _Py_Specialize_CallKw admitted (an optimized function of the default
+ * call, not a generator) whose keyword names the plan can place.  Every other
+ * callable, a bound method object included, is "other": it runs in
+ * CallKw.Generic. */
+enum { CALLKW_CASE_PLAN, CALLKW_CASE_OTHER };
+
+int
+_PyRop_ClassifyCallKw(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
+                      const _PyIRWord *head)
 {
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[CALL_KW] == INLINE_CACHE_ENTRIES_CALL_KW);
-    assert(instr_opcode(instr) != INSTRUMENTED_CALL_KW);
-    bool native_or_inline = PyValue_IsInline(callable_st) ||
-        (PyValue_IsObject(callable_st) &&
-         PyCFunction_Check(PyValue_AsKnownObjectBorrow(callable_st)));
-    fb_begin_call_ex(instr, PyValue_TYPE(callable_st), !native_or_inline);
-    if (PyValue_IsInline(callable_st)) {
-        SPECIALIZATION_FAIL(CALL_KW, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
+    assert(site == head);
+    (void)site;
+    if (is_shared_entry(&fb->h) || !PyValue_IsObject(fn) ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return CALLKW_CASE_OTHER;
     }
-    PyObject *callable = PyValue_AsKnownObjectBorrow(callable_st);
-    int fail;
-    if (PyFunction_Check(callable)) {
-        fail = specialize_py_call_kw((PyFunctionObject *)callable, instr, nargs,
-                                    false, !PyValue_IsNull(self_or_null),
-                                    PyValue_Borrow(kwnames));
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    if (!PyFunction_Check(callable)) {
+        return CALLKW_CASE_OTHER;
     }
-    else if (PyMethod_Check(callable)) {
-        PyObject *func = ((PyMethodObject *)callable)->im_func;
-        if (PyFunction_Check(func)) {
-            fail = specialize_py_call_kw((PyFunctionObject *)func, instr, nargs,
-                                        true, false, PyValue_Borrow(kwnames));
-        }
-        else {
-            SPECIALIZATION_FAIL(CALL_KW, SPEC_FAIL_CALL_BOUND_METHOD);
-            fail = -1;
-        }
+    PyFunctionObject *func = (PyFunctionObject *)callable;
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (func->vectorcall != _PyFunction_Vectorcall ||
+        function_signature(code) == UNOPTIMIZED_SIGNATURE ||
+        code_creates_generator(code) || !prepare_function_exec(code))
+    {
+        return CALLKW_CASE_OTHER;
     }
-    else {
-        specialize(instr, CALL_KW_NON_PY);
-        fail = 0;
+    int version = _PyFunction_GetVersionForCurrentState(func);
+    if (!_PyFunction_IsVersionValid(version)) {
+        return CALLKW_CASE_OTHER;
     }
-    if (fail) {
-        unspecialize(instr);
-    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbCall) - sizeof(_PyFbHeader));
+    fb->callable_type_version = fb_type_version(Py_TYPE(callable));
+    fb->func_version = version;
+    _PyIRWord word = head[0];
+    // The self slot of the word, which is NULL at run time for a class
+    // attribute that is not a method: the arguments follow it
+    int self_slot = (word & IR_F_NO_SELF) == 0;
+    int self_present = self_slot && !PyValue_IsNull(
+        _PyFrame_Slots(current_frame())[_PyIR_CallOperand(head, 0)]);
+    int nargs = (int)IR_C(word) - 1 - self_slot;
+    PyCodeObject *caller = _PyFrame_GetCode(current_frame());
+    PyValueBorrow names = PyTuple_GET_VALUE(
+        caller->co_consts, _PyIR_CallOperand(head, (int)IR_C(word) - 1));
+    specialize_keyword_binding(func, fb, nargs + self_present,
+                               self_slot && !self_present, names);
+    return (fb->plan.flags & _Py_CALL_BIND_VALID)
+        ? CALLKW_CASE_PLAN : CALLKW_CASE_OTHER;
 }
 
 /** Binary Op Specialization Extensions */
@@ -3072,56 +3044,6 @@ _Py_Specialize_Send(PyValue receiver_st, _PyInstr *instr)
     }
     SPECIALIZATION_FAIL(SEND,
                         _PySpecialization_ClassifyIterator(receiver));
-failure:
-    unspecialize(instr);
-}
-
-Py_NO_INLINE void
-_Py_Specialize_CallFunctionEx(PyValue func_st, PyValue args_st, _PyInstr *instr)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[CALL_FUNCTION_EX] == INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX);
-    fb_begin_call(instr, PyValue_TYPE(func_st));
-    if (PyValue_IsInline(func_st)) {
-        SPECIALIZATION_FAIL(CALL_FUNCTION_EX, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
-
-    /* The binding plan of the arity and the code that the site sees: the
-     * call uses it for that code and arity (func_version holds the code's
-     * version), and derives one for any other. */
-    _PyFbCall *fb = instr_entry(instr);
-    memset(&fb->plan, 0, sizeof(fb->plan));
-    fb->func_version = 0;
-    int lead = 0;
-    if (PyMethod_Check(func)) {
-        func = ((PyMethodObject *)func)->im_func;
-        lead = 1;
-    }
-    if (PyFunction_Check(func) && PyValue_IsObject(args_st) &&
-        PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(args_st)))
-    {
-        PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
-        Py_ssize_t count = lead + PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(args_st));
-        if (count <= UINT8_MAX &&
-            _PyBindPlan_Init(&fb->plan, code, (int)count, 0, lead, NULL, 0))
-        {
-            fb->func_version = code->co_version;
-        }
-    }
-    func = PyValue_AsKnownObjectBorrow(func_st);
-    if (Py_TYPE(func) == &PyFunction_Type &&
-        ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
-        if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
-            goto failure;
-        }
-        specialize(instr, CALL_EX_PY);
-        return;
-    }
-    specialize(instr, CALL_EX_NON_PY_GENERAL);
-    return;
 failure:
     unspecialize(instr);
 }

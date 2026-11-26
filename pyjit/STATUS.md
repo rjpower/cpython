@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `b7c50a68f42` (pushed) holds:
+`pyjit/rir90` at `871e8237b78` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -79,10 +79,18 @@ interpreter hold no reference to the stack at step D, and tests check it.
   - specialization statistics are kept by register family and arm;
   - instrumentation is stated by handler: a word's monitoring state is its
     handler, its observed twin, or a line or instruction wrapper over either,
-    and the opcode-indexed event tables are deleted.
+    and the opcode-indexed event tables are deleted;
+- WF1-WF3: the `.rop` language declares each family's homes, vacant parts
+  and per-edge states (`vacant(...)`, `Out<G>`), and the generator emits
+  them as a homes view of the word format.  The verifier, the `f_lineno`
+  planner and the outcome readers read that view; the stack-shaped outcome
+  tables and the verifier's dead owner-program paths are deleted.  This
+  fixes three classes of wrong answers in the old planner: a completed
+  value reported NULL, an IterClose cursor never named, and a keep-mode
+  BranchTruth jump reported as retired.
 
 No word runs an inherited handler. The last merge check passed the smoke set
-on release and assert, and the verifier reports no error over 108,919 code
+on release and assert, and the verifier reports no error over 108,929 code
 objects. The id-shifted guard build passed at `efa0b20ac00`, after a fix to
 the Python handler ids it found. Ports keep the old handlers' object locks and turn every old
 specialization into an arm.
@@ -95,11 +103,11 @@ join.
 
 Running, for the end condition that the IR and the interpreter hold no
 reference to the stack:
-- WF (Opus) replaces the stack-shaped word format with home operands and
-  declared per-edge states.  WF3 moves the readers to it; WF4 splits the
-  format and rewrites the translator.
-- D then switches the WF3 files' remaining stack-op tests to declared data,
-  deletes the opcode maps that lose their last reader, and adds the test
+- WF4 (Opus) splits the format: the translator reads its own stack format,
+  and the register format keeps no stack field.
+- D, beside it, switches the remaining stack-op name tests in the verifier,
+  the planner and the outcome readers to declared data; after WF4 it
+  deletes the opcode maps that lose their last reader and adds the test
   that no stack reference remains. Its migration check found three classes of wrong
   answers in the old f_lineno planner, which the new format fixes.
 

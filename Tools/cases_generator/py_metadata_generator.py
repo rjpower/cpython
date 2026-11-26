@@ -19,7 +19,7 @@ from cwriter import CWriter
 from collections.abc import Sequence
 
 import ir_arms
-from ir_generator import (IR_BASE_ONLY, all_instructions, is_abort_body, stack_only_names,
+from ir_generator import (all_instructions, is_abort_body, stack_only_names,
                           handler_ids, ir_only_handler_names, num_old_handlers)
 from typing import TextIO
 
@@ -70,7 +70,7 @@ def generate_opmap(analysis: Analysis, out: CWriter) -> None:
     specialized = get_specialized(analysis)
     out.emit("opmap = frozendict(\n")
     for inst, op in analysis.opmap.items():
-        if inst not in specialized and inst not in IR_BASE_ONLY:
+        if inst not in specialized:
             out.emit(f"{inst}={analysis.opmap[inst]},\n")
     out.emit(")\n\n")
 
@@ -81,11 +81,10 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter,
     old ones, then the register instruction arms by their dotted names"""
     out.emit("_ir_opmap = frozendict(\n")
     ids = handler_ids(analysis) | {
-        name: analysis.opmap[name] for name in IR_BASE_ONLY
-        if name not in handler_ids(analysis)}
+        name: inst.opcode for name, inst in analysis.translator_only.items()}
     only = set(ir_only_handler_names(analysis))
     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
-        if name in only or name in IR_BASE_ONLY:
+        if name in only or name in analysis.translator_only:
             out.emit(f"{name}={handler},\n")
     first = num_old_handlers(analysis)
     if arms:
@@ -113,7 +112,7 @@ def classify_handlers(analysis: Analysis) -> tuple[list[str], list[str]]:
     stubs = {*stack_only_names(analysis)}
     stubs.update(name for name in all_instructions(analysis)
                  if is_abort_body(analysis, name))
-    inherited = set(handler_ids(analysis)) | set(IR_BASE_ONLY)
+    inherited = set(handler_ids(analysis)) | set(analysis.translator_only)
     return sorted(inherited - stubs), sorted(stubs)
 
 

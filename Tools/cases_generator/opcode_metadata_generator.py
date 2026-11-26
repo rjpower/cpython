@@ -10,6 +10,7 @@ from analyzer import (
     Instruction,
     PseudoInstruction,
     analyze_files,
+    stack_ops_of,
     Uop,
 )
 from generators_common import (
@@ -19,7 +20,7 @@ from generators_common import (
     cflags,
 )
 from cwriter import CWriter
-from ir_generator import IR_BASE_ONLY
+from stack_opcode_pins import HAVE_ARGUMENT, MIN_SPECIALIZED_OPCODE
 from typing import TextIO
 from stack import get_stack_effect
 
@@ -103,7 +104,7 @@ def generate_stack_effect_functions(analysis: Analysis, out: CWriter) -> None:
         popped_data.append((inst.name, popped))
         pushed_data.append((inst.name, pushed))
 
-    for inst in analysis.instructions.values():
+    for inst in stack_ops_of(analysis).values():
         add(inst)
     for pseudo in analysis.pseudos.values():
         add(pseudo)
@@ -121,8 +122,16 @@ def generate_is_pseudo(analysis: Analysis, out: CWriter) -> None:
     out.emit(")\n\n")
 
 
+def has_oparg(inst: Instruction) -> bool:
+    """Whether the stack op takes an oparg.  A base op's number says so, as
+    dis and the compiler read it, whatever the body of its stub does."""
+    if inst.opcode < MIN_SPECIALIZED_OPCODE:
+        return inst.opcode >= HAVE_ARGUMENT
+    return inst.properties.oparg
+
+
 def get_format(inst: Instruction) -> str:
-    if inst.properties.oparg:
+    if has_oparg(inst):
         format = "INSTR_FMT_IB"
     else:
         format = "INSTR_FMT_IX"
@@ -135,7 +144,7 @@ def get_format(inst: Instruction) -> str:
 def generate_instruction_formats(analysis: Analysis, out: CWriter) -> None:
     # Compute the set of all instruction formats.
     formats: set[str] = set()
-    for inst in analysis.instructions.values():
+    for inst in stack_ops_of(analysis).values():
         formats.add(get_format(inst))
     # Generate an enum for it
     out.emit("enum InstructionFormat {\n")
@@ -151,12 +160,12 @@ def generate_deopt_table(analysis: Analysis, out: CWriter) -> None:
     out.emit("#ifdef NEED_OPCODE_METADATA\n")
     out.emit("const uint8_t _PyOpcode_Deopt[256] = {\n")
     deopts: list[tuple[str, str]] = []
-    for inst in analysis.instructions.values():
+    for inst in stack_ops_of(analysis).values():
         deopt = inst.name
         if inst.family is not None:
             deopt = inst.family.name
         deopts.append((inst.name, deopt))
-    defined = set(analysis.opmap.values())
+    defined = {inst.opcode for inst in stack_ops_of(analysis).values()}
     for i in range(256):
         if i not in defined:
             deopts.append((f'{i}', f'{i}'))
@@ -173,7 +182,7 @@ def generate_cache_table(analysis: Analysis, out: CWriter) -> None:
     out.emit("PyAPI_DATA(const uint8_t) _PyOpcode_Caches[256];\n")
     out.emit("#ifdef NEED_OPCODE_METADATA\n")
     out.emit("const uint8_t _PyOpcode_Caches[256] = {\n")
-    for inst in analysis.instructions.values():
+    for inst in stack_ops_of(analysis).values():
         if inst.family and inst.family.name != inst.name:
             continue
         if inst.name.startswith("INSTRUMENTED"):
@@ -205,7 +214,7 @@ def generate_feedback_fields_table(analysis: Analysis, out: CWriter) -> None:
     where its inline cache held them before typed feedback, which is where
     code_getcodeadaptive() puts them for dis."""
     tables = {}
-    for inst in analysis.instructions.values():
+    for inst in stack_ops_of(analysis).values():
         if inst.family is None or inst.family.name == inst.name:
             continue
         if fields := feedback_fields(inst):
@@ -240,7 +249,7 @@ def generate_name_table(analysis: Analysis, out: CWriter) -> None:
     out.emit(f"PyAPI_DATA(const char) *_PyOpcode_OpName[{table_size}];\n")
     out.emit("#ifdef NEED_OPCODE_METADATA\n")
     out.emit(f"const char *_PyOpcode_OpName[{table_size}] = {{\n")
-    names = list(analysis.instructions) + list(analysis.pseudos)
+    names = list(stack_ops_of(analysis)) + list(analysis.pseudos)
     for name in sorted(names):
         out.emit(f'[{name}] = "{name}",\n')
     out.emit("};\n")
@@ -261,7 +270,7 @@ def generate_metadata_table(analysis: Analysis, out: CWriter) -> None:
     out.emit(
         f"const struct opcode_metadata _PyOpcode_opcode_metadata[{table_size}] = {{\n"
     )
-    for inst in sorted(analysis.instructions.values(), key=lambda t: t.name):
+    for inst in sorted(stack_ops_of(analysis).values(), key=lambda t: t.name):
         out.emit(
             f"[{inst.name}] = {{ true, {get_format(inst)}, {cflags(inst.properties)} }},\n"
         )
@@ -279,7 +288,7 @@ def generate_metadata_table(analysis: Analysis, out: CWriter) -> None:
 
 def generate_expansion_table(analysis: Analysis, out: CWriter) -> None:
     expansions_table: dict[str, list[tuple[str, str, int]]] = {}
-    for inst in sorted(analysis.instructions.values(), key=lambda t: t.name):
+    for inst in sorted(stack_ops_of(analysis).values(), key=lambda t: t.name):
         offset: int = 0  # Cache effect offset
         expansions: list[tuple[str, str, int]] = []  # [(name, size, offset), ...]
         if inst.is_super():
@@ -288,10 +297,10 @@ def generate_expansion_table(analysis: Analysis, out: CWriter) -> None:
             parts_per_piece = int(len(pieces) / 2)
             name1 = "_".join(pieces[:parts_per_piece])
             name2 = "_".join(pieces[parts_per_piece:])
-            assert name1 in analysis.instructions, f"{name1} doesn't match any instr"
-            assert name2 in analysis.instructions, f"{name2} doesn't match any instr"
-            instr1 = analysis.instructions[name1]
-            instr2 = analysis.instructions[name2]
+            assert name1 in stack_ops_of(analysis), f"{name1} doesn't match any instr"
+            assert name2 in stack_ops_of(analysis), f"{name2} doesn't match any instr"
+            instr1 = stack_ops_of(analysis)[name1]
+            instr2 = stack_ops_of(analysis)[name2]
             for part in instr1.parts:
                 expansions.append((part.name, "OPARG_TOP", 0))
             for part in instr2.parts:
@@ -363,7 +372,7 @@ def is_viable_expansion(inst: Instruction) -> bool:
 
 def generate_extra_cases(analysis: Analysis, out: CWriter) -> None:
     out.emit("#define EXTRA_CASES \\\n")
-    valid_opcodes = set(analysis.opmap.values())
+    valid_opcodes = {inst.opcode for inst in stack_ops_of(analysis).values()}
     for op in range(256):
         if op not in valid_opcodes:
             out.emit(f"    case {op}: \\\n")
@@ -427,11 +436,11 @@ def generate_opcode_metadata(
         out.emit("#define IS_VALID_OPCODE(OP) \\\n")
         out.emit(f"    (((OP) >= 0) && ((OP) < {table_size}) && \\\n")
         out.emit("     (_PyOpcode_opcode_metadata[(OP)].valid_entry))\n\n")
-        # co_code holds stack bytecode: the handlers that only the register
-        # IR uses as base opcodes are not among its opcodes
+        # co_code holds stack bytecode: the translator-only ops, which
+        # have table entries for the CFG, are not among its opcodes
         out.emit("#define IS_STACK_OPCODE(OP) \\\n")
         out.emit("    (IS_VALID_OPCODE(OP)")
-        for name in IR_BASE_ONLY:
+        for name in analysis.translator_only:
             out.emit(f" && (OP) != {name}")
         out.emit(")\n\n")
         generate_flag_macros(out)

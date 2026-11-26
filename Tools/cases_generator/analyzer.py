@@ -5,6 +5,9 @@ import parser
 import re
 from typing import Optional, Callable
 
+from stack_opcode_pins import (
+    HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE, PINNED_OPCODES, PINNED_PSEUDOS,
+)
 from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, WhileStmt, ForStmt, MacroIfStmt
 
 @dataclass
@@ -402,6 +405,15 @@ class Analysis:
     free_ids: list[int]
     # The declared generator-boundary clauses, by source
     boundaries: dict[str, Boundary] = field(default_factory=dict)
+    # Instructions annotated `translator_only`: ops of the register
+    # translator's CFG that no co_code holds.  They have no stack opcode;
+    # their ids come from free_ids, and they have no register handler.
+    translator_only: dict[str, Instruction] = field(default_factory=dict)
+
+
+def stack_ops_of(analysis: Analysis) -> dict[str, Instruction]:
+    "The ops of the CFG and its tables: the stack ops, then the translator-only ones"
+    return {**analysis.instructions, **analysis.translator_only}
 
 
 def analysis_error(message: str, tkn: lexer.Token) -> SyntaxError:
@@ -1250,86 +1262,47 @@ def add_label(
     labels[label.name] = Label(label.name, label.spilled, label.block, properties)
 
 
+def unpinned_names(analysis: "Analysis") -> list[str]:
+    "The instructions and pseudo-instructions that have no pinned number"
+    return [name for name in analysis.instructions
+            if name not in PINNED_OPCODES] + [
+            name for name in analysis.pseudos if name not in PINNED_PSEUDOS]
+
+
+def check_pinned(analysis: "Analysis") -> None:
+    """The generator's rule: only the pinned table gives a stack number, so
+    every instruction of bytecodes.c is in it, annotated `ir_only` or
+    annotated `translator_only`.  (analyze_files itself accepts other names,
+    which the generator tests use, and numbers them like handler-only ops.)"""
+    names = unpinned_names(analysis)
+    if names:
+        where = (analysis.instructions.get(names[0])
+                 or analysis.pseudos[names[0]]).where
+        raise analysis_error(
+            f"{', '.join(names)} not in the pinned stack opcode table "
+            "(stack_opcode_pins.py): annotate the instruction ir_only or "
+            "translator_only", where)
+
+
 def assign_opcodes(
     instructions: dict[str, Instruction],
-    families: dict[str, Family],
     pseudos: dict[str, PseudoInstruction],
 ) -> tuple[dict[str, int], int, int]:
-    """Assigns opcodes, then returns the opmap,
-    have_arg and min_instrumented values"""
+    """Looks up the declared number of each stack opcode and returns the
+    opmap, have_arg and min_instrumented.  A name that the table lacks has
+    no opcode: it is not in the opmap (check_pinned rejects it)."""
     instmap: dict[str, int] = {}
-
-    # 0 is reserved for cache entries. This helps debugging.
-    instmap["CACHE"] = 0
-
-    # 17 is reserved as it is the initial value for the specializing counter.
-    # This helps catch cases where we attempt to execute a cache.
-    instmap["RESERVED"] = 17
-
-    # 128 is RESUME - it is hard coded as such in Tools/build/deepfreeze.py
-    instmap["RESUME"] = 128
-
-    # The last opcode of the byte; no opcode follows it.
-    instmap["INSTRUMENTED_LINE"] = 255
-
-    instrumented = [name for name in instructions if name.startswith("INSTRUMENTED")]
-
-    specialized: set[str] = set()
-    no_arg: list[str] = []
-    has_arg: list[str] = []
-
-    for family in families.values():
-        specialized.update(inst.name for inst in family.members)
-
-    for inst in instructions.values():
-        name = inst.name
-        if name in specialized:
-            continue
-        if name in instrumented:
-            continue
-        if inst.properties.oparg:
-            has_arg.append(name)
-        else:
-            no_arg.append(name)
-
-    # Specialized ops appear in their own section
-    # Instrumented opcodes are at the end of the valid range
-    min_internal = instmap["RESUME"] + 1
-    # INSTRUMENTED_LINE takes the last number whether or not it is defined.
-    min_instrumented = 256 - len({*instrumented, "INSTRUMENTED_LINE"})
-    assert min_internal + len(specialized) < min_instrumented
-
-    next_opcode = 1
-
-    def add_instruction(name: str) -> None:
-        nonlocal next_opcode
-        if name in instmap:
-            return  # Pre-defined name
-        while next_opcode in instmap.values():
-            next_opcode += 1
-        instmap[name] = next_opcode
-        next_opcode += 1
-
-    for name in sorted(no_arg):
-        add_instruction(name)
-    for name in sorted(has_arg):
-        add_instruction(name)
-    # For compatibility
-    next_opcode = min_internal
-    for name in sorted(specialized):
-        add_instruction(name)
-    next_opcode = min_instrumented
-    for name in instrumented:
-        add_instruction(name)
-
-    for name in instructions:
-        instructions[name].opcode = instmap[name]
-
-    for op, name in enumerate(sorted(pseudos), 256):
-        instmap[name] = op
-        pseudos[name].opcode = op
-
-    return instmap, len(no_arg), min_instrumented
+    for name, inst in instructions.items():
+        if name in PINNED_OPCODES:
+            inst.opcode = instmap[name] = PINNED_OPCODES[name]
+    for name, pseudo in pseudos.items():
+        if name in PINNED_PSEUDOS:
+            pseudo.opcode = instmap[name] = PINNED_PSEUDOS[name]
+    spare = max(PINNED_PSEUDOS.values()) + 1
+    for name in sorted(n for n in pseudos if n not in PINNED_PSEUDOS):
+        pseudos[name].opcode = instmap[name] = spare
+        spare += 1
+    return instmap, HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE
 
 
 def get_instruction_size_for_uop(instructions: dict[str, Instruction], uop: Uop) -> int | None:
@@ -1406,7 +1379,12 @@ def analyze_forest(
             case _:
                 pass
     ir_only: dict[str, Instruction] = {}
+    translator_only: dict[str, Instruction] = {}
     for name, inst in list(instructions.items()):
+        if any(isinstance(part, Uop) and "translator_only" in part.annotations
+               for part in inst.parts):
+            translator_only[name] = instructions.pop(name)
+            continue
         if any(isinstance(part, Uop) and "ir_only" in part.annotations
                for part in inst.parts):
             ir_only[name] = instructions.pop(name)
@@ -1423,13 +1401,19 @@ def analyze_forest(
         family.members = [m for m in family.members if m.name not in ir_only]
     for uop in uops.values():
         uop.instruction_size = get_instruction_size_for_uop(instructions, uop)
-    opmap, first_arg, min_instrumented = assign_opcodes(
-        instructions, families, pseudos)
-    held = set(opmap.values())
+    opmap, first_arg, min_instrumented = assign_opcodes(instructions, pseudos)
+    # The holes of deleted ops stay reserved, so a port moves no handler id
+    held = {*PINNED_OPCODES.values(), *PINNED_PSEUDOS.values()}
     free_ids = [number for number in range(256) if number not in held]
+    handler_only = {**translator_only, **{
+        name: inst for name, inst in instructions.items()
+        if name not in PINNED_OPCODES}}
+    for name, number in zip(sorted(handler_only), free_ids):
+        handler_only[name].opcode = number
+    free_ids = free_ids[len(handler_only):]
     return Analysis(
         instructions, uops, families, pseudos, labels, opmap, first_arg,
-        min_instrumented, ir_only, free_ids, boundaries
+        min_instrumented, ir_only, free_ids, boundaries, translator_only
     )
 
 

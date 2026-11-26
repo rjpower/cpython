@@ -48,8 +48,8 @@ FEEDBACK = {
 
 OPARGS = (0, 1, 2, 3, 7, 0x102)
 
-# Handlers that no stack bytecode has as an opcode (Tools/cases_generator/
-# ir_generator.py)
+# Ops that no stack bytecode has as an opcode: the translator_only
+# instructions of Python/bytecodes.c
 IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
@@ -188,7 +188,7 @@ class ContractTests(unittest.TestCase):
                 self.assertIn(row.shadow, ROWS)
         for name in (*opcode._specialized_opmap, *opcode._ir_opmap):
             if (opcode._ir_opmap.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS
-                    or name in IR_BASE_ONLY and name != "MATERIALIZE_KWARGS"):
+                    or name in IR_BASE_ONLY):
                 continue
             self.assertIn(name, BY_NAME)
 

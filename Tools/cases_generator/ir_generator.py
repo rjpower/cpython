@@ -98,6 +98,7 @@ from dataclasses import dataclass, fields, replace
 
 from analyzer import (
     Analysis,
+    stack_ops_of,
     IR_HELPER_CALLEES,
     IR_HELPER_EFFECTS,
     IR_MARKER_EFFECTS,
@@ -1205,7 +1206,8 @@ def group_name(inst: Instruction, analysis: Analysis) -> str:
 
 
 def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
-    return {**analysis.instructions, **analysis.ir_only}
+    return {**analysis.instructions, **analysis.ir_only,
+            **analysis.translator_only}
 
 
 # Opcodes of the compiler's stack model that no word ever has: the register
@@ -1244,15 +1246,6 @@ def stack_only_names(analysis: Analysis) -> frozenset[str]:
         {name for name in all_instructions(analysis)
          if is_abort_body(analysis, name) and name not in ABORT_STUBS_WITH_HANDLERS}
         | set(STACK_ONLY_WITH_BODY))
-
-
-# Handlers that the register passes make and that no stack bytecode has, but
-# whose opcode numbers lie in the opcode space (their instrumented forms are
-# tables indexed by opcode).  They are not in opcode.opmap, which lists what
-# co_code can hold.
-IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP")
 
 
 def ir_only_handler_names(analysis: Analysis) -> list[str]:
@@ -8691,8 +8684,9 @@ def handler_contracts(analysis: Analysis,
                 normal_storage[name] = None
     result = {}
     insts = {**handler_instructions(analysis),
-             **{name: analysis.instructions[name] for name in stack_only_names(analysis)
-                if name in analysis.instructions}}
+             **{name: inst for name, inst in
+                stack_ops_of(analysis).items()
+                if name in stack_only_names(analysis)}}
     # A family's baseline(...) arm runs in compiled code only, never on a
     # word, so instrumentation never replaces it: it has no twin
     baselines = {family.baseline for family in analysis.families.values()}

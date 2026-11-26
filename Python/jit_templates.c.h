@@ -347,15 +347,15 @@ jit_template_STORE_FAST(_PyJitWordCx *cx)
 }
 
 const _PyJitTemplate _PyJit_Templates[512] = {
-    [8] = jit_template_END_FOR,
-    [9] = jit_template_END_SEND,
+    [9] = jit_template_END_FOR,
+    [10] = jit_template_END_SEND,
     [25] = jit_template_NOP,
     [28] = jit_template_POP_ITER,
-    [110] = jit_template_STORE_FAST,
-    [122] = jit_template_IR_JUMP,
-    [130] = jit_template_FOR_ITER_LIST,
-    [131] = jit_template_FOR_ITER_RANGE,
-    [132] = jit_template_FOR_ITER_TUPLE,
+    [108] = jit_template_STORE_FAST,
+    [125] = jit_template_IR_JUMP,
+    [175] = jit_template_FOR_ITER_LIST,
+    [176] = jit_template_FOR_ITER_RANGE,
+    [177] = jit_template_FOR_ITER_TUPLE,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
     [ROP_HANDLER_GetAttr_Instance] = jit_template_GetAttr_Instance,
     [ROP_HANDLER_GetAttr_Shape] = jit_template_GetAttr_Shape,

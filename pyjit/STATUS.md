@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `73f88fa1cdb` (pushed) holds:
+`pyjit/rir90` at `b7c50a68f42` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -66,17 +66,25 @@ interpreter hold no reference to the stack at step D, and tests check it.
 - PS:
   - stack opcode numbers are pinned to upstream's table, so ports no longer
     bump the pyc magic number (64451);
-  - register handler ids are dense and independent of stack numbers (302
-    handlers), with generated maps between the two spaces and range asserts;
+  - register handler ids are dense and independent of stack numbers, with
+    generated maps between the two spaces and range asserts;
   - an assert build with every id shifted (`PYJIT_IR_ID_BASE`) runs the smoke
     set at integration points;
-- D's first steps: the stack-op schema is a Python table (`stack_ops.py`)
-  that the opcode generators read instead of `bytecodes.c`, and the `.rop`
-  externs are the one declaration of each C row.
+- D's steps so far:
+  - the stack-op schema is a Python table (`stack_ops.py`) that the opcode
+    generators read, and the `.rop` externs are the one declaration of each
+    C row;
+  - `bytecodes.c`, the stack-semantic generator and their tests are deleted;
+    the arms are dense from id 1 (294 handlers);
+  - specialization statistics are kept by register family and arm;
+  - instrumentation is stated by handler: a word's monitoring state is its
+    handler, its observed twin, or a line or instruction wrapper over either,
+    and the opcode-indexed event tables are deleted.
 
 No word runs an inherited handler. The last merge check passed the smoke set
-on release and assert, and the verifier reports no error over 109,658 code
-objects. Ports keep the old handlers' object locks and turn every old
+on release and assert, and the verifier reports no error over 108,919 code
+objects. The id-shifted guard build passed at `efa0b20ac00`, after a fix to
+the Python handler ids it found. Ports keep the old handlers' object locks and turn every old
 specialization into an arm.
 
 Interpreter first (user, 2026-11-25): port every op, reach test parity, then
@@ -87,10 +95,12 @@ join.
 
 Running, for the end condition that the IR and the interpreter hold no
 reference to the stack:
-- D deletes the stack-semantic generator, `bytecodes.c` and their tests
-  (about 21,000 lines of Python), then restates instrumentation by handler.
 - WF (Opus) replaces the stack-shaped word format with home operands and
-  declared per-edge states. Its migration check found three classes of wrong
+  declared per-edge states.  WF3 moves the readers to it; WF4 splits the
+  format and rewrites the translator.
+- D then switches the WF3 files' remaining stack-op tests to declared data,
+  deletes the opcode maps that lose their last reader, and adds the test
+  that no stack reference remains. Its migration check found three classes of wrong
   answers in the old f_lineno planner, which the new format fixes.
 
 Then full suites and approximate timing.

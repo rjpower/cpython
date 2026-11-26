@@ -401,22 +401,17 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"roles", "the roles of fields A to D"},
     {"imm", "where the oparg lives, an IR_LOC_* constant"},
     {"fb", "where the feedback index lives"},
-    {"ninputs", "the inputs of a register-style handler"},
-    {"dst", "the slot of dst relative to the stack, or None"},
-    {"borrow_mask", "bit k: input k may name a borrowed local"},
     {"fb_kind", "the kind of the feedback entry"},
     {"fb_size", "the size of the feedback entry, or 0"},
-    {"result_phase", "the first output's conditional publication phase"},
-    {"output_kind", "the handler's physical output publication mapping"},
-    {"reads", "the stack inputs, a (k, form) extent"},
-    {"writes", "the stack outputs, a (k, form) extent"},
-    {"through", "the deepest inputs left in place, a (k, form) extent"},
+    {"group", "the parts of the home group operand, or 0"},
+    {"vacant", "bit h: home h may be NULL when the word reads it"},
+    {"committed", "bit e: edge e publishes before its callbacks"},
+    {"edges", "per normal edge, the IR_HOME_* state of each home: two 6-tuples"},
     {"shadow", "the instruction that the handler stands for"},
     {"base", "the opcode that the handler stands for"},
     {"twin", "the handler that instrumentation runs, or None"},
     {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
     {"word_flags", "the canonical word flags the handler admits (IR_F_NO_SELF, IR_F_NO_KW)"},
-    {"error_routes", "complete exceptional routes, including conditional bridges and local publication"},
     {NULL}
 };
 
@@ -434,6 +429,13 @@ handler_or_none(int h)
     return h == _PyIR_NO_HANDLER ? Py_NewRef(Py_None) : PyLong_FromLong(h);
 }
 
+/* The _PyIR_HOME_* state of home h after normal edge e */
+static int
+home_state(const _PyIRFormat *fmt, int e, int h)
+{
+    return (int)((fmt->edges >> (2 * (_PyIR_HOMES * e + h))) & 3);
+}
+
 static PyObject *
 ir_contract_row(PyTypeObject *type, int h)
 {
@@ -449,24 +451,24 @@ ir_contract_row(PyTypeObject *type, int h)
                       fmt->roles[3]),
         PyLong_FromLong(fmt->imm),
         PyLong_FromLong(fmt->fb),
-        PyLong_FromLong(fmt->ninputs),
-        fmt->dst == _PyIR_NO_DST ? Py_NewRef(Py_None)
-                                 : PyLong_FromLong(fmt->dst),
-        PyLong_FromLong(fmt->borrow_mask),
         PyLong_FromLong(fmt->fb_kind),
         PyLong_FromLong(fmt->fb_size),
-        PyLong_FromLong(fmt->result_phase),
-        PyLong_FromLong(fmt->output_kind),
-        Py_BuildValue("(ii)", fmt->reads.k, fmt->reads.form),
-        Py_BuildValue("(ii)", fmt->writes.k, fmt->writes.form),
-        Py_BuildValue("(ii)", fmt->through.k, fmt->through.form),
+        PyLong_FromLong(fmt->group),
+        PyLong_FromLong(fmt->vacant),
+        PyLong_FromLong(fmt->committed),
+        Py_BuildValue("((iiiiii)(iiiiii))",
+                      home_state(fmt, 0, 0), home_state(fmt, 0, 1),
+                      home_state(fmt, 0, 2), home_state(fmt, 0, 3),
+                      home_state(fmt, 0, 4), home_state(fmt, 0, 5),
+                      home_state(fmt, 1, 0), home_state(fmt, 1, 1),
+                      home_state(fmt, 1, 2), home_state(fmt, 1, 3),
+                      home_state(fmt, 1, 4), home_state(fmt, 1, 5)),
         fmt->shadow == _PyIR_NO_OPCODE ? Py_NewRef(Py_None)
                                        : PyLong_FromLong(fmt->shadow),
         PyLong_FromLong(_PyIR_BaseOpcode(h)),
         handler_or_none(fmt->twin),
         PyLong_FromUnsignedLong(fmt->events),
         PyLong_FromLong(fmt->word_flags),
-        PyLong_FromLong(fmt->error_routes),
     };
     static_assert(Py_ARRAY_LENGTH(items)
                   == Py_ARRAY_LENGTH(ir_contract_fields) - 1,
@@ -685,9 +687,6 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_F_UNINTERRUPTED", IR_F_UNINTERRUPTED);
     ADD_IR_CONSTANT("IR_F_EX", IR_F_EX);
     ADD_IR_CONSTANT("IR_OPERANDS", IR_OPERANDS);
-    ADD_IR_CONSTANT("IR_RESULT_PHASE_NONE", _PyIR_RESULT_PHASE_NONE);
-    ADD_IR_CONSTANT("IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE",
-                    _PyIR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE);
     ADD_IR_CONSTANT("IR_ROLE_NONE", _PyIR_ROLE_NONE);
     ADD_IR_CONSTANT("IR_ROLE_DST", _PyIR_ROLE_DST);
     ADD_IR_CONSTANT("IR_ROLE_BASE", _PyIR_ROLE_BASE);
@@ -709,20 +708,9 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_LOC_BC", _PyIR_LOC_BC);
     ADD_IR_CONSTANT("IR_LOC_AB", _PyIR_LOC_AB);
     ADD_IR_CONSTANT("IR_VALID", _PyIR_VALID);
-    ADD_IR_CONSTANT("IR_WINDOW", _PyIR_WINDOW);
     ADD_IR_CONSTANT("IR_JUMPS", _PyIR_JUMPS);
     ADD_IR_CONSTANT("IR_FORWARD", _PyIR_FORWARD);
-    ADD_IR_CONSTANT("IR_NO_FOLD", _PyIR_NO_FOLD);
     ADD_IR_CONSTANT("IR_TRANSPARENT", _PyIR_TRANSPARENT);
-    ADD_IR_CONSTANT("IR_STORE_DST", _PyIR_STORE_DST);
-    ADD_IR_CONSTANT("IR_OUTPUT_REGISTER_DST", _PyIR_OUTPUT_REGISTER_DST);
-    ADD_IR_CONSTANT("IR_OUTPUT_WINDOW", _PyIR_OUTPUT_WINDOW);
-    ADD_IR_CONSTANT("IR_OUTPUT_WINDOW_DST_FIRST", _PyIR_OUTPUT_WINDOW_DST_FIRST);
-    ADD_IR_CONSTANT("IR_OUTPUT_OUTCOME", _PyIR_OUTPUT_OUTCOME);
-    ADD_IR_CONSTANT("IR_UNPACKS", _PyIR_UNPACKS);
-    ADD_IR_CONSTANT("IR_ABRUPT_PREFIX", _PyIR_ABRUPT_PREFIX);
-    ADD_IR_CONSTANT("IR_ABRUPT_OPERANDS", _PyIR_ABRUPT_OPERANDS);
-    ADD_IR_CONSTANT("IR_ERROR_PROGRAM", _PyIR_ERROR_PROGRAM);
     ADD_IR_CONSTANT("IR_RUNS_CODE", _PyIR_RUNS_CODE);
     ADD_IR_CONSTANT("IR_JUMP_ALWAYS", _PyIR_JUMP_ALWAYS);
     ADD_IR_CONSTANT("IR_NAMES_TARGET", _PyIR_NAMES_TARGET);
@@ -736,14 +724,10 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_PURE", _PyIR_PURE);
     ADD_IR_CONSTANT("IR_SPECIALIZES", _PyIR_SPECIALIZES);
     ADD_IR_CONSTANT("IR_LEARNED_ONLY", _PyIR_LEARNED_ONLY);
-    ADD_IR_CONSTANT("IR_ERROR_COMPLETE", _PyIR_ERROR_COMPLETE);
-    ADD_IR_CONSTANT("IR_ERROR_DIRECT", _PyIR_ERROR_DIRECT);
-    ADD_IR_CONSTANT("IR_ERROR_LOCAL_DST", _PyIR_ERROR_LOCAL_DST);
-    ADD_IR_CONSTANT("IR_EXT_FIXED", _PyIR_EXT_FIXED);
-    ADD_IR_CONSTANT("IR_EXT_OPARG", _PyIR_EXT_OPARG);
-    ADD_IR_CONSTANT("IR_EXT_OPARG2", _PyIR_EXT_OPARG2);
-    ADD_IR_CONSTANT("IR_EXT_BIT0", _PyIR_EXT_BIT0);
-    ADD_IR_CONSTANT("IR_EXT_BYTES", _PyIR_EXT_BYTES);
+    ADD_IR_CONSTANT("IR_HOME_PRESERVE", _PyIR_HOME_PRESERVE);
+    ADD_IR_CONSTANT("IR_HOME_VACATE", _PyIR_HOME_VACATE);
+    ADD_IR_CONSTANT("IR_HOME_DEFINE", _PyIR_HOME_DEFINE);
+    ADD_IR_CONSTANT("IR_HOME_UNKNOWN", _PyIR_HOME_UNKNOWN);
 #undef ADD_IR_CONSTANT
     return 0;
 }

@@ -14,6 +14,7 @@ from test.support import os_helper
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import handler_table
+    import ir_metadata_generator
     import rop_primitives
     import rop_catalog
     import rop_check
@@ -503,13 +504,36 @@ class ArmRowTests(unittest.TestCase):
         self.assertEqual(add_int.base, "BINARY_OP")
         self.assertEqual(fmt.roles, ("_PyIR_ROLE_DST", "_PyIR_ROLE_IN0 + 0",
                                      "_PyIR_ROLE_IN0 + 1", "_PyIR_ROLE_FB"))
-        self.assertEqual((fmt.fb, fmt.fb_schema, fmt.ninputs, fmt.dst, fmt.writes),
-                         ("_PyIR_LOC_D", "Binary", 2, -2, 1))
+        self.assertEqual((fmt.fb, fmt.fb_schema), ("_PyIR_LOC_D", "Binary"))
+        # The translator's row: two inputs and a result above them, which
+        # may name a local
+        row = ir_metadata_generator.arm_stack_format(fmt)
+        self.assertEqual((row.ninputs, row.dst, row.borrow_mask), (2, -2, 0b11))
+        self.assertEqual(row.roles, ("DST", "IN0+0", "IN0+1", "FB"))
+        self.assertIn("STORE_DST", row.flags)
         self.assertEqual(fmt.effects, ("_PyIR_RAISES", "_PyIR_DEOPTS"))
         self.assertEqual(fmt.operands, "_PyIR_OPERANDS_NONE")
         generic = next(e for e in entries if e.dotted == "Add.Generic")
         self.assertIn("_PyIR_SPECIALIZES", generic.format.effects)
         self.assertIn("_PyIR_ESCAPES", generic.format.effects)
+
+    def test_window_rows_are_derived_from_the_home_group(self):
+        # A BASE field names the window: its result is part 2 of the group,
+        # and part 0 passes through where edge 0 keeps it.  CleanupThrow's
+        # completion spends the receiver, so nothing passes through, and its
+        # thrown exception is an input of its own.  The edges come from the
+        # verified points (load_arm_entries).
+        entries = {e.dotted: e for e in rop_generator.load_arm_entries()}
+        for name, ninputs, through in (("ForIter.Generic", 0, 1),
+                                       ("Send.Generic", 0, 1),
+                                       ("CleanupThrow.Generic", 1, 0)):
+            with self.subTest(arm=name):
+                fmt = entries[name].format
+                self.assertNotIn("_PyIR_WINDOW", fmt.flags)
+                row = ir_metadata_generator.arm_stack_format(fmt)
+                self.assertIn("WINDOW", row.flags)
+                self.assertEqual((row.ninputs, row.dst, row.through),
+                                 (ninputs, 2, (through, "FIXED")))
 
     def test_every_arm_has_a_row_in_every_generated_table(self):
         entries = rop_generator.arm_entries(products())

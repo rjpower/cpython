@@ -500,8 +500,9 @@ ARGS_OPERANDS = {"CALL_KW": "_PyIR_OPERANDS_KW",
 def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     """The fields of the arm's _PyIRFormat row.  Which homes a word reads and
     defines come from the family's derived encoding: a Src operand is an
-    input and a Dst operand the destination.  Fields that describe stack
-    positions (through, windows, the stack-only flags) stay empty."""
+    input and a Dst operand the destination.  The format says nothing of
+    stack positions; the translator derives its row of the arm from it
+    (ir_metadata_generator.arm_stack_format)."""
     fam = program.families[arm.family]
     enc = program.encodings[arm.family]
     params = {x.name: x for x in fam.params}
@@ -515,14 +516,11 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     ninputs = writes = 0
     # A loop's pair of homes (the iterator, then its cursor): the family's
     # points say how the word treats it.  A word that defines it writes two
-    # homes at the field; one that keeps the receiver steps it in place, as
-    # a window of the legacy op; else the word spends both
-    reads = None
-    through = 0
+    # homes at the field; one that keeps the receiver steps it in place
+    # (role BASE); else the word spends both
     pair_writes = 0
     window = False
     send_window = False
-    window_name = ""
     has_target = has_args = has_span = False
     target = "_PyIR_LOC_NONE"
     for slot in enc.elements:
@@ -564,7 +562,6 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                 role = "_PyIR_ROLE_BASE"
                 window = True
                 send_window = True
-                window_name = pl.operand
             elif kind == "ITERPAIR":
                 pair = pl.operand
                 if rop_check.is_out(param.type):
@@ -627,21 +624,6 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     if is_generic(program, arm) and "again" in fam.exits:
         effects.add("_PyIR_SPECIALIZES")
     flags = ["_PyIR_VALID"]
-    if window:
-        # FOR_ITER's shape: the pair is read and rewritten in place, the
-        # item goes two homes above it, and the receiver passes through.  A
-        # window that no point keeps (a throw's completion spends it) has no
-        # pass-through, and its sources follow the window's homes.
-        flags.append("_PyIR_WINDOW")
-        kept = send_window and any(
-            f"{window_name}.receiver" in pt.keep and pt.defs
-            for pt in program.points.values() if pt.family == arm.family)
-        reads, through = ((3 + ninputs, 1 if kept else 0) if send_window
-                          else (2, 1))
-        writes = 3
-    if writes:
-        # A result that nothing reads goes to the frame's discard slot
-        flags += ["_PyIR_STORE_DST", "_PyIR_DISCARDS"]
     if "_PyIR_RUNS_PYTHON" in effects:
         flags.append("_PyIR_RUNS_CODE")
     if arm.displacing:
@@ -655,25 +637,22 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
             # No exit of the family goes to the target: the word names it for
             # sys.monitoring
             flags.append("_PyIR_NAMES_TARGET")
-    observers = (("_PyIR_OBSERVER_NONE" if send_window else
-                  "_PyIR_OBSERVER_FOR_BODY" if window else
-                  "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE"),
-                 # A loop step's item is the body's input; its exhaustion completes
-                 "_PyIR_OBSERVER_COMPLETION" if window else None)
+    # The edges that publish before their callbacks: a loop step's two (its
+    # item is the body's input, its exhaustion completes), a delegation's
+    # completion, and both edges of a branch that fires branch events
+    committed = (0b10 if send_window else
+                 0b11 if window or branch_events else 0)
     homes = word_homes(program, arm.family, enc, params)
+    touches_homes = bool(writes or pair_writes or window or
+                         {e.name for e in arm.contract.effect_set} & HOME_EFFECTS)
     return ir_arms.ArmFormat(
-        tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
-        imm, fb, ninputs,
-        2 if window else -ninputs if writes or pair_writes else None,
-        (1 << ninputs) - 1,
-        fb_schema, (ARGS_OPERANDS.get(fam.ops[0], "_PyIR_OPERANDS_CALL") if has_args else
-                    "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
-        0 if has_args else enc.words, writes + pair_writes, arm_transfer(exits, ninputs, arm.family, writes or pair_writes > 0 or bool(
-            {e.name for e in arm.contract.effect_set} & HOME_EFFECTS)), target,
-        observers[0], observers[1], reads, through,
-        committed=sum(1 << e for e, o in enumerate((observers[0], observers[1] or observers[0]))
-                      if o != "_PyIR_OBSERVER_NONE"),
-        **homes)
+        flags=tuple(flags), effects=tuple(e for e in EFFECT_ORDER if e in effects),
+        roles=tuple(roles), imm=imm, fb=fb, fb_schema=fb_schema,
+        operands=(ARGS_OPERANDS.get(fam.ops[0], "_PyIR_OPERANDS_CALL") if has_args else
+                  "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
+        fixed_words=0 if has_args else enc.words,
+        transfer=arm_transfer(exits, ninputs, arm.family, touches_homes),
+        target=target, committed=committed, **homes)
 
 
 # The exits that end the word abnormally: they carry no normal-edge contract

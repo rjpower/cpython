@@ -190,7 +190,7 @@ int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
  * from operand words and has none: its one output is new.  A Move's
  * destinations are new too. */
 static inline int
-_PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
+_PyRegOp_Through(const _PyRegOp *op, const _PyStackFormat *fmt)
 {
     if (_PyIR_CALL_SHAPED(fmt->operands) ||
         fmt->operands == _PyIR_OPERANDS_SPANS) {
@@ -213,7 +213,77 @@ _PyRegOp_CallBorrows(const _PyRegOp *op, int k)
     return k != 1 && !(op->opcode == ROP_OP_CallKw_Generic && k == op->nread - 1);
 }
 
-const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
+/* The translator's row of a CFG opcode: a stack op's (_PyStack_Formats), or
+ * an arm's (_PyStack_ArmFormats), which the generator derives from the arm's
+ * word format */
+static inline const _PyStackFormat *
+_PyRegCfg_FormatOf(int opcode)
+{
+    if (ROP_CFG_IS_ARM(opcode)) {
+        return &_PyStack_ArmFormats[ROP_CFG_HANDLER(opcode)];
+    }
+    return &_PyStack_Formats[opcode];
+}
+
+/* The role of the field of row fmt that holds the oparg: IMM or a slot
+ * role; NONE if no single field holds it. */
+static inline int
+_PyStack_OpargRole(const _PyStackFormat *fmt)
+{
+    if (fmt->imm >= _PyIR_LOC_A && fmt->imm <= _PyIR_LOC_D) {
+        return fmt->roles[fmt->imm - _PyIR_LOC_A];
+    }
+    return _PyIR_ROLE_NONE;
+}
+
+/* Whether an op of row fmt may run Python code, which may rebind any
+ * local through frame.f_locals: its row says so, or it releases the old
+ * value of a local, whose __del__ may.  It does so through a dst that
+ * names a local (_PyIR_STORE_DST, where dst_local says that dst does), and
+ * through an oparg whose role is _PyIR_ROLE_LOCAL_OUT or
+ * _PyIR_ROLE_LOCAL_CLEAR. */
+static inline int
+_PyStack_MayRunPython(const _PyStackFormat *fmt, int dst_local)
+{
+    int role = _PyStack_OpargRole(fmt);
+    return (fmt->flags & _PyIR_RUNS_CODE)
+           || (dst_local && (fmt->flags & _PyIR_STORE_DST))
+           || role == _PyIR_ROLE_LOCAL_OUT
+           || role == _PyIR_ROLE_LOCAL_CLEAR;
+}
+
+/* The spans of a span row: its COUNT fields (_PyIR_SpanCountFields) */
+static inline int
+_PyStack_SpanCount(const _PyStackFormat *fmt)
+{
+    int n = 0;
+    for (int f = 0; f < 4; f++) {
+        n += fmt->roles[f] == _PyIR_ROLE_COUNT;
+    }
+    return fmt->operands == _PyIR_OPERANDS_SPANS ? n : 0;
+}
+
+/* A row whose one span is destinations (Unpack's): it has no DST role */
+static inline int
+_PyStack_IsDstSpan(const _PyStackFormat *fmt)
+{
+    if (_PyStack_SpanCount(fmt) != 1) {
+        return 0;
+    }
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* A Move's row: two spans, its destinations and its sources */
+static inline int
+_PyStack_IsMove(const _PyStackFormat *fmt)
+{
+    return _PyStack_SpanCount(fmt) == 2;
+}
 
 /* Whether op writes local z through its dst, or, for a word whose outputs
  * are a destination span (Unpack), as one of its outputs */
@@ -223,7 +293,7 @@ _PyRegOp_WritesLocal(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
     if (op->dst >= 0) {
         return z == op->dst;
     }
-    if (op->nout == 0 || !_PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg))) {
+    if (op->nout == 0 || !_PyStack_IsDstSpan(_PyRegCfg_FormatOf(op->opcode))) {
         return 0;
     }
     const int *out = _PyReg_OUT(cfg, op);
@@ -333,10 +403,6 @@ typedef struct {
 
 void _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
                        _PyRegSlots *slots);
-
-/* The format of the stack instruction of an op: the generic handler's,
- * which its family shares. */
-struct _PyIRFormat;
 
 /* Internal to Python/regcfg.c and Python/regcfg_passes.c */
 

@@ -74,7 +74,7 @@ extern "C" {
 #define IR_CD_MAX       0xFFFFFF    // and of CD
 /* A frame has at most this many slots, so a slot field is 0 to 4094. */
 #define IR_MAX_SLOTS    IR_FIELD_MAX
-/* The dst field of a word whose result nothing reads (_PyIR_DISCARDS), where
+/* The dst field of a word whose result nothing reads (_PyIR_HasDst()), where
  * a CALL; POP_TOP pair took two words: outside the slot range.  The executing
  * copy of the code replaces it with the frame's discard slot (_PyCodeExec),
  * so no handler tests for it. */
@@ -248,9 +248,12 @@ enum {
 
 /* _PyIRFormat.flags: the format, shared by a family, its instrumented twins
  * and the IR-only handlers named after a member.  What a flag says holds
- * for a word of the format whichever of them runs. */
+ * for a word of the format whichever of them runs.  WINDOW, NO_FOLD,
+ * STORE_DST and DISCARDS are flags of the translator's rows
+ * (_PyStackFormat) only. */
 #define _PyIR_VALID         0x1     // the handler exists
-#define _PyIR_WINDOW        0x2     // window style
+#define _PyIR_WINDOW        0x2     // window style: reads and rewrites
+                                    // consecutive slots from a base
 #define _PyIR_JUMPS         0x4     // the oparg is the absolute target in
                                     // words, in CD
 #define _PyIR_FORWARD       0x8     // the oparg is a signed distance in
@@ -259,7 +262,7 @@ enum {
 #define _PyIR_TRANSPARENT   0x20    // runs another handler on the same fields
 #define _PyIR_STORE_DST     0x40    // dst may name a local: a folded
                                     // STORE_FAST, which releases the local's
-                                    // old value (_PyIR_MayRunPython())
+                                    // old value (_PyStack_MayRunPython())
 #define _PyIR_RUNS_CODE     0x80    // a member may run Python code, which may
                                     // rebind a local through frame.f_locals
 #define _PyIR_JUMP_ALWAYS   0x100   // a jump with one successor, its target;
@@ -269,15 +272,6 @@ enum {
                                     // (END_ASYNC_FOR names its END_SEND)
 #define _PyIR_DISCARDS      0x800   // dst may be IR_NO_DST: the handler
                                     // releases the result (the calls)
-#define _PyIR_UNPACKS       0x1000  // dst names the first of a run of locals
-                                    // that receive the elements of an
-                                    // unpack in order, or is IR_NO_DST: the
-                                    // elements stay in the window
-#define _PyIR_ABRUPT_PREFIX 0x2000  // checked complete suspension footprint;
-                                    // exceptional absence only, not readability
-#define _PyIR_ABRUPT_OPERANDS 0x4000 // only encoded transport can destroy prior
-                                     // scratch absence; no readability grant
-#define _PyIR_ERROR_PROGRAM 0x8000  // actual Storage suffix follows normal events
 
 /* _PyIRFormat.effects: what the handler itself may do, a projection of its
  * arm's declaration (Python/register_ops): the effects it declares, the
@@ -301,17 +295,12 @@ enum {
 #define _PyIR_LEARNED_ONLY  0x1000  // requires a reached feedback nomination;
                                     // never admitted in a code image
 
-/* Complete exceptional-route census from the actual emitter. Zero is
- * unknown, not infallible. These bits establish no readable-home facts. */
-#define _PyIR_ERROR_COMPLETE  1u
-#define _PyIR_ERROR_DIRECT    2u
-#define _PyIR_ERROR_LOCAL_DST 8u
-
+/* _PyStackFormat.dst of a row without a result */
 #define _PyIR_NO_DST        INT8_MIN
 
 /* A count of slots as a function of the oparg: k plus the part of the oparg
- * that form names.  Window extents and pass-through inputs, as the stack
- * effect of the handler's instruction has them. */
+ * that form names: the inputs that a translator's row passes through
+ * (_PyStackFormat.through). */
 enum {
     _PyIR_EXT_FIXED,        // k
     _PyIR_EXT_OPARG,        // k + oparg
@@ -342,28 +331,6 @@ _PyIR_Extent(_PyIRExtent e, int oparg)
     }
 }
 
-/* Success-path fact for the first output of a STORE_DST handler. A temporary
- * home owns its canonical result before receiver retirement. A folded local
- * delays this handler's overwrite until the final store; callbacks may change
- * that home. This says nothing about earlier callbacks, exceptional exits or
- * additional outputs. */
-enum {
-    _PyIR_RESULT_PHASE_NONE,
-    _PyIR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE,
-};
-
-/* The instruction contract of a handler: what a word that it runs reads,
- * writes and may do (pyjit/design/register-ir.md section 5).  Generated in
- * pycore_ir_metadata.h by Tools/cases_generator/ir_metadata_generator.py,
- * indexed by handler; Python reads it through _opcode.get_ir_contract().
- * Heap effects, guards and result type facts are not in it yet. */
-enum {
-    _PyIR_OUTPUT_REGISTER_DST,
-    _PyIR_OUTPUT_WINDOW,
-    _PyIR_OUTPUT_WINDOW_DST_FIRST,
-    _PyIR_OUTPUT_OUTCOME,
-};
-
 /* Positively checked normal-edge ownership contracts. UNKNOWN deliberately
  * grants no logical initialization or ownership fact during NULL shadowing. */
 enum {
@@ -380,79 +347,6 @@ enum {
     _PyIR_TRANSFER_EXIT,
 };
 
-enum {
-    _PyIR_OWNER_LEAF,
-    _PyIR_OWNER_READ,
-    _PyIR_OWNER_TAKE,
-    _PyIR_OWNER_FRESH,
-    _PyIR_OWNER_RESTORE,
-    _PyIR_OWNER_ERROR_BRANCH,
-    _PyIR_OWNER_NORMAL_EXIT,
-    _PyIR_OWNER_ERROR_EXIT,
-    _PyIR_OWNER_GENERATOR_MARKER,
-    _PyIR_OWNER_NORMAL_CLEAR_INPUTS,
-    _PyIR_OWNER_CALL_DRAIN,
-    _PyIR_OWNER_NORMAL_COMPLETION,
-    _PyIR_OWNER_UNPACK_LOCAL_DRAIN,
-    _PyIR_OWNER_YIELD_DELEGATED,
-    _PyIR_OWNER_ERROR_PROGRAM,
-    _PyIR_OWNER_ERROR_CHECKPOINT,
-    _PyIR_OWNER_STORAGE_SAVE,
-    _PyIR_OWNER_STORAGE_VACATE,
-    _PyIR_OWNER_STORAGE_PUBLISH,
-    _PyIR_OWNER_STORAGE_CALLBACK,
-    _PyIR_OWNER_STORAGE_JOIN,
-    _PyIR_OWNER_STORAGE_LITERAL,
-    _PyIR_OWNER_STORAGE_COPY,
-    _PyIR_OWNER_STORAGE_RESULT,
-    _PyIR_OWNER_STORAGE_GUARD,
-    _PyIR_OWNER_STORAGE_NORMAL,
-    /* Logical normal-edge result in a private native transfer. This is not
-     * a home publication, error snapshot or reached reader authority. */
-    _PyIR_OWNER_NATIVE_WINDOW_OUT,
-};
-
-#define _PyIR_COMPLETION_HAS_RESULT 1u
-#define _PyIR_COMPLETION_SEND_YIELDED 2u
-#define _PyIR_NORMAL_WINDOW_RESULT 1u
-#define _PyIR_NORMAL_DISJOINT_CHILD 2u
-#define _PyIR_NORMAL_NULL_FALLTHROUGH 4u
-#define _PyIR_NORMAL_NULL_TAKEN 8u
-#define _PyIR_ERROR_CANONICAL_OR_NULL 1u
-#define _PyIR_STORAGE_READ_NULLABLE 1u
-#define _PyIR_STORAGE_TAKES_HOME 1u
-#define _PyIR_STORAGE_PUBLISH_TEMPORARY 1u
-#define _PyIR_STORAGE_PUBLISH_SAME_VALUE 2u
-#define _PyIR_STORAGE_LITERAL_NONNULL 1u
-#define _PyIR_STORAGE_COPY_OWNED_SOURCE 1u
-#define _PyIR_STORAGE_RESULT_CANONICAL 1u
-#define _PyIR_STORAGE_RESULT_NONNULL 2u
-#define _PyIR_STORAGE_GUARD_NONNULL 1u
-#define _PyIR_STORAGE_CALLBACK_DST 1u
-#define _PyIR_STORAGE_CALLBACK_CURRENT_IDENTITY 2u
-
-/* owner_events counts only the normal prefix. ERROR_PROGRAM, when flagged,
- * follows that prefix and counts its suffix records in extent. Its src counts
- * the shared topological Storage action prefix. The remaining records name
- * reached error IDs or the normal endpoint and their final action nodes. */
-typedef struct {
-    uint8_t kind, flags;
-    uint16_t dst, src, extent;
-} _PyIROwnershipEvent;
-static_assert(sizeof(_PyIROwnershipEvent) == 8,
-              "ownership event encoding must remain fixed");
-
-/* A checked observer edge whose terminal provider has committed its physical
- * outputs before the callback. Generated from the provider, not inferred from
- * its event name. An absent fact cannot authorize POST inspection. */
-enum {
-    _PyIR_OBSERVER_NONE,
-    _PyIR_OBSERVER_FORMAT_VALUE,
-    _PyIR_OBSERVER_FORMAT_NULL_FIRST,
-    _PyIR_OBSERVER_FOR_BODY,
-    _PyIR_OBSERVER_COMPLETION,
-};
-
 /* _PyIRFormat.operands */
 enum {
     _PyIR_OPERANDS_NONE,
@@ -466,6 +360,10 @@ enum {
 #define _PyIR_CALL_SHAPED(OPERANDS) \
     ((OPERANDS) != _PyIR_OPERANDS_NONE && (OPERANDS) != _PyIR_OPERANDS_SPANS)
 
+/* The instruction contract of a handler: the word format of a register
+ * instruction.  Generated in pycore_ir_metadata.h from the families of
+ * Python/register_ops by Tools/cases_generator/rop_generator.py, indexed by
+ * handler; Python reads it through _opcode.get_ir_contract(). */
 typedef struct _PyIRFormat {
     uint16_t flags;         // _PyIR_VALID, ...: the format
     uint16_t effects;       // _PyIR_RAISES, ...: the handler
@@ -474,56 +372,48 @@ typedef struct _PyIRFormat {
     uint8_t fb;             // _PyIR_LOC_*
     uint8_t target;         // _PyIR_LOC_*: where a register instruction keeps
                             // its jump target (FORWARD), or NONE: D
-    uint8_t ninputs;        // register style
-    int8_t dst;             // slot of dst less the depth before, or for
-                            // window style less base; or _PyIR_NO_DST
-    uint8_t borrow_mask;    // bit k: input k may name a borrowed local
-    uint8_t fb_kind;        // _PyFbKind of the entry, where fb is a field
-    uint8_t fb_size;        // the bytes of that entry's type, or 0
-    uint8_t result_phase;   // _PyIR_RESULT_PHASE_*: conditional success fact
-    uint8_t observer_outcome[2]; // checked fallthrough/taken POST facts
-    uint8_t output_kind;    // actual physical publication, not fold capability:
-                            // REGISTER_DST: outputs at dst; WINDOW: at base;
-                            // WINDOW_DST_FIRST: base outputs, with only the
-                            // result at base+dst moved to the explicit dst;
-                            // OUTCOME: use the semantic per-edge contract.
-                            // UNPACKS additionally transfers to its local run.
-    uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
-    uint32_t owner_program;
-    uint16_t owner_events;
-    uint16_t word_flags;    // the canonical flags a word of the handler
-                            // may carry: IR_F_CALL_ROLES or a subset
-    uint8_t error_routes;   // _PyIR_ERROR_*; conditional native error routes
     uint8_t operands;       // _PyIR_OPERANDS_*: the words of the format have
                             // operand words after the head (a call)
     uint8_t fixed_words;    // the operand words after the head that a
                             // register instruction's encoding has (an arm)
-    _PyIRExtent reads;      // the stack inputs, from the deepest
-    _PyIRExtent writes;     // the stack outputs, from the same slot
-    _PyIRExtent through;    // the deepest inputs that the handler leaves
-                            // in their slots with their values: it never
-                            // assigns, reassigns or takes the address of
-                            // them (passing an array on counts).  The
-                            // count stops at the first input that is not
-                            // such, so an unchanged input above a changed
-                            // one (the middle of SWAP) is not counted.
-                            // The other inputs are consumed, and a
-                            // temporary that names them is cleared
-    uint16_t shadow;        // the stack opcode that the handler stands for, or _PyIR_NO_OPCODE
-    uint16_t twin;          // the handler that instrumentation runs on the
-                            // word (itself for a twin), or _PyIR_NO_HANDLER
-    uint32_t events;        // bit e: semantic handler or twin can fire event e
+    uint8_t fb_kind;        // _PyFbKind of the entry, where fb is a field
+    uint8_t fb_size;        // the bytes of that entry's type, or 0
+    uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
     /* The homes a register instruction names (_PyIR_WordHomes): home h is
-     * field h for h < 4, and part h - 3 of its home group for h = 4, 5.
-     * Rows of stack ops and old handlers leave them 0. */
+     * field h for h < 4, and part h - 3 of its home group for h = 4, 5. */
     uint8_t group;          // the parts of the home group operand, or 0
     uint8_t group_at;       // the field that names the group's part 0
     uint8_t normal;         // bit e: an arm of the family takes edge e
     uint8_t vacant;         // bit h: home h may be NULL when the word reads it
     uint8_t committed;      // bit e: edge e publishes before its callbacks
+    uint16_t word_flags;    // the canonical flags a word of the handler
+                            // may carry: IR_F_CALL_ROLES or a subset
     uint32_t edges;         // _PyIR_HOME_* of home h after edge e, in the two
                             // bits at 2 * (_PyIR_HOMES * e + h)
+    uint16_t shadow;        // the stack opcode that the handler stands for, or _PyIR_NO_OPCODE
+    uint16_t twin;          // the handler that instrumentation runs on the
+                            // word (itself for a twin), or _PyIR_NO_HANDLER
+    uint32_t events;        // bit e: semantic handler or twin can fire event e
 } _PyIRFormat;
+
+/* The translator's row of a stack op (Python/regcfg.c), from
+ * Tools/cases_generator/stack_ops.py, and of a register instruction as the
+ * translator places it (_PyRegCfg_FormatOf).  Window ops read and rewrite
+ * consecutive slots from a base; the others read their inputs from IN
+ * fields and write dst. */
+typedef struct {
+    uint16_t flags;         // _PyIR_VALID, _PyIR_WINDOW, ...
+    uint16_t effects;       // _PyIR_RAISES, ...
+    uint8_t roles[4];       // of fields A, B, C and D
+    uint8_t imm;            // _PyIR_LOC_*: where the oparg lives
+    uint8_t ninputs;        // the inputs that IN fields name
+    int8_t dst;             // slot of dst less the depth before, or for a
+                            // window less its base; or _PyIR_NO_DST
+    uint8_t borrow_mask;    // bit k: input k may name a borrowed local
+    uint8_t operands;       // _PyIR_OPERANDS_*
+    _PyIRExtent through;    // the deepest inputs that the op leaves in
+                            // their slots with their values
+} _PyStackFormat;
 
 #define _PyIR_HOMES 6
 /* A home after a normal edge of the word */
@@ -563,31 +453,18 @@ _PyIR_FormatDistance(const _PyIRFormat *fmt, _PyIRWord word)
     }
 }
 
-/* The role of the field of format fmt that holds the oparg: IMM or a slot
- * role; NONE if no single field holds it. */
+/* Whether the word format has a destination home of its own (a group it
+ * defines is not one): a result that nothing reads goes to the frame's
+ * discard slot, and a destination may name a local */
 static inline int
-_PyIR_OpargRole(const _PyIRFormat *fmt)
+_PyIR_HasDst(const _PyIRFormat *fmt)
 {
-    if (fmt->imm >= _PyIR_LOC_A && fmt->imm <= _PyIR_LOC_D) {
-        return fmt->roles[fmt->imm - _PyIR_LOC_A];
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST && !(fmt->group && f == fmt->group_at)) {
+            return 1;
+        }
     }
-    return _PyIR_ROLE_NONE;
-}
-
-/* Whether a word of format fmt may run Python code, which may rebind any
- * local through frame.f_locals: its format may, or it releases the old
- * value of a local, whose __del__ may.  It does so through a dst that
- * names a local (_PyIR_STORE_DST, where dst_local says that dst does), and
- * through an oparg whose role is _PyIR_ROLE_LOCAL_OUT or
- * _PyIR_ROLE_LOCAL_CLEAR. */
-static inline int
-_PyIR_MayRunPython(const _PyIRFormat *fmt, int dst_local)
-{
-    int role = _PyIR_OpargRole(fmt);
-    return (fmt->flags & _PyIR_RUNS_CODE)
-           || (dst_local && (fmt->flags & _PyIR_STORE_DST))
-           || role == _PyIR_ROLE_LOCAL_OUT
-           || role == _PyIR_ROLE_LOCAL_CLEAR;
+    return 0;
 }
 
 /* Whether words of the generic handler opcode specialise from their entry

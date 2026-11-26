@@ -325,7 +325,7 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
             if (!op->nwords) {
                 continue;
             }
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+            const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
             if (op->target >= 0 && !(fmt->flags & _PyIR_NAMES_TARGET)) {
                 int target = op->target;
                 RETURN_IF_ERROR(

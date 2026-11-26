@@ -3,8 +3,9 @@
 The register instruction arms (Python/register_ops) follow the word kinds in
 every per-handler table, then the observed wrappers of the arms of families
 that declare events: rop_generator.arm_entries() lists them, and
-IR_NUM_HANDLERS counts them.  The stack ops (stack_ops.py) have a row of the
-translator's format in _PyIR_StackOnlyFormats and no handler.
+IR_NUM_HANDLERS counts them.  The translator reads a stack op's row
+(stack_ops.py) in _PyStack_Formats and an arm's in _PyStack_ArmFormats, both
+of type _PyStackFormat (arm_stack_format).
 
 The tables are defined where NEED_IR_METADATA is defined (Python/ir.c) and
 declared elsewhere.  Handler ids without an instruction have a zeroed row,
@@ -19,7 +20,7 @@ import ir_arms
 from cwriter import CWriter
 from generators_common import ROOT, write_header
 from handler_table import first_arm, num_handlers
-from stack_ops import PSEUDOS, STACK_OPS, StackOp
+from stack_ops import PSEUDOS, STACK_OPS, StackFormat, StackOp
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 STACK_NAMES = {op.name for op in STACK_OPS} | {p.name for p in PSEUDOS}
@@ -38,13 +39,8 @@ CALL_ROLE_FLAGS = {
 OPERANDS_ROW = (
     "{ .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, "
     "_PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
-    ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, "
-    ".result_phase = _PyIR_RESULT_PHASE_NONE, .output_kind = _PyIR_OUTPUT_REGISTER_DST, "
-    ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 0, .owner_events = 0, "
-    ".word_flags = 0, .error_routes = 0, .operands = _PyIR_OPERANDS_NONE, "
-    ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
-    ".reads = { 0, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, "
-    ".through = { 0, _PyIR_EXT_FIXED }, .shadow = _PyIR_NO_OPCODE, "
+    ".fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
+    ".word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .shadow = _PyIR_NO_OPCODE, "
     ".twin = _PyIR_NO_HANDLER, .events = 0 }")
 OPERANDS_FLAGS = "_PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_IR_ONLY | _PyIR_H_PRISTINE"
 
@@ -58,34 +54,62 @@ def extent_row(extent: tuple[int, str]) -> str:
     return f"{{ {k}, _PyIR_EXT_{form} }}"
 
 
-def stack_format_row(op: StackOp) -> str:
-    """The row of a stack op that has no handler: the translator's format
-    (stack_ops.StackFormat) in the layout of _PyIRFormat"""
-    fmt = op.format
-    assert fmt is not None, op.name
+def stack_format_row(fmt: StackFormat) -> str:
+    "A _PyStackFormat row"
     roles = ", ".join("_PyIR_ROLE_" + role.replace("+", " + ") for role in fmt.roles)
     dst = "_PyIR_NO_DST" if fmt.dst is None else str(fmt.dst)
     return (
         f"{{ .flags = {bits(['_PyIR_' + f for f in fmt.flags])}, "
         f".effects = {bits(['_PyIR_' + e for e in fmt.effects])}, "
         f".roles = {{ {roles} }}, .imm = _PyIR_LOC_{fmt.imm}, "
-        f".fb = _PyIR_LOC_NONE, .ninputs = {fmt.ninputs}, .dst = {dst}, "
+        f".ninputs = {fmt.ninputs}, .dst = {dst}, "
         f".borrow_mask = {fmt.borrow_mask:#x}, "
-        f".fb_kind = 0, .fb_size = 0, "
-        f".result_phase = _PyIR_RESULT_PHASE_NONE, "
-        f".output_kind = _PyIR_OUTPUT_{fmt.output_kind}, "
-        f".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-        f".owner_program = 0, .owner_events = 0, "
-        f".word_flags = 0, .error_routes = 0, "
         f".operands = _PyIR_OPERANDS_{fmt.operands}, "
-        f".observer_outcome = {{ {', '.join('_PyIR_OBSERVER_' + o for o in fmt.observer)} }}, "
-        f".reads = {extent_row(fmt.reads)}, "
-        f".writes = {extent_row(fmt.writes)}, "
-        f".through = {extent_row(fmt.through)}, "
-        f".shadow = {op.name}, "
-        f".twin = _PyIR_NO_HANDLER, "
-        f".events = 0 }}"
+        f".through = {extent_row(fmt.through)} }}"
     )
+
+
+def _strip(prefix: str, name: str) -> str:
+    assert name.startswith(prefix), name
+    return name[len(prefix):]
+
+
+def arm_stack_format(fmt: ir_arms.ArmFormat) -> StackFormat:
+    """The translator's row of an arm, from its word format.  A window (a
+    BASE role: ForIter, Send, CleanupThrow) reads its home group from the
+    base and its other inputs from IN fields; its result is part 2 of the
+    group, and part 0 passes through where the family's edge 0 keeps it.
+    Other arms read an input per IN field, or the parts of the home group
+    that an IN field names, and write dst above the inputs they pop.  A
+    destination of its own may name a local or the discard slot; an out
+    group (IterOpen's pair) is a result but not such a destination."""
+    window = "_PyIR_ROLE_BASE" in fmt.roles
+    ninputs = 0
+    has_dst = out_group = False
+    for f, role in enumerate(fmt.roles):
+        grouped = bool(fmt.group) and f == fmt.group_at
+        if role.startswith("_PyIR_ROLE_IN0"):
+            ninputs += fmt.group if grouped else 1
+        elif role == "_PyIR_ROLE_DST":
+            out_group |= grouped
+            has_dst |= not grouped
+    through = 0
+    if window:
+        dst: int | None = 2
+        kept = (fmt.edges >> (2 * fmt.group_at)) & 3 == 0   # _PyIR_HOME_PRESERVE
+        through = 1 if fmt.normal & 1 and kept else 0
+    else:
+        dst = -ninputs if has_dst or out_group else None
+    flags = [_strip("_PyIR_", f) for f in fmt.flags]
+    if window:
+        flags.append("WINDOW")
+    if window or has_dst:
+        flags += ["STORE_DST", "DISCARDS"]
+    return StackFormat(
+        tuple(flags), tuple(_strip("_PyIR_", e) for e in fmt.effects),
+        tuple(_strip("_PyIR_ROLE_", r).replace(" ", "") for r in fmt.roles),
+        _strip("_PyIR_LOC_", fmt.imm), ninputs, dst, (1 << ninputs) - 1,
+        _strip("_PyIR_OPERANDS_", fmt.operands), (through, "FIXED"))
 
 
 def arm_id(arm: ir_arms.ArmEntry) -> int:
@@ -151,18 +175,8 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
     return " | ".join(parts)
 
 
-def arm_owner_program(fmt: ir_arms.ArmFormat) -> tuple[tuple, ...]:
-    """An arm's owner program: the leaf of its derived transfer, as an old
-    handler with a checked leaf contract has (none for UNKNOWN)"""
-    if fmt.transfer == "_PyIR_TRANSFER_UNKNOWN":
-        return ()
-    return (("_PyIR_OWNER_LEAF", 0, 0, fmt.transfer, 0),)
-
-
-def arm_row(arm: ir_arms.ArmEntry,
-            program: tuple[int, int] = (0, 0)) -> str:
-    """The _PyIRFormat row of an arm, or of its observed wrapper; program
-    is its owner program's (start, length) in the owner table"""
+def arm_row(arm: ir_arms.ArmEntry) -> str:
+    "The _PyIRFormat row of an arm, or of its observed wrapper"
     fmt = arm.format
     assert fmt is not None
     own = arm_id(arm)
@@ -177,7 +191,6 @@ def arm_row(arm: ir_arms.ArmEntry,
         fb_size = f"sizeof(_PyFb{fmt.fb_schema})"
     events = bits([f"(1u << PY_MONITORING_EVENT_{e})" for e in arm.events])
     fixed = f".fixed_words = {fmt.fixed_words}, " if fmt.fixed_words else ""
-    dst = "_PyIR_NO_DST" if fmt.dst is None else str(fmt.dst)
     # sys.monitoring sees an observed wrapper as the instrumented form of
     # its family's stack op, as it sees an old handler's twin
     shadow = arm.base
@@ -188,18 +201,10 @@ def arm_row(arm: ir_arms.ArmEntry,
     return (
         f"{{ .flags = {bits(list(fmt.flags))}, .effects = {bits(list(fmt.effects))}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
-        f".fb = {fmt.fb}, .target = {fmt.target}, .ninputs = {fmt.ninputs}, "
-        f".dst = {dst}, "
-        f".borrow_mask = {fmt.borrow_mask:#x}, .fb_kind = {fb_kind}, "
-        f".fb_size = {fb_size}, .result_phase = _PyIR_RESULT_PHASE_NONE, "
-        f".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
-        f".transfer_kind = {fmt.transfer}, .owner_program = {program[0]}, "
-        f".owner_events = {program[1]}, .word_flags = {word_flags}, .error_routes = 0, "
-        f".operands = {fmt.operands}, {fixed}"
-        f".observer_outcome = {{ {fmt.observer}, {fmt.observer_taken or fmt.observer} }}, "
-        f".reads = {{ {fmt.ninputs if fmt.reads is None else fmt.reads}, _PyIR_EXT_FIXED }}, "
-        f".writes = {{ {fmt.writes}, _PyIR_EXT_FIXED }}, "
-        f".through = {{ {fmt.through}, _PyIR_EXT_FIXED }}, .shadow = {shadow}, "
+        f".fb = {fmt.fb}, .target = {fmt.target}, .fb_kind = {fb_kind}, "
+        f".fb_size = {fb_size}, .transfer_kind = {fmt.transfer}, "
+        f".word_flags = {word_flags}, .operands = {fmt.operands}, {fixed}"
+        f".shadow = {shadow}, "
         f".twin = {twin}, .events = {events}, .group = {fmt.group}, "
         f".group_at = {fmt.group_at}, .normal = {fmt.normal:#x}, .vacant = {fmt.vacant:#x}, "
         f".committed = {fmt.committed:#x}, .edges = {fmt.edges:#x} }}")
@@ -208,14 +213,6 @@ def arm_row(arm: ir_arms.ArmEntry,
 def generate_ir_metadata(
     filenames: list[str], outfile: TextIO, arms: Sequence[ir_arms.ArmEntry]
 ) -> None:
-    programs: dict[tuple, tuple[int, int]] = {}
-    ownership: list[tuple] = []
-    for arm in arms:
-        assert arm.format is not None
-        key = arm_owner_program(arm.format)
-        if key not in programs:
-            programs[key] = len(ownership), len(key)
-            ownership.extend(key)
     n = num_handlers(arms)
     for arm in arms:
         if arm.base not in STACK_NUMBERS:
@@ -226,16 +223,6 @@ def generate_ir_metadata(
         out.emit("#ifndef Py_BUILD_CORE\n")
         out.emit('#  error "this header requires Py_BUILD_CORE define"\n')
         out.emit("#endif\n\n")
-        out.emit("#define _PyIR_OBSERVER_ENTRY_ABSENCE 0\n\n")
-        count = max(len(ownership), 1)
-        out.emit(f"PyAPI_DATA(const _PyIROwnershipEvent) _PyIR_OwnerPrograms[{count}];\n")
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit(f"const _PyIROwnershipEvent _PyIR_OwnerPrograms[{count}] = {{\n")
-        for kind, flags, dst, src, extent in ownership:
-            out.emit(f"{{ {kind}, {flags}, {dst}, {src}, {extent} }},\n")
-        if not ownership:
-            out.emit("{0},\n")
-        out.emit("};\n#endif\n\n")
         for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
                           ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
@@ -263,19 +250,25 @@ def generate_ir_metadata(
         out.emit(f"[IR_H_IR_OPERANDS] = {OPERANDS_ROW},  /* IR_OPERANDS */\n")
         for arm in arms:
             assert arm.format is not None
-            program = programs[arm_owner_program(arm.format)]
-            out.emit(f"[{arm_id(arm)}] = {arm_row(arm, program)},  /* {arm.dotted} */\n")
+            out.emit(f"[{arm_id(arm)}] = {arm_row(arm)},  /* {arm.dotted} */\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
 
-        # The CFG reads the format of a stack op by its stack number
-        # (_PyRegCfg_FormatOf), or by its handler when a displacing arm is
-        # one (_PyIR_OpcodeHandler)
-        out.emit("PyAPI_DATA(const _PyIRFormat) _PyIR_StackOnlyFormats[256];\n")
+        # The translator reads the row of a stack op by its stack number, and
+        # of an arm by its handler (_PyRegCfg_FormatOf)
+        out.emit("PyAPI_DATA(const _PyStackFormat) _PyStack_Formats[256];\n")
+        out.emit(f"PyAPI_DATA(const _PyStackFormat) _PyStack_ArmFormats[{n}];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const _PyIRFormat _PyIR_StackOnlyFormats[256] = {\n")
+        out.emit("const _PyStackFormat _PyStack_Formats[256] = {\n")
         for op in sorted(STACK_OPS, key=lambda op: op.opcode):
-            out.emit(f"[{op.opcode}] = {stack_format_row(op)},  /* {op.name} */\n")
+            assert op.format is not None, op.name
+            out.emit(f"[{op.opcode}] = {stack_format_row(op.format)},  /* {op.name} */\n")
+        out.emit("};\n")
+        out.emit(f"const _PyStackFormat _PyStack_ArmFormats[{n}] = {{\n")
+        for arm in arms:
+            assert arm.format is not None
+            row = stack_format_row(arm_stack_format(arm.format))
+            out.emit(f"[{arm_id(arm)}] = {row},  /* {arm.dotted} */\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
 

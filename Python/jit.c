@@ -511,7 +511,7 @@ emit_continuation(_PyJitCompiler *c, uint32_t i)
         _PyJitAsm_TestRR(a, R(RCX), R(RCX));
         _PyJitAsm_Jcc(a, _PyJitCond_NE, c->backedge);
     }
-    else if ((fmt->effects & MAY_RUN_PYTHON) || (fmt->flags & _PyIR_STORE_DST)) {
+    else if ((fmt->effects & MAY_RUN_PYTHON) || _PyIR_HasDst(fmt)) {
         _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
         _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
         _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);

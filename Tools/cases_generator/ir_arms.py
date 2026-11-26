@@ -28,24 +28,11 @@ class ArmFormat:
     roles: tuple[str, str, str, str]
     imm: str
     fb: str
-    ninputs: int
-    dst: int | None           # None: _PyIR_NO_DST
-    borrow_mask: int
     fb_schema: str | None     # the schema name: Binary for FB_BINARY
     operands: str             # _PyIR_OPERANDS_*
     fixed_words: int          # operand words after the head
-    writes: int
     transfer: str             # _PyIR_TRANSFER_*: the normal edge's ownership
     target: str = "_PyIR_LOC_NONE"   # where a jump target lives (flag FORWARD)
-    # The words the observer reads at the edges of a branch: the format
-    # (reads, writes, through) says what the edge leaves in the homes
-    observer: str = "_PyIR_OBSERVER_NONE"
-    # The fact of the taken edge where it differs (a loop's exhaustion)
-    observer_taken: str | None = None
-    # Set where the stack positions that the word reads and passes through
-    # differ from its inputs (a window)
-    reads: int | None = None
-    through: int = 0
     # The word's homes (rop_generator.family_homes): the home group's parts
     # and the field naming its first, the homes that may be vacant when
     # read (bit h), the committed edges (bit e) and each home's state after

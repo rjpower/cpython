@@ -2293,6 +2293,159 @@ ir_normal_physical_transfer(PyObject *self, PyObject *args)
     return Py_BuildValue("(ii)", result.kind, result.source);
 }
 
+/* The migration check of WF2: for every register instruction of code, every
+ * scratch home and normal edge, the answers of the readers in
+ * pycore_ir_outcomes.h that decode stack shapes, beside those of the homes
+ * view (_PyIR_WordHomes).  Returns the differences as tuples
+ * (pc, handler, reader, edge, scratch index, old, new). */
+static int
+home_oracle_add(PyObject *out, int pc, int handler, const char *reader,
+                int edge, int index, PyObject *old, PyObject *new)
+{
+    if (old == NULL || new == NULL) {
+        Py_XDECREF(old);
+        Py_XDECREF(new);
+        return -1;
+    }
+    int same = PyObject_RichCompareBool(old, new, Py_EQ);
+    if (same < 0) {
+        Py_DECREF(old);
+        Py_DECREF(new);
+        return -1;
+    }
+    int rc = 0;
+    if (!same) {
+        PyObject *row = Py_BuildValue("(issiiOO)", pc, _PyIR_HandlerName(handler),
+                                      reader, edge, index, old, new);
+        rc = row == NULL ? -1 : PyList_Append(out, row);
+        Py_XDECREF(row);
+    }
+    Py_DECREF(old);
+    Py_DECREF(new);
+    return rc;
+}
+
+static PyObject *
+observed_at(int ok, const _PyIRObservedHomes *observed, int home)
+{
+    if (!ok) {
+        return Py_NewRef(Py_False);
+    }
+    for (int k = 0; k < observed->count; k++) {
+        if (observed->home[k] == home) {
+            return Py_BuildValue("(ii)", observed->physical[k], observed->old_cut[k]);
+        }
+    }
+    return Py_NewRef(Py_None);
+}
+
+/* What semantic_leaf_step does to a home's absence fact */
+static const char *
+absence_effect(int absence, int physical)
+{
+    if (absence == _PyIR_ABSENCE_SET_EMPTY) {
+        return "set";
+    }
+    if (absence == _PyIR_ABSENCE_SET_VALUE ||
+        (absence != _PyIR_ABSENCE_PRESERVE && physical != _PyIR_PHYSICAL_PRESERVE))
+    {
+        return "clear";
+    }
+    return "keep";
+}
+
+static PyObject *
+ir_home_oracle(PyObject *self, PyObject *arg)
+{
+    if (!PyCode_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a code object");
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)arg;
+    if (_PyCode_GetExec(code) == NULL) {
+        return NULL;
+    }
+    int n = (int)_PyCode_IRSize(code), nl = _PyCode_IRFixed(code);
+    int limit = code->co_framesize - FRAME_SPECIALS_SIZE;
+    PyObject *out = PyList_New(0);
+    if (out == NULL) {
+        return NULL;
+    }
+    for (int pc = 0; pc < n; pc += _PyCode_InstrLength(code, pc)) {
+        const _PyIRWord *wp = &_PyCode_IRWords(code)[pc];
+        _PyIRWord word = *wp;
+        int handler = IR_HANDLER(word);
+        if (handler < IR_NUM_OLD_HANDLERS || handler >= IR_NUM_HANDLERS) {
+            continue;
+        }
+        int oparg = _PyCode_InstrOparg(code, pc);
+        _PyIRHomes v;
+        _PyIR_WordHomes(word, &v);
+        _PyIRObservedHomes old_seen[2], new_seen[2];
+        int old_ok[2], new_ok[2];
+        for (int e = 0; e < 2; e++) {
+            old_ok[e] = _PyIR_ObservedHomes(word, e, nl, limit, &old_seen[e]);
+            new_ok[e] = _PyIR_HomesObserved(word, e, nl, limit, &new_seen[e]);
+        }
+        for (int home = nl; home < limit; home++) {
+            int index = home - nl;
+            for (int e = 0; e < 2; e++) {
+                /* An edge the word never takes has no answer to compare */
+                if (!(v.fmt->normal & (1u << e))) {
+                    continue;
+                }
+                _PyIRPhysicalTransfer a = _PyIR_NormalPhysicalTransfer(
+                    wp, oparg, e, home, nl, limit);
+                _PyIRPhysicalTransfer b = _PyIR_HomesPhysicalAt(
+                    wp, oparg, e, home, nl, limit);
+                if (home_oracle_add(out, pc, handler, "physical", e, index,
+                                    PyLong_FromLong(a.kind),
+                                    PyLong_FromLong(b.kind)) < 0 ||
+                    home_oracle_add(out, pc, handler, "observed", e, index,
+                                    observed_at(old_ok[e], &old_seen[e], home),
+                                    observed_at(new_ok[e], &new_seen[e], home)) < 0)
+                {
+                    goto error;
+                }
+            }
+            int old_touched = _PyIR_ReadsHome(wp, oparg, home) ||
+                              _PyIR_DefinesHome(word, oparg, home);
+            for (int e = 0; e < 2; e++) {
+                _PyIRSlotOutcome outcome = _PyIR_Outcome(word, e);
+                old_touched |= outcome.semantic &&
+                    ((home >= outcome.first && home - outcome.first < outcome.count) ||
+                     home == outcome.dst);
+            }
+            int new_touched = _PyIR_HomeTouched(&v, home) ||
+                              _PyIR_ReadsHome(wp, oparg, home);
+            int old_nullable = _PyIR_ReadsHome(wp, oparg, home) &&
+                               _PyIR_NullableHomeAs(word, wp, oparg, home);
+            int new_nullable = _PyIR_HomesNullableAs(word, wp, home);
+            if (home_oracle_add(out, pc, handler, "touched", -1, index,
+                                PyBool_FromLong(old_touched),
+                                PyBool_FromLong(new_touched)) < 0 ||
+                home_oracle_add(out, pc, handler, "nullable", -1, index,
+                                PyBool_FromLong(old_nullable),
+                                PyBool_FromLong(new_nullable)) < 0 ||
+                (v.fmt->normal &&
+                 home_oracle_add(out, pc, handler, "absence", -1, index,
+                    PyUnicode_FromString(absence_effect(
+                        _PyIR_NormalCallAbsence(wp, oparg, home, nl, limit),
+                        _PyIR_NormalPhysicalTransfer(wp, oparg, 0, home, nl, limit).kind)),
+                    PyUnicode_FromString(absence_effect(
+                        _PyIR_HomesAbsence(wp, oparg, home, nl, limit),
+                        _PyIR_HomesPhysicalAt(wp, oparg, -1, home, nl, limit).kind))) < 0))
+            {
+                goto error;
+            }
+        }
+    }
+    return out;
+error:
+    Py_DECREF(out);
+    return NULL;
+}
+
 /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
  * relax, for code compiled from now on, and return the previous one. */
 static PyObject *
@@ -5597,6 +5750,7 @@ static PyMethodDef module_functions[] = {
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
     {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},
+    {"ir_home_oracle", ir_home_oracle, METH_O, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

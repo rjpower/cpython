@@ -36,7 +36,7 @@ from rop_cgen import (ESCAPING, Lowering, Unsupported, inline_rows, lower_arm,
 from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, FieldKind,
                          Handle, Slot, Wrap)
 from rop_check import Program, select_dimension
-from rop_model import Arm, HandleType, Param, WrapType
+from rop_model import Arm, Encoding, HandleType, Param, WrapType
 from rop_print import type_text
 from rop_ssa import SsaError
 
@@ -574,6 +574,12 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
             # No exit of the family goes to the target: the word names it for
             # sys.monitoring
             flags.append("_PyIR_NAMES_TARGET")
+    observers = (("_PyIR_OBSERVER_NONE" if send_window else
+                  "_PyIR_OBSERVER_FOR_BODY" if window else
+                  "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE"),
+                 # A loop step's item is the body's input; its exhaustion completes
+                 "_PyIR_OBSERVER_COMPLETION" if window else None)
+    homes = word_homes(program, arm.family, enc, params)
     return ir_arms.ArmFormat(
         tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
         imm, fb, ninputs,
@@ -583,12 +589,10 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
         0 if has_args else enc.words, writes + pair_writes, arm_transfer(exits, ninputs, arm.family, writes or pair_writes > 0 or bool(
             {e.name for e in arm.contract.effect_set} & HOME_EFFECTS)), target,
-        ("_PyIR_OBSERVER_NONE" if send_window else
-         "_PyIR_OBSERVER_FOR_BODY" if window else
-         "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE"),
-        # A loop step's item is the body's input; its exhaustion completes
-        "_PyIR_OBSERVER_COMPLETION" if window else None,
-        reads, through)
+        observers[0], observers[1], reads, through,
+        committed=sum(1 << e for e, o in enumerate((observers[0], observers[1] or observers[0]))
+                      if o != "_PyIR_OBSERVER_NONE"),
+        **homes)
 
 
 
@@ -620,6 +624,10 @@ def arm_transfer(exits: set[str], ninputs: int, family: str, touches_homes: bool
 # Home states: what a family's word leaves in each of its homes on each
 # normal edge, from the points its arms publish there
 
+# Home h of a word: field h (A..D) for h < 4, part h - 3 of its group after
+HOME_FIELDS = 4
+HOME_CODES = {"PRESERVE": 0, "VACATE": 1, "DEFINE": 2, "UNKNOWN": 3}
+
 class HomeState(enum.Enum):
     """A home after a normal edge (_PyIR_HOME_*)"""
     PRESERVE = "PRESERVE"   # untouched, or read and kept with its owner
@@ -640,6 +648,8 @@ class FamilyHomes:
     group: int
     out: bool
     edges: tuple[Mapping[str, HomeState], Mapping[str, HomeState]]
+    # bit e: an arm, observed wrapper or completion of the family takes edge e
+    normal: int = 0
 
 
 def point_states(program: Program, operands: Mapping[str, object],
@@ -682,7 +692,10 @@ def family_homes(program: Program, family: str) -> FamilyHomes:
     arms = [a.name for a in (*program.arms.values(), *program.completions.values())
             if a.family == family]
     edges = []
+    normal = 0
     for edge in (rop_verify.EDGE_NEXT, rop_verify.EDGE_TAKEN):
+        if any(e == edge for a in arms for e, _ in program.exit_points.get(a, ())):
+            normal |= 1 << edge
         seen: dict[str, set[HomeState]] = {h: set() for h in homes}
         for name in sorted({pt for a in arms for e, pt in program.exit_points.get(a, ())
                             if e == edge}, key=lambda n: n or ""):
@@ -693,7 +706,37 @@ def family_homes(program: Program, family: str) -> FamilyHomes:
                       for h, s in seen.items()})
     return FamilyHomes(tuple(homes), frozenset(read),
                        frozenset(rop_check.vacant_homes(fam)), group, out,
-                       (edges[0], edges[1]))
+                       (edges[0], edges[1]), normal)
+
+
+def word_homes(program: Program, family: str, enc: Encoding,
+               params: Mapping[str, Param]) -> dict[str, int]:
+    """The ArmFormat home fields of the family's words: family_homes laid
+    out by the fields its encoding gives each home operand"""
+    fh = family_homes(program, family)
+    index: dict[str, int] = {}
+    group_at = 0
+    for pl in enc.placements:
+        if pl.kind is not FieldKind.home:
+            continue
+        if not pl.slots or pl.slots[0] not in HEAD_FIELDS:
+            raise GenerateError(f"{family}: home operand {pl.operand} is not in a "
+                                "field of the head")
+        field = HEAD_FIELDS[pl.slots[0]]
+        parts = rop_check.group_parts(params[pl.operand].type)
+        if parts:
+            group_at = field
+            names = rop_check.expand_group(pl.operand, {pl.operand: params[pl.operand].type})
+            index[names[0]] = field
+            for i, name in enumerate(names[1:]):
+                index[name] = HOME_FIELDS + i
+        else:
+            index[pl.operand] = field
+    assert set(index) == set(fh.homes), (family, index, fh.homes)
+    edges = sum(HOME_CODES[state.value] << 2 * (6 * e + index[h])
+                for e, states in enumerate(fh.edges) for h, state in states.items())
+    return {"group": fh.group, "group_at": group_at, "normal": fh.normal,
+            "vacant": sum(1 << index[h] for h in fh.vacant), "edges": edges}
 
 
 def observer(program: Program, family: str) -> str | None:

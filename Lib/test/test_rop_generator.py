@@ -477,6 +477,23 @@ class HomeStateTests(unittest.TestCase):
                             self.assertEqual({edge[n] for n in group},
                                              {rop_generator.HomeState.DEFINE})
 
+    def test_the_word_format_lays_the_homes_out_by_field(self):
+        # ForIter(item:Dst, pair:IterPair): item is home 0 (A), the receiver
+        # home 1 (B), the cursor home 4; two bits per home and edge
+        fmt = rop_generator.arm_format(self.program, self.program.arms["ForIter.Generic"])
+        P, V, D, U = range(4)
+        def at(edge, home, state):
+            return state << 2 * (6 * edge + home)
+        self.assertEqual((fmt.group, fmt.group_at, fmt.normal, fmt.vacant),
+                         (2, 1, 0b11, 1 << 4))
+        self.assertEqual(fmt.edges, at(0, 0, D) | at(0, 1, P) | at(0, 4, U) |
+                                    at(1, 0, P) | at(1, 1, V) | at(1, 4, V))
+        # IterOpen(pair:Out<IterPair>, source:Src) defines the pair
+        fmt = rop_generator.arm_format(self.program, self.program.arms["IterOpen.Generic"])
+        self.assertEqual((fmt.group, fmt.group_at, fmt.normal, fmt.vacant),
+                         (2, 0, 0b01, 0))
+        self.assertEqual(fmt.edges, at(0, 0, D) | at(0, 4, D) | at(0, 1, V))
+
     def test_every_normal_exit_names_a_point_of_its_family(self):
         for name, pairs in self.program.exit_points.items():
             family = rop_verify.arm_of(self.program, name).family

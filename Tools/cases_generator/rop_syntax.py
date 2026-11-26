@@ -321,10 +321,11 @@ class Parser:
             entry = self.ident("a classifier case").text
             self.expect(")")
         observes = self.accept("observes") is not None
+        trailing = self.accept("trailing") is not None
         contract = self.contract(exits=True)
         graph = self.graph()
         return Arm(name.text, region, contract, graph, start.span, select, entry, observes,
-                   completion)
+                   completion, trailing)
 
     def macro(self) -> Macro:
         start = self.take()

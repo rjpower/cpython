@@ -110,8 +110,8 @@ instr_length(PyCodeObject *code, int i)
     int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
     if ((opcode == FOR_ITER || opcode == SEND || opcode == POP_JUMP_IF_TRUE ||
          opcode == POP_JUMP_IF_NONE) && i + length + 1 < _PyCode_IRSize(code) &&
-        _PyCode_InstrHandler(code, i + length) == IR_JUMP &&
-        _PyCode_InstrHandler(code, i + length + 1) == IR_JUMP &&
+        _PyCode_IsTrailing(code, i + length) &&
+        _PyCode_IsTrailing(code, i + length + 1) &&
         _PyCode_InstrTarget(code, i) == i + length + 1 &&
         _PyCode_InstrTarget(code, i + length) == i + length + 2)
     {
@@ -133,7 +133,7 @@ is_relaxation_jump(PyCodeObject *code, int head, int i)
 static inline int
 line_landing(PyCodeObject *code, int dest)
 {
-    if (_PyCode_InstrHandler(code, dest) != IR_JUMP) {
+    if (!_PyCode_IsTrailing(code, dest)) {
         return dest;
     }
     // The head is up to a head with one operand word and a jump before

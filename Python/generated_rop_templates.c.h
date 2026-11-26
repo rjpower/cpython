@@ -85,7 +85,7 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->builtins_version, uint32_t: 1, de
 static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
               "recipe Global.index: _PyGlobalRecipe.index is not uint32_t");
 //
-// 34 templates.  Inline arms that keep the call of their form:
+// 35 templates.  Inline arms that keep the call of their form:
 //   AttrWrite.Hint: AttrWrite.Hint: home has no leaf lowering
 //   AttrWrite.Instance: AttrWrite.Instance: home has no leaf lowering
 //   AttrWrite.Shape: AttrWrite.Shape: admitted_store_shape has no leaf lowering
@@ -2525,6 +2525,20 @@ jit_template_BranchNone_Test(_PyJitWordCx *cx)
 //     jump
 static void
 jit_template_Jump_Direct(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_Jmp(a, cx->target);
+}
+
+// The leaf graph of Jump.Trailing:
+//   b0:
+//     jump
+static void
+jit_template_Jump_Trailing(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
     _PyIRWord ir_word = cx->word;

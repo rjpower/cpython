@@ -1275,7 +1275,7 @@ class RelaxationTest(unittest.TestCase):
         index = [k for k, word in enumerate(ir) if word[0] == opname][0]
         jumps = []
         for word in ir[index + 1:]:
-            if word[0] != "IR_JUMP":
+            if word[0] != "Jump.Trailing":
                 break
             jumps.append(word[0])
         return index, jumps
@@ -1302,7 +1302,7 @@ class RelaxationTest(unittest.TestCase):
             self.assertEqual(f(gen(4)), 6 * nlines)
             self.assertEqual(f(()), 0)
         index, jumps = self.relaxed(f, "ForIter.Generic")
-        self.assertEqual(jumps, ["IR_JUMP"] * 2)
+        self.assertEqual(jumps, ["Jump.Trailing"] * 2)
         # The loop exits by distance 1, to the second jump
         self.assertTrue(handlers(f)[index].startswith("ForIter."))
         AssemblerTest.check_offsets(self, f)
@@ -1350,7 +1350,7 @@ class RelaxationTest(unittest.TestCase):
         namespace = relaxed_compile(source)
         for name in ("outer", "co"):
             _, jumps = self.relaxed(namespace[name], "Send.Generic")
-            self.assertEqual(jumps, ["IR_JUMP"] * 2)
+            self.assertEqual(jumps, ["Jump.Trailing"] * 2)
         expected = [1, 5, "done", "stop", "a", "b"]
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(namespace["run"](), expected)
@@ -1370,7 +1370,7 @@ class RelaxationTest(unittest.TestCase):
         """
         relaxed = relaxed_compile(source)["f"]
         plain = make_function(source)
-        self.assertEqual(self.relaxed(relaxed, "ForIter.Generic")[1], ["IR_JUMP"] * 2)
+        self.assertEqual(self.relaxed(relaxed, "ForIter.Generic")[1], ["Jump.Trailing"] * 2)
         self.assertEqual(self.relaxed(plain, "ForIter.Generic")[1], [])
 
         def branches(func):

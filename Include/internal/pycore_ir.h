@@ -12,7 +12,6 @@ extern "C" {
 #include "ir_handler_ids.h"      // IR_H_*, IR_NUM_HANDLERS
 
 /* The handlers of the words that are not instructions: handler-only names */
-#define IR_JUMP IR_H_IR_JUMP
 #define IR_OPERANDS IR_H_IR_OPERANDS
 #include "pycore_feedback.h"    // _PyFbBlock, _PyFbHeader
 #include "pycore_structs.h"     // _PyIRWord
@@ -28,7 +27,7 @@ extern "C" {
  *     +----------+----------+----------+----------+----------+
  *
  * The handler of an instruction that has an opcode is that opcode.  The
- * handlers of the IR only (IR_JUMP, BINARY_OP_ADD, ...) take the numbers
+ * handlers of the IR only (Jump.Trailing, BINARY_OP_ADD, ...) take the numbers
  * below 256 that no opcode holds, then continue from 256 (a
  * pseudo-instruction has no handler, so its number is free).
  * _PyIR_IsOnlyHandler tells them from the opcodes.  A, B, C and D are 12-bit fields,
@@ -869,7 +868,7 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
 
 /* The opcode of the stack instruction that handler stands for, without
  * specialisation or instrumentation: BINARY_OP for BINARY_OP_ADD, LOAD_ATTR
- * for LOAD_ATTR.  IR_JUMP, which has no stack instruction, is
+ * for LOAD_ATTR.  Jump.Trailing, which has no stack instruction, is
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
@@ -968,6 +967,10 @@ PyAPI_FUNC(int) _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode);
 /* Whether the word at index i of co has a handler that monitoring selects
  * by tools, not by rewriting its opcode (_PyIR_H_TWIN_BY_TOOLS). */
 PyAPI_FUNC(int) _PyCode_TwinByTools(PyCodeObject *co, int i);
+
+/* Whether the word at index i of co is a jump that the assembler adds after
+ * a relaxed FOR_ITER, SEND or conditional branch (_PyIR_H_TRAILING). */
+PyAPI_FUNC(int) _PyCode_IsTrailing(PyCodeObject *co, int i);
 
 /* Rewrite the handler of the word at instr of an executing copy, for
  * specialisation and instrumentation.  The fields never change, but other

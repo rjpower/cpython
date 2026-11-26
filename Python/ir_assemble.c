@@ -1296,10 +1296,15 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
     return SUCCESS;
 }
 
+/* The trailing jump at word index `at` to word index `target`: a signed
+ * distance from the next word, in the fields A and B as every Jump arm
+ * has it */
 static inline _PyIRWord
-jump_word(int target)
+jump_word(int at, int target)
 {
-    return IR_WORD(IR_JUMP, 0, 0, target & IR_FIELD_MAX, target >> 12);
+    int distance = target - (at + 1);
+    return IR_WORD(ROP_HANDLER_Jump_Trailing, distance & IR_FIELD_MAX,
+                   (distance >> 12) & IR_FIELD_MAX, 0, 0);
 }
 
 /* The words and the feedback table, in a->a_words and a->a_fbinit */
@@ -1351,26 +1356,26 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                     // A relaxed branch: its fall-through word jumps over
                     // the second jump, which goes to the target
                     int k = _PyIR_FormatOf(op->handler)->fixed_words;
-                    words[w + 1 + k] = jump_word(w + RELAXED_BRANCH_WORDS + k);
-                    words[w + 2 + k] = jump_word(jump_target(cfg, op));
+                    words[w + 1 + k] = jump_word(w + 1 + k, w + RELAXED_BRANCH_WORDS + k);
+                    words[w + 2 + k] = jump_word(w + 2 + k, jump_target(cfg, op));
                 }
             }
             else if (op->nwords > 1) {
                 int exit = jump_target(cfg, op);
                 if (IS_FOR_ITER(op)) {
-                    words[w + 1] = jump_word(w + RELAXED_FOR_ITER_WORDS);
-                    words[w + 2] = jump_word(exit);
+                    words[w + 1] = jump_word(w + 1, w + RELAXED_FOR_ITER_WORDS);
+                    words[w + 2] = jump_word(w + 2, exit);
                 }
                 else if (_PyIR_FormatOf(op->handler)->target != _PyIR_LOC_NONE) {
                     // The branch reaches the second jump; the word after the
                     // branch skips it
-                    words[w + 1] = jump_word(w + RELAXED_BRANCH_WORDS);
-                    words[w + 2] = jump_word(exit);
+                    words[w + 1] = jump_word(w + 1, w + RELAXED_BRANCH_WORDS);
+                    words[w + 2] = jump_word(w + 2, exit);
                 }
                 else {
                     assert(IS_SEND(op));
-                    words[w + 1] = jump_word(w + RELAXED_SEND_WORDS);
-                    words[w + 2] = jump_word(exit);
+                    words[w + 1] = jump_word(w + 1, w + RELAXED_SEND_WORDS);
+                    words[w + 2] = jump_word(w + 2, exit);
                 }
             }
         }

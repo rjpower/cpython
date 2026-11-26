@@ -897,9 +897,6 @@ PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
  * machinery read a word's origin here, whatever handler the word has. */
 PyAPI_FUNC(int) _PyIR_OriginOpcode(PyCodeObject *co, int word);
 
-/* The opcode that sys.monitoring sees the word as: the base opcode. */
-PyAPI_FUNC(int) _PyIR_EventOpcode(int handler);
-
 /* The handler that the executing copy of co starts with at index i: the
  * generic handler.
  * Deoptimisation and de-instrumentation restore it. */

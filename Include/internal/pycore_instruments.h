@@ -159,7 +159,7 @@ typedef struct _PyCoMonitoringData {
     /* Information to support instruction events */
     /* Per word, whether the instruction under an INSTRUCTION wrapper is
      * observed (_PyCo_ flags) */
-    uint8_t *per_instruction_opcodes;  /* state flags, not opcodes: kept under its name for the free in codeobject.c, to be renamed with the WF3 sites */
+    uint8_t *per_instruction_state;
     /* The tools that are to be notified for instruction events for the matching code unit */
     uint8_t *per_instruction_tools;
 } _PyCoMonitoringData;
@@ -168,7 +168,7 @@ extern int
 _Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index);
 
 /* The flags in the first byte of a lines[] entry and in a
- * per_instruction_opcodes[] entry.  What a LINE or INSTRUCTION wrapper
+ * per_instruction_state[] entry.  What a LINE or INSTRUCTION wrapper
  * displaced is the code object's own handler for the word, which monitoring
  * never rewrites (_PyCode_HandlerFor), or its observed twin: the flags say
  * which. */

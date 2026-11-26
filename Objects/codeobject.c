@@ -1139,8 +1139,8 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                 block_at[i + length] = 1;
             }
         }
-        if (IS_SCOPE_EXIT_OPCODE(_PyIR_OpcodeBase[
-                _PyIR_BaseOpcode(IR_HANDLER(words[i]))]) && i + length < n)
+        // A word with no normal edge ends its block
+        if (fmt->normal == 0 && i + length < n)
         {
             block_at[i + length] = 1;
         }
@@ -1322,10 +1322,8 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                 (void)semantic_step(image, &work, state, i, 0, &complete);
             }
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
-            int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
             memcpy(work.branch, state, state_words * sizeof(uint64_t));
-            if (end < n && !(fmt->flags & _PyIR_JUMP_ALWAYS) &&
-                !IS_SCOPE_EXIT_OPCODE(_PyIR_OpcodeBase[opcode]))
+            if (end < n && (fmt->normal & 1))
             {
                 semantic_enqueue(&work, block_at[end], state, complete);
             }
@@ -1373,7 +1371,7 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                 break;
             }
             int handler = IR_HANDLER(words[i]);
-            if (_PyIR_BaseOpcode(handler) == RETURN_VALUE) {
+            if (_PyIR_HandlerFamily[handler] == IR_FAMILY_Return) {
                 /* The translator selects Return.Empty from its stack depth.
                  * Facts that every word on the way proves must agree; a word
                  * without a transfer contract (an arm whose exits give none)
@@ -3090,8 +3088,8 @@ free_monitoring_data(_PyCoMonitoringData *data)
     }
     PyMem_Free(data->source_line_tools);
     PyMem_Free(data->source_forced);
-    if (data->per_instruction_opcodes) {
-        PyMem_Free(data->per_instruction_opcodes);
+    if (data->per_instruction_state) {
+        PyMem_Free(data->per_instruction_state);
     }
     if (data->per_instruction_tools) {
         PyMem_Free(data->per_instruction_tools);

@@ -80,12 +80,6 @@ _PyCodeIR _PyIR_InitCleanupIR = {
 
 /* Decoding */
 
-int
-_PyIR_EventOpcode(int handler)
-{
-    return _PyIR_BaseOpcode(handler);
-}
-
 const char *
 _PyIR_HandlerName(int handler)
 {

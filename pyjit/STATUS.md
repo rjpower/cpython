@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `d8cb2109192` (pushed) holds:
+`pyjit/rir90` at `aeb9f76b65c` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -102,11 +102,17 @@ interpreter hold no reference to the stack at step D, and tests check it.
   maps and the `shadow` field are deleted, and the `.rop` sources have no
   `ops(...)` clause;
 - PAR: the tests that expected stack specialization names (`test_embed`,
-  `test_type_cache`, `test_pyvalue`) ask which register arm a word runs.
+  `test_type_cache`, `test_pyvalue`) ask which register arm a word runs;
+- D's correction of a root error: item 6 had moved the `.rop` `ops(...)`
+  clauses into `stack_ops.py` as a static stack-op-to-family table, which
+  the user had ruled out (no fixed lowering per stack op).  The table is
+  deleted; the stack-op schema keeps encoding facts only, every stack op
+  the compiler emits has a translator rule, an op without one is refused,
+  and a test checks that a translator rule emits every family.
 
 No word runs an inherited handler. The last merge check passed the smoke set
 on release and assert, and the verifier reports no error over 108,949 code
-objects. The full suites at `0a81f42d9bf` (release and assert, JIT off)
+objects (108,951 at the last merge). The full suites at `0a81f42d9bf` (release and assert, JIT off)
 failed only the three stale specialization tests PAR then fixed, and the
 id-shifted guard build passes at `d8cb2109192`. Ports keep the old handlers' object locks and turn every old
 specialization into an arm.
@@ -127,11 +133,10 @@ executes 2.05 times golden87's instructions at an IPC of 2.06 against 3.08;
 rest.
 
 Running:
-- D corrects a root error: item 6 moved the `.rop` `ops(...)` clauses into
-  `stack_ops.py` as a static stack-op-to-family table (`LOWERS_TO`), which
-  the user had ruled out (no fixed lowering per stack op).  The lowering
-  moves wholly into the translator's rules, and the table, the legacy
-  default rule and the opcode-indexed lowering array go.
+- D rewrites the test disassembler (`test.support.ir_dis`) to show words
+  as arms with register operands and edges, from declared exports.  It
+  showed each word as a stack instruction through a copy of the deleted
+  table; its 26 test modules are restated in arms.
 - IP (Opus) diagnoses the interpreter gap by structural cause and ranks the
   design changes; perf-parity units follow, then the JIT.
 

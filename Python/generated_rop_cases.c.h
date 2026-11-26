@@ -1079,6 +1079,176 @@
             IR_REDIRECT();
         }
 
+        TARGET(Send_Generic) {
+            // Send.Generic (split)
+            int opcode = ROP_HANDLER_Send_Generic;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Send_Generic);
+            PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow adapt_before_use_send1_g;
+            PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+            PyValueBorrow adapt_before_use_send1_v;
+            PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+            PyValueBorrow adapt_before_use_send1_c;
+            bool won;
+            PyValueBorrow g;
+            PyValue sent;
+            _PyInterpreterFrame * c;
+            int adapt_before_use_send1_c_gen;
+            int ret1;
+            int adapt_before_use_send1_c_virtual;
+            int ret2;
+            int adapt_before_use_send1_c_async;
+            int ret3;
+            _PyRopAnchors a;
+            PyValue out4;
+            _PyStatusValue ret5;
+            PyValue arg6;
+            PyValue arg7;
+            PyValue old_send_cursor;
+            PyValue old_send_value;
+            PyValue own_send_receiver = PyValue_NULL;
+            PyValue own_send_cursor = PyValue_NULL;
+            PyValue old_completed;
+            PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+            PyValue y;
+            PyValue nc;
+            PyValue rv;
+            adapt_before_use_send1_g = PyValue_Borrow(*home_send_receiver);
+            adapt_before_use_send1_v = PyValue_Borrow(*home_send_value);
+            adapt_before_use_send1_c = PyValue_Borrow(*home_send_cursor);
+            if (!_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h)) {
+                goto rop_Send_Generic_adapt_before_use_send1_Sample;
+            }
+            rop_Send_Generic_adapt_before_use_send1_Run:
+            rop_Send_Generic_Run:
+            won = _PyRop_ClaimGenerator(tstate, PyValue_Borrow(*home_send_receiver), PyValue_Borrow(*home_send_value));
+            if (won) {
+                goto rop_Send_Generic_Claim;
+            }
+            goto rop_Send_Generic_Step;
+            rop_Send_Generic_Claim:
+            g = PyValue_Borrow(*home_send_receiver);
+            sent = _PyFrame_TakeHome(frame, home_send_value);
+            c = _PyRop_EnterClaimed(tstate, frame, g, sent);
+            ROP_ENTER(c, (IR_B(ir_word) + 2));
+            rop_Send_Generic_adapt_before_use_send1_Sample:
+            if (_PyRop_GeneratorReceiver(adapt_before_use_send1_g)) {
+                goto rop_Send_Generic_adapt_before_use_send1_PickGen;
+            }
+            goto rop_Send_Generic_adapt_before_use_send1_TryVirtual;
+            rop_Send_Generic_adapt_before_use_send1_PickGen:
+            adapt_before_use_send1_c_gen = ROP_HANDLER_Send_Gen;
+            ret1 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_send1_c_gen);
+            if (ret1 == 0) {
+                goto rop_Send_Generic_adapt_before_use_send1_Run;
+            }
+            if (ret1 < 0) {
+                goto rop_Send_Generic_adapt_before_use_send1_Run;
+            }
+            rop_Send_Generic_adapt_before_use_send1_Changed:
+            next_instr = this_instr;
+            DISPATCH_SAME_OPARG();
+            rop_Send_Generic_adapt_before_use_send1_TryVirtual:
+            if (_PyRop_HasIterItem(adapt_before_use_send1_g)) {
+                goto rop_Send_Generic_adapt_before_use_send1_PickVirtual;
+            }
+            goto rop_Send_Generic_adapt_before_use_send1_TryAsync;
+            rop_Send_Generic_adapt_before_use_send1_PickVirtual:
+            adapt_before_use_send1_c_virtual = ROP_HANDLER_Send_Virtual;
+            ret2 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_send1_c_virtual);
+            if (ret2 > 0) {
+                goto rop_Send_Generic_adapt_before_use_send1_Changed;
+            }
+            if (ret2 == 0) {
+                goto rop_Send_Generic_adapt_before_use_send1_Run;
+            }
+            goto rop_Send_Generic_adapt_before_use_send1_Run;
+            rop_Send_Generic_adapt_before_use_send1_TryAsync:
+            if (_PyRop_IsAsyncGenASend(adapt_before_use_send1_g)) {
+                goto rop_Send_Generic_adapt_before_use_send1_PickAsync;
+            }
+            goto rop_Send_Generic_adapt_before_use_send1_Backoff;
+            rop_Send_Generic_adapt_before_use_send1_PickAsync:
+            adapt_before_use_send1_c_async = ROP_HANDLER_Send_AsyncGen;
+            ret3 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_send1_c_async);
+            if (ret3 > 0) {
+                goto rop_Send_Generic_adapt_before_use_send1_Changed;
+            }
+            if (ret3 == 0) {
+                goto rop_Send_Generic_adapt_before_use_send1_Run;
+            }
+            goto rop_Send_Generic_adapt_before_use_send1_Run;
+            rop_Send_Generic_adapt_before_use_send1_Backoff:
+            _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h);
+            goto rop_Send_Generic_Run;
+            rop_Send_Generic_Step:
+            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 3, {0, 0, 0}, {home_send_receiver, home_send_cursor, home_send_value}});
+            IR_STUB_ESCAPE();
+            ret5 = _PyRop_SendStep(tstate, frame, _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), _PyRop_AnchorArg(&a, 2), &out4);
+            if (ret5.status == 0) {
+                rv = ret5.value;
+                goto rop_Send_Generic_Done;
+            }
+            if (ret5.status < 0) {
+                goto rop_Send_Generic_Failed;
+            }
+            arg6 = ret5.value;
+            arg7 = out4;
+            y = arg6;
+            nc = arg7;
+            if (_PyRop_RedirectPending(frame)) {
+                goto rop_Send_Generic_YieldGone;
+            }
+            old_send_cursor = *home_send_cursor;
+            old_send_value = *home_send_value;
+            _PyFrame_WriteHome(frame, home_send_cursor, nc);
+            _PyValue_CheckHome(*home_send_cursor);
+            _PyFrame_WriteHome(frame, home_send_value, y);
+            _PyValue_CheckHome(*home_send_value);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(old_send_cursor);
+            PyValue_XCLOSE(old_send_value);
+            DISPATCH();
+            rop_Send_Generic_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
+            PROCESS_ERROR_AT(RAISE, 107, this_instr);
+            rop_Send_Generic_Done:
+            if (_PyRop_RedirectPending(frame)) {
+                goto rop_Send_Generic_DoneGone;
+            }
+            own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
+            own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
+            old_completed = *home_completed;
+            _PyFrame_WriteHome(frame, home_completed, rv);
+            _PyValue_CheckHome(*home_completed);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(own_send_receiver);
+            PyValue_XCLOSE(own_send_cursor);
+            PyValue_XCLOSE(old_completed);
+            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+            rop_Send_Generic_DoneGone:
+            IR_STUB_ESCAPE();
+            _PyRop_DiscardResult(rv);
+            IR_STUB_ESCAPE();
+            _PyRop_RetireAbandoned(&a);
+            IR_REDIRECT();
+            rop_Send_Generic_YieldGone:
+            IR_STUB_ESCAPE();
+            _PyRop_DiscardResult(y);
+            IR_STUB_ESCAPE();
+            _PyRop_DiscardResult(nc);
+            IR_STUB_ESCAPE();
+            _PyRop_RetireAbandoned(&a);
+            IR_REDIRECT();
+        }
+
         TARGET(Compare_Generic) {
             // Compare.Generic (shared)
             int opcode = ROP_HANDLER_Compare_Generic;
@@ -5769,65 +5939,85 @@
             IR_REDIRECT();
         }
 
-        TARGET(Send_Generic) {
-            // Send.Generic (split)
-            int opcode = ROP_HANDLER_Send_Generic;
+        TARGET(Send_Gen) {
+            // Send.Gen (split)
+            int opcode = ROP_HANDLER_Send_Gen;
             (void)opcode;
             _PyIRWord *const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(ROP_HANDLER_Send_Generic);
+            INSTRUCTION_STATS(ROP_HANDLER_Send_Gen);
             PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
             PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
             PyValueBorrow g;
             PyValue sent;
             void * ret1;
-            PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
-            _PyRopAnchors a;
-            PyValue out2;
-            _PyStatusValue ret3;
-            PyValue arg4;
-            PyValue arg5;
-            PyValue old_send_cursor;
-            PyValue old_send_value;
-            PyValue own_send_receiver = PyValue_NULL;
-            PyValue own_send_cursor = PyValue_NULL;
-            PyValue old_completed;
-            PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
             _PyInterpreterFrame * c;
-            PyValue y;
-            PyValue nc;
-            PyValue rv;
-            if (_PyRop_ClaimableGenerator(tstate, PyValue_Borrow(*home_send_receiver), PyValue_Borrow(*home_send_value))) {
-                goto rop_Send_Generic_Claim;
+            if (!_PyRop_ClaimableGenerator(tstate, PyValue_Borrow(*home_send_receiver), PyValue_Borrow(*home_send_value))) {
+                JUMP_TO_PREDICTED(Send_Generic);
             }
-            goto rop_Send_Generic_Step;
-            rop_Send_Generic_Claim:
             g = PyValue_Borrow(*home_send_receiver);
             sent = _PyFrame_TakeHome(frame, home_send_value);
             ret1 = _PyRop_EnterGenerator(tstate, frame, g, sent);
             if (ret1 == NULL) {
-                goto rop_Send_Generic_EnterFailed;
+                goto rop_Send_Gen_EnterFailed;
             }
             c = ret1;
             ROP_ENTER(c, (IR_B(ir_word) + 2));
-            rop_Send_Generic_Step:
-            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 3, {0, 0, 0}, {home_send_receiver, home_send_cursor, home_send_value}});
+            rop_Send_Gen_EnterFailed:
+            PROCESS_ERROR_AT(RAISE, 104, this_instr);
+        }
+
+        TARGET(Send_Virtual) {
+            // Send.Virtual (split)
+            int opcode = ROP_HANDLER_Send_Virtual;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Send_Virtual);
+            PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+            PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+            PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+            _PyRopAnchors a;
+            PyValue out1;
+            _PyStatusValue ret2;
+            PyValue arg3;
+            PyValue arg4;
+            PyValue old_send_cursor;
+            PyValue old_send_value;
+            PyValue own_send_receiver = PyValue_NULL;
+            PyValue own_send_cursor = PyValue_NULL;
+            PyValue own_send_value = PyValue_NULL;
+            PyValue old_completed;
+            PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+            PyValue y;
+            PyValue nc;
+            PyValue rv;
+            if (!PyValue_IsNone(PyValue_Borrow(*home_send_value))) {
+                JUMP_TO_PREDICTED(Send_Generic);
+            }
+            if (!_PyRop_CursorPresent(PyValue_Borrow(*home_send_cursor))) {
+                JUMP_TO_PREDICTED(Send_Generic);
+            }
+            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {0, 0}, {home_send_receiver, home_send_cursor}});
             IR_STUB_ESCAPE();
-            ret3 = _PyRop_SendStep(tstate, frame, _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), _PyRop_AnchorArg(&a, 2), &out2);
-            if (ret3.status == 0) {
-                rv = ret3.value;
-                goto rop_Send_Generic_Done;
+            ret2 = _PyRop_SendVirtual(_PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), &out1);
+            if (ret2.status == 0) {
+                rv = ret2.value;
+                goto rop_Send_Virtual_Done;
             }
-            if (ret3.status < 0) {
-                goto rop_Send_Generic_Failed;
+            if (ret2.status < 0) {
+                goto rop_Send_Virtual_Failed;
             }
-            arg4 = ret3.value;
-            arg5 = out2;
-            y = arg4;
-            nc = arg5;
+            arg3 = ret2.value;
+            arg4 = out1;
+            y = arg3;
+            nc = arg4;
             old_send_cursor = *home_send_cursor;
             old_send_value = *home_send_value;
             _PyFrame_WriteHome(frame, home_send_cursor, nc);
@@ -5838,23 +6028,97 @@
             PyValue_XCLOSE(old_send_cursor);
             PyValue_XCLOSE(old_send_value);
             DISPATCH();
-            rop_Send_Generic_Failed:
+            rop_Send_Virtual_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
             PROCESS_ERROR_AT(RAISE, 107, this_instr);
-            rop_Send_Generic_Done:
+            rop_Send_Virtual_Done:
             own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
             own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
+            own_send_value = _PyFrame_TakeHome(frame, home_send_value);
             old_completed = *home_completed;
             _PyFrame_WriteHome(frame, home_completed, rv);
             _PyValue_CheckHome(*home_completed);
             _PyRop_CloseAnchors(&a);
             PyValue_XCLOSE(own_send_receiver);
             PyValue_XCLOSE(own_send_cursor);
+            PyValue_XCLOSE(own_send_value);
             PyValue_XCLOSE(old_completed);
-            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 40) & 0xfff) ^ 0x800) - 0x800)));
-            rop_Send_Generic_EnterFailed:
-            PROCESS_ERROR_AT(RAISE, 104, this_instr);
+            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+        }
+
+        TARGET(Send_AsyncGen) {
+            // Send.AsyncGen (split)
+            int opcode = ROP_HANDLER_Send_AsyncGen;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Send_AsyncGen);
+            PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+            PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+            PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+            _PyRopAnchors a;
+            PyValue out1;
+            _PyStatusValue ret2;
+            PyValue arg3;
+            PyValue arg4;
+            PyValue old_send_cursor;
+            PyValue old_send_value;
+            PyValue own_send_receiver = PyValue_NULL;
+            PyValue own_send_cursor = PyValue_NULL;
+            PyValue own_send_value = PyValue_NULL;
+            PyValue old_completed;
+            PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+            PyValue y;
+            PyValue nc;
+            PyValue rv;
+            if (!_PyRop_IsAsyncGenASend(PyValue_Borrow(*home_send_receiver))) {
+                JUMP_TO_PREDICTED(Send_Generic);
+            }
+            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 3, {0, 0, 0}, {home_send_receiver, home_send_cursor, home_send_value}});
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_SendStep(tstate, frame, _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), _PyRop_AnchorArg(&a, 2), &out1);
+            if (ret2.status == 0) {
+                rv = ret2.value;
+                goto rop_Send_AsyncGen_Done;
+            }
+            if (ret2.status < 0) {
+                goto rop_Send_AsyncGen_Failed;
+            }
+            arg3 = ret2.value;
+            arg4 = out1;
+            y = arg3;
+            nc = arg4;
+            old_send_cursor = *home_send_cursor;
+            old_send_value = *home_send_value;
+            _PyFrame_WriteHome(frame, home_send_cursor, nc);
+            _PyValue_CheckHome(*home_send_cursor);
+            _PyFrame_WriteHome(frame, home_send_value, y);
+            _PyValue_CheckHome(*home_send_value);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(old_send_cursor);
+            PyValue_XCLOSE(old_send_value);
+            DISPATCH();
+            rop_Send_AsyncGen_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
+            PROCESS_ERROR_AT(RAISE, 107, this_instr);
+            rop_Send_AsyncGen_Done:
+            own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
+            own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
+            own_send_value = _PyFrame_TakeHome(frame, home_send_value);
+            old_completed = *home_completed;
+            _PyFrame_WriteHome(frame, home_completed, rv);
+            _PyValue_CheckHome(*home_completed);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(own_send_receiver);
+            PyValue_XCLOSE(own_send_cursor);
+            PyValue_XCLOSE(own_send_value);
+            PyValue_XCLOSE(old_completed);
+            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
         }
 
         TARGET(Send_Observed) {
@@ -5869,56 +6133,53 @@
             INSTRUCTION_STATS(ROP_HANDLER_Send_Observed);
             PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
             PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+            bool won;
             PyValueBorrow g;
             PyValue sent;
-            void * ret1;
+            _PyInterpreterFrame * c;
             PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
             _PyRopAnchors a;
-            PyValue out2;
-            _PyStatusValue ret3;
+            PyValue out1;
+            _PyStatusValue ret2;
+            PyValue arg3;
             PyValue arg4;
-            PyValue arg5;
             PyValue old_send_cursor;
             PyValue old_send_value;
-            _PyStatusValue ret6;
+            _PyStatusValue ret5;
             PyValue own_send_receiver = PyValue_NULL;
             PyValue own_send_cursor = PyValue_NULL;
             PyValue old_completed;
             PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
-            int ret7;
-            _PyInterpreterFrame * c;
+            int ret6;
             PyValue y;
             PyValue nc;
             PyValue rv;
             PyValue w;
-            if (_PyRop_ClaimableGenerator(tstate, PyValue_Borrow(*home_send_receiver), PyValue_Borrow(*home_send_value))) {
+            won = _PyRop_ClaimGenerator(tstate, PyValue_Borrow(*home_send_receiver), PyValue_Borrow(*home_send_value));
+            if (won) {
                 goto rop_Send_Observed_Claim;
             }
             goto rop_Send_Observed_Step;
             rop_Send_Observed_Claim:
             g = PyValue_Borrow(*home_send_receiver);
             sent = _PyFrame_TakeHome(frame, home_send_value);
-            ret1 = _PyRop_EnterGenerator(tstate, frame, g, sent);
-            if (ret1 == NULL) {
-                goto rop_Send_Observed_EnterFailed;
-            }
-            c = ret1;
+            c = _PyRop_EnterClaimed(tstate, frame, g, sent);
             ROP_ENTER(c, (IR_B(ir_word) + 2));
             rop_Send_Observed_Step:
             a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 3, {0, 0, 0}, {home_send_receiver, home_send_cursor, home_send_value}});
             IR_STUB_ESCAPE();
-            ret3 = _PyRop_SendStep(tstate, frame, _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), _PyRop_AnchorArg(&a, 2), &out2);
-            if (ret3.status == 0) {
-                rv = ret3.value;
+            ret2 = _PyRop_SendStep(tstate, frame, _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), _PyRop_AnchorArg(&a, 2), &out1);
+            if (ret2.status == 0) {
+                rv = ret2.value;
                 goto rop_Send_Observed_Done;
             }
-            if (ret3.status < 0) {
+            if (ret2.status < 0) {
                 goto rop_Send_Observed_Failed;
             }
-            arg4 = ret3.value;
-            arg5 = out2;
-            y = arg4;
-            nc = arg5;
+            arg3 = ret2.value;
+            arg4 = out1;
+            y = arg3;
+            nc = arg4;
             old_send_cursor = *home_send_cursor;
             old_send_value = *home_send_value;
             _PyFrame_WriteHome(frame, home_send_cursor, nc);
@@ -5935,14 +6196,14 @@
             PROCESS_ERROR_AT(RAISE, 107, this_instr);
             rop_Send_Observed_Done:
             IR_STUB_ESCAPE();
-            ret6 = _PyRop_SendStopEvent(tstate, frame, this_instr, _PyRop_AnchorArg(&a, 0), rv);
-            if (ret6.status > 0) {
+            ret5 = _PyRop_SendStopEvent(tstate, frame, this_instr, _PyRop_AnchorArg(&a, 0), rv);
+            if (ret5.status > 0) {
                 goto rop_Send_Observed_Moved;
             }
-            if (ret6.status < 0) {
+            if (ret5.status < 0) {
                 goto rop_Send_Observed_StopFailed;
             }
-            w = ret6.value;
+            w = ret5.value;
             own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
             own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
             old_completed = *home_completed;
@@ -5953,14 +6214,14 @@
             PyValue_XCLOSE(own_send_cursor);
             PyValue_XCLOSE(old_completed);
             IR_STUB_ESCAPE();
-            ret7 = _PyRop_SendExitEvent(tstate, frame, this_instr);
-            if (ret7 > 0) {
+            ret6 = _PyRop_SendExitEvent(tstate, frame, this_instr);
+            if (ret6 > 0) {
                 goto rop_Send_Observed_ExitMoved;
             }
-            if (ret7 < 0) {
+            if (ret6 < 0) {
                 goto rop_Send_Observed_ExitFailed;
             }
-            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 40) & 0xfff) ^ 0x800) - 0x800)));
+            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
             rop_Send_Observed_StopFailed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
@@ -5976,8 +6237,6 @@
             PROCESS_ERROR_AT(RAISE, 106, this_instr);
             rop_Send_Observed_ExitMoved:
             IR_REDIRECT();
-            rop_Send_Observed_EnterFailed:
-            PROCESS_ERROR_AT(RAISE, 104, this_instr);
         }
 
         TARGET(Compare_Int) {

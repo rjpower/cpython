@@ -93,8 +93,7 @@ from ir_read_effects import (
     value_nonnull_changes, value_transport_expression,
 )
 from ir_error_effects import (
-    HELPERS, HomeEffect, analyze_error_effects, checked_native_step_effects,
-)
+    HELPERS, HomeEffect, analyze_error_effects, )
 import re
 from dataclasses import dataclass, fields, replace
 
@@ -1265,56 +1264,6 @@ def place_fields(slots: list[str], has_fb: bool, imm_kind: str | None,
     return fields, imm, fb
 
 
-# What a SEND handler's uops may declare: they run Python and may enter a
-# generator's frame, never poll, and leave by these exits
-SEND_EFFECTS = frozenset(("reads", "writes", "allocates", "raises", "releases",
-                          "runs_python", "switches_frame"))
-SEND_EXITS = frozenset(("next", "branch", "jump", "miss", "deopt", "raise", "enter"))
-
-
-def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | None:
-    """The native-step source footprint shared by normal and abrupt edges:
-    the uops of a SEND handler up to the one that sends (the first that is
-    no pass-through), each declared.
-
-    The declarations are the contract (ir_contract.py verifies each body
-    against its own): the effects and exits of every uop lie within
-    SEND_EFFECTS and SEND_EXITS, a guard or specializer before the send
-    passes its three inputs through, and the send is three scalar inputs
-    and two or three outputs.  Normal transport still requires its final
-    flush or child publication; exceptional transport independently
-    requires every error/exit receipt.
-    """
-    if (fmt.group != "SEND" or not fmt.window or fmt.n_inputs != 0
-            or fmt.dst_offset != 2 or
-            any(not isinstance(part, (Uop, Skip)) for part in inst.parts)):
-        return None
-    inputs, outputs = external_io(inst)
-    if (len(inputs) != 3 or len(outputs) not in (2, 3) or
-        any(item.is_array() for item in inputs) or
-        any(entry.item.is_array() for entry in outputs)):
-        return None
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    for index, part in enumerate(parts):
-        contract = ir_contract.declared_contract(part)
-        if contract.effects - SEND_EFFECTS or contract.exits - SEND_EXITS:
-            return None
-        if any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs)):
-            return None
-        shape = ([item.name for item in part.stack.inputs],
-                 [item.name for item in part.stack.outputs])
-        if len(part.stack.inputs) == 3 and shape[0] != shape[1]:
-            # The send; its handler ends here, or it ends the handler
-            if index != len(parts) - 1 and not part.properties.always_exits:
-                return None
-            return tuple(parts[:index + 1])
-        # A guard or the specializer inspects or redispatches unchanged
-        # inputs, and acquires no frame or home-pointer capability
-        if shape[0] != shape[1] or contract.effects & {"writes", "switches_frame"}:
-            return None
-    return None
-
-
 def metadata_only_passthroughs(inst: Instruction) -> frozenset[int]:
     """An unread unchanged cursor whose dependency stays in the compiler."""
     markers = [token for token in uop_token_list(inst)
@@ -2013,72 +1962,6 @@ STORE_NEVER = "never"      # pushes more than the result, so dst never names
                            # a local
 
 
-@dataclass(frozen=True)
-class GeneratorEntryRecipe:
-    part: Uop
-    generator: str
-    kind: str
-
-
-def generator_entry_recipe(inst: Instruction) -> GeneratorEntryRecipe | None:
-    """The terminal intrinsic owns this child's yielded-result recipient.
-
-    This describes recipient transport only. The normal/error source contracts
-    still decide whether the surrounding operation preserves home authority.
-    Conditional entry in a generic SEND is not an unconditional return recipe.
-    """
-    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
-        return None
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    entries = [part for part in parts if any(
-        token.text == "IR_ENTER_GENERATOR" for token in part.body.tokens())]
-    if len(entries) != 1:
-        return None
-    entry = entries[0]
-    statements = entry.body.body
-    if not statements or not isinstance(statements[-1], SimpleStmt):
-        return None
-    tokens = list(statements[-1].tokens())
-    if (len(tokens) != 7 or tokens[0].text != "IR_ENTER_GENERATOR"
-            or tokens[1].kind != "LPAREN" or tokens[2].kind != "IDENTIFIER"
-            or tokens[3].kind != "COMMA" or tokens[5].kind != "RPAREN"
-            or tokens[6].kind != "SEMI"
-            or tokens[4].text not in {"_PY_IR_FOR_ITER", "_PY_IR_SEND"}
-            or sum(token.text == "IR_ENTER_GENERATOR"
-                   for token in entry.body.tokens()) != 1):
-        return None
-    if (set(entry.properties.escaping_calls) != {statements[-1]}
-            or any(token.text in {"frame", "slots", "window"}
-                   or token.text.startswith(("_PyFrame_", "_PyHomeBitmap_", "IR_"))
-                   for statement in statements[:-1] for token in statement.tokens())):
-        return None
-    kind = tokens[4].text
-    count = 2 if kind == "_PY_IR_FOR_ITER" else 3
-    if (len(entry.stack.inputs) != count or len(entry.stack.outputs) != 2
-            or any(item.is_array() for item in
-                   entry.stack.inputs + entry.stack.outputs)
-            or any(passed_through(entry, j) != j for j in range(2))):
-        return None
-    at = parts.index(entry)
-    for part in parts[:at]:
-        if not part.is_guard():
-            return None
-        effect = analyze_error_effects(replace(inst, parts=[part]), guard_prefix=True)
-        if (effect is None or effect.homes != HomeEffect.NO_ARENA_WRITE
-                or effect.callback or effect.changes_origin or effect.may_fail
-                or effect.error_sources or effect.unwind_sources):
-            return None
-    # The intrinsic's frame handoff is terminal: nothing follows it (VT2)
-    if parts[at + 1:]:
-        return None
-    inputs, outputs = external_io(inst)
-    if (len(inputs) != count or len(outputs) != 2
-            or any(item.is_array() for item in inputs)
-            or any(output.external != j for j, output in enumerate(outputs))):
-        return None
-    return GeneratorEntryRecipe(entry, tokens[2].text, kind)
-
-
 def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     """How inst, a member of a family whose dst may name a local, treats
     such a dst; None if it cannot.  The result must be the first new output
@@ -2092,11 +1975,6 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     names dst as its return slot needs nothing more; one that may also
     produce the result itself moves it.  A member whose frames return
     elsewhere leaves to the head."""
-    entry = generator_entry_recipe(inst)
-    if entry is not None and entry.kind == "_PY_IR_FOR_ITER":
-        # The child's yields go to A through the ordinary return-slot protocol,
-        # including local replacement and discard. SEND instead yields to B+2.
-        return STORE_RETURN
     # The terminal adapter publishes the native result itself, or the Python
     # child's eventual return. Its unused DSL C output still has a real dst.
     if inst.properties.always_exits and "IR_COMPLETE_STEP" in uop_tokens(inst):
@@ -2139,8 +2017,7 @@ def names_return_slot(inst: Instruction) -> bool:
     that slot, and its return value at the end of a FOR_ITER."""
     tokens = uop_tokens(inst)
     # _PyEval_CreateInitFrame takes the return slot from the call's own word
-    return ("IR_SUSPEND_DELEGATED" in tokens or
-            "_PyEval_CreateInitFrame" in tokens or
+    return ("_PyEval_CreateInitFrame" in tokens or
             "IR_DST_SLOT" in tokens and "gi_iframe" not in tokens)
 
 
@@ -3242,8 +3119,6 @@ class IREmitter(Emitter):
         self.error_uncovered = True
         self.error_finalized = False
         self.error_local_dst = False
-        self.send_source_parts = None
-        self.error_redispatch_origin = None
         self.error_checkpoint_sites = {}
         self.error_checkpoint_count = 0
         self.allowed_error_checkpoints: frozenset[int] | None = frozenset()
@@ -3282,7 +3157,6 @@ class IREmitter(Emitter):
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_FINISH_GENERATOR_RETURN"] = self.finish_generator_return
         self._replacers["IR_FINISH_GENERATOR_RETURN_EMPTY"] = self.finish_generator_return
-        self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
@@ -3296,7 +3170,6 @@ class IREmitter(Emitter):
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         self._replacers["IR_BINARY_READER"] = self.binary_reader
         self._replacers["IR_METADATA_PASSTHROUGH"] = self.metadata_passthrough
-        self._replacers["IR_SUSPEND_DELEGATED"] = self.suspend_delegated
         self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
         self._replacers["IR_UNPACK_ITEMS"] = self.unpack_items_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
@@ -3472,35 +3345,6 @@ class IREmitter(Emitter):
                 or inst is None or metadata_only_passthroughs(inst) != frozenset({1})):
             raise analysis_error("uncertified metadata-only passthrough", tkn)
         return True
-
-    def suspend_delegated(self, tkn, tkn_iter, uop, storage, inst):
-        value, = self.macro_args(tkn, tkn_iter, 1)
-        if inst is None or metadata_only_passthroughs(inst) != frozenset({1}):
-            raise analysis_error("delegated suspension requires its checked transport", tkn)
-        self.ownership_event("YIELD_DELEGATED")
-        dst = FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]
-        self.emit("assert(frame->owner == FRAME_OWNED_BY_GENERATOR);\n")
-        self.emit("frame->instr_ptr = next_instr;\n")
-        self.emit("PyGenObject *ir_yield_gen = _PyGen_GetGeneratorFromFrame(frame);\n")
-        self.emit(f"assert(_PyValue_IsHome({value}));\n")
-        self.emit("DTRACE_FUNCTION_RETURN();\n")
-        self.emit("tstate->exc_info = ir_yield_gen->gi_exc_state.previous_item;\n")
-        self.emit("ir_yield_gen->gi_exc_state.previous_item = NULL;\n")
-        self.emit("_Py_LeaveRecursiveCallPy(tstate);\n")
-        self.emit("_PyInterpreterFrame *ir_yield_frame = frame;\n")
-        self.emit(f"ir_yield_frame->return_slot = (uint16_t){dst};\n")
-        self.emit("_PyThreadState_UpdateLastProfiledFrame(tstate, frame, frame->previous);\n")
-        self.emit("frame = tstate->current_frame = frame->previous;\n")
-        self.emit("ir_yield_frame->previous = NULL;\n")
-        self.emit("((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;\n")
-        self.emit("FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);\n")
-        self.abrupt_prefix = True
-        self.emit(f"IR_TRY_NATIVE_YIELD({value});\n")
-        self.emit("next_instr = frame->return_pc;\n")
-        self.emit(f"IR_STORE_RETURN({value});\n")
-        self.emit("LLTRACE_RESUME_FRAME();\n")
-        self.emit("DISPATCH();\n")
-        return False
 
     def binary_reader(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
@@ -5034,21 +4878,11 @@ class IREmitter(Emitter):
 
     def deopt_if(self, tkn, tkn_iter, uop, storage, inst):
         self.check_exit_inputs(tkn, storage)
-        previous = self.error_redispatch_origin
-        self.error_redispatch_origin = id(tkn)
-        try:
-            return super().deopt_if(tkn, tkn_iter, uop, storage, inst)
-        finally:
-            self.error_redispatch_origin = previous
+        return super().deopt_if(tkn, tkn_iter, uop, storage, inst)
 
     def exit_if(self, tkn, tkn_iter, uop, storage, inst):
         self.check_exit_inputs(tkn, storage)
-        previous = self.error_redispatch_origin
-        self.error_redispatch_origin = id(tkn)
-        try:
-            return super().exit_if(tkn, tkn_iter, uop, storage, inst)
-        finally:
-            self.error_redispatch_origin = previous
+        return super().exit_if(tkn, tkn_iter, uop, storage, inst)
 
     def check_error_outputs(self, tkn: Token, storage: Storage) -> None:
         """An error exit stores no output, so no output may hold a TAKE()
@@ -5220,20 +5054,7 @@ class IREmitter(Emitter):
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
         fmt = self.format_of(inst)
-        target = self.formats.get(inst.family.name) if inst.family is not None else None
-        if (self.send_source_parts is not None and self.error_redispatch_origin is not None
-                and inst.family is not None and inst.family.name == fmt.group
-                and target is not None and target.group == fmt.group
-                and (target.roles, target.window, target.n_inputs,
-                     target.dst_offset, target.imm, target.fb, target.borrow_mask) ==
-                    (fmt.roles, fmt.window, fmt.n_inputs,
-                     fmt.dst_offset, fmt.imm, fmt.fb, fmt.borrow_mask)):
-            # The positive adapter proof excludes effects before these guards.
-            # check_exit_inputs has checked their actual Storage state. The
-            # emitted target is exactly this same canonical protocol family.
-            self.error_terminal_sources.add(self.error_redispatch_origin)
-        else:
-            self.error_uncovered = True
+        self.error_uncovered = True
         deopt = self.record.deopt if self.record is not None else ""
         kind, _, head = deopt.partition("(")
         head = head.rstrip(")")
@@ -5290,7 +5111,6 @@ class IREmitter(Emitter):
             distance = "oparg"
         entries = {
             "_PY_IR_FOR_ITER": "_PyEval_CompleteForIter",
-            "_PY_IR_SEND": "_PyEval_CompleteSend",
             "_PY_IR_SEND_THROW": "_PyEval_CompleteSendThrow",
         }
         if kind not in entries:
@@ -5341,60 +5161,6 @@ class IREmitter(Emitter):
             raise analysis_error("generator return needs canonical source transfer", tkn)
         empty = 1 if tkn.text.endswith("_EMPTY") else 0
         self.emit(f"IR_GEN_RETURN({value}, {dying}, {empty});\n")
-        return False
-
-    def enter_generator(self, tkn, tkn_iter, uop, storage, inst):
-        """Commit a resumed child's complete state before disposing input.
-
-        In particular an unused sent value may be the last mortal owner;
-        neither the caller window nor an unentered child may advertise it
-        while its finalizer executes.
-        """
-        gen, kind = self.macro_args(tkn, tkn_iter, 2)
-        assert inst is not None
-        entry = generator_entry_recipe(inst)
-        if (kind not in {"_PY_IR_FOR_ITER", "_PY_IR_SEND"}
-                or entry is not None and
-                    (entry.part is not uop or entry.generator != gen or entry.kind != kind)
-                or kind == "_PY_IR_FOR_ITER" and entry is None):
-            raise analysis_error("unsupported generator-entry recipient", tkn)
-        fmt = self.format_of(inst)
-        if kind in {"_PY_IR_FOR_ITER", "_PY_IR_SEND"}:
-            self.normal_completion(inst, fmt, kind)
-        else:
-            self.normal_completion_uncovered = True
-        if kind == "_PY_IR_SEND" and self.send_source_parts is not None:
-            self.send_yielded_published = True
-        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
-        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        self.emit("{\n")
-        self.emit(f"_PyInterpreterFrame *ir_resumed_frame = &{gen}->gi_iframe;\n")
-        self.emit("PyValue ir_resume_input = PyValue_None;\n")
-        self.emit(f"if ({kind} == _PY_IR_SEND) {{\n")
-        self.emit(f"ir_resume_input = IR_SLOT({base} + 2);\n")
-        self.emit(f"IR_SLOT({base} + 2) = PyValue_NULL;\n")
-        self.emit("}\n")
-        self.emit(f"frame->return_slot = (uint16_t)({kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
-        self.emit("frame->return_pc = next_instr;\n")
-        self.emit("ir_resumed_frame->previous = frame;\n")
-        self.emit(f"{gen}->gi_exc_state.previous_item = tstate->exc_info;\n")
-        self.emit(f"tstate->exc_info = &{gen}->gi_exc_state;\n")
-        self.emit("frame = tstate->current_frame = ir_resumed_frame;\n")
-        self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
-        self.emit("PyValue_XCLOSE(ir_resume_input);\n")
-        self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
-        self.emit("}\n")
-        self.emit("_PyFrame_SetResumeValue(frame, ir_resume_input);\n")
-        self.emit("LOAD_IP(0);\n")
-        self.emit("IR_SKIP_RESUME();\n")
-        self.emit("DTRACE_FUNCTION_ENTRY();\n")
-        self.emit("LLTRACE_RESUME_FRAME();\n")
-        self.emit("DISPATCH();\n")
-        self.emit("}\n")
-        # The entered heap frame cannot overlap the parent's values. Its
-        # failed entry/return retires the child before error re-enters parent.
-        self.abrupt_operand_sources.add(id(tkn))
-        self.error_terminal_sources.add(id(tkn))
         return False
 
     def ir_instruction_size(
@@ -5460,13 +5226,7 @@ class IREmitter(Emitter):
                     self.check_exit_inputs(inst.where, storage,
                                            f"The guard of {uop.name}")
                 self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace{at}({ref}))) {{\n")
-                previous = self.error_redispatch_origin
-                if self.send_source_parts is not None and uop in self.send_source_parts:
-                    self.error_redispatch_origin = (id(uop), var.name)
-                try:
-                    self.emit_jump_to_predicted(inst)
-                finally:
-                    self.error_redispatch_origin = previous
+                self.emit_jump_to_predicted(inst)
                 self.emit("}\n")
                 var.known_object = True
                 continue
@@ -6689,10 +6449,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     emitter.ownership_events = []
     emitter.normal_inputs_cleared = False
     emitter.abrupt_prefix = False
-    emitter.send_source_parts = send_source_contract(inst, fmt)
     emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
-    if emitter.error_source is None and emitter.send_source_parts is not None:
-        emitter.error_source = checked_native_step_effects(emitter.send_source_parts)
     source = emitter.error_source
     emitter.callback_current_identity = current_operation_preserves_scratch(inst, fmt, source)
     emitter.abrupt_operand_expected = operand_errors_from_summary(emitter.error_source)
@@ -6704,7 +6461,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     emitter.error_uncovered = False
     emitter.error_finalized = False
     emitter.error_local_dst = False
-    emitter.error_redispatch_origin = None
     emitter.error_checkpoint_sites = {}
     emitter.error_checkpoint_count = 0
     emitter.observer_source = observer_entry_source(inst, fmt)
@@ -6716,7 +6472,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     emitter.normal_result_offsets = set()
     emitter.normal_null_receipts = []
     emitter.null_outputs = null_output_names(inst, fmt)
-    emitter.send_yielded_published = False
     emitter.native_window_out = False
     emitter.unpack_local_drained = False
     emitter.normal_observer_edges = set()
@@ -6873,8 +6628,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
         emitter.normal_null_receipts.append(
             {edge: stack.null_stores.get(edge, False) for edge in stack.null_paths})
-        if emitter.send_source_parts is not None:
-            emitter.send_yielded_published = True
         if call_window:
             emitter.call_normal_drained = True
         # A structured JUMPTO/JUMPBY selects next_instr; it does not bypass
@@ -6955,9 +6708,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                 src=result_offset or 0))
     if not emitter.normal_completion_uncovered:
         completions = emitter.normal_completions
-        if emitter.send_yielded_published:
-            completions = {replace(event, flags=event.flags | 2, extent=2)
-                           for event in completions}
         emitter.ownership_events.extend(sorted(completions,
                                               key=lambda event: (event.dst, event.src)))
     emitter.check_record_consumed()
@@ -7688,7 +7438,7 @@ def monitoring_events(name: str, inst: Instruction) -> list[str]:
         events.update(EVENT_PREFIX + e for e in CALL_EVENTS)
     # Completion has one semantic site, including when the producer is a
     # specialized native iterator or a Python generator returning to it.
-    if any(t.text in {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}
+    if any(t.text in {"IR_COMPLETE_STEP"}
            for t in uop_token_list(inst)):
         group = inst.family.name if inst.family else inst.name.removeprefix("INSTRUMENTED_")
         if group == "FOR_ITER":
@@ -8146,7 +7896,7 @@ def handler_output_kind(inst: Instruction, fmt: IRFormat) -> str:
     """
     if not fmt.window or fmt.operands != "_PyIR_OPERANDS_NONE":
         return "_PyIR_OUTPUT_REGISTER_DST"
-    if set(uop_tokens(inst)) & {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}:
+    if set(uop_tokens(inst)) & {"IR_COMPLETE_STEP"}:
         return "_PyIR_OUTPUT_OUTCOME"
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:

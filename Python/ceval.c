@@ -2994,9 +2994,24 @@ _PyRop_ClaimableGenerator(PyThreadState *tstate, PyValueBorrow receiver,
     return gen_may_claim(gen);
 }
 
-/* Claim the generator and link its frame under frame, which returns it: the
+/* Link the claimed generator's frame under frame, which returns it: the
  * links of the old IR_ENTER_GENERATOR.  The recursion debit and the first
  * word are the frame start's. */
+static inline _PyInterpreterFrame *
+_PyRop_LinkGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     PyGenObject *gen, PyValue sent)
+{
+    _PyInterpreterFrame *resumed = &gen->gi_iframe;
+    resumed->previous = frame;
+    gen->gi_exc_state.previous_item = tstate->exc_info;
+    tstate->exc_info = &gen->gi_exc_state;
+    _PyFrame_SetResumeValue(resumed, sent);
+    return resumed;
+}
+
+/* Send.Gen: claim the generator that _PyRop_ClaimableGenerator accepted, as
+ * SEND_GEN did.  Free-threaded, another thread can claim it first, and the
+ * send raises what the generic send raises for an executing generator. */
 static Py_NO_INLINE _PyInterpreterFrame *
 _PyRop_EnterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
                       PyValueBorrow receiver, PyValue sent)
@@ -3008,12 +3023,91 @@ _PyRop_EnterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyErr_SetRaisedException(error);
         return NULL;
     }
-    _PyInterpreterFrame *resumed = &gen->gi_iframe;
-    resumed->previous = frame;
-    gen->gi_exc_state.previous_item = tstate->exc_info;
-    tstate->exc_info = &gen->gi_exc_state;
-    _PyFrame_SetResumeValue(resumed, sent);
-    return resumed;
+    return _PyRop_LinkGenerator(tstate, frame, gen, sent);
+}
+
+/* Send.Generic: the claim of the old generic _SEND.  A receiver that is not
+ * claimable, or that another thread has claimed or is reading (its state is
+ * SUSPENDED_YIELD_FROM_LOCKED), is stepped by _PyValue_Send, which waits. */
+static Py_NO_INLINE bool
+_PyRop_ClaimGenerator(PyThreadState *tstate, PyValueBorrow receiver,
+                      PyValueBorrow sent)
+{
+    if (IS_PEP523_HOOKED(tstate) || !PyValue_IsObject(receiver)) {
+        return false;
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
+    if (Py_TYPE(object) != &PyGen_Type && Py_TYPE(object) != &PyCoro_Type) {
+        return false;
+    }
+    PyGenObject *gen = (PyGenObject *)object;
+    if (FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED &&
+        !PyValue_IsNone(sent)) {
+        return false;
+    }
+    return gen_try_set_executing(gen);
+}
+
+/* Link the generator that _PyRop_ClaimGenerator claimed */
+static Py_NO_INLINE _PyInterpreterFrame *
+_PyRop_EnterClaimed(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValueBorrow receiver, PyValue sent)
+{
+    PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+    return _PyRop_LinkGenerator(tstate, frame, gen, sent);
+}
+
+/* Whether a Send site may be specialized on this receiver: a generator or
+ * coroutine of the exact types while no PEP 523 hook is installed */
+static inline bool
+_PyRop_GeneratorReceiver(PyValueBorrow receiver)
+{
+    if (!PyValue_IsObject(receiver) ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return false;
+    }
+    PyTypeObject *type = Py_TYPE(PyValue_AsKnownObjectBorrow(receiver));
+    return type == &PyGen_Type || type == &PyCoro_Type;
+}
+
+static inline bool
+_PyRop_HasIterItem(PyValueBorrow receiver)
+{
+    return PyValue_IsObject(receiver) &&
+           Py_TYPE(PyValue_AsKnownObjectBorrow(receiver))->_tp_iteritem != NULL;
+}
+
+static inline bool
+_PyRop_IsAsyncGenASend(PyValueBorrow receiver)
+{
+    return PyValue_IsObject(receiver) &&
+           PyAsyncGenASend_CheckExact(PyValue_AsKnownObjectBorrow(receiver));
+}
+
+static inline bool
+_PyRop_CursorPresent(PyValueBorrow cursor)
+{
+    return !PyValue_IsNull(cursor);
+}
+
+/* Send.Virtual: the next item of an index-protocol receiver, the step of
+ * the old _SEND_VIRTUAL.  1 yielded (the next cursor in *next), 0 returned
+ * (None), -1 raised. */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_SendVirtual(PyValueBorrow receiver, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *iter = PyValue_AsKnownObjectBorrow(receiver);
+    Py_ssize_t position = PyValue_UntagIndex(cursor);
+    _PyValueIndexPair item = Py_TYPE(iter)->_tp_iteritem(iter, position);
+    if (PyValue_IsNull(item.value)) {
+        if (item.index < 0) {
+            return (_PyStatusValue){-1, PyValue_NULL};
+        }
+        return (_PyStatusValue){0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(item.index);
+    return (_PyStatusValue){1, item.value};
 }
 
 /* One step of a receiver that is not entered: the cursor's next item for a

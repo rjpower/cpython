@@ -3048,9 +3048,8 @@
           EXITS(branch(committed), raise(committed))) \
     /* IR_MARKER_EFFECTS: escapes, error, terminal; TRANSFER_TOKENS (BRANCH, \
      * RAISE).  Arguments are the kind, the completion value and the \
-     * oparg.  The completion helper (_PyEval_CompleteForIter, \
-     * _PyEval_CompleteSend) owns the value on every exit, so the value is \
-     * consumed (G0a4).  Reviewed G0c5: complete_step_impl (ceval.c) \
+     * oparg.  The completion helper (_PyEval_CompleteForIter) owns the \
+     * value on every exit, so the value is consumed (G0a4).  Reviewed G0c5: complete_step_impl (ceval.c) \
      * reads the window homes and, on a FOR_ITER completion, retires them \
      * (window[0] and window[1] are cleared and closed: the iterator and \
      * its cursor), publishes nothing else, and returns the step's next \
@@ -3094,28 +3093,6 @@
     MACRO(IR_FINISH_GENERATOR_RETURN_EMPTY, ARGS(consumed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python, switches_frame, retires_frame), \
           EXITS(return, raise)) \
-    /* ir_generator.py enter_generator: stores the sent value's slot into \
-     * the resumed frame (frame->return_slot, return_pc, previous, the \
-     * generator's exc_info), makes the generator's frame current, then \
-     * either enters the recursion count (_Py_EnterRecursivePy, which can \
-     * fail with RecursionError: the sent value is closed, \
-     * PROCESS_ERROR_AT) or, in the generator boundary form, jumps through \
-     * IR_GEN_RESUME.  The new frame runs Python, so runs_python and \
-     * switches_frame; the sent value moves into the resumed frame, which \
-     * the walk cannot say, so the uop declares it taken.  Exits: enter (the \
-     * transfer), raise (the failed entry). */ \
-    MACRO(IR_ENTER_GENERATOR, ARGS(object, scalar), NONE, \
-          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
-          EXITS(enter, raise)) \
-    /* IR_MARKER_EFFECTS escapes, terminal, frame (no error); \
-     * TRANSFER_TOKENS (YIELD) */ \
-    /* Evidence (G0c8): ir_generator.py:3634: suspends the frame for a delegated yield: stores \
-     * instr_ptr, detaches the generator's exception state (writes), leaves the recursion \
-     * count, switches to the previous frame, and stores the value to the caller's slot \
-     * (IR_STORE_RETURN, which may enter the unit: IR_JIT_RESUME runs Python).  It \
-     * consumes the yielded value into the caller's home and exits by `yield`. */ \
-    MACRO(IR_SUSPEND_DELEGATED, ARGS(consumed), NONE, \
-          EFFECTS(reads, writes, runs_python, switches_frame), EXITS(yield)) \
     /* ir_generator.try_dict_first_probe: _PyDict_TryGetFirstProbeValue \
      * (Objects/dictobject.c) reads an exact dict's first probe slot for an \
      * inline int key and returns a new reference to the value only on an \

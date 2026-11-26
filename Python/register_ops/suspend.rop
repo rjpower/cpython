@@ -228,8 +228,8 @@ arm YieldFrom.Observed split observes
 // the word's `done` exit with `completed` defined: the END_SEND that
 // followed it has no word.  A generator or coroutine receiver is entered in
 // place; when its frame returns, the completion arm runs in this frame.
-family Send(completed:Dst, send:SendWindow, done:NearHead)
-  exits(next, branch, enter, raise, redirect) ops(SEND)
+family Send(completed:Dst, send:SendWindow, fb:Fb<Iter>, done:NearHead)
+  exits(next, branch, enter, raise, redirect, miss, again) generic(Generic) ops(SEND)
   events(STOP_ITERATION, BRANCH_LEFT);
 
 // The receiver, entered in place, has yielded: the sent value moved into its
@@ -284,6 +284,68 @@ extern helper enter_generator(t:Thread, f:Frame, g:B, v:O)
               "tstate->exc_info. v is its resume value, or closed on err. The recursion"
               "debit and the resume are the frame start's.");
 
+// The claim of the old generic _SEND: the guards of claimable_generator and
+// gen_try_set_executing.  A receiver that is not claimed, because it is of
+// another kind or another thread has it, is stepped, which waits for a
+// generator that is being read.
+extern helper claim_generator(t:Thread, g:B, v:B) -> Bool
+  effects(reads, writes)
+  c _PyRop_ClaimGenerator as bool
+  evidence(
+    review: "ceval.c _PyRop_ClaimGenerator: the condition of bytecodes.c _SEND that"
+            "entered a generator, gen_try_set_executing included.",
+    contract: "True: the receiver is claimed (FRAME_EXECUTING). False: nothing changed.");
+
+// Link the frame of a generator that claim_generator claimed
+extern helper enter_claimed(t:Thread, f:Frame, g:B, v:O) -> NewFrame
+  effects(reads, writes)
+  ensures(result.generator_frame(result))
+  c _PyRop_EnterClaimed as pointer
+  evidence(
+    review: "ceval.c _PyRop_EnterClaimed: the links of IR_ENTER_GENERATOR.",
+    contract: "The receiver's frame is returned, whose previous is f. The exception chain"
+              "of the generator hangs off tstate->exc_info. v is its resume value.");
+
+// What a Send arm is specialized on (specialize.c: the old _Py_Specialize_Send)
+extern helper generator_receiver(g:B) -> Bool
+  effects(reads)
+  c _PyRop_GeneratorReceiver as bool
+  evidence(
+    review: "ceval.c _PyRop_GeneratorReceiver: _Py_Specialize_Send's generator case.",
+    contract: "Reads the receiver's type and whether specialization is enabled.");
+
+extern helper has_iteritem(g:B) -> Bool
+  effects(reads)
+  c _PyRop_HasIterItem as bool
+  evidence(
+    review: "ceval.c _PyRop_HasIterItem: _Py_Specialize_Send's _tp_iteritem case.",
+    contract: "Reads the receiver's type.");
+
+extern helper is_asend(g:B) -> Bool
+  effects(reads)
+  c _PyRop_IsAsyncGenASend as bool
+  evidence(
+    review: "ceval.c _PyRop_IsAsyncGenASend: _Py_Specialize_Send's asend case.",
+    contract: "Reads the receiver's type.");
+
+extern helper cursor_present(c:B) -> Bool
+  effects()
+  c _PyRop_CursorPresent as bool
+  evidence(
+    review: "ceval.c _PyRop_CursorPresent: _GUARD_NOS_NOT_NULL.",
+    contract: "A comparison of the word.");
+
+// The step of an index-protocol receiver with a tagged cursor: the old
+// _SEND_VIRTUAL
+extern helper send_virtual(recv:B, cur:B)
+  cases(yielded(y:O, next:O), done(rv:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_SendVirtual as step_out
+  evidence(
+    review: "ceval.c _PyRop_SendVirtual: bytecodes.c _SEND_VIRTUAL.",
+    contract: "yielded: a new owner of the item and the next cursor; done: None; err: set."
+              "The receiver and the cursor are borrowed.");
+
 // One step of a receiver that the evaluator does not enter: the cursor's
 // next item, or what the receiver's send returns.  The sent value and the
 // receiver are borrowed; the cursor is read, not taken.
@@ -324,14 +386,121 @@ extern helper send_exit_event(t:Thread, f:Frame, at:Site)
     contract: "The operands are retired and the completion value is in its home. A callback may"
               "raise or move the frame, whose return_pc then names the word to run.");
 
-arm Send.Generic split
-  effects(reads, writes, allocates, runs_python, raises, releases on (completed), switches_frame)
-  feedback()
-  exits(next, branch, enter, raise)
+// Adaptation evidence: the sampled receiver chooses the arm that the old
+// _Py_Specialize_Send chose: SEND_GEN, SEND_VIRTUAL or SEND_ASYNC_GEN
+macro adapt_before_use_send(f:Fb<Iter>, g:B, v:B, c:B)
+  cases(run(), changed(tk:Ticket<Iter>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
 {
   entry():
-    branch claimable_generator(thread, use(send.receiver), use(send.value)) -> Claim(), Step();
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    branch generator_receiver(g) -> PickGen(), TryVirtual();
+  TryVirtual():
+    branch has_iteritem(g) -> PickVirtual(), TryAsync();
+  TryAsync():
+    branch is_asend(g) -> PickAsync(), Backoff();
+  PickGen():
+    let c_gen:Candidate<Iter> = candidate(Send.Gen);
+    call install(site, f, c_gen) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickVirtual():
+    let c_virtual:Candidate<Iter> = candidate(Send.Virtual);
+    call install(site, f, c_virtual) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickAsync():
+    let c_async:Candidate<Iter> = candidate(Send.AsyncGen);
+    call install(site, f, c_async) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Backoff():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(tk:Ticket<Iter>):
+    exit changed(tk);
+  Run():
+    exit run();
+}
+
+arm Send.Generic split
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed), switches_frame)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, branch, enter, raise, redirect, again)
+{
+  entry():
+    call adapt_before_use_send(fb, use(send.receiver), use(send.value), use(send.cursor)) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Iter>):
+    exit again(tk);
+  Run():
+    let won:Bool = claim_generator(thread, use(send.receiver), use(send.value));
+    branch won -> Claim(), Step();
   Claim():
+    let g:B = use(send.receiver);
+    let sent:O = acquire(send.value);
+    let c:NewFrame = enter_claimed(thread, frame, g, sent);
+    exit enter(c) resume Send.Yielded complete Send.Complete;
+  Step():
+    let a:Anchors = anchor_for_call([send.receiver, send.cursor, send.value]);
+    call send_step(thread, frame, arg(a, 0), arg(a, 1), arg(a, 2)) {
+      yielded -> Yielded();
+      done -> Done();
+      err -> Failed();
+    }
+  Yielded(y:O, nc:O):
+    call redirect_status(frame) {
+      running -> Stepped();
+      redirected -> YieldGone();
+    }
+  Stepped():
+    publish [send.cursor = nc, send.value = y] retire [roots(a), old(send.cursor), old(send.value)] at Send.Stepped;
+    exit next();
+  YieldGone(yr:Route):
+    let _:Unit = discard_result(y);
+    let _:Unit = discard_result(nc);
+    let yield_route:Route = retire_abandoned(a, yr);
+    exit redirect(yield_route);
+  Done(rv:O):
+    call redirect_status(frame) {
+      running -> Finished();
+      redirected -> DoneGone();
+    }
+  Finished():
+    publish [completed = rv] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    exit branch(done);
+  DoneGone(dr:Route):
+    let _:Unit = discard_result(rv);
+    let done_route:Route = retire_abandoned(a, dr);
+    exit redirect(done_route);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Failed, saved);
+}
+
+// SEND_GEN: a generator or coroutine that is created or suspended, entered
+// in place.  Free-threaded, another thread can claim it between the guard and
+// the claim: that is the ValueError of an executing generator.
+arm Send.Gen split
+  effects(reads, writes, raises, switches_frame)
+  feedback()
+  exits(enter, raise, miss)
+{
+  entry():
+    guard claimable_generator(thread, use(send.receiver), use(send.value)) else miss;
     let g:B = use(send.receiver);
     let sent:O = acquire(send.value);
     call enter_generator(thread, frame, g, sent) {
@@ -342,7 +511,42 @@ arm Send.Generic split
     exit enter(c) resume Send.Yielded complete Send.Complete;
   EnterFailed(ee:Err):
     exit raise(Send.Closed, ee);
-  Step():
+}
+
+// SEND_VIRTUAL: None sent to an index-protocol receiver with a tagged cursor
+arm Send.Virtual split
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed))
+  feedback()
+  exits(next, branch, raise, miss)
+{
+  entry():
+    guard is_none(use(send.value)) else miss;
+    guard cursor_present(use(send.cursor)) else miss;
+    let a:Anchors = anchor_for_call([send.receiver, send.cursor]);
+    call send_virtual(arg(a, 0), arg(a, 1)) {
+      yielded -> Yielded();
+      done -> Done();
+      err -> Failed();
+    }
+  Yielded(y:O, nc:O):
+    publish [send.cursor = nc, send.value = y] retire [roots(a), old(send.cursor), old(send.value)] at Send.Stepped;
+    exit next();
+  Done(rv:O):
+    publish [completed = rv] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    exit branch(done);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Failed, saved);
+}
+
+// SEND_ASYNC_GEN: the awaitable of an asynchronous generator's asend
+arm Send.AsyncGen split
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed))
+  feedback()
+  exits(next, branch, raise, miss)
+{
+  entry():
+    guard is_asend(use(send.receiver)) else miss;
     let a:Anchors = anchor_for_call([send.receiver, send.cursor, send.value]);
     call send_step(thread, frame, arg(a, 0), arg(a, 1), arg(a, 2)) {
       yielded -> Yielded();
@@ -378,18 +582,13 @@ arm Send.Observed split observes
   exits(next, branch, enter, raise, redirect)
 {
   entry():
-    branch claimable_generator(thread, use(send.receiver), use(send.value)) -> Claim(), Step();
+    let won:Bool = claim_generator(thread, use(send.receiver), use(send.value));
+    branch won -> Claim(), Step();
   Claim():
     let g:B = use(send.receiver);
     let sent:O = acquire(send.value);
-    call enter_generator(thread, frame, g, sent) {
-      entered -> Enter();
-      err -> EnterFailed();
-    }
-  Enter(c:NewFrame):
+    let c:NewFrame = enter_claimed(thread, frame, g, sent);
     exit enter(c) resume Send.Yielded complete Send.Complete;
-  EnterFailed(ee:Err):
-    exit raise(Send.Closed, ee);
   Step():
     let a:Anchors = anchor_for_call([send.receiver, send.cursor, send.value]);
     call send_step(thread, frame, arg(a, 0), arg(a, 1), arg(a, 2)) {

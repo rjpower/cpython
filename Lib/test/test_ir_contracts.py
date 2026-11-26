@@ -2118,17 +2118,8 @@ class VerifierTests(unittest.TestCase):
                      r"spam is no kind of word")
 
     def test_a_frame_switch_is_at_its_token(self):
-        # Send.Generic's claim: the guards before IR_ENTER_GENERATOR restart the
-        # word; the switch is where the row that names it is called
-        self.verify("""
-            op(_OP, (receiver: object, null: nullable, v: taken -- receiver, null, gen_frame: owned))
-                effects(runs_python, switches_frame) exits(miss, enter, raise)
-            {
-                PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
-                EXIT_IF(Py_TYPE(gen) != &PyGen_Type, "not a generator");
-                IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
-            }
-        """)
+        # The guards before the row that names the switch restart the word;
+        # the switch is where that row is called
         # Nothing follows the switch: a guard there is refused, not skipped
         source = """
             op(_OP, (callable: taken, self_or_null: taken, args[oparg]: taken -- new_frame: owned))
@@ -2449,11 +2440,8 @@ class VerifierTests(unittest.TestCase):
         """, r"declares exits\(enter\), but not the effect switches_frame")
 
     def test_a_switch_on_some_paths_leaves_next(self):
-        # _SEND: the generator is entered when it can be claimed; otherwise
-        # the body runs on to its end
-        # the body runs on to its end. A uop that also completes switches
-        # only through a row that declares the switch (VT5), as _SEND's
-        # IR_ENTER_GENERATOR does
+        # A uop that switches on some paths only does so through a row that
+        # declares the switch (VT5); otherwise the body runs on to its end
         source = """
             op(_OP, (--)) effects(%s) exits(%s) {
                 if (oparg) {

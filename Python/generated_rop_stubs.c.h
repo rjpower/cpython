@@ -4805,7 +4805,7 @@ _PyRop_Complete_Send_Complete(
     PyValue_XCLOSE(own_send_receiver);
     PyValue_XCLOSE(own_send_cursor);
     PyValue_XCLOSE(old_completed);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 40) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
 }
 
 static Py_NO_INLINE int
@@ -4859,7 +4859,7 @@ _PyRop_Complete_Send_CompleteObserved(
     if (ret2 < 0) {
         goto rop_Send_CompleteObserved_ExitFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 40) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
     rop_Send_CompleteObserved_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
@@ -4879,6 +4879,12 @@ typedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,
 static const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS] = {
     [ROP_HANDLER_Send_Generic - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
     [ROP_HANDLER_Send_Generic_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
+    [ROP_HANDLER_Send_Gen - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
+    [ROP_HANDLER_Send_Gen_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
+    [ROP_HANDLER_Send_Virtual - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
+    [ROP_HANDLER_Send_Virtual_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
+    [ROP_HANDLER_Send_AsyncGen - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
+    [ROP_HANDLER_Send_AsyncGen_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
     [ROP_HANDLER_Send_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
 };
 

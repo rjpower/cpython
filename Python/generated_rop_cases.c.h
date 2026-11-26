@@ -710,11 +710,17 @@
             int ret2;
             int adapt_before_use_call_kw1_cp;
             int ret3;
-            PyValue ret4;
+            int adapt_before_use_call_kw1_cn;
+            int ret4;
+            int adapt_before_use_call_kw1_cb;
+            int ret5;
+            int adapt_before_use_call_kw1_cg;
+            int ret6;
+            PyValue ret7;
             PyValue own_fn = PyValue_NULL;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-            int ret5;
+            int ret8;
             _PyInterpreterFrame * c;
             PyValue z;
             if (!_PyFb_TickQuiet(&((_PyFbCall *)IR_FB(IR_D(ir_word)))->h)) {
@@ -737,6 +743,15 @@
             rop_CallKw_Generic_adapt_before_use_call_kw1_Sample:
             ret2 = _PyRop_ClassifyCallKw(this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_fn), this_instr);
             if (ret2 == 1) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Created;
+            }
+            if (ret2 == 2) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Bound;
+            }
+            if (ret2 == 3) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Native;
+            }
+            if (ret2 == 4) {
                 goto rop_CallKw_Generic_adapt_before_use_call_kw1_Other;
             }
             adapt_before_use_call_kw1_cp = ROP_HANDLER_CallKw_Plan;
@@ -747,18 +762,49 @@
             if (ret3 < 0) {
                 goto rop_CallKw_Generic_adapt_before_use_call_kw1_Run;
             }
+            rop_CallKw_Generic_adapt_before_use_call_kw1_Changed:
             next_instr = this_instr;
             DISPATCH_SAME_OPARG();
             rop_CallKw_Generic_adapt_before_use_call_kw1_Other:
             _PyRop_Backoff(&((_PyFbCall *)IR_FB(IR_D(ir_word)))->h);
             goto rop_CallKw_Generic_Run;
+            rop_CallKw_Generic_adapt_before_use_call_kw1_Native:
+            adapt_before_use_call_kw1_cn = ROP_HANDLER_CallKw_NonPy;
+            ret4 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call_kw1_cn);
+            if (ret4 > 0) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Changed;
+            }
+            if (ret4 == 0) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Run;
+            }
+            goto rop_CallKw_Generic_adapt_before_use_call_kw1_Run;
+            rop_CallKw_Generic_adapt_before_use_call_kw1_Bound:
+            adapt_before_use_call_kw1_cb = ROP_HANDLER_CallKw_BoundMethod;
+            ret5 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call_kw1_cb);
+            if (ret5 > 0) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Changed;
+            }
+            if (ret5 == 0) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Run;
+            }
+            goto rop_CallKw_Generic_adapt_before_use_call_kw1_Run;
+            rop_CallKw_Generic_adapt_before_use_call_kw1_Created:
+            adapt_before_use_call_kw1_cg = ROP_HANDLER_CallKw_Generator;
+            ret6 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call_kw1_cg);
+            if (ret6 > 0) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Changed;
+            }
+            if (ret6 == 0) {
+                goto rop_CallKw_Generic_adapt_before_use_call_kw1_Run;
+            }
+            goto rop_CallKw_Generic_adapt_before_use_call_kw1_Run;
             rop_CallKw_Generic_Native:
             IR_STUB_ESCAPE();
-            ret4 = _PyRop_CallNative(tstate, frame, home_fn, this_instr);
-            if (PyValue_IsNull(ret4)) {
+            ret7 = _PyRop_CallNative(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret7)) {
                 goto rop_CallKw_Generic_NativeFailed;
             }
-            z = ret4;
+            z = ret7;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 own_fn = _PyFrame_TakeHome(frame, home_fn);
             }
@@ -769,8 +815,8 @@
             PyValue_XCLOSE(own_fn);
             PyValue_XCLOSE(old_dst);
             IR_STUB_ESCAPE();
-            ret5 = _PyRop_EndPoll(tstate, frame);
-            if (ret5 < 0) {
+            ret8 = _PyRop_EndPoll(tstate, frame);
+            if (ret8 < 0) {
                 goto rop_CallKw_Generic_PollFailed;
             }
             DISPATCH();
@@ -782,6 +828,169 @@
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_CallKw_Generic_Failed:
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
+        }
+
+        TARGET(CallEx_Generic) {
+            // CallEx.Generic (split)
+            int opcode = ROP_HANDLER_CallEx_Generic;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_CallEx_Generic);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue fo;
+            PyValue ko;
+            PyValue ret1;
+            PyValue arg2;
+            PyValue arg3;
+            PyValue arg4;
+            PyValue arg5;
+            PyValue arg6;
+            PyValue arg7;
+            PyValue arg8;
+            PyValue arg9;
+            PyValue arg10;
+            PyValue arg11;
+            PyValue arg12;
+            void * ret13;
+            int ret14;
+            int adapt_before_use_call_ex1_cp;
+            int ret15;
+            int adapt_before_use_call_ex1_cn;
+            int ret16;
+            PyValue ret17;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret18;
+            PyValue tfo;
+            PyValue tko;
+            PyValue tup;
+            PyValue pfo;
+            PyValue pko;
+            PyValue ptup;
+            PyValue qfo;
+            PyValue qko;
+            _PyInterpreterFrame * c;
+            PyValue ntup;
+            PyValue nfo;
+            PyValue nko;
+            PyValue z;
+            if (!_PyFb_TickQuiet(&((_PyFbCall *)IR_FB(IR_D(ir_word)))->h)) {
+                goto rop_CallEx_Generic_adapt_before_use_call_ex1_Sample;
+            }
+            rop_CallEx_Generic_adapt_before_use_call_ex1_Run:
+            rop_CallEx_Generic_Run:
+            fo = PyValue_DUP(PyValue_Borrow(*home_fn));
+            ko = _PyRop_HoldKwargs(frame, this_instr);
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_StarTuple(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                arg2 = fo;
+                arg3 = ko;
+                tfo = arg2;
+                tko = arg3;
+                goto rop_CallEx_Generic_TupleFailed;
+            }
+            arg4 = ret1;
+            arg5 = fo;
+            arg6 = ko;
+            tup = arg4;
+            pfo = arg5;
+            pko = arg6;
+            if (_PyRop_PythonTargetHeld(tstate, frame, pfo, this_instr)) {
+                arg7 = tup;
+                arg8 = pfo;
+                arg9 = pko;
+                ptup = arg7;
+                qfo = arg8;
+                qko = arg9;
+                goto rop_CallEx_Generic_Python;
+            }
+            arg10 = tup;
+            arg11 = pfo;
+            arg12 = pko;
+            ntup = arg10;
+            nfo = arg11;
+            nko = arg12;
+            goto rop_CallEx_Generic_Native;
+            rop_CallEx_Generic_Python:
+            IR_STUB_ESCAPE();
+            ret13 = _PyRop_PushPythonEx(tstate, frame, home_fn, qfo, qko, ptup, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
+            if (ret13 == NULL) {
+                goto rop_CallEx_Generic_Failed;
+            }
+            c = ret13;
+            ROP_ENTER(c, IR_A(ir_word));
+            rop_CallEx_Generic_adapt_before_use_call_ex1_Sample:
+            ret14 = _PyRop_ClassifyCallEx(this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_fn), this_instr);
+            if (ret14 == 1) {
+                goto rop_CallEx_Generic_adapt_before_use_call_ex1_Native;
+            }
+            if (ret14 == 2) {
+                goto rop_CallEx_Generic_adapt_before_use_call_ex1_Other;
+            }
+            adapt_before_use_call_ex1_cp = ROP_HANDLER_CallEx_Py;
+            ret15 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call_ex1_cp);
+            if (ret15 == 0) {
+                goto rop_CallEx_Generic_adapt_before_use_call_ex1_Run;
+            }
+            if (ret15 < 0) {
+                goto rop_CallEx_Generic_adapt_before_use_call_ex1_Run;
+            }
+            rop_CallEx_Generic_adapt_before_use_call_ex1_Changed:
+            next_instr = this_instr;
+            DISPATCH_SAME_OPARG();
+            rop_CallEx_Generic_adapt_before_use_call_ex1_Other:
+            _PyRop_Backoff(&((_PyFbCall *)IR_FB(IR_D(ir_word)))->h);
+            goto rop_CallEx_Generic_Run;
+            rop_CallEx_Generic_adapt_before_use_call_ex1_Native:
+            adapt_before_use_call_ex1_cn = ROP_HANDLER_CallEx_NonPy;
+            ret16 = _PyRop_Install(this_instr, &((_PyFbCall *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_call_ex1_cn);
+            if (ret16 > 0) {
+                goto rop_CallEx_Generic_adapt_before_use_call_ex1_Changed;
+            }
+            if (ret16 == 0) {
+                goto rop_CallEx_Generic_adapt_before_use_call_ex1_Run;
+            }
+            goto rop_CallEx_Generic_adapt_before_use_call_ex1_Run;
+            rop_CallEx_Generic_TupleFailed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
+            PROCESS_ERROR_AT(RAISE, 36, this_instr);
+            rop_CallEx_Generic_Native:
+            IR_STUB_ESCAPE();
+            ret17 = _PyRop_CallNativeEx(tstate, frame, nfo, nko, ntup, this_instr);
+            if (PyValue_IsNull(ret17)) {
+                goto rop_CallEx_Generic_NativeFailed;
+            }
+            z = ret17;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            IR_STUB_ESCAPE();
+            ret18 = _PyRop_EndPoll(tstate, frame);
+            if (ret18 < 0) {
+                goto rop_CallEx_Generic_PollFailed;
+            }
+            DISPATCH();
+            rop_CallEx_Generic_NativeFailed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 36, this_instr);
+            rop_CallEx_Generic_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 37, this_instr);
+            rop_CallEx_Generic_Failed:
+            PROCESS_ERROR_AT(RAISE, 36, this_instr);
         }
 
         TARGET(Unpack_Generic) {
@@ -4288,6 +4497,7 @@
             INSTRUCTION_STATS(ROP_HANDLER_CallKw_Plan);
             PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
             void * ret1;
+            void * ret2;
             _PyInterpreterFrame * c;
             if (!_PyRop_DefaultEvalFrame(tstate)) {
                 JUMP_TO_PREDICTED(CallKw_Generic);
@@ -4298,18 +4508,178 @@
             if (!_PyRop_RecursionBudget(tstate)) {
                 JUMP_TO_PREDICTED(CallKw_Generic);
             }
-            if (!_PyRop_PlanFits(tstate, frame, PyValue_Borrow(*home_fn), this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-                JUMP_TO_PREDICTED(CallKw_Generic);
+            if (_PyRop_PlanFits(tstate, frame, PyValue_Borrow(*home_fn), this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+                goto rop_CallKw_Plan_Planned;
             }
+            goto rop_CallKw_Plan_General;
+            rop_CallKw_Plan_Planned:
             IR_STUB_ESCAPE();
             ret1 = _PyRop_PushPlan(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
             if (ret1 == NULL) {
                 goto rop_CallKw_Plan_Failed;
             }
             c = ret1;
+            rop_CallKw_Plan_Enter:
             ROP_ENTER(c, IR_A(ir_word));
+            rop_CallKw_Plan_General:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
+            if (!ret2 == NULL) {
+                c = ret2;
+                goto rop_CallKw_Plan_Enter;
+            }
             rop_CallKw_Plan_Failed:
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
+        }
+
+        TARGET(CallKw_Generator) {
+            // CallKw.Generator (split)
+            int opcode = ROP_HANDLER_CallKw_Generator;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_CallKw_Generator);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
+            PyValue own_fn = PyValue_NULL;
+            PyValue z;
+            PyValue r;
+            if (!_PyRop_DefaultEvalFrame(tstate)) {
+                JUMP_TO_PREDICTED(CallKw_Generic);
+            }
+            if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+                JUMP_TO_PREDICTED(CallKw_Generic);
+            }
+            if (!_PyRop_RecursionBudget(tstate)) {
+                JUMP_TO_PREDICTED(CallKw_Generic);
+            }
+            if (_PyRop_PlanFits(tstate, frame, PyValue_Borrow(*home_fn), this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+                goto rop_CallKw_Generator_Planned;
+            }
+            goto rop_CallKw_Generator_Vector;
+            rop_CallKw_Generator_Planned:
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_PlanGenerator(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
+            if (PyValue_IsNull(ret1)) {
+                goto rop_CallKw_Generator_Failed;
+            }
+            z = ret1;
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_CallKw_Generator_Vector:
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_CallNative(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret2)) {
+                goto rop_CallKw_Generator_NativeFailed;
+            }
+            r = ret2;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, r);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_CallKw_Generator_NativeFailed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_CallKw_Generator_Failed:
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+        }
+
+        TARGET(CallKw_BoundMethod) {
+            // CallKw.BoundMethod (split)
+            int opcode = ROP_HANDLER_CallKw_BoundMethod;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_CallKw_BoundMethod);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            void * ret1;
+            _PyInterpreterFrame * c;
+            if (!_PyRop_DefaultEvalFrame(tstate)) {
+                JUMP_TO_PREDICTED(CallKw_Generic);
+            }
+            if (!_PyRop_SelfAbsent(frame, this_instr)) {
+                JUMP_TO_PREDICTED(CallKw_Generic);
+            }
+            if (!_PyRop_MethodVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+                JUMP_TO_PREDICTED(CallKw_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
+            if (ret1 == NULL) {
+                goto rop_CallKw_BoundMethod_Failed;
+            }
+            c = ret1;
+            ROP_ENTER(c, IR_A(ir_word));
+            rop_CallKw_BoundMethod_Failed:
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+        }
+
+        TARGET(CallKw_NonPy) {
+            // CallKw.NonPy (split)
+            int opcode = ROP_HANDLER_CallKw_NonPy;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_CallKw_NonPy);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue ret1;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            PyValue z;
+            if (!_PyRop_NotPythonCallable(PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(CallKw_Generic);
+            }
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_CallNative(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_CallKw_NonPy_NativeFailed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_EndPoll(tstate, frame);
+            if (ret2 < 0) {
+                goto rop_CallKw_NonPy_PollFailed;
+            }
+            DISPATCH();
+            rop_CallKw_NonPy_NativeFailed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            rop_CallKw_NonPy_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 41, this_instr);
         }
 
         TARGET(CallKw_Observed) {
@@ -4395,16 +4765,16 @@
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
         }
 
-        TARGET(CallEx_Generic) {
-            // CallEx.Generic (split)
-            int opcode = ROP_HANDLER_CallEx_Generic;
+        TARGET(CallEx_Py) {
+            // CallEx.Py (split)
+            int opcode = ROP_HANDLER_CallEx_Py;
             (void)opcode;
             _PyIRWord *const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
-            INSTRUCTION_STATS(ROP_HANDLER_CallEx_Generic);
+            INSTRUCTION_STATS(ROP_HANDLER_CallEx_Py);
             PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
             PyValue fo;
             PyValue ko;
@@ -4439,6 +4809,12 @@
             PyValue nfo;
             PyValue nko;
             PyValue z;
+            if (!_PyRop_DefaultEvalFrame(tstate)) {
+                JUMP_TO_PREDICTED(CallEx_Generic);
+            }
+            if (!_PyRop_PyCallableEx(PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(CallEx_Generic);
+            }
             fo = PyValue_DUP(PyValue_Borrow(*home_fn));
             ko = _PyRop_HoldKwargs(frame, this_instr);
             IR_STUB_ESCAPE();
@@ -4448,7 +4824,7 @@
                 arg3 = ko;
                 tfo = arg2;
                 tko = arg3;
-                goto rop_CallEx_Generic_TupleFailed;
+                goto rop_CallEx_Py_TupleFailed;
             }
             arg4 = ret1;
             arg5 = fo;
@@ -4463,7 +4839,7 @@
                 ptup = arg7;
                 qfo = arg8;
                 qko = arg9;
-                goto rop_CallEx_Generic_Python;
+                goto rop_CallEx_Py_Python;
             }
             arg10 = tup;
             arg11 = pfo;
@@ -4471,24 +4847,24 @@
             ntup = arg10;
             nfo = arg11;
             nko = arg12;
-            goto rop_CallEx_Generic_Native;
-            rop_CallEx_Generic_Python:
+            goto rop_CallEx_Py_Native;
+            rop_CallEx_Py_Python:
             IR_STUB_ESCAPE();
-            ret13 = _PyRop_PushPythonEx(tstate, frame, home_fn, qfo, qko, ptup, this_instr);
+            ret13 = _PyRop_PushPythonEx(tstate, frame, home_fn, qfo, qko, ptup, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
             if (ret13 == NULL) {
-                goto rop_CallEx_Generic_Failed;
+                goto rop_CallEx_Py_Failed;
             }
             c = ret13;
             ROP_ENTER(c, IR_A(ir_word));
-            rop_CallEx_Generic_TupleFailed:
+            rop_CallEx_Py_TupleFailed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
             PROCESS_ERROR_AT(RAISE, 36, this_instr);
-            rop_CallEx_Generic_Native:
+            rop_CallEx_Py_Native:
             IR_STUB_ESCAPE();
             ret14 = _PyRop_CallNativeEx(tstate, frame, nfo, nko, ntup, this_instr);
             if (PyValue_IsNull(ret14)) {
-                goto rop_CallEx_Generic_NativeFailed;
+                goto rop_CallEx_Py_NativeFailed;
             }
             z = ret14;
             if (!(ir_word & IR_F_LOCAL_B)) {
@@ -4503,16 +4879,140 @@
             IR_STUB_ESCAPE();
             ret15 = _PyRop_EndPoll(tstate, frame);
             if (ret15 < 0) {
-                goto rop_CallEx_Generic_PollFailed;
+                goto rop_CallEx_Py_PollFailed;
             }
             DISPATCH();
-            rop_CallEx_Generic_NativeFailed:
+            rop_CallEx_Py_NativeFailed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
             PROCESS_ERROR_AT(RAISE, 36, this_instr);
-            rop_CallEx_Generic_PollFailed:
+            rop_CallEx_Py_PollFailed:
             PROCESS_ERROR_AT(RAISE, 37, this_instr);
-            rop_CallEx_Generic_Failed:
+            rop_CallEx_Py_Failed:
+            PROCESS_ERROR_AT(RAISE, 36, this_instr);
+        }
+
+        TARGET(CallEx_NonPy) {
+            // CallEx.NonPy (split)
+            int opcode = ROP_HANDLER_CallEx_NonPy;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+            INSTRUCTION_STATS(ROP_HANDLER_CallEx_NonPy);
+            PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+            PyValue fo;
+            PyValue ko;
+            PyValue ret1;
+            PyValue arg2;
+            PyValue arg3;
+            PyValue arg4;
+            PyValue arg5;
+            PyValue arg6;
+            PyValue arg7;
+            PyValue arg8;
+            PyValue arg9;
+            PyValue arg10;
+            PyValue arg11;
+            PyValue arg12;
+            void * ret13;
+            PyValue ret14;
+            PyValue own_fn = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret15;
+            PyValue tfo;
+            PyValue tko;
+            PyValue tup;
+            PyValue pfo;
+            PyValue pko;
+            PyValue ptup;
+            PyValue qfo;
+            PyValue qko;
+            _PyInterpreterFrame * c;
+            PyValue ntup;
+            PyValue nfo;
+            PyValue nko;
+            PyValue z;
+            if (!_PyRop_NotPyCallableEx(PyValue_Borrow(*home_fn))) {
+                JUMP_TO_PREDICTED(CallEx_Generic);
+            }
+            fo = PyValue_DUP(PyValue_Borrow(*home_fn));
+            ko = _PyRop_HoldKwargs(frame, this_instr);
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_StarTuple(tstate, frame, home_fn, this_instr);
+            if (PyValue_IsNull(ret1)) {
+                arg2 = fo;
+                arg3 = ko;
+                tfo = arg2;
+                tko = arg3;
+                goto rop_CallEx_NonPy_TupleFailed;
+            }
+            arg4 = ret1;
+            arg5 = fo;
+            arg6 = ko;
+            tup = arg4;
+            pfo = arg5;
+            pko = arg6;
+            if (_PyRop_PythonTargetHeld(tstate, frame, pfo, this_instr)) {
+                arg7 = tup;
+                arg8 = pfo;
+                arg9 = pko;
+                ptup = arg7;
+                qfo = arg8;
+                qko = arg9;
+                goto rop_CallEx_NonPy_Python;
+            }
+            arg10 = tup;
+            arg11 = pfo;
+            arg12 = pko;
+            ntup = arg10;
+            nfo = arg11;
+            nko = arg12;
+            goto rop_CallEx_NonPy_Native;
+            rop_CallEx_NonPy_Python:
+            IR_STUB_ESCAPE();
+            ret13 = _PyRop_PushPythonEx(tstate, frame, home_fn, qfo, qko, ptup, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
+            if (ret13 == NULL) {
+                goto rop_CallEx_NonPy_Failed;
+            }
+            c = ret13;
+            ROP_ENTER(c, IR_A(ir_word));
+            rop_CallEx_NonPy_TupleFailed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
+            PROCESS_ERROR_AT(RAISE, 36, this_instr);
+            rop_CallEx_NonPy_Native:
+            IR_STUB_ESCAPE();
+            ret14 = _PyRop_CallNativeEx(tstate, frame, nfo, nko, ntup, this_instr);
+            if (PyValue_IsNull(ret14)) {
+                goto rop_CallEx_NonPy_NativeFailed;
+            }
+            z = ret14;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_fn = _PyFrame_TakeHome(frame, home_fn);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_SpendArgs(frame, this_instr, home_dst);
+            PyValue_XCLOSE(own_fn);
+            PyValue_XCLOSE(old_dst);
+            IR_STUB_ESCAPE();
+            ret15 = _PyRop_EndPoll(tstate, frame);
+            if (ret15 < 0) {
+                goto rop_CallEx_NonPy_PollFailed;
+            }
+            DISPATCH();
+            rop_CallEx_NonPy_NativeFailed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+            PROCESS_ERROR_AT(RAISE, 36, this_instr);
+            rop_CallEx_NonPy_PollFailed:
+            PROCESS_ERROR_AT(RAISE, 37, this_instr);
+            rop_CallEx_NonPy_Failed:
             PROCESS_ERROR_AT(RAISE, 36, this_instr);
         }
 
@@ -4621,7 +5121,7 @@
             goto rop_CallEx_Observed_Native;
             rop_CallEx_Observed_Python:
             IR_STUB_ESCAPE();
-            ret19 = _PyRop_PushPythonEx(tstate, frame, home_fn, qfo, qko, ptup, this_instr);
+            ret19 = _PyRop_PushPythonEx(tstate, frame, home_fn, qfo, qko, ptup, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
             if (ret19 == NULL) {
                 goto rop_CallEx_Observed_Failed;
             }

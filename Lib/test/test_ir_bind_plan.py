@@ -4,6 +4,7 @@ after its site specialized."""
 
 import asyncio
 import sys
+import types
 import unittest
 
 from test.support import cpython_only, requires_specialization, reset_code
@@ -271,6 +272,87 @@ class TestDefaultsAndKeywords(PlanTestCase):
 
 @cpython_only
 @requires_specialization
+class TestKeywordAndExpandedArms(PlanTestCase):
+    """The arms of CallKw and CallEx that the old specializations became,
+    and the guards that send a changed callable back to Generic"""
+
+    def check_arm(self, call, arm, *args):
+        call = reset_code(call)
+        expected = outcome(call, *args)
+        self.assertEqual(warm(call, *args), expected)
+        self.assertIn(arm, handlers(call))
+        return call
+
+    def test_generator_function_with_keywords(self):
+        def gen(a, b=2, *, c=3):
+            yield a
+            yield b
+            yield c
+
+        def call(x):
+            return list(gen(x, c=7))
+        call = self.check_arm(call, "CallKw.Generator", 1)
+        self.assertEqual(call(1), [1, 2, 7])
+        # A change of the defaults is outside the plan: the call still binds
+        gen.__defaults__ = (10,)
+        self.assertEqual(call(1), [1, 10, 7])
+        gen.__kwdefaults__ = {"c": 8}
+        self.assertEqual(list(gen(1, b=2)), [1, 2, 8])
+
+    def test_bound_method_with_keywords(self):
+        class C:
+            def m(self, a, b=2):
+                return (a, b)
+
+        def call(m, x):
+            return m(x, b=9)
+        self.check_arm(call, "CallKw.BoundMethod", C().m, 1)
+
+    def test_bound_method_misses_for_another_function(self):
+        class C:
+            def m(self, a, b=2):
+                return (a, b)
+
+        def call(m, x):
+            return m(x, b=9)
+        c = C()
+        call = self.check_arm(call, "CallKw.BoundMethod", c.m, 1)
+        self.assertEqual(call(types.MethodType(
+            lambda self, a, b=0: ("new", a, b), c), 1), ("new", 1, 9))
+
+    def test_native_callable_with_keywords(self):
+        def call(x):
+            return max(x, 3, key=None) if False else int("5", base=x)
+        self.check_arm(call, "CallKw.NonPy", 10)
+
+    def test_star_call_of_a_function(self):
+        def f(*args, **kwargs):
+            return args, kwargs
+
+        def call(a):
+            return f(*a, **{"k": 1})
+        self.check_arm(call, "CallEx.Py", (1, 2))
+
+    def test_star_call_of_a_native_callable(self):
+        def call(a):
+            return max(*a)
+        self.check_arm(call, "CallEx.NonPy", (1, 2))
+
+    def test_star_call_changes_from_function_to_native(self):
+        def py(*args):
+            return args
+
+        targets = [py]
+
+        def call(a):
+            return targets[0](*a)
+        call = self.check_arm(call, "CallEx.Py", (1, 2))
+        targets[0] = max
+        self.assertEqual(call((1, 2)), 2)
+
+
+@cpython_only
+@requires_specialization
 class TestKwargsDict(PlanTestCase):
     def test_empty_and_filled_dicts(self):
         def f(a, b=2, *args, c=3, **kw):
@@ -517,7 +599,7 @@ class TestGeneratorCallees(PlanTestCase):
                     [(1, 2, 3, 10), 3])
         self.assertEqual(warm(call, 1), expected)
         self.assertEqual(call(1), expected)
-        self.assertIn("CallKw.Generic", handlers(call))
+        self.assertIn("CallKw.Generator", handlers(call))
 
     def test_generator_cell_argument_with_default(self):
         def gen(x=3):

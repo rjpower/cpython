@@ -251,9 +251,9 @@ class CallRoleTests(unittest.TestCase):
             self.assertEqual(actual[1], values)
         if not support.Py_GIL_DISABLED:
             self.assertEqual(call_rows(namespace["plain"].__code__, True)[0][0],
-                             "CallEx.Generic+NO_KW")
+                             "CallEx.Py+NO_KW")
             self.assertEqual(call_rows(namespace["bound"].__code__, True)[0][0],
-                             "CallEx.Generic+NO_KW")
+                             "CallEx.NonPy+NO_KW")
 
     def test_native_prepend_uses_owned_copy_without_arena_offset(self):
         receiver = object()

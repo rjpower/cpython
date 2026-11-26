@@ -608,10 +608,7 @@ class TestCallCache(TestBase):
         # Trigger specialization
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             instantiate()
-        # CallEx has no specialized arms: the call of a Python function and
-        # of one with a nop vectorcall both run on CallEx.Generic
-        self.assertEqual(instantiate(), 1)
-        self.assert_specialized(instantiate, "CallEx.Generic")
+        self.assert_specialized(instantiate, "CallEx.Py")
 
     @requires_specialization
     def test_specialize_call_function_ex_py_fail(self):
@@ -627,7 +624,8 @@ class TestCallCache(TestBase):
         # Trigger specialization
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             instantiate()
-        self.assert_specialized(instantiate, "CallEx.Generic")
+        self.assert_no_opcode(instantiate, "CallEx.Py")
+        self.assert_specialized(instantiate, "CallEx.NonPy")
 
 def make_deferred_ref_count_obj():
     """Create an object that uses deferred reference counting.
@@ -2508,8 +2506,6 @@ class TestFeedback(TestBase):
 
         # No handler of the register IR reads a COUNTER entry, so it has none
         no_entry = {op for op, kind in self.KINDS.items() if kind == "COUNTER"}
-        # CallEx has no feedback: it has no specialized arm to guard
-        no_entry.add("CALL_FUNCTION_EX")
         seen = set()
         for func in C.m, g:
             for instr in dis.get_instructions(func):

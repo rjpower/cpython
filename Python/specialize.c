@@ -2687,13 +2687,37 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
 }
 
 /* The evidence row of CallKw (classify_call_kw, Python/register_ops/calls.rop):
- * whether the call of fn at site takes CallKw.Plan, which binds the keywords
- * from the plan that this fills in the site's entry.  A function that the
- * old _Py_Specialize_CallKw admitted (an optimized function of the default
- * call, not a generator) whose keyword names the plan can place.  Every other
- * callable, a bound method object included, is "other": it runs in
- * CallKw.Generic. */
-enum { CALLKW_CASE_PLAN, CALLKW_CASE_OTHER };
+ * the arm that the call of fn at site stands for, as the old
+ * _Py_Specialize_CallKw chose a handler.  A function of the default call
+ * (the standard vectorcall, an optimized signature, no PEP 523 hook, a
+ * version) is plan, or generator if it creates one: CallKw.Plan and
+ * CallKw.Generator bind the keywords from the plan that this fills in the
+ * site's entry, and a call that the plan does not fit binds generally.  A
+ * bound method of such a function is bound, and any other callable that is no
+ * function and no method is nonpy.  The rest, an inline value or a bound
+ * method of another callable included, is other: CallKw.Generic. */
+enum { CALLKW_CASE_PLAN, CALLKW_CASE_GENERATOR, CALLKW_CASE_BOUND,
+       CALLKW_CASE_NONPY, CALLKW_CASE_OTHER };
+
+/* Whether the old specialize_py_call_kw admitted func; its version is the
+ * site's func_version */
+static bool
+callkw_admits_function(_PyFbCall *fb, PyFunctionObject *func)
+{
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (func->vectorcall != _PyFunction_Vectorcall ||
+        function_signature(code) == UNOPTIMIZED_SIGNATURE ||
+        !prepare_function_exec(code))
+    {
+        return false;
+    }
+    int version = _PyFunction_GetVersionForCurrentState(func);
+    if (!_PyFunction_IsVersionValid(version)) {
+        return false;
+    }
+    fb->func_version = version;
+    return true;
+}
 
 int
 _PyRop_ClassifyCallKw(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
@@ -2707,24 +2731,25 @@ _PyRop_ClassifyCallKw(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
         return CALLKW_CASE_OTHER;
     }
     PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
-    if (!PyFunction_Check(callable)) {
-        return CALLKW_CASE_OTHER;
-    }
-    PyFunctionObject *func = (PyFunctionObject *)callable;
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
-    if (func->vectorcall != _PyFunction_Vectorcall ||
-        function_signature(code) == UNOPTIMIZED_SIGNATURE ||
-        code_creates_generator(code) || !prepare_function_exec(code))
-    {
-        return CALLKW_CASE_OTHER;
-    }
-    int version = _PyFunction_GetVersionForCurrentState(func);
-    if (!_PyFunction_IsVersionValid(version)) {
-        return CALLKW_CASE_OTHER;
-    }
     memset(&fb->h + 1, 0, sizeof(_PyFbCall) - sizeof(_PyFbHeader));
     fb->callable_type_version = fb_type_version(Py_TYPE(callable));
-    fb->func_version = version;
+    if (PyMethod_Check(callable)) {
+        PyObject *func = ((PyMethodObject *)callable)->im_func;
+        // A generator function takes the vectorcall (python_target)
+        return PyFunction_Check(func) &&
+            !code_creates_generator(
+                (PyCodeObject *)((PyFunctionObject *)func)->func_code) &&
+            callkw_admits_function(fb, (PyFunctionObject *)func)
+            ? CALLKW_CASE_BOUND : CALLKW_CASE_OTHER;
+    }
+    if (!PyFunction_Check(callable)) {
+        return CALLKW_CASE_NONPY;
+    }
+    PyFunctionObject *func = (PyFunctionObject *)callable;
+    if (!callkw_admits_function(fb, func)) {
+        return CALLKW_CASE_OTHER;
+    }
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
     _PyIRWord word = head[0];
     // The self slot of the word, which is NULL at run time for a class
     // attribute that is not a method: the arguments follow it
@@ -2737,8 +2762,56 @@ _PyRop_ClassifyCallKw(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
         caller->co_consts, _PyIR_CallOperand(head, (int)IR_C(word) - 1));
     specialize_keyword_binding(func, fb, nargs + self_present,
                                self_slot && !self_present, names);
-    return (fb->plan.flags & _Py_CALL_BIND_VALID)
-        ? CALLKW_CASE_PLAN : CALLKW_CASE_OTHER;
+    return code_creates_generator(code) ? CALLKW_CASE_GENERATOR
+                                        : CALLKW_CASE_PLAN;
+}
+
+/* The evidence row of CallEx (classify_call_ex): a function with the
+ * standard vectorcall is py (CallEx.Py), any other object nonpy
+ * (CallEx.NonPy).  The site's plan is that of the arity and the code that the
+ * site sees: the call uses it for that code and arity (func_version holds the
+ * code's version), and derives one for any other. */
+enum { CALLEX_CASE_PY, CALLEX_CASE_NONPY, CALLEX_CASE_OTHER };
+
+int
+_PyRop_ClassifyCallEx(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
+                      const _PyIRWord *head)
+{
+    assert(site == head);
+    (void)site;
+    if (is_shared_entry(&fb->h) || !PyValue_IsObject(fn) ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return CALLEX_CASE_OTHER;
+    }
+    PyObject *func = PyValue_AsKnownObjectBorrow(fn);
+    memset(&fb->h + 1, 0, sizeof(_PyFbCall) - sizeof(_PyFbHeader));
+    fb->callable_type_version = fb_type_version(Py_TYPE(func));
+    PyObject *target = func;
+    int lead = 0;
+    if (PyMethod_Check(target)) {
+        target = ((PyMethodObject *)target)->im_func;
+        lead = 1;
+    }
+    PyValue args = _PyFrame_Slots(current_frame())[_PyIR_CallOperand(head, 0)];
+    if (PyFunction_Check(target) && PyValue_IsObject(args) &&
+        PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(args)))
+    {
+        PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)target)->func_code;
+        Py_ssize_t count = lead +
+            PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(args));
+        if (count <= UINT8_MAX &&
+            _PyBindPlan_Init(&fb->plan, code, (int)count, 0, lead, NULL, 0))
+        {
+            fb->func_version = code->co_version;
+        }
+    }
+    if (Py_TYPE(func) == &PyFunction_Type &&
+        ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall)
+    {
+        return CALLEX_CASE_PY;
+    }
+    return CALLEX_CASE_NONPY;
 }
 
 /** Binary Op Specialization Extensions */

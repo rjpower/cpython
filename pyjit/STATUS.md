@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `aeb9f76b65c` (pushed) holds:
+`pyjit/rir90` at `0808a8115f4` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -108,11 +108,15 @@ interpreter hold no reference to the stack at step D, and tests check it.
   the user had ruled out (no fixed lowering per stack op).  The table is
   deleted; the stack-op schema keeps encoding facts only, every stack op
   the compiler emits has a translator rule, an op without one is refused,
-  and a test checks that a translator rule emits every family.
+  and a test checks that a translator rule emits every family;
+- D's item 7: the test disassembler (`test.support.ir_dis`) yields one
+  record per word, with the arm, its operands by declared name, kind and
+  role, its edges and its origin offset, decoded from declared exports;
+  its 26 test modules check arms, and `test_ir_no_stack` scans it.
 
 No word runs an inherited handler. The last merge check passed the smoke set
 on release and assert, and the verifier reports no error over 108,949 code
-objects (108,951 at the last merge). The full suites at `0a81f42d9bf` (release and assert, JIT off)
+objects (108,923 at the last merge). The full suites at `0a81f42d9bf` (release and assert, JIT off)
 failed only the three stale specialization tests PAR then fixed, and the
 id-shifted guard build passes at `d8cb2109192`. Ports keep the old handlers' object locks and turn every old
 specialization into an arm.
@@ -132,13 +136,38 @@ executes 2.05 times golden87's instructions at an IPC of 2.06 against 3.08;
 `ir_evaluate` takes 60% of its time and out-of-line routines most of the
 rest.
 
-Running:
-- D rewrites the test disassembler (`test.support.ir_dis`) to show words
-  as arms with register operands and edges, from declared exports.  It
-  showed each word as a stack instruction through a copy of the deleted
-  table; its 26 test modules are restated in arms.
-- IP (Opus) diagnoses the interpreter gap by structural cause and ranks the
-  design changes; perf-parity units follow, then the JIT.
+IP's [diagnosis](../../python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/rir90/ip/diagnosis.md)
+(1.563 of golden87's cycles, 1.407 of its instructions): rir90 executes as
+many words as golden87 or fewer, with the same dispatch, so the excess is
+in the handler bodies.  The causes, by expected gain:
+1. GCC outlines `static inline` helpers because `ceval.c` holds the loop,
+   the function forms and the stubs (about 35k generated lines); raising
+   the inlining budget for that unit alone gives 1.396.  Blanket inlining
+   is worse (1.467).
+2. Arm bodies are heavier even when inlined (7-22 cycles per hot arm):
+   closes of operands a guard proved inline, address-taken aggregates,
+   values kept live for cold exits, mode operands read at run time;
+   10-15%, up to 19%.
+3. Unpack goes through a heap buffer with span geometry decoded at run
+   time: about 5%.
+4. Missing arms (CALL_PY_GENERAL, FOR_ITER_GEN, BINARY_OP_POWER) and a
+   parallel move solved at run time: 1.5-2.5%.
+
+First-call lowering costs nothing in steady state.
+
+Running, interpreter performance wave 1 (timing recorded, never gated):
+- TB: the generator emits tight arm bodies (cause 2, less mode operands);
+- INL: `ceval.c` holds the interpreter, and hot helpers are declared
+  always-inline, with no global compiler flags (cause 1);
+- DBG: the Py_DEBUG build aborts at bootstrap, because the generator
+  checks every home store as a value though an iteration cursor home holds
+  a tagged index; the check follows the declared type, and the Py_STATS
+  build's nested-activation crash is fixed;
+- D's item 8: the arms that push a frame declare that they run Python,
+  which the checker enforces, and tests read declared enums.
+
+Wave 2, after these merge: one arm per operator and branch sense, unpack
+and moves placed at lowering, and the missing arms.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

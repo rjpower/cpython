@@ -11,7 +11,6 @@ from analyzer import (
     PseudoInstruction,
     analyze_files,
     stack_ops_of,
-    Uop,
 )
 from generators_common import (
     DEFAULT_INPUT,
@@ -24,23 +23,6 @@ from stack_opcode_pins import HAVE_ARGUMENT, MIN_SPECIALIZED_OPCODE
 from typing import TextIO
 from stack import get_stack_effect
 
-# Constants used instead of size for macro expansions.
-# Note: 1, 2, 4 must match actual cache entry sizes.
-OPARG_KINDS = {
-    "OPARG_SIMPLE": 0,
-    "OPARG_CACHE_1": 1,
-    "OPARG_CACHE_2": 2,
-    "OPARG_CACHE_4": 4,
-    "OPARG_TOP": 5,
-    "OPARG_BOTTOM": 6,
-    "OPARG_SAVE_RETURN_SLOT": 7,
-    # Skip 8 as the other powers of 2 are sizes
-    "OPARG_REPLACED": 9,
-    "OPERAND1_1": 10,
-    "OPERAND1_2": 11,
-    "OPERAND1_4": 12,
-}
-
 FLAGS = [
     "ARG",
     "CONST",
@@ -49,14 +31,6 @@ FLAGS = [
     "FREE",
     "LOCAL",
     "EVAL_BREAK",
-    "DEOPT",
-    "ERROR",
-    "ESCAPES",
-    "EXIT",
-    "PURE",
-    "SYNC_SP",
-    "ERROR_NO_POP",
-    "NO_SAVE_IP",
 ]
 
 
@@ -67,12 +41,6 @@ def generate_flag_macros(out: CWriter) -> None:
         out.emit(
             f"#define OPCODE_HAS_{flag}(OP) (_PyOpcode_opcode_metadata[OP].flags & (HAS_{flag}_FLAG))\n"
         )
-    out.emit("\n")
-
-
-def generate_oparg_macros(out: CWriter) -> None:
-    for name, value in OPARG_KINDS.items():
-        out.emit(f"#define {name} {value}\n")
     out.emit("\n")
 
 
@@ -193,57 +161,6 @@ def generate_cache_table(analysis: Analysis, out: CWriter) -> None:
     out.emit("#endif\n\n")
 
 
-def feedback_fields(inst: Instruction) -> list[tuple[int, int, str]]:
-    """(unit, size, name) of each named cache effect of a specialised
-    instruction.  Fields of size 0 had no inline cache units to go back to."""
-    fields: dict[int, tuple[int, int, str]] = {}
-    offset = 1
-    for part in inst.parts:
-        if isinstance(part, Uop):
-            for cache in part.caches:
-                if cache.name != "unused" and cache.size:
-                    fields.setdefault(offset, (offset, cache.size, cache.name))
-                offset += cache.size
-        else:
-            offset += part.size
-    return sorted(fields.values())
-
-
-def generate_feedback_fields_table(analysis: Analysis, out: CWriter) -> None:
-    """The feedback entry fields that each specialised instruction reads, and
-    where its inline cache held them before typed feedback, which is where
-    code_getcodeadaptive() puts them for dis."""
-    tables = {}
-    for inst in stack_ops_of(analysis).values():
-        if inst.family is None or inst.family.name == inst.name:
-            continue
-        if fields := feedback_fields(inst):
-            tables[inst.name] = (inst.family.name, fields)
-    max_fields = max((len(fields) for _, fields in tables.values()), default=1)
-    out.emit(f"#define FB_MAX_FIELDS {max_fields}\n")
-    out.emit("struct _PyFbField {\n")
-    out.emit("uint8_t unit;  // in code units from the instruction\n")
-    out.emit("uint8_t size;  // in code units\n")
-    out.emit("uint8_t offset;  // in the feedback entry\n")
-    out.emit("};\n")
-    out.emit("struct _PyFbFields {\n")
-    out.emit("uint8_t n;\n")
-    out.emit("struct _PyFbField fields[FB_MAX_FIELDS];\n")
-    out.emit("};\n")
-    out.emit("extern const struct _PyFbFields _PyOpcode_FeedbackFields[256];\n")
-    out.emit("#ifdef NEED_OPCODE_METADATA\n")
-    out.emit('#include "pycore_ir.h"            // _PyFb_<family>\n')
-    out.emit("const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {\n")
-    for name, (family, fields) in sorted(tables.items()):
-        entries = ", ".join(
-            f"{{ {unit}, {size}, offsetof(_PyFb_{family}, {field}) }}"
-            for unit, size, field in fields
-        )
-        out.emit(f"[{name}] = {{ {len(fields)}, {{ {entries} }} }},\n")
-    out.emit("};\n")
-    out.emit("#endif\n\n")
-
-
 def generate_name_table(analysis: Analysis, out: CWriter) -> None:
     table_size = 256 + len(analysis.pseudos)
     out.emit(f"PyAPI_DATA(const char) *_PyOpcode_OpName[{table_size}];\n")
@@ -284,99 +201,6 @@ def generate_metadata_table(analysis: Analysis, out: CWriter) -> None:
         out.emit(f"[{pseudo.name}] = {{ true, -1, {flags} }},\n")
     out.emit("};\n")
     out.emit("#endif\n\n")
-
-
-def generate_expansion_table(analysis: Analysis, out: CWriter) -> None:
-    expansions_table: dict[str, list[tuple[str, str, int]]] = {}
-    for inst in sorted(stack_ops_of(analysis).values(), key=lambda t: t.name):
-        offset: int = 0  # Cache effect offset
-        expansions: list[tuple[str, str, int]] = []  # [(name, size, offset), ...]
-        if inst.is_super():
-            pieces = inst.name.split("_")
-            assert len(pieces) % 2 == 0, f"{inst.name} doesn't look like a super-instr"
-            parts_per_piece = int(len(pieces) / 2)
-            name1 = "_".join(pieces[:parts_per_piece])
-            name2 = "_".join(pieces[parts_per_piece:])
-            assert name1 in stack_ops_of(analysis), f"{name1} doesn't match any instr"
-            assert name2 in stack_ops_of(analysis), f"{name2} doesn't match any instr"
-            instr1 = stack_ops_of(analysis)[name1]
-            instr2 = stack_ops_of(analysis)[name2]
-            for part in instr1.parts:
-                expansions.append((part.name, "OPARG_TOP", 0))
-            for part in instr2.parts:
-                expansions.append((part.name, "OPARG_BOTTOM", 0))
-        elif not is_viable_expansion(inst):
-            continue
-        else:
-            for part in inst.parts:
-                size = part.size
-                if isinstance(part, Uop):
-                    # Skip specializations
-                    if "specializing" in part.annotations:
-                        continue
-                    # Add the primary expansion.
-                    fmt = "OPARG_SIMPLE"
-                    if part.name == "_SAVE_RETURN_SLOT":
-                        fmt = "OPARG_SAVE_RETURN_SLOT"
-                    elif part.caches:
-                        fmt = str(part.caches[0].size)
-                    if "replaced" in part.annotations:
-                        fmt = "OPARG_REPLACED"
-                    expansions.append((part.name, fmt, offset))
-                    if len(part.caches) > 1 and part.caches[-1].size:
-                        # Zero-width metadata has no encoded second operand.
-                        internal_offset = 0
-                        for cache in part.caches[:-1]:
-                            internal_offset += cache.size
-                        expansions.append((part.name, f"OPERAND1_{part.caches[-1].size}", offset+internal_offset))
-                offset += part.size
-        expansions_table[inst.name] = expansions
-    max_uops = max(len(ex) for ex in expansions_table.values())
-    out.emit(f"#define MAX_UOP_PER_EXPANSION {max_uops}\n")
-    out.emit("struct opcode_macro_expansion {\n")
-    out.emit("int nuops;\n")
-    out.emit(
-        "struct { int16_t uop; int8_t size; int8_t offset; } uops[MAX_UOP_PER_EXPANSION];\n"
-    )
-    out.emit("};\n")
-    out.emit(
-        "extern const struct opcode_macro_expansion _PyOpcode_macro_expansion[256];\n\n"
-    )
-    out.emit("#ifdef NEED_OPCODE_METADATA\n")
-    out.emit("const struct opcode_macro_expansion\n")
-    out.emit("_PyOpcode_macro_expansion[256] = {\n")
-    for inst_name, expansions in expansions_table.items():
-        uops = [
-            f"{{ {name}, {size}, {offset} }}" for (name, size, offset) in expansions
-        ]
-        out.emit(
-            f'[{inst_name}] = {{ .nuops = {len(expansions)}, .uops = {{ {", ".join(uops)} }} }},\n'
-        )
-    out.emit("};\n")
-    out.emit("#endif // NEED_OPCODE_METADATA\n\n")
-
-
-def is_viable_expansion(inst: Instruction) -> bool:
-    "An instruction can be expanded if all its parts are viable uops"
-    for part in inst.parts:
-        if isinstance(part, Uop):
-            # Skip specializing and replaced uops
-            if "specializing" in part.annotations:
-                continue
-            if "replaced" in part.annotations:
-                continue
-            if part.properties.tier == 1 or not part.is_viable():
-                return False
-    return True
-
-
-def generate_extra_cases(analysis: Analysis, out: CWriter) -> None:
-    out.emit("#define EXTRA_CASES \\\n")
-    valid_opcodes = {inst.opcode for inst in stack_ops_of(analysis).values()}
-    for op in range(256):
-        if op not in valid_opcodes:
-            out.emit(f"    case {op}: \\\n")
-    out.emit("        ;\n")
 
 
 def generate_pseudo_targets(analysis: Analysis, out: CWriter) -> None:
@@ -429,7 +253,6 @@ def generate_opcode_metadata(
         out.emit("#include <stdbool.h>              // bool\n")
         out.emit('#include "opcode_ids.h"\n')
         generate_is_pseudo(analysis, out)
-        out.emit('#include "pycore_uop_ids.h"\n')
         generate_stack_effect_functions(analysis, out)
         generate_instruction_formats(analysis, out)
         table_size = 256 + len(analysis.pseudos)
@@ -444,14 +267,10 @@ def generate_opcode_metadata(
             out.emit(f" && (OP) != {name}")
         out.emit(")\n\n")
         generate_flag_macros(out)
-        generate_oparg_macros(out)
         generate_metadata_table(analysis, out)
-        generate_expansion_table(analysis, out)
         generate_name_table(analysis, out)
         generate_cache_table(analysis, out)
-        generate_feedback_fields_table(analysis, out)
         generate_deopt_table(analysis, out)
-        generate_extra_cases(analysis, out)
         generate_pseudo_targets(analysis, out)
 
 

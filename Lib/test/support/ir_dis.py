@@ -39,7 +39,7 @@ _operand_tables = _testinternalcapi.arm_operands()
 
 # The name of each handler id: arms, their observed wrappers, IR_OPERANDS
 _all_opname = _opcode.get_ir_handler_names()
-_all_opmap = {name: h for h, name in enumerate(_all_opname)}
+_all_opmap = {name: h for h, name in enumerate(_all_opname) if name is not None}
 
 _WORD_SIZE = 8
 _FIELD_MAX = 0xFFF

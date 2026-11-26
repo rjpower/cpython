@@ -145,7 +145,8 @@ class IRMetadataTests(unittest.TestCase):
     def test_handler_names(self):
         names = _opcode.get_ir_handler_names()
         self.assertEqual(len(names), _opcode.IR_NUM_HANDLERS)
-        self.assertEqual(len(set(names)), len(names))
+        named = [name for name in names if name is not None]
+        self.assertEqual(len(set(named)), len(named))
         self.assertEqual(names[_opcode.IR_OPERANDS], "IR_OPERANDS")
         for name in names[_opcode.IR_FIRST_ARM:]:
             self.assertIn(".", name)

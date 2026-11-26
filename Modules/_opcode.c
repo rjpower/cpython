@@ -635,7 +635,8 @@ _opcode_get_ir_word_length(PyObject *module, PyObject *arg)
 }
 
 /* The name of each handler id: `Family.Arm` (with `.Observed` for a wrapper),
- * or IR_OPERANDS for the word kind that holds operands. */
+ * or IR_OPERANDS for the word kind that holds operands.  An id that no
+ * handler has (a guard build shifts the ids up) is None. */
 static PyObject *
 _opcode_get_ir_handler_names(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
@@ -644,7 +645,9 @@ _opcode_get_ir_handler_names(PyObject *module, PyObject *Py_UNUSED(ignored))
         return NULL;
     }
     for (int h = 0; h < IR_NUM_HANDLERS; h++) {
-        PyObject *name = PyUnicode_FromString(_PyIR_HandlerName(h));
+        const char *s = _PyIR_HandlerName(h);
+        PyObject *name = s != NULL ? PyUnicode_FromString(s)
+                                   : Py_NewRef(Py_None);
         if (name == NULL) {
             Py_DECREF(names);
             return NULL;
@@ -675,7 +678,8 @@ opcode_functions[] =  {
     _OPCODE_GET_RECOVERY_ENTRIES_METHODDEF
     {"get_ir_handler_names", _opcode_get_ir_handler_names, METH_NOARGS,
      "get_ir_handler_names()\n--\n\n"
-     "Return the name of each handler id, in id order."},
+     "Return the name of each handler id, in id order; None for an id\n"
+     "that no handler has (a guard build shifts the ids up)."},
     {"get_ir_word_length", _opcode_get_ir_word_length, METH_O,
      "get_ir_word_length(word, /)\n--\n\n"
      "Return the number of words of the instruction whose first word is word."},

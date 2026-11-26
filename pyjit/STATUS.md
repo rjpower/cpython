@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `674dc7aff6b` (pushed; OB merged, below) holds:
+`pyjit/rir90` at `29f34da48fb` (pushed; OB and JX merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -287,12 +287,15 @@ unpack_sequence 1.85 to 1.54, raytrace 1.28 to 1.08; coroutines lost
 computed-goto evaluator and makes the observing mode a second table of
 tail functions.
 
+**JX, merged at `29f34da48fb`**: SP's `edb30efc8e3` left
+`GetItem.ListSlice` planned for the JIT with no generic stub to miss to,
+so a miss jumped to address 0.  Every arm that can miss is now unplanned
+when its family's generic is split, and the generator refuses a planned
+miss with no generic stub.  `test_rop_ssa` judges a declared jump by its
+target, which removes a JIT-always failure that predated SP.
+
 Running:
 - TI's landing on rir90 with OB.
-- JX's fix is being merged: SP's `edb30efc8e3` left `GetItem.ListSlice`
-  planned for the JIT with no generic stub to miss to; every arm that can
-  miss is now unplanned when its family's generic is split, and the
-  generator refuses a planned miss with no generic stub.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

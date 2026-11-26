@@ -289,7 +289,7 @@ class ForceArmTests(unittest.TestCase):
                 # The head's handler field is the low 9 bits of its word
                 length = _opcode.get_ir_word_length(handler)
                 # A feedback entry named by an operand word makes the head two words
-                two = name.startswith(("GetMethod.", "SuperMethod.", "Compare.", "Contains.", "TestBranch."))
+                two = name.startswith(("GetMethod.", "SuperMethod.", "SuperMethodExplicit.", "Compare.", "Contains.", "TestBranch."))
                 self.assertEqual(length, 2 if two else 1)
                 self.assertIsNotNone(contract[handler])
 

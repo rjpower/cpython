@@ -3690,6 +3690,8 @@
             PyValueBorrow l;
             PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
             PyValueBorrow r;
+            double a;
+            double b;
             PyValue ret1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
@@ -3699,7 +3701,9 @@
             if (!_PyRop_FloatOperands(l, r)) {
                 JUMP_TO_PREDICTED(Add_Generic);
             }
-            ret1 = _PyRop_AddFloats(l, r);
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            ret1 = _PyRop_AddFloats(a, b);
             if (PyValue_IsNull(ret1)) {
                 goto rop_Add_Float_Failed;
             }
@@ -9504,16 +9508,23 @@
             PyValueBorrow l;
             PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
             PyValueBorrow r;
+            int64_t a;
+            int64_t b;
             PyValue ret1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
-            if (!_PyRop_IntBinaryApplies((uint32_t)IR_D(ir_word), l, r)) {
+            if (!PyValue_BothInlineInt(l, r)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = _PyRop_IntBinary((uint32_t)IR_D(ir_word), l, r);
+            a = _PyValue_IntScaled(l);
+            b = _PyValue_IntScaled(r);
+            if (!_PyRop_IntOpAdmits((uint32_t)IR_D(ir_word), b)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = _PyRop_IntBinary((uint32_t)IR_D(ir_word), a, b);
             if (PyValue_IsNull(ret1)) {
                 goto rop_Binary_Int_Failed;
             }
@@ -9547,16 +9558,23 @@
             PyValueBorrow l;
             PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
             PyValueBorrow r;
+            double a;
+            double b;
             PyValue ret1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
-            if (!_PyRop_FloatBinaryApplies((uint32_t)IR_D(ir_word), l, r)) {
+            if (!_PyRop_FloatOperands(l, r)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = _PyRop_FloatBinary((uint32_t)IR_D(ir_word), l, r);
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            if (!_PyRop_FloatOpAdmits((uint32_t)IR_D(ir_word), b)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = _PyRop_FloatBinary((uint32_t)IR_D(ir_word), a, b);
             if (PyValue_IsNull(ret1)) {
                 goto rop_Binary_Float_Failed;
             }

@@ -312,8 +312,8 @@ static _PyIRTransfer ir_run_Yield_Ordinary(PyThreadState *tstate, _PyInterpreter
 static Py_ALWAYS_INLINE bool _PyRop_FloatOperands(PyValueBorrow, PyValueBorrow);
 static Py_NO_INLINE bool _PyRop_FloatOperands_Outlined(PyValueBorrow p0, PyValueBorrow p1)
 { return _PyRop_FloatOperands(p0, p1); }
-static Py_ALWAYS_INLINE PyValue _PyRop_AddFloats(PyValueBorrow, PyValueBorrow);
-static Py_NO_INLINE PyValue _PyRop_AddFloats_Outlined(PyValueBorrow p0, PyValueBorrow p1)
+static Py_ALWAYS_INLINE PyValue _PyRop_AddFloats(double, double);
+static Py_NO_INLINE PyValue _PyRop_AddFloats_Outlined(double p0, double p1)
 { return _PyRop_AddFloats(p0, p1); }
 static Py_ALWAYS_INLINE bool _PyRop_ExactPositional(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);
 static Py_NO_INLINE bool _PyRop_ExactPositional_Outlined(_PyInterpreterFrame *p0, PyValueBorrow p1, const _PyIRWord *p2)
@@ -4112,6 +4112,8 @@ ir_run_Add_Float(
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
+    double a;
+    double b;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
@@ -4121,7 +4123,9 @@ ir_run_Add_Float(
     if (!_PyRop_FloatOperands_Outlined(l, r)) {
         JUMP_TO_PREDICTED(Add_Generic);
     }
-    ret1 = _PyRop_AddFloats_Outlined(l, r);
+    a = PyValue_NumberAsDouble(l);
+    b = PyValue_NumberAsDouble(r);
+    ret1 = _PyRop_AddFloats_Outlined(a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Add_Float_Failed;
     }
@@ -10310,16 +10314,23 @@ ir_run_Binary_Int(
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
+    int64_t a;
+    int64_t b;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
     l = PyValue_Borrow(*home_x);
     r = PyValue_Borrow(*home_y);
-    if (!_PyRop_IntBinaryApplies((uint32_t)IR_D(ir_word), l, r)) {
+    if (!PyValue_BothInlineInt(l, r)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_IntBinary((uint32_t)IR_D(ir_word), l, r);
+    a = _PyValue_IntScaled(l);
+    b = _PyValue_IntScaled(r);
+    if (!_PyRop_IntOpAdmits((uint32_t)IR_D(ir_word), b)) {
+        JUMP_TO_PREDICTED(Binary_Generic);
+    }
+    ret1 = _PyRop_IntBinary((uint32_t)IR_D(ir_word), a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Int_Failed;
     }
@@ -10356,16 +10367,23 @@ ir_run_Binary_Float(
     PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
     PyValueBorrow r;
+    double a;
+    double b;
     PyValue ret1;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
     l = PyValue_Borrow(*home_x);
     r = PyValue_Borrow(*home_y);
-    if (!_PyRop_FloatBinaryApplies((uint32_t)IR_D(ir_word), l, r)) {
+    if (!_PyRop_FloatOperands_Outlined(l, r)) {
         JUMP_TO_PREDICTED(Binary_Generic);
     }
-    ret1 = _PyRop_FloatBinary((uint32_t)IR_D(ir_word), l, r);
+    a = PyValue_NumberAsDouble(l);
+    b = PyValue_NumberAsDouble(r);
+    if (!_PyRop_FloatOpAdmits((uint32_t)IR_D(ir_word), b)) {
+        JUMP_TO_PREDICTED(Binary_Generic);
+    }
+    ret1 = _PyRop_FloatBinary((uint32_t)IR_D(ir_word), a, b);
     if (PyValue_IsNull(ret1)) {
         goto rop_Binary_Float_Failed;
     }

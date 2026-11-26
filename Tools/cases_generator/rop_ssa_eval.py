@@ -217,9 +217,13 @@ def _float_operands(ev, a, b):
     return bool(spec("PyValue_FloatOperandValues")(cx, a, b)[0])
 
 
-def _add_floats(ev, a, b):
-    ok, x, y = spec("PyValue_FloatOperandValues")(ev.cx, a, b)
-    assert ok
+def _number_as_double(ev, v):
+    if spec("PyValue_IsInlineFloat")(ev.cx, v):
+        return spec("PyValue_InlineFloat")(ev.cx, v)
+    return float(spec("PyValue_InlineInt64")(ev.cx, v))
+
+
+def _add_floats(ev, x, y):
     return ("ok", (spec("PyValue_FromDouble")(ev.cx, x + y),))
 
 
@@ -294,6 +298,7 @@ MODELS = {
     "_PyValue_BorrowPresent": lambda ev, m: m != EMPTY,
     "_PyRop_FloatOperands": _float_operands,
     "_PyRop_AddFloats": _add_floats,
+    "PyValue_NumberAsDouble": _number_as_double,
     "_PyRop_ConcatText": _concat,
     "_PyValue_BoxInt64": _box_i64,
     "_PyRop_SmallInt": lambda ev, i: spec("PyValue_FromInlineInt")(ev.cx, i),

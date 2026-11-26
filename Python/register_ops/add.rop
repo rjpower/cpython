@@ -122,17 +122,29 @@ extern helper float_operands(a:B, b:B) -> Bool
     review: "Reviewed P2. pycore_value.h PyValue_FloatOperandsCheck.",
     contract: "A comparison of the two words: no memory, no failure, no callback.");
 
-// The sum of an admitted pair: a double, boxed only when it is NaN
-extern helper add_floats(a:B, b:B)
+// An operand of an admitted pair, decoded once for the compute that follows
+extern primitive number_as_double(v:B) -> F64
+  effects()
+  requires(inline_number(v))
+  c PyValue_NumberAsDouble as scalar
+  evidence(
+    review: "TB. pycore_value.h: the inline float's double, or the inline int's"
+            "value converted to double.",
+    contract: "Reads the word: no memory, no failure, no callback.",
+    lowering: "none: the arms that use it are shared and are not compiled inline",
+    test: "test_rop_add");
+
+// The sum of an admitted pair's doubles, boxed only when it is NaN
+extern helper add_floats(a:F64, b:F64)
   cases(ok(z:O), err(e:Err))
   effects(allocates, raises)
   ensures(ok.exact<float>(z))
   c _PyRop_AddFloats as value_or_null inline
   evidence(
-    review: "Reviewed P2. pycore_rop_rows.h: PyValue_FloatOperandValues, then"
-            "PyValue_FromDouble, which allocates only for NaN.",
-    contract: "The pair is admitted (asserted). NULL with MemoryError only if the"
-              "NaN box fails. No finalizer, no Python.");
+    review: "Reviewed P2. pycore_rop_rows.h: PyValue_FromDouble of the sum, which"
+            "allocates only for NaN.",
+    contract: "NULL with MemoryError only if the NaN box fails. No finalizer, no"
+              "Python.");
 
 // Text rows
 
@@ -321,7 +333,9 @@ arm Add.Float shared
     let l:B = use(x);
     let r:B = use(y);
     guard float_operands(l, r) else miss;
-    call add_floats(l, r) {
+    let a:F64 = number_as_double(l);
+    let b:F64 = number_as_double(r);
+    call add_floats(a, b) {
       ok -> Finish();
       err -> Failed();
     }

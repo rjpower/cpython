@@ -637,6 +637,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     flags = ["_PyIR_VALID"]
     if group_out:
         flags.append("_PyIR_GROUP_OUT")
+    if any(p.name in fam.vacant and (isinstance(p.type, WrapType) and p.type.wrap == Wrap.Span) for p in fam.params):
+        flags.append("_PyIR_VACANT_SPAN")
     if "_PyIR_RUNS_PYTHON" in effects:
         flags.append("_PyIR_RUNS_CODE")
     if arm.displacing:

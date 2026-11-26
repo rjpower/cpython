@@ -439,13 +439,13 @@ holds_line(const _PyRegOp *neighbour, const _PyRegOp *op)
  * Either way the producer of v gives the jump a fresh register to take. */
 
 /* The retirement of v alone where jump falls through, on jump's line: the
- * Move.Retire that the POP_TOP after the jump became */
+ * Retire.Close that the POP_TOP after the jump became */
 static _PyRegOp *
 fall_through_pop(_PyRegCfg *cfg, int start, int end, _PyRegOp *jump, int v)
 {
     int j = (int)(jump - cfg->ops);
     _PyRegOp *next = live_neighbour(cfg, start, end, j, 1);
-    if (next == NULL || next->opcode != ROP_SELECT_Move_retire
+    if (next == NULL || next->opcode != ROP_OP_Retire_Close
         || next->nread != 1 || next->nout != 0
         || next->loc.lineno != jump->loc.lineno
         || _PyReg_IN(cfg, next)[0] != v)

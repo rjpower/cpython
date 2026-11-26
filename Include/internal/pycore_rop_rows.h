@@ -54,7 +54,7 @@ PyAPI_FUNC(void) _PyFrame_ParallelMove(_PyInterpreterFrame *frame, int n,
 PyAPI_FUNC(void) _PyFrame_ApplyRecipe(_PyInterpreterFrame *frame,
                                       const int32_t *recipe);
 PyAPI_FUNC(void) _PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s);
-PyAPI_FUNC(void) _PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s);
+PyAPI_FUNC(void) _PyRop_CloseSpan(const _PyRopSpan *s);
 PyAPI_FUNC(void) _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s);
 
 /* Build, AddElement, AddEntry, UpdateContainer and MergeKeywords, in ceval.c */

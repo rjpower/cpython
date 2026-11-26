@@ -268,6 +268,8 @@ enum {
                                     // (END_ASYNC_FOR names its END_SEND)
 #define _PyIR_GROUP_OUT     0x400   // the word defines its home group
                                     // and does not read it (Out<G>)
+#define _PyIR_VACANT_SPAN   0x1000  // the elements of the word's span may be
+                                    // vacant when it reads them (Retire)
 
 /* _PyIRFormat.effects: what the handler itself may do, a projection of its
  * arm's declaration (Python/register_ops): the effects it declares, the
@@ -897,10 +899,13 @@ _PyIR_IsDstSpanFormat(const _PyIRFormat *fmt)
     return 1;
 }
 
+/* Whether the format moves or retires homes: a Move's two spans, or a
+ * Retire's one span of sources that may be vacant */
 static inline int
 _PyIR_IsMoveFormat(const _PyIRFormat *fmt)
 {
-    return fmt->operands == _PyIR_OPERANDS_SPANS && _PyIR_SpanCountFields(fmt) == 2;
+    return fmt->operands == _PyIR_OPERANDS_SPANS &&
+           (_PyIR_SpanCountFields(fmt) == 2 || (fmt->flags & _PyIR_VACANT_SPAN));
 }
 
 /* Span k of the word at head, which runs as handler: its element count and

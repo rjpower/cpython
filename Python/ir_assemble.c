@@ -885,7 +885,7 @@ lower_completions(_PyRegCfg *cfg)
             }
             // The retirement of the resume input alone (rule_pop_top)
             int pop = next_frontend_op(cfg, i + 1, 1);
-            if (pop >= 0 && cfg->ops[pop].opcode == ROP_SELECT_Move_retire &&
+            if (pop >= 0 && cfg->ops[pop].opcode == ROP_OP_Retire_Close &&
                 op->nout == 1 && cfg->ops[pop].nout == 0 &&
                 cfg->ops[pop].nread == 1 &&
                 _PyReg_IN(cfg, &cfg->ops[pop])[0] == _PyReg_OUT(cfg, op)[0])

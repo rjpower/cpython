@@ -1383,7 +1383,7 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
  *   2. The producer absorbs it: an op that may discard its result
  *      (_PyStack_DISCARDS), which nothing else read, writes it nowhere
  *      (_PyReg_DISCARD).
- *   3. A retirement: Move.Retire of the value, which closes it and may run
+ *   3. A retirement: Retire.Close of the value, which closes it and may run
  *      Python.  A retirement right after another on the same line and
  *      under the same handler joins it: one word closes both, in pop
  *      order.  An edge's Move set that follows takes it in (bind_edge()).
@@ -1463,7 +1463,7 @@ sole_producer(_PyRegTr *t, int v)
 }
 
 /* The retirement that the op being translated may join: the last op of the
- * block, past source-only ops, if it is a Move.Retire on src's line under
+ * block, past source-only ops, if it is a Retire.Close on src's line under
  * src's handler */
 static _PyRegOp *
 joinable_retire(_PyRegTr *t, const _PyRegOp *src)
@@ -1473,7 +1473,7 @@ joinable_retire(_PyRegTr *t, const _PyRegOp *src)
         if (op->loc.lineno != src->loc.lineno || op->except != src->except) {
             return NULL;
         }
-        if (op->opcode == ROP_SELECT_Move_retire) {
+        if (op->opcode == ROP_OP_Retire_Close) {
             return op->nout == 0 ? op : NULL;
         }
         if (op->opcode != NOP || op->nread != 0 || op->nout != 0) {
@@ -1554,7 +1554,7 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
     int v = t->stack[t->sp - 1];
     _PyRegOp *prod = sole_producer(t, v);
     _PyRegOp *retire = NULL, *dead = NULL;
-    int emitted = NOP;  // a CFG op number: NOP or the tagged Move.Retire
+    int emitted = NOP;  // a CFG op number: NOP or the tagged Retire.Close
     if (prod != NULL && prod->loc.lineno == src->loc.lineno &&
         prod->except == src->except && only_makes_value(t->cfg, prod))
     {
@@ -1574,7 +1574,7 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
         RETURN_IF_ERROR(retire_also(t, retire, v));
     }
     else {
-        emitted = ROP_SELECT_Move_retire;
+        emitted = ROP_OP_Retire_Close;
     }
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, emitted, &v,
@@ -5011,7 +5011,7 @@ has_duplicate(const _PyRegCfg *cfg, const int *vs, int n)
 }
 
 /* Ownership: each value has one owner (RV change 9).  An op takes no value
- * twice; a parallel move, a recipe and a Move.Retire name each value once;
+ * twice; a parallel move, a recipe and a Retire.Close name each value once;
  * and within a region nothing names a temporary after an op took it,
  * unless an op has defined it again.  A wrong alias breaks one of these:
  * a value released twice, or a home read after it was emptied.  Ops that

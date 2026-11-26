@@ -458,12 +458,26 @@ _PyIR_SpanReadsHome(const _PyIRWord *wp, int home)
     return 0;
 }
 
+/* A move word's pair count and source count: a Retire has sources only */
+static inline void
+_PyIR_MoveCounts(const _PyIRWord *wp, int *nd, int *ns)
+{
+    if (_PyIR_FormatOf(IR_HANDLER(*wp))->flags & _PyIR_VACANT_SPAN) {
+        *nd = 0;
+        *ns = (int)IR_A(*wp);
+        return;
+    }
+    *nd = (int)IR_A(*wp);
+    *ns = (int)IR_B(*wp);
+}
+
 /* The pair of a Move whose source is home, or -1; *extra says that home is
- * a source past the pairs, which Move.Retire closes */
+ * a source past the pairs, which Retire.Close closes */
 static inline int
 _PyIR_MoveSourceOf(const _PyIRWord *wp, int home, int *extra)
 {
-    int nd = (int)IR_A(*wp), ns = (int)IR_B(*wp);
+    int nd, ns;
+    _PyIR_MoveCounts(wp, &nd, &ns);
     *extra = 0;
     for (int k = 0; k < ns; k++) {
         if (_PyIR_SpanElement(wp, IR_HANDLER(*wp), nd + k) == home) {
@@ -478,7 +492,9 @@ _PyIR_MoveSourceOf(const _PyIRWord *wp, int home, int *extra)
 static inline int
 _PyIR_MoveGives(const _PyIRWord *wp, int home)
 {
-    int nd = (int)IR_A(*wp);
+    int nd, ns;
+    _PyIR_MoveCounts(wp, &nd, &ns);
+    (void)ns;
     for (int k = 0; k < nd; k++) {
         if (_PyIR_SpanElement(wp, IR_HANDLER(*wp), k) == home) {
             return _PyIR_SpanElement(wp, IR_HANDLER(*wp), nd + k);

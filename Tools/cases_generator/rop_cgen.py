@@ -1060,6 +1060,11 @@ class ArmLowerer:
         for d in spent:
             if d.subject in moved:
                 continue
+            if self.is_span_operand(d.subject):
+                # A span's homes close together, after every home is cleared
+                # (_PyRop_CloseSpan)
+                owners[d.subject] = None
+                continue
             if self.is_vector(d.subject):
                 # An argument vector's temporaries close after the bindings
                 # (_PyRop_SpendArgs), all but a home that a binding now holds
@@ -1101,13 +1106,13 @@ class ArmLowerer:
         kept = self.home(scalar[0].target) if len(s.bindings) == 1 and scalar else "NULL"
         for d in s.debts:
             if d.kind is DebtKind.spent and d.subject in moved:
-                # The sources past the pairs, closed after every home is written
-                target = next(b.target for b in vectors if b.value.name == d.subject)
-                # The closes may run finalizers, which a stub reports
-                self.emit("IR_STUB_ESCAPE();")
-                self.emit(f"_PyRop_CloseRest({self.span(target)}, {self.span(d.subject)});")
+                raise Unsupported(f"{self.arm.name}: {d.subject} is moved and spent")
             elif d.kind is DebtKind.owned:
                 self.emit(f"PyValue_XCLOSE({self.expr_text(Name(d.subject))});")
+            elif d.kind is DebtKind.spent and self.is_span_operand(d.subject):
+                # The closes may run finalizers, which a stub reports
+                self.emit("IR_STUB_ESCAPE();")
+                self.emit(f"_PyRop_CloseSpan({self.span(d.subject)});")
             elif d.kind is DebtKind.spent and self.is_vector(d.subject):
                 self.emit(f"_PyRop_SpendArgs(frame, this_instr, {kept});")
             elif d.kind is DebtKind.spent and owners[d.subject] is not None:

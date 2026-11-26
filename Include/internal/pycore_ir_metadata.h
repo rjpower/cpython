@@ -260,8 +260,8 @@ const uint16_t _PyIR_HandlerFlags[IR_NUM_HANDLERS] = {
     [228] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SaveLocal.Take */
     [229] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalDelete.Checked */
     [230] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Transfer */
-    [231] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Retire */
-    [232] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Copy */
+    [231] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Copy */
+    [232] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Retire.Close */
     [233] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttr.Generic.Observed */
     [234] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttr.Builtin.Observed */
     [235] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttrExplicit.Generic.Observed */
@@ -560,8 +560,8 @@ const _PyIRFormat _PyIR_Formats[294] = {
     [228] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* SaveLocal.Take */
     [229] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* LocalDelete.Checked */
     [230] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Transfer */
-    [231] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Retire */
-    [232] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Copy */
+    [231] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Copy */
+    [232] = { .flags = _PyIR_VALID | _PyIR_VACANT_SPAN | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Retire.Close */
     [233] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 233, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Generic.Observed */
     [234] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 234, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Builtin.Observed */
     [235] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 235, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Generic.Observed */
@@ -697,28 +697,29 @@ enum {
         IR_FAMILY_Raise = 66,
         IR_FAMILY_Reraise = 67,
         IR_FAMILY_Resume = 68,
-        IR_FAMILY_Return = 69,
-        IR_FAMILY_SaveLocal = 70,
-        IR_FAMILY_Send = 71,
-        IR_FAMILY_SetItem = 72,
-        IR_FAMILY_SetupAnnotations = 73,
-        IR_FAMILY_SliceRead = 74,
-        IR_FAMILY_SliceWrite = 75,
-        IR_FAMILY_SpecialLookup = 76,
-        IR_FAMILY_SuperAttr = 77,
-        IR_FAMILY_SuperAttrExplicit = 78,
-        IR_FAMILY_SuperMethod = 79,
-        IR_FAMILY_SuperMethodExplicit = 80,
-        IR_FAMILY_TestBranch = 81,
-        IR_FAMILY_Truth = 82,
-        IR_FAMILY_Unary = 83,
-        IR_FAMILY_Unpack = 84,
-        IR_FAMILY_UnpackStar = 85,
-        IR_FAMILY_UpdateContainer = 86,
-        IR_FAMILY_WithExit = 87,
-        IR_FAMILY_Yield = 88,
-        IR_FAMILY_YieldFrom = 89,
-    IR_NUM_FAMILIES = 90
+        IR_FAMILY_Retire = 69,
+        IR_FAMILY_Return = 70,
+        IR_FAMILY_SaveLocal = 71,
+        IR_FAMILY_Send = 72,
+        IR_FAMILY_SetItem = 73,
+        IR_FAMILY_SetupAnnotations = 74,
+        IR_FAMILY_SliceRead = 75,
+        IR_FAMILY_SliceWrite = 76,
+        IR_FAMILY_SpecialLookup = 77,
+        IR_FAMILY_SuperAttr = 78,
+        IR_FAMILY_SuperAttrExplicit = 79,
+        IR_FAMILY_SuperMethod = 80,
+        IR_FAMILY_SuperMethodExplicit = 81,
+        IR_FAMILY_TestBranch = 82,
+        IR_FAMILY_Truth = 83,
+        IR_FAMILY_Unary = 84,
+        IR_FAMILY_Unpack = 85,
+        IR_FAMILY_UnpackStar = 86,
+        IR_FAMILY_UpdateContainer = 87,
+        IR_FAMILY_WithExit = 88,
+        IR_FAMILY_Yield = 89,
+        IR_FAMILY_YieldFrom = 90,
+    IR_NUM_FAMILIES = 91
 };
 static_assert(IR_NUM_FAMILIES <= 256, "family_stats is sized 256");
 
@@ -957,8 +958,8 @@ const uint8_t _PyIR_HandlerFamily[IR_NUM_HANDLERS] = {
     [228] = IR_FAMILY_SaveLocal, /* SaveLocal.Take */
     [229] = IR_FAMILY_LocalDelete, /* LocalDelete.Checked */
     [230] = IR_FAMILY_Move, /* Move.Transfer */
-    [231] = IR_FAMILY_Move, /* Move.Retire */
-    [232] = IR_FAMILY_Move, /* Move.Copy */
+    [231] = IR_FAMILY_Move, /* Move.Copy */
+    [232] = IR_FAMILY_Retire, /* Retire.Close */
     [233] = IR_FAMILY_SuperAttr, /* SuperAttr.Generic.Observed */
     [234] = IR_FAMILY_SuperAttr, /* SuperAttr.Builtin.Observed */
     [235] = IR_FAMILY_SuperAttrExplicit, /* SuperAttrExplicit.Generic.Observed */
@@ -1091,6 +1092,7 @@ const char *const _PyIR_FamilyNames[IR_NUM_FAMILIES] = {
     [IR_FAMILY_Raise] = "Raise",
     [IR_FAMILY_Reraise] = "Reraise",
     [IR_FAMILY_Resume] = "Resume",
+    [IR_FAMILY_Retire] = "Retire",
     [IR_FAMILY_Return] = "Return",
     [IR_FAMILY_SaveLocal] = "SaveLocal",
     [IR_FAMILY_Send] = "Send",
@@ -1349,8 +1351,8 @@ const int8_t _PyIR_PrimaryEvent[IR_NUM_HANDLERS] = {
     [228] = -1, /* SaveLocal.Take */
     [229] = -1, /* LocalDelete.Checked */
     [230] = -1, /* Move.Transfer */
-    [231] = -1, /* Move.Retire */
-    [232] = -1, /* Move.Copy */
+    [231] = -1, /* Move.Copy */
+    [232] = -1, /* Retire.Close */
     [233] = PY_MONITORING_EVENT_CALL, /* SuperAttr.Generic.Observed */
     [234] = PY_MONITORING_EVENT_CALL, /* SuperAttr.Builtin.Observed */
     [235] = PY_MONITORING_EVENT_CALL, /* SuperAttrExplicit.Generic.Observed */
@@ -1649,8 +1651,8 @@ const char *const _PyIR_OnlyNames[IR_NUM_HANDLERS] = {
     [228] = "SaveLocal.Take",
     [229] = "LocalDelete.Checked",
     [230] = "Move.Transfer",
-    [231] = "Move.Retire",
-    [232] = "Move.Copy",
+    [231] = "Move.Copy",
+    [232] = "Retire.Close",
     [233] = "SuperAttr.Generic.Observed",
     [234] = "SuperAttr.Builtin.Observed",
     [235] = "SuperAttrExplicit.Generic.Observed",

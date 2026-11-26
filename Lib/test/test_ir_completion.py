@@ -121,7 +121,7 @@ class SemanticCompletionTests(unittest.TestCase):
         iterator.close()
         gc.collect()
         self.assertEqual(released, ['released', 'released'])
-        self.assertNotIn('Move.Retire', arms(gen))
+        self.assertNotIn('Retire.Close', arms(gen))
         recipients = [i.dst for i in dis.get_instructions(gen)
                       if i.family == 'Yield']
         self.assertEqual(recipients, [None])

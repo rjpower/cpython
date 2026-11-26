@@ -256,7 +256,7 @@ arm LocalDelete.Checked shared
 // rename (an edge's residual bindings, staging, a second owner, a
 // retirement at its own origin).  The arm is the mode, chosen by the
 // lowering through its `select`.  Element i of `srcs` goes to element i of
-// `dsts`; `srcs` may be longer, by the sources that Retire closes.
+// `dsts`.
 family Move(dsts:Span<Dst>, srcs:Span<Src>)
   exits(next);
 
@@ -276,18 +276,6 @@ arm Move.Transfer shared select(transfer)
     exit next();
 }
 
-// The same, then the sources past the pairs, left vacant, are closed after
-// every home is written
-arm Move.Retire shared select(retire)
-  effects(reads, writes, releases, runs_python)
-  feedback()
-  exits(next)
-{
-  entry():
-    publish [dsts[] = srcs[]] retire [spent(srcs)] at Move.Done;
-    exit next();
-}
-
 // Each destination takes a second owner of its source, which keeps its own
 arm Move.Copy shared select(copy)
   effects(reads, writes)
@@ -296,6 +284,24 @@ arm Move.Copy shared select(copy)
 {
   entry():
     publish [dsts[] = dup(srcs[])] retire [] at Move.Copied;
+    exit next();
+}
+
+// POP_TOP's retirement: the sources are closed, in order, after every home
+// is cleared.  It moves nothing, so it has no destinations.
+family Retire(srcs:Span<Src>)
+  exits(next)
+  vacant(srcs);
+
+point Retire.Done(current, next_head, clear) keep() spent(srcs) defs();
+
+arm Retire.Close shared
+  effects(reads, writes, releases, runs_python)
+  feedback()
+  exits(next)
+{
+  entry():
+    publish [] retire [spent(srcs)] at Retire.Done;
     exit next();
 }
 

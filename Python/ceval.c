@@ -2527,16 +2527,15 @@ _PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s)
 }
 
 void
-_PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s)
+_PyRop_CloseSpan(const _PyRopSpan *s)
 {
-    // Every home is written before any close runs a finalizer
+    // Every home is cleared before any close runs a finalizer
     PyValue taken[IR_FIELD_MAX + 1];
-    int n = 0;
-    for (int i = d->count; i < s->count; i++) {
+    for (int i = 0; i < s->count; i++) {
         int slot = _PyIR_SpanElement(s->head, s->handler, s->first + i);
-        taken[n++] = _PyFrame_TakeHome(s->frame, &s->frame->base[slot]);
+        taken[i] = _PyFrame_TakeHome(s->frame, &s->frame->base[slot]);
     }
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < s->count; i++) {
         PyValue_XCLOSE(taken[i]);
     }
 }

@@ -1891,7 +1891,7 @@ void
 _PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s);
 
 void
-_PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s);
+_PyRop_CloseSpan(const _PyRopSpan *s);
 
 void
 _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s);

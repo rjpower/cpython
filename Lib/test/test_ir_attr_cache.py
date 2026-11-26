@@ -172,7 +172,7 @@ class TestCanonicalMethodCapture(unittest.TestCase):
             self.assertIn("GetMethod.PolyMethod" if expected !=
                           "GetMethod.LazyDict" else expected,
                           handlers(invoke))
-        [site] = [i for i in dis.get_instructions(invoke) if i.opname == "LOAD_ATTR"]
+        [site] = [i for i in dis.get_instructions(invoke) if i.family in ("GetAttr", "GetMethod")]
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
             invoke.__code__, site.offset)
         self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
@@ -287,7 +287,7 @@ class TestDirectClassValue(unittest.TestCase):
             for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
                 self.assertIs(read(cls), cls.selected)
             self.assert_cached(read, metaclass=type(cls) is Meta)
-        [site] = [i for i in dis.get_instructions(read) if i.opname == "LOAD_ATTR"]
+        [site] = [i for i in dis.get_instructions(read) if i.family in ("GetAttr", "GetMethod")]
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
             read.__code__, site.offset)
         self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
@@ -513,7 +513,7 @@ class TestGuardedClassValue(unittest.TestCase):
                 self.assertIs(read(owner), type(owner).selected)
             self.assert_cached(read)
         [site] = [instruction for instruction in dis.get_instructions(read)
-                  if instruction.opname == "LOAD_ATTR"]
+                  if instruction.family in ("GetAttr", "GetMethod")]
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
             read.__code__, site.offset)
         self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
@@ -531,7 +531,7 @@ class TestGuardedClassValue(unittest.TestCase):
              "    return selected\n", namespace)
         read = namespace["read"]
         sites = [instruction for instruction in dis.get_instructions(read)
-                 if instruction.opname == "LOAD_ATTR"]
+                 if instruction.family in ("GetAttr", "GetMethod")]
         private = [site for site in sites if site.fb != 0]
         shared = [site for site in sites if site.fb == 0]
         # Two header units, then 682 six-unit attr entries before entry 0.

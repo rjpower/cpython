@@ -9,7 +9,6 @@ from unittest import mock
 
 import _opcode
 import _testinternalcapi
-from test.support import ir_dis as opcode
 
 from test.test_ir_call_roles import routes
 

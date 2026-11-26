@@ -1748,6 +1748,44 @@ get_co_framesize(PyObject *self, PyObject *arg)
     return PyLong_FromLong(code->co_framesize);
 }
 
+/* The names of the feedback kinds and states, by value */
+static const char *const feedback_kinds[] = {
+    "COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL", "COMPARE", "CONTAINS",
+};
+static const char *const feedback_states[] = {"COLD", "MONO", "POLY", "MEGA", "OFF"};
+
+/* (kinds, states): the names of _PyFbKind and _PyFbState by value */
+static PyObject *
+get_feedback_names(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *kinds = PyTuple_New(Py_ARRAY_LENGTH(feedback_kinds));
+    PyObject *states = PyTuple_New(Py_ARRAY_LENGTH(feedback_states));
+    if (kinds == NULL || states == NULL) {
+        Py_XDECREF(kinds);
+        Py_XDECREF(states);
+        return NULL;
+    }
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(feedback_kinds); i++) {
+        PyObject *name = PyUnicode_FromString(feedback_kinds[i]);
+        if (name == NULL) {
+            goto error;
+        }
+        PyTuple_SET_ITEM(kinds, i, name);
+    }
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(feedback_states); i++) {
+        PyObject *name = PyUnicode_FromString(feedback_states[i]);
+        if (name == NULL) {
+            goto error;
+        }
+        PyTuple_SET_ITEM(states, i, name);
+    }
+    return Py_BuildValue("(NN)", kinds, states);
+error:
+    Py_DECREF(kinds);
+    Py_DECREF(states);
+    return NULL;
+}
+
 /* The feedback entry of the instruction at word index I of the executing
  * copy of CODE, which this makes if CODE has never run: None if it has
  * none, else (kind,
@@ -1757,10 +1795,8 @@ get_co_framesize(PyObject *self, PyObject *arg)
 static PyObject *
 get_feedback(PyObject *self, PyObject *args)
 {
-    static const char *const kinds[] = {
-        "COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL", "COMPARE", "CONTAINS",
-    };
-    static const char *const states[] = {"COLD", "MONO", "POLY", "MEGA", "OFF"};
+    const char *const *kinds = feedback_kinds;
+    const char *const *states = feedback_states;
     PyCodeObject *code;
     int i;
     if (!PyArg_ParseTuple(args, "O!i", &PyCode_Type, &code, &i)) {
@@ -2088,6 +2124,56 @@ find_arm(const char *name)
         }
     }
     PyErr_Format(PyExc_ValueError, "no register instruction arm %s", name);
+    return NULL;
+}
+
+/* arm_operands() -> {family: ((name, kind, role, optional, bits, offset), ...)}:
+ * the declared operands of each register instruction family, in declaration
+ * order.  kind is one of "home", "imm", "name", "const", "feedback",
+ * "target", "vector", "flag"; offset is the bit offset in the image of the
+ * head and operand words, whose handler field is the low 16 bits. */
+static PyObject *
+arm_operands(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    static const char *const kinds[] = {"home", "imm", "name", "const",
+                                        "feedback", "target", "vector", "flag"};
+    static const char *const roles[] = {"none", "src", "dst", "local", "cell",
+                                        "free", "iterpair", "sendwindow"};
+    PyObject *result = PyDict_New();
+    if (result == NULL) {
+        return NULL;
+    }
+    for (int f = 0; f < ROP_NUM_FAMILIES; f++) {
+        const _PyRopFamily *family = &_PyRop_Families[f];
+        PyObject *operands = PyList_New(0);
+        if (operands == NULL) {
+            goto error;
+        }
+        for (int k = 0; k < family->noperands; k++) {
+            const _PyRopOperand *o = &family->operands[k];
+            PyObject *row = Py_BuildValue("(sssiii)", o->name, kinds[o->kind],
+                                          roles[o->role], o->optional,
+                                          o->bits, o->offset);
+            if (row == NULL || PyList_Append(operands, row) < 0) {
+                Py_XDECREF(row);
+                Py_DECREF(operands);
+                goto error;
+            }
+            Py_DECREF(row);
+        }
+        PyObject *tuple = PyList_AsTuple(operands);
+        Py_DECREF(operands);
+        if (tuple == NULL ||
+            PyDict_SetItemString(result, family->name, tuple) < 0)
+        {
+            Py_XDECREF(tuple);
+            goto error;
+        }
+        Py_DECREF(tuple);
+    }
+    return result;
+error:
+    Py_DECREF(result);
     return NULL;
 }
 
@@ -5661,6 +5747,8 @@ static PyMethodDef module_functions[] = {
     {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
+    {"arm_operands", arm_operands, METH_NOARGS, NULL},
+    {"get_feedback_names", get_feedback_names, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
     {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},
     {"ir_edge_homes", ir_edge_homes, METH_VARARGS, NULL},

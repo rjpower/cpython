@@ -7,12 +7,12 @@ mean to run: g is a function that fails the test.
 
 from test.support import ir_dis as dis
 import marshal
-from test.support import ir_dis as opcode
 import sys
 import types
 import unittest
 
 import _opcode
+from _opcode_metadata import _ir_handlers
 from test.support import import_helper
 from test.support.ir_dis import IRCode, encode_words
 
@@ -107,17 +107,21 @@ class WordLengthTests(unittest.TestCase):
 
     def test_only_the_call_families_have_operand_words(self):
         length = _opcode.get_ir_word_length
-        for handler, row in enumerate(CONTRACT[:_opcode.IR_FIRST_ARM]):
-            if row is None:
+        call_shaped = (_opcode.IR_OPERANDS_CALL, _opcode.IR_OPERANDS_KW,
+                       _opcode.IR_OPERANDS_EX)
+        for handler, row in enumerate(CONTRACT):
+            # A span's length follows its count fields, not field C
+            if row.operands == _opcode.IR_OPERANDS_SPANS:
                 continue
             name = dis._all_opname[handler]
             with self.subTest(handler=name):
-                is_call = name.split(".")[0] in CALL_FAMILIES
+                is_call = row.operands in call_shaped
+                self.assertEqual(is_call, name.split(".")[0] in CALL_FAMILIES)
                 word = self.word(name, 0, 0, 7, 0)
-                self.assertEqual(length(word), 3 if is_call else 1)
+                self.assertEqual(length(word), 3 if is_call else 1 + row.fixed_words)
 
     def test_operands_handler_is_never_dispatched(self):
-        row = CONTRACT[opcode._ir_handlers["IR_OPERANDS"]]
+        row = CONTRACT[_ir_handlers["IR_OPERANDS"]]
         self.assertEqual(row.roles, (_opcode.IR_ROLE_NONE,) * 4)
         self.assertEqual(row.word_flags, 0)
 
@@ -196,13 +200,13 @@ class DisTests(unittest.TestCase):
         self.assertEqual(offset, len(words))
         self.assertEqual(len(instructions), sum(
             1 for row in words if row[0] != "IR_OPERANDS"))
-        self.assertFalse(any(i.opname == "IR_OPERANDS" for i in instructions))
+        self.assertFalse(any(i.arm == "IR_OPERANDS" for i in instructions))
 
     def test_the_operands_are_listed_with_the_head(self):
         code = FUNCTIONS["f"]
         (i, head, operands), = calls(code)
         call = next(ins for ins in dis.get_instructions(code) if ins.offset == i)
-        self.assertEqual(call.opname, "CALL")
+        self.assertEqual(call.family, "Call")
         self.assertEqual(call.handler, "Call.Generic+NO_SELF")
         self.assertEqual(call.length, 1 + len(operands))
         slots = [s for row in operands for s in row[1:]][:head[3]]
@@ -229,7 +233,7 @@ class DisTests(unittest.TestCase):
     def test_labels_never_land_on_operands(self):
         for code in FUNCTIONS.values():
             starts = {ins.offset for ins in dis.get_instructions(code)}
-            for target in dis.findlabels(IRCode(code).co_code):
+            for target in dis.findlabels(code):
                 self.assertIn(target, starts)
 
     def test_adaptive_view_shows_the_same_instructions(self):

@@ -202,7 +202,7 @@ class TestClassMethodCache(unittest.TestCase):
         for cls in classes[1:]:
             for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
                 self.assertEqual(invoke(cls, 7), (cls, 7))
-        [site] = [i for i in dis.get_instructions(invoke) if i.opname == "LOAD_ATTR"]
+        [site] = [i for i in dis.get_instructions(invoke) if i.family in ("GetAttr", "GetMethod")]
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
             invoke.__code__, site.offset)
         self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
@@ -361,7 +361,6 @@ class TestClassMethodCache(unittest.TestCase):
         self.warm_invoke(invoke, Receiver)
         self.assertIn("GetMethod.ClassMethod", _testinternalcapi.arm_handlers())
         self.assertEqual(invoke.__code__.co_code, original)
-        # ir_dis shows an execution-only handler as the instruction it runs
         self.assertIn("GetMethod.ClassMethod", handlers(invoke))
 
 

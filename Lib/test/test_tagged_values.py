@@ -454,8 +454,8 @@ def warm(func, *args, **kwargs):
 
 
 def opnames(func):
-    # The stack ops, and the register instruction arms that the words run
-    names = {i.opname for i in dis.get_instructions(func, adaptive=True)}
+    # The arms that the words run
+    names = {i.arm for i in dis.get_instructions(func, adaptive=True)}
     return names | {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
 
 
@@ -463,8 +463,7 @@ def existing(*names):
     """The names of old handlers that this build still has, and every arm
     name (it has a dot).  A port deletes the old handlers of its family."""
     return [name for name in names
-            if "." in name or name in dis._ir_handlers
-            or name in dis._specialized_opmap or name in dis.opmap]
+            if "." in name or name in dis._all_opmap]
 
 
 def handler_names(func):

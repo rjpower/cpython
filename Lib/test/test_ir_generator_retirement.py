@@ -1,7 +1,6 @@
 """Completed receiver destruction preserves owners across callbacks."""
 
 import gc
-from test.support import ir_dis as opcode
 import sys
 import types
 import unittest
@@ -12,7 +11,6 @@ import _testinternalcapi
 from test import support
 
 
-HANDLERS = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_handlers}
 CONTRACTS = _opcode.get_ir_contract()
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD * 3
 

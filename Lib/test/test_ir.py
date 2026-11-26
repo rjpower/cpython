@@ -6,7 +6,6 @@ import dis as stack_dis
 import gc
 import io
 import math
-from test.support import ir_dis as opcode
 import sys
 import types
 import unittest
@@ -20,6 +19,29 @@ from test.support.ir_dis import IRCode
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = _testinternalcapi.get_ir
+
+# The modes of a BranchTruth word, in the order of the BranchMode enum
+# (Python/register_ops/truth.rop): the jump on false or true, which drops the
+# tested value, and the jump on false or true that keeps it
+JUMP_IF_FALSE, JUMP_IF_TRUE, KEEP_IF_FALSE, KEEP_IF_TRUE = range(4)
+
+
+# The ids of an IntrinsicPair.Attr word, which are the places of
+# INTRINSIC_GETATTR and INTRINSIC_SETATTR in enum IntrinsicId
+# (Python/register_ops/functions.rop)
+INTRINSIC_GETATTR, INTRINSIC_SETATTR = 18, 19
+
+
+def origins(func):
+    """The stack instruction that each word of func was lowered from"""
+    return [dis.origin_opcode(func, word) for word in dis.get_instructions(func)]
+
+
+def modes(func):
+    """The mode of each BranchTruth word of func"""
+    return [word.get("mode") for word in dis.get_instructions(func)
+            if word.family == "BranchTruth"]
+
 
 # The free-threaded build does not specialise the IR.
 SPECIALIZES = not support.Py_GIL_DISABLED
@@ -102,7 +124,7 @@ class AssemblerTest(unittest.TestCase):
             return a.x in b.y
         base = nlocalsplus(f)
         contains = [instr for instr in dis.get_instructions(f)
-                    if instr.opname == "CONTAINS_OP"][0]
+                    if instr.family == "Contains"][0]
         self.assertEqual(contains.dst, base)
         self.assertEqual(contains.srcs, (base, base + 1))
         o = types.SimpleNamespace(x=1, y=[1])
@@ -384,7 +406,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(True, noop), 1)
         self.assertIn("BranchTruth.Bool", handlers(f))
         instructions = list(dis.get_instructions(f))
-        self.assertNotIn("NOP", [i.opname for i in instructions])
+        self.assertNotIn("NOP", origins(f))
         source_line = f.__code__.co_firstlineno + 5  # try:
         self.assertEqual(f(False, noop), 2)
 
@@ -560,8 +582,8 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(xs), len(xs) // 3)
         self.assertIn("TestBranch.Int", handlers(f))
         jump = [instr for instr in dis.get_instructions(f)
-                if instr.opname.startswith("POP_JUMP_IF")][0]
-        if_true = jump.opname == "POP_JUMP_IF_TRUE"
+                if instr.family == "TestBranch"][0]
+        if_true = bool(jump.get("sense"))
         # The event is at the stack bytecode's jump, which the word has
         # with the compare
         source = [instr.offset for instr in stack_dis.get_instructions(f)
@@ -627,7 +649,7 @@ class AssemblerTest(unittest.TestCase):
         # The last constant names its index through B and C
         index = [k for k, word in enumerate(ir) if word[0] == "Const.Pool"][-1]
         _, _, b, c, _ = ir[index]
-        arg = list(dis.get_instructions(f))[index].arg
+        arg = f.__code__.co_consts.index(nconsts - 1 + 0.5)
         self.assertGreater(arg, IR_FIELD_MAX)
         self.assertEqual(c << 12 | b, arg)
         self.check_offsets(f)
@@ -696,17 +718,16 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 4):
             self.assertEqual(f(O(), 2), expected)
         instrs = list(dis.get_instructions(f))
-        compares = [i for i in instrs
-                    if i.opname.startswith(("COMPARE_OP", "CONTAINS_OP"))]
+        compares = [i for i in instrs if i.family in ("Compare", "Contains")]
         self.assertEqual([i.fb for i in compares], [0, 0])
-        load_attrs = [i for i in instrs if i.opname == "LOAD_ATTR"]
+        load_attrs = [i for i in instrs if i.family in ("GetAttr", "GetMethod")]
         self.assertEqual(fb_position(f.__code__, load_attrs[0].fb), 2)
         self.assertEqual(fb_position(f.__code__, load_attrs[1].fb), 8)
         shared = [i for i in load_attrs if i.fb == 0]
         owned = [i for i in load_attrs if i.fb != 0]
         self.assertEqual(len(owned), 682)
         self.assertEqual(len(shared), nsites + 6 - len(owned))
-        self.assertEqual({i.argval for i in shared}, {"attr", "other"})
+        self.assertEqual({i.get("name") for i in shared}, {"attr", "other"})
         ir = handlers(f)
         self.assertEqual({ir[i.offset] for i in shared}, {"GetAttr.Generic"})
         if SPECIALIZES:
@@ -767,8 +788,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(ir.count("Binary.Generic"), 3)
         self.assertEqual(f(7, 2), (3, 10))
         self.assertEqual(f(7.0, 2), (3.0, 10.0))
-        ops = [instr.opname for instr in dis.get_instructions(f)]
-        self.assertEqual(ops.count("BINARY_OP"), 3)
+        self.assertEqual(origins(f).count("BINARY_OP"), 3)
 
 
 def call_and_return(function):
@@ -887,11 +907,11 @@ class FeedbackLayoutTest(unittest.TestCase):
         # The sites in the loop come first, in source order, then the others
         by_name = {}
         for instr in dis.get_instructions(f):
-            by_name.setdefault(instr.opname, []).append(instr.fb)
-        c1, c2 = by_name["POP_JUMP_IF_TRUE"]
-        pre, a1, b, a2 = by_name["LOAD_ATTR"][:4]
-        after = by_name["LOAD_ATTR"][4]
-        store = by_name["STORE_ATTR"][0]
+            by_name.setdefault(instr.family, []).append(instr.fb)
+        c1, c2 = by_name["TestBranch"]
+        pre, a1, b, a2 = by_name["GetAttr"][:4]
+        after = by_name["GetAttr"][4]
+        store = by_name["AttrWrite"][0]
         self.assertEqual(sorted([a1, c1, b, c2, a2, store]),
                          [a1, c1, b, c2, a2, store])
         self.assertLess(store, pre)
@@ -909,14 +929,15 @@ class FeedbackLayoutTest(unittest.TestCase):
                   "        y = o.b\n"
                   "    return o.c\n")
         f = make_function(source)
-        attrs = [i for i in dis.get_instructions(f) if i.opname == "LOAD_ATTR"]
-        self.assertEqual([i.argval for i in attrs], ["a", "b", "c"])
+        attrs = [i for i in dis.get_instructions(f)
+                 if i.family in ("GetAttr", "GetMethod")]
+        self.assertEqual([i.get("name") for i in attrs], ["a", "b", "c"])
         self.assertLess(attrs[1].fb, attrs[0].fb)
         self.assertLess(attrs[0].fb, attrs[2].fb)
         module = compile("x = a.p\nfor i in range(3):\n    y = a.q\nz = a.r\n",
                          "<test>", "exec")
         attrs = [i for i in dis.get_instructions(module)
-                 if i.opname == "LOAD_ATTR"]
+                 if i.family in ("GetAttr", "GetMethod")]
         self.assertEqual(sorted(i.fb for i in attrs), [i.fb for i in attrs])
 
     def test_loops_are_in_the_flow_graph(self):
@@ -930,8 +951,8 @@ class FeedbackLayoutTest(unittest.TestCase):
                 except KeyError:
                     pass
             o.after
-        fbs = {i.argval: i.fb for i in dis.get_instructions(f)
-               if i.opname == "LOAD_ATTR"}
+        fbs = {i.get("name"): i.fb for i in dis.get_instructions(f)
+               if i.family in ("GetAttr", "GetMethod")}
         self.assertLess(fbs["inside"], fbs["pre0"])
         self.assertLess(fbs["pre0"], fbs["after"])
 
@@ -956,10 +977,9 @@ class FeedbackLayoutTest(unittest.TestCase):
         instrs = list(dis.get_instructions(f))
         # The tests alone and the tests that a jump consumes
         tests = [i for i in instrs
-                 if i.opname in ("COMPARE_OP", "CONTAINS_OP")
-                 or (i.opname.startswith("POP_JUMP") and i.length > 1)]
+                 if i.family in ("Compare", "Contains", "TestBranch")]
         self.assertEqual(len(tests), nsites)
-        self.assertFalse([i for i in instrs if i.opname == "CALL_INTRINSIC_2"])
+        self.assertFalse([i for i in instrs if i.family == "IntrinsicPair"])
         owned = [i for i in tests if i.fb]
         self.assertTrue(0 < len(owned) < nsites)
         # Entries go in source order; the sites after them share entry 0
@@ -1195,9 +1215,9 @@ class NameLimitTest(unittest.TestCase):
         f = self.make([f"    t += o.n{i}" for i in range(n)])
         self.assertEqual(len(f.__code__.co_names), n)
         instrs = list(dis.get_instructions(f))
-        loads = [i for i in instrs if i.opname == "LOAD_ATTR"]
-        gets = [i for i in instrs if i.opname == "CALL_INTRINSIC_2"
-                and i.argrepr == "INTRINSIC_GETATTR"]
+        loads = [i for i in instrs if i.family == "GetAttr"]
+        gets = [i for i in instrs if i.arm == "IntrinsicPair.Attr"
+                and i.get("id") == INTRINSIC_GETATTR]
         # oparg = index << 1 must fit 12 bits: 2,048 names
         self.assertEqual(len(loads), 2048)
         self.assertEqual(len(gets), n - 2048)
@@ -1226,8 +1246,9 @@ class NameLimitTest(unittest.TestCase):
             self.assertEqual(f(ns), want)
             self.assertEqual(vars(ns).keys(), {f"m{i}" for i in range(n)})
         instrs = list(dis.get_instructions(f))
-        self.assertIn("INTRINSIC_SETATTR",
-                      {i.argrepr for i in instrs if i.opname == "CALL_INTRINSIC_2"})
+        self.assertIn(INTRINSIC_SETATTR,
+                      {i.get("id") for i in instrs
+                       if i.arm == "IntrinsicPair.Attr"})
         # A store to an object that refuses it raises from the lowered site
         class Frozen:
             def __getattr__(self, name):
@@ -1248,10 +1269,11 @@ class NameLimitTest(unittest.TestCase):
         exec("\n".join(lines) + "\n", ns)
         d = ns["D"]()
         code = ns["D"].f.__code__
-        names = [i.opname for i in dis.get_instructions(code)]
-        self.assertIn("LOAD_SUPER_ATTR", names)
-        self.assertGreater(names.count("LOAD_SUPER_ATTR"), 1000)
-        self.assertLess(names.count("LOAD_SUPER_ATTR"), n)
+        names = [i.family for i in dis.get_instructions(code)
+                 if i.family in ("SuperAttr", "SuperMethod")]
+        self.assertTrue(names)
+        self.assertGreater(len(names), 1000)
+        self.assertLess(len(names), n)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
             self.assertEqual(d.f(), sum(range(n)))
 
@@ -1421,7 +1443,7 @@ def words(func):
     (handler, dst or None, srcs)"""
     return [(instr.handler, instr.dst, instr.srcs)
             for instr in dis.get_instructions(func)
-            if instr.opname != "RESUME"]
+            if instr.family != "Resume"]
 
 
 class FoldTest(unittest.TestCase):
@@ -1761,14 +1783,14 @@ class TruthTest(unittest.TestCase):
             if not x:
                 return 1
             return 2
-        # The word is the BranchTruth family's; the stack instruction it came
-        # from shows as the opname
+        # The word is the BranchTruth family's; its mode is the sense of the
+        # jump
         self.assertEqual(words(f)[0], ("BranchTruth.Generic", None, (0,)))
         self.assertEqual(words(g)[0], ("BranchTruth.Generic", None, (0,)))
-        self.assertEqual([i.opname for i in dis.get_instructions(f)][1], "POP_JUMP_IF_FALSE")
-        self.assertEqual([i.opname for i in dis.get_instructions(g)][1], "POP_JUMP_IF_TRUE")
+        self.assertEqual(modes(f), [JUMP_IF_FALSE])
+        self.assertEqual(modes(g), [JUMP_IF_TRUE])
         for func in f, g:
-            names = [instr.opname for instr in dis.get_instructions(func)]
+            names = origins(func)
             self.assertNotIn("TO_BOOL", names)
             self.assertNotIn("UNARY_NOT", names)
 
@@ -1779,8 +1801,7 @@ class TruthTest(unittest.TestCase):
         def g(o):
             o.a += 1
         for func in f, g:
-            names = [instr.opname for instr in dis.get_instructions(func)]
-            self.assertNotIn("COPY", names)
+            self.assertNotIn("COPY", origins(func))
         o = types.SimpleNamespace(a=1)
         for k in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(0, 5), 0)
@@ -1869,8 +1890,8 @@ class TruthTest(unittest.TestCase):
 
         xs = [0, 1, None, "a", [], [0], Truthy(), Falsy()] * 10
         jump = [instr for instr in dis.get_instructions(f)
-                if instr.opname.startswith("POP_JUMP_IF_")][0]
-        if_true = jump.opname == "POP_JUMP_IF_TRUE"
+                if instr.family == "BranchTruth"][0]
+        if_true = jump.get("mode") == JUMP_IF_TRUE
         # The event is at the stack bytecode's jump
         source = [instr.offset for instr in stack_dis.get_instructions(f)
                   if instr.opname.startswith("POP_JUMP_IF_")][0]
@@ -2711,7 +2732,7 @@ class RegCfgTest(unittest.TestCase):
 
     def ops(self, func):
         """The stack instructions that the words came from"""
-        return [i.opname for i in dis.get_instructions(func)]
+        return origins(func)
 
     # a. Copy propagation
 
@@ -2940,8 +2961,8 @@ class RegCfgTest(unittest.TestCase):
             return o.x and b
         def disj(o, b):
             return o.x or b
-        self.assertIn("JUMP_IF_FALSE_OR_POP", self.ops(conj))
-        self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
+        self.assertIn(KEEP_IF_FALSE, modes(conj))
+        self.assertIn(KEEP_IF_TRUE, modes(disj))
         for f in conj, disj:
             self.assertNotIn("Move.Copy", self.names(f))
             self.assertNotIn("Move.Retire", self.names(f))
@@ -2966,7 +2987,7 @@ class RegCfgTest(unittest.TestCase):
             return a or b
         def window(a, b):
             return list((a or b(), 1))
-        self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
+        self.assertIn(KEEP_IF_TRUE, modes(disj))
         self.assertNotIn("Move.Retire", self.names(disj))
         empty, full = [], [1]
         for a in empty, full, 0, 2.5:
@@ -3549,8 +3570,8 @@ class FusedJumpTest(AssemblerTestCase):
                     # The word is the jump in the disassembly: no word is
                     # a test of its own
                     self.assertFalse(
-                        [i.opname for i in dis.get_instructions(f)
-                         if i.opname in ("COMPARE_OP", "IS_OP", "CONTAINS_OP")])
+                        [i for i in dis.get_instructions(f)
+                         if i.family in ("Compare", "Identity", "Contains")])
 
     def test_instrumentation_sees_a_jump(self):
         f = make_function("def f(a, b):\n    if a < b:\n        return 1\n"

@@ -11,8 +11,14 @@ _testinternalcapi = import_helper.import_module("_testinternalcapi")
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD + 10
 
 
-def opnames(function):
-    return [instruction.opname for instruction in dis.get_instructions(function)]
+def arms(function):
+    return [word.arm for word in dis.get_instructions(function)]
+
+
+def origins(function):
+    # The stack instruction that each word was lowered from
+    return [dis.origin_opcode(function, word)
+            for word in dis.get_instructions(function)]
 
 
 class SemanticCompletionTests(unittest.TestCase):
@@ -80,8 +86,8 @@ class SemanticCompletionTests(unittest.TestCase):
 
         for _ in range(ROUNDS):
             self.assertIs(consume(), item)
-        self.assertNotIn("END_FOR", opnames(consume))
-        self.assertNotIn("POP_ITER", opnames(consume))
+        self.assertNotIn("END_FOR", origins(consume))
+        self.assertNotIn("POP_ITER", origins(consume))
 
     def test_native_for_iter_outcomes(self):
         class Iterator:
@@ -110,8 +116,8 @@ class SemanticCompletionTests(unittest.TestCase):
                 for _ in range(ROUNDS):
                     self.assertEqual(consume(factory()), (6, 3))
         self.assertEqual(consume([]), (0, None))
-        self.assertNotIn("END_FOR", opnames(consume))
-        self.assertNotIn("POP_ITER", opnames(consume))
+        self.assertNotIn("END_FOR", origins(consume))
+        self.assertNotIn("POP_ITER", origins(consume))
 
     def test_send_completion_separate_from_yield_recipient(self):
         marker = object()
@@ -130,7 +136,7 @@ class SemanticCompletionTests(unittest.TestCase):
             with self.assertRaises(StopIteration) as stopped:
                 generator.send(None)
             self.assertIs(stopped.exception.value, marker)
-        self.assertNotIn("END_SEND", opnames(outer))
+        self.assertNotIn("END_SEND", origins(outer))
 
     def test_cleanup_throw_completes_same_send_result(self):
         marker = object()
@@ -154,7 +160,7 @@ class SemanticCompletionTests(unittest.TestCase):
         with self.assertRaises(StopIteration) as stopped:
             generator.throw(ValueError("injected"))
         self.assertIs(stopped.exception.value, marker)
-        self.assertNotIn("END_SEND", opnames(outer))
+        self.assertNotIn("END_SEND", origins(outer))
 
     def test_ignored_resume_input_and_created_send_validation(self):
         def ignore():
@@ -169,7 +175,7 @@ class SemanticCompletionTests(unittest.TestCase):
         self.assertEqual(generator.send(object()), "second")
         with self.assertRaises(StopIteration):
             generator.send(object())
-        self.assertNotIn("Move.Retire", opnames(ignore))
+        self.assertNotIn("Move.Retire", arms(ignore))
 
     def test_init_cleanup_real_continuation(self):
         class Normal:

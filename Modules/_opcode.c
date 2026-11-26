@@ -407,8 +407,8 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"vacant", "bit h: home h may be NULL when the word reads it"},
     {"committed", "bit e: edge e publishes before its callbacks"},
     {"edges", "per normal edge, the IR_HOME_* state of each home: two 6-tuples"},
-    {"twin", "the handler that instrumentation runs, or None"},
-    {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
+    {"events", "bit e: the family's observer can fire monitoring event e"},
+    {"observer", "the handler that the observing evaluator runs for the word"},
     {"word_flags", "the canonical word flags the handler admits (IR_F_NO_SELF, IR_F_NO_KW)"},
     {"operands", "the words after the head: an IR_OPERANDS_* constant"},
     {"fixed_words", "the operand words after the head before a span's elements"},
@@ -422,12 +422,6 @@ static PyStructSequence_Desc ir_contract_desc = {
     ir_contract_fields,
     Py_ARRAY_LENGTH(ir_contract_fields) - 1,
 };
-
-static PyObject *
-handler_or_none(int h)
-{
-    return h == _PyIR_NO_HANDLER ? Py_NewRef(Py_None) : PyLong_FromLong(h);
-}
 
 /* The _PyIR_HOME_* state of home h after normal edge e */
 static int
@@ -463,8 +457,8 @@ ir_contract_row(PyTypeObject *type, int h)
                       home_state(fmt, 1, 0), home_state(fmt, 1, 1),
                       home_state(fmt, 1, 2), home_state(fmt, 1, 3),
                       home_state(fmt, 1, 4), home_state(fmt, 1, 5)),
-        handler_or_none(fmt->twin),
         PyLong_FromUnsignedLong(fmt->events),
+        PyLong_FromLong(_PyIR_ObservingHandler[h]),
         PyLong_FromLong(fmt->word_flags),
         PyLong_FromLong(fmt->operands),
         PyLong_FromLong(fmt->fixed_words),
@@ -494,13 +488,12 @@ Item h describes handler h: None if there is none, else an IRContract,
 whose fields are those of _PyIRFormat in Include/internal/pycore_ir.h,
 which documents them, and base, the opcode that the handler stands for.
 roles holds the roles of fields A to D; reads, writes and through are
-(k, form) extents; dst is None for a format without one; twin
-is a handler or None.
+(k, form) extents; dst is None for a format without one.
 [clinic start generated code]*/
 
 static PyValue
 _opcode_get_ir_contract_impl(PyObject *module)
-/*[clinic end generated code: output=cad532d9315c6dc9 input=0fe500acc87ed1d2]*/
+/*[clinic end generated code: output=cad532d9315c6dc9 input=d0c0e1b1885393a0]*/
 {
     PyTypeObject *type = get_opcode_state(module)->ir_contract_type;
     PyObject *contract = PyTuple_New(IR_NUM_HANDLERS);
@@ -743,7 +736,6 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_VALID", _PyIR_VALID);
     ADD_IR_CONSTANT("IR_JUMPS", _PyIR_JUMPS);
     ADD_IR_CONSTANT("IR_FORWARD", _PyIR_FORWARD);
-    ADD_IR_CONSTANT("IR_TRANSPARENT", _PyIR_TRANSPARENT);
     ADD_IR_CONSTANT("IR_GROUP_OUT", _PyIR_GROUP_OUT);
     ADD_IR_CONSTANT("IR_RUNS_CODE", _PyIR_RUNS_CODE);
     ADD_IR_CONSTANT("IR_JUMP_ALWAYS", _PyIR_JUMP_ALWAYS);

@@ -530,8 +530,8 @@ parse_code_object(RemoteUnwinderObject *unwinder,
     // Read the instruction opcode from target process if opcodes flag is set
     PyObject *opcode_obj = NULL;
     if (unwinder->opcodes) {
-        // The handler of the word, which may be specialised or
-        // instrumented: dis.opname and the _opcode module name every handler
+        // The handler of the word, which may be specialised: dis.opname and
+        // the _opcode module name every handler
         uint64_t word = 0;
         if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, ip,
                                                    sizeof(uint64_t), &word) == 0) {

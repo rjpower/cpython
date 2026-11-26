@@ -393,8 +393,8 @@ class Scenario:
     words_of: dict[str, str] = field(default_factory=dict)
     # The sources whose code has local events (EVENTS).  An arm
     # that `observes` runs only on them: its event rows require
-    # instrumented(site), which its declaration grants on the instrumented
-    # twin's words only
+    # instrumented(site), which its declaration grants on the words of
+    # observed code only
     monitored: tuple[str, ...] = ()
     # Arms the probe cannot run on these words, and why (the report lists them)
     skip: dict[str, str] = field(default_factory=dict)
@@ -1215,10 +1215,6 @@ UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
               "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
     "Rotate.Cycle": "the helper turns homes in place; test_ir runs a cycle",
-    # Monitoring: a displacing arm runs another handler, which the evaluator
-    # does not model; test_monitoring and test_sys_settrace run them
-    "Line.Hook": "covered by test_monitoring and test_sys_settrace",
-    "Instruction.Hook": "covered by test_monitoring and test_sys_settrace",
     # Iteration (rir90 FI): the arms are checked by test_rop_iter
     "IterOpen.Generic": "covered by test_rop_iter",
     "ForIter.Generic": "covered by test_rop_iter",

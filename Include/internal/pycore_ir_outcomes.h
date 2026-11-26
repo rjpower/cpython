@@ -265,19 +265,15 @@ _PyIR_HomesInFrame(_PyIRWord word, const _PyIRHomes *v, int nl, int limit)
     return 1;
 }
 
-/* Whether edge publishes its homes before its callbacks run.  Constructor
- * words are pristine; monitoring runs their twin, which declares it. */
+/* Whether edge publishes its homes before its callbacks run, which the
+ * format of the family declares for every arm and its observer */
 static inline int
 _PyIR_Committed(_PyIRWord word, int edge)
 {
     if (edge < 0 || edge > 1) {
         return 0;
     }
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (fmt->twin != _PyIR_NO_HANDLER) {
-        fmt = _PyIR_FormatOf(fmt->twin);
-    }
-    return (fmt->committed >> edge) & 1;
+    return (_PyIR_FormatOf(IR_HANDLER(word))->committed >> edge) & 1;
 }
 
 enum {

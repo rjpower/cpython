@@ -11,6 +11,7 @@ extern "C" {
 #include "pycore_backoff.h"     // _Py_BackoffCounter
 #include "pycore_feedback.h"    // _PyFbHeader
 #include "pycore_structs.h"     // _Py_CODEUNIT
+#include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_UINTPTR_ACQUIRE
 #include "pycore_tstate.h"      // _PyThreadStateImpl
 
 
@@ -24,6 +25,21 @@ extern "C" {
 // This helps with backporting certain changes to 3.12.
 #define _PyCode_HAS_INSTRUMENTATION(CODE) \
     (CODE->_co_instrumentation_version > 0)
+
+/* The observed mark of _co_instrumentation_version: the top bit, above every
+ * version (set_global_version() asserts that no version reaches it).  The
+ * code of an observed code object runs in the observing evaluator
+ * (Python/ceval_observing.c).  The eval breaker never holds the mark, so the
+ * normal evaluator's RESUME test fails for observed code, and RESUME sends
+ * the frame to the other evaluator. */
+#define _PyCode_OBSERVED_MARK ((uintptr_t)1 << (8 * sizeof(uintptr_t) - 1))
+
+static inline int
+_PyCode_IsObserved(PyCodeObject *co)
+{
+    uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(co->_co_instrumentation_version);
+    return (version & _PyCode_OBSERVED_MARK) != 0;
+}
 
 
 extern PyStatus _PyCode_Init(PyInterpreterState *interp);

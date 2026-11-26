@@ -505,13 +505,12 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     Py_ssize_t word_index = frame->instr_ptr - exec->words;
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr);
     int handler = IR_HANDLER(word);
-    int semantic_handler = _PyCode_InstrHandler(code, (int)word_index);
     /* The window of the stack instruction: the callable, the self or NULL,
      * the arguments, and for CALL_KW its names or for CALL_FUNCTION_EX the
      * tuple and the kwargs.  The temporary operands stand in their homes,
      * as the callable does, while a native callee runs. */
     int has_self = (word & IR_F_NO_SELF) == 0, count;
-    switch (_PyIR_HandlerFamily[semantic_handler]) {
+    switch (_PyIR_HandlerFamily[handler]) {
         case IR_FAMILY_CallEx:
             count = 4;
             break;

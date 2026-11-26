@@ -1,8 +1,7 @@
 """Generate the metadata of the register IR: Include/internal/pycore_ir_metadata.h.
 
 The register instruction arms (Python/register_ops) follow the word kinds in
-every per-handler table, then the observed wrappers of the arms of families
-that declare events: rop_generator.arm_entries() lists them, and
+every per-handler table: rop_generator.arm_entries() lists them, and
 IR_NUM_HANDLERS counts them.  The translator's rows of the stack ops are
 in its own header (regcfg_metadata_generator.py).
 
@@ -37,7 +36,7 @@ OPERANDS_ROW = (
     "_PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
     ".fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
     ".word_flags = 0, .operands = _PyIR_OPERANDS_NONE, "
-    ".twin = _PyIR_NO_HANDLER, .events = 0 }")
+    ".events = 0 }")
 OPERANDS_FLAGS = "_PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_IR_ONLY | _PyIR_H_PRISTINE"
 
 
@@ -88,8 +87,6 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
             parts.append("_PyIR_H_SAVES_IP")
     if arm.adaptive and not arm.is_generic:
         parts.append("_PyIR_H_SPECIALIZED")
-    if arm.observes is not None or arm.displacing:
-        parts.append("_PyIR_H_INSTRUMENTED")
     if arm.trailing:
         parts.append("_PyIR_H_TRAILING")
     _, left, stop = monitor_events(arm)
@@ -102,15 +99,9 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
 
 
 def arm_row(arm: ir_arms.ArmEntry) -> str:
-    "The _PyIRFormat row of an arm, or of its observed wrapper"
+    "The _PyIRFormat row of an arm"
     fmt = arm.format
     assert fmt is not None
-    own = arm_id(arm)
-    if arm.observes is not None:
-        twin = own
-    else:
-        twin = ("_PyIR_NO_HANDLER" if arm.twin is None
-                else first_arm() + arm.twin)
     fb_kind, fb_size = "0", "0"
     if fmt.fb_schema is not None:
         fb_kind = f"FB_{fmt.fb_schema.upper()}"
@@ -125,7 +116,7 @@ def arm_row(arm: ir_arms.ArmEntry) -> str:
         f".fb = {fmt.fb}, .target = {fmt.target}, .fb_kind = {fb_kind}, "
         f".fb_size = {fb_size}, .transfer_kind = {fmt.transfer}, "
         f".word_flags = {word_flags}, .operands = {fmt.operands}, {fixed}"
-        f".twin = {twin}, .events = {events}, .group = {fmt.group}, "
+        f".events = {events}, .group = {fmt.group}, "
         f".normal = {fmt.normal:#x}, .vacant = {fmt.vacant:#x}, "
         f".committed = {fmt.committed:#x}, .edges = {fmt.edges:#x} }}")
 
@@ -140,7 +131,7 @@ def generate_ir_metadata(
         out.emit("#ifndef Py_BUILD_CORE\n")
         out.emit('#  error "this header requires Py_BUILD_CORE define"\n')
         out.emit("#endif\n\n")
-        for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
+        for kind, bit in (("SPECIALIZED", 1),
                           ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
@@ -200,6 +191,22 @@ def generate_ir_metadata(
             primary, name = primaries.get(handler, (None, "no event"))
             value = -1 if primary is None else "PY_MONITORING_EVENT_" + primary
             out.emit(f"[{handler}] = {value}, /* {name} */\n")
+        out.emit("};\n#endif\n\n")
+
+        # The handler that the observing evaluator runs for a word of each
+        # handler at a location that a tool observes (_PyIR_OBSERVE_EVENTS):
+        # its family's observer, or the handler itself.  The observing
+        # dispatch table (Python/ir_targets.h) and forms table send the words
+        # of a family whose observer gates to it everywhere; all come from the
+        # same declaration, and test_ir_contract checks the rows.
+        out.emit("PyAPI_DATA(const uint16_t) _PyIR_ObservingHandler[IR_NUM_HANDLERS];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const uint16_t _PyIR_ObservingHandler[IR_NUM_HANDLERS] = {\n")
+        by_c_name = {arm.name: arm for arm in arms}
+        observing = {arm_id(arm): arm_id(by_c_name[arm.observer]) if arm.observer else arm_id(arm)
+                     for arm in arms}
+        for handler in range(n):
+            out.emit(f"[{handler}] = {observing.get(handler, handler)},\n")
         out.emit("};\n#endif\n\n")
 
         out.emit("PyAPI_DATA(const char *const) _PyIR_OnlyNames[IR_NUM_HANDLERS];\n")

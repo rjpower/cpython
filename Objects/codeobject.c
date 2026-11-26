@@ -3088,9 +3088,6 @@ free_monitoring_data(_PyCoMonitoringData *data)
     }
     PyMem_Free(data->source_line_tools);
     PyMem_Free(data->source_forced);
-    if (data->per_instruction_state) {
-        PyMem_Free(data->per_instruction_state);
-    }
     if (data->per_instruction_tools) {
         PyMem_Free(data->per_instruction_tools);
     }

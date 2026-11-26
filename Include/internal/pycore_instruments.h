@@ -43,15 +43,13 @@ PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation(PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *instr);
 
-/* Fire the LINE event of the word at instr and return the handler that the
- * word goes on to (what the LINE hook displaced), or -1 with an exception
- * set. */
+/* Fire the LINE event of the word at instr, which follows prev: 0, or -1
+ * with an exception set.  A callback may move the frame (instr_ptr). */
 PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
                               _PyInstr *instr, _PyInstr *prev);
 
-/* Fire the INSTRUCTION event of the word at instr and return the handler
- * that it displaced, or -1 */
+/* Fire the INSTRUCTION event of the word at instr: 0, or -1 */
 PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation_instruction(
     PyThreadState *tstate, _PyInterpreterFrame* frame, _PyInstr *instr);
@@ -103,11 +101,14 @@ PyAPI_DATA(PyObject) _PyInstrumentation_DISABLE;
 /* Private observer phase: never a registered monitoring event or tool index. */
 #define _PY_DEBUGGER_ENTRY_EVENT _PY_MONITORING_EVENTS
 
-/* Tables of which tools are active for each monitored event. */
+/* What a source edge record forces at a word while LINE is observed
+ * (_PyCoMonitoringData.source_forced): the branch's observer, which reports
+ * the edge (1); the LINE event at the landing (2); the INSTRUCTION event,
+ * which records an ingress PC that nothing else saves (4). */
 enum {
-    _PyIR_SOURCE_BRANCH_WRAPPER = 1,
-    _PyIR_SOURCE_LINE_WRAPPER = 2,
-    _PyIR_SOURCE_INGRESS_WRAPPER = 4,
+    _PyIR_SOURCE_FORCE_BRANCH = 1,
+    _PyIR_SOURCE_FORCE_LINE = 2,
+    _PyIR_SOURCE_FORCE_INGRESS = 4,
 };
 
 typedef struct _Py_LocalMonitors {
@@ -153,33 +154,20 @@ typedef struct _PyCoMonitoringData {
     uint8_t *line_tools;
     uint8_t *source_line_tools;  /* per source-only edge record */
     uint64_t line_epoch;        /* invalidates pending observed LINE landings */
-    /* Observer-only wrappers: branch twin (1), landing LINE (2), or
-     * INSTRUCTION wrapper recording otherwise unsaved ingress PC (4). */
+    /* What source edges force at each word (_PyIR_SOURCE_FORCE_*) */
     uint8_t *source_forced;
-    /* Information to support instruction events */
-    /* Per word, whether the instruction under an INSTRUCTION wrapper is
-     * observed (_PyCo_ flags) */
-    uint8_t *per_instruction_state;
     /* The tools that are to be notified for instruction events for the matching code unit */
     uint8_t *per_instruction_tools;
+    /* The words and source edge records at which a tool listens: the code
+     * is observed (_PyCode_OBSERVED_MARK) while there is one */
+    uint32_t observed_tools;
 } _PyCoMonitoringData;
 
 extern int
 _Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index);
 
-/* The flags in the first byte of a lines[] entry and in a
- * per_instruction_state[] entry.  What a LINE or INSTRUCTION wrapper
- * displaced is the code object's own handler for the word, which monitoring
- * never rewrites (_PyCode_HandlerFor), or its observed twin: the flags say
- * which. */
-#define _PyCo_LINE_STARTS 1          // lines: the word starts a line
-#define _PyCo_DISPLACED_OBSERVED 2   // the displaced handler is the observed twin
-#define _PyCo_DISPLACED_INSTRUCTION 4 // lines: the INSTRUCTION wrapper is what LINE displaced
-#define _PyCo_STATE_SET 1            // per_instruction_state: the entry is set
-
-/* The handler that the LINE or INSTRUCTION wrapper at word index displaced */
-PyAPI_FUNC(int) _PyCode_LineDisplaced(PyCodeObject *code, int index);
-PyAPI_FUNC(int) _PyCode_InstructionDisplaced(PyCodeObject *code, int index);
+/* The flags in the first byte of a lines[] entry */
+#define _PyCo_LINE_STARTS 1          // the word starts a line
 
 #ifdef __cplusplus
 }

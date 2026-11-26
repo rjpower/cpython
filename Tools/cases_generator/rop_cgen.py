@@ -49,7 +49,6 @@ HANDLE_C = {
     Handle.NewFrame: "_PyInterpreterFrame *",
     Handle.DeadFrame: "_PyInterpreterFrame *",
     Handle.Head: "_PyInstr *",
-    Handle.Handler: "int",
     # An argument descriptor is the instruction's head: a row reads its
     # count, self role and homes from the head and the operand words
     Handle.Args: "const _PyIRWord *",
@@ -1299,13 +1298,6 @@ class ArmLowerer:
             (target,) = t.args
             assert isinstance(target, Name)
             self.emit(f"IR_BRANCH({self.operand_value(target.name)});")
-        elif t.kind == "dispatch":
-            # The word goes on under the handler the arm computed, with the
-            # fields it has
-            self.emit("next_instr = this_instr;")
-            self.emit(f"opcode = {self.expr(t.args[0])};")
-            self.emit("PRE_DISPATCH_GOTO();")
-            self.emit("DISPATCH_GOTO();")
         elif t.kind == "again":
             # The word runs again, under the handler it now names
             self.emit("next_instr = this_instr;")

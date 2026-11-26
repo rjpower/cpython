@@ -1887,6 +1887,10 @@ tstate_delete_common(PyThreadState *tstate, int release_gil, int is_unlinked)
 
     // XXX Move to PyThreadState_Clear()?
     clear_datastack(tstate);
+    /* The switch entries name frames of the stack that is gone */
+    PyMem_RawFree(tstate_impl->eval_switches.items);
+    tstate_impl->eval_switches.items = NULL;
+    tstate_impl->eval_switches.count = tstate_impl->eval_switches.size = 0;
 
     if (release_gil) {
         _PyEval_ReleaseLock(tstate->interp, tstate, 1);

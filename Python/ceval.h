@@ -211,6 +211,11 @@ lltrace_instruction(_PyInterpreterFrame *frame,
                     _PyIRWord *next_instr,
                     int opcode)
 {
+    if (opcode == IR_H_SWITCH) {
+        printf("switch\n");
+        fflush(stdout);
+        return;
+    }
     _PyIRWord word = *next_instr;
     uint32_t a = IR_A(word), b = IR_B(word), c = IR_C(word), d = IR_D(word);
     const char *name = _PyIR_HandlerName(opcode);
@@ -226,7 +231,7 @@ lltrace_instruction(_PyInterpreterFrame *frame,
      * for, with its oparg; then the handler and its fields, on a line
      * without a colon. */
     int offset = _PyFrame_InstrOffset(frame, next_instr);
-    int shown = _PyIR_RealHandler(frame, next_instr);
+    int shown = IR_HANDLER(*next_instr);
     printf("%d: %s\n", offset, _PyIR_HandlerName(shown));
     printf("    ir %s %u %u %u %u\n", name, a, b, c, d);
     fflush(stdout);

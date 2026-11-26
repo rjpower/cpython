@@ -1009,11 +1009,13 @@ extern primitive events_pending(t:Thread) -> Bool
     lowering: "rop_leaf ROW_LOWERINGS: _Py_EvalBreakerHasEvents",
     test: "test_rop_truth");
 
-// _CHECK_PERIODIC: signals, the GC and other pending events
-extern helper poll(t:Thread, at:Site)
-  cases(ok(), err(e:Err))
+// _CHECK_PERIODIC: signals, the GC and other pending events.  After a
+// monitoring change the frame may move to the other evaluator: the word runs
+// again there (the route is the switch word).
+extern helper poll(t:Thread, f:Frame, at:Site)
+  cases(ok(), moved(r:Route), err(e:Err))
   effects(runs_python, raises, polls)
-  c _PyRop_Poll as int_zero_ok
+  c _PyRop_Poll as int_redirect
   evidence(
     review: "Reviewed P5. bytecodes.c _CHECK_PERIODIC: check_periodics.",
     contract: "A signal handler or a finalizer may run Python and raise.");
@@ -1081,19 +1083,22 @@ arm Jump.Trailing inline trailing
 arm Jump.Poll inline select(interruptible, jit_off)
   effects(runs_python, polls, raises)
   feedback()
-  exits(jump, raise)
+  exits(jump, raise, redirect)
 {
   entry():
     branch events_pending(thread) -> Poll(), Go();
   Poll():
-    call poll(thread, site) {
+    call poll(thread, frame, site) {
       ok -> Go();
+      moved -> PollSwitched();
       err -> Failed();
     }
   Go():
     exit jump(target);
   Failed(e:Err):
     exit raise(Jump.PollFailed, e);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Jump.Warm split select(interruptible, jit_on)
@@ -1104,8 +1109,9 @@ arm Jump.Warm split select(interruptible, jit_on)
   entry():
     branch events_pending(thread) -> Poll(), Go();
   Poll():
-    call poll(thread, site) {
+    call poll(thread, frame, site) {
       ok -> Go();
+      moved -> PollSwitched();
       err -> Failed();
     }
   Go():
@@ -1119,6 +1125,8 @@ arm Jump.Warm split select(interruptible, jit_on)
     exit redirect(r);
   Failed(e:Err):
     exit raise(Jump.PollFailed, e);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Jump.Observed split observes
@@ -1131,8 +1139,9 @@ arm Jump.Observed split observes
   Back():
     branch events_pending(thread) -> Poll(), Event();
   Poll():
-    call poll(thread, site) {
+    call poll(thread, frame, site) {
       ok -> Event();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   PollFailed(pe:Err):
@@ -1149,4 +1158,6 @@ arm Jump.Observed split observes
     exit redirect(r);
   EventFailed(ee:Err):
     exit raise(Jump.EventFailed, ee);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }

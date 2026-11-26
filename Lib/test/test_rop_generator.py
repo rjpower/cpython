@@ -402,6 +402,11 @@ arm F.B shared effects() feedback() exits(next, miss)
     guard is_int(v) else miss;
     exit next();
 }
+arm F.Observed shared observes effects() feedback() exits(next)
+{
+  entry():
+    exit next();
+}
 """
 
 
@@ -509,28 +514,27 @@ class ArmRowTests(unittest.TestCase):
     """The per-handler tables list every arm, and the wrappers of families
     that declare events after the arms"""
 
-    def test_a_family_with_events_gets_a_twin_per_arm_after_the_arms(self):
+    def test_the_arms_of_a_family_with_events_name_its_observer(self):
         entries = wrapped_entries()
         self.assertEqual([e.dotted for e in entries],
-                         ["F.A", "G.A", "F.B", "F.A.Observed", "F.B.Observed"])
-        fa, ga, fb, fa_twin, fb_twin = entries
-        self.assertEqual((fa.twin, ga.twin, fb.twin), (3, None, 4))
-        self.assertEqual((fa_twin.observes, fb_twin.observes), (0, 2))
+                         ["F.A", "G.A", "F.B", "F.Observed"])
+        fa, ga, fb, fo = entries
+        self.assertEqual((fa.observer, ga.observer, fb.observer, fo.observer),
+                         ("F_Observed", None, "F_Observed", None))
         self.assertEqual(fa.events, ("CALL", "C_RETURN"))
-        self.assertEqual(fa_twin.events, fa.events)
+        self.assertEqual(fo.events, fa.events)
         self.assertEqual(ga.events, ())
         self.assertFalse(any(e.emitted for e in entries))
 
-    def test_the_handler_ids_of_the_twins_are_defined(self):
+    def test_the_handler_ids_are_the_arms(self):
         import io
         program = rop_check.check([rop_syntax.parse(WRAPPED, "t.rop")])
         p = rop_generator.Products(program, rop_generator.number_arms(program), {}, {}, {}, {})
         out = io.StringIO()
         rop_generator.write_metadata(out, p, [])
         text = out.getvalue()
-        self.assertIn("#define ROP_NUM_HANDLERS 5", text)
-        self.assertIn("#define ROP_HANDLER_F_A_Observed (ROP_FIRST_HANDLER + 3)", text)
-        self.assertIn("#define ROP_HANDLER_F_B_Observed (ROP_FIRST_HANDLER + 4)", text)
+        self.assertIn("#define ROP_NUM_HANDLERS 4", text)
+        self.assertIn("#define ROP_HANDLER_F_Observed (ROP_FIRST_HANDLER + 3)", text)
 
     def test_add_int_row_is_derived_from_its_encoding_and_declarations(self):
         entries = rop_generator.arm_entries(products())

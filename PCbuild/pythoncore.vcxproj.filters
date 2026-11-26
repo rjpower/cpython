@@ -1433,6 +1433,9 @@
     <ClCompile Include="..\Python\ceval_forms.c">
       <Filter>Python</Filter>
     </ClCompile>
+    <ClCompile Include="..\Python\ceval_observing.c">
+      <Filter>Python</Filter>
+    </ClCompile>
     <ClCompile Include="..\Python\codecs.c">
       <Filter>Python</Filter>
     </ClCompile>

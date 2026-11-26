@@ -34,6 +34,16 @@ _PyFrame_Exec(_PyInterpreterFrame *f)
     return exec;
 }
 
+/* What monitoring observes at the word at instr of f's executing copy
+ * (_PyIR_OBSERVE_*).  Every copy has a header, the entry frame's too, so
+ * the frame's own pointer finds it. */
+static inline uint8_t
+_PyFrame_Observed(_PyInterpreterFrame *f, const _PyIRWord *instr)
+{
+    const uint8_t *observe = ((_PyCodeExec *)f->ir_words - 1)->observe;
+    return observe == NULL ? 0 : observe[instr - f->ir_words];
+}
+
 /* The word index of the instruction at instr, which is f_lasti for
  * frame->instr_ptr.  The word before the first, which the unwinding of a
  * frame that has not finished an instruction reads, is at -1. */

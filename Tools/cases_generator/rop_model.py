@@ -404,7 +404,7 @@ class Family:
     name: str
     params: tuple[Param, ...]
     exits: tuple[str, ...]
-    # The events of the family's observed wrapper (its arms' twins)
+    # The events of the family's observer arm
     events: tuple[MonitoringEvent, ...] = ()
     span: SrcSpan = _span()
     # The arm a miss restarts in (`generic(Arm)`), by its short name
@@ -482,20 +482,23 @@ class Arm:
     select: tuple[Select, ...] = ()
     # The classifier case whose recipe the arm's entry holds (`entry(k)`)
     entry: str | None = None
-    # The family's observed wrapper, which runs under instrumented twins
+    # The family's observer arm, which the observing evaluator runs for
+    # every word of the family
     observes: bool = False
     # A completion arm (`completion(P)`): no word of its own; it runs in the
     # consumer's frame, from P's homes, when a generator child returns
     completion: str | None = None
     # A trailing arm (`trailing`): its word belongs to the instruction before
     # it, as a CACHE belongs to its head upstream (the jumps that the
-    # assembler adds after a relaxed head).  It has no observed twin, fires
-    # no event and leaves the instruction pointer at that instruction.
+    # assembler adds after a relaxed head).  It is not observed, fires no
+    # event and leaves the instruction pointer at that instruction.
     trailing: bool = False
-    # A displacing arm (`displacing`): the word that monitoring put in place of
-    # another one, whose handler it runs once its hook has returned.  Only
-    # such an arm has the `dispatch` exit and the name `prev_head`.
-    displacing: bool = False
+    # An observer that gates its family (`observes gates`): the observing
+    # evaluator runs it for every word of the family, where an observer that
+    # does not gate runs only at a location that a tool observes
+    # (_PyIR_OBSERVE_EVENTS).  Resume's observer gates: it keeps the frame in
+    # the evaluator that its code asks for.
+    gates: bool = False
     # The member set the arm states (`over(...)`), as parsed.  The checker
     # replaces the arm by its member arms, each with no set and with
     # `member` naming its member, and the rest arm, with neither.

@@ -1,5 +1,38 @@
 // Macros and other things needed by ceval.c and the generated arms
 
+/* The compilation of the evaluator body (Python/ceval_evaluator.h): 0 for
+ * ir_evaluate() in Python/ceval.c, 1 for the observing evaluator in
+ * Python/ceval_observing.c.  The function forms (Python/ceval_forms.c) are
+ * compiled once, with 0, and their executor picks a word's form by the
+ * observed mark of its code. */
+#ifndef IR_OBSERVING
+#  define IR_OBSERVING 0
+#endif
+/* The throwflag of an evaluator that goes on at frame->instr_ptr, where the
+ * other compilation left the frame (the switch word, IR_H_SWITCH) */
+#define IR_ENTER_SWITCH 2
+/* IR_COMPLETIONS(SITE): the completions of the consumer's word at SITE,
+ * which the observing evaluator takes from its family's observer where a
+ * tool observes the word */
+#if IR_OBSERVING
+#  define IR_OTHER_EVALUATOR _PyEval_EvalNormal
+#  define IR_COMPLETIONS(SITE) \
+    ((_PyFrame_Observed(frame, (SITE)) & _PyIR_OBSERVE_EVENTS) \
+        ? _PyRop_ObservingCompletions : _PyRop_Completions)
+#else
+#  define IR_OTHER_EVALUATOR _PyEval_EvalObserving
+#  define IR_COMPLETIONS(SITE) _PyRop_Completions
+#endif
+/* The evaluator's switch where an error routine resumes frame at
+ * next_instr: to the other evaluator if the frame goes on there */
+#define IR_ERROR_SWITCH() \
+    do { \
+        if (_PyEval_SwitchesLoop(frame, IR_OBSERVING)) { \
+            frame->return_pc = next_instr; \
+            Py_MUSTTAIL return IR_OTHER_EVALUATOR(tstate, frame, IR_ENTER_SWITCH); \
+        } \
+    } while (0)
+
 /* Use macros rather than inline functions, to make it as clear as possible
  * to the C compiler that the tracing check is a simple test then branch.
  * We want to be sure that the compiler knows this before it generates
@@ -56,9 +89,9 @@
  * take values and return a value, a status or a {frame, next} pair; none
  * jumps into the evaluator.
  *
- * A handler that runs another on the same word, as INSTRUMENTED_LINE does
- * and a specialisation that deoptimises to its family head, jumps to it with
- * ir_word unchanged, so the other handler finds the same fields.
+ * A handler that runs another on the same word, as a specialisation that
+ * deoptimises to its family head does, jumps to it with ir_word unchanged,
+ * so the other handler finds the same fields.
  *
  * Every handler also has a function form, ir_run_X(tstate, frame,
  * next_instr, ir_word), which returns a _PyIRTransfer (tiers87, C2).  The
@@ -298,13 +331,28 @@ do { \
 #endif
 
 
-/* Do interpreter dispatch accounting for tracing and instrumentation */
+/* Dispatch the word at next_instr.  The observing evaluator first tests
+ * what monitoring observes at the word (LABEL_observe_word,
+ * Python/ceval_evaluator.h); the normal one never reads it.  The switch
+ * word is no word of the code, and nothing observes it. */
+#if IR_OBSERVING
+#define DISPATCH() \
+    { \
+        NEXTOPARG(); \
+        PRE_DISPATCH_GOTO(); \
+        if (opcode != IR_H_SWITCH && _PyFrame_Observed(frame, next_instr)) { \
+            goto LABEL_observe_word; \
+        } \
+        DISPATCH_GOTO(); \
+    }
+#else
 #define DISPATCH() \
     { \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
     }
+#endif
 
 /* A monitoring callback redirected the frame (a debugger's f_lineno jump):
  * the word leaves for frame->instr_ptr, the redirect exit */
@@ -495,23 +543,6 @@ _PyFb_TickQuiet(_PyFbHeader *fb)
     }
     _PyFb_AdvanceCounter(fb);
     return true;
-}
-
-/* Keep the site's counter from triggering while an instrumented twin runs the
- * word, so that the specializer does not overwrite the instrumentation.  A
- * function, not a macro, so that it is type checked. */
-static inline void
-PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
-{
-    if (fb == NULL) {
-        return;
-    }
-#ifdef Py_GIL_DISABLED
-    if (backoff_counter_is_unreachable(fb->counter)) {
-        return;
-    }
-#endif
-    fb->counter = pause_backoff_counter(fb->counter);
 }
 
 #define UNBOUNDLOCAL_ERROR_MSG \
@@ -898,7 +929,14 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
 #else
 #  define ROP_ENTER_GATE_TLBC() 1
 #endif
-#define ROP_ENTER_GATE() ROP_ENTER_GATE_IF(IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Poll)
+/* The observing evaluator never skips: RESUME's observer reports PY_START,
+ * and the RESUME of code that is not observed sends the frame back to the
+ * normal evaluator. */
+#if IR_OBSERVING
+#  define ROP_ENTER_GATE() ((void)0)
+#else
+#  define ROP_ENTER_GATE() ROP_ENTER_GATE_IF(IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Poll)
+#endif
 /* IS_RESUME: the word at next_instr is a RESUME to skip */
 #define ROP_ENTER_GATE_IF(IS_RESUME) \
     do { \

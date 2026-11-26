@@ -608,11 +608,15 @@ class AssemblerTest(unittest.TestCase):
                                             E.BRANCH_LEFT | E.BRANCH_RIGHT)
             self.assertEqual(f(xs), len(xs) // 3)
             ir = handlers(f)
+            observed = _testinternalcapi.code_is_observed(f.__code__)
         finally:
             sys.monitoring.set_local_events(tool, f.__code__, 0)
             sys.monitoring.free_tool_id(tool)
         self.assertEqual(events, expected)
-        self.assertIn("TestBranch.Generic.Observed", ir)
+        # The code runs in the observing evaluator, which runs TestBranch's
+        # observer for the word; the word keeps its specialisation
+        self.assertTrue(observed)
+        self.assertTrue(any(h.startswith("TestBranch.Int") for h in ir), ir)
         self.assertEqual(f(xs), len(xs) // 3)
 
     def test_f_lasti(self):
@@ -3616,7 +3620,7 @@ class FusedJumpTest(AssemblerTestCase):
             self.assertEqual(f(1, 2), 1)
             self.assertEqual(f(2, 1), 2)
             self.assertEqual(f(1, 2), 1)
-            self.assertIn("TestBranch.Generic.Observed", handlers(f))
+            self.assertTrue(_testinternalcapi.code_is_observed(f.__code__))
         finally:
             sys.monitoring.set_local_events(tool, f.__code__, 0)
             sys.monitoring.free_tool_id(tool)
@@ -3977,8 +3981,8 @@ class FusedJumpTest(AssemblerTestCase):
                     sys.monitoring.restart_events()
                     self.assertEqual(f(1, 2), 1)
                     if warm:
-                        self.assertIn("TestBranch.Generic.Observed",
-                                      handlers(f))
+                        self.assertTrue(
+                            _testinternalcapi.code_is_observed(f.__code__))
                 finally:
                     sys.monitoring.set_local_events(tool, f.__code__, 0)
                     sys.monitoring.register_callback(tool, E.BRANCH_LEFT, None)

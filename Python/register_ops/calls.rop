@@ -272,11 +272,13 @@ extern primitive polls(i:Enum<Interrupt>) -> Bool
     lowering: "none yet: the flag is a constant of the word",
     test: "test_rop_call");
 
-// The poll after a call returns (CALL_PERIODIC): signals and the GC
-extern helper end_poll(t:Thread, f:Frame)
-  cases(ok(), err(e:Err))
+// The poll after a call returns (CALL_PERIODIC): signals and the GC.  After
+// a monitoring change the frame may move to the other evaluator, where it
+// goes on at the next word (the route is the switch word).
+extern helper end_poll(t:Thread, f:Frame, to:Head)
+  cases(ok(), moved(r:Route), err(e:Err))
   effects(runs_python, raises, polls)
-  c _PyRop_EndPoll as int_zero_ok
+  c _PyRop_EndPoll as int_redirect
   evidence(
     review: "P4. ceval_macros.h: check_periodics_at_end (_CHECK_PERIODIC_AT_END).",
     contract: "A signal handler or a finalizer may run Python and raise.");
@@ -932,7 +934,7 @@ arm Call.Generator split
 arm Call.Generic split
   effects(runs_python, raises, polls, switches_frame, releases on (dst))
   feedback(read(entry), write(entry), write(handler))
-  exits(next, enter, raise, again)
+  exits(next, enter, raise, again, redirect)
 {
   entry():
     call adapt_before_use_call(fb, fn, args) {
@@ -961,8 +963,9 @@ arm Call.Generic split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -972,6 +975,8 @@ arm Call.Generic split
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm InitResult.Check split
@@ -998,7 +1003,7 @@ arm InitResult.Check split
 arm Call.Observed split observes
   effects(runs_python, raises, polls, switches_frame, releases on (dst))
   feedback()
-  exits(next, enter, raise)
+  exits(next, enter, raise, redirect)
 {
   entry():
     let fo:O = dup(use(fn));
@@ -1029,8 +1034,9 @@ arm Call.Observed split observes
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1040,6 +1046,8 @@ arm Call.Observed split observes
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Return.Ordinary split select(thread_frame, live_scratch)
@@ -1156,14 +1164,14 @@ arm Return.External split select(entry_frame)
 // keyword names as its last operand (the elided LOAD_CONST); the arms share
 // Call's rows, which read the keywords from the word.
 family CallKw(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
-  exits(next, enter, raise, miss, again) generic(Generic)
+  exits(next, enter, raise, redirect, miss, again) generic(Generic)
   events(CALL, C_RETURN, C_RAISE);
 
 // `args` is the positional iterable or tuple and, unless the word says
 // otherwise, the kwargs dict.  The tuple that the call makes of the iterable
 // is an owner of the call, not a home.
 family CallEx(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
-  exits(next, enter, raise, miss, again) generic(Generic)
+  exits(next, enter, raise, redirect, miss, again) generic(Generic)
   events(CALL, C_RETURN, C_RAISE);
 
 // The local's **kwargs dict, which the binding of a frame left pending
@@ -1607,7 +1615,7 @@ arm Call.Type1 split
 arm Call.Str1 split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard self_absent(frame, args) else miss;
@@ -1620,8 +1628,9 @@ arm Call.Str1 split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1631,12 +1640,14 @@ arm Call.Str1 split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.Tuple1 split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard self_absent(frame, args) else miss;
@@ -1649,8 +1660,9 @@ arm Call.Tuple1 split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1660,12 +1672,14 @@ arm Call.Tuple1 split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.BuiltinClass split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard builtin_class(use(fn)) else miss;
@@ -1678,8 +1692,9 @@ arm Call.BuiltinClass split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1689,12 +1704,14 @@ arm Call.BuiltinClass split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.BuiltinO split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard builtin_o(frame, use(fn), args) else miss;
@@ -1707,8 +1724,9 @@ arm Call.BuiltinO split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1718,12 +1736,14 @@ arm Call.BuiltinO split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.BuiltinFast split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard builtin_fast(frame, use(fn), args) else miss;
@@ -1736,8 +1756,9 @@ arm Call.BuiltinFast split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1747,12 +1768,14 @@ arm Call.BuiltinFast split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.BuiltinFastKeywords split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard builtin_fast_keywords(use(fn)) else miss;
@@ -1765,8 +1788,9 @@ arm Call.BuiltinFastKeywords split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1776,6 +1800,8 @@ arm Call.BuiltinFastKeywords split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.Len split
@@ -1842,7 +1868,7 @@ arm Call.ListAppend split
 arm Call.DescriptorO split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard descriptor_o(frame, use(fn), args) else miss;
@@ -1855,8 +1881,9 @@ arm Call.DescriptorO split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1866,12 +1893,14 @@ arm Call.DescriptorO split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.DescriptorFast split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard descriptor_fast(frame, use(fn), args) else miss;
@@ -1884,8 +1913,9 @@ arm Call.DescriptorFast split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1895,12 +1925,14 @@ arm Call.DescriptorFast split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.DescriptorFastKeywords split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard descriptor_fast_keywords(frame, use(fn), args) else miss;
@@ -1913,8 +1945,9 @@ arm Call.DescriptorFastKeywords split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1924,12 +1957,14 @@ arm Call.DescriptorFastKeywords split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm Call.DescriptorNoargs split
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard descriptor_noargs(frame, use(fn), args) else miss;
@@ -1942,8 +1977,9 @@ arm Call.DescriptorNoargs split
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
     branch polls(interrupt) -> Poll(), Next();
   Poll():
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -1953,6 +1989,8 @@ arm Call.DescriptorNoargs split
   Failed(e:Err):
     let saved:Err = retire_failed_args(frame, fn, args, e);
     exit raise(Call.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 // A generator function of the default call: the call creates the generator
@@ -2015,7 +2053,7 @@ arm CallKw.BoundMethod split
 arm CallKw.NonPy split
   effects(runs_python, raises, polls, releases on (dst))
   feedback()
-  exits(next, raise, miss)
+  exits(next, raise, miss, redirect)
 {
   entry():
     guard not_python_callable(use(fn)) else miss;
@@ -2025,8 +2063,9 @@ arm CallKw.NonPy split
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallKw.Done;
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -2036,12 +2075,14 @@ arm CallKw.NonPy split
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(CallKw.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm CallKw.Generic split
   effects(runs_python, raises, polls, switches_frame, releases on (dst))
   feedback(read(entry), write(entry), write(handler))
-  exits(next, enter, raise, again)
+  exits(next, enter, raise, again, redirect)
 {
   entry():
     call adapt_before_use_call_kw(fb, fn, args) {
@@ -2068,8 +2109,9 @@ arm CallKw.Generic split
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallKw.Done;
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -2079,12 +2121,14 @@ arm CallKw.Generic split
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(CallKw.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 arm CallKw.Observed split observes
   effects(runs_python, raises, polls, switches_frame, releases on (dst))
   feedback()
-  exits(next, enter, raise)
+  exits(next, enter, raise, redirect)
 {
   entry():
     let fo:O = dup(use(fn));
@@ -2113,8 +2157,9 @@ arm CallKw.Observed split observes
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallKw.Done;
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -2124,6 +2169,8 @@ arm CallKw.Observed split observes
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(CallKw.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 // The callable of a CallEx is a function with the standard vectorcall
@@ -2198,7 +2245,7 @@ macro adapt_before_use_call_ex(f:Fb<Call>, fn:Src, a:Args)
 arm CallEx.Generic split
   effects(runs_python, allocates, raises, polls, switches_frame, releases on (dst))
   feedback(read(entry), write(entry), write(handler), read(entry.func_version), read(entry.plan))
-  exits(next, enter, raise, again)
+  exits(next, enter, raise, again, redirect)
 {
   entry():
     call adapt_before_use_call_ex(fb, fn, args) {
@@ -2235,8 +2282,9 @@ arm CallEx.Generic split
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallEx.Done;
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -2246,6 +2294,8 @@ arm CallEx.Generic split
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(CallEx.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 
@@ -2253,7 +2303,7 @@ arm CallEx.Generic split
 arm CallEx.Py split
   effects(runs_python, allocates, raises, polls, switches_frame, releases on (dst))
   feedback(read(entry.func_version), read(entry.plan))
-  exits(next, enter, raise, miss)
+  exits(next, enter, raise, miss, redirect)
 {
   entry():
     guard default_eval_frame(thread) else miss;
@@ -2285,8 +2335,9 @@ arm CallEx.Py split
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallEx.Done;
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -2296,6 +2347,8 @@ arm CallEx.Py split
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(CallEx.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 
@@ -2304,7 +2357,7 @@ arm CallEx.Py split
 arm CallEx.NonPy split
   effects(runs_python, allocates, raises, polls, switches_frame, releases on (dst))
   feedback(read(entry.func_version), read(entry.plan))
-  exits(next, enter, raise, miss)
+  exits(next, enter, raise, miss, redirect)
 {
   entry():
     guard not_py_callable_ex(use(fn)) else miss;
@@ -2335,8 +2388,9 @@ arm CallEx.NonPy split
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallEx.Done;
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -2346,13 +2400,15 @@ arm CallEx.NonPy split
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(CallEx.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 
 arm CallEx.Observed split observes
   effects(runs_python, allocates, raises, polls, switches_frame, releases on (dst))
   feedback(read(entry.func_version), read(entry.plan))
-  exits(next, enter, raise)
+  exits(next, enter, raise, redirect)
 {
   entry():
     let fo:O = dup(use(fn));
@@ -2390,8 +2446,9 @@ arm CallEx.Observed split observes
     }
   Result(z:O):
     publish [dst = z] retire [spent(args), spent(fn), old(dst)] at CallEx.Done;
-    call end_poll(thread, frame) {
+    call end_poll(thread, frame, next_head) {
       ok -> Next();
+      moved -> PollSwitched();
       err -> PollFailed();
     }
   Next():
@@ -2401,6 +2458,8 @@ arm CallEx.Observed split observes
   NativeFailed(ne:Err):
     let saved:Err = retire_failed_args(frame, fn, args, ne);
     exit raise(CallEx.Failed, saved);
+  PollSwitched(ps:Route):
+    exit redirect(ps);
 }
 
 // 2C: async iteration, await, send, yield

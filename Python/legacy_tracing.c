@@ -482,7 +482,7 @@ sys_trace_jump_func(
     int from_line = _Py_Instrumentation_GetLine(
         code, code->_co_monitoring->lines, _PyCode_OffsetWord(code, from));
     if (to_line != from_line) {
-        /* Will be handled by target INSTRUMENTED_LINE */
+        /* The LINE event at the target reports it */
         return disable;
     }
     _PyIRObservationMap source = _PyIRObservation_Stored(code);

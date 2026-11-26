@@ -430,7 +430,7 @@ PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopGeneralWithResult(
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate,
                                         _PyInterpreterFrame *frame);
 /* Distinct semantic outcomes share one completion/ownership protocol. */
-enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND, _PY_IR_SEND_THROW };
+enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND };
 enum _PyIRStepStatus {
     _PY_IR_STEP_ERROR_PRE = -2,
     _PY_IR_STEP_ERROR_POST = -1,
@@ -452,9 +452,6 @@ PyAPI_FUNC(int) _PyIR_ObserveStopIteration(
     PyValueBorrow, PyValueBorrow);
 PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteForIter(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, _PyInstr *, PyValue);
-PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteSendThrow(
-    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, int,
-    _PyInstr *, PyValue);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,

@@ -46,9 +46,9 @@ jit_template_STORE_FAST(_PyJitWordCx *cx)
 }
 
 const _PyJitTemplate _PyJit_Templates[512] = {
-    [3] = jit_template_NOP,
-    [13] = jit_template_STORE_FAST,
-    [17] = jit_template_IR_JUMP,
+    [2] = jit_template_NOP,
+    [10] = jit_template_STORE_FAST,
+    [13] = jit_template_IR_JUMP,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
     [ROP_HANDLER_GetAttr_Instance] = jit_template_GetAttr_Instance,
     [ROP_HANDLER_GetAttr_Shape] = jit_template_GetAttr_Shape,

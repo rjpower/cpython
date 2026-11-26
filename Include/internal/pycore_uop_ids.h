@@ -62,7 +62,6 @@ enum {
 #define _PUSH_NULL PUSH_NULL
 #define _TO_BOOL TO_BOOL
 #define _UNARY_NOT UNARY_NOT
-#define _WITH_EXCEPT_START WITH_EXCEPT_START
 
 #ifdef __cplusplus
 }

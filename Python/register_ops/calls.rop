@@ -1575,15 +1575,3 @@ arm CallEx.Observed split observes
 // 2C: async iteration, await, send, yield
 
 // Send is in suspend.rop
-
-// 2E: throw completion, async-for termination, exceptional context exit
-
-family CleanupThrow(exc:Src, pair:IterPair, completed:Dst, done:NearHead, route:NearHead)
-  exits(branch, return, raise, redirect) ops(CLEANUP_THROW);
-
-// `send` is the original Send head, the origin its branch observer reports
-family EndAsyncFor(exc:Src, target:NearHead, send:NearHead)
-  exits(next, jump, raise, redirect) ops(END_ASYNC_FOR);
-
-family WithExit(dst:Dst, exit_fn:Src, self:Maybe<Src>, exc:Src, context:Src)
-  exits(next, raise) ops(WITH_EXCEPT_START);

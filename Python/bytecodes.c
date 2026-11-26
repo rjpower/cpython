@@ -634,67 +634,41 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        // exc_st is the exception that exception_unwind pushed into a
-        // temporary; INSTRUMENTED_JUMP's callbacks in _MONITOR_END_ASYNC_FOR
-        // can replace a temporary only by redirecting the frame, and a
-        // redirect leaves the word
-        tier1 window op(_END_ASYNC_FOR,
+        /* Stack ops only: END_ASYNC_FOR and its instrumented form are the
+         * EndAsyncFor family (Python/register_ops/cleanup.rop).  The word names
+         * the SEND of its loop and does not go there: JUMPBY(0) gives the stack
+         * op its target for the CFG (names_target_only). */
+        tier1 inst(END_ASYNC_FOR,
                 (awaitable_st: taken, exc_st: taken assumed(object) by exception_unwind -- ))
-            effects(runs_python) exits(next, jump, raise)
+            effects(releases) exits(next, jump)
         {
             (void)oparg;
-            // An exception being handled is an instance of BaseException
-            assert(PyValue_IsObject(exc_st));
-            PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
-
-            assert(exc && PyExceptionInstance_Check(exc));
-            int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
-            if (matches) {
-                DECREF_INPUTS();
-            }
-            else {
-                _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
-                monitor_reraise(tstate, frame, this_instr);
-                goto exception_unwind;
-            }
-            // Pretend jump as we need source offset for monitoring; after
-            // the raise, so that the word's successor is set only on the
-            // path that completes
+            PyValue_CLOSE(awaitable_st);
+            PyValue_CLOSE(exc_st);
             JUMPBY(0);
         }
 
-        tier1 op(_MONITOR_END_ASYNC_FOR, ( -- ))
-            effects(runs_python) exits(next, raise, redirect)
+        tier1 inst(INSTRUMENTED_END_ASYNC_FOR,
+                (awaitable_st: taken, exc_st: taken assumed(object) by exception_unwind -- ))
+            effects(releases) exits(next, jump)
         {
-            assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
-            INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
+            (void)oparg;
+            PyValue_CLOSE(awaitable_st);
+            PyValue_CLOSE(exc_st);
+            JUMPBY(0);
         }
 
-        macro(INSTRUMENTED_END_ASYNC_FOR) =
-            _MONITOR_END_ASYNC_FOR +
-            _END_ASYNC_FOR;
-
-        outlined macro(END_ASYNC_FOR) = _END_ASYNC_FOR;
-
+        /* A stack op only: CLEANUP_THROW is the CleanupThrow family
+         * (Python/register_ops/cleanup.rop).  It has no oparg in the stack form;
+         * its word names the exit. */
         tier1 inst(CLEANUP_THROW,
                 (sub_iter: taken, null_in: taken nullable, last_sent_val: taken,
                  exc_value_st: taken assumed(object) by exception_unwind
                  -- none: owned, null_out: owned, value: owned))
-            effects(runs_python) exits(branch, raise)
+            exits(abort)
         {
-            // An exception being handled is an instance of BaseException
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
-            assert(exc_value && PyExceptionInstance_Check(exc_value));
-            int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
-            if (!matches) {
-                _PyErr_SetRaisedException(tstate, Py_NewRef(exc_value));
-                monitor_reraise(tstate, frame, this_instr);
-                goto exception_unwind;
-            }
-            PyValue completed = _PyStopIteration_GetValue(exc_value);
-            // IR_EXIT: the exit named by the word. co_code has no operand, and
-            // the instruction after this one continues there.
-            IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         pure inst(LOAD_COMMON_CONSTANT, ( -- value: owned))
@@ -1425,37 +1399,16 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(WITH_EXCEPT_START,
+        /* A stack op only: WITH_EXCEPT_START is the WithExit family
+         * (Python/register_ops/cleanup.rop). */
+        tier1 inst(WITH_EXCEPT_START,
                 (exit_func, exit_self: nullable, lasti, unused,
                  val: assumed(object) by PUSH_EXC_INFO
                  -- exit_func, exit_self, lasti, unused, val, res: owned))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
-            /* At the top of the stack are 4 values:
-               - val: TOP = exc_info()
-               - unused: SECOND = previous exception
-               - lasti: THIRD = lasti of exception in exc_info()
-               - exit_self: FOURTH = the context or NULL
-               - exit_func: FIFTH = the context.__exit__ function or context.__exit__ bound method
-               We call FOURTH(type(TOP), TOP, GetTraceback(TOP)).
-               Then we push the __exit__ return value.
-            */
-            PyObject *exc;
-
-            // The exit function is any attribute value, a scalar included;
-            // the call raises upstream's TypeError for one.
-            PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
-
-            assert(val_o && PyExceptionInstance_Check(val_o));
-            exc = PyExceptionInstance_Class(val_o);
-            // A new reference or NULL; the call is passed None for NULL
-            PyObject *original_tb = PyException_GetTraceback(val_o);
-            assert(PyValue_IsTaggedIndex(lasti));
-            (void)lasti; // Shut up compiler warning if asserts are off
-            res = with_exit_call(exit_func, exit_self, exc, val_o,
-                                 original_tb == NULL ? Py_None : original_tb);
-            Py_XDECREF(original_tb);
-            ERROR_IF(PyValue_IsNull(res));
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         pseudo(SETUP_FINALLY, (-- unused), (HAS_ARG)) = {

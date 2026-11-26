@@ -1786,9 +1786,6 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
     ObserverRedirectState before = observer_redirect_state(frame);
     assert(before.instruction == site);
     if (phase == 0) {
-        if (kind == _PY_IR_SEND_THROW) {
-            return result;
-        }
         PyValueBorrow receiver = PyValue_Borrow(frame->base[IR_B(*site)]);
         if (_PyIR_ObserveStopIteration(tstate, frame, site, next, receiver,
                                        value) < 0) {
@@ -1796,23 +1793,21 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
         }
     }
     else {
-        if (kind != _PY_IR_SEND_THROW) {
-            int event = kind == _PY_IR_FOR_ITER
-                ? PY_MONITORING_EVENT_BRANCH_RIGHT : PY_MONITORING_EVENT_BRANCH_LEFT;
-            if (get_tools_for_instruction(code, tstate->interp, from, event)) {
-                PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
-                                  PyValue_FromInt64(_PyCode_WordOffset(code, dest_offset(frame, next)))};
-                _PyIRObserverSpec context = {frame, site, next, before.generation,
-                    event, _PY_IR_OBSERVER_POST_COMMITTED,
-                    _PyIR_EDGE_TAKEN, UINT32_MAX};
-                if (call_instrumentation_vector_context(
-                        site, tstate, event, frame, site, 3, args, &context)) {
-                    goto error;
-                }
+        int event = kind == _PY_IR_FOR_ITER
+            ? PY_MONITORING_EVENT_BRANCH_RIGHT : PY_MONITORING_EVENT_BRANCH_LEFT;
+        if (get_tools_for_instruction(code, tstate->interp, from, event)) {
+            PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                              PyValue_FromInt64(_PyCode_WordOffset(code, dest_offset(frame, next)))};
+            _PyIRObserverSpec context = {frame, site, next, before.generation,
+                event, _PY_IR_OBSERVER_POST_COMMITTED,
+                _PyIR_EDGE_TAKEN, UINT32_MAX};
+            if (call_instrumentation_vector_context(
+                    site, tstate, event, frame, site, 3, args, &context)) {
+                goto error;
             }
-            if (observer_redirected(frame, before)) {
-                goto redirected;
-            }
+        }
+        if (observer_redirected(frame, before)) {
+            goto redirected;
         }
         if (!code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_LINE])
         {

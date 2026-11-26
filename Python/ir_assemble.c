@@ -371,6 +371,7 @@ assemble_pcmap(struct assembler *a, _PyRegCfg *cfg)
 
 /* The delegation word of await and yield from */
 #define IS_SEND(op) ((op)->opcode == ROP_OP_Send_Generic)
+#define IS_CLEANUP_THROW(op) ((op)->opcode == ROP_OP_CleanupThrow_Generic)
 
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
 int _PyIR_MaxForward = IR_MAX_FORWARD;
@@ -635,7 +636,7 @@ jump_target(_PyRegCfg *cfg, _PyRegOp *op)
 {
     assert(op->target >= 0);
     _PyRegBlock *b = &cfg->blocks[op->target];
-    if (op->opcode == END_ASYNC_FOR) {
+    if (op->opcode == ROP_OP_EndAsyncFor_Generic) {
         _PyRegOp *send = &cfg->ops[b->start];
         assert(IS_SEND(send));
         return send->word;
@@ -865,7 +866,7 @@ lower_completions(_PyRegCfg *cfg)
                 cfg->ops[pop].flags |= _PyReg_COMPLETED;
             }
         }
-        else if (op->opcode == CLEANUP_THROW) {
+        else if (IS_CLEANUP_THROW(op)) {
             int target = op->target < 0 ? -1
                 : next_frontend_op(cfg, cfg->blocks[op->target].start, 0);
             if (target < 0 || cfg->ops[target].opcode != END_SEND ||
@@ -916,7 +917,7 @@ lower_completions(_PyRegCfg *cfg)
             _PyRegBlock *pred = &cfg->blocks[p];
             for (int j = pred->start; j < pred->end; j++) {
                 _PyRegOp *incoming = &cfg->ops[j];
-                if (incoming->target == b && incoming->opcode != END_ASYNC_FOR &&
+                if (incoming->target == b && incoming->opcode != ROP_OP_EndAsyncFor_Generic &&
                     incoming->completion != first + 1)
                 {
                     return completion_error(cfg, incoming, "uncompleted edge into completion");
@@ -1188,7 +1189,7 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
     const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
     _PyRegSlots slots;
     _PyRegCfg_OpSlots(cfg, op, &slots);
-    if ((IS_SEND(op) || op->opcode == CLEANUP_THROW) && op->completion) {
+    if ((IS_SEND(op) || IS_CLEANUP_THROW(op)) && op->completion) {
         _PyRegSlots completed;
         _PyRegCfg_OpSlots(cfg, &cfg->ops[op->completion - 1], &completed);
         slots.out[0] = completed.out[0];

@@ -579,9 +579,9 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
             arguments = _call(tokens)
             if (arguments is None or len(arguments) != 3 or origin.changed
                     or [t.text for t in arguments[0]] not in (
-                        ["_PY_IR_FOR_ITER"], ["_PY_IR_SEND"], ["_PY_IR_SEND_THROW"])
+                        ["_PY_IR_FOR_ITER"], ["_PY_IR_SEND"])
                     or expression(arguments[1], variables, origin).kind != Kind.VALUE
-                    or [t.text for t in arguments[2]] not in (["oparg"], ["IR_EXIT"])):
+                    or [t.text for t in arguments[2]] not in (["oparg"],)):
                 return False
             helpers.add("IR_COMPLETE_STEP")
             _apply_native(expression(arguments[1], variables, origin), origin)

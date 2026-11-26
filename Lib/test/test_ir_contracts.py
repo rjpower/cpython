@@ -2611,14 +2611,6 @@ class VerifierTests(unittest.TestCase):
             # replaced it (a finalizer writes locals through FrameLocalsProxy)
             self.refuses(text, r"`x`, which may have been replaced since the handler's "
                          r"entry, at _EVENT, which may reenter \(")
-        # The real handler verifies with its window, and refuses without it
-        inst = analysis.instructions["INSTRUMENTED_END_ASYNC_FOR"]
-        ir_contract.verify_handler(inst, temporaries=True)
-        with self.assertRaisesRegex(SyntaxError, r"_END_ASYNC_FOR assumes object by "
-                                    r"exception_unwind of `exc_st`, which may have been "
-                                    r"replaced since the handler's entry, at "
-                                    r"_MONITOR_END_ASYNC_FOR"):
-            ir_contract.verify_handler(inst)
 
     def test_a_fact_made_in_the_handler_survives_a_reentry(self):
         # R1 (the list truth jumps, now BranchTruth.List): the bool made is a

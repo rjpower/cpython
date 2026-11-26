@@ -2003,7 +2003,7 @@ static const _PyRopPoint _PyRop_Points[203] = {
     {"Jump.PollFailed", ROP_FAMILY_Jump, 120, 0, 0, 1, 0, 0, 0},
     {"Length.Done", ROP_FAMILY_Length, 121, 0, 1, 0, (1 << 1), 0, (1 << 0)},
     {"Length.Failed", ROP_FAMILY_Length, 122, 0, 0, 1, (1 << 1), 0, 0},
-    {"Line.Failed", ROP_FAMILY_Line, 123, 0, 0, 1, 0, 0, 0},
+    {"Line.Failed", ROP_FAMILY_Line, 123, 0, 5, 1, 0, 0, 0},
     {"LocalDelete.Done", ROP_FAMILY_LocalDelete, 124, 0, 1, 0, 0, (1 << 0), (1 << 0)},
     {"LocalDelete.Unbound", ROP_FAMILY_LocalDelete, 125, 0, 0, 1, 0, (1 << 0), 0},
     {"LocalRead.Done", ROP_FAMILY_LocalRead, 126, 0, 1, 0, (1 << 1), 0, (1 << 0)},

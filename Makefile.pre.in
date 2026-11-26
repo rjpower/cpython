@@ -456,6 +456,7 @@ PYTHON_OBJS=	\
 		Python/borrow.o \
 		Python/brc.o \
 		Python/ceval.o \
+		Python/ceval_forms.o \
 		Python/codecs.o \
 		Python/codegen.o \
 		Python/compile.o \
@@ -629,7 +630,7 @@ LINK_PYTHON_OBJS=@LINK_PYTHON_OBJS@
 # On some systems, object files that reference DTrace probes need to be modified
 # in-place by dtrace(1).
 DTRACE_DEPS = \
-	Python/ceval.o Python/gc.o Python/import.o Python/sysmodule.o
+	Python/ceval.o Python/ceval_forms.o Python/gc.o Python/import.o Python/sysmodule.o
 
 ##########################################################################
 # pyexpat's expat library
@@ -2244,6 +2245,7 @@ regen-rop:
 	    --cases $(srcdir)/Python/generated_rop_cases.c.h.new \
 	    --forms $(srcdir)/Python/generated_rop_forms.c.h.new \
 	    --stubs $(srcdir)/Python/generated_rop_stubs.c.h.new \
+	    --inline $(srcdir)/Python/generated_rop_inline.h.new \
 	    --targets $(srcdir)/Python/ir_targets.h.new \
 	    --templates $(srcdir)/Python/generated_rop_templates.c.h.new \
 	    --lowerings $(srcdir)/Python/jit_lowerings.h.new \
@@ -2251,6 +2253,7 @@ regen-rop:
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_cases.c.h $(srcdir)/Python/generated_rop_cases.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_forms.c.h $(srcdir)/Python/generated_rop_forms.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_stubs.c.h $(srcdir)/Python/generated_rop_stubs.c.h.new
+	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_inline.h $(srcdir)/Python/generated_rop_inline.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/ir_targets.h $(srcdir)/Python/ir_targets.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/jit_lowerings.h $(srcdir)/Python/jit_lowerings.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_templates.c.h $(srcdir)/Python/generated_rop_templates.c.h.new
@@ -2280,8 +2283,9 @@ Python/compile.o Python/codegen.o Python/assemble.o Python/ir_assemble.o Python/
                 $(srcdir)/Include/internal/pycore_opcode_utils.h \
                 $(srcdir)/Include/internal/pycore_regcfg.h
 
-Python/ceval.o: \
+Python/ceval.o Python/ceval_forms.o: \
 		$(srcdir)/Include/internal/pycore_native_scope.h \
+		$(srcdir)/Python/ceval_shared.h \
 		$(srcdir)/Python/ceval_generator.h \
 		$(srcdir)/Python/ceval_macros.h \
 		$(srcdir)/Python/ceval_routines.h \
@@ -2291,6 +2295,7 @@ Python/ceval.o: \
 		$(srcdir)/Python/generated_rop_cases.c.h \
 		$(srcdir)/Python/generated_rop_forms.c.h \
 		$(srcdir)/Python/generated_rop_stubs.c.h \
+		$(srcdir)/Python/generated_rop_inline.h \
 		$(srcdir)/Include/internal/pycore_rop_metadata.h \
 		$(srcdir)/Include/internal/pycore_ir.h \
 		$(srcdir)/Include/internal/pycore_ir_metadata.h
@@ -2312,7 +2317,7 @@ Include/pydtrace_probes.h: $(srcdir)/Include/pydtrace.d
 	sed 's/PYTHON_/PyDTrace_/' $@ > $@.tmp
 	mv $@.tmp $@
 
-Python/ceval.o: $(srcdir)/Include/pydtrace.h
+Python/ceval.o Python/ceval_forms.o: $(srcdir)/Include/pydtrace.h
 Python/gc.o: $(srcdir)/Include/pydtrace.h
 Python/import.o: $(srcdir)/Include/pydtrace.h $(srcdir)/Include/internal/pycore_magic_number.h
 
@@ -3260,6 +3265,9 @@ Python/dtoa.o: Python/dtoa.c
 	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_ALIASING) -o $@ $<
 
 Python/ceval.o: Python/ceval.c
+	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_CEVAL) -o $@ $<
+
+Python/ceval_forms.o: Python/ceval_forms.c
 	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_CEVAL) -o $@ $<
 
 # Run reindent on the library

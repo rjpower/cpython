@@ -142,9 +142,9 @@ class InlineRowTests(unittest.TestCase):
         self.assertEqual(program.diagnostics, ())
         p = rop_generator.lower_all(program, rop_generator.number_arms(program))
         out = {}
-        for name in ("cases", "forms", "stubs"):
+        for name in ("cases", "forms", "stubs", "inline"):
             out[name] = io.StringIO()
-            getattr(rop_generator, f"write_{name}")(out[name], p, [])
+            getattr(rop_generator, "write_inline_declarations" if name == "inline" else f"write_{name}")(out[name], p, [])
         return {k: v.getvalue() for k, v in out.items()}
 
     def test_the_products_call_the_symbol_they_link(self):
@@ -158,11 +158,12 @@ class InlineRowTests(unittest.TestCase):
             self.assertNotRegex(body, r"PyValue_IsInlineInt\(")
 
     def test_the_forms_define_one_outlined_copy_of_the_row(self):
-        forms = self.generated()["forms"]
-        self.assertEqual(forms.count("static Py_NO_INLINE bool "
-                                     "PyValue_IsInlineInt_Outlined(PyValueBorrow p0)"), 1)
+        text = self.generated()
+        self.assertEqual(text["forms"].count("static Py_NO_INLINE bool "
+                                             "PyValue_IsInlineInt_Outlined(PyValueBorrow p0)"), 1)
+        # every unit that runs the arms includes the declaration
         self.assertIn("static Py_ALWAYS_INLINE bool "
-                      "PyValue_IsInlineInt(PyValueBorrow);", forms)
+                      "PyValue_IsInlineInt(PyValueBorrow);", text["inline"])
 
     def test_a_program_without_inline_rows_is_unchanged(self):
         text = self.generated(SHARED)

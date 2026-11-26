@@ -11,7 +11,7 @@
  * This file is included once, with the exits of the outlined handlers. */
 #define GENERATOR_DISPATCH() DISPATCH()
 #define GEN_STEP(NAME) \
-    static Py_NO_INLINE _PyIRTransfer \
+    Py_NO_INLINE _PyIRTransfer \
     ir_##NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, \
               _PyInstr *next_instr, _PyIRWord ir_word)
 

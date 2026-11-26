@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `18c9f520e3b` (pushed) holds:
+`pyjit/rir90` at `04a20a7d76e` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -155,6 +155,16 @@ needs a language change (on the freeze list).  Measured on CPU 1 (cycles
 of golden87's): unpack_sequence 2.91 to 1.83, nbody 1.91 to 1.53,
 spectral_norm 1.87 to 1.28.
 
+MV is merged: no parallel move is solved at run time.  A retirement is its
+own family (`Retire.Close`), which closes its sources and moves nothing;
+the translator orders a move's pairs at lowering so each destination is
+vacant when its pair runs, and each cycle becomes a `Rotate.Cycle` word;
+the unwinder's ingress recipes are sequenced the same way.  The run-time
+solver (`_PyFrame_ParallelMove`) is deleted.  Generators run 2% fewer
+instructions and about 7% fewer cycles; IP's estimate for this cause was
+five times too high, and generators' excess (1.62 of golden87's
+instructions) is still inside `ir_evaluate`.
+
 A refleak run (`-R 3:3`, 16 modules) finds no reference leak, and the same
 memory-block growth before and after TB (a backlog item).
 
@@ -207,8 +217,6 @@ nbody 3.18 to 1.85, chaos 1.86 to 1.37, float 1.79 to 1.34; unpack_sequence
 Running, interpreter performance wave 2 (timing recorded, never gated):
 - AR: a mode operand selects its arm (one arm per operator of the integer
   and float families, one per branch sense), from a declared enum;
-- MV: no parallel move is solved at run time; a generator return runs no
-  solver;
 - SP item 4: the remaining specializations with no arm (the native calls,
   the bound-method and generator-function calls, property, overridden
   `__getattribute__` and `__getitem__` frames, dict-items iteration).

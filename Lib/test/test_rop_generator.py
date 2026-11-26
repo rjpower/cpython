@@ -241,20 +241,23 @@ class StubTests(unittest.TestCase):
         self.assertNotIn("own_x", text)
         self.assertEqual(text.count("PyValue_XCLOSE("), 1)
 
-    def test_an_owners_binding_stores_then_closes_the_displaced_owners(self):
-        # d[] = v exchanges each item with the owner its home displaces;
-        # old(d) closes those after every home is written
+    def test_an_owners_binding_publishes_the_items_in_one_call(self):
+        # d[] = v writes every item into its home before any displaced value
+        # is closed (_PyRop_PublishItems), which discharges old(d); the span
+        # carries the layout's constant geometry
         program = rop_check.check([rop_syntax.parse(OWNERS, "t.rop")])
         self.assertEqual(program.diagnostics, ())
         p = rop_generator.lower_all(program, rop_generator.number_arms(program))
-        self.assertIn("_PyRopOwners v;", p.lowered["F.Split"].decls)
+        self.assertIn("_PyRopItems v;", p.lowered["F.Split"].decls)
         text = "\n".join(p.lowered["F.Split"].body)
         self.assertIn("v = _PyRop_Split(", text)
         self.assertRegex(text, r"n = \(Py_ssize_t\)IR_\w+\(ir_word\);")
+        self.assertRegex(text, r"span\d+ = \(_PyRopSpan\)\{frame, this_instr, 0, "
+                               r"IR_\w+\(ir_word\), \d, \d\};")
         order = [text.index(mark) for mark in (
-            "_PyRop_StoreOwners(&span", "IR_STUB_ESCAPE();",
-            "_PyRop_CloseOwners(&v);")]
+            "IR_STUB_ESCAPE();", "_PyRop_PublishItems(&span")]
         self.assertEqual(order, sorted(order))
+        self.assertNotIn("PyValue_XCLOSE", text)
 
     def test_anchors_of_a_literal_span_are_scalars(self):
         # Binary.Generic anchors [x, y]: a view and an owner per source on

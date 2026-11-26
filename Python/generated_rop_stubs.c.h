@@ -734,7 +734,7 @@ _PyIR_Rop_Stub_Unpack_Generic(
     INSTRUCTION_STATS(ROP_HANDLER_Unpack_Generic);
     size_t adapt_before_use_unpack1_n;
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-    _PyRopOwners out1;
+    _PyRopItems out1;
     int ret2;
     PyValue own_source = PyValue_NULL;
     _PyRopSpan span3;
@@ -743,7 +743,7 @@ _PyIR_Rop_Stub_Unpack_Generic(
     int ret5;
     int adapt_before_use_unpack1_cl;
     int ret6;
-    _PyRopOwners vals;
+    _PyRopItems vals;
     adapt_before_use_unpack1_n = (Py_ssize_t)IR_A(ir_word);
     if (!_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h)) {
         goto rop_Unpack_Generic_adapt_before_use_unpack1_Sample;
@@ -759,11 +759,10 @@ _PyIR_Rop_Stub_Unpack_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-    _PyRop_StoreOwners(&span3, &vals);
-    PyValue_XCLOSE(own_source);
     IR_STUB_ESCAPE();
-    _PyRop_CloseOwners(&vals);
+    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+    _PyRop_PublishItems(&span3, &vals);
+    PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_Unpack_Generic_adapt_before_use_unpack1_Sample:
     ret4 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), adapt_before_use_unpack1_n);
@@ -4350,32 +4349,22 @@ _PyIR_Rop_Stub_Unpack_Tuple(
     INSTRUCTION_STATS(ROP_HANDLER_Unpack_Tuple);
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow v;
-    _PyRopOwners out1;
-    int ret2;
+    _PyRopItems vals;
     PyValue own_source = PyValue_NULL;
-    _PyRopSpan span3;
-    _PyRopOwners vals;
+    _PyRopSpan span1;
     v = PyValue_Borrow(*home_source);
     if (!_PyRop_TupleHasLength(v, (Py_ssize_t)IR_A(ir_word))) {
         JUMP_TO_PREDICTED(Unpack_Generic);
     }
-    IR_STUB_ESCAPE();
-    ret2 = _PyRop_UnpackTuple(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
-    if (ret2 < 0) {
-        goto rop_Unpack_Tuple_Failed;
-    }
-    vals = out1;
+    vals = _PyRop_UnpackTuple_Outlined(home_source, (Py_ssize_t)IR_A(ir_word));
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-    _PyRop_StoreOwners(&span3, &vals);
-    PyValue_XCLOSE(own_source);
     IR_STUB_ESCAPE();
-    _PyRop_CloseOwners(&vals);
+    span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+    _PyRop_PublishItems(&span1, &vals);
+    PyValue_XCLOSE(own_source);
     DISPATCH();
-    rop_Unpack_Tuple_Failed:
-    PROCESS_ERROR_AT(RAISE, 193, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -4397,11 +4386,11 @@ _PyIR_Rop_Stub_Unpack_List(
     INSTRUCTION_STATS(ROP_HANDLER_Unpack_List);
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow v;
-    _PyRopOwners out1;
+    _PyRopItems out1;
     int ret2;
     PyValue own_source = PyValue_NULL;
     _PyRopSpan span3;
-    _PyRopOwners vals;
+    _PyRopItems vals;
     v = PyValue_Borrow(*home_source);
     if (!_PyRop_ListHasLength(v, (Py_ssize_t)IR_A(ir_word))) {
         JUMP_TO_PREDICTED(Unpack_Generic);
@@ -4415,11 +4404,10 @@ _PyIR_Rop_Stub_Unpack_List(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-    _PyRop_StoreOwners(&span3, &vals);
-    PyValue_XCLOSE(own_source);
     IR_STUB_ESCAPE();
-    _PyRop_CloseOwners(&vals);
+    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+    _PyRop_PublishItems(&span3, &vals);
+    PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_Unpack_List_Failed:
     PROCESS_ERROR_AT(RAISE, 193, this_instr);
@@ -4443,11 +4431,11 @@ _PyIR_Rop_Stub_UnpackStar_Iterable(
     next_instr += 1 + (IR_A(ir_word) + 3) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_UnpackStar_Iterable);
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-    _PyRopOwners out1;
+    _PyRopItems out1;
     int ret2;
     PyValue own_source = PyValue_NULL;
     _PyRopSpan span3;
-    _PyRopOwners vals;
+    _PyRopItems vals;
     IR_STUB_ESCAPE();
     ret2 = _PyRop_UnpackStar(home_source, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)), &out1);
     if (ret2 < 0) {
@@ -4457,11 +4445,10 @@ _PyIR_Rop_Stub_UnpackStar_Iterable(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 0, 0};
-    _PyRop_StoreOwners(&span3, &vals);
-    PyValue_XCLOSE(own_source);
     IR_STUB_ESCAPE();
-    _PyRop_CloseOwners(&vals);
+    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 0, 0};
+    _PyRop_PublishItems(&span3, &vals);
+    PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UnpackStar_Iterable_Failed:
     PROCESS_ERROR_AT(RAISE, 195, this_instr);

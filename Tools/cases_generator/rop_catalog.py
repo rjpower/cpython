@@ -810,10 +810,10 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.zero, _RES, (CSource.out,), False),
           COutcome(CTest.positive, _RES, (CSource.token,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
-    # ok(vals): zero, the owners the row made written through the last
-    # parameter (a Span<O>, in storage from PyMem_Malloc); err(e): negative,
-    # the exception set and nothing written
-    _conv("owners_or_raised", CReturn.int_status,
+    # ok(vals): zero, the items the publish writes (a Span<O>) written
+    # through the last parameter; err(e): negative, the exception set and
+    # nothing held
+    _conv("items_or_raised", CReturn.int_status,
           COutcome(CTest.zero, _RES, (CSource.out,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
     # A truth int: 1 true, 0 false, negative raised

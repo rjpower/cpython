@@ -126,7 +126,7 @@ def c_type(t: Type) -> str | None:
     if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Candidate:
         return "int"
     if t == WrapType(Wrap.Span, HandleType(Handle.O)):
-        return "_PyRopOwners"
+        return "_PyRopItems"
     if isinstance(t, EnumType):
         # A member that a primitive computes from another operand
         return "uint32_t"
@@ -163,7 +163,7 @@ def row_signature(x: Extern) -> tuple[str, list[str]]:
                               "inline row's out-of-line copy")
     if conv.returns is CReturn.void:
         ret = "void"
-    elif conv.returns is CReturn.pointer:
+    elif conv.returns in (CReturn.pointer, CReturn.handle):
         if not isinstance(x.result, Returns) or c_type(x.result.type) is None:
             raise Unsupported(f"{x.name}: no C result type for an inline row")
         ret = c_type(x.result.type)
@@ -1060,8 +1060,9 @@ class ArmLowerer:
         spent = sorted((d for d in s.debts if d.kind is DebtKind.spent),
                        key=lambda d: order.index(d.subject))
         olds = [d for d in s.debts if d.kind is DebtKind.old]
-        # d[] = v: StoreOwners exchanges each item of v with its home's
-        # displaced owner, which old(d) closes with the storage
+        # d[] = v: the items of v are written into d's homes before the
+        # values they displace are closed (_PyRop_PublishItems), which
+        # discharges old(d) too; the debts after it close what it read from
         stored = {b.target: b.value.name for b in s.bindings if b.owners}
         vectors = [b for b in s.bindings if b.vector and not b.owners]
         moved = {b.value.name for b in vectors if isinstance(b.value, Name)}
@@ -1104,7 +1105,9 @@ class ArmLowerer:
             self.declare("old_" + cname(d.subject), "PyValue")
             self.emit(f"old_{cname(d.subject)} = *{self.home(d.subject)};")
         for target, value in stored.items():
-            self.emit(f"_PyRop_StoreOwners({self.span(target)}, &{value});")
+            # The closes may run finalizers, which a stub reports
+            self.emit("IR_STUB_ESCAPE();")
+            self.emit(f"_PyRop_PublishItems({self.span(target)}, &{value});")
         for b in s.bindings:
             if b.vector:
                 continue
@@ -1131,9 +1134,7 @@ class ArmLowerer:
             elif d.kind is DebtKind.spent and owners[d.subject] is not None:
                 self.emit(f"PyValue_XCLOSE({owners[d.subject]});")
             elif d.kind is DebtKind.old and d.subject in stored:
-                # The closes may run finalizers, which a stub reports
-                self.emit("IR_STUB_ESCAPE();")
-                self.emit(f"_PyRop_CloseOwners(&{stored[d.subject]});")
+                pass
             elif d.kind is DebtKind.old:
                 self.emit(f"PyValue_XCLOSE(old_{cname(d.subject)});")
             elif d.kind is DebtKind.roots and d.subject in self.anchors:

@@ -1948,16 +1948,13 @@ _PyRop_MergeKeywords(PyValue *fn_home, PyValue *dict_home, PyValue *update_home)
 
 
 int
-_PyRop_UnpackIterable(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out);
+_PyRop_UnpackIterable(PyValue *source_home, Py_ssize_t n, _PyRopItems *out);
 
 int
-_PyRop_UnpackStar(PyValue *source_home, Py_ssize_t shape, _PyRopOwners *out);
+_PyRop_UnpackStar(PyValue *source_home, Py_ssize_t shape, _PyRopItems *out);
 
 int
-_PyRop_UnpackTuple(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out);
-
-int
-_PyRop_UnpackList(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out);
+_PyRop_UnpackList(PyValue *source_home, Py_ssize_t n, _PyRopItems *out);
 
 bool
 _PyRop_TupleHasLength(PyValueBorrow v, Py_ssize_t n);
@@ -1967,12 +1964,6 @@ _PyRop_ListHasLength(PyValueBorrow v, Py_ssize_t n);
 
 int
 _PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n);
-
-void
-_PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v);
-
-void
-_PyRop_CloseOwners(_PyRopOwners *v);
 
 Py_NO_INLINE _PyIRErrorResult
 _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,

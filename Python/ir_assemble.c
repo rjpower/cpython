@@ -495,7 +495,10 @@ span_elems(_PyRegCfg *cfg, const _PyRegOp *op, int counts[2], int *elems)
         }
     }
     else if (span_out) {
-        for (int j = 0; j < op->nout; j++) {
+        // Unpack's destinations, which the translator keeps in stack order
+        // (the first target on top, the last output): the word names them
+        // in target order, the order its rows give the items in
+        for (int j = op->nout - 1; j >= 0; j--) {
             elems[n++] = _PyRegCfg_Slot(cfg, _PyReg_OUT(cfg, op)[j]);
         }
     }

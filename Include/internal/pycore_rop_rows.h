@@ -84,25 +84,69 @@ PyAPI_FUNC(int) _PyRop_SetUnion(PyValue *set, PyValue *iterable);
 PyAPI_FUNC(int) _PyRop_DictOverlay(PyValue *dict, PyValue *update);
 PyAPI_FUNC(int) _PyRop_MergeKeywords(PyValue *fn, PyValue *dict, PyValue *update);
 
-/* A Span<O> value: count owners in storage from PyMem_Malloc (NULL when
- * count is 0), which the row that makes it allocates.  A publish
- * `d[] = v` exchanges each item with the owner its home displaces
- * (_PyRop_StoreOwners); old(d) closes those and frees the storage
- * (_PyRop_CloseOwners). */
+/* A Span<O> value: the count items that a publish `d[] = v` writes into
+ * the homes of d, a count of each.  The items are those of a tuple or list
+ * that the arm holds while it publishes: a temporary source taken from its
+ * home, a local source in its home (parked if a destination displaces it),
+ * or hold, a count of the container (a tuple the row made, or a tuple
+ * source too long for one park).  No code runs between the row and the last
+ * write of the first park, so a list's items stay as the row found them. */
 typedef struct {
-    PyValue *items;
+    const PyValue *items;
+    PyObject *hold;
     Py_ssize_t count;
-} _PyRopOwners;
+} _PyRopItems;
 
-PyAPI_FUNC(int) _PyRop_UnpackIterable(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
-PyAPI_FUNC(int) _PyRop_UnpackStar(PyValue *source, Py_ssize_t shape, _PyRopOwners *out);
-PyAPI_FUNC(int) _PyRop_UnpackTuple(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
-PyAPI_FUNC(int) _PyRop_UnpackList(PyValue *source, Py_ssize_t n, _PyRopOwners *out);
+/* The displaced values that a publish of items holds until every home of
+ * the park is written */
+#define _PY_ROP_PARK 16
+
+PyAPI_FUNC(int) _PyRop_UnpackIterable(PyValue *source, Py_ssize_t n, _PyRopItems *out);
+PyAPI_FUNC(int) _PyRop_UnpackStar(PyValue *source, Py_ssize_t shape, _PyRopItems *out);
+PyAPI_FUNC(int) _PyRop_UnpackList(PyValue *source, Py_ssize_t n, _PyRopItems *out);
 PyAPI_FUNC(int) _PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n);
 PyAPI_FUNC(bool) _PyRop_TupleHasLength(PyValueBorrow v, Py_ssize_t n);
 PyAPI_FUNC(bool) _PyRop_ListHasLength(PyValueBorrow v, Py_ssize_t n);
-PyAPI_FUNC(void) _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v);
-PyAPI_FUNC(void) _PyRop_CloseOwners(_PyRopOwners *v);
+
+/* The items of the exact tuple of n items in the source home (Unpack.Tuple).
+ * A span longer than a park holds a count: a park's closes may close a
+ * local source that a destination displaced. */
+static inline _PyRopItems
+_PyRop_UnpackTuple(PyValue *source_home, size_t n)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyTuple_CheckExact(seq_o) && (size_t)PyTuple_GET_SIZE(seq_o) == n);
+    return (_PyRopItems){_PyTuple_ITEMS(seq_o),
+                         n > _PY_ROP_PARK ? Py_NewRef(seq_o) : NULL,
+                         (Py_ssize_t)n};
+}
+
+/* The publish `d[] = v` of a Span<O>: item i goes to home i of d.  Up to a
+ * park of homes at a time, every home is written before any value it
+ * displaced is closed, so a finalizer sees the park published and cannot
+ * change the items still to be read (a longer span's items are a held
+ * tuple's).  A vacant home displaces NULL, whose close does nothing. */
+static inline Py_ALWAYS_INLINE void
+_PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
+{
+    assert(v->count == d->count);
+    assert(d->count <= _PY_ROP_PARK || v->hold != NULL);
+    PyValue park[_PY_ROP_PARK];
+    for (int base = 0; base < d->count; base += _PY_ROP_PARK) {
+        int m = Py_MIN(d->count - base, _PY_ROP_PARK);
+        for (int i = 0; i < m; i++) {
+            PyValue *home = &d->frame->base[_PyRopSpan_Slot(d, base + i)];
+            park[i] = _PyFrame_TakeHome(d->frame, home);
+            _PyFrame_WriteHome(d->frame, home,
+                               PyValue_DUP(PyValue_Borrow(v->items[base + i])));
+        }
+        for (int i = 0; i < m; i++) {
+            PyValue_XCLOSE(park[i]);
+        }
+    }
+    Py_XDECREF(v->hold);
+    v->hold = NULL;
+}
 
 /* The values a call reads.  A local source is held by an owner of its own,
  * because the call can reassign the local; a temporary is held by its

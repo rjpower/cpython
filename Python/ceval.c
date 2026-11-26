@@ -2875,11 +2875,12 @@ done:
 }
 
 /* Unpack and UnpackStar (Python/register_ops/displays.rop): the values of
- * the iterable as owners the publish moves into the homes of the targets,
- * which are in stack order (the first target is the last element).  The source stays in its home and is held across the call. */
+ * the iterable, in target order, staged in a new tuple that the items hold,
+ * so that a failure part-way leaves every home as it was.  The source stays
+ * in its home and is held across the call. */
 static int
 rop_unpack(PyValue *source_home, int before, int after, Py_ssize_t count,
-           _PyRopOwners *out)
+           _PyRopItems *out)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     PyValue seq = PyValue_DUP(PyValue_Borrow(*source_home));
@@ -2891,24 +2892,21 @@ rop_unpack(PyValue *source_home, int before, int after, Py_ssize_t count,
                       PyValue_TYPE(PyValue_Borrow(seq))->tp_name);
         goto done;
     }
-    PyValue *items = count ? PyMem_Malloc(count * sizeof(PyValue)) : NULL;
-    if (count && items == NULL) {
-        _PyErr_NoMemory(tstate);
+    PyObject *staged = PyTuple_New(count);
+    if (staged == NULL) {
         goto done;
     }
     PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(seq));
+    PyValue *items = _PyTuple_ITEMS(staged);
     if (!_PyEval_UnpackIterableValue(tstate, seq_o, before, after, items)) {
-        PyMem_Free(items);
+        // The items made are closed; the tuple holds none of them
+        for (Py_ssize_t i = 0; i < count; i++) {
+            items[i] = PyValue_NULL;
+        }
+        Py_DECREF(staged);
         goto done;
     }
-    // The outputs are in stack order, bottom first: the first target is last
-    for (Py_ssize_t i = 0, j = count - 1; i < j; i++, j--) {
-        PyValue tmp = items[i];
-        items[i] = items[j];
-        items[j] = tmp;
-    }
-    out->items = items;
-    out->count = count;
+    *out = (_PyRopItems){items, staged, count};
     ok = 1;
 done:
     PyValue_CLOSE(seq);
@@ -2916,68 +2914,49 @@ done:
 }
 
 int
-_PyRop_UnpackIterable(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+_PyRop_UnpackIterable(PyValue *source_home, Py_ssize_t n, _PyRopItems *out)
 {
     return rop_unpack(source_home, (int)n, -1, n, out);
 }
 
 int
-_PyRop_UnpackStar(PyValue *source_home, Py_ssize_t shape, _PyRopOwners *out)
+_PyRop_UnpackStar(PyValue *source_home, Py_ssize_t shape, _PyRopItems *out)
 {
     int before = shape & 0xFF, after = shape >> 8;
     return rop_unpack(source_home, before, after, before + 1 + after, out);
 }
 
-/* The specialized arms: the items of an exact tuple or list of n items,
- * duplicated, in stack order.  The guard has checked the type and length; the
- * list's length is checked again under its lock, and a list that changed goes
+/* The specialized arms: the items of an exact tuple or list of n items.  The
+ * guard has checked the type and length.  The list's length is checked
+ * again under its lock.  In the free-threaded build, and for a list longer
+ * than a park, the items are a tuple copied under the lock; otherwise no
+ * code runs until the publish has written them.  A list that changed goes
  * the generic way. */
 int
-_PyRop_UnpackTuple(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
-{
-    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
-    assert(PyTuple_CheckExact(seq_o) && PyTuple_GET_SIZE(seq_o) == n);
-    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
-    if (n && items == NULL) {
-        _PyErr_NoMemory(_PyThreadState_GET());
-        return -1;
-    }
-    for (Py_ssize_t i = 0; i < n; i++) {
-        items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyTuple_ITEMS(seq_o)[i]));
-    }
-    out->items = items;
-    out->count = n;
-    return 0;
-}
-
-int
-_PyRop_UnpackList(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+_PyRop_UnpackList(PyValue *source_home, Py_ssize_t n, _PyRopItems *out)
 {
     PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
     assert(PyList_CheckExact(seq_o));
-    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
-    if (n && items == NULL) {
-        _PyErr_NoMemory(_PyThreadState_GET());
-        return -1;
-    }
-    int same = 1;
+    int same = 1, failed = 0;
     Py_BEGIN_CRITICAL_SECTION(seq_o);
     if (PyList_GET_SIZE(seq_o) != n) {
         same = 0;
     }
+#ifndef Py_GIL_DISABLED
+    else if (n <= _PY_ROP_PARK) {
+        *out = (_PyRopItems){_PyList_ITEMS(seq_o), NULL, n};
+    }
+#endif
     else {
-        for (Py_ssize_t i = 0; i < n; i++) {
-            items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyList_ITEMS(seq_o)[i]));
-        }
+        PyObject *copy = _PyTuple_FromValueArray(_PyList_ITEMS(seq_o), n);
+        failed = copy == NULL;
+        *out = (_PyRopItems){copy ? _PyTuple_ITEMS(copy) : NULL, copy, n};
     }
     Py_END_CRITICAL_SECTION();
     if (!same) {
-        PyMem_Free(items);
         return _PyRop_UnpackIterable(source_home, n, out);
     }
-    out->items = items;
-    out->count = n;
-    return 0;
+    return failed ? -1 : 0;
 }
 
 bool
@@ -3005,31 +2984,6 @@ _PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n)
         return 0;
     }
     return _PyRop_ListHasLength(v, n) ? 1 : 2;
-}
-
-void
-_PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v)
-{
-    // The row that made v returns count(d) items
-    assert(v->count == d->count);
-    for (int i = 0; i < d->count; i++) {
-        int to = _PyRopSpan_Slot(d, i);
-        PyValue old = _PyFrame_TakeHome(d->frame, &d->frame->base[to]);
-        _PyFrame_WriteHome(d->frame, &d->frame->base[to], v->items[i]);
-        v->items[i] = old;
-    }
-}
-
-void
-_PyRop_CloseOwners(_PyRopOwners *v)
-{
-    // Every home is written before any close runs a finalizer
-    for (Py_ssize_t i = 0; i < v->count; i++) {
-        PyValue_XCLOSE(v->items[i]);
-    }
-    PyMem_Free(v->items);
-    v->items = NULL;
-    v->count = 0;
 }
 
 /* All descriptors are local to this reached cold scope; no successful handler

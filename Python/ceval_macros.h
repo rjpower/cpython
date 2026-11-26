@@ -90,12 +90,12 @@
 #define GEN_DISPATCH() goto LABEL_gen_dispatch
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
-        gen_transfer = ir_##NAME(tstate, (F), (IP), (V).bits); \
+        gen_transfer = ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
         goto LABEL_gen_stepped; \
     } while (0)
 #define GEN_STEP_EFFECT(REMAINING, IP, V) \
     do { \
-        gen_transfer = ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
+        gen_transfer = ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), _PyValue_ToTransferWord(V), \
                                               (REMAINING)); \
         goto LABEL_gen_stepped; \
     } while (0)
@@ -122,7 +122,7 @@
         DISPATCH(); \
     } while (0)
 #define IR_GEN_JUMP(NAME, F, IP, V) \
-    IR_STEP_DONE(ir_##NAME(tstate, (F), (IP), (V).bits))
+    IR_STEP_DONE(ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)))
 
 /* The yielded value V passes up from the SEND at SITE, whose YIELD follows
  * it, through every delegating frame above. */
@@ -985,8 +985,8 @@ _PyIR_UnpackItemsToLocals(PyValue *locals, PyValue *window,
         PyValue old = locals[j];
         locals[j] = item;
         _PyValue_CheckHome(locals[j]);
-        uintptr_t owns = (old.bits != 0) & ((old.bits & Py_OWNED_MASK) == 0);
-        slot->bits = old.bits & -owns;
+        bool owns = PyValue_RefcountOnObject(old);
+        *slot = owns ? old : PyValue_NULL;
         owned |= owns;
     }
     return owned != 0;
@@ -1141,15 +1141,6 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
  * lowers a site that gets none to CALL_INTRINSIC_2. */
 #define IR_FB_ARG(FB, F) \
     (assert((F) != IR_FB_SHARED), (int)((_PyFbHeader *)(FB))->arg)
-
-/* A specialisation of BINARY_OP deoptimises to the generic body, run with
- * the operation that its entry, at index F, records. */
-#define IR_DEOPT_BINARY_OP(F) \
-    do { \
-        binary_op_operation = (int)((_PyFbHeader *)IR_FB(F))->arg; \
-        next_instr = this_instr; \
-        goto LABEL_binary_op; \
-    } while (0)
 
 /* On entry to a frame at next_instr, its instr_ptr: if the word there is a
  * RESUME that would do nothing, because the eval breaker has nothing pending

@@ -208,7 +208,7 @@ class HomeWriterTests(unittest.TestCase):
             namespace = {}
             exec(f"def unpack(values):\n    {target} = values\n    return {result}\n", namespace)
             code = namespace["unpack"].__code__
-            self.assertTrue(any(row[0] == "UNPACK_SEQUENCE"
+            self.assertTrue(any(row[0] == "Unpack.Generic"
                                 for row in _testinternalcapi.get_ir(code)))
             values = tuple(object() for _ in range(count))
             for admitted in routes(code):

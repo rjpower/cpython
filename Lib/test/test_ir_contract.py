@@ -39,11 +39,9 @@ FIELD_LOCS = (_opcode.IR_LOC_A, _opcode.IR_LOC_B, _opcode.IR_LOC_C,
 # The feedback entry of each family (Include/internal/pycore_feedback.h):
 # its kind and size in bytes
 FEEDBACK = {
-    "UNPACK_SEQUENCE": ("UNARY", 24),
     "FOR_ITER": ("UNARY", 24),
     "GET_ITER": ("UNARY", 24),
     "SEND": ("UNARY", 24),
-    "BINARY_OP": ("BINARY", 32),
     "STORE_ATTR": ("ATTR", 48),
     "LOAD_SUPER_ATTR": ("ATTR", 48),
     "CALL_KW": ("CALL", 40),
@@ -486,10 +484,10 @@ class ContractTests(unittest.TestCase):
                             name)
         for name in ("LOAD_COMMON_CONSTANT",):
             self.assertFalse(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        for name in ("CALL_KW", "STORE_FAST", "BINARY_OP"):
+        for name in ("CALL_KW", "STORE_FAST"):
             self.assertTrue(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
         self.assertTrue(BY_NAME["RESUME"].effects & _opcode.IR_POLLS)
-        self.assertTrue(BY_NAME["BINARY_OP_ADD_INT"].effects & _opcode.IR_DEOPTS)
+        self.assertTrue(BY_NAME["COMPARE_OP_INT"].effects & _opcode.IR_DEOPTS)
 
 
 def _code_objects(module):

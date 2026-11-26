@@ -3875,6 +3875,10 @@ branch_word(PyCodeObject *code, int offset)
         first--;
     }
     int start = _PyCode_WordOffset(code, first);
+    // The last word that starts before the jump may be an operand word
+    while (first > 0 && _PyCode_WordOffset(code, first - 1) == start) {
+        first--;
+    }
     for (int w = first; w < (int)code->_co_exec->nwords &&
                         _PyCode_WordOffset(code, w) == start; w += _PyCode_InstrLength(code, w)) {
         int base = base_opcode(code, w);

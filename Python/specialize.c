@@ -538,15 +538,6 @@ fb_begin_unary(_PyInstr *instr, PyTypeObject *tp)
     fb->type_version = fb_type_version(tp);
 }
 
-static _PyFbBinary *
-fb_begin_binary(_PyInstr *instr, PyTypeObject *lhs_type, PyTypeObject *rhs_type)
-{
-    _PyFbBinary *fb = (_PyFbBinary *)fb_begin(instr);
-    fb->lhs_version = fb_type_version(lhs_type);
-    fb->rhs_version = fb_type_version(rhs_type);
-    return fb;
-}
-
 static void
 fb_begin_call_ex(_PyInstr *instr, PyTypeObject *callable_type, bool may_allocate)
 {
@@ -769,7 +760,7 @@ static int binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int o
                                              _PyBinaryOpSpecializationDescr **descr);
 
 bool
-_PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
+_PyRop_FindExtension(_PyFbBinary *fb, uint32_t op, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
 {
     fb->descr = NULL;
     if (!PyValue_IsObject(lhs_st) || !PyValue_IsObject(rhs_st)) {
@@ -778,11 +769,22 @@ _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow lhs_st, PyValueBorrow rhs
     _PyBinaryOpSpecializationDescr *descr;
     if (!binary_op_extended_specialization(PyValue_AsKnownObjectBorrow(lhs_st),
                                            PyValue_AsKnownObjectBorrow(rhs_st),
-                                           NB_ADD, &descr)) {
+                                           op, &descr)) {
         return false;
     }
     fb->descr = descr;
     return true;
+}
+
+void
+_PyRop_RecordOperands(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
+{
+    if (is_shared_entry(&fb->h)) {
+        return;
+    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbBinary) - sizeof(_PyFbHeader));
+    fb->lhs_version = fb_type_version(PyValue_TYPE(a));
+    fb->rhs_version = fb_type_version(PyValue_TYPE(b));
 }
 
 int
@@ -2738,170 +2740,6 @@ _Py_Specialize_CallKw(PyValue callable_st, PyValue self_or_null,
     }
 }
 
-#ifdef Py_STATS
-static int
-binary_op_fail_kind(int oparg, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
-{
-    PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
-    PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
-    switch (oparg) {
-        case NB_INPLACE_ADD:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_ADD_DIFFERENT_TYPES;
-            }
-            return SPEC_FAIL_BINARY_OP_ADD_OTHER;
-        case NB_AND:
-        case NB_INPLACE_AND:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_AND_DIFFERENT_TYPES;
-            }
-            if (lhs_type == &PyLong_Type) {
-                return SPEC_FAIL_BINARY_OP_AND_INT;
-            }
-            return SPEC_FAIL_BINARY_OP_AND_OTHER;
-        case NB_FLOOR_DIVIDE:
-        case NB_INPLACE_FLOOR_DIVIDE:
-            return SPEC_FAIL_BINARY_OP_FLOOR_DIVIDE;
-        case NB_LSHIFT:
-        case NB_INPLACE_LSHIFT:
-            return SPEC_FAIL_BINARY_OP_LSHIFT;
-        case NB_MATRIX_MULTIPLY:
-        case NB_INPLACE_MATRIX_MULTIPLY:
-            return SPEC_FAIL_BINARY_OP_MATRIX_MULTIPLY;
-        case NB_MULTIPLY:
-        case NB_INPLACE_MULTIPLY:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_MULTIPLY_DIFFERENT_TYPES;
-            }
-            return SPEC_FAIL_BINARY_OP_MULTIPLY_OTHER;
-        case NB_OR:
-        case NB_INPLACE_OR:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_OR_DIFFERENT_TYPES;
-            }
-            if (lhs_type == &PyLong_Type) {
-                return SPEC_FAIL_BINARY_OP_OR_INT;
-            }
-            return SPEC_FAIL_BINARY_OP_OR;
-        case NB_POWER:
-        case NB_INPLACE_POWER:
-            return SPEC_FAIL_BINARY_OP_POWER;
-        case NB_REMAINDER:
-        case NB_INPLACE_REMAINDER:
-            return SPEC_FAIL_BINARY_OP_REMAINDER;
-        case NB_RSHIFT:
-        case NB_INPLACE_RSHIFT:
-            return SPEC_FAIL_BINARY_OP_RSHIFT;
-        case NB_SUBTRACT:
-        case NB_INPLACE_SUBTRACT:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_SUBTRACT_DIFFERENT_TYPES;
-            }
-            return SPEC_FAIL_BINARY_OP_SUBTRACT_OTHER;
-        case NB_TRUE_DIVIDE:
-        case NB_INPLACE_TRUE_DIVIDE:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_DIFFERENT_TYPES;
-            }
-            if (lhs_type == &PyFloat_Type) {
-                return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_FLOAT;
-            }
-            return SPEC_FAIL_BINARY_OP_TRUE_DIVIDE_OTHER;
-        case NB_XOR:
-        case NB_INPLACE_XOR:
-            if (lhs_type != rhs_type) {
-                return SPEC_FAIL_BINARY_OP_XOR_DIFFERENT_TYPES;
-            }
-            if (lhs_type == &PyLong_Type) {
-                return SPEC_FAIL_BINARY_OP_XOR_INT;
-            }
-            return SPEC_FAIL_BINARY_OP_XOR;
-        case NB_SUBSCR:
-            if (lhs_type == &PyList_Type) {
-                if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
-                    return SPEC_FAIL_OUT_OF_RANGE;
-                }
-                if (rhs_type == &PySlice_Type) {
-                    return SPEC_FAIL_BINARY_OP_SUBSCR_LIST_SLICE;
-                }
-            }
-            if (lhs_type == &PyTuple_Type) {
-                if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
-                    return SPEC_FAIL_OUT_OF_RANGE;
-                }
-                if (rhs_type == &PySlice_Type) {
-                    return SPEC_FAIL_BINARY_OP_SUBSCR_TUPLE_SLICE;
-                }
-            }
-            if (lhs_type == &PyUnicode_Type) {
-                if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
-                    return SPEC_FAIL_OUT_OF_RANGE;
-                }
-                if (rhs_type == &PySlice_Type) {
-                    return SPEC_FAIL_BINARY_OP_SUBSCR_STRING_SLICE;
-                }
-            }
-            PyTypeObject *container_type = lhs_type;
-            if (PyType_IsSubtype(lhs_type, &PyDictProxy_Type)) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_MAPPINGPROXY;
-            }
-
-            if (PyType_IsSubtype(lhs_type, &PyBytes_Type)) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_BYTES;
-            }
-
-            if (PyType_IsSubtype(lhs_type, &PyRange_Type)) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_RANGE;
-            }
-
-            if (strcmp(container_type->tp_name, "array.array") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_ARRAY;
-            }
-
-            if (strcmp(container_type->tp_name, "re.Match") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_RE_MATCH;
-            }
-
-            if (strcmp(container_type->tp_name, "collections.deque") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_DEQUE;
-            }
-
-            if (strcmp(container_type->tp_name, "EnumDict") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_ENUMDICT;
-            }
-
-            if (strcmp(container_type->tp_name, "StackSummary") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_STACKSUMMARY;
-            }
-
-            if (strcmp(container_type->tp_name, "collections.defaultdict") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_DEFAULTDICT;
-            }
-
-            if (strcmp(container_type->tp_name, "Counter") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_COUNTER;
-            }
-
-            if (strcmp(container_type->tp_name, "collections.OrderedDict") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_ORDEREDDICT;
-            }
-
-            if (strcmp(container_type->tp_name, "time.struct_time") == 0) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_STRUCTTIME;
-            }
-
-            if (rhs_type == &PySlice_Type) {
-                return SPEC_FAIL_BINARY_OP_SUBSCR_OTHER_SLICE;
-            }
-            return SPEC_FAIL_BINARY_OP_SUBSCR;
-    }
-    Py_UNREACHABLE();
-}
-#endif
-
 /** Binary Op Specialization Extensions */
 
 #define SEQ_INT_MULTIPLY_ACTION(NAME, REPEAT, SEQ, COUNT) \
@@ -3022,207 +2860,6 @@ specialize_iter_generator(PyTypeObject *tp, _PyInstr *instr)
     return nominated;
 }
 
-/* Binary nomination cannot escape: evaluated operands remain in their
- * canonical homes until the semantic operation captures independent owners.
- * Scalar types and existing compact predicates need no temporary boxes. */
-static void
-specialize_binary_op(PyObject *lhs, PyObject *rhs,
-                     PyValueBorrow lhs_st, PyValueBorrow rhs_st,
-                     _PyInstr *instr, int oparg, PyValue *locals)
-{
-    PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
-    PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
-    _PyFbBinary *fb = fb_begin_binary(instr, lhs_type, rhs_type);
-    fb->descr = NULL;
-    bool producers = true;
-    // The specialized forms take inline operands only.
-    bool inline_ints = producers && PyValue_BothInlineInt(lhs_st, rhs_st);
-    // Two floats, or a float and an int.
-    bool floats = producers && PyValue_FloatOperandsCheck(lhs_st, rhs_st);
-
-    switch (oparg) {
-        /* NB_ADD is the Add family's (add.rop adapt_before_use_add) */
-        case NB_INPLACE_ADD:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_ADD_INT);
-                return;
-            }
-            if (floats) {
-                specialize(instr, BINARY_OP_ADD_FLOAT);
-                return;
-            }
-            if (lhs_type != rhs_type) {
-                break;
-            }
-            if (lhs_type == &PyUnicode_Type) {
-                // A STORE_FAST folded into the word: its dst names the local
-                _PyInterpreterFrame *frame = current_frame();
-                int local = _PyCode_InstrStoredLocal(
-                    _PyFrame_GetCode(frame), _PyFrame_InstrOffset(frame, instr));
-                bool to_store = local >= 0;
-                if (to_store && PyValue_IsObject(locals[local]) &&
-                    PyValue_AsKnownObjectBorrow(locals[local]) == lhs)
-                {
-                    specialize(instr, BINARY_OP_INPLACE_ADD_UNICODE);
-                    return;
-                }
-                specialize(instr, BINARY_OP_ADD_UNICODE);
-                return;
-            }
-            break;
-        case NB_MULTIPLY:
-        case NB_INPLACE_MULTIPLY:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_MULTIPLY_INT);
-                return;
-            }
-            if (floats) {
-                specialize(instr, BINARY_OP_MULTIPLY_FLOAT);
-                return;
-            }
-            break;
-        case NB_SUBTRACT:
-        case NB_INPLACE_SUBTRACT:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_SUBTRACT_INT);
-                return;
-            }
-            if (floats) {
-                specialize(instr, BINARY_OP_SUBTRACT_FLOAT);
-                return;
-            }
-            break;
-        case NB_TRUE_DIVIDE:
-        case NB_INPLACE_TRUE_DIVIDE:
-            if (floats && PyValue_NumberAsDouble(rhs_st) != 0.0) {
-                specialize(instr, BINARY_OP_TRUEDIV_FLOAT);
-                return;
-            }
-            break;
-        case NB_FLOOR_DIVIDE:
-        case NB_INPLACE_FLOOR_DIVIDE:
-            if (inline_ints && PyValue_InlineInt64(rhs_st) != 0) {
-                specialize(instr, BINARY_OP_FLOOR_DIVIDE_INT);
-                return;
-            }
-            break;
-        case NB_REMAINDER:
-        case NB_INPLACE_REMAINDER:
-            if (inline_ints && PyValue_InlineInt64(rhs_st) != 0) {
-                specialize(instr, BINARY_OP_REMAINDER_INT);
-                return;
-            }
-            break;
-        case NB_AND:
-        case NB_INPLACE_AND:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_AND_INT);
-                return;
-            }
-            break;
-        case NB_OR:
-        case NB_INPLACE_OR:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_OR_INT);
-                return;
-            }
-            break;
-        case NB_XOR:
-        case NB_INPLACE_XOR:
-            if (inline_ints) {
-                specialize(instr, BINARY_OP_XOR_INT);
-                return;
-            }
-            break;
-        case NB_LSHIFT:
-        case NB_INPLACE_LSHIFT:
-            if (inline_ints && PyValue_InlineInt64(rhs_st) >= 0) {
-                specialize(instr, BINARY_OP_LSHIFT_INT);
-                return;
-            }
-            break;
-        case NB_RSHIFT:
-        case NB_INPLACE_RSHIFT:
-            if (inline_ints && PyValue_InlineInt64(rhs_st) >= 0) {
-                specialize(instr, BINARY_OP_RSHIFT_INT);
-                return;
-            }
-            break;
-    }
-
-    _PyBinaryOpSpecializationDescr *descr;
-    if (lhs != NULL && rhs != NULL &&
-        binary_op_extended_specialization(lhs, rhs, oparg, &descr)) {
-        fb->descr = descr;
-        specialize(instr, BINARY_OP_EXTEND);
-        return;
-    }
-
-    SPECIALIZATION_FAIL(BINARY_OP, binary_op_fail_kind(oparg, lhs_st, rhs_st));
-    unspecialize(instr);
-}
-
-Py_NO_INLINE void
-(_Py_Specialize_BinaryOp)(PyValueBorrow lhs_st, PyValueBorrow rhs_st, _PyInstr *instr,
-                        int oparg, PyValue *locals)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[BINARY_OP] == INLINE_CACHE_ENTRIES_BINARY_OP);
-    PyObject *lhs = PyValue_IsObject(lhs_st) ? PyValue_AsKnownObjectBorrow(lhs_st) : NULL;
-    PyObject *rhs = PyValue_IsObject(rhs_st) ? PyValue_AsKnownObjectBorrow(rhs_st) : NULL;
-    specialize_binary_op(lhs, rhs, lhs_st, rhs_st, instr, oparg, locals);
-}
-
-
-#ifdef Py_STATS
-static int
-unpack_sequence_fail_kind(PyObject *seq)
-{
-    if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(seq))) {
-        return SPEC_FAIL_UNPACK_SEQUENCE_SEQUENCE;
-    }
-    if (PyIter_Check(seq)) {
-        return SPEC_FAIL_UNPACK_SEQUENCE_ITERATOR;
-    }
-    return SPEC_FAIL_OTHER;
-}
-#endif   // Py_STATS
-
-Py_NO_INLINE void
-_Py_Specialize_UnpackSequence(PyValue seq_st, _PyInstr *instr, int oparg)
-{
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[UNPACK_SEQUENCE] ==
-           INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE);
-    fb_begin_unary(instr, PyValue_TYPE(seq_st));
-    if (PyValue_IsInline(seq_st)) {
-        SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *seq = PyValue_AsKnownObjectBorrow(seq_st);
-    if (PyTuple_CheckExact(seq)) {
-        if (PyTuple_GET_SIZE(seq) != oparg) {
-            SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
-            unspecialize(instr);
-            return;
-        }
-        specialize(instr, UNPACK_SEQUENCE_TUPLE);
-        return;
-    }
-    if (PyList_CheckExact(seq)) {
-        if (PyList_GET_SIZE(seq) != oparg) {
-            SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
-            unspecialize(instr);
-            return;
-        }
-        specialize(instr, UNPACK_SEQUENCE_LIST);
-        return;
-    }
-    SPECIALIZATION_FAIL(UNPACK_SEQUENCE, unpack_sequence_fail_kind(seq));
-    unspecialize(instr);
-}
-
 #ifdef Py_STATS
 int
  _PySpecialization_ClassifyIterator(PyObject *iter)
@@ -3298,16 +2935,15 @@ int
 
 /* Whether the word after the FOR_ITER at instr unpacks its item, which this
  * word leaves in a temporary, into two locals: the loop of
- * `for key, value in d.items()`. */
+ * `for key, value in d.items()`.  Unpack publishes into the homes of its
+ * targets, so a word that does is an Unpack with two element homes that are
+ * both locals; the translator does not yet fold the target stores into the
+ * Unpack word, so none is. */
 static inline int
 for_iter_unpacks_pair(_PyInstr *instr)
 {
-    _PyIRWord for_iter = FT_ATOMIC_LOAD_UINT64_RELAXED(instr[0]);
-    _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(instr[1]);
-    int handler = IR_HANDLER(unpack);
-    return (handler == UNPACK_SEQUENCE || handler == UNPACK_SEQUENCE_TUPLE) &&
-           IR_B(unpack) == 2 && IR_A(unpack) == IR_A(for_iter) &&
-           (unpack & IR_F_LOCAL_D) != 0;
+    (void)instr;
+    return 0;
 }
 
 Py_NO_INLINE void

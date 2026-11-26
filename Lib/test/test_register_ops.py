@@ -733,10 +733,10 @@ class DefinitionTests(unittest.TestCase):
     # Appendix A of the addendum, in its order
     APPENDIX_A = """
         Nop Const LocalRead LocalWrite SaveLocal LocalDelete Move Add Truth Jump
-        BranchTruth BranchNone Binary Unary Compare Identity Contains TestBranch
+        BranchTruth BranchNone Binary AppendText Unary Compare Identity Contains TestBranch
         GetAttr GetMethod AttrWrite SuperLookup SpecialLookup
         GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement AddEntry
-        UpdateContainer MergeKeywords Unpack
+        UpdateContainer MergeKeywords Unpack UnpackStar
         CellMake CellRead CellMapRead CellStore CellDelete NamespaceRead NamespaceReadFrom
         NamespaceWrite
         GlobalRead SetupAnnotations Import ImportFrom BuildText Convert Format FormatSpec Length Pattern PatternClass PatternKeys
@@ -747,7 +747,7 @@ class DefinitionTests(unittest.TestCase):
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 79)
+        self.assertEqual(len(self.APPENDIX_A), 80)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

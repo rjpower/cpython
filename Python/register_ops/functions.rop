@@ -12,7 +12,7 @@
 // compiler's number: _PyRop_IntrinsicNumber() maps it, and
 // test_rop_functions checks the map against the header.
 enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
-                 INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
+                 INTRINSIC_ASYNC_GEN_WRAP,
                  INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
                  INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
                  INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
@@ -82,7 +82,7 @@ point IntrinsicPair.Failed(current, site, pending) keep() spent(x, y) defs();
 // Every row consumes its operands, closing them on both outcomes; the
 // result is a new owner.
 
-// PRINT (sys.displayhook), ASYNC_GEN_WRAP, UNARY_POSITIVE (__pos__),
+// PRINT (sys.displayhook), ASYNC_GEN_WRAP,
 // LIST_TO_TUPLE and BUILD_FROZENSET (the compiler's uniquely referenced
 // temporary), TYPEVAR, PARAMSPEC, TYPEVARTUPLE, SUBSCRIPT_GENERIC (imports
 // typing), TYPEALIAS
@@ -92,7 +92,7 @@ extern helper intrinsic_unary(t:Thread, id:Enum<IntrinsicId>, x:O)
   c _PyRop_IntrinsicUnary as value_or_null
   evidence(
     review: "Reviewed 1I. bytecodes.c _CALL_INTRINSIC_1 through _PyEval_CallIntrinsic1.",
-    contract: "PRINT, UNARY_POSITIVE and SUBSCRIPT_GENERIC run Python; the others"
+    contract: "PRINT and SUBSCRIPT_GENERIC run Python; the others"
               "allocate. No namespace is written.");
 
 // IMPORT_STAR: the frame's locals mapping gains the names of the module (or of

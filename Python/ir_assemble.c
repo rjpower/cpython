@@ -561,6 +561,9 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
         else if (role >= _PyIR_ROLE_IN0) {
             fields[f] = (uint32_t)_PyRegCfg_Slot(cfg, _PyReg_IN(cfg, op)[fixed_in++]);
         }
+        else if (role == _PyIR_ROLE_FB) {
+            fields[f] = (uint32_t)(op->fb > 0 ? op->fb : IR_FB_SHARED);
+        }
         else if (role == _PyIR_ROLE_IMM) {
             // A scalar next to the spans (Function's `present`): the op's oparg
             fields[f] = (uint32_t)op->oparg;
@@ -617,15 +620,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
      * family's (the translator's rule). */
     if (opcode == RESUME && _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
         return RESUME_JIT;
-    }
-    if (opcode == BINARY_OP) {
-        // NB_SUBSCR is the GetItem family's, never a BINARY_OP handler
-        if (oparg >= NB_SUBSCR) {
-            PyErr_Format(PyExc_SystemError,
-                         "invalid BINARY_OP operation %d", oparg);
-            return ERROR;
-        }
-        return _PyIR_BINARY_OP_FIRST + oparg;
     }
     return opcode;
 }

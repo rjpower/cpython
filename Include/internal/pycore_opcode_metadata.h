@@ -40,40 +40,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 0;
         case BINARY_OP:
             return 2;
-        case BINARY_OP_ADD_FLOAT:
-            return 2;
-        case BINARY_OP_ADD_INT:
-            return 2;
-        case BINARY_OP_ADD_UNICODE:
-            return 2;
-        case BINARY_OP_AND_INT:
-            return 2;
-        case BINARY_OP_EXTEND:
-            return 2;
-        case BINARY_OP_FLOOR_DIVIDE_INT:
-            return 2;
-        case BINARY_OP_INPLACE_ADD_UNICODE:
-            return 2;
-        case BINARY_OP_LSHIFT_INT:
-            return 2;
-        case BINARY_OP_MULTIPLY_FLOAT:
-            return 2;
-        case BINARY_OP_MULTIPLY_INT:
-            return 2;
-        case BINARY_OP_OR_INT:
-            return 2;
-        case BINARY_OP_REMAINDER_INT:
-            return 2;
-        case BINARY_OP_RSHIFT_INT:
-            return 2;
-        case BINARY_OP_SUBTRACT_FLOAT:
-            return 2;
-        case BINARY_OP_SUBTRACT_INT:
-            return 2;
-        case BINARY_OP_TRUEDIV_FLOAT:
-            return 2;
-        case BINARY_OP_XOR_INT:
-            return 2;
         case BINARY_SLICE:
             return 3;
         case BUILD_INTERPOLATION:
@@ -416,10 +382,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 1;
         case UNPACK_SEQUENCE:
             return 1;
-        case UNPACK_SEQUENCE_LIST:
-            return 1;
-        case UNPACK_SEQUENCE_TUPLE:
-            return 1;
         case WITH_EXCEPT_START:
             return 5;
         case YIELD_VALUE:
@@ -438,40 +400,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
         case ANNOTATIONS_PLACEHOLDER:
             return 0;
         case BINARY_OP:
-            return 1;
-        case BINARY_OP_ADD_FLOAT:
-            return 1;
-        case BINARY_OP_ADD_INT:
-            return 1;
-        case BINARY_OP_ADD_UNICODE:
-            return 1;
-        case BINARY_OP_AND_INT:
-            return 1;
-        case BINARY_OP_EXTEND:
-            return 1;
-        case BINARY_OP_FLOOR_DIVIDE_INT:
-            return 1;
-        case BINARY_OP_INPLACE_ADD_UNICODE:
-            return 1;
-        case BINARY_OP_LSHIFT_INT:
-            return 1;
-        case BINARY_OP_MULTIPLY_FLOAT:
-            return 1;
-        case BINARY_OP_MULTIPLY_INT:
-            return 1;
-        case BINARY_OP_OR_INT:
-            return 1;
-        case BINARY_OP_REMAINDER_INT:
-            return 1;
-        case BINARY_OP_RSHIFT_INT:
-            return 1;
-        case BINARY_OP_SUBTRACT_FLOAT:
-            return 1;
-        case BINARY_OP_SUBTRACT_INT:
-            return 1;
-        case BINARY_OP_TRUEDIV_FLOAT:
-            return 1;
-        case BINARY_OP_XOR_INT:
             return 1;
         case BINARY_SLICE:
             return 1;
@@ -815,10 +743,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 1 + (oparg & 0xFF) + (oparg >> 8);
         case UNPACK_SEQUENCE:
             return oparg;
-        case UNPACK_SEQUENCE_LIST:
-            return oparg;
-        case UNPACK_SEQUENCE_TUPLE:
-            return oparg;
         case WITH_EXCEPT_START:
             return 6;
         case YIELD_VALUE:
@@ -841,7 +765,6 @@ enum InstructionFormat {
     INSTR_FMT_IXC = 8,
     INSTR_FMT_IXC00 = 9,
     INSTR_FMT_IXC000 = 10,
-    INSTR_FMT_IXC0000 = 11,
 };
 
 #define IS_VALID_OPCODE(OP) \
@@ -903,24 +826,7 @@ struct opcode_metadata {
 PyAPI_DATA(const struct opcode_metadata) _PyOpcode_opcode_metadata[267];
 #ifdef NEED_OPCODE_METADATA
 const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
-    [BINARY_OP] = { true, INSTR_FMT_IBC0000, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [BINARY_OP_ADD_FLOAT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_ADD_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_ADD_UNICODE] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_AND_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_EXTEND] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
-    [BINARY_OP_FLOOR_DIVIDE_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_INPLACE_ADD_UNICODE] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [BINARY_OP_LSHIFT_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_MULTIPLY_FLOAT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_MULTIPLY_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_OR_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_REMAINDER_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_RSHIFT_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_SUBTRACT_FLOAT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_SUBTRACT_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_TRUEDIV_FLOAT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
-    [BINARY_OP_XOR_INT] = { true, INSTR_FMT_IXC0000, HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
+    [BINARY_OP] = { true, INSTR_FMT_IBC0000, HAS_ARG_FLAG },
     [BINARY_SLICE] = { true, INSTR_FMT_IX, 0 },
     [BUILD_INTERPOLATION] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [BUILD_LIST] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
@@ -1077,13 +983,11 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [STORE_SUBSCR] = { true, INSTR_FMT_IXC, 0 },
     [SWAP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [TO_BOOL] = { true, INSTR_FMT_IXC00, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [UNARY_INVERT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
-    [UNARY_NEGATIVE] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
+    [UNARY_INVERT] = { true, INSTR_FMT_IX, 0 },
+    [UNARY_NEGATIVE] = { true, INSTR_FMT_IX, 0 },
     [UNARY_NOT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_EX] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_SEQUENCE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_SEQUENCE_LIST] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_SEQUENCE_TUPLE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
+    [UNPACK_EX] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [UNPACK_SEQUENCE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [WITH_EXCEPT_START] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [ANNOTATIONS_PLACEHOLDER] = { true, -1, HAS_PURE_FLAG },
@@ -1100,7 +1004,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
 };
 #endif
 
-#define MAX_UOP_PER_EXPANSION 5
+#define MAX_UOP_PER_EXPANSION 4
 struct opcode_macro_expansion {
     int nuops;
     struct { int16_t uop; int8_t size; int8_t offset; } uops[MAX_UOP_PER_EXPANSION];
@@ -1110,24 +1014,6 @@ extern const struct opcode_macro_expansion _PyOpcode_macro_expansion[256];
 #ifdef NEED_OPCODE_METADATA
 const struct opcode_macro_expansion
 _PyOpcode_macro_expansion[256] = {
-    [BINARY_OP] = { .nuops = 1, .uops = { { _BINARY_OP, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_ADD_FLOAT] = { .nuops = 3, .uops = { { _BINARY_OP_ADD_FLOAT, OPARG_SIMPLE, 5 }, { _POP_TOP_NUMBER, OPARG_SIMPLE, 5 }, { _POP_TOP_NUMBER, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_ADD_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_ADD_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_ADD_UNICODE] = { .nuops = 5, .uops = { { _GUARD_TOS_UNICODE, OPARG_SIMPLE, 0 }, { _GUARD_NOS_UNICODE, OPARG_SIMPLE, 0 }, { _BINARY_OP_ADD_UNICODE, OPARG_SIMPLE, 5 }, { _POP_TOP_UNICODE, OPARG_SIMPLE, 5 }, { _POP_TOP_UNICODE, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_AND_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_AND_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_EXTEND] = { .nuops = 3, .uops = { { _BINARY_OP_EXTEND, 4, 1 }, { _POP_TOP_ANY, OPARG_SIMPLE, 5 }, { _POP_TOP_ANY, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_FLOOR_DIVIDE_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_FLOOR_DIVIDE_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_INPLACE_ADD_UNICODE] = { .nuops = 3, .uops = { { _GUARD_TOS_UNICODE, OPARG_SIMPLE, 0 }, { _GUARD_NOS_UNICODE, OPARG_SIMPLE, 0 }, { _BINARY_OP_INPLACE_ADD_UNICODE, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_LSHIFT_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_LSHIFT_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_MULTIPLY_FLOAT] = { .nuops = 3, .uops = { { _BINARY_OP_MULTIPLY_FLOAT, OPARG_SIMPLE, 5 }, { _POP_TOP_NUMBER, OPARG_SIMPLE, 5 }, { _POP_TOP_NUMBER, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_MULTIPLY_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_MULTIPLY_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_OR_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_OR_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_REMAINDER_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_REMAINDER_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_RSHIFT_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_RSHIFT_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_SUBTRACT_FLOAT] = { .nuops = 3, .uops = { { _BINARY_OP_SUBTRACT_FLOAT, OPARG_SIMPLE, 5 }, { _POP_TOP_NUMBER, OPARG_SIMPLE, 5 }, { _POP_TOP_NUMBER, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_SUBTRACT_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_SUBTRACT_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_TRUEDIV_FLOAT] = { .nuops = 3, .uops = { { _BINARY_OP_TRUEDIV_FLOAT, OPARG_SIMPLE, 5 }, { _POP_TOP_NUMBER, OPARG_SIMPLE, 5 }, { _POP_TOP_NUMBER, OPARG_SIMPLE, 5 } } },
-    [BINARY_OP_XOR_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_INT, OPARG_SIMPLE, 0 }, { _BINARY_OP_XOR_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 }, { _POP_TOP_INT, OPARG_SIMPLE, 5 } } },
     [CHECK_EG_MATCH] = { .nuops = 1, .uops = { { _CHECK_EG_MATCH, OPARG_SIMPLE, 0 } } },
     [CHECK_EXC_MATCH] = { .nuops = 1, .uops = { { _CHECK_EXC_MATCH, OPARG_SIMPLE, 0 } } },
     [END_FOR] = { .nuops = 1, .uops = { { _END_FOR, OPARG_SIMPLE, 0 } } },
@@ -1173,13 +1059,7 @@ _PyOpcode_macro_expansion[256] = {
     [STORE_ATTR_WITH_HINT] = { .nuops = 2, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _STORE_ATTR_WITH_HINT, 1, 3 } } },
     [STORE_FAST] = { .nuops = 2, .uops = { { _SWAP_FAST, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 } } },
     [TO_BOOL] = { .nuops = 1, .uops = { { _TO_BOOL, OPARG_SIMPLE, 3 } } },
-    [UNARY_INVERT] = { .nuops = 2, .uops = { { _UNARY_INVERT, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 } } },
-    [UNARY_NEGATIVE] = { .nuops = 2, .uops = { { _UNARY_NEGATIVE, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 } } },
     [UNARY_NOT] = { .nuops = 1, .uops = { { _UNARY_NOT, OPARG_SIMPLE, 0 } } },
-    [UNPACK_EX] = { .nuops = 1, .uops = { { _UNPACK_EX, OPARG_SIMPLE, 0 } } },
-    [UNPACK_SEQUENCE] = { .nuops = 1, .uops = { { _UNPACK_SEQUENCE, OPARG_SIMPLE, 1 } } },
-    [UNPACK_SEQUENCE_LIST] = { .nuops = 2, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _UNPACK_SEQUENCE_LIST, OPARG_SIMPLE, 1 } } },
-    [UNPACK_SEQUENCE_TUPLE] = { .nuops = 2, .uops = { { _GUARD_TOS_TUPLE, OPARG_SIMPLE, 0 }, { _UNPACK_SEQUENCE_TUPLE, OPARG_SIMPLE, 1 } } },
     [WITH_EXCEPT_START] = { .nuops = 1, .uops = { { _WITH_EXCEPT_START, OPARG_SIMPLE, 0 } } },
     [YIELD_VALUE] = { .nuops = 2, .uops = { { _MAKE_HEAP_SAFE, OPARG_SIMPLE, 0 }, { _YIELD_VALUE, OPARG_SIMPLE, 0 } } },
 };
@@ -1190,23 +1070,6 @@ PyAPI_DATA(const char) *_PyOpcode_OpName[267];
 const char *_PyOpcode_OpName[267] = {
     [ANNOTATIONS_PLACEHOLDER] = "ANNOTATIONS_PLACEHOLDER",
     [BINARY_OP] = "BINARY_OP",
-    [BINARY_OP_ADD_FLOAT] = "BINARY_OP_ADD_FLOAT",
-    [BINARY_OP_ADD_INT] = "BINARY_OP_ADD_INT",
-    [BINARY_OP_ADD_UNICODE] = "BINARY_OP_ADD_UNICODE",
-    [BINARY_OP_AND_INT] = "BINARY_OP_AND_INT",
-    [BINARY_OP_EXTEND] = "BINARY_OP_EXTEND",
-    [BINARY_OP_FLOOR_DIVIDE_INT] = "BINARY_OP_FLOOR_DIVIDE_INT",
-    [BINARY_OP_INPLACE_ADD_UNICODE] = "BINARY_OP_INPLACE_ADD_UNICODE",
-    [BINARY_OP_LSHIFT_INT] = "BINARY_OP_LSHIFT_INT",
-    [BINARY_OP_MULTIPLY_FLOAT] = "BINARY_OP_MULTIPLY_FLOAT",
-    [BINARY_OP_MULTIPLY_INT] = "BINARY_OP_MULTIPLY_INT",
-    [BINARY_OP_OR_INT] = "BINARY_OP_OR_INT",
-    [BINARY_OP_REMAINDER_INT] = "BINARY_OP_REMAINDER_INT",
-    [BINARY_OP_RSHIFT_INT] = "BINARY_OP_RSHIFT_INT",
-    [BINARY_OP_SUBTRACT_FLOAT] = "BINARY_OP_SUBTRACT_FLOAT",
-    [BINARY_OP_SUBTRACT_INT] = "BINARY_OP_SUBTRACT_INT",
-    [BINARY_OP_TRUEDIV_FLOAT] = "BINARY_OP_TRUEDIV_FLOAT",
-    [BINARY_OP_XOR_INT] = "BINARY_OP_XOR_INT",
     [BINARY_SLICE] = "BINARY_SLICE",
     [BUILD_INTERPOLATION] = "BUILD_INTERPOLATION",
     [BUILD_LIST] = "BUILD_LIST",
@@ -1378,8 +1241,6 @@ const char *_PyOpcode_OpName[267] = {
     [UNARY_NOT] = "UNARY_NOT",
     [UNPACK_EX] = "UNPACK_EX",
     [UNPACK_SEQUENCE] = "UNPACK_SEQUENCE",
-    [UNPACK_SEQUENCE_LIST] = "UNPACK_SEQUENCE_LIST",
-    [UNPACK_SEQUENCE_TUPLE] = "UNPACK_SEQUENCE_TUPLE",
     [WITH_EXCEPT_START] = "WITH_EXCEPT_START",
     [YIELD_VALUE] = "YIELD_VALUE",
 };
@@ -1390,6 +1251,7 @@ PyAPI_DATA(const uint8_t) _PyOpcode_Caches[256];
 const uint8_t _PyOpcode_Caches[256] = {
     [TO_BOOL] = 3,
     [STORE_SUBSCR] = 1,
+    [UNPACK_SEQUENCE] = 1,
     [LOAD_GLOBAL] = 4,
     [LOAD_ATTR] = 9,
     [COMPARE_OP] = 1,
@@ -1399,17 +1261,16 @@ const uint8_t _PyOpcode_Caches[256] = {
     [POP_JUMP_IF_NONE] = 1,
     [POP_JUMP_IF_NOT_NONE] = 1,
     [CALL] = 3,
+    [BINARY_OP] = 5,
     [RESUME] = 1,
     [SEND] = 1,
     [FOR_ITER] = 1,
-    [UNPACK_SEQUENCE] = 1,
     [STORE_ATTR] = 4,
     [LOAD_SUPER_ATTR] = 1,
     [JUMP_BACKWARD] = 1,
     [GET_ITER] = 1,
     [CALL_KW] = 3,
     [CALL_FUNCTION_EX] = 1,
-    [BINARY_OP] = 5,
 };
 #endif
 
@@ -1427,7 +1288,6 @@ extern const struct _PyFbFields _PyOpcode_FeedbackFields[256];
 #ifdef NEED_OPCODE_METADATA
 #include "pycore_ir.h"            // _PyFb_<family>
 const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
-    [BINARY_OP_EXTEND] = { 1, { { 2, 4, offsetof(_PyFb_BINARY_OP, descr) } } },
     [CALL_KW_BOUND_METHOD] = { 1, { { 2, 2, offsetof(_PyFb_CALL_KW, func_version) } } },
     [CALL_KW_PY] = { 1, { { 2, 2, offsetof(_PyFb_CALL_KW, func_version) } } },
     [STORE_ATTR_INSTANCE_VALUE] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
@@ -1441,6 +1301,7 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
+    [119] = 119,
     [120] = 120,
     [121] = 121,
     [122] = 122,
@@ -1449,6 +1310,24 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [125] = 125,
     [126] = 126,
     [127] = 127,
+    [151] = 151,
+    [152] = 152,
+    [153] = 153,
+    [154] = 154,
+    [155] = 155,
+    [156] = 156,
+    [157] = 157,
+    [158] = 158,
+    [159] = 159,
+    [160] = 160,
+    [161] = 161,
+    [162] = 162,
+    [163] = 163,
+    [164] = 164,
+    [165] = 165,
+    [166] = 166,
+    [167] = 167,
+    [168] = 168,
     [169] = 169,
     [170] = 170,
     [171] = 171,
@@ -1515,23 +1394,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [232] = 232,
     [233] = 233,
     [BINARY_OP] = BINARY_OP,
-    [BINARY_OP_ADD_FLOAT] = BINARY_OP,
-    [BINARY_OP_ADD_INT] = BINARY_OP,
-    [BINARY_OP_ADD_UNICODE] = BINARY_OP,
-    [BINARY_OP_AND_INT] = BINARY_OP,
-    [BINARY_OP_EXTEND] = BINARY_OP,
-    [BINARY_OP_FLOOR_DIVIDE_INT] = BINARY_OP,
-    [BINARY_OP_INPLACE_ADD_UNICODE] = BINARY_OP,
-    [BINARY_OP_LSHIFT_INT] = BINARY_OP,
-    [BINARY_OP_MULTIPLY_FLOAT] = BINARY_OP,
-    [BINARY_OP_MULTIPLY_INT] = BINARY_OP,
-    [BINARY_OP_OR_INT] = BINARY_OP,
-    [BINARY_OP_REMAINDER_INT] = BINARY_OP,
-    [BINARY_OP_RSHIFT_INT] = BINARY_OP,
-    [BINARY_OP_SUBTRACT_FLOAT] = BINARY_OP,
-    [BINARY_OP_SUBTRACT_INT] = BINARY_OP,
-    [BINARY_OP_TRUEDIV_FLOAT] = BINARY_OP,
-    [BINARY_OP_XOR_INT] = BINARY_OP,
     [BINARY_SLICE] = BINARY_SLICE,
     [BUILD_INTERPOLATION] = BUILD_INTERPOLATION,
     [BUILD_LIST] = BUILD_LIST,
@@ -1693,8 +1555,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [UNARY_NOT] = UNARY_NOT,
     [UNPACK_EX] = UNPACK_EX,
     [UNPACK_SEQUENCE] = UNPACK_SEQUENCE,
-    [UNPACK_SEQUENCE_LIST] = UNPACK_SEQUENCE,
-    [UNPACK_SEQUENCE_TUPLE] = UNPACK_SEQUENCE,
     [WITH_EXCEPT_START] = WITH_EXCEPT_START,
     [YIELD_VALUE] = YIELD_VALUE,
 };
@@ -1702,6 +1562,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
+    case 119: \
     case 120: \
     case 121: \
     case 122: \
@@ -1710,6 +1571,24 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 125: \
     case 126: \
     case 127: \
+    case 151: \
+    case 152: \
+    case 153: \
+    case 154: \
+    case 155: \
+    case 156: \
+    case 157: \
+    case 158: \
+    case 159: \
+    case 160: \
+    case 161: \
+    case 162: \
+    case 163: \
+    case 164: \
+    case 165: \
+    case 166: \
+    case 167: \
+    case 168: \
     case 169: \
     case 170: \
     case 171: \

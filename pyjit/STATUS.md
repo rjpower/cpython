@@ -232,6 +232,14 @@ Running, interpreter performance wave 2 (timing recorded, never gated):
 - SP item 4: the remaining specializations with no arm (the native calls,
   the bound-method and generator-function calls, property, overridden
   `__getattribute__` and `__getitem__` frames, dict-items iteration).
+- OB (user decision, 2026-11-26): observation stops being a set of
+  handler ids.  Every arm of a family that declares events had an observed
+  twin with its own id (100 of 366, in 19 families), which pushed the
+  9-bit handler field toward its limit.  An observed word will run its
+  family's observer arm, with the arm it displaces read from the code
+  object, as line and instruction hooks already work; an observed bit in
+  the word was refused, because no flag bit is free and a bit would cost
+  every dispatch.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

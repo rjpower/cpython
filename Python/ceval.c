@@ -2509,7 +2509,7 @@ static int
 span_slots(const _PyRopSpan *span, int32_t *slots)
 {
     for (int i = 0; i < span->count; i++) {
-        slots[i] = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+        slots[i] = _PyRopSpan_Slot(span, i);
     }
     return span->count;
 }
@@ -2521,7 +2521,7 @@ _PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s)
     int n = span_slots(d, dst);
     assert(s->count >= n);
     for (int i = 0; i < n; i++) {
-        src[i] = _PyIR_SpanElement(s->head, s->handler, s->first + i);
+        src[i] = _PyRopSpan_Slot(s, i);
     }
     _PyFrame_ParallelMove(d->frame, n, src, dst, 1);
 }
@@ -2533,7 +2533,7 @@ _PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s)
     PyValue taken[IR_FIELD_MAX + 1];
     int n = 0;
     for (int i = d->count; i < s->count; i++) {
-        int slot = _PyIR_SpanElement(s->head, s->handler, s->first + i);
+        int slot = _PyRopSpan_Slot(s, i);
         taken[n++] = _PyFrame_TakeHome(s->frame, &s->frame->base[slot]);
     }
     for (int i = 0; i < n; i++) {
@@ -2546,8 +2546,8 @@ _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s)
 {
     assert(d->count == s->count);
     for (int i = 0; i < d->count; i++) {
-        int from = _PyIR_SpanElement(s->head, s->handler, s->first + i);
-        int to = _PyIR_SpanElement(d->head, d->handler, d->first + i);
+        int from = _PyRopSpan_Slot(s, i);
+        int to = _PyRopSpan_Slot(d, i);
         PyValue old = _PyFrame_TakeHome(d->frame, &d->frame->base[to]);
         assert(PyValue_IsNull(old));
         (void)old;
@@ -2565,7 +2565,7 @@ _PyEval_rop_take_items(const _PyRopSpan *span, PyValue *vals)
     _PyInterpreterFrame *frame = span->frame;
     int nlocals = _PyCode_IRFixed(_PyFrame_GetCode(frame));
     for (int i = 0; i < span->count; i++) {
-        int slot = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+        int slot = _PyRopSpan_Slot(span, i);
         PyValue *home = &frame->base[slot];
         vals[i] = slot < nlocals ? PyValue_DUP(PyValue_Borrow(*home))
                                  : _PyFrame_TakeHome(frame, home);
@@ -2580,7 +2580,7 @@ _PyRop_SrcsOfSpan(const _PyRopSpan *span)
     assert(span->count <= _PY_ROP_MAX_SRCS);
     _PyRopSrcs s = {.frame = frame, .n = (uint8_t)span->count};
     for (int i = 0; i < span->count; i++) {
-        int slot = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+        int slot = _PyRopSpan_Slot(span, i);
         s.home[i] = &frame->base[slot];
         s.local[i] = slot < nlocals;
     }
@@ -3013,7 +3013,7 @@ _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v)
     // The row that made v returns count(d) items
     assert(v->count == d->count);
     for (int i = 0; i < d->count; i++) {
-        int to = _PyIR_SpanElement(d->head, d->handler, d->first + i);
+        int to = _PyRopSpan_Slot(d, i);
         PyValue old = _PyFrame_TakeHome(d->frame, &d->frame->base[to]);
         _PyFrame_WriteHome(d->frame, &d->frame->base[to], v->items[i]);
         v->items[i] = old;
@@ -3160,7 +3160,7 @@ _PyRop_SliceFromParts(const _PyRopSpan *parts)
     assert(n == 2 || n == 3);
     PyValue *home[3];
     for (int i = 0; i < n; i++) {
-        int slot = _PyIR_SpanElement(parts->head, parts->handler, parts->first + i);
+        int slot = _PyRopSpan_Slot(parts, i);
         home[i] = &frame->base[slot];
     }
     // The bounds are stored as the values they are: no box of an inline one

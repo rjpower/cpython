@@ -1164,7 +1164,7 @@ _PyRop_SuperLookupExplicitObserved(PyThreadState *tstate, _PyInterpreterFrame *f
 static inline PyValueBorrow
 rop_super_part(const _PyRopSpan *parts, int i)
 {
-    int slot = _PyIR_SpanElement(parts->head, parts->handler, parts->first + i);
+    int slot = _PyRopSpan_Slot(parts, i);
     return PyValue_Borrow(parts->frame->base[slot]);
 }
 

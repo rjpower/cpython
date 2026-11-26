@@ -817,41 +817,42 @@ _PyIR_CallWordLength(_PyIRWord word)
 
 /* The span operands of a register instruction (rop_check.pack): each has a
  * count field (role COUNT), and their elements, the spans in declaration
- * order, fill the head's fields of role ELEMENT, then operand words of four
- * fields each after the fixed operand words.  Element j of the word whose
- * head is head: */
+ * order, fill the head's trailing fields of role ELEMENT (nhead of them, at
+ * most three), then operand words of four fields each after the fixed
+ * operand words.  Both numbers are constants of the arm's layout, which the
+ * generated handlers pass as literals.  Element j of the word whose head is
+ * head: */
+static inline Py_ALWAYS_INLINE int
+_PyIR_SpanElementAt(const _PyIRWord *head, int nhead, int fixed, int j)
+{
+    if (j < nhead) {
+        return (int)((head[0] >> (16 + 12 * (4 - nhead + j))) & IR_FIELD_MAX);
+    }
+    j -= nhead;
+    return (int)((head[1 + fixed + j / IR_OPERANDS_PER_WORD]
+                  >> (16 + 12 * (j % IR_OPERANDS_PER_WORD))) & IR_FIELD_MAX);
+}
+
+/* The number of head fields of a span format that hold elements */
+static inline int
+_PyIR_SpanHeadElements(const _PyIRFormat *fmt)
+{
+    int nhead = 0;
+    for (int f = 0; f < 4; f++) {
+        nhead += fmt->roles[f] == _PyIR_ROLE_ELEMENT;
+    }
+    return nhead;
+}
+
+/* Element j of a word whose handler is known only at run time, for the
+ * decoders, the planner and the verifier; the handlers use the constant
+ * geometry (_PyIR_SpanElementAt) */
 static inline int
 _PyIR_SpanElement(const _PyIRWord *head, int handler, int j)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    int nhead = 0;
-    for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] == _PyIR_ROLE_ELEMENT) {
-            if (nhead++ == j) {
-                return (int)((head[0] >> (16 + 12 * f)) & IR_FIELD_MAX);
-            }
-        }
-    }
-    j -= nhead;
-    return (int)((head[1 + fmt->fixed_words + j / IR_OPERANDS_PER_WORD]
-                  >> (16 + 12 * (j % IR_OPERANDS_PER_WORD))) & IR_FIELD_MAX);
-}
-
-/* The words of a span instruction: the head, its fixed operand words, and
- * the words of the elements that the head's free fields do not hold */
-static inline int
-_PyIR_SpanWordLength(int handler, _PyIRWord word)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    int total = 0, nhead = 0;
-    for (int f = 0; f < 4; f++) {
-        int value = (int)((word >> (16 + 12 * f)) & IR_FIELD_MAX);
-        total += fmt->roles[f] == _PyIR_ROLE_COUNT ? value : 0;
-        nhead += fmt->roles[f] == _PyIR_ROLE_ELEMENT;
-    }
-    int rest = total > nhead ? total - nhead : 0;
-    return 1 + fmt->fixed_words
-           + (rest + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD;
+    return _PyIR_SpanElementAt(head, _PyIR_SpanHeadElements(fmt),
+                               fmt->fixed_words, j);
 }
 
 /* The spans of a span format: the number of COUNT fields, which are the
@@ -931,8 +932,18 @@ static inline int
 _PyIR_WordLength(_PyIRWord word)
 {
     int handler = IR_HANDLER(word);
-    if (_PyIR_FormatOf(handler)->operands == _PyIR_OPERANDS_SPANS) {
-        return _PyIR_SpanWordLength(handler, word);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+        // The head, the fixed operand words, and the elements past the
+        // head's fields (rop_cgen.ArmLowerer.span_words)
+        int total = 0;
+        for (int f = 0; f < 4; f++) {
+            if (fmt->roles[f] == _PyIR_ROLE_COUNT) {
+                total += (int)((word >> (16 + 12 * f)) & IR_FIELD_MAX);
+            }
+        }
+        return 1 + fmt->fixed_words
+               + (total + 3 - _PyIR_SpanHeadElements(fmt)) / IR_OPERANDS_PER_WORD;
     }
     if (!_PyIR_HandlerHasOperands(handler)) {
         // A register instruction arm may have fixed operand words

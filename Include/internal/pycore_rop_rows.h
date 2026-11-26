@@ -36,16 +36,26 @@ typedef struct {
     PyValue *home[_PY_ROP_MAX_SRCS];
 } _PyRopSrcs;
 
-/* A span operand of the instruction whose head is head, which runs as
- * handler (pycore_ir.h, _PyIR_SpanElement()): count homes from element
- * first of the word's spans */
+/* A span operand of the instruction whose head is head: count homes from
+ * element first of the word's spans, with the constant geometry of the
+ * arm's layout (pycore_ir.h, _PyIR_SpanElementAt()), which the generated
+ * handler gives as literals */
 typedef struct {
     _PyInterpreterFrame *frame;
     const _PyIRWord *head;
-    int handler;
     int first;
     int count;
+    int nhead;
+    int fixed;
 } _PyRopSpan;
+
+/* The frame index of home i of a span */
+static inline Py_ALWAYS_INLINE int
+_PyRopSpan_Slot(const _PyRopSpan *span, int i)
+{
+    return _PyIR_SpanElementAt(span->head, span->nhead, span->fixed,
+                               span->first + i);
+}
 
 /* The rows of the Move arms, in ceval.c */
 PyAPI_FUNC(void) _PyFrame_ParallelMove(_PyInterpreterFrame *frame, int n,

@@ -2282,6 +2282,7 @@ static inline bool _PyRop_PythonTarget(PyThreadState *tstate,
 static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
+static PyValue _PyRop_UnaryOp(uint32_t op, PyValue x);
 /* The rows of Function and Intrinsic (Python/register_ops/functions.rop) */
 static PyValue _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
                                    const _PyRopSpan *fields, uint32_t present);
@@ -2800,6 +2801,25 @@ _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home)
     _PyEval_FormatExcCheckArg(
         _PyThreadState_GET(), PyExc_UnboundLocalError, UNBOUNDLOCAL_ERROR_MSG,
         _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, index));
+}
+
+/* AppendText.Text (numeric.rop): the in-place append of `s += t`.  The
+ * string's owner leaves the local before the append, so PyUnicode_Append sees
+ * the local's reference as the only one and may extend the buffer in place;
+ * that keeps a loop of appends linear.  Failure leaves the local vacant and
+ * the string released, as the old handler did. */
+PyValue
+_PyRop_AppendText(PyValue *home, PyValueBorrow right)
+{
+    PyValue held = *home;
+    assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(held)));
+    *home = PyValue_NULL;
+    PyObject *left = value_unicode_append(PyValue_AsKnownObjectSteal(held),
+                                          PyValue_AsKnownObjectBorrow(right));
+    if (left == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromNonNumberSteal(left);
 }
 
 PyValue
@@ -3787,8 +3807,6 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef IR_EXIT
 #pragma push_macro("JUMP_TO_PREDICTED")
 #undef JUMP_TO_PREDICTED
-#pragma push_macro("IR_DEOPT_BINARY_OP")
-#undef IR_DEOPT_BINARY_OP
 #pragma push_macro("IR_OBSERVE_EDGE")
 #undef IR_OBSERVE_EDGE
 #pragma push_macro("IR_HOLD_NEXT")
@@ -3859,12 +3877,6 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define JUMP_TO_PREDICTED(name) \
     do { \
         Py_MUSTTAIL return ir_run_##name(tstate, frame, this_instr, ir_word); \
-    } while (0)
-#define IR_DEOPT_BINARY_OP(F) \
-    do { \
-        Py_MUSTTAIL return ir_binary_op( \
-            tstate, frame, this_instr, ir_word, \
-            (int)((_PyFbHeader *)IR_FB(F))->arg); \
     } while (0)
 #define IR_HOLD_NEXT() ((void)0)
 #define IR_STEP_DONE(STEP) return (STEP)
@@ -4387,7 +4399,6 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("PROCESS_ERROR_AT")
 #pragma pop_macro("IR_EXIT")
 #pragma pop_macro("JUMP_TO_PREDICTED")
-#pragma pop_macro("IR_DEOPT_BINARY_OP")
 #pragma pop_macro("IR_OBSERVE_EDGE")
 #pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
@@ -4421,10 +4432,8 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
     /* The operands of the shared bodies that the labels below read: the
-     * generic BINARY_OP's operation and the VM routines' (Python/
-     * ceval_routines.h), which the transfer macros set.  None is live across
-     * a dispatch. */
-    int binary_op_operation;
+     * VM routines' (Python/ceval_routines.h), which the transfer macros set.
+     * None is live across a dispatch. */
     _PyInstr *process_error_origin;
     uint32_t process_error_entry;
     PyValue gen_value;
@@ -8841,10 +8850,40 @@ _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
     return PyValue_FromObjectSteal((PyObject *)func_obj);
 }
 
+/* The Unary row (Python/register_ops/numeric.rop): closes x on both outcomes.
+ * Only -Py_INT_MIN leaves the inline int range, and negating a float that is
+ * not NaN gives one that is not. */
+static PyValue
+_PyRop_UnaryOp(uint32_t op, PyValue x)
+{
+    PyValue value = x;
+    PyValue res;
+    if (op == NEGATIVE) {
+        if (PyValue_IsInlineInt(value)) {
+            res = PyValue_FromInt64(-PyValue_InlineInt64(value));
+        }
+        else if (PyValue_IsInlineFloat(value)) {
+            res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
+        }
+        else {
+            res = _PyValue_Negative(value);
+        }
+    }
+    else if (op == POSITIVE) {
+        res = _PyValue_Positive(value);
+    }
+    else {
+        assert(op == INVERT);
+        res = _PyValue_Invert(value);
+    }
+    PyValue_XCLOSE(value);
+    return res;
+}
+
 /* The compiler's number of each member of IntrinsicId, in declaration order */
 static const uint8_t rop_intrinsic_number[] = {
     INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
-    INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
+    INTRINSIC_ASYNC_GEN_WRAP,
     INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
     INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
     INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
@@ -8859,15 +8898,9 @@ static PyValue
 _PyRop_IntrinsicUnary(PyThreadState *tstate, uint32_t id, PyValue x)
 {
     PyValue value = x;
-    int number = rop_intrinsic_number[id];
-    PyValue res;
-    if (number == INTRINSIC_UNARY_POSITIVE) {
-        res = _PyValue_Positive(value);
-    }
-    else {
-        // The other intrinsics take objects: the helper boxes a number
-        res = _PyEval_CallIntrinsic1(tstate, number, value);
-    }
+    // The intrinsics take objects: the helper boxes a number
+    PyValue res = _PyEval_CallIntrinsic1(tstate, rop_intrinsic_number[id],
+                                         value);
     PyValue_XCLOSE(value);
     return res;
 }

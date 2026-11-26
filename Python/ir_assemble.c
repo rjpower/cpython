@@ -621,15 +621,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     if (opcode == RESUME && _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
         return RESUME_JIT;
     }
-    if (opcode == BINARY_OP) {
-        // NB_SUBSCR is the GetItem family's, never a BINARY_OP handler
-        if (oparg >= NB_SUBSCR) {
-            PyErr_Format(PyExc_SystemError,
-                         "invalid BINARY_OP operation %d", oparg);
-            return ERROR;
-        }
-        return _PyIR_BINARY_OP_FIRST + oparg;
-    }
     return opcode;
 }
 

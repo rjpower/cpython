@@ -733,7 +733,7 @@ class DefinitionTests(unittest.TestCase):
     # Appendix A of the addendum, in its order
     APPENDIX_A = """
         Nop Const LocalRead LocalWrite SaveLocal LocalDelete Move Add Truth Jump
-        BranchTruth BranchNone Binary Unary Compare Identity Contains TestBranch
+        BranchTruth BranchNone Binary AppendText Unary Compare Identity Contains TestBranch
         GetAttr GetMethod AttrWrite SuperLookup SpecialLookup
         GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement AddEntry
         UpdateContainer MergeKeywords Unpack UnpackStar

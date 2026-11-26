@@ -362,6 +362,14 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 continue;
             }
             p->dst = op->oparg;
+            // `s += t` into the local that holds s: the word starts on the
+            // family that appends in place (numeric.rop AppendText)
+            if (p->opcode == ROP_HANDLER_Binary_Generic
+                && p->oparg == NB_INPLACE_ADD
+                && _PyReg_IN(cfg, p)[0] == p->dst)
+            {
+                p->opcode = ROP_HANDLER_AppendText_Generic;
+            }
             // A jump's outputs stay canonical for its target, where the
             // handler leaves the slot of the result NULL
             if (!(p->target >= 0)) {

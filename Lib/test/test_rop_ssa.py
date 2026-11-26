@@ -274,6 +274,10 @@ PAIRS = [(3, 4), (2**50, 2**50), (2**60, 5), (-2**50, -2**50), (1.5, 2), (2, 0.2
          (RaisesAdd(), 1), (1, "a"), (b"x", b"y")]
 
 
+SMALL_PAIRS = [(3, 4), (2, 70), (-2, 3), (2, -1), (0, 0), (1.5, 2), (2, 0.25),
+               ("a", "b"), ([1], [2]), (7, 0)]
+
+
 COMPARE_PAIRS = PAIRS + [(2**60, 2**60), (float("nan"), float("nan")), (1, 1), ("a", "a"),
                          ("a", 1), (Plain(), Plain()), (None, None)]
 CONTAINS_PAIRS = [(1, {1, 2}), (3, {1, 2}), (1, frozenset({1})), ([1], {1}), (1, {1: 2}),
@@ -377,6 +381,12 @@ MODULE_SOURCE = ("import types\n"
                  "f = types.FunctionType(compile(%r, 'm', 'exec'), globals())\n")
 
 # The code of a generic function's scope, which makes its type parameters
+TYPEVAR_SOURCE = (
+    "import types\n"
+    "m = compile('def g[T](): pass', 'm', 'exec')\n"
+    "scope = next(c for c in m.co_consts if hasattr(c, 'co_code'))\n"
+    "f = types.FunctionType(scope, globals())\n")
+
 PAIR_SOURCE = (
     "import types\n"
     "m = compile('def g[T: int](): pass', 'm', 'exec')\n"
@@ -390,6 +400,31 @@ SCENARIOS = {
         "temporaries": "def f(a, b):\n    return (a * 1) + (b * 1)\n",
         "alias": "def f(a, b):\n    a = a + b\n    return a\n"},
         [{"x": x, "y": y} for x, y in PAIRS], warm=([1], [2])),
+    "Binary": Scenario("Binary", {
+        "subtract": "def f(a, b):\n    return a - b\n",
+        "multiply": "def f(a, b):\n    return [a][0] * [b][0]\n",
+        "floor_divide": "def f(a, b):\n    return a // b\n",
+        "remainder": "def f(a, b):\n    return a % b\n",
+        "power": "def f(a, b):\n    return a ** b\n",
+        "shift": "def f(a, b):\n    return a << b\n",
+        "bits": "def f(a, b):\n    return (a & b) | (a ^ b)\n",
+        "true_divide": "def f(a, b):\n    return a / b\n",
+        "in_place": "def f(a, b):\n    a -= b\n    return a\n",
+        "alias": "def f(a, b):\n    a *= b\n    return a\n"},
+        [{"x": x, "y": y} for x, y in PAIRS + [(7, 0), (7, -2), (2, 70), (7.5, 0)]],
+        warm=(3, 4),
+        # Powers and shifts of the large pairs would build huge numbers
+        inputs_by_source={
+            "power": [{"x": x, "y": y} for x, y in SMALL_PAIRS],
+            "shift": [{"x": x, "y": y} for x, y in SMALL_PAIRS]}),
+    "Unary": Scenario("Unary", {
+        "negative": "def f(a):\n    return -a\n",
+        "temporary": "def f(a):\n    return -(a * 1)\n",
+        "invert": "def f(a):\n    return ~a\n",
+        "positive": "def f(a):\n    return +a\n"},
+        [{"value": v} for v in (1, -2**50, 2**50 - 1, 0, 1.5, -0.0, float("nan"), 2**70,
+                                True, "s", Plain(), [1])],
+        warm=(1,)),
     "Truth": Scenario("Truth", {
         "locals": "def f(a):\n    return not a\n",
         "temporaries": "def f(a):\n    return not (a * 1)\n"},
@@ -618,11 +653,12 @@ SCENARIOS = {
                          for v in ((1,), (), (None, 2))],
             "all": [{"code": identity.__code__, "fields": [(1,), {"k": 2}, {"k": int}]}]}),
     "Intrinsic": Scenario("Intrinsic", {
-        "unary": "def f(a):\n    return +a\n",
+        "unary": TYPEVAR_SOURCE,
         "stopiteration": "def f(a):\n    yield a\n",
         "import_star": MODULE_SOURCE % "from sys import *"},
         [{"x": v} for v in (1, 1.5, 2**70, "s", Plain(), [1])], warm=(1,),
         inputs_by_source={
+            "unary": [{"x": v} for v in ("T", "name")],
             # (A StopIteration becomes a new error that holds it, which the
             # count check cannot see; test_rop_functions runs that case)
             "stopiteration": [{"x": v} for v in (ValueError(1), KeyError("k"))],
@@ -995,6 +1031,9 @@ NOT_RUN = {
     "Unpack.Tuple": UNPACK_WHY,
     "Unpack.List": UNPACK_WHY,
     "UnpackStar.Iterable": UNPACK_WHY,
+    "AppendText.Text": "no scenario yet: the tracer's view is deferred, and the arm "
+                       "takes the string out of its own destination local",
+    "AppendText.Generic": "no scenario yet: the tracer's view is deferred",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",
     "Import.Lazy": "`lazy import` is a module-level statement",
     # select(jit_on) and select(jit_off): the word is the one the JIT's

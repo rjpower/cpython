@@ -50,7 +50,7 @@ def finish(generator, value):
 
 class GeneratorContractExportTests(unittest.TestCase):
     def test_metadata_only_operation_has_an_ordinary_identity(self):
-        handler = HANDLERS["BINARY_OP"]
+        handler = HANDLERS["COMPARE_OP"]
         row = CONTRACTS[handler]
         self.assertEqual(row.ordinary_handler, handler)
         self.assertEqual(row.generator_yielded_consumer, _opcode.GEN_CONSUMER_NONE)
@@ -86,7 +86,7 @@ class SpecializationPreservationTests(unittest.TestCase):
             self.assertEqual(add(1.25, 2.5), 3.75)
             self.assertEqual(subtract(2.5, 1.25), 1.25)
         self.assertIn("Add.Float", ordinary_names(add))
-        self.assertIn("BINARY_OP_SUBTRACT_FLOAT", ordinary_names(subtract))
+        self.assertIn("Binary.Generic", ordinary_names(subtract))
         for function in (add, subtract):
             for _, _, row in sites(function):
                 self.assertEqual(row.generator_boundary_flags, 0)

@@ -7,7 +7,6 @@ enum PollMode(POLL, NO_POLL);
 // The four conditional jumps of the old bytecode: the sense of the test and
 // whether the jump edge keeps the tested owner (JUMP_IF_x_OR_POP)
 enum BranchMode(BRANCH_IF_FALSE, BRANCH_IF_TRUE, BRANCH_KEEP_IF_FALSE, BRANCH_KEEP_IF_TRUE);
-enum UnaryOp(NEGATIVE, POSITIVE, INVERT);
 enum WriteMode(SET, DELETE);
 enum SuperMode(SUPER_ATTR, SUPER_METHOD);
 enum Special(ENTER, EXIT, AENTER, AEXIT);
@@ -331,14 +330,6 @@ family BranchNone(value:Src, sense:Bool, target:NearHead)
   exits(next, branch, raise, redirect)
   ops(POP_JUMP_IF_NONE, POP_JUMP_IF_NOT_NONE)
   events(BRANCH_LEFT, BRANCH_RIGHT);
-
-// 1A: numeric and in-place operations, unary protocols
-
-family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
-  exits(next, raise, miss, again) ops(BINARY_OP);
-
-family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>)
-  exits(next, raise) ops(UNARY_NEGATIVE, UNARY_INVERT);
 
 // 1D: attribute writes, super and special-method resolution
 

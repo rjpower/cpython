@@ -1777,14 +1777,7 @@
      * `runs_python` (a lookup callback or a finalizer can run code and rewrite frame \
      * homes); the feedback is read(entry) (the cache fields it checks), write(entry) \
      * and write(handler).  The operands are `borrowed`: PyValue operands are views \
-     * (the guards that cached them are the specialized words'). \
-     * BinaryOp also reaches specialize_subscr_getitem -> prepare_function_for_inline -> \
-     * _PyCode_GetExec for BINARY_OP_SUBSCR_GETITEM; its `PyValue *` out argument is \
-     * the frame's homes (LOCALS_ARRAY), read to find the operands' slots. */ \
-    HELPER(_Py_Specialize_BinaryOp, void, \
-           (PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *), \
-           ARGS(borrowed, borrowed, scalar, scalar, scalar), NONE, \
-           EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+     * (the guards that cached them are the specialized words'). */ \
     /* Evidence (G0c8): the generator's expansion `_PyIR_FbHeaderOf(frame, instr, handler)` \
      * (ceval_macros.h:1163): `_PyIR_InstrFeedback(code, exec, instr)`, which indexes the \
      * code's feedback-index table and the executing copy's entry array (ir.c:705) and \
@@ -1805,39 +1798,39 @@
      * heap state (nothing rewrites it), so the row reads nothing: `reads` is removed. */ \
     HELPER(_PyFb_HasEntry, int, (int), \
         ARGS(scalar), SCALAR, EFFECTS()) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the callee and its \
+    /* Evidence (G0c8): as the block above. Reads the callee and its \
      * argument tuple and builds the binding plan (_PyBindPlan_Init); no lowering. */ \
     HELPER(_Py_Specialize_CallFunctionEx, void, (PyValue, PyValue, _PyInstr *), \
         ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_py_call_kw / \
+    /* Evidence (G0c8): as the block above. specialize_py_call_kw / \
      * specialize_keyword_binding build a binding plan (_PyBindPlan_Init) and lower \
      * the callee. */ \
     HELPER(_Py_Specialize_CallKw, void, (PyValue, PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the iterator's type and \
+    /* Evidence (G0c8): as the block above. Reads the iterator's type and \
      * iteration slots, and classifies the failure \
      * (_PySpecialization_ClassifyIterator). 
      * The iterator is taken as an object without a test (PyValue_AsKnownObjectBorrow; GET_ITER always leaves one): the row requires `object`. */ \
     HELPER(_Py_Specialize_ForIter, void, (PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed object, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the iterable's type and \
+    /* Evidence (G0c8): as the block above. Reads the iterable's type and \
      * iteration slots (_PyType_IteratesByIndex, tp_iter); \
      * specialize_iter_generator looks up __iter__ without allocating \
      * (_PyType_TryLookupValueNoAlloc) and lowers a generator function's code \
      * (prepare_function_exec). */ \
     HELPER(_Py_Specialize_GetIter, void, (PyValue, _PyInstr *), \
         ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Compares the global `super` \
+    /* Evidence (G0c8): as the block above. Compares the global `super` \
      * with PySuper_Type by address and tests the class's type flag; no lookup and \
      * no lowering. */ \
     HELPER(_Py_Specialize_LoadSuperAttr, void, (PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the receiver's type and \
+    /* Evidence (G0c8): as the block above. Reads the receiver's type and \
      * its _tp_iteritem slot; no lookup and no lowering. 
      * The receiver is taken as an object without a test (PyValue_AsKnownObjectBorrow; the send loop's receiver is always one): the row requires `object`. */ \
     HELPER(_Py_Specialize_Send, void, (PyValue, _PyInstr *), \
         ARGS(borrowed object, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. The instance, slot and dict- \
+    /* Evidence (G0c8): as the block above. The instance, slot and dict- \
      * hint paths read shapes and keys (specialize_dict_access), as for loads. */ \
     HELPER(_Py_Specialize_StoreAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
         ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))

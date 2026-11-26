@@ -1270,9 +1270,6 @@ def assign_opcodes(
     # 128 is RESUME - it is hard coded as such in Tools/build/deepfreeze.py
     instmap["RESUME"] = 128
 
-    # This is an historical oddity.
-    instmap["BINARY_OP_INPLACE_ADD_UNICODE"] = 3
-
     # The last opcode of the byte; no opcode follows it.
     instmap["INSTRUMENTED_LINE"] = 255
 
@@ -1427,14 +1424,6 @@ def analyze_forest(
         family.members = [m for m in family.members if m.name not in ir_only]
     for uop in uops.values():
         uop.instruction_size = get_instruction_size_for_uop(instructions, uop)
-    # Special case BINARY_OP_INPLACE_ADD_UNICODE
-    # BINARY_OP_INPLACE_ADD_UNICODE is not a normal family member,
-    # as it is the wrong size, but we need it to maintain an
-    # historical optimization.
-    if "BINARY_OP_INPLACE_ADD_UNICODE" in instructions:
-        inst = instructions["BINARY_OP_INPLACE_ADD_UNICODE"]
-        inst.family = families["BINARY_OP"]
-        families["BINARY_OP"].members.append(inst)
     opmap, first_arg, min_instrumented = assign_opcodes(
         instructions, families, pseudos)
     held = set(opmap.values())

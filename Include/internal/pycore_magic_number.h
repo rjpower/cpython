@@ -391,8 +391,10 @@ Known values:
           register IR is made at the first call and never stored
    64447: rir90 PN: opcode numbers are computed densely at each build, with
           no pinned table; MIN_INSTRUMENTED_OPCODE is 234 and the numbers of
-          the has-argument and specialized opcodes shift */
-#define PYC_MAGIC_NUMBER 64447
+          the has-argument and specialized opcodes shift
+   64448: rir90 BN: BINARY_OP and the unary ops are stack-only stubs, so
+          BINARY_OP and the opcodes after it take new numbers */
+#define PYC_MAGIC_NUMBER 64448
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

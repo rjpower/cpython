@@ -99,13 +99,6 @@ def base_opcode(name: str) -> int:
     return STACK_NUMBERS[name]
 
 
-def twin_by_tools(arm: ir_arms.ArmEntry) -> bool:
-    """Whether monitoring selects the arm's observed twin by handler: its
-    family declares events, but upstream's pinned table has no
-    INSTRUMENTED_ stack opcode of its base to rewrite the opcode to"""
-    return bool(arm.events) and f"INSTRUMENTED_{arm.base}" not in STACK_NAMES
-
-
 # The events that a word of an instrumented family can carry in tools[]
 # (sys.monitoring's grouped events); C_RETURN and C_RAISE are fired by CALL
 # and have no tools of their own
@@ -147,8 +140,6 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
         parts.append("_PyIR_H_SPECIALIZED")
     if arm.observes is not None or arm.displacing:
         parts.append("_PyIR_H_INSTRUMENTED")
-    if twin_by_tools(arm):
-        parts.append("_PyIR_H_TWIN_BY_TOOLS")
     if arm.trailing:
         parts.append("_PyIR_H_TRAILING")
     _, left, stop = monitor_events(arm)
@@ -247,8 +238,8 @@ def generate_ir_metadata(
                           ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
-                          ("SAVES_IP", 1024), ("JIT_EVENT", 2048),
-                          ("TWIN_BY_TOOLS", 4096), ("TRAILING", 8192),
+                          ("SAVES_IP", 1024),
+                          ("TRAILING", 8192),
                           ("BRANCH_LEFT", 16384), ("STOP_SLOT", 32768)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
@@ -343,10 +334,11 @@ def generate_ir_metadata(
         out.emit("PyAPI_DATA(const int8_t) _PyIR_PrimaryEvent[IR_NUM_HANDLERS];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit("const int8_t _PyIR_PrimaryEvent[IR_NUM_HANDLERS] = {\n")
-        primaries = {arm_id(arm): monitor_events(arm)[0] for arm in arms}
+        primaries = {arm_id(arm): (monitor_events(arm)[0], arm.dotted) for arm in arms}
         for handler in range(n):
-            primary = primaries.get(handler)
-            out.emit(f"[{handler}] = {-1 if primary is None else 'PY_MONITORING_EVENT_' + primary},\n")
+            primary, name = primaries.get(handler, (None, "no event"))
+            value = -1 if primary is None else "PY_MONITORING_EVENT_" + primary
+            out.emit(f"[{handler}] = {value}, /* {name} */\n")
         out.emit("};\n#endif\n\n")
 
         out.emit("PyAPI_DATA(const char *const) _PyIR_OnlyNames[IR_NUM_HANDLERS];\n")

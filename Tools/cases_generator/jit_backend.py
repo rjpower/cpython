@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import rop_primitives
-from jit_row_facts import ROW_FACTS
+from jit_row_facts import ROW_FACTS, RowFacts
 
 
 
@@ -571,9 +571,26 @@ def dominators(g: Graph) -> dict[int, int]:
 
 
 
+EFFECT_NAMES = {
+    rop_primitives.READS_HEAP: "reads", rop_primitives.WRITES_HEAP: "writes",
+    rop_primitives.ALLOCATES: "allocates", rop_primitives.MAY_RAISE: "raises",
+    rop_primitives.MAY_RELEASE: "releases",
+    rop_primitives.MAY_RUN_PYTHON: "runs_python",
+}
+
+
 def row(name):
     "The optimizer's facts of a primitive or helper, or None"
     return ROW_FACTS.get(name) if isinstance(name, str) else None
+
+
+def declared_effects(name: str) -> frozenset[str]:
+    "The effects of a primitive or helper that the optimizer knows"
+    source = rop_primitives.PRIMITIVES.get(name) or rop_primitives.HELPERS[name]
+    effects = {EFFECT_NAMES[e] for e in source.effects}
+    if ROW_FACTS[name].polls:
+        effects.add("polls")
+    return frozenset(effects)
 
 
 def is_null_test(name: str) -> bool:
@@ -657,12 +674,13 @@ def effects_of(op: TOp):
     r = row(prim_name(op) if op.kind == "prim" else op.attr)
     if r is None:
         return None
-    effects = set(r.effects)
-    if op.kind == "prim" and r.destructor_arg:
+    name = prim_name(op) if op.kind == "prim" else op.attr
+    effects = set(declared_effects(name))
+    if op.kind == "prim" and "destructor" in rop_primitives.PRIMITIVES[name].params:
         d = row(op.attr[1]) if isinstance(op.attr, tuple) else None
         if d is None:
             return None
-        effects |= d.effects
+        effects |= declared_effects(op.attr[1])
     return effects
 
 
@@ -693,7 +711,7 @@ def reads_only(op: TOp) -> bool:
     if op.kind != "prim" or not isinstance(op.attr, str) or op.attr not in LOWERINGS:
         return False
     r = row(op.attr)
-    return r is not None and r.effects <= {"reads"} and not changes_counts(r)
+    return r is not None and declared_effects(op.attr) <= {"reads"} and not changes_counts(r)
 
 
 def cse(g: Graph) -> bool:
@@ -713,7 +731,7 @@ def cse(g: Graph) -> bool:
 
     def is_read(key) -> bool:
         return (key[0] == "load" or is_home(key)
-                or (key[0] == "prim" and "reads" in row(key[1]).effects))
+                or (key[0] == "prim" and "reads" in declared_effects(key[1])))
 
     def walk(i: int, seen: dict) -> None:
         b = g.blocks[i]

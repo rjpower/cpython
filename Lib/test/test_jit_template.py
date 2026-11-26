@@ -857,6 +857,10 @@ def prim_graph(*steps):
 class TemplateGraphTests(unittest.TestCase):
     "What the generator reads from the component rows, and the graphs it builds with it"
 
+    def test_every_fact_names_a_primitive_or_helper(self):
+        declared_names = set(rop_primitives.PRIMITIVES) | set(rop_primitives.HELPERS)
+        self.assertEqual(set(jit_row_facts.ROW_FACTS) - declared_names, set())
+
     def test_tests_for_null(self):
         found = {name for name in jit_row_facts.ROW_FACTS if jit_backend.is_null_test(name)}
         self.assertEqual(found, {"PyValue_IsNull"})

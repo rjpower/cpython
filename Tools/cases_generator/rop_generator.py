@@ -149,8 +149,7 @@ int opcode = {handler};
 (void)opcode;
 _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
-{save_ip}IR_HOLD_NEXT();
-next_instr += {advance};
+{save_ip}next_instr += {advance};
 INSTRUCTION_STATS({handler});"""
 
 

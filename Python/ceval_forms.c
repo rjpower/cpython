@@ -34,8 +34,6 @@
 #undef JUMP_TO_PREDICTED
 #pragma push_macro("IR_OBSERVE_EDGE")
 #undef IR_OBSERVE_EDGE
-#pragma push_macro("IR_HOLD_NEXT")
-#undef IR_HOLD_NEXT
 #pragma push_macro("IR_STEP_DONE")
 #undef IR_STEP_DONE
 #pragma push_macro("IR_REPORT_EDGE")
@@ -119,7 +117,6 @@ ir_frame_observed(_PyInterpreterFrame *frame)
     do { \
         Py_MUSTTAIL return ir_run_##name(tstate, frame, this_instr, ir_word); \
     } while (0)
-#define IR_HOLD_NEXT() ((void)0)
 #define IR_STEP_DONE(STEP) return (STEP)
 #define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
 #define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
@@ -354,7 +351,6 @@ _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int thro
 #pragma pop_macro("IR_EXIT")
 #pragma pop_macro("JUMP_TO_PREDICTED")
 #pragma pop_macro("IR_OBSERVE_EDGE")
-#pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
 #pragma pop_macro("IR_REPORT_EDGE")
 #pragma pop_macro("IR_GEN_RETURN")

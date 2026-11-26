@@ -205,17 +205,6 @@
  * C frame deep. */
 #define Py_MUSTTAIL __attribute__((musttail))
 
-/* Every IR word is one word, so every handler's entry computes the same
- * next_instr + 1.  Left alone, RTL partial redundancy elimination hoists that
- * addition into the dispatch blocks, where it is a sixth value live across
- * the dispatch (frame, tstate, next_instr, ir_word and next_instr + 1), more
- * than the callee-saved registers hold.  The empty asm changes next_instr in
- * a way that the optimiser cannot see through, so the advance stays in the
- * handler.  The structural alternative, where DISPATCH advances and a handler
- * uses next_instr - 1 (8957f9fc4dd, reverted by 2052561d888), clears the
- * hoist too but costs one more instruction per dispatched word: it measured
- * about 1% more instructions on every kernel than this form (29c4c49c650). */
-#define IR_HOLD_NEXT() __asm__("" : "+r"(next_instr))
 /* A planned arm's uop that may reenter Python: the whole-word completion
  * stub's ESCAPED bit (Python/generated_rop_stubs.c.h); nothing elsewhere */
 #define IR_STUB_ESCAPE() ((void)0)

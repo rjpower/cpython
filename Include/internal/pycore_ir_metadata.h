@@ -68,267 +68,271 @@ const uint16_t _PyIR_HandlerFlags[IR_NUM_HANDLERS] = {
     [36] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Return.External */
     [37] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* MaterializeKwargs.Pending */
     [38] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.Plan */
-    [39] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.Generator */
-    [40] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.BoundMethod */
-    [41] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.NonPy */
-    [42] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CallKw.Generic */
-    [43] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.Observed */
-    [44] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CallEx.Generic */
-    [45] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallEx.Py */
-    [46] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallEx.NonPy */
-    [47] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallEx.Observed */
-    [48] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellMake.Wrap */
-    [49] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellRead.Get */
-    [50] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellMapRead.Lookup */
-    [51] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellStore.Set */
-    [52] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellDelete.Unbind */
-    [53] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CleanupThrow.Generic */
-    [54] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* EndAsyncFor.Generic */
-    [55] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* EndAsyncFor.Observed */
-    [56] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* WithExit.Generic */
-    [57] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Build.Tuple */
-    [58] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Build.List */
-    [59] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Build.Set */
-    [60] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Build.Map */
-    [61] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AddElement.Append */
-    [62] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AddElement.Add */
-    [63] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AddEntry.Put */
-    [64] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* UpdateContainer.Extend */
-    [65] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* UpdateContainer.Union */
-    [66] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* UpdateContainer.Overlay */
-    [67] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* MergeKeywords.Merge */
-    [68] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Unpack.Generic */
-    [69] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Unpack.Tuple */
-    [70] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Unpack.List */
-    [71] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* UnpackStar.Iterable */
-    [72] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Raise.Throw */
-    [73] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Reraise.Plain */
-    [74] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Reraise.Origin */
-    [75] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ExceptEnter.Install */
-    [76] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ExceptLeave.Restore */
-    [77] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ExceptMatch.Match */
-    [78] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ExceptGroupMatch.Split */
-    [79] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Function.Make */
-    [80] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Intrinsic.Unary */
-    [81] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Intrinsic.ImportStar */
-    [82] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Intrinsic.StopIteration */
-    [83] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IntrinsicPair.Binary */
-    [84] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IntrinsicPair.Attr */
-    [85] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Instance */
-    [86] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.GetSet */
-    [87] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* GetAttr.Generic */
-    [88] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Shape */
-    [89] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.PolyShape */
-    [90] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Module */
-    [91] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Hint */
-    [92] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.ValueSlot */
-    [93] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.PointerSlot */
-    [94] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Class */
-    [95] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.NonDescriptorValues */
-    [96] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.NonDescriptorNoDict */
-    [97] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.MethodValues */
-    [98] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* GetMethod.Generic */
-    [99] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.PolyMethod */
-    [100] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.NoDict */
-    [101] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.LazyDict */
-    [102] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.ClassMethod */
-    [103] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* GetItem.Generic */
-    [104] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SetItem.Generic */
-    [105] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* DelItem.Generic */
-    [106] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SliceRead.Generic */
-    [107] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SliceWrite.Generic */
-    [108] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* BuildSlice.Generic */
-    [109] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.ListIndex */
-    [110] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.TupleIndex */
-    [111] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.Ascii */
-    [112] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.UnicodeAsciiChar */
-    [113] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.ListSlice */
-    [114] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.Dict */
-    [115] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* SetItem.ListIndex */
-    [116] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* SetItem.Dict */
-    [117] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IterOpen.Generic */
-    [118] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Generic */
-    [119] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* IterOpen.Self */
-    [120] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* IterOpen.Indexed */
-    [121] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* IterOpen.GenMethod */
-    [122] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.List */
-    [123] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Tuple */
-    [124] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Range */
-    [125] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Indexed */
-    [126] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Slot */
-    [127] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Observed */
-    [128] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IterClose.Retire */
-    [129] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IterClose.Observed */
-    [130] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Line.Hook */
-    [131] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Instruction.Hook */
-    [132] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* GlobalRead.Generic */
-    [133] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GlobalRead.Module */
-    [134] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GlobalRead.Builtin */
-    [135] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceRead.Name */
-    [136] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceRead.Locals */
-    [137] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceRead.BuildClass */
-    [138] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceReadFrom.Mapping */
-    [139] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceWrite.Name */
-    [140] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceWrite.Global */
-    [141] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SetupAnnotations.Setup */
-    [142] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Import.Eager */
-    [143] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Import.Policy */
-    [144] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Import.Lazy */
-    [145] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ImportFrom.From */
-    [146] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ImportFrom.FromLast */
-    [147] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Binary.Int */
-    [148] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Binary.Float */
-    [149] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Binary.Text */
-    [150] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Binary.Extended */
-    [151] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Binary.Generic */
-    [152] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Unary.Generic */
-    [153] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* AppendText.Text */
-    [154] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AppendText.Generic */
-    [155] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Length.Size */
-    [156] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Pattern.Flag */
-    [157] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* PatternClass.Match */
-    [158] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* PatternKeys.Match */
-    [159] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Resume.Poll */
-    [160] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Resume.Warm */
-    [161] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Resume.Observed */
-    [162] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Awaitable.Await */
-    [163] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AsyncIterOpen.Open */
-    [164] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AsyncIterNext.Next */
-    [165] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Yield.Ordinary */
-    [166] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* YieldFrom.Delegated */
-    [167] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Yield.Observed */
-    [168] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* YieldFrom.Observed */
-    [169] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Generic */
-    [170] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Gen */
-    [171] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Virtual */
-    [172] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.AsyncGen */
-    [173] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Observed */
-    [174] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Int */
-    [175] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Float */
-    [176] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Str */
-    [177] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Compare.Generic */
-    [178] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Identity.Test */
-    [179] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Contains.Set */
-    [180] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Contains.Dict */
-    [181] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Contains.Generic */
-    [182] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Identity */
-    [183] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Int */
-    [184] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Float */
-    [185] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Str */
-    [186] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Set */
-    [187] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Dict */
-    [188] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Sequence */
-    [189] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Generic */
-    [190] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Observed */
-    [191] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* BuildText.Join */
-    [192] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* BuildText.Interpolation */
-    [193] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* BuildText.Template */
-    [194] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Convert.Text */
-    [195] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Format.Simple */
-    [196] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* FormatSpec.Value */
-    [197] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Bool */
-    [198] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Int */
-    [199] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.List */
-    [200] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.None */
-    [201] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Str */
-    [202] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Plain */
-    [203] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Slot */
-    [204] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Truth.Generic */
-    [205] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Bool */
-    [206] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Int */
-    [207] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.List */
-    [208] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.None */
-    [209] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Str */
-    [210] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Plain */
-    [211] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Slot */
-    [212] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Generic */
-    [213] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchNone.Test */
-    [214] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Observed */
-    [215] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchNone.Observed */
-    [216] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Jump.Direct */
-    [217] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_TRAILING | _PyIR_H_IR_ONLY, /* Jump.Trailing */
-    [218] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Jump.Poll */
-    [219] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Jump.Warm */
-    [220] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Jump.Observed */
-    [221] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Const.Pool */
-    [222] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Const.Small */
-    [223] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Const.Common */
-    [224] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalRead.Bound */
-    [225] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalRead.Checked */
-    [226] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalWrite.Store */
-    [227] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalWrite.Restore */
-    [228] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SaveLocal.Take */
-    [229] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalDelete.Checked */
-    [230] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Transfer */
-    [231] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Retire */
-    [232] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Copy */
-    [233] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttr.Generic.Observed */
-    [234] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttr.Builtin.Observed */
-    [235] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttrExplicit.Generic.Observed */
-    [236] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttrExplicit.Builtin.Observed */
-    [237] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperMethod.Generic.Observed */
-    [238] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperMethod.Builtin.Observed */
-    [239] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperMethodExplicit.Generic.Observed */
-    [240] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperMethodExplicit.Builtin.Observed */
-    [241] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.Exact.Observed */
-    [242] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.BoundExact.Observed */
-    [243] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.Init.Observed */
-    [244] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.Generator.Observed */
-    [245] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.Generic.Observed */
-    [246] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Return.Ordinary.Observed */
-    [247] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Return.Empty.Observed */
-    [248] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Return.Generator.Observed */
-    [249] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Return.External.Observed */
-    [250] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.Plan.Observed */
-    [251] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.Generator.Observed */
-    [252] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.BoundMethod.Observed */
-    [253] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.NonPy.Observed */
-    [254] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.Generic.Observed */
-    [255] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallEx.Generic.Observed */
-    [256] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallEx.Py.Observed */
-    [257] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallEx.NonPy.Observed */
-    [258] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* EndAsyncFor.Generic.Observed */
-    [259] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Generic.Observed */
-    [260] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.List.Observed */
-    [261] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Tuple.Observed */
-    [262] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Range.Observed */
-    [263] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Indexed.Observed */
-    [264] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Slot.Observed */
-    [265] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* IterClose.Retire.Observed */
-    [266] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Resume.Poll.Observed */
-    [267] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Resume.Warm.Observed */
-    [268] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Yield.Ordinary.Observed */
-    [269] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* YieldFrom.Delegated.Observed */
-    [270] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Generic.Observed */
-    [271] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Gen.Observed */
-    [272] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Virtual.Observed */
-    [273] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.AsyncGen.Observed */
-    [274] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Identity.Observed */
-    [275] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Int.Observed */
-    [276] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Float.Observed */
-    [277] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Str.Observed */
-    [278] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Set.Observed */
-    [279] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Dict.Observed */
-    [280] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Sequence.Observed */
-    [281] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Generic.Observed */
-    [282] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Bool.Observed */
-    [283] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Int.Observed */
-    [284] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.List.Observed */
-    [285] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.None.Observed */
-    [286] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Str.Observed */
-    [287] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Plain.Observed */
-    [288] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Slot.Observed */
-    [289] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Generic.Observed */
-    [290] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchNone.Test.Observed */
-    [291] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Jump.Direct.Observed */
-    [292] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Jump.Poll.Observed */
-    [293] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Jump.Warm.Observed */
+    [39] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Call.PyGeneral */
+    [40] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.Generator */
+    [41] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.BoundMethod */
+    [42] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.NonPy */
+    [43] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CallKw.Generic */
+    [44] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallKw.Observed */
+    [45] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CallEx.Generic */
+    [46] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallEx.Py */
+    [47] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallEx.NonPy */
+    [48] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CallEx.Observed */
+    [49] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellMake.Wrap */
+    [50] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellRead.Get */
+    [51] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellMapRead.Lookup */
+    [52] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellStore.Set */
+    [53] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CellDelete.Unbind */
+    [54] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* CleanupThrow.Generic */
+    [55] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* EndAsyncFor.Generic */
+    [56] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* EndAsyncFor.Observed */
+    [57] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* WithExit.Generic */
+    [58] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Build.Tuple */
+    [59] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Build.List */
+    [60] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Build.Set */
+    [61] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Build.Map */
+    [62] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AddElement.Append */
+    [63] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AddElement.Add */
+    [64] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AddEntry.Put */
+    [65] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* UpdateContainer.Extend */
+    [66] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* UpdateContainer.Union */
+    [67] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* UpdateContainer.Overlay */
+    [68] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* MergeKeywords.Merge */
+    [69] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Unpack.Generic */
+    [70] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Unpack.Tuple */
+    [71] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Unpack.List */
+    [72] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* UnpackStar.Iterable */
+    [73] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Raise.Throw */
+    [74] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Reraise.Plain */
+    [75] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Reraise.Origin */
+    [76] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ExceptEnter.Install */
+    [77] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ExceptLeave.Restore */
+    [78] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ExceptMatch.Match */
+    [79] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ExceptGroupMatch.Split */
+    [80] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Function.Make */
+    [81] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Intrinsic.Unary */
+    [82] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Intrinsic.ImportStar */
+    [83] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Intrinsic.StopIteration */
+    [84] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IntrinsicPair.Binary */
+    [85] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IntrinsicPair.Attr */
+    [86] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Instance */
+    [87] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.GetSet */
+    [88] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* GetAttr.Generic */
+    [89] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Shape */
+    [90] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.PolyShape */
+    [91] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Module */
+    [92] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Hint */
+    [93] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.ValueSlot */
+    [94] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.PointerSlot */
+    [95] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.Class */
+    [96] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.NonDescriptorValues */
+    [97] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetAttr.NonDescriptorNoDict */
+    [98] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.MethodValues */
+    [99] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* GetMethod.Generic */
+    [100] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.PolyMethod */
+    [101] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.NoDict */
+    [102] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.LazyDict */
+    [103] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetMethod.ClassMethod */
+    [104] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* GetItem.Generic */
+    [105] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SetItem.Generic */
+    [106] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* DelItem.Generic */
+    [107] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SliceRead.Generic */
+    [108] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SliceWrite.Generic */
+    [109] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* BuildSlice.Generic */
+    [110] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.ListIndex */
+    [111] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.TupleIndex */
+    [112] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.Ascii */
+    [113] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.UnicodeAsciiChar */
+    [114] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.ListSlice */
+    [115] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GetItem.Dict */
+    [116] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* SetItem.ListIndex */
+    [117] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* SetItem.Dict */
+    [118] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IterOpen.Generic */
+    [119] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Generic */
+    [120] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* IterOpen.Self */
+    [121] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* IterOpen.Indexed */
+    [122] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* IterOpen.GenMethod */
+    [123] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.List */
+    [124] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Tuple */
+    [125] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Range */
+    [126] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Indexed */
+    [127] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Gen */
+    [128] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Slot */
+    [129] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Observed */
+    [130] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IterClose.Retire */
+    [131] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* IterClose.Observed */
+    [132] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Line.Hook */
+    [133] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Instruction.Hook */
+    [134] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* GlobalRead.Generic */
+    [135] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GlobalRead.Module */
+    [136] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* GlobalRead.Builtin */
+    [137] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceRead.Name */
+    [138] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceRead.Locals */
+    [139] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceRead.BuildClass */
+    [140] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceReadFrom.Mapping */
+    [141] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceWrite.Name */
+    [142] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* NamespaceWrite.Global */
+    [143] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SetupAnnotations.Setup */
+    [144] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Import.Eager */
+    [145] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Import.Policy */
+    [146] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Import.Lazy */
+    [147] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ImportFrom.From */
+    [148] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* ImportFrom.FromLast */
+    [149] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Binary.Int */
+    [150] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Binary.Float */
+    [151] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Binary.Text */
+    [152] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Binary.Extended */
+    [153] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Binary.Generic */
+    [154] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Unary.Generic */
+    [155] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* AppendText.Text */
+    [156] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AppendText.Generic */
+    [157] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Length.Size */
+    [158] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Pattern.Flag */
+    [159] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* PatternClass.Match */
+    [160] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* PatternKeys.Match */
+    [161] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Resume.Poll */
+    [162] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Resume.Warm */
+    [163] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Resume.Observed */
+    [164] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Awaitable.Await */
+    [165] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AsyncIterOpen.Open */
+    [166] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* AsyncIterNext.Next */
+    [167] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Yield.Ordinary */
+    [168] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* YieldFrom.Delegated */
+    [169] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Yield.Observed */
+    [170] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* YieldFrom.Observed */
+    [171] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Generic */
+    [172] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Gen */
+    [173] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Virtual */
+    [174] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.AsyncGen */
+    [175] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Observed */
+    [176] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Int */
+    [177] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Float */
+    [178] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Compare.Str */
+    [179] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Compare.Generic */
+    [180] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Identity.Test */
+    [181] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Contains.Set */
+    [182] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Contains.Dict */
+    [183] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Contains.Generic */
+    [184] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Identity */
+    [185] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Int */
+    [186] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Float */
+    [187] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Str */
+    [188] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Set */
+    [189] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Dict */
+    [190] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Sequence */
+    [191] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Generic */
+    [192] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Observed */
+    [193] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* BuildText.Join */
+    [194] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* BuildText.Interpolation */
+    [195] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* BuildText.Template */
+    [196] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Convert.Text */
+    [197] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Format.Simple */
+    [198] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* FormatSpec.Value */
+    [199] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Bool */
+    [200] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Int */
+    [201] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.List */
+    [202] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.None */
+    [203] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Str */
+    [204] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Plain */
+    [205] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* Truth.Slot */
+    [206] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Truth.Generic */
+    [207] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Bool */
+    [208] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Int */
+    [209] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.List */
+    [210] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.None */
+    [211] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Str */
+    [212] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Plain */
+    [213] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Slot */
+    [214] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Generic */
+    [215] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchNone.Test */
+    [216] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Observed */
+    [217] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchNone.Observed */
+    [218] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Jump.Direct */
+    [219] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_TRAILING | _PyIR_H_IR_ONLY, /* Jump.Trailing */
+    [220] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Jump.Poll */
+    [221] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Jump.Warm */
+    [222] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Jump.Observed */
+    [223] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Const.Pool */
+    [224] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Const.Small */
+    [225] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Const.Common */
+    [226] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalRead.Bound */
+    [227] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalRead.Checked */
+    [228] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalWrite.Store */
+    [229] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalWrite.Restore */
+    [230] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* SaveLocal.Take */
+    [231] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* LocalDelete.Checked */
+    [232] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Transfer */
+    [233] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Retire */
+    [234] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_IR_ONLY, /* Move.Copy */
+    [235] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttr.Generic.Observed */
+    [236] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttr.Builtin.Observed */
+    [237] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttrExplicit.Generic.Observed */
+    [238] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperAttrExplicit.Builtin.Observed */
+    [239] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperMethod.Generic.Observed */
+    [240] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperMethod.Builtin.Observed */
+    [241] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperMethodExplicit.Generic.Observed */
+    [242] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* SuperMethodExplicit.Builtin.Observed */
+    [243] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.Exact.Observed */
+    [244] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.BoundExact.Observed */
+    [245] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.Init.Observed */
+    [246] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.Generator.Observed */
+    [247] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.Generic.Observed */
+    [248] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Return.Ordinary.Observed */
+    [249] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Return.Empty.Observed */
+    [250] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Return.Generator.Observed */
+    [251] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Return.External.Observed */
+    [252] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.Plan.Observed */
+    [253] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Call.PyGeneral.Observed */
+    [254] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.Generator.Observed */
+    [255] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.BoundMethod.Observed */
+    [256] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.NonPy.Observed */
+    [257] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallKw.Generic.Observed */
+    [258] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallEx.Generic.Observed */
+    [259] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallEx.Py.Observed */
+    [260] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* CallEx.NonPy.Observed */
+    [261] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* EndAsyncFor.Generic.Observed */
+    [262] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Generic.Observed */
+    [263] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.List.Observed */
+    [264] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Tuple.Observed */
+    [265] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Range.Observed */
+    [266] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Indexed.Observed */
+    [267] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Gen.Observed */
+    [268] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_STOP_SLOT | _PyIR_H_IR_ONLY, /* ForIter.Slot.Observed */
+    [269] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* IterClose.Retire.Observed */
+    [270] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Resume.Poll.Observed */
+    [271] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Resume.Warm.Observed */
+    [272] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Yield.Ordinary.Observed */
+    [273] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* YieldFrom.Delegated.Observed */
+    [274] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Generic.Observed */
+    [275] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Gen.Observed */
+    [276] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.Virtual.Observed */
+    [277] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* Send.AsyncGen.Observed */
+    [278] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Identity.Observed */
+    [279] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Int.Observed */
+    [280] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Float.Observed */
+    [281] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Str.Observed */
+    [282] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Set.Observed */
+    [283] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Dict.Observed */
+    [284] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Sequence.Observed */
+    [285] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* TestBranch.Generic.Observed */
+    [286] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Bool.Observed */
+    [287] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Int.Observed */
+    [288] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.List.Observed */
+    [289] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.None.Observed */
+    [290] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Str.Observed */
+    [291] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Plain.Observed */
+    [292] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Slot.Observed */
+    [293] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchTruth.Generic.Observed */
+    [294] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_BRANCH_LEFT | _PyIR_H_IR_ONLY, /* BranchNone.Test.Observed */
+    [295] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Jump.Direct.Observed */
+    [296] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Jump.Poll.Observed */
+    [297] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* Jump.Warm.Observed */
 };
 #endif
 
-PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[294];
+PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[298];
 #ifdef NEED_IR_METADATA
-const _PyIRFormat _PyIR_Formats[294] = {
+const _PyIRFormat _PyIR_Formats[298] = {
     [IR_H_IR_OPERANDS] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0 },  /* IR_OPERANDS */
     [1] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Add.Int */
     [2] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Add.Float */
@@ -341,288 +345,292 @@ const _PyIRFormat _PyIR_Formats[294] = {
     [9] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x31 },  /* AttrWrite.ShapeAdd */
     [10] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x31 },  /* AttrWrite.Hint */
     [11] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x31 },  /* AttrWrite.Slot */
-    [12] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 233, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Generic */
-    [13] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 234, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Builtin */
+    [12] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 235, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Generic */
+    [13] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 236, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Builtin */
     [14] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Observed */
-    [15] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 235, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Generic */
-    [16] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 236, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Builtin */
+    [15] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 237, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Generic */
+    [16] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 238, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Builtin */
     [17] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Observed */
-    [18] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 237, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Generic */
-    [19] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 238, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Builtin */
+    [18] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 239, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Generic */
+    [19] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 240, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Builtin */
     [20] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Observed */
-    [21] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 239, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Generic */
-    [22] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 240, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Builtin */
+    [21] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 241, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Generic */
+    [22] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 242, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Builtin */
     [23] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Observed */
     [24] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* SpecialLookup.Generic */
-    [25] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 241, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Exact */
-    [26] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 242, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.BoundExact */
-    [27] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 243, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Init */
-    [28] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 244, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Generator */
-    [29] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 245, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Generic */
+    [25] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 243, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Exact */
+    [26] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 244, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.BoundExact */
+    [27] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 245, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Init */
+    [28] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 246, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Generator */
+    [29] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 247, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Generic */
     [30] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1 },  /* InitResult.Check */
     [31] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Observed */
-    [32] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 246, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Ordinary */
-    [33] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 247, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Empty */
-    [34] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 248, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Generator */
+    [32] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 248, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Ordinary */
+    [33] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 249, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Empty */
+    [34] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 250, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Generator */
     [35] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Observed */
-    [36] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 249, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.External */
+    [36] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 251, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.External */
     [37] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x3 },  /* MaterializeKwargs.Pending */
-    [38] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 250, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Plan */
-    [39] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 251, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Generator */
-    [40] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 252, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.BoundMethod */
-    [41] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 253, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.NonPy */
-    [42] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 254, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Generic */
-    [43] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Observed */
-    [44] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 255, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Generic */
-    [45] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 256, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Py */
-    [46] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 257, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.NonPy */
-    [47] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Observed */
-    [48] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* CellMake.Wrap */
-    [49] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_CELL, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* CellRead.Get */
-    [50] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_CELL, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CellMapRead.Lookup */
-    [51] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_CELL, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* CellStore.Set */
-    [52] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_CELL, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* CellDelete.Unbind */
-    [53] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 3, .normal = 0x2, .vacant = 0x30, .committed = 0x2, .edges = 0x516000 },  /* CleanupThrow.Generic */
-    [54] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_NAMES_TARGET, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 258, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x3, .edges = 0x5 },  /* EndAsyncFor.Generic */
-    [55] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_NAMES_TARGET, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x3, .edges = 0x5 },  /* EndAsyncFor.Observed */
-    [56] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x2 },  /* WithExit.Generic */
-    [57] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Build.Tuple */
-    [58] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Build.List */
-    [59] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Build.Set */
-    [60] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Build.Map */
-    [61] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* AddElement.Append */
-    [62] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* AddElement.Add */
-    [63] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x14 },  /* AddEntry.Put */
-    [64] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* UpdateContainer.Extend */
-    [65] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* UpdateContainer.Union */
-    [66] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* UpdateContainer.Overlay */
-    [67] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x10 },  /* MergeKeywords.Merge */
-    [68] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* Unpack.Generic */
-    [69] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* Unpack.Tuple */
-    [70] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* Unpack.List */
-    [71] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* UnpackStar.Iterable */
-    [72] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Raise.Throw */
-    [73] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x1, .committed = 0x0, .edges = 0x0 },  /* Reraise.Plain */
-    [74] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x1, .committed = 0x0, .edges = 0x0 },  /* Reraise.Origin */
-    [75] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* ExceptEnter.Install */
-    [76] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1 },  /* ExceptLeave.Restore */
-    [77] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x12 },  /* ExceptMatch.Match */
-    [78] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x5a },  /* ExceptGroupMatch.Split */
-    [79] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Function.Make */
-    [80] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x12 },  /* Intrinsic.Unary */
-    [81] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x12 },  /* Intrinsic.ImportStar */
-    [82] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x12 },  /* Intrinsic.StopIteration */
-    [83] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1 }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x52 },  /* IntrinsicPair.Binary */
-    [84] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1 }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x52 },  /* IntrinsicPair.Attr */
-    [85] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Instance */
-    [86] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.GetSet */
-    [87] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Generic */
-    [88] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Shape */
-    [89] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.PolyShape */
-    [90] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Module */
-    [91] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Hint */
-    [92] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.ValueSlot */
-    [93] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.PointerSlot */
-    [94] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Class */
-    [95] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.NonDescriptorValues */
-    [96] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.NonDescriptorNoDict */
-    [97] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.MethodValues */
-    [98] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.Generic */
-    [99] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.PolyMethod */
-    [100] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.NoDict */
-    [101] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.LazyDict */
-    [102] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.ClassMethod */
-    [103] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.Generic */
-    [104] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x15 },  /* SetItem.Generic */
-    [105] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x5 },  /* DelItem.Generic */
-    [106] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x56 },  /* SliceRead.Generic */
-    [107] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_SRC + 3 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x55 },  /* SliceWrite.Generic */
-    [108] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* BuildSlice.Generic */
-    [109] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.ListIndex */
-    [110] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.TupleIndex */
-    [111] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.Ascii */
-    [112] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.UnicodeAsciiChar */
-    [113] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.ListSlice */
-    [114] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.Dict */
-    [115] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x15 },  /* SetItem.ListIndex */
-    [116] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x15 },  /* SetItem.Dict */
-    [117] = { .flags = _PyIR_VALID | _PyIR_GROUP_OUT | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 2, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x206 },  /* IterOpen.Generic */
-    [118] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 259, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Generic */
-    [119] = { .flags = _PyIR_VALID | _PyIR_GROUP_OUT, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 2, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x206 },  /* IterOpen.Self */
-    [120] = { .flags = _PyIR_VALID | _PyIR_GROUP_OUT, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 2, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x206 },  /* IterOpen.Indexed */
-    [121] = { .flags = _PyIR_VALID | _PyIR_GROUP_OUT | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 2, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x206 },  /* IterOpen.GenMethod */
-    [122] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 260, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.List */
-    [123] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 261, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Tuple */
-    [124] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 262, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Range */
-    [125] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 263, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Indexed */
-    [126] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 264, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Slot */
-    [127] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Observed */
-    [128] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 265, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 2, .normal = 0x1, .vacant = 0x10, .committed = 0x3, .edges = 0x101 },  /* IterClose.Retire */
-    [129] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 2, .normal = 0x1, .vacant = 0x10, .committed = 0x3, .edges = 0x101 },  /* IterClose.Observed */
-    [130] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_TRANSPARENT, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Line.Hook */
-    [131] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_TRANSPARENT, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Instruction.Hook */
-    [132] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_FB, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_GLOBAL, .fb_size = sizeof(_PyFbGlobal), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* GlobalRead.Generic */
-    [133] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_FB, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_GLOBAL, .fb_size = sizeof(_PyFbGlobal), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* GlobalRead.Module */
-    [134] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_FB, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_GLOBAL, .fb_size = sizeof(_PyFbGlobal), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* GlobalRead.Builtin */
-    [135] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* NamespaceRead.Name */
-    [136] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* NamespaceRead.Locals */
-    [137] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* NamespaceRead.BuildClass */
-    [138] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* NamespaceReadFrom.Mapping */
-    [139] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_AB, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x30 },  /* NamespaceWrite.Name */
-    [140] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_AB, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x30 },  /* NamespaceWrite.Global */
-    [141] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* SetupAnnotations.Setup */
-    [142] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Import.Eager */
-    [143] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Import.Policy */
-    [144] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Import.Lazy */
-    [145] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xe },  /* ImportFrom.From */
-    [146] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xe },  /* ImportFrom.FromLast */
-    [147] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Int */
-    [148] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Float */
-    [149] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Text */
-    [150] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Extended */
-    [151] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Generic */
-    [152] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Unary.Generic */
-    [153] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* AppendText.Text */
-    [154] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* AppendText.Generic */
-    [155] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Length.Size */
-    [156] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Pattern.Flag */
-    [157] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* PatternClass.Match */
-    [158] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* PatternKeys.Match */
-    [159] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 266, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Poll */
-    [160] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 267, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Warm */
-    [161] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Observed */
-    [162] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Awaitable.Await */
-    [163] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* AsyncIterOpen.Open */
-    [164] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* AsyncIterNext.Next */
-    [165] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 268, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* Yield.Ordinary */
-    [166] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 269, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* YieldFrom.Delegated */
-    [167] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* Yield.Observed */
-    [168] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* YieldFrom.Observed */
-    [169] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 270, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Generic */
-    [170] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 271, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Gen */
-    [171] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 272, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Virtual */
-    [172] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 273, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.AsyncGen */
-    [173] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Observed */
-    [174] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Compare.Int */
-    [175] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Compare.Float */
-    [176] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Compare.Str */
-    [177] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Compare.Generic */
-    [178] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Identity.Test */
-    [179] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_CONTAINS, .fb_size = sizeof(_PyFbContains), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Contains.Set */
-    [180] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_CONTAINS, .fb_size = sizeof(_PyFbContains), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Contains.Dict */
-    [181] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_CONTAINS, .fb_size = sizeof(_PyFbContains), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Contains.Generic */
-    [182] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 274, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Identity */
-    [183] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 275, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Int */
-    [184] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 276, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Float */
-    [185] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 277, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Str */
-    [186] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 278, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Set */
-    [187] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 279, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Dict */
-    [188] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 280, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Sequence */
-    [189] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 281, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Generic */
-    [190] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Observed */
-    [191] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* BuildText.Join */
-    [192] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* BuildText.Interpolation */
-    [193] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* BuildText.Template */
-    [194] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Convert.Text */
-    [195] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Format.Simple */
-    [196] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* FormatSpec.Value */
-    [197] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Bool */
-    [198] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Int */
-    [199] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.List */
-    [200] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.None */
-    [201] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Str */
-    [202] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Plain */
-    [203] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Slot */
-    [204] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Generic */
-    [205] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 282, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Bool */
-    [206] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 283, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Int */
-    [207] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 284, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.List */
-    [208] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 285, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.None */
-    [209] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 286, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Str */
-    [210] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 287, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Plain */
-    [211] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 288, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Slot */
-    [212] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 289, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Generic */
-    [213] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = 0, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_RETIRE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 290, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x1001 },  /* BranchNone.Test */
-    [214] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Observed */
-    [215] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_RETIRE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x1001 },  /* BranchNone.Observed */
-    [216] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = 0, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 291, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Direct */
-    [217] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = 0, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Trailing */
-    [218] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 292, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Poll */
-    [219] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 293, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Warm */
-    [220] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Observed */
-    [221] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Const.Pool */
-    [222] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Const.Small */
-    [223] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Const.Common */
-    [224] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* LocalRead.Bound */
-    [225] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* LocalRead.Checked */
-    [226] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* LocalWrite.Store */
-    [227] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* LocalWrite.Restore */
-    [228] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* SaveLocal.Take */
-    [229] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* LocalDelete.Checked */
-    [230] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Transfer */
-    [231] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Retire */
-    [232] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Copy */
-    [233] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 233, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Generic.Observed */
-    [234] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 234, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Builtin.Observed */
-    [235] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 235, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Generic.Observed */
-    [236] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 236, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Builtin.Observed */
-    [237] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 237, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Generic.Observed */
-    [238] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 238, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Builtin.Observed */
-    [239] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 239, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Generic.Observed */
-    [240] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 240, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Builtin.Observed */
-    [241] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 241, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Exact.Observed */
-    [242] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 242, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.BoundExact.Observed */
-    [243] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 243, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Init.Observed */
-    [244] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 244, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Generator.Observed */
-    [245] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 245, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Generic.Observed */
-    [246] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 246, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Ordinary.Observed */
-    [247] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 247, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Empty.Observed */
-    [248] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 248, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Generator.Observed */
-    [249] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 249, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.External.Observed */
-    [250] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 250, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Plan.Observed */
-    [251] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 251, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Generator.Observed */
-    [252] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 252, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.BoundMethod.Observed */
-    [253] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 253, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.NonPy.Observed */
-    [254] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 254, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Generic.Observed */
-    [255] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 255, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Generic.Observed */
-    [256] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 256, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Py.Observed */
-    [257] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 257, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.NonPy.Observed */
-    [258] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_NAMES_TARGET, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 258, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x3, .edges = 0x5 },  /* EndAsyncFor.Generic.Observed */
-    [259] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 259, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Generic.Observed */
-    [260] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 260, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.List.Observed */
-    [261] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 261, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Tuple.Observed */
-    [262] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 262, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Range.Observed */
-    [263] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 263, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Indexed.Observed */
-    [264] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 264, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Slot.Observed */
-    [265] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 265, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 2, .normal = 0x1, .vacant = 0x10, .committed = 0x3, .edges = 0x101 },  /* IterClose.Retire.Observed */
-    [266] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 266, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Poll.Observed */
-    [267] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 267, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Warm.Observed */
-    [268] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 268, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* Yield.Ordinary.Observed */
-    [269] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 269, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* YieldFrom.Delegated.Observed */
-    [270] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 270, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Generic.Observed */
-    [271] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 271, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Gen.Observed */
-    [272] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 272, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Virtual.Observed */
-    [273] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 273, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.AsyncGen.Observed */
-    [274] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 274, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Identity.Observed */
-    [275] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 275, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Int.Observed */
-    [276] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 276, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Float.Observed */
-    [277] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 277, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Str.Observed */
-    [278] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 278, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Set.Observed */
-    [279] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 279, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Dict.Observed */
-    [280] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 280, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Sequence.Observed */
-    [281] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 281, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Generic.Observed */
-    [282] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 282, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Bool.Observed */
-    [283] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 283, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Int.Observed */
-    [284] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 284, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.List.Observed */
-    [285] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 285, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.None.Observed */
-    [286] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 286, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Str.Observed */
-    [287] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 287, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Plain.Observed */
-    [288] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 288, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Slot.Observed */
-    [289] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 289, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Generic.Observed */
-    [290] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = 0, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_RETIRE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 290, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x1001 },  /* BranchNone.Test.Observed */
-    [291] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = 0, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 291, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Direct.Observed */
-    [292] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 292, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Poll.Observed */
-    [293] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 293, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Warm.Observed */
+    [38] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 252, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Plan */
+    [39] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 253, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.PyGeneral */
+    [40] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 254, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Generator */
+    [41] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 255, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.BoundMethod */
+    [42] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 256, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.NonPy */
+    [43] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 257, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Generic */
+    [44] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Observed */
+    [45] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 258, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Generic */
+    [46] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 259, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Py */
+    [47] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 260, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.NonPy */
+    [48] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Observed */
+    [49] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* CellMake.Wrap */
+    [50] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_CELL, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* CellRead.Get */
+    [51] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_CELL, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CellMapRead.Lookup */
+    [52] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_CELL, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* CellStore.Set */
+    [53] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_CELL, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* CellDelete.Unbind */
+    [54] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 3, .normal = 0x2, .vacant = 0x30, .committed = 0x2, .edges = 0x516000 },  /* CleanupThrow.Generic */
+    [55] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_NAMES_TARGET, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 261, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x3, .edges = 0x5 },  /* EndAsyncFor.Generic */
+    [56] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_NAMES_TARGET, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x3, .edges = 0x5 },  /* EndAsyncFor.Observed */
+    [57] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x2 },  /* WithExit.Generic */
+    [58] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Build.Tuple */
+    [59] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Build.List */
+    [60] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Build.Set */
+    [61] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Build.Map */
+    [62] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* AddElement.Append */
+    [63] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* AddElement.Add */
+    [64] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x14 },  /* AddEntry.Put */
+    [65] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* UpdateContainer.Extend */
+    [66] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* UpdateContainer.Union */
+    [67] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* UpdateContainer.Overlay */
+    [68] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x10 },  /* MergeKeywords.Merge */
+    [69] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* Unpack.Generic */
+    [70] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* Unpack.Tuple */
+    [71] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* Unpack.List */
+    [72] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x4 },  /* UnpackStar.Iterable */
+    [73] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Raise.Throw */
+    [74] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x1, .committed = 0x0, .edges = 0x0 },  /* Reraise.Plain */
+    [75] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x1, .committed = 0x0, .edges = 0x0 },  /* Reraise.Origin */
+    [76] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* ExceptEnter.Install */
+    [77] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1 },  /* ExceptLeave.Restore */
+    [78] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x12 },  /* ExceptMatch.Match */
+    [79] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x5a },  /* ExceptGroupMatch.Split */
+    [80] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Function.Make */
+    [81] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x12 },  /* Intrinsic.Unary */
+    [82] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x12 },  /* Intrinsic.ImportStar */
+    [83] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x12 },  /* Intrinsic.StopIteration */
+    [84] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1 }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x52 },  /* IntrinsicPair.Binary */
+    [85] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1 }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x52 },  /* IntrinsicPair.Attr */
+    [86] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Instance */
+    [87] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.GetSet */
+    [88] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Generic */
+    [89] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Shape */
+    [90] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.PolyShape */
+    [91] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Module */
+    [92] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Hint */
+    [93] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.ValueSlot */
+    [94] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.PointerSlot */
+    [95] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.Class */
+    [96] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.NonDescriptorValues */
+    [97] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* GetAttr.NonDescriptorNoDict */
+    [98] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.MethodValues */
+    [99] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.Generic */
+    [100] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.PolyMethod */
+    [101] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.NoDict */
+    [102] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.LazyDict */
+    [103] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x1a },  /* GetMethod.ClassMethod */
+    [104] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.Generic */
+    [105] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x15 },  /* SetItem.Generic */
+    [106] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x5 },  /* DelItem.Generic */
+    [107] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x56 },  /* SliceRead.Generic */
+    [108] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_SRC + 3 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x55 },  /* SliceWrite.Generic */
+    [109] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* BuildSlice.Generic */
+    [110] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.ListIndex */
+    [111] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.TupleIndex */
+    [112] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.Ascii */
+    [113] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.UnicodeAsciiChar */
+    [114] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.ListSlice */
+    [115] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* GetItem.Dict */
+    [116] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x15 },  /* SetItem.ListIndex */
+    [117] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_SRC + 2, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x15 },  /* SetItem.Dict */
+    [118] = { .flags = _PyIR_VALID | _PyIR_GROUP_OUT | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 2, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x206 },  /* IterOpen.Generic */
+    [119] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 262, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Generic */
+    [120] = { .flags = _PyIR_VALID | _PyIR_GROUP_OUT, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 2, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x206 },  /* IterOpen.Self */
+    [121] = { .flags = _PyIR_VALID | _PyIR_GROUP_OUT, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 2, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x206 },  /* IterOpen.Indexed */
+    [122] = { .flags = _PyIR_VALID | _PyIR_GROUP_OUT | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 2, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x206 },  /* IterOpen.GenMethod */
+    [123] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 263, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.List */
+    [124] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 264, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Tuple */
+    [125] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 265, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Range */
+    [126] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 266, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Indexed */
+    [127] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 267, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Gen */
+    [128] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 268, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Slot */
+    [129] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Observed */
+    [130] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 269, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 2, .normal = 0x1, .vacant = 0x10, .committed = 0x3, .edges = 0x101 },  /* IterClose.Retire */
+    [131] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 2, .normal = 0x1, .vacant = 0x10, .committed = 0x3, .edges = 0x101 },  /* IterClose.Observed */
+    [132] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_TRANSPARENT, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Line.Hook */
+    [133] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_TRANSPARENT, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Instruction.Hook */
+    [134] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_FB, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_GLOBAL, .fb_size = sizeof(_PyFbGlobal), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* GlobalRead.Generic */
+    [135] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_FB, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_GLOBAL, .fb_size = sizeof(_PyFbGlobal), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* GlobalRead.Module */
+    [136] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_FB, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_NONE, .fb_kind = FB_GLOBAL, .fb_size = sizeof(_PyFbGlobal), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* GlobalRead.Builtin */
+    [137] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* NamespaceRead.Name */
+    [138] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* NamespaceRead.Locals */
+    [139] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* NamespaceRead.BuildClass */
+    [140] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* NamespaceReadFrom.Mapping */
+    [141] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_AB, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x30 },  /* NamespaceWrite.Name */
+    [142] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_AB, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x4, .committed = 0x0, .edges = 0x30 },  /* NamespaceWrite.Global */
+    [143] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* SetupAnnotations.Setup */
+    [144] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Import.Eager */
+    [145] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Import.Policy */
+    [146] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Import.Lazy */
+    [147] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xe },  /* ImportFrom.From */
+    [148] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xe },  /* ImportFrom.FromLast */
+    [149] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Int */
+    [150] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Float */
+    [151] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Text */
+    [152] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Extended */
+    [153] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Binary.Generic */
+    [154] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Unary.Generic */
+    [155] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* AppendText.Text */
+    [156] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* AppendText.Generic */
+    [157] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Length.Size */
+    [158] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Pattern.Flag */
+    [159] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_CD, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* PatternClass.Match */
+    [160] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* PatternKeys.Match */
+    [161] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 270, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Poll */
+    [162] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 271, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Warm */
+    [163] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Observed */
+    [164] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Awaitable.Await */
+    [165] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* AsyncIterOpen.Open */
+    [166] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* AsyncIterNext.Next */
+    [167] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 272, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* Yield.Ordinary */
+    [168] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 273, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* YieldFrom.Delegated */
+    [169] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* Yield.Observed */
+    [170] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* YieldFrom.Observed */
+    [171] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 274, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Generic */
+    [172] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 275, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Gen */
+    [173] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 276, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Virtual */
+    [174] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 277, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.AsyncGen */
+    [175] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Observed */
+    [176] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Compare.Int */
+    [177] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Compare.Float */
+    [178] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Compare.Str */
+    [179] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Compare.Generic */
+    [180] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Identity.Test */
+    [181] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_CONTAINS, .fb_size = sizeof(_PyFbContains), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Contains.Set */
+    [182] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_CONTAINS, .fb_size = sizeof(_PyFbContains), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Contains.Dict */
+    [183] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_CONTAINS, .fb_size = sizeof(_PyFbContains), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* Contains.Generic */
+    [184] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 278, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Identity */
+    [185] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 279, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Int */
+    [186] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 280, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Float */
+    [187] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 281, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Str */
+    [188] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 282, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Set */
+    [189] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 283, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Dict */
+    [190] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 284, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Sequence */
+    [191] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 285, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Generic */
+    [192] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Observed */
+    [193] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* BuildText.Join */
+    [194] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* BuildText.Interpolation */
+    [195] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* BuildText.Template */
+    [196] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Convert.Text */
+    [197] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Format.Simple */
+    [198] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x16 },  /* FormatSpec.Value */
+    [199] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Bool */
+    [200] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Int */
+    [201] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.List */
+    [202] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.None */
+    [203] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Str */
+    [204] = { .flags = _PyIR_VALID, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Plain */
+    [205] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Slot */
+    [206] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Truth.Generic */
+    [207] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 286, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Bool */
+    [208] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 287, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Int */
+    [209] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 288, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.List */
+    [210] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 289, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.None */
+    [211] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 290, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Str */
+    [212] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 291, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Plain */
+    [213] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 292, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Slot */
+    [214] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 293, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Generic */
+    [215] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = 0, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_RETIRE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 294, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x1001 },  /* BranchNone.Test */
+    [216] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Observed */
+    [217] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_RETIRE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x1001 },  /* BranchNone.Observed */
+    [218] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = 0, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 295, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Direct */
+    [219] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = 0, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Trailing */
+    [220] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 296, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Poll */
+    [221] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 297, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Warm */
+    [222] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Observed */
+    [223] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Const.Pool */
+    [224] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Const.Small */
+    [225] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_BC, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* Const.Common */
+    [226] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* LocalRead.Bound */
+    [227] = { .flags = _PyIR_VALID, .effects = _PyIR_RAISES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* LocalRead.Checked */
+    [228] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* LocalWrite.Store */
+    [229] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* LocalWrite.Restore */
+    [230] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* SaveLocal.Take */
+    [231] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* LocalDelete.Checked */
+    [232] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Transfer */
+    [233] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Retire */
+    [234] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_COUNT, _PyIR_ROLE_COUNT, _PyIR_ROLE_ELEMENT, _PyIR_ROLE_ELEMENT }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = _PyIR_NO_HANDLER, .events = 0, .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Move.Copy */
+    [235] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 235, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Generic.Observed */
+    [236] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 236, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttr.Builtin.Observed */
+    [237] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 237, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Generic.Observed */
+    [238] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .twin = 238, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x2 },  /* SuperAttrExplicit.Builtin.Observed */
+    [239] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 239, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Generic.Observed */
+    [240] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 240, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethod.Builtin.Observed */
+    [241] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 241, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Generic.Observed */
+    [242] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_DST, _PyIR_ROLE_COUNT, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_SPANS, .fixed_words = 1, .twin = 242, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0xa },  /* SuperMethodExplicit.Builtin.Observed */
+    [243] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 243, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Exact.Observed */
+    [244] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 244, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.BoundExact.Observed */
+    [245] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 245, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Init.Observed */
+    [246] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 246, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Generator.Observed */
+    [247] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 247, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.Generic.Observed */
+    [248] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 248, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Ordinary.Observed */
+    [249] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 249, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Empty.Observed */
+    [250] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 250, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.Generator.Observed */
+    [251] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_EXIT, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 251, .events = (1u << PY_MONITORING_EVENT_PY_RETURN), .group = 0, .normal = 0x0, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Return.External.Observed */
+    [252] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 252, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Plan.Observed */
+    [253] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_UNINTERRUPTED, .operands = _PyIR_OPERANDS_CALL, .twin = 253, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* Call.PyGeneral.Observed */
+    [254] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 254, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Generator.Observed */
+    [255] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 255, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.BoundMethod.Observed */
+    [256] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 256, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.NonPy.Observed */
+    [257] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_SELF | IR_F_KW, .operands = _PyIR_OPERANDS_KW, .twin = 257, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallKw.Generic.Observed */
+    [258] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_POLLS | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 258, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Generic.Observed */
+    [259] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 259, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.Py.Observed */
+    [260] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | _PyIR_POLLS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_D, .target = _PyIR_LOC_NONE, .fb_kind = FB_CALL, .fb_size = sizeof(_PyFbCall), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = IR_F_NO_KW | IR_F_EX, .operands = _PyIR_OPERANDS_EX, .twin = 260, .events = (1u << PY_MONITORING_EVENT_CALL) | (1u << PY_MONITORING_EVENT_C_RETURN) | (1u << PY_MONITORING_EVENT_C_RAISE), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x6 },  /* CallEx.NonPy.Observed */
+    [261] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_NAMES_TARGET, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 261, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x3, .edges = 0x5 },  /* EndAsyncFor.Generic.Observed */
+    [262] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 262, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Generic.Observed */
+    [263] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 263, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.List.Observed */
+    [264] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 264, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Tuple.Observed */
+    [265] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 265, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Range.Observed */
+    [266] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 266, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Indexed.Observed */
+    [267] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 267, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Gen.Observed */
+    [268] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 268, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION), .group = 2, .normal = 0x3, .vacant = 0x10, .committed = 0x3, .edges = 0x104302 },  /* ForIter.Slot.Observed */
+    [269] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_GROUP, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 269, .events = (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 2, .normal = 0x1, .vacant = 0x10, .committed = 0x3, .edges = 0x101 },  /* IterClose.Retire.Observed */
+    [270] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 270, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Poll.Observed */
+    [271] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_A, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 271, .events = (1u << PY_MONITORING_EVENT_PY_START) | (1u << PY_MONITORING_EVENT_PY_RESUME), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x0, .edges = 0x0 },  /* Resume.Warm.Observed */
+    [272] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 272, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* Yield.Ordinary.Observed */
+    [273] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_DST, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_NONE, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 273, .events = (1u << PY_MONITORING_EVENT_PY_YIELD), .group = 0, .normal = 0x1, .vacant = 0x0, .committed = 0x0, .edges = 0x9 },  /* YieldFrom.Delegated.Observed */
+    [274] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_PUSHES_FRAME | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 274, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Generic.Observed */
+    [275] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 275, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Gen.Observed */
+    [276] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 276, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.Virtual.Observed */
+    [277] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_GROUP, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_C, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 277, .events = (1u << PY_MONITORING_EVENT_STOP_ITERATION) | (1u << PY_MONITORING_EVENT_BRANCH_LEFT), .group = 3, .normal = 0x3, .vacant = 0x10, .committed = 0x2, .edges = 0x506b00 },  /* Send.AsyncGen.Observed */
+    [278] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 278, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Identity.Observed */
+    [279] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 279, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Int.Observed */
+    [280] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 280, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Float.Observed */
+    [281] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 281, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Str.Observed */
+    [282] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 282, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Set.Observed */
+    [283] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 283, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Dict.Observed */
+    [284] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 284, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Sequence.Observed */
+    [285] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_SRC + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_D, .fb_kind = FB_COMPARE, .fb_size = sizeof(_PyFbCompare), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .fixed_words = 1, .twin = 285, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x5005 },  /* TestBranch.Generic.Observed */
+    [286] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 286, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Bool.Observed */
+    [287] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 287, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Int.Observed */
+    [288] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 288, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.List.Observed */
+    [289] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 289, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.None.Observed */
+    [290] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 290, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Str.Observed */
+    [291] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 291, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Plain.Observed */
+    [292] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 292, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Slot.Observed */
+    [293] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_C, .fb = _PyIR_LOC_B, .target = _PyIR_LOC_D, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 293, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x3001 },  /* BranchTruth.Generic.Observed */
+    [294] = { .flags = _PyIR_VALID | _PyIR_FORWARD, .effects = 0, .roles = { _PyIR_ROLE_SRC + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_C, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_RETIRE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 294, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT), .group = 0, .normal = 0x3, .vacant = 0x0, .committed = 0x3, .edges = 0x1001 },  /* BranchNone.Test.Observed */
+    [295] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = 0, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 295, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Direct.Observed */
+    [296] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 296, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Poll.Observed */
+    [297] = { .flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_JUMP_ALWAYS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_POLLS, .roles = { _PyIR_ROLE_IMM, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .target = _PyIR_LOC_AB, .fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_PRESERVE, .word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .twin = 297, .events = (1u << PY_MONITORING_EVENT_JUMP), .group = 0, .normal = 0x2, .vacant = 0x0, .committed = 0x3, .edges = 0x0 },  /* Jump.Warm.Observed */
 };
 #endif
 
@@ -765,261 +773,265 @@ const uint8_t _PyIR_HandlerFamily[IR_NUM_HANDLERS] = {
     [36] = IR_FAMILY_Return, /* Return.External */
     [37] = IR_FAMILY_MaterializeKwargs, /* MaterializeKwargs.Pending */
     [38] = IR_FAMILY_CallKw, /* CallKw.Plan */
-    [39] = IR_FAMILY_CallKw, /* CallKw.Generator */
-    [40] = IR_FAMILY_CallKw, /* CallKw.BoundMethod */
-    [41] = IR_FAMILY_CallKw, /* CallKw.NonPy */
-    [42] = IR_FAMILY_CallKw, /* CallKw.Generic */
-    [43] = IR_FAMILY_CallKw, /* CallKw.Observed */
-    [44] = IR_FAMILY_CallEx, /* CallEx.Generic */
-    [45] = IR_FAMILY_CallEx, /* CallEx.Py */
-    [46] = IR_FAMILY_CallEx, /* CallEx.NonPy */
-    [47] = IR_FAMILY_CallEx, /* CallEx.Observed */
-    [48] = IR_FAMILY_CellMake, /* CellMake.Wrap */
-    [49] = IR_FAMILY_CellRead, /* CellRead.Get */
-    [50] = IR_FAMILY_CellMapRead, /* CellMapRead.Lookup */
-    [51] = IR_FAMILY_CellStore, /* CellStore.Set */
-    [52] = IR_FAMILY_CellDelete, /* CellDelete.Unbind */
-    [53] = IR_FAMILY_CleanupThrow, /* CleanupThrow.Generic */
-    [54] = IR_FAMILY_EndAsyncFor, /* EndAsyncFor.Generic */
-    [55] = IR_FAMILY_EndAsyncFor, /* EndAsyncFor.Observed */
-    [56] = IR_FAMILY_WithExit, /* WithExit.Generic */
-    [57] = IR_FAMILY_Build, /* Build.Tuple */
-    [58] = IR_FAMILY_Build, /* Build.List */
-    [59] = IR_FAMILY_Build, /* Build.Set */
-    [60] = IR_FAMILY_Build, /* Build.Map */
-    [61] = IR_FAMILY_AddElement, /* AddElement.Append */
-    [62] = IR_FAMILY_AddElement, /* AddElement.Add */
-    [63] = IR_FAMILY_AddEntry, /* AddEntry.Put */
-    [64] = IR_FAMILY_UpdateContainer, /* UpdateContainer.Extend */
-    [65] = IR_FAMILY_UpdateContainer, /* UpdateContainer.Union */
-    [66] = IR_FAMILY_UpdateContainer, /* UpdateContainer.Overlay */
-    [67] = IR_FAMILY_MergeKeywords, /* MergeKeywords.Merge */
-    [68] = IR_FAMILY_Unpack, /* Unpack.Generic */
-    [69] = IR_FAMILY_Unpack, /* Unpack.Tuple */
-    [70] = IR_FAMILY_Unpack, /* Unpack.List */
-    [71] = IR_FAMILY_UnpackStar, /* UnpackStar.Iterable */
-    [72] = IR_FAMILY_Raise, /* Raise.Throw */
-    [73] = IR_FAMILY_Reraise, /* Reraise.Plain */
-    [74] = IR_FAMILY_Reraise, /* Reraise.Origin */
-    [75] = IR_FAMILY_ExceptEnter, /* ExceptEnter.Install */
-    [76] = IR_FAMILY_ExceptLeave, /* ExceptLeave.Restore */
-    [77] = IR_FAMILY_ExceptMatch, /* ExceptMatch.Match */
-    [78] = IR_FAMILY_ExceptGroupMatch, /* ExceptGroupMatch.Split */
-    [79] = IR_FAMILY_Function, /* Function.Make */
-    [80] = IR_FAMILY_Intrinsic, /* Intrinsic.Unary */
-    [81] = IR_FAMILY_Intrinsic, /* Intrinsic.ImportStar */
-    [82] = IR_FAMILY_Intrinsic, /* Intrinsic.StopIteration */
-    [83] = IR_FAMILY_IntrinsicPair, /* IntrinsicPair.Binary */
-    [84] = IR_FAMILY_IntrinsicPair, /* IntrinsicPair.Attr */
-    [85] = IR_FAMILY_GetAttr, /* GetAttr.Instance */
-    [86] = IR_FAMILY_GetAttr, /* GetAttr.GetSet */
-    [87] = IR_FAMILY_GetAttr, /* GetAttr.Generic */
-    [88] = IR_FAMILY_GetAttr, /* GetAttr.Shape */
-    [89] = IR_FAMILY_GetAttr, /* GetAttr.PolyShape */
-    [90] = IR_FAMILY_GetAttr, /* GetAttr.Module */
-    [91] = IR_FAMILY_GetAttr, /* GetAttr.Hint */
-    [92] = IR_FAMILY_GetAttr, /* GetAttr.ValueSlot */
-    [93] = IR_FAMILY_GetAttr, /* GetAttr.PointerSlot */
-    [94] = IR_FAMILY_GetAttr, /* GetAttr.Class */
-    [95] = IR_FAMILY_GetAttr, /* GetAttr.NonDescriptorValues */
-    [96] = IR_FAMILY_GetAttr, /* GetAttr.NonDescriptorNoDict */
-    [97] = IR_FAMILY_GetMethod, /* GetMethod.MethodValues */
-    [98] = IR_FAMILY_GetMethod, /* GetMethod.Generic */
-    [99] = IR_FAMILY_GetMethod, /* GetMethod.PolyMethod */
-    [100] = IR_FAMILY_GetMethod, /* GetMethod.NoDict */
-    [101] = IR_FAMILY_GetMethod, /* GetMethod.LazyDict */
-    [102] = IR_FAMILY_GetMethod, /* GetMethod.ClassMethod */
-    [103] = IR_FAMILY_GetItem, /* GetItem.Generic */
-    [104] = IR_FAMILY_SetItem, /* SetItem.Generic */
-    [105] = IR_FAMILY_DelItem, /* DelItem.Generic */
-    [106] = IR_FAMILY_SliceRead, /* SliceRead.Generic */
-    [107] = IR_FAMILY_SliceWrite, /* SliceWrite.Generic */
-    [108] = IR_FAMILY_BuildSlice, /* BuildSlice.Generic */
-    [109] = IR_FAMILY_GetItem, /* GetItem.ListIndex */
-    [110] = IR_FAMILY_GetItem, /* GetItem.TupleIndex */
-    [111] = IR_FAMILY_GetItem, /* GetItem.Ascii */
-    [112] = IR_FAMILY_GetItem, /* GetItem.UnicodeAsciiChar */
-    [113] = IR_FAMILY_GetItem, /* GetItem.ListSlice */
-    [114] = IR_FAMILY_GetItem, /* GetItem.Dict */
-    [115] = IR_FAMILY_SetItem, /* SetItem.ListIndex */
-    [116] = IR_FAMILY_SetItem, /* SetItem.Dict */
-    [117] = IR_FAMILY_IterOpen, /* IterOpen.Generic */
-    [118] = IR_FAMILY_ForIter, /* ForIter.Generic */
-    [119] = IR_FAMILY_IterOpen, /* IterOpen.Self */
-    [120] = IR_FAMILY_IterOpen, /* IterOpen.Indexed */
-    [121] = IR_FAMILY_IterOpen, /* IterOpen.GenMethod */
-    [122] = IR_FAMILY_ForIter, /* ForIter.List */
-    [123] = IR_FAMILY_ForIter, /* ForIter.Tuple */
-    [124] = IR_FAMILY_ForIter, /* ForIter.Range */
-    [125] = IR_FAMILY_ForIter, /* ForIter.Indexed */
-    [126] = IR_FAMILY_ForIter, /* ForIter.Slot */
-    [127] = IR_FAMILY_ForIter, /* ForIter.Observed */
-    [128] = IR_FAMILY_IterClose, /* IterClose.Retire */
-    [129] = IR_FAMILY_IterClose, /* IterClose.Observed */
-    [130] = IR_FAMILY_Line, /* Line.Hook */
-    [131] = IR_FAMILY_Instruction, /* Instruction.Hook */
-    [132] = IR_FAMILY_GlobalRead, /* GlobalRead.Generic */
-    [133] = IR_FAMILY_GlobalRead, /* GlobalRead.Module */
-    [134] = IR_FAMILY_GlobalRead, /* GlobalRead.Builtin */
-    [135] = IR_FAMILY_NamespaceRead, /* NamespaceRead.Name */
-    [136] = IR_FAMILY_NamespaceRead, /* NamespaceRead.Locals */
-    [137] = IR_FAMILY_NamespaceRead, /* NamespaceRead.BuildClass */
-    [138] = IR_FAMILY_NamespaceReadFrom, /* NamespaceReadFrom.Mapping */
-    [139] = IR_FAMILY_NamespaceWrite, /* NamespaceWrite.Name */
-    [140] = IR_FAMILY_NamespaceWrite, /* NamespaceWrite.Global */
-    [141] = IR_FAMILY_SetupAnnotations, /* SetupAnnotations.Setup */
-    [142] = IR_FAMILY_Import, /* Import.Eager */
-    [143] = IR_FAMILY_Import, /* Import.Policy */
-    [144] = IR_FAMILY_Import, /* Import.Lazy */
-    [145] = IR_FAMILY_ImportFrom, /* ImportFrom.From */
-    [146] = IR_FAMILY_ImportFrom, /* ImportFrom.FromLast */
-    [147] = IR_FAMILY_Binary, /* Binary.Int */
-    [148] = IR_FAMILY_Binary, /* Binary.Float */
-    [149] = IR_FAMILY_Binary, /* Binary.Text */
-    [150] = IR_FAMILY_Binary, /* Binary.Extended */
-    [151] = IR_FAMILY_Binary, /* Binary.Generic */
-    [152] = IR_FAMILY_Unary, /* Unary.Generic */
-    [153] = IR_FAMILY_AppendText, /* AppendText.Text */
-    [154] = IR_FAMILY_AppendText, /* AppendText.Generic */
-    [155] = IR_FAMILY_Length, /* Length.Size */
-    [156] = IR_FAMILY_Pattern, /* Pattern.Flag */
-    [157] = IR_FAMILY_PatternClass, /* PatternClass.Match */
-    [158] = IR_FAMILY_PatternKeys, /* PatternKeys.Match */
-    [159] = IR_FAMILY_Resume, /* Resume.Poll */
-    [160] = IR_FAMILY_Resume, /* Resume.Warm */
-    [161] = IR_FAMILY_Resume, /* Resume.Observed */
-    [162] = IR_FAMILY_Awaitable, /* Awaitable.Await */
-    [163] = IR_FAMILY_AsyncIterOpen, /* AsyncIterOpen.Open */
-    [164] = IR_FAMILY_AsyncIterNext, /* AsyncIterNext.Next */
-    [165] = IR_FAMILY_Yield, /* Yield.Ordinary */
-    [166] = IR_FAMILY_YieldFrom, /* YieldFrom.Delegated */
-    [167] = IR_FAMILY_Yield, /* Yield.Observed */
-    [168] = IR_FAMILY_YieldFrom, /* YieldFrom.Observed */
-    [169] = IR_FAMILY_Send, /* Send.Generic */
-    [170] = IR_FAMILY_Send, /* Send.Gen */
-    [171] = IR_FAMILY_Send, /* Send.Virtual */
-    [172] = IR_FAMILY_Send, /* Send.AsyncGen */
-    [173] = IR_FAMILY_Send, /* Send.Observed */
-    [174] = IR_FAMILY_Compare, /* Compare.Int */
-    [175] = IR_FAMILY_Compare, /* Compare.Float */
-    [176] = IR_FAMILY_Compare, /* Compare.Str */
-    [177] = IR_FAMILY_Compare, /* Compare.Generic */
-    [178] = IR_FAMILY_Identity, /* Identity.Test */
-    [179] = IR_FAMILY_Contains, /* Contains.Set */
-    [180] = IR_FAMILY_Contains, /* Contains.Dict */
-    [181] = IR_FAMILY_Contains, /* Contains.Generic */
-    [182] = IR_FAMILY_TestBranch, /* TestBranch.Identity */
-    [183] = IR_FAMILY_TestBranch, /* TestBranch.Int */
-    [184] = IR_FAMILY_TestBranch, /* TestBranch.Float */
-    [185] = IR_FAMILY_TestBranch, /* TestBranch.Str */
-    [186] = IR_FAMILY_TestBranch, /* TestBranch.Set */
-    [187] = IR_FAMILY_TestBranch, /* TestBranch.Dict */
-    [188] = IR_FAMILY_TestBranch, /* TestBranch.Sequence */
-    [189] = IR_FAMILY_TestBranch, /* TestBranch.Generic */
-    [190] = IR_FAMILY_TestBranch, /* TestBranch.Observed */
-    [191] = IR_FAMILY_BuildText, /* BuildText.Join */
-    [192] = IR_FAMILY_BuildText, /* BuildText.Interpolation */
-    [193] = IR_FAMILY_BuildText, /* BuildText.Template */
-    [194] = IR_FAMILY_Convert, /* Convert.Text */
-    [195] = IR_FAMILY_Format, /* Format.Simple */
-    [196] = IR_FAMILY_FormatSpec, /* FormatSpec.Value */
-    [197] = IR_FAMILY_Truth, /* Truth.Bool */
-    [198] = IR_FAMILY_Truth, /* Truth.Int */
-    [199] = IR_FAMILY_Truth, /* Truth.List */
-    [200] = IR_FAMILY_Truth, /* Truth.None */
-    [201] = IR_FAMILY_Truth, /* Truth.Str */
-    [202] = IR_FAMILY_Truth, /* Truth.Plain */
-    [203] = IR_FAMILY_Truth, /* Truth.Slot */
-    [204] = IR_FAMILY_Truth, /* Truth.Generic */
-    [205] = IR_FAMILY_BranchTruth, /* BranchTruth.Bool */
-    [206] = IR_FAMILY_BranchTruth, /* BranchTruth.Int */
-    [207] = IR_FAMILY_BranchTruth, /* BranchTruth.List */
-    [208] = IR_FAMILY_BranchTruth, /* BranchTruth.None */
-    [209] = IR_FAMILY_BranchTruth, /* BranchTruth.Str */
-    [210] = IR_FAMILY_BranchTruth, /* BranchTruth.Plain */
-    [211] = IR_FAMILY_BranchTruth, /* BranchTruth.Slot */
-    [212] = IR_FAMILY_BranchTruth, /* BranchTruth.Generic */
-    [213] = IR_FAMILY_BranchNone, /* BranchNone.Test */
-    [214] = IR_FAMILY_BranchTruth, /* BranchTruth.Observed */
-    [215] = IR_FAMILY_BranchNone, /* BranchNone.Observed */
-    [216] = IR_FAMILY_Jump, /* Jump.Direct */
-    [217] = IR_FAMILY_Jump, /* Jump.Trailing */
-    [218] = IR_FAMILY_Jump, /* Jump.Poll */
-    [219] = IR_FAMILY_Jump, /* Jump.Warm */
-    [220] = IR_FAMILY_Jump, /* Jump.Observed */
-    [221] = IR_FAMILY_Const, /* Const.Pool */
-    [222] = IR_FAMILY_Const, /* Const.Small */
-    [223] = IR_FAMILY_Const, /* Const.Common */
-    [224] = IR_FAMILY_LocalRead, /* LocalRead.Bound */
-    [225] = IR_FAMILY_LocalRead, /* LocalRead.Checked */
-    [226] = IR_FAMILY_LocalWrite, /* LocalWrite.Store */
-    [227] = IR_FAMILY_LocalWrite, /* LocalWrite.Restore */
-    [228] = IR_FAMILY_SaveLocal, /* SaveLocal.Take */
-    [229] = IR_FAMILY_LocalDelete, /* LocalDelete.Checked */
-    [230] = IR_FAMILY_Move, /* Move.Transfer */
-    [231] = IR_FAMILY_Move, /* Move.Retire */
-    [232] = IR_FAMILY_Move, /* Move.Copy */
-    [233] = IR_FAMILY_SuperAttr, /* SuperAttr.Generic.Observed */
-    [234] = IR_FAMILY_SuperAttr, /* SuperAttr.Builtin.Observed */
-    [235] = IR_FAMILY_SuperAttrExplicit, /* SuperAttrExplicit.Generic.Observed */
-    [236] = IR_FAMILY_SuperAttrExplicit, /* SuperAttrExplicit.Builtin.Observed */
-    [237] = IR_FAMILY_SuperMethod, /* SuperMethod.Generic.Observed */
-    [238] = IR_FAMILY_SuperMethod, /* SuperMethod.Builtin.Observed */
-    [239] = IR_FAMILY_SuperMethodExplicit, /* SuperMethodExplicit.Generic.Observed */
-    [240] = IR_FAMILY_SuperMethodExplicit, /* SuperMethodExplicit.Builtin.Observed */
-    [241] = IR_FAMILY_Call, /* Call.Exact.Observed */
-    [242] = IR_FAMILY_Call, /* Call.BoundExact.Observed */
-    [243] = IR_FAMILY_Call, /* Call.Init.Observed */
-    [244] = IR_FAMILY_Call, /* Call.Generator.Observed */
-    [245] = IR_FAMILY_Call, /* Call.Generic.Observed */
-    [246] = IR_FAMILY_Return, /* Return.Ordinary.Observed */
-    [247] = IR_FAMILY_Return, /* Return.Empty.Observed */
-    [248] = IR_FAMILY_Return, /* Return.Generator.Observed */
-    [249] = IR_FAMILY_Return, /* Return.External.Observed */
-    [250] = IR_FAMILY_CallKw, /* CallKw.Plan.Observed */
-    [251] = IR_FAMILY_CallKw, /* CallKw.Generator.Observed */
-    [252] = IR_FAMILY_CallKw, /* CallKw.BoundMethod.Observed */
-    [253] = IR_FAMILY_CallKw, /* CallKw.NonPy.Observed */
-    [254] = IR_FAMILY_CallKw, /* CallKw.Generic.Observed */
-    [255] = IR_FAMILY_CallEx, /* CallEx.Generic.Observed */
-    [256] = IR_FAMILY_CallEx, /* CallEx.Py.Observed */
-    [257] = IR_FAMILY_CallEx, /* CallEx.NonPy.Observed */
-    [258] = IR_FAMILY_EndAsyncFor, /* EndAsyncFor.Generic.Observed */
-    [259] = IR_FAMILY_ForIter, /* ForIter.Generic.Observed */
-    [260] = IR_FAMILY_ForIter, /* ForIter.List.Observed */
-    [261] = IR_FAMILY_ForIter, /* ForIter.Tuple.Observed */
-    [262] = IR_FAMILY_ForIter, /* ForIter.Range.Observed */
-    [263] = IR_FAMILY_ForIter, /* ForIter.Indexed.Observed */
-    [264] = IR_FAMILY_ForIter, /* ForIter.Slot.Observed */
-    [265] = IR_FAMILY_IterClose, /* IterClose.Retire.Observed */
-    [266] = IR_FAMILY_Resume, /* Resume.Poll.Observed */
-    [267] = IR_FAMILY_Resume, /* Resume.Warm.Observed */
-    [268] = IR_FAMILY_Yield, /* Yield.Ordinary.Observed */
-    [269] = IR_FAMILY_YieldFrom, /* YieldFrom.Delegated.Observed */
-    [270] = IR_FAMILY_Send, /* Send.Generic.Observed */
-    [271] = IR_FAMILY_Send, /* Send.Gen.Observed */
-    [272] = IR_FAMILY_Send, /* Send.Virtual.Observed */
-    [273] = IR_FAMILY_Send, /* Send.AsyncGen.Observed */
-    [274] = IR_FAMILY_TestBranch, /* TestBranch.Identity.Observed */
-    [275] = IR_FAMILY_TestBranch, /* TestBranch.Int.Observed */
-    [276] = IR_FAMILY_TestBranch, /* TestBranch.Float.Observed */
-    [277] = IR_FAMILY_TestBranch, /* TestBranch.Str.Observed */
-    [278] = IR_FAMILY_TestBranch, /* TestBranch.Set.Observed */
-    [279] = IR_FAMILY_TestBranch, /* TestBranch.Dict.Observed */
-    [280] = IR_FAMILY_TestBranch, /* TestBranch.Sequence.Observed */
-    [281] = IR_FAMILY_TestBranch, /* TestBranch.Generic.Observed */
-    [282] = IR_FAMILY_BranchTruth, /* BranchTruth.Bool.Observed */
-    [283] = IR_FAMILY_BranchTruth, /* BranchTruth.Int.Observed */
-    [284] = IR_FAMILY_BranchTruth, /* BranchTruth.List.Observed */
-    [285] = IR_FAMILY_BranchTruth, /* BranchTruth.None.Observed */
-    [286] = IR_FAMILY_BranchTruth, /* BranchTruth.Str.Observed */
-    [287] = IR_FAMILY_BranchTruth, /* BranchTruth.Plain.Observed */
-    [288] = IR_FAMILY_BranchTruth, /* BranchTruth.Slot.Observed */
-    [289] = IR_FAMILY_BranchTruth, /* BranchTruth.Generic.Observed */
-    [290] = IR_FAMILY_BranchNone, /* BranchNone.Test.Observed */
-    [291] = IR_FAMILY_Jump, /* Jump.Direct.Observed */
-    [292] = IR_FAMILY_Jump, /* Jump.Poll.Observed */
-    [293] = IR_FAMILY_Jump, /* Jump.Warm.Observed */
+    [39] = IR_FAMILY_Call, /* Call.PyGeneral */
+    [40] = IR_FAMILY_CallKw, /* CallKw.Generator */
+    [41] = IR_FAMILY_CallKw, /* CallKw.BoundMethod */
+    [42] = IR_FAMILY_CallKw, /* CallKw.NonPy */
+    [43] = IR_FAMILY_CallKw, /* CallKw.Generic */
+    [44] = IR_FAMILY_CallKw, /* CallKw.Observed */
+    [45] = IR_FAMILY_CallEx, /* CallEx.Generic */
+    [46] = IR_FAMILY_CallEx, /* CallEx.Py */
+    [47] = IR_FAMILY_CallEx, /* CallEx.NonPy */
+    [48] = IR_FAMILY_CallEx, /* CallEx.Observed */
+    [49] = IR_FAMILY_CellMake, /* CellMake.Wrap */
+    [50] = IR_FAMILY_CellRead, /* CellRead.Get */
+    [51] = IR_FAMILY_CellMapRead, /* CellMapRead.Lookup */
+    [52] = IR_FAMILY_CellStore, /* CellStore.Set */
+    [53] = IR_FAMILY_CellDelete, /* CellDelete.Unbind */
+    [54] = IR_FAMILY_CleanupThrow, /* CleanupThrow.Generic */
+    [55] = IR_FAMILY_EndAsyncFor, /* EndAsyncFor.Generic */
+    [56] = IR_FAMILY_EndAsyncFor, /* EndAsyncFor.Observed */
+    [57] = IR_FAMILY_WithExit, /* WithExit.Generic */
+    [58] = IR_FAMILY_Build, /* Build.Tuple */
+    [59] = IR_FAMILY_Build, /* Build.List */
+    [60] = IR_FAMILY_Build, /* Build.Set */
+    [61] = IR_FAMILY_Build, /* Build.Map */
+    [62] = IR_FAMILY_AddElement, /* AddElement.Append */
+    [63] = IR_FAMILY_AddElement, /* AddElement.Add */
+    [64] = IR_FAMILY_AddEntry, /* AddEntry.Put */
+    [65] = IR_FAMILY_UpdateContainer, /* UpdateContainer.Extend */
+    [66] = IR_FAMILY_UpdateContainer, /* UpdateContainer.Union */
+    [67] = IR_FAMILY_UpdateContainer, /* UpdateContainer.Overlay */
+    [68] = IR_FAMILY_MergeKeywords, /* MergeKeywords.Merge */
+    [69] = IR_FAMILY_Unpack, /* Unpack.Generic */
+    [70] = IR_FAMILY_Unpack, /* Unpack.Tuple */
+    [71] = IR_FAMILY_Unpack, /* Unpack.List */
+    [72] = IR_FAMILY_UnpackStar, /* UnpackStar.Iterable */
+    [73] = IR_FAMILY_Raise, /* Raise.Throw */
+    [74] = IR_FAMILY_Reraise, /* Reraise.Plain */
+    [75] = IR_FAMILY_Reraise, /* Reraise.Origin */
+    [76] = IR_FAMILY_ExceptEnter, /* ExceptEnter.Install */
+    [77] = IR_FAMILY_ExceptLeave, /* ExceptLeave.Restore */
+    [78] = IR_FAMILY_ExceptMatch, /* ExceptMatch.Match */
+    [79] = IR_FAMILY_ExceptGroupMatch, /* ExceptGroupMatch.Split */
+    [80] = IR_FAMILY_Function, /* Function.Make */
+    [81] = IR_FAMILY_Intrinsic, /* Intrinsic.Unary */
+    [82] = IR_FAMILY_Intrinsic, /* Intrinsic.ImportStar */
+    [83] = IR_FAMILY_Intrinsic, /* Intrinsic.StopIteration */
+    [84] = IR_FAMILY_IntrinsicPair, /* IntrinsicPair.Binary */
+    [85] = IR_FAMILY_IntrinsicPair, /* IntrinsicPair.Attr */
+    [86] = IR_FAMILY_GetAttr, /* GetAttr.Instance */
+    [87] = IR_FAMILY_GetAttr, /* GetAttr.GetSet */
+    [88] = IR_FAMILY_GetAttr, /* GetAttr.Generic */
+    [89] = IR_FAMILY_GetAttr, /* GetAttr.Shape */
+    [90] = IR_FAMILY_GetAttr, /* GetAttr.PolyShape */
+    [91] = IR_FAMILY_GetAttr, /* GetAttr.Module */
+    [92] = IR_FAMILY_GetAttr, /* GetAttr.Hint */
+    [93] = IR_FAMILY_GetAttr, /* GetAttr.ValueSlot */
+    [94] = IR_FAMILY_GetAttr, /* GetAttr.PointerSlot */
+    [95] = IR_FAMILY_GetAttr, /* GetAttr.Class */
+    [96] = IR_FAMILY_GetAttr, /* GetAttr.NonDescriptorValues */
+    [97] = IR_FAMILY_GetAttr, /* GetAttr.NonDescriptorNoDict */
+    [98] = IR_FAMILY_GetMethod, /* GetMethod.MethodValues */
+    [99] = IR_FAMILY_GetMethod, /* GetMethod.Generic */
+    [100] = IR_FAMILY_GetMethod, /* GetMethod.PolyMethod */
+    [101] = IR_FAMILY_GetMethod, /* GetMethod.NoDict */
+    [102] = IR_FAMILY_GetMethod, /* GetMethod.LazyDict */
+    [103] = IR_FAMILY_GetMethod, /* GetMethod.ClassMethod */
+    [104] = IR_FAMILY_GetItem, /* GetItem.Generic */
+    [105] = IR_FAMILY_SetItem, /* SetItem.Generic */
+    [106] = IR_FAMILY_DelItem, /* DelItem.Generic */
+    [107] = IR_FAMILY_SliceRead, /* SliceRead.Generic */
+    [108] = IR_FAMILY_SliceWrite, /* SliceWrite.Generic */
+    [109] = IR_FAMILY_BuildSlice, /* BuildSlice.Generic */
+    [110] = IR_FAMILY_GetItem, /* GetItem.ListIndex */
+    [111] = IR_FAMILY_GetItem, /* GetItem.TupleIndex */
+    [112] = IR_FAMILY_GetItem, /* GetItem.Ascii */
+    [113] = IR_FAMILY_GetItem, /* GetItem.UnicodeAsciiChar */
+    [114] = IR_FAMILY_GetItem, /* GetItem.ListSlice */
+    [115] = IR_FAMILY_GetItem, /* GetItem.Dict */
+    [116] = IR_FAMILY_SetItem, /* SetItem.ListIndex */
+    [117] = IR_FAMILY_SetItem, /* SetItem.Dict */
+    [118] = IR_FAMILY_IterOpen, /* IterOpen.Generic */
+    [119] = IR_FAMILY_ForIter, /* ForIter.Generic */
+    [120] = IR_FAMILY_IterOpen, /* IterOpen.Self */
+    [121] = IR_FAMILY_IterOpen, /* IterOpen.Indexed */
+    [122] = IR_FAMILY_IterOpen, /* IterOpen.GenMethod */
+    [123] = IR_FAMILY_ForIter, /* ForIter.List */
+    [124] = IR_FAMILY_ForIter, /* ForIter.Tuple */
+    [125] = IR_FAMILY_ForIter, /* ForIter.Range */
+    [126] = IR_FAMILY_ForIter, /* ForIter.Indexed */
+    [127] = IR_FAMILY_ForIter, /* ForIter.Gen */
+    [128] = IR_FAMILY_ForIter, /* ForIter.Slot */
+    [129] = IR_FAMILY_ForIter, /* ForIter.Observed */
+    [130] = IR_FAMILY_IterClose, /* IterClose.Retire */
+    [131] = IR_FAMILY_IterClose, /* IterClose.Observed */
+    [132] = IR_FAMILY_Line, /* Line.Hook */
+    [133] = IR_FAMILY_Instruction, /* Instruction.Hook */
+    [134] = IR_FAMILY_GlobalRead, /* GlobalRead.Generic */
+    [135] = IR_FAMILY_GlobalRead, /* GlobalRead.Module */
+    [136] = IR_FAMILY_GlobalRead, /* GlobalRead.Builtin */
+    [137] = IR_FAMILY_NamespaceRead, /* NamespaceRead.Name */
+    [138] = IR_FAMILY_NamespaceRead, /* NamespaceRead.Locals */
+    [139] = IR_FAMILY_NamespaceRead, /* NamespaceRead.BuildClass */
+    [140] = IR_FAMILY_NamespaceReadFrom, /* NamespaceReadFrom.Mapping */
+    [141] = IR_FAMILY_NamespaceWrite, /* NamespaceWrite.Name */
+    [142] = IR_FAMILY_NamespaceWrite, /* NamespaceWrite.Global */
+    [143] = IR_FAMILY_SetupAnnotations, /* SetupAnnotations.Setup */
+    [144] = IR_FAMILY_Import, /* Import.Eager */
+    [145] = IR_FAMILY_Import, /* Import.Policy */
+    [146] = IR_FAMILY_Import, /* Import.Lazy */
+    [147] = IR_FAMILY_ImportFrom, /* ImportFrom.From */
+    [148] = IR_FAMILY_ImportFrom, /* ImportFrom.FromLast */
+    [149] = IR_FAMILY_Binary, /* Binary.Int */
+    [150] = IR_FAMILY_Binary, /* Binary.Float */
+    [151] = IR_FAMILY_Binary, /* Binary.Text */
+    [152] = IR_FAMILY_Binary, /* Binary.Extended */
+    [153] = IR_FAMILY_Binary, /* Binary.Generic */
+    [154] = IR_FAMILY_Unary, /* Unary.Generic */
+    [155] = IR_FAMILY_AppendText, /* AppendText.Text */
+    [156] = IR_FAMILY_AppendText, /* AppendText.Generic */
+    [157] = IR_FAMILY_Length, /* Length.Size */
+    [158] = IR_FAMILY_Pattern, /* Pattern.Flag */
+    [159] = IR_FAMILY_PatternClass, /* PatternClass.Match */
+    [160] = IR_FAMILY_PatternKeys, /* PatternKeys.Match */
+    [161] = IR_FAMILY_Resume, /* Resume.Poll */
+    [162] = IR_FAMILY_Resume, /* Resume.Warm */
+    [163] = IR_FAMILY_Resume, /* Resume.Observed */
+    [164] = IR_FAMILY_Awaitable, /* Awaitable.Await */
+    [165] = IR_FAMILY_AsyncIterOpen, /* AsyncIterOpen.Open */
+    [166] = IR_FAMILY_AsyncIterNext, /* AsyncIterNext.Next */
+    [167] = IR_FAMILY_Yield, /* Yield.Ordinary */
+    [168] = IR_FAMILY_YieldFrom, /* YieldFrom.Delegated */
+    [169] = IR_FAMILY_Yield, /* Yield.Observed */
+    [170] = IR_FAMILY_YieldFrom, /* YieldFrom.Observed */
+    [171] = IR_FAMILY_Send, /* Send.Generic */
+    [172] = IR_FAMILY_Send, /* Send.Gen */
+    [173] = IR_FAMILY_Send, /* Send.Virtual */
+    [174] = IR_FAMILY_Send, /* Send.AsyncGen */
+    [175] = IR_FAMILY_Send, /* Send.Observed */
+    [176] = IR_FAMILY_Compare, /* Compare.Int */
+    [177] = IR_FAMILY_Compare, /* Compare.Float */
+    [178] = IR_FAMILY_Compare, /* Compare.Str */
+    [179] = IR_FAMILY_Compare, /* Compare.Generic */
+    [180] = IR_FAMILY_Identity, /* Identity.Test */
+    [181] = IR_FAMILY_Contains, /* Contains.Set */
+    [182] = IR_FAMILY_Contains, /* Contains.Dict */
+    [183] = IR_FAMILY_Contains, /* Contains.Generic */
+    [184] = IR_FAMILY_TestBranch, /* TestBranch.Identity */
+    [185] = IR_FAMILY_TestBranch, /* TestBranch.Int */
+    [186] = IR_FAMILY_TestBranch, /* TestBranch.Float */
+    [187] = IR_FAMILY_TestBranch, /* TestBranch.Str */
+    [188] = IR_FAMILY_TestBranch, /* TestBranch.Set */
+    [189] = IR_FAMILY_TestBranch, /* TestBranch.Dict */
+    [190] = IR_FAMILY_TestBranch, /* TestBranch.Sequence */
+    [191] = IR_FAMILY_TestBranch, /* TestBranch.Generic */
+    [192] = IR_FAMILY_TestBranch, /* TestBranch.Observed */
+    [193] = IR_FAMILY_BuildText, /* BuildText.Join */
+    [194] = IR_FAMILY_BuildText, /* BuildText.Interpolation */
+    [195] = IR_FAMILY_BuildText, /* BuildText.Template */
+    [196] = IR_FAMILY_Convert, /* Convert.Text */
+    [197] = IR_FAMILY_Format, /* Format.Simple */
+    [198] = IR_FAMILY_FormatSpec, /* FormatSpec.Value */
+    [199] = IR_FAMILY_Truth, /* Truth.Bool */
+    [200] = IR_FAMILY_Truth, /* Truth.Int */
+    [201] = IR_FAMILY_Truth, /* Truth.List */
+    [202] = IR_FAMILY_Truth, /* Truth.None */
+    [203] = IR_FAMILY_Truth, /* Truth.Str */
+    [204] = IR_FAMILY_Truth, /* Truth.Plain */
+    [205] = IR_FAMILY_Truth, /* Truth.Slot */
+    [206] = IR_FAMILY_Truth, /* Truth.Generic */
+    [207] = IR_FAMILY_BranchTruth, /* BranchTruth.Bool */
+    [208] = IR_FAMILY_BranchTruth, /* BranchTruth.Int */
+    [209] = IR_FAMILY_BranchTruth, /* BranchTruth.List */
+    [210] = IR_FAMILY_BranchTruth, /* BranchTruth.None */
+    [211] = IR_FAMILY_BranchTruth, /* BranchTruth.Str */
+    [212] = IR_FAMILY_BranchTruth, /* BranchTruth.Plain */
+    [213] = IR_FAMILY_BranchTruth, /* BranchTruth.Slot */
+    [214] = IR_FAMILY_BranchTruth, /* BranchTruth.Generic */
+    [215] = IR_FAMILY_BranchNone, /* BranchNone.Test */
+    [216] = IR_FAMILY_BranchTruth, /* BranchTruth.Observed */
+    [217] = IR_FAMILY_BranchNone, /* BranchNone.Observed */
+    [218] = IR_FAMILY_Jump, /* Jump.Direct */
+    [219] = IR_FAMILY_Jump, /* Jump.Trailing */
+    [220] = IR_FAMILY_Jump, /* Jump.Poll */
+    [221] = IR_FAMILY_Jump, /* Jump.Warm */
+    [222] = IR_FAMILY_Jump, /* Jump.Observed */
+    [223] = IR_FAMILY_Const, /* Const.Pool */
+    [224] = IR_FAMILY_Const, /* Const.Small */
+    [225] = IR_FAMILY_Const, /* Const.Common */
+    [226] = IR_FAMILY_LocalRead, /* LocalRead.Bound */
+    [227] = IR_FAMILY_LocalRead, /* LocalRead.Checked */
+    [228] = IR_FAMILY_LocalWrite, /* LocalWrite.Store */
+    [229] = IR_FAMILY_LocalWrite, /* LocalWrite.Restore */
+    [230] = IR_FAMILY_SaveLocal, /* SaveLocal.Take */
+    [231] = IR_FAMILY_LocalDelete, /* LocalDelete.Checked */
+    [232] = IR_FAMILY_Move, /* Move.Transfer */
+    [233] = IR_FAMILY_Move, /* Move.Retire */
+    [234] = IR_FAMILY_Move, /* Move.Copy */
+    [235] = IR_FAMILY_SuperAttr, /* SuperAttr.Generic.Observed */
+    [236] = IR_FAMILY_SuperAttr, /* SuperAttr.Builtin.Observed */
+    [237] = IR_FAMILY_SuperAttrExplicit, /* SuperAttrExplicit.Generic.Observed */
+    [238] = IR_FAMILY_SuperAttrExplicit, /* SuperAttrExplicit.Builtin.Observed */
+    [239] = IR_FAMILY_SuperMethod, /* SuperMethod.Generic.Observed */
+    [240] = IR_FAMILY_SuperMethod, /* SuperMethod.Builtin.Observed */
+    [241] = IR_FAMILY_SuperMethodExplicit, /* SuperMethodExplicit.Generic.Observed */
+    [242] = IR_FAMILY_SuperMethodExplicit, /* SuperMethodExplicit.Builtin.Observed */
+    [243] = IR_FAMILY_Call, /* Call.Exact.Observed */
+    [244] = IR_FAMILY_Call, /* Call.BoundExact.Observed */
+    [245] = IR_FAMILY_Call, /* Call.Init.Observed */
+    [246] = IR_FAMILY_Call, /* Call.Generator.Observed */
+    [247] = IR_FAMILY_Call, /* Call.Generic.Observed */
+    [248] = IR_FAMILY_Return, /* Return.Ordinary.Observed */
+    [249] = IR_FAMILY_Return, /* Return.Empty.Observed */
+    [250] = IR_FAMILY_Return, /* Return.Generator.Observed */
+    [251] = IR_FAMILY_Return, /* Return.External.Observed */
+    [252] = IR_FAMILY_CallKw, /* CallKw.Plan.Observed */
+    [253] = IR_FAMILY_Call, /* Call.PyGeneral.Observed */
+    [254] = IR_FAMILY_CallKw, /* CallKw.Generator.Observed */
+    [255] = IR_FAMILY_CallKw, /* CallKw.BoundMethod.Observed */
+    [256] = IR_FAMILY_CallKw, /* CallKw.NonPy.Observed */
+    [257] = IR_FAMILY_CallKw, /* CallKw.Generic.Observed */
+    [258] = IR_FAMILY_CallEx, /* CallEx.Generic.Observed */
+    [259] = IR_FAMILY_CallEx, /* CallEx.Py.Observed */
+    [260] = IR_FAMILY_CallEx, /* CallEx.NonPy.Observed */
+    [261] = IR_FAMILY_EndAsyncFor, /* EndAsyncFor.Generic.Observed */
+    [262] = IR_FAMILY_ForIter, /* ForIter.Generic.Observed */
+    [263] = IR_FAMILY_ForIter, /* ForIter.List.Observed */
+    [264] = IR_FAMILY_ForIter, /* ForIter.Tuple.Observed */
+    [265] = IR_FAMILY_ForIter, /* ForIter.Range.Observed */
+    [266] = IR_FAMILY_ForIter, /* ForIter.Indexed.Observed */
+    [267] = IR_FAMILY_ForIter, /* ForIter.Gen.Observed */
+    [268] = IR_FAMILY_ForIter, /* ForIter.Slot.Observed */
+    [269] = IR_FAMILY_IterClose, /* IterClose.Retire.Observed */
+    [270] = IR_FAMILY_Resume, /* Resume.Poll.Observed */
+    [271] = IR_FAMILY_Resume, /* Resume.Warm.Observed */
+    [272] = IR_FAMILY_Yield, /* Yield.Ordinary.Observed */
+    [273] = IR_FAMILY_YieldFrom, /* YieldFrom.Delegated.Observed */
+    [274] = IR_FAMILY_Send, /* Send.Generic.Observed */
+    [275] = IR_FAMILY_Send, /* Send.Gen.Observed */
+    [276] = IR_FAMILY_Send, /* Send.Virtual.Observed */
+    [277] = IR_FAMILY_Send, /* Send.AsyncGen.Observed */
+    [278] = IR_FAMILY_TestBranch, /* TestBranch.Identity.Observed */
+    [279] = IR_FAMILY_TestBranch, /* TestBranch.Int.Observed */
+    [280] = IR_FAMILY_TestBranch, /* TestBranch.Float.Observed */
+    [281] = IR_FAMILY_TestBranch, /* TestBranch.Str.Observed */
+    [282] = IR_FAMILY_TestBranch, /* TestBranch.Set.Observed */
+    [283] = IR_FAMILY_TestBranch, /* TestBranch.Dict.Observed */
+    [284] = IR_FAMILY_TestBranch, /* TestBranch.Sequence.Observed */
+    [285] = IR_FAMILY_TestBranch, /* TestBranch.Generic.Observed */
+    [286] = IR_FAMILY_BranchTruth, /* BranchTruth.Bool.Observed */
+    [287] = IR_FAMILY_BranchTruth, /* BranchTruth.Int.Observed */
+    [288] = IR_FAMILY_BranchTruth, /* BranchTruth.List.Observed */
+    [289] = IR_FAMILY_BranchTruth, /* BranchTruth.None.Observed */
+    [290] = IR_FAMILY_BranchTruth, /* BranchTruth.Str.Observed */
+    [291] = IR_FAMILY_BranchTruth, /* BranchTruth.Plain.Observed */
+    [292] = IR_FAMILY_BranchTruth, /* BranchTruth.Slot.Observed */
+    [293] = IR_FAMILY_BranchTruth, /* BranchTruth.Generic.Observed */
+    [294] = IR_FAMILY_BranchNone, /* BranchNone.Test.Observed */
+    [295] = IR_FAMILY_Jump, /* Jump.Direct.Observed */
+    [296] = IR_FAMILY_Jump, /* Jump.Poll.Observed */
+    [297] = IR_FAMILY_Jump, /* Jump.Warm.Observed */
 };
 const char *const _PyIR_FamilyNames[IR_NUM_FAMILIES] = {
     [IR_FAMILY_Add] = "Add",
@@ -1157,261 +1169,265 @@ const int8_t _PyIR_PrimaryEvent[IR_NUM_HANDLERS] = {
     [36] = PY_MONITORING_EVENT_PY_RETURN, /* Return.External */
     [37] = -1, /* MaterializeKwargs.Pending */
     [38] = PY_MONITORING_EVENT_CALL, /* CallKw.Plan */
-    [39] = PY_MONITORING_EVENT_CALL, /* CallKw.Generator */
-    [40] = PY_MONITORING_EVENT_CALL, /* CallKw.BoundMethod */
-    [41] = PY_MONITORING_EVENT_CALL, /* CallKw.NonPy */
-    [42] = PY_MONITORING_EVENT_CALL, /* CallKw.Generic */
-    [43] = PY_MONITORING_EVENT_CALL, /* CallKw.Observed */
-    [44] = PY_MONITORING_EVENT_CALL, /* CallEx.Generic */
-    [45] = PY_MONITORING_EVENT_CALL, /* CallEx.Py */
-    [46] = PY_MONITORING_EVENT_CALL, /* CallEx.NonPy */
-    [47] = PY_MONITORING_EVENT_CALL, /* CallEx.Observed */
-    [48] = -1, /* CellMake.Wrap */
-    [49] = -1, /* CellRead.Get */
-    [50] = -1, /* CellMapRead.Lookup */
-    [51] = -1, /* CellStore.Set */
-    [52] = -1, /* CellDelete.Unbind */
-    [53] = -1, /* CleanupThrow.Generic */
-    [54] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* EndAsyncFor.Generic */
-    [55] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* EndAsyncFor.Observed */
-    [56] = -1, /* WithExit.Generic */
-    [57] = -1, /* Build.Tuple */
-    [58] = -1, /* Build.List */
-    [59] = -1, /* Build.Set */
-    [60] = -1, /* Build.Map */
-    [61] = -1, /* AddElement.Append */
-    [62] = -1, /* AddElement.Add */
-    [63] = -1, /* AddEntry.Put */
-    [64] = -1, /* UpdateContainer.Extend */
-    [65] = -1, /* UpdateContainer.Union */
-    [66] = -1, /* UpdateContainer.Overlay */
-    [67] = -1, /* MergeKeywords.Merge */
-    [68] = -1, /* Unpack.Generic */
-    [69] = -1, /* Unpack.Tuple */
-    [70] = -1, /* Unpack.List */
-    [71] = -1, /* UnpackStar.Iterable */
-    [72] = -1, /* Raise.Throw */
-    [73] = -1, /* Reraise.Plain */
-    [74] = -1, /* Reraise.Origin */
-    [75] = -1, /* ExceptEnter.Install */
-    [76] = -1, /* ExceptLeave.Restore */
-    [77] = -1, /* ExceptMatch.Match */
-    [78] = -1, /* ExceptGroupMatch.Split */
-    [79] = -1, /* Function.Make */
-    [80] = -1, /* Intrinsic.Unary */
-    [81] = -1, /* Intrinsic.ImportStar */
-    [82] = -1, /* Intrinsic.StopIteration */
-    [83] = -1, /* IntrinsicPair.Binary */
-    [84] = -1, /* IntrinsicPair.Attr */
-    [85] = -1, /* GetAttr.Instance */
-    [86] = -1, /* GetAttr.GetSet */
-    [87] = -1, /* GetAttr.Generic */
-    [88] = -1, /* GetAttr.Shape */
-    [89] = -1, /* GetAttr.PolyShape */
-    [90] = -1, /* GetAttr.Module */
-    [91] = -1, /* GetAttr.Hint */
-    [92] = -1, /* GetAttr.ValueSlot */
-    [93] = -1, /* GetAttr.PointerSlot */
-    [94] = -1, /* GetAttr.Class */
-    [95] = -1, /* GetAttr.NonDescriptorValues */
-    [96] = -1, /* GetAttr.NonDescriptorNoDict */
-    [97] = -1, /* GetMethod.MethodValues */
-    [98] = -1, /* GetMethod.Generic */
-    [99] = -1, /* GetMethod.PolyMethod */
-    [100] = -1, /* GetMethod.NoDict */
-    [101] = -1, /* GetMethod.LazyDict */
-    [102] = -1, /* GetMethod.ClassMethod */
-    [103] = -1, /* GetItem.Generic */
-    [104] = -1, /* SetItem.Generic */
-    [105] = -1, /* DelItem.Generic */
-    [106] = -1, /* SliceRead.Generic */
-    [107] = -1, /* SliceWrite.Generic */
-    [108] = -1, /* BuildSlice.Generic */
-    [109] = -1, /* GetItem.ListIndex */
-    [110] = -1, /* GetItem.TupleIndex */
-    [111] = -1, /* GetItem.Ascii */
-    [112] = -1, /* GetItem.UnicodeAsciiChar */
-    [113] = -1, /* GetItem.ListSlice */
-    [114] = -1, /* GetItem.Dict */
-    [115] = -1, /* SetItem.ListIndex */
-    [116] = -1, /* SetItem.Dict */
-    [117] = -1, /* IterOpen.Generic */
-    [118] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Generic */
-    [119] = -1, /* IterOpen.Self */
-    [120] = -1, /* IterOpen.Indexed */
-    [121] = -1, /* IterOpen.GenMethod */
-    [122] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.List */
-    [123] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Tuple */
-    [124] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Range */
-    [125] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Indexed */
-    [126] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Slot */
-    [127] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Observed */
-    [128] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* IterClose.Retire */
-    [129] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* IterClose.Observed */
-    [130] = -1, /* Line.Hook */
-    [131] = -1, /* Instruction.Hook */
-    [132] = -1, /* GlobalRead.Generic */
-    [133] = -1, /* GlobalRead.Module */
-    [134] = -1, /* GlobalRead.Builtin */
-    [135] = -1, /* NamespaceRead.Name */
-    [136] = -1, /* NamespaceRead.Locals */
-    [137] = -1, /* NamespaceRead.BuildClass */
-    [138] = -1, /* NamespaceReadFrom.Mapping */
-    [139] = -1, /* NamespaceWrite.Name */
-    [140] = -1, /* NamespaceWrite.Global */
-    [141] = -1, /* SetupAnnotations.Setup */
-    [142] = -1, /* Import.Eager */
-    [143] = -1, /* Import.Policy */
-    [144] = -1, /* Import.Lazy */
-    [145] = -1, /* ImportFrom.From */
-    [146] = -1, /* ImportFrom.FromLast */
-    [147] = -1, /* Binary.Int */
-    [148] = -1, /* Binary.Float */
-    [149] = -1, /* Binary.Text */
-    [150] = -1, /* Binary.Extended */
-    [151] = -1, /* Binary.Generic */
-    [152] = -1, /* Unary.Generic */
-    [153] = -1, /* AppendText.Text */
-    [154] = -1, /* AppendText.Generic */
-    [155] = -1, /* Length.Size */
-    [156] = -1, /* Pattern.Flag */
-    [157] = -1, /* PatternClass.Match */
-    [158] = -1, /* PatternKeys.Match */
-    [159] = PY_MONITORING_EVENT_PY_START, /* Resume.Poll */
-    [160] = PY_MONITORING_EVENT_PY_START, /* Resume.Warm */
-    [161] = PY_MONITORING_EVENT_PY_START, /* Resume.Observed */
-    [162] = -1, /* Awaitable.Await */
-    [163] = -1, /* AsyncIterOpen.Open */
-    [164] = -1, /* AsyncIterNext.Next */
-    [165] = PY_MONITORING_EVENT_PY_YIELD, /* Yield.Ordinary */
-    [166] = PY_MONITORING_EVENT_PY_YIELD, /* YieldFrom.Delegated */
-    [167] = PY_MONITORING_EVENT_PY_YIELD, /* Yield.Observed */
-    [168] = PY_MONITORING_EVENT_PY_YIELD, /* YieldFrom.Observed */
-    [169] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Generic */
-    [170] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Gen */
-    [171] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Virtual */
-    [172] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.AsyncGen */
-    [173] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Observed */
-    [174] = -1, /* Compare.Int */
-    [175] = -1, /* Compare.Float */
-    [176] = -1, /* Compare.Str */
-    [177] = -1, /* Compare.Generic */
-    [178] = -1, /* Identity.Test */
-    [179] = -1, /* Contains.Set */
-    [180] = -1, /* Contains.Dict */
-    [181] = -1, /* Contains.Generic */
-    [182] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Identity */
-    [183] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Int */
-    [184] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Float */
-    [185] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Str */
-    [186] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Set */
-    [187] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Dict */
-    [188] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Sequence */
-    [189] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Generic */
-    [190] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Observed */
-    [191] = -1, /* BuildText.Join */
-    [192] = -1, /* BuildText.Interpolation */
-    [193] = -1, /* BuildText.Template */
-    [194] = -1, /* Convert.Text */
-    [195] = -1, /* Format.Simple */
-    [196] = -1, /* FormatSpec.Value */
-    [197] = -1, /* Truth.Bool */
-    [198] = -1, /* Truth.Int */
-    [199] = -1, /* Truth.List */
-    [200] = -1, /* Truth.None */
-    [201] = -1, /* Truth.Str */
-    [202] = -1, /* Truth.Plain */
-    [203] = -1, /* Truth.Slot */
-    [204] = -1, /* Truth.Generic */
-    [205] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Bool */
-    [206] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Int */
-    [207] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.List */
-    [208] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.None */
-    [209] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Str */
-    [210] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Plain */
-    [211] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Slot */
-    [212] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Generic */
-    [213] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchNone.Test */
-    [214] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Observed */
-    [215] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchNone.Observed */
-    [216] = PY_MONITORING_EVENT_JUMP, /* Jump.Direct */
-    [217] = -1, /* Jump.Trailing */
-    [218] = PY_MONITORING_EVENT_JUMP, /* Jump.Poll */
-    [219] = PY_MONITORING_EVENT_JUMP, /* Jump.Warm */
-    [220] = PY_MONITORING_EVENT_JUMP, /* Jump.Observed */
-    [221] = -1, /* Const.Pool */
-    [222] = -1, /* Const.Small */
-    [223] = -1, /* Const.Common */
-    [224] = -1, /* LocalRead.Bound */
-    [225] = -1, /* LocalRead.Checked */
-    [226] = -1, /* LocalWrite.Store */
-    [227] = -1, /* LocalWrite.Restore */
-    [228] = -1, /* SaveLocal.Take */
-    [229] = -1, /* LocalDelete.Checked */
-    [230] = -1, /* Move.Transfer */
-    [231] = -1, /* Move.Retire */
-    [232] = -1, /* Move.Copy */
-    [233] = PY_MONITORING_EVENT_CALL, /* SuperAttr.Generic.Observed */
-    [234] = PY_MONITORING_EVENT_CALL, /* SuperAttr.Builtin.Observed */
-    [235] = PY_MONITORING_EVENT_CALL, /* SuperAttrExplicit.Generic.Observed */
-    [236] = PY_MONITORING_EVENT_CALL, /* SuperAttrExplicit.Builtin.Observed */
-    [237] = PY_MONITORING_EVENT_CALL, /* SuperMethod.Generic.Observed */
-    [238] = PY_MONITORING_EVENT_CALL, /* SuperMethod.Builtin.Observed */
-    [239] = PY_MONITORING_EVENT_CALL, /* SuperMethodExplicit.Generic.Observed */
-    [240] = PY_MONITORING_EVENT_CALL, /* SuperMethodExplicit.Builtin.Observed */
-    [241] = PY_MONITORING_EVENT_CALL, /* Call.Exact.Observed */
-    [242] = PY_MONITORING_EVENT_CALL, /* Call.BoundExact.Observed */
-    [243] = PY_MONITORING_EVENT_CALL, /* Call.Init.Observed */
-    [244] = PY_MONITORING_EVENT_CALL, /* Call.Generator.Observed */
-    [245] = PY_MONITORING_EVENT_CALL, /* Call.Generic.Observed */
-    [246] = PY_MONITORING_EVENT_PY_RETURN, /* Return.Ordinary.Observed */
-    [247] = PY_MONITORING_EVENT_PY_RETURN, /* Return.Empty.Observed */
-    [248] = PY_MONITORING_EVENT_PY_RETURN, /* Return.Generator.Observed */
-    [249] = PY_MONITORING_EVENT_PY_RETURN, /* Return.External.Observed */
-    [250] = PY_MONITORING_EVENT_CALL, /* CallKw.Plan.Observed */
-    [251] = PY_MONITORING_EVENT_CALL, /* CallKw.Generator.Observed */
-    [252] = PY_MONITORING_EVENT_CALL, /* CallKw.BoundMethod.Observed */
-    [253] = PY_MONITORING_EVENT_CALL, /* CallKw.NonPy.Observed */
-    [254] = PY_MONITORING_EVENT_CALL, /* CallKw.Generic.Observed */
-    [255] = PY_MONITORING_EVENT_CALL, /* CallEx.Generic.Observed */
-    [256] = PY_MONITORING_EVENT_CALL, /* CallEx.Py.Observed */
-    [257] = PY_MONITORING_EVENT_CALL, /* CallEx.NonPy.Observed */
-    [258] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* EndAsyncFor.Generic.Observed */
-    [259] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Generic.Observed */
-    [260] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.List.Observed */
-    [261] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Tuple.Observed */
-    [262] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Range.Observed */
-    [263] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Indexed.Observed */
-    [264] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Slot.Observed */
-    [265] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* IterClose.Retire.Observed */
-    [266] = PY_MONITORING_EVENT_PY_START, /* Resume.Poll.Observed */
-    [267] = PY_MONITORING_EVENT_PY_START, /* Resume.Warm.Observed */
-    [268] = PY_MONITORING_EVENT_PY_YIELD, /* Yield.Ordinary.Observed */
-    [269] = PY_MONITORING_EVENT_PY_YIELD, /* YieldFrom.Delegated.Observed */
-    [270] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Generic.Observed */
-    [271] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Gen.Observed */
-    [272] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Virtual.Observed */
-    [273] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.AsyncGen.Observed */
-    [274] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Identity.Observed */
-    [275] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Int.Observed */
-    [276] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Float.Observed */
-    [277] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Str.Observed */
-    [278] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Set.Observed */
-    [279] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Dict.Observed */
-    [280] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Sequence.Observed */
-    [281] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Generic.Observed */
-    [282] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Bool.Observed */
-    [283] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Int.Observed */
-    [284] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.List.Observed */
-    [285] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.None.Observed */
-    [286] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Str.Observed */
-    [287] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Plain.Observed */
-    [288] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Slot.Observed */
-    [289] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Generic.Observed */
-    [290] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchNone.Test.Observed */
-    [291] = PY_MONITORING_EVENT_JUMP, /* Jump.Direct.Observed */
-    [292] = PY_MONITORING_EVENT_JUMP, /* Jump.Poll.Observed */
-    [293] = PY_MONITORING_EVENT_JUMP, /* Jump.Warm.Observed */
+    [39] = PY_MONITORING_EVENT_CALL, /* Call.PyGeneral */
+    [40] = PY_MONITORING_EVENT_CALL, /* CallKw.Generator */
+    [41] = PY_MONITORING_EVENT_CALL, /* CallKw.BoundMethod */
+    [42] = PY_MONITORING_EVENT_CALL, /* CallKw.NonPy */
+    [43] = PY_MONITORING_EVENT_CALL, /* CallKw.Generic */
+    [44] = PY_MONITORING_EVENT_CALL, /* CallKw.Observed */
+    [45] = PY_MONITORING_EVENT_CALL, /* CallEx.Generic */
+    [46] = PY_MONITORING_EVENT_CALL, /* CallEx.Py */
+    [47] = PY_MONITORING_EVENT_CALL, /* CallEx.NonPy */
+    [48] = PY_MONITORING_EVENT_CALL, /* CallEx.Observed */
+    [49] = -1, /* CellMake.Wrap */
+    [50] = -1, /* CellRead.Get */
+    [51] = -1, /* CellMapRead.Lookup */
+    [52] = -1, /* CellStore.Set */
+    [53] = -1, /* CellDelete.Unbind */
+    [54] = -1, /* CleanupThrow.Generic */
+    [55] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* EndAsyncFor.Generic */
+    [56] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* EndAsyncFor.Observed */
+    [57] = -1, /* WithExit.Generic */
+    [58] = -1, /* Build.Tuple */
+    [59] = -1, /* Build.List */
+    [60] = -1, /* Build.Set */
+    [61] = -1, /* Build.Map */
+    [62] = -1, /* AddElement.Append */
+    [63] = -1, /* AddElement.Add */
+    [64] = -1, /* AddEntry.Put */
+    [65] = -1, /* UpdateContainer.Extend */
+    [66] = -1, /* UpdateContainer.Union */
+    [67] = -1, /* UpdateContainer.Overlay */
+    [68] = -1, /* MergeKeywords.Merge */
+    [69] = -1, /* Unpack.Generic */
+    [70] = -1, /* Unpack.Tuple */
+    [71] = -1, /* Unpack.List */
+    [72] = -1, /* UnpackStar.Iterable */
+    [73] = -1, /* Raise.Throw */
+    [74] = -1, /* Reraise.Plain */
+    [75] = -1, /* Reraise.Origin */
+    [76] = -1, /* ExceptEnter.Install */
+    [77] = -1, /* ExceptLeave.Restore */
+    [78] = -1, /* ExceptMatch.Match */
+    [79] = -1, /* ExceptGroupMatch.Split */
+    [80] = -1, /* Function.Make */
+    [81] = -1, /* Intrinsic.Unary */
+    [82] = -1, /* Intrinsic.ImportStar */
+    [83] = -1, /* Intrinsic.StopIteration */
+    [84] = -1, /* IntrinsicPair.Binary */
+    [85] = -1, /* IntrinsicPair.Attr */
+    [86] = -1, /* GetAttr.Instance */
+    [87] = -1, /* GetAttr.GetSet */
+    [88] = -1, /* GetAttr.Generic */
+    [89] = -1, /* GetAttr.Shape */
+    [90] = -1, /* GetAttr.PolyShape */
+    [91] = -1, /* GetAttr.Module */
+    [92] = -1, /* GetAttr.Hint */
+    [93] = -1, /* GetAttr.ValueSlot */
+    [94] = -1, /* GetAttr.PointerSlot */
+    [95] = -1, /* GetAttr.Class */
+    [96] = -1, /* GetAttr.NonDescriptorValues */
+    [97] = -1, /* GetAttr.NonDescriptorNoDict */
+    [98] = -1, /* GetMethod.MethodValues */
+    [99] = -1, /* GetMethod.Generic */
+    [100] = -1, /* GetMethod.PolyMethod */
+    [101] = -1, /* GetMethod.NoDict */
+    [102] = -1, /* GetMethod.LazyDict */
+    [103] = -1, /* GetMethod.ClassMethod */
+    [104] = -1, /* GetItem.Generic */
+    [105] = -1, /* SetItem.Generic */
+    [106] = -1, /* DelItem.Generic */
+    [107] = -1, /* SliceRead.Generic */
+    [108] = -1, /* SliceWrite.Generic */
+    [109] = -1, /* BuildSlice.Generic */
+    [110] = -1, /* GetItem.ListIndex */
+    [111] = -1, /* GetItem.TupleIndex */
+    [112] = -1, /* GetItem.Ascii */
+    [113] = -1, /* GetItem.UnicodeAsciiChar */
+    [114] = -1, /* GetItem.ListSlice */
+    [115] = -1, /* GetItem.Dict */
+    [116] = -1, /* SetItem.ListIndex */
+    [117] = -1, /* SetItem.Dict */
+    [118] = -1, /* IterOpen.Generic */
+    [119] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Generic */
+    [120] = -1, /* IterOpen.Self */
+    [121] = -1, /* IterOpen.Indexed */
+    [122] = -1, /* IterOpen.GenMethod */
+    [123] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.List */
+    [124] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Tuple */
+    [125] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Range */
+    [126] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Indexed */
+    [127] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Gen */
+    [128] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Slot */
+    [129] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Observed */
+    [130] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* IterClose.Retire */
+    [131] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* IterClose.Observed */
+    [132] = -1, /* Line.Hook */
+    [133] = -1, /* Instruction.Hook */
+    [134] = -1, /* GlobalRead.Generic */
+    [135] = -1, /* GlobalRead.Module */
+    [136] = -1, /* GlobalRead.Builtin */
+    [137] = -1, /* NamespaceRead.Name */
+    [138] = -1, /* NamespaceRead.Locals */
+    [139] = -1, /* NamespaceRead.BuildClass */
+    [140] = -1, /* NamespaceReadFrom.Mapping */
+    [141] = -1, /* NamespaceWrite.Name */
+    [142] = -1, /* NamespaceWrite.Global */
+    [143] = -1, /* SetupAnnotations.Setup */
+    [144] = -1, /* Import.Eager */
+    [145] = -1, /* Import.Policy */
+    [146] = -1, /* Import.Lazy */
+    [147] = -1, /* ImportFrom.From */
+    [148] = -1, /* ImportFrom.FromLast */
+    [149] = -1, /* Binary.Int */
+    [150] = -1, /* Binary.Float */
+    [151] = -1, /* Binary.Text */
+    [152] = -1, /* Binary.Extended */
+    [153] = -1, /* Binary.Generic */
+    [154] = -1, /* Unary.Generic */
+    [155] = -1, /* AppendText.Text */
+    [156] = -1, /* AppendText.Generic */
+    [157] = -1, /* Length.Size */
+    [158] = -1, /* Pattern.Flag */
+    [159] = -1, /* PatternClass.Match */
+    [160] = -1, /* PatternKeys.Match */
+    [161] = PY_MONITORING_EVENT_PY_START, /* Resume.Poll */
+    [162] = PY_MONITORING_EVENT_PY_START, /* Resume.Warm */
+    [163] = PY_MONITORING_EVENT_PY_START, /* Resume.Observed */
+    [164] = -1, /* Awaitable.Await */
+    [165] = -1, /* AsyncIterOpen.Open */
+    [166] = -1, /* AsyncIterNext.Next */
+    [167] = PY_MONITORING_EVENT_PY_YIELD, /* Yield.Ordinary */
+    [168] = PY_MONITORING_EVENT_PY_YIELD, /* YieldFrom.Delegated */
+    [169] = PY_MONITORING_EVENT_PY_YIELD, /* Yield.Observed */
+    [170] = PY_MONITORING_EVENT_PY_YIELD, /* YieldFrom.Observed */
+    [171] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Generic */
+    [172] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Gen */
+    [173] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Virtual */
+    [174] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.AsyncGen */
+    [175] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Observed */
+    [176] = -1, /* Compare.Int */
+    [177] = -1, /* Compare.Float */
+    [178] = -1, /* Compare.Str */
+    [179] = -1, /* Compare.Generic */
+    [180] = -1, /* Identity.Test */
+    [181] = -1, /* Contains.Set */
+    [182] = -1, /* Contains.Dict */
+    [183] = -1, /* Contains.Generic */
+    [184] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Identity */
+    [185] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Int */
+    [186] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Float */
+    [187] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Str */
+    [188] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Set */
+    [189] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Dict */
+    [190] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Sequence */
+    [191] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Generic */
+    [192] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Observed */
+    [193] = -1, /* BuildText.Join */
+    [194] = -1, /* BuildText.Interpolation */
+    [195] = -1, /* BuildText.Template */
+    [196] = -1, /* Convert.Text */
+    [197] = -1, /* Format.Simple */
+    [198] = -1, /* FormatSpec.Value */
+    [199] = -1, /* Truth.Bool */
+    [200] = -1, /* Truth.Int */
+    [201] = -1, /* Truth.List */
+    [202] = -1, /* Truth.None */
+    [203] = -1, /* Truth.Str */
+    [204] = -1, /* Truth.Plain */
+    [205] = -1, /* Truth.Slot */
+    [206] = -1, /* Truth.Generic */
+    [207] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Bool */
+    [208] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Int */
+    [209] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.List */
+    [210] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.None */
+    [211] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Str */
+    [212] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Plain */
+    [213] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Slot */
+    [214] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Generic */
+    [215] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchNone.Test */
+    [216] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Observed */
+    [217] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchNone.Observed */
+    [218] = PY_MONITORING_EVENT_JUMP, /* Jump.Direct */
+    [219] = -1, /* Jump.Trailing */
+    [220] = PY_MONITORING_EVENT_JUMP, /* Jump.Poll */
+    [221] = PY_MONITORING_EVENT_JUMP, /* Jump.Warm */
+    [222] = PY_MONITORING_EVENT_JUMP, /* Jump.Observed */
+    [223] = -1, /* Const.Pool */
+    [224] = -1, /* Const.Small */
+    [225] = -1, /* Const.Common */
+    [226] = -1, /* LocalRead.Bound */
+    [227] = -1, /* LocalRead.Checked */
+    [228] = -1, /* LocalWrite.Store */
+    [229] = -1, /* LocalWrite.Restore */
+    [230] = -1, /* SaveLocal.Take */
+    [231] = -1, /* LocalDelete.Checked */
+    [232] = -1, /* Move.Transfer */
+    [233] = -1, /* Move.Retire */
+    [234] = -1, /* Move.Copy */
+    [235] = PY_MONITORING_EVENT_CALL, /* SuperAttr.Generic.Observed */
+    [236] = PY_MONITORING_EVENT_CALL, /* SuperAttr.Builtin.Observed */
+    [237] = PY_MONITORING_EVENT_CALL, /* SuperAttrExplicit.Generic.Observed */
+    [238] = PY_MONITORING_EVENT_CALL, /* SuperAttrExplicit.Builtin.Observed */
+    [239] = PY_MONITORING_EVENT_CALL, /* SuperMethod.Generic.Observed */
+    [240] = PY_MONITORING_EVENT_CALL, /* SuperMethod.Builtin.Observed */
+    [241] = PY_MONITORING_EVENT_CALL, /* SuperMethodExplicit.Generic.Observed */
+    [242] = PY_MONITORING_EVENT_CALL, /* SuperMethodExplicit.Builtin.Observed */
+    [243] = PY_MONITORING_EVENT_CALL, /* Call.Exact.Observed */
+    [244] = PY_MONITORING_EVENT_CALL, /* Call.BoundExact.Observed */
+    [245] = PY_MONITORING_EVENT_CALL, /* Call.Init.Observed */
+    [246] = PY_MONITORING_EVENT_CALL, /* Call.Generator.Observed */
+    [247] = PY_MONITORING_EVENT_CALL, /* Call.Generic.Observed */
+    [248] = PY_MONITORING_EVENT_PY_RETURN, /* Return.Ordinary.Observed */
+    [249] = PY_MONITORING_EVENT_PY_RETURN, /* Return.Empty.Observed */
+    [250] = PY_MONITORING_EVENT_PY_RETURN, /* Return.Generator.Observed */
+    [251] = PY_MONITORING_EVENT_PY_RETURN, /* Return.External.Observed */
+    [252] = PY_MONITORING_EVENT_CALL, /* CallKw.Plan.Observed */
+    [253] = PY_MONITORING_EVENT_CALL, /* Call.PyGeneral.Observed */
+    [254] = PY_MONITORING_EVENT_CALL, /* CallKw.Generator.Observed */
+    [255] = PY_MONITORING_EVENT_CALL, /* CallKw.BoundMethod.Observed */
+    [256] = PY_MONITORING_EVENT_CALL, /* CallKw.NonPy.Observed */
+    [257] = PY_MONITORING_EVENT_CALL, /* CallKw.Generic.Observed */
+    [258] = PY_MONITORING_EVENT_CALL, /* CallEx.Generic.Observed */
+    [259] = PY_MONITORING_EVENT_CALL, /* CallEx.Py.Observed */
+    [260] = PY_MONITORING_EVENT_CALL, /* CallEx.NonPy.Observed */
+    [261] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* EndAsyncFor.Generic.Observed */
+    [262] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Generic.Observed */
+    [263] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.List.Observed */
+    [264] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Tuple.Observed */
+    [265] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Range.Observed */
+    [266] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Indexed.Observed */
+    [267] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Gen.Observed */
+    [268] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* ForIter.Slot.Observed */
+    [269] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* IterClose.Retire.Observed */
+    [270] = PY_MONITORING_EVENT_PY_START, /* Resume.Poll.Observed */
+    [271] = PY_MONITORING_EVENT_PY_START, /* Resume.Warm.Observed */
+    [272] = PY_MONITORING_EVENT_PY_YIELD, /* Yield.Ordinary.Observed */
+    [273] = PY_MONITORING_EVENT_PY_YIELD, /* YieldFrom.Delegated.Observed */
+    [274] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Generic.Observed */
+    [275] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Gen.Observed */
+    [276] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.Virtual.Observed */
+    [277] = PY_MONITORING_EVENT_STOP_ITERATION, /* Send.AsyncGen.Observed */
+    [278] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Identity.Observed */
+    [279] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Int.Observed */
+    [280] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Float.Observed */
+    [281] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Str.Observed */
+    [282] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Set.Observed */
+    [283] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Dict.Observed */
+    [284] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Sequence.Observed */
+    [285] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* TestBranch.Generic.Observed */
+    [286] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Bool.Observed */
+    [287] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Int.Observed */
+    [288] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.List.Observed */
+    [289] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.None.Observed */
+    [290] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Str.Observed */
+    [291] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Plain.Observed */
+    [292] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Slot.Observed */
+    [293] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchTruth.Generic.Observed */
+    [294] = PY_MONITORING_EVENT_BRANCH_RIGHT, /* BranchNone.Test.Observed */
+    [295] = PY_MONITORING_EVENT_JUMP, /* Jump.Direct.Observed */
+    [296] = PY_MONITORING_EVENT_JUMP, /* Jump.Poll.Observed */
+    [297] = PY_MONITORING_EVENT_JUMP, /* Jump.Warm.Observed */
 };
 #endif
 
@@ -1457,261 +1473,265 @@ const char *const _PyIR_OnlyNames[IR_NUM_HANDLERS] = {
     [36] = "Return.External",
     [37] = "MaterializeKwargs.Pending",
     [38] = "CallKw.Plan",
-    [39] = "CallKw.Generator",
-    [40] = "CallKw.BoundMethod",
-    [41] = "CallKw.NonPy",
-    [42] = "CallKw.Generic",
-    [43] = "CallKw.Observed",
-    [44] = "CallEx.Generic",
-    [45] = "CallEx.Py",
-    [46] = "CallEx.NonPy",
-    [47] = "CallEx.Observed",
-    [48] = "CellMake.Wrap",
-    [49] = "CellRead.Get",
-    [50] = "CellMapRead.Lookup",
-    [51] = "CellStore.Set",
-    [52] = "CellDelete.Unbind",
-    [53] = "CleanupThrow.Generic",
-    [54] = "EndAsyncFor.Generic",
-    [55] = "EndAsyncFor.Observed",
-    [56] = "WithExit.Generic",
-    [57] = "Build.Tuple",
-    [58] = "Build.List",
-    [59] = "Build.Set",
-    [60] = "Build.Map",
-    [61] = "AddElement.Append",
-    [62] = "AddElement.Add",
-    [63] = "AddEntry.Put",
-    [64] = "UpdateContainer.Extend",
-    [65] = "UpdateContainer.Union",
-    [66] = "UpdateContainer.Overlay",
-    [67] = "MergeKeywords.Merge",
-    [68] = "Unpack.Generic",
-    [69] = "Unpack.Tuple",
-    [70] = "Unpack.List",
-    [71] = "UnpackStar.Iterable",
-    [72] = "Raise.Throw",
-    [73] = "Reraise.Plain",
-    [74] = "Reraise.Origin",
-    [75] = "ExceptEnter.Install",
-    [76] = "ExceptLeave.Restore",
-    [77] = "ExceptMatch.Match",
-    [78] = "ExceptGroupMatch.Split",
-    [79] = "Function.Make",
-    [80] = "Intrinsic.Unary",
-    [81] = "Intrinsic.ImportStar",
-    [82] = "Intrinsic.StopIteration",
-    [83] = "IntrinsicPair.Binary",
-    [84] = "IntrinsicPair.Attr",
-    [85] = "GetAttr.Instance",
-    [86] = "GetAttr.GetSet",
-    [87] = "GetAttr.Generic",
-    [88] = "GetAttr.Shape",
-    [89] = "GetAttr.PolyShape",
-    [90] = "GetAttr.Module",
-    [91] = "GetAttr.Hint",
-    [92] = "GetAttr.ValueSlot",
-    [93] = "GetAttr.PointerSlot",
-    [94] = "GetAttr.Class",
-    [95] = "GetAttr.NonDescriptorValues",
-    [96] = "GetAttr.NonDescriptorNoDict",
-    [97] = "GetMethod.MethodValues",
-    [98] = "GetMethod.Generic",
-    [99] = "GetMethod.PolyMethod",
-    [100] = "GetMethod.NoDict",
-    [101] = "GetMethod.LazyDict",
-    [102] = "GetMethod.ClassMethod",
-    [103] = "GetItem.Generic",
-    [104] = "SetItem.Generic",
-    [105] = "DelItem.Generic",
-    [106] = "SliceRead.Generic",
-    [107] = "SliceWrite.Generic",
-    [108] = "BuildSlice.Generic",
-    [109] = "GetItem.ListIndex",
-    [110] = "GetItem.TupleIndex",
-    [111] = "GetItem.Ascii",
-    [112] = "GetItem.UnicodeAsciiChar",
-    [113] = "GetItem.ListSlice",
-    [114] = "GetItem.Dict",
-    [115] = "SetItem.ListIndex",
-    [116] = "SetItem.Dict",
-    [117] = "IterOpen.Generic",
-    [118] = "ForIter.Generic",
-    [119] = "IterOpen.Self",
-    [120] = "IterOpen.Indexed",
-    [121] = "IterOpen.GenMethod",
-    [122] = "ForIter.List",
-    [123] = "ForIter.Tuple",
-    [124] = "ForIter.Range",
-    [125] = "ForIter.Indexed",
-    [126] = "ForIter.Slot",
-    [127] = "ForIter.Observed",
-    [128] = "IterClose.Retire",
-    [129] = "IterClose.Observed",
-    [130] = "Line.Hook",
-    [131] = "Instruction.Hook",
-    [132] = "GlobalRead.Generic",
-    [133] = "GlobalRead.Module",
-    [134] = "GlobalRead.Builtin",
-    [135] = "NamespaceRead.Name",
-    [136] = "NamespaceRead.Locals",
-    [137] = "NamespaceRead.BuildClass",
-    [138] = "NamespaceReadFrom.Mapping",
-    [139] = "NamespaceWrite.Name",
-    [140] = "NamespaceWrite.Global",
-    [141] = "SetupAnnotations.Setup",
-    [142] = "Import.Eager",
-    [143] = "Import.Policy",
-    [144] = "Import.Lazy",
-    [145] = "ImportFrom.From",
-    [146] = "ImportFrom.FromLast",
-    [147] = "Binary.Int",
-    [148] = "Binary.Float",
-    [149] = "Binary.Text",
-    [150] = "Binary.Extended",
-    [151] = "Binary.Generic",
-    [152] = "Unary.Generic",
-    [153] = "AppendText.Text",
-    [154] = "AppendText.Generic",
-    [155] = "Length.Size",
-    [156] = "Pattern.Flag",
-    [157] = "PatternClass.Match",
-    [158] = "PatternKeys.Match",
-    [159] = "Resume.Poll",
-    [160] = "Resume.Warm",
-    [161] = "Resume.Observed",
-    [162] = "Awaitable.Await",
-    [163] = "AsyncIterOpen.Open",
-    [164] = "AsyncIterNext.Next",
-    [165] = "Yield.Ordinary",
-    [166] = "YieldFrom.Delegated",
-    [167] = "Yield.Observed",
-    [168] = "YieldFrom.Observed",
-    [169] = "Send.Generic",
-    [170] = "Send.Gen",
-    [171] = "Send.Virtual",
-    [172] = "Send.AsyncGen",
-    [173] = "Send.Observed",
-    [174] = "Compare.Int",
-    [175] = "Compare.Float",
-    [176] = "Compare.Str",
-    [177] = "Compare.Generic",
-    [178] = "Identity.Test",
-    [179] = "Contains.Set",
-    [180] = "Contains.Dict",
-    [181] = "Contains.Generic",
-    [182] = "TestBranch.Identity",
-    [183] = "TestBranch.Int",
-    [184] = "TestBranch.Float",
-    [185] = "TestBranch.Str",
-    [186] = "TestBranch.Set",
-    [187] = "TestBranch.Dict",
-    [188] = "TestBranch.Sequence",
-    [189] = "TestBranch.Generic",
-    [190] = "TestBranch.Observed",
-    [191] = "BuildText.Join",
-    [192] = "BuildText.Interpolation",
-    [193] = "BuildText.Template",
-    [194] = "Convert.Text",
-    [195] = "Format.Simple",
-    [196] = "FormatSpec.Value",
-    [197] = "Truth.Bool",
-    [198] = "Truth.Int",
-    [199] = "Truth.List",
-    [200] = "Truth.None",
-    [201] = "Truth.Str",
-    [202] = "Truth.Plain",
-    [203] = "Truth.Slot",
-    [204] = "Truth.Generic",
-    [205] = "BranchTruth.Bool",
-    [206] = "BranchTruth.Int",
-    [207] = "BranchTruth.List",
-    [208] = "BranchTruth.None",
-    [209] = "BranchTruth.Str",
-    [210] = "BranchTruth.Plain",
-    [211] = "BranchTruth.Slot",
-    [212] = "BranchTruth.Generic",
-    [213] = "BranchNone.Test",
-    [214] = "BranchTruth.Observed",
-    [215] = "BranchNone.Observed",
-    [216] = "Jump.Direct",
-    [217] = "Jump.Trailing",
-    [218] = "Jump.Poll",
-    [219] = "Jump.Warm",
-    [220] = "Jump.Observed",
-    [221] = "Const.Pool",
-    [222] = "Const.Small",
-    [223] = "Const.Common",
-    [224] = "LocalRead.Bound",
-    [225] = "LocalRead.Checked",
-    [226] = "LocalWrite.Store",
-    [227] = "LocalWrite.Restore",
-    [228] = "SaveLocal.Take",
-    [229] = "LocalDelete.Checked",
-    [230] = "Move.Transfer",
-    [231] = "Move.Retire",
-    [232] = "Move.Copy",
-    [233] = "SuperAttr.Generic.Observed",
-    [234] = "SuperAttr.Builtin.Observed",
-    [235] = "SuperAttrExplicit.Generic.Observed",
-    [236] = "SuperAttrExplicit.Builtin.Observed",
-    [237] = "SuperMethod.Generic.Observed",
-    [238] = "SuperMethod.Builtin.Observed",
-    [239] = "SuperMethodExplicit.Generic.Observed",
-    [240] = "SuperMethodExplicit.Builtin.Observed",
-    [241] = "Call.Exact.Observed",
-    [242] = "Call.BoundExact.Observed",
-    [243] = "Call.Init.Observed",
-    [244] = "Call.Generator.Observed",
-    [245] = "Call.Generic.Observed",
-    [246] = "Return.Ordinary.Observed",
-    [247] = "Return.Empty.Observed",
-    [248] = "Return.Generator.Observed",
-    [249] = "Return.External.Observed",
-    [250] = "CallKw.Plan.Observed",
-    [251] = "CallKw.Generator.Observed",
-    [252] = "CallKw.BoundMethod.Observed",
-    [253] = "CallKw.NonPy.Observed",
-    [254] = "CallKw.Generic.Observed",
-    [255] = "CallEx.Generic.Observed",
-    [256] = "CallEx.Py.Observed",
-    [257] = "CallEx.NonPy.Observed",
-    [258] = "EndAsyncFor.Generic.Observed",
-    [259] = "ForIter.Generic.Observed",
-    [260] = "ForIter.List.Observed",
-    [261] = "ForIter.Tuple.Observed",
-    [262] = "ForIter.Range.Observed",
-    [263] = "ForIter.Indexed.Observed",
-    [264] = "ForIter.Slot.Observed",
-    [265] = "IterClose.Retire.Observed",
-    [266] = "Resume.Poll.Observed",
-    [267] = "Resume.Warm.Observed",
-    [268] = "Yield.Ordinary.Observed",
-    [269] = "YieldFrom.Delegated.Observed",
-    [270] = "Send.Generic.Observed",
-    [271] = "Send.Gen.Observed",
-    [272] = "Send.Virtual.Observed",
-    [273] = "Send.AsyncGen.Observed",
-    [274] = "TestBranch.Identity.Observed",
-    [275] = "TestBranch.Int.Observed",
-    [276] = "TestBranch.Float.Observed",
-    [277] = "TestBranch.Str.Observed",
-    [278] = "TestBranch.Set.Observed",
-    [279] = "TestBranch.Dict.Observed",
-    [280] = "TestBranch.Sequence.Observed",
-    [281] = "TestBranch.Generic.Observed",
-    [282] = "BranchTruth.Bool.Observed",
-    [283] = "BranchTruth.Int.Observed",
-    [284] = "BranchTruth.List.Observed",
-    [285] = "BranchTruth.None.Observed",
-    [286] = "BranchTruth.Str.Observed",
-    [287] = "BranchTruth.Plain.Observed",
-    [288] = "BranchTruth.Slot.Observed",
-    [289] = "BranchTruth.Generic.Observed",
-    [290] = "BranchNone.Test.Observed",
-    [291] = "Jump.Direct.Observed",
-    [292] = "Jump.Poll.Observed",
-    [293] = "Jump.Warm.Observed",
+    [39] = "Call.PyGeneral",
+    [40] = "CallKw.Generator",
+    [41] = "CallKw.BoundMethod",
+    [42] = "CallKw.NonPy",
+    [43] = "CallKw.Generic",
+    [44] = "CallKw.Observed",
+    [45] = "CallEx.Generic",
+    [46] = "CallEx.Py",
+    [47] = "CallEx.NonPy",
+    [48] = "CallEx.Observed",
+    [49] = "CellMake.Wrap",
+    [50] = "CellRead.Get",
+    [51] = "CellMapRead.Lookup",
+    [52] = "CellStore.Set",
+    [53] = "CellDelete.Unbind",
+    [54] = "CleanupThrow.Generic",
+    [55] = "EndAsyncFor.Generic",
+    [56] = "EndAsyncFor.Observed",
+    [57] = "WithExit.Generic",
+    [58] = "Build.Tuple",
+    [59] = "Build.List",
+    [60] = "Build.Set",
+    [61] = "Build.Map",
+    [62] = "AddElement.Append",
+    [63] = "AddElement.Add",
+    [64] = "AddEntry.Put",
+    [65] = "UpdateContainer.Extend",
+    [66] = "UpdateContainer.Union",
+    [67] = "UpdateContainer.Overlay",
+    [68] = "MergeKeywords.Merge",
+    [69] = "Unpack.Generic",
+    [70] = "Unpack.Tuple",
+    [71] = "Unpack.List",
+    [72] = "UnpackStar.Iterable",
+    [73] = "Raise.Throw",
+    [74] = "Reraise.Plain",
+    [75] = "Reraise.Origin",
+    [76] = "ExceptEnter.Install",
+    [77] = "ExceptLeave.Restore",
+    [78] = "ExceptMatch.Match",
+    [79] = "ExceptGroupMatch.Split",
+    [80] = "Function.Make",
+    [81] = "Intrinsic.Unary",
+    [82] = "Intrinsic.ImportStar",
+    [83] = "Intrinsic.StopIteration",
+    [84] = "IntrinsicPair.Binary",
+    [85] = "IntrinsicPair.Attr",
+    [86] = "GetAttr.Instance",
+    [87] = "GetAttr.GetSet",
+    [88] = "GetAttr.Generic",
+    [89] = "GetAttr.Shape",
+    [90] = "GetAttr.PolyShape",
+    [91] = "GetAttr.Module",
+    [92] = "GetAttr.Hint",
+    [93] = "GetAttr.ValueSlot",
+    [94] = "GetAttr.PointerSlot",
+    [95] = "GetAttr.Class",
+    [96] = "GetAttr.NonDescriptorValues",
+    [97] = "GetAttr.NonDescriptorNoDict",
+    [98] = "GetMethod.MethodValues",
+    [99] = "GetMethod.Generic",
+    [100] = "GetMethod.PolyMethod",
+    [101] = "GetMethod.NoDict",
+    [102] = "GetMethod.LazyDict",
+    [103] = "GetMethod.ClassMethod",
+    [104] = "GetItem.Generic",
+    [105] = "SetItem.Generic",
+    [106] = "DelItem.Generic",
+    [107] = "SliceRead.Generic",
+    [108] = "SliceWrite.Generic",
+    [109] = "BuildSlice.Generic",
+    [110] = "GetItem.ListIndex",
+    [111] = "GetItem.TupleIndex",
+    [112] = "GetItem.Ascii",
+    [113] = "GetItem.UnicodeAsciiChar",
+    [114] = "GetItem.ListSlice",
+    [115] = "GetItem.Dict",
+    [116] = "SetItem.ListIndex",
+    [117] = "SetItem.Dict",
+    [118] = "IterOpen.Generic",
+    [119] = "ForIter.Generic",
+    [120] = "IterOpen.Self",
+    [121] = "IterOpen.Indexed",
+    [122] = "IterOpen.GenMethod",
+    [123] = "ForIter.List",
+    [124] = "ForIter.Tuple",
+    [125] = "ForIter.Range",
+    [126] = "ForIter.Indexed",
+    [127] = "ForIter.Gen",
+    [128] = "ForIter.Slot",
+    [129] = "ForIter.Observed",
+    [130] = "IterClose.Retire",
+    [131] = "IterClose.Observed",
+    [132] = "Line.Hook",
+    [133] = "Instruction.Hook",
+    [134] = "GlobalRead.Generic",
+    [135] = "GlobalRead.Module",
+    [136] = "GlobalRead.Builtin",
+    [137] = "NamespaceRead.Name",
+    [138] = "NamespaceRead.Locals",
+    [139] = "NamespaceRead.BuildClass",
+    [140] = "NamespaceReadFrom.Mapping",
+    [141] = "NamespaceWrite.Name",
+    [142] = "NamespaceWrite.Global",
+    [143] = "SetupAnnotations.Setup",
+    [144] = "Import.Eager",
+    [145] = "Import.Policy",
+    [146] = "Import.Lazy",
+    [147] = "ImportFrom.From",
+    [148] = "ImportFrom.FromLast",
+    [149] = "Binary.Int",
+    [150] = "Binary.Float",
+    [151] = "Binary.Text",
+    [152] = "Binary.Extended",
+    [153] = "Binary.Generic",
+    [154] = "Unary.Generic",
+    [155] = "AppendText.Text",
+    [156] = "AppendText.Generic",
+    [157] = "Length.Size",
+    [158] = "Pattern.Flag",
+    [159] = "PatternClass.Match",
+    [160] = "PatternKeys.Match",
+    [161] = "Resume.Poll",
+    [162] = "Resume.Warm",
+    [163] = "Resume.Observed",
+    [164] = "Awaitable.Await",
+    [165] = "AsyncIterOpen.Open",
+    [166] = "AsyncIterNext.Next",
+    [167] = "Yield.Ordinary",
+    [168] = "YieldFrom.Delegated",
+    [169] = "Yield.Observed",
+    [170] = "YieldFrom.Observed",
+    [171] = "Send.Generic",
+    [172] = "Send.Gen",
+    [173] = "Send.Virtual",
+    [174] = "Send.AsyncGen",
+    [175] = "Send.Observed",
+    [176] = "Compare.Int",
+    [177] = "Compare.Float",
+    [178] = "Compare.Str",
+    [179] = "Compare.Generic",
+    [180] = "Identity.Test",
+    [181] = "Contains.Set",
+    [182] = "Contains.Dict",
+    [183] = "Contains.Generic",
+    [184] = "TestBranch.Identity",
+    [185] = "TestBranch.Int",
+    [186] = "TestBranch.Float",
+    [187] = "TestBranch.Str",
+    [188] = "TestBranch.Set",
+    [189] = "TestBranch.Dict",
+    [190] = "TestBranch.Sequence",
+    [191] = "TestBranch.Generic",
+    [192] = "TestBranch.Observed",
+    [193] = "BuildText.Join",
+    [194] = "BuildText.Interpolation",
+    [195] = "BuildText.Template",
+    [196] = "Convert.Text",
+    [197] = "Format.Simple",
+    [198] = "FormatSpec.Value",
+    [199] = "Truth.Bool",
+    [200] = "Truth.Int",
+    [201] = "Truth.List",
+    [202] = "Truth.None",
+    [203] = "Truth.Str",
+    [204] = "Truth.Plain",
+    [205] = "Truth.Slot",
+    [206] = "Truth.Generic",
+    [207] = "BranchTruth.Bool",
+    [208] = "BranchTruth.Int",
+    [209] = "BranchTruth.List",
+    [210] = "BranchTruth.None",
+    [211] = "BranchTruth.Str",
+    [212] = "BranchTruth.Plain",
+    [213] = "BranchTruth.Slot",
+    [214] = "BranchTruth.Generic",
+    [215] = "BranchNone.Test",
+    [216] = "BranchTruth.Observed",
+    [217] = "BranchNone.Observed",
+    [218] = "Jump.Direct",
+    [219] = "Jump.Trailing",
+    [220] = "Jump.Poll",
+    [221] = "Jump.Warm",
+    [222] = "Jump.Observed",
+    [223] = "Const.Pool",
+    [224] = "Const.Small",
+    [225] = "Const.Common",
+    [226] = "LocalRead.Bound",
+    [227] = "LocalRead.Checked",
+    [228] = "LocalWrite.Store",
+    [229] = "LocalWrite.Restore",
+    [230] = "SaveLocal.Take",
+    [231] = "LocalDelete.Checked",
+    [232] = "Move.Transfer",
+    [233] = "Move.Retire",
+    [234] = "Move.Copy",
+    [235] = "SuperAttr.Generic.Observed",
+    [236] = "SuperAttr.Builtin.Observed",
+    [237] = "SuperAttrExplicit.Generic.Observed",
+    [238] = "SuperAttrExplicit.Builtin.Observed",
+    [239] = "SuperMethod.Generic.Observed",
+    [240] = "SuperMethod.Builtin.Observed",
+    [241] = "SuperMethodExplicit.Generic.Observed",
+    [242] = "SuperMethodExplicit.Builtin.Observed",
+    [243] = "Call.Exact.Observed",
+    [244] = "Call.BoundExact.Observed",
+    [245] = "Call.Init.Observed",
+    [246] = "Call.Generator.Observed",
+    [247] = "Call.Generic.Observed",
+    [248] = "Return.Ordinary.Observed",
+    [249] = "Return.Empty.Observed",
+    [250] = "Return.Generator.Observed",
+    [251] = "Return.External.Observed",
+    [252] = "CallKw.Plan.Observed",
+    [253] = "Call.PyGeneral.Observed",
+    [254] = "CallKw.Generator.Observed",
+    [255] = "CallKw.BoundMethod.Observed",
+    [256] = "CallKw.NonPy.Observed",
+    [257] = "CallKw.Generic.Observed",
+    [258] = "CallEx.Generic.Observed",
+    [259] = "CallEx.Py.Observed",
+    [260] = "CallEx.NonPy.Observed",
+    [261] = "EndAsyncFor.Generic.Observed",
+    [262] = "ForIter.Generic.Observed",
+    [263] = "ForIter.List.Observed",
+    [264] = "ForIter.Tuple.Observed",
+    [265] = "ForIter.Range.Observed",
+    [266] = "ForIter.Indexed.Observed",
+    [267] = "ForIter.Gen.Observed",
+    [268] = "ForIter.Slot.Observed",
+    [269] = "IterClose.Retire.Observed",
+    [270] = "Resume.Poll.Observed",
+    [271] = "Resume.Warm.Observed",
+    [272] = "Yield.Ordinary.Observed",
+    [273] = "YieldFrom.Delegated.Observed",
+    [274] = "Send.Generic.Observed",
+    [275] = "Send.Gen.Observed",
+    [276] = "Send.Virtual.Observed",
+    [277] = "Send.AsyncGen.Observed",
+    [278] = "TestBranch.Identity.Observed",
+    [279] = "TestBranch.Int.Observed",
+    [280] = "TestBranch.Float.Observed",
+    [281] = "TestBranch.Str.Observed",
+    [282] = "TestBranch.Set.Observed",
+    [283] = "TestBranch.Dict.Observed",
+    [284] = "TestBranch.Sequence.Observed",
+    [285] = "TestBranch.Generic.Observed",
+    [286] = "BranchTruth.Bool.Observed",
+    [287] = "BranchTruth.Int.Observed",
+    [288] = "BranchTruth.List.Observed",
+    [289] = "BranchTruth.None.Observed",
+    [290] = "BranchTruth.Str.Observed",
+    [291] = "BranchTruth.Plain.Observed",
+    [292] = "BranchTruth.Slot.Observed",
+    [293] = "BranchTruth.Generic.Observed",
+    [294] = "BranchNone.Test.Observed",
+    [295] = "Jump.Direct.Observed",
+    [296] = "Jump.Poll.Observed",
+    [297] = "Jump.Warm.Observed",
 };
 #endif
 

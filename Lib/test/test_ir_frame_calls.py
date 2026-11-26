@@ -152,7 +152,7 @@ class FrameCallTests(unittest.TestCase):
 
                 call.__code__ = call.__code__.replace()
                 self.assertEqual(warm(call), (1, 10, 20))
-                self.assertIn("Call.Generic+NO_SELF", [w[0] for w in
+                self.assertIn("Call.PyGeneral+NO_SELF", [w[0] for w in
                     _testinternalcapi.get_ir(call.__code__, True)])
                 constants = tuple(defaults if value == (10, 20) else value
                                   for value in factory_code.co_consts)
@@ -359,7 +359,7 @@ class FrameCallTests(unittest.TestCase):
 
         call = positional_caller(target)
         self.assertTrue(warm(call))
-        self.assertIn("Call.Generic+NO_SELF", [w[0] for w in
+        self.assertIn("Call.PyGeneral+NO_SELF", [w[0] for w in
             _testinternalcapi.get_ir(call.__code__, True)])
 
     def test_first_read_materializes_fresh_identity(self):

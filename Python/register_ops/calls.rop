@@ -331,17 +331,18 @@ extern helper generator_frame(f:Frame) -> Bool
 // Adaptation evidence (specialize.c): the call specializer in collecting
 // mode fills the site's entry and answers with the arm the call stands for
 extern helper classify_call(at:Site, f:Fb<Call>, fn:B, a:Args)
-  cases(exact(), bound_exact(), init(), generator(), other())
+  cases(exact(), bound_exact(), init(), generator(), plan(), other())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
   c _PyRop_ClassifyCall as case_index
   evidence(
     review: "P4. specialize.c: the old _Py_Specialize_Call's handler choice"
             "collected (as attr_classify): CALL_PY_EXACT_ARGS,"
-            "CALL_BOUND_METHOD_EXACT_ARGS, CALL_ALLOC_AND_ENTER_INIT and"
-            "CALL_PY_GENERATOR are the first four cases, anything else is other.",
+            "CALL_BOUND_METHOD_EXACT_ARGS, CALL_ALLOC_AND_ENTER_INIT,"
+            "CALL_PY_GENERATOR and CALL_PY_GENERAL are the first five cases,"
+            "anything else is other.",
     contract: "Writes the site's entry (func_version, type_version, the type's init"
-              "cache) and sets no handler.  No Python runs.");
+              "cache, the binding plan) and sets no handler.  No Python runs.");
 
 macro adapt_before_use_call(f:Fb<Call>, fn:Src, a:Args)
   cases(run(), changed(t:Ticket<Call>))
@@ -359,6 +360,7 @@ macro adapt_before_use_call(f:Fb<Call>, fn:Src, a:Args)
       bound_exact -> Bound();
       init -> Init();
       generator -> Generator();
+      plan -> Planned();
       other -> Other();
     }
   Exact():
@@ -385,6 +387,13 @@ macro adapt_before_use_call(f:Fb<Call>, fn:Src, a:Args)
   Generator():
     let cg:Candidate<Call> = candidate(Call.Generator);
     call install(site, f, cg) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Planned():
+    let cp:Candidate<Call> = candidate(Call.PyGeneral);
+    call install(site, f, cp) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();
@@ -1122,6 +1131,35 @@ arm CallKw.Plan split
     exit enter(c) resume CallKw.Returned;
   Failed(e:Err):
     exit raise(CallKw.Failed, e);
+}
+
+// CALL_PY_GENERAL: a function whose arguments the exact arms do not take
+// (defaults, *args, **kwargs, keyword-only parameters), bound by the site's
+// plan; a call that the plan does not fit binds generally
+arm Call.PyGeneral split
+  effects(runs_python, reads, writes, allocates, releases, raises, switches_frame)
+  feedback(read(entry.func_version), read(entry.plan))
+  exits(enter, raise, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard function_version(use(fn), fb) else miss;
+    guard recursion_budget(thread) else miss;
+    branch plan_fits(thread, frame, use(fn), args, fb) -> Planned(), General();
+  Planned():
+    call push_plan(thread, frame, fn, args, fb) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  General():
+    call push_python(thread, frame, fn, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume Call.Returned;
+  Failed(e:Err):
+    exit raise(Call.Failed, e);
 }
 
 // A generator function of the default call: the call creates the generator

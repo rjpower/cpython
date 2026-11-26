@@ -295,6 +295,99 @@ class CallBoundExactTests(unittest.TestCase):
         self.assertIs(r(), m)
 
 
+@cpython_only
+class CallPyGeneralTests(unittest.TestCase):
+    """Call.PyGeneral binds a function whose arguments the exact arms do not
+    take, by the site's plan"""
+
+    def test_defaults_star_and_keyword_only(self):
+        def g(a, b=2, *rest, c=3, **extra):
+            return (a, b, rest, c, extra)
+
+        def f():
+            return g(1), g(1, 5), g(1, 5, 6, 7)
+        warm(f)
+        self.assertIn("Call.PyGeneral", word_names(f.__code__))
+        expected = ((1, 2, (), 3, {}), (1, 5, (), 3, {}),
+                    (1, 5, (6, 7), 3, {}))
+        self.assertEqual(f(), expected)
+
+    def test_the_plan_rebinds_after_the_defaults_change(self):
+        def g(a, b=2):
+            return a + b
+
+        def f():
+            return g(1)
+        warm(f)
+        self.assertIn("Call.PyGeneral", word_names(f.__code__))
+        self.assertEqual(f(), 3)
+        g.__defaults__ = (10,)
+        self.assertEqual(f(), 11)
+        g.__defaults__ = ()
+        with self.assertRaises(TypeError):
+            f()
+        g.__defaults__ = (2,)
+        self.assertEqual(f(), 3)
+
+    def test_a_different_function_misses(self):
+        def g(a, b=2):
+            return a + b
+
+        def h(a, b=7):
+            return a * b
+
+        def f(fn):
+            return fn(3)
+        warm(f, g)
+        self.assertEqual(f(g), 5)
+        self.assertEqual(f(h), 21)
+        self.assertEqual(f(g), 5)
+
+    def test_the_operands_are_released(self):
+        Tracker.deaths.clear()
+
+        def g(a, b=None):
+            return a
+
+        def f():
+            return g(Tracker("arg"))
+        warm(f)
+        Tracker.deaths.clear()
+        result = f()
+        del result
+        self.assertEqual(Tracker.deaths, ["arg"])
+
+    def test_a_binding_error_raises(self):
+        def g(a, b=2, *, c):
+            return a
+
+        def f():
+            return g(1)
+        for _ in range(100):
+            with self.assertRaises(TypeError):
+                f()
+
+    def test_a_deep_recursion_raises(self):
+        def g(n, step=1):
+            return g(n + step)
+
+        for _ in range(3):
+            with self.assertRaises(RecursionError):
+                g(0)
+
+    def test_a_bound_method_with_defaults_is_generic(self):
+        class C:
+            def m(self, a, b=2):
+                return (self, a, b)
+
+        c = C()
+
+        def f():
+            return c.m(1)
+        warm(f)
+        self.assertEqual(f(), (c, 1, 2))
+
+
 class Point:
     def __init__(self, x, y):
         self.x = x

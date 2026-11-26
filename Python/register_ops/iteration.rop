@@ -14,7 +14,7 @@ family IterOpen(pair:Out<IterPair>, source:Src, fb:Fb<Iter>, mode:Enum<IterMode>
   exits(next, raise, miss, again) generic(Generic);
 
 family ForIter(item:Dst, pair:IterPair, fb:Fb<Iter>, done:NearHead)
-  exits(next, branch, raise, miss, again, redirect) generic(Generic)
+  exits(next, branch, enter, raise, miss, again, redirect) generic(Generic)
   events(BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION) vacant(pair.cursor);
 
 family IterClose(pair:IterPair)
@@ -25,6 +25,10 @@ family IterClose(pair:IterPair)
 point IterOpen.Done(current, next_head, clear) keep() spent(source, pair) defs(pair);
 // The source was closed by the failed open
 point IterOpen.Failed(current, site, pending) keep(pair) spent(source) defs();
+
+// The generator, entered in place, has yielded: the item is its value, which
+// takes the item's home (the old item is released with it)
+point ForIter.Entered(caller, next_head, clear) keep(pair) spent() defs(item);
 
 // A step that leaves the cursor as it is (the iterator keeps its own position)
 point ForIter.Advanced(current, next_head, clear) keep(pair) spent() defs(item);
@@ -85,6 +89,57 @@ extern helper generic_step(t:Thread, f:Frame, it:B, c:B)
     contract: "item: a new owner of the item and the next cursor (a tagged index"
               "or NULL), the iterator unchanged in its home. end: a new owner of"
               "the completion value. err: the exception is set.");
+
+// Whether the receiver is a generator that the evaluator can enter in place:
+// no PEP 523 hook, exactly a generator, one that is created or suspended (a
+// read of its state; the claim decides).  A cursor is vacant for a generator.
+extern helper claimable_for_generator(t:Thread, g:B) -> Bool
+  effects(reads)
+  c _PyRop_ClaimableForGenerator as bool inline
+  evidence(
+    review: "FI. bytecodes.c _FOR_ITER_GEN_FRAME (684a98eb30e): _CHECK_PEP_523, the type is"
+            "PyGen_Type and gen_may_claim.",
+    contract: "Reads the receiver's type and frame state; no memory, no failure. The"
+              "answer can be stale: the claim decides.");
+
+// Claim the generator and link its frame under this one, with None as the
+// value it resumes with.  Free-threaded, another thread can claim it first:
+// that is the ValueError of an executing generator.
+extern helper enter_for_generator(t:Thread, f:Frame, g:B)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, raises)
+  ensures(entered.generator_frame(c))
+  c _PyRop_EnterForGenerator as pointer_or_raised
+  evidence(
+    review: "FI. bytecodes.c _FOR_ITER_GEN_FRAME: gen_claim and IR_ENTER_GENERATOR,"
+            "as _PyRop_EnterGenerator does for SEND_GEN, with None for the resume value.",
+    contract: "The receiver is claimed (FRAME_EXECUTING) and its frame returned, whose"
+              "previous is f. The exception chain of the generator hangs off"
+              "tstate->exc_info. The recursion debit and the resume are the frame"
+              "start's.");
+
+// The claim of the generic step: the guards of claimable_for_generator and
+// gen_try_set_executing.  A receiver that is not claimed, because it is of
+// another kind or another thread has it, is stepped, which reports a
+// generator that is running.
+extern helper claim_for_generator(t:Thread, g:B) -> Bool
+  effects(reads, writes)
+  c _PyRop_ClaimForGenerator as bool
+  evidence(
+    review: "FI. bytecodes.c _FOR_ITER_GEN_FRAME's guards, with gen_try_set_executing,"
+            "as _PyRop_ClaimGenerator does for the generic send.",
+    contract: "True: the receiver is claimed (FRAME_EXECUTING). False: nothing changed.");
+
+// Link the frame of a generator that claim_for_generator claimed
+extern helper enter_for_claimed(t:Thread, f:Frame, g:B) -> NewFrame
+  effects(reads, writes)
+  ensures(result.generator_frame(result))
+  c _PyRop_EnterForClaimed as pointer
+  evidence(
+    review: "FI. ceval.c _PyRop_EnterClaimed: the links of IR_ENTER_GENERATOR, with None"
+            "for the resume value.",
+    contract: "The receiver's frame is returned, whose previous is f. The exception chain"
+              "of the generator hangs off tstate->exc_info.");
 
 // The STOP_ITERATION event of a generator or coroutine receiver, before the
 // loop is retired.  A receiver of another kind reports nothing.
@@ -162,6 +217,16 @@ extern primitive cursor_is_vacant(c:B) -> Bool
   evidence(
     review: "FI. _FOR_ITER_VIRTUAL: PyValue_IsNull(index).",
     contract: "A comparison of the word: no memory, no failure.",
+    lowering: "none yet: a type load and a compare",
+    test: "test_rop_iter");
+
+// Whether the receiver is exactly a generator, while specialization is enabled
+extern primitive exact_generator_iter(v:B) -> Bool
+  effects(reads)
+  c _PyRop_ExactGeneratorIter as bool
+  evidence(
+    review: "FI. specialize.c _Py_Specialize_ForIter (684a98eb30e): tp == &PyGen_Type with no PEP 523 hook.",
+    contract: "Reads the type: no memory, no failure.",
     lowering: "none yet: a type load and a compare",
     test: "test_rop_iter");
 
@@ -325,7 +390,9 @@ macro adapt_before_use_for_iter(f:Fb<Iter>, r:B, c:B)
   TryTuple():
     branch exact_tuple(r) -> PickTuple(), PickIndexed();
   TryRange():
-    branch exact_range_iter(r) -> PickRange(), TrySlot();
+    branch exact_range_iter(r) -> PickRange(), TryGen();
+  TryGen():
+    branch exact_generator_iter(r) -> PickGen(), TrySlot();
   TrySlot():
     branch has_iternext_value(r) -> PickSlot(), Backoff();
   PickList():
@@ -352,6 +419,13 @@ macro adapt_before_use_for_iter(f:Fb<Iter>, r:B, c:B)
   PickRange():
     let c_range:Candidate<Iter> = candidate(ForIter.Range);
     call install(site, f, c_range) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickGen():
+    let c_gen:Candidate<Iter> = candidate(ForIter.Gen);
+    call install(site, f, c_gen) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();
@@ -403,10 +477,10 @@ arm IterOpen.Generic shared
     exit raise(IterOpen.Failed, saved);
 }
 
-arm ForIter.Generic shared
-  effects(reads, writes, allocates, runs_python, raises, releases on (item))
+arm ForIter.Generic split
+  effects(reads, writes, allocates, runs_python, raises, releases on (item), switches_frame)
   feedback(read(entry), write(entry), write(handler))
-  exits(next, branch, raise, again, redirect)
+  exits(next, branch, enter, raise, again, redirect)
 {
   entry():
     call adapt_before_use_for_iter(fb, use(pair.receiver), use(pair.cursor)) {
@@ -416,6 +490,13 @@ arm ForIter.Generic shared
   Retry(tk:Ticket<Iter>):
     exit again(tk);
   Run():
+    let won:Bool = claim_for_generator(thread, use(pair.receiver));
+    branch won -> Claim(), Step();
+  Claim():
+    let g:B = use(pair.receiver);
+    let c:NewFrame = enter_for_claimed(thread, frame, g);
+    exit enter(c) resume ForIter.Entered complete ForIter.Complete;
+  Step():
     let a:Anchors = anchor_for_call([pair.receiver, pair.cursor]);
     call generic_step(thread, frame, arg(a, 0), arg(a, 1)) {
       item -> Item();
@@ -598,6 +679,38 @@ arm ForIter.Indexed split
     exit raise(ForIter.Failed, saved);
 }
 
+// FOR_ITER_GEN: a generator receiver, entered in place with None sent.  Its
+// frame returns the item to the loop's body, or, when it returns, completes
+// the loop at ForIter.Complete.  Free-threaded, another thread can claim it
+// between the guard and the claim.
+arm ForIter.Gen split
+  effects(runs_python, reads, writes, raises, switches_frame)
+  feedback()
+  exits(enter, raise, miss)
+{
+  entry():
+    guard cursor_is_vacant(use(pair.cursor)) else miss;
+    guard claimable_for_generator(thread, use(pair.receiver)) else miss;
+    call enter_for_generator(thread, frame, use(pair.receiver)) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume ForIter.Entered complete ForIter.Complete;
+  Failed(e:Err):
+    exit raise(ForIter.Failed, e);
+}
+
+// The completion of the generator that ForIter.Gen entered: its return value
+// is closed, and the loop is retired as at any exhaustion
+arm ForIter.Complete completion(ForIter.Entered) split
+  effects(writes, releases) feedback() exits(branch)
+{
+  entry(v:O):
+    publish [] retire [spent(pair), owned(v)] at ForIter.Exhausted;
+    exit branch(done);
+}
+
 // A receiver with the iternext value slot, and a vacant cursor
 arm ForIter.Slot split
   effects(reads, writes, allocates, runs_python, raises, releases on (item))
@@ -712,4 +825,39 @@ arm IterClose.Observed split observes
     exit redirect(r);
   Failed(e:Err):
     exit raise(IterClose.Event, e);
+}
+
+// The observed twin of ForIter.Complete, for a word that was observed while
+// the generator ran: the STOP_ITERATION event before the pair is retired,
+// BRANCH_RIGHT after, as ForIter.Observed makes them
+arm ForIter.CompleteObserved completion(ForIter.Entered) split observes
+  effects(reads, writes, releases, runs_python, raises) feedback()
+  exits(branch, raise, redirect)
+{
+  entry(v:O):
+    let a:Anchors = anchor_for_call([pair.receiver]);
+    call stop_iteration_event(thread, frame, site, arg(a, 0), v) {
+      ok -> Retire();
+      moved -> StopMoved();
+      err -> StopFailed();
+    }
+  Retire():
+    publish [] retire [roots(a), spent(pair)] at ForIter.Exhausted;
+    call branch_event(thread, frame, site, true) {
+      ok -> Exit();
+      moved -> ExitMoved();
+      err -> ExitEventFailed();
+    }
+  Exit():
+    exit branch(done);
+  ExitMoved(xr:Route):
+    exit redirect(xr);
+  ExitEventFailed(xe:Err):
+    exit raise(ForIter.ExitEvent, xe);
+  StopMoved(sr:Route):
+    publish [] retire [roots(a)] at ForIter.Closed;
+    exit redirect(sr);
+  StopFailed(sf:Err):
+    publish [] retire [roots(a)] at ForIter.Closed;
+    exit raise(ForIter.Closed, sf);
 }

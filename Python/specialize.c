@@ -2570,13 +2570,13 @@ _PyRop_ClassifySetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
 
 /* The evidence row of Call (classify_call, Python/register_ops/calls.rop):
  * the arm that a call of fn at site stands for, as the index of its case
- * (exact, bound_exact, init, other), with the site's entry filled for that
- * arm: a simple Python function, a bound method of one, or a heap class whose
+ * (exact, bound_exact, init, generator, plan, other), with the site's entry
+ * filled for that arm: a simple Python function, a bound method of one, or a heap class whose
  * __init__ is one, or a generator function that takes exactly these
  * arguments; every other callable is "other", which runs in
  * Call.Generic. */
 enum { CALL_CASE_EXACT, CALL_CASE_BOUND_EXACT, CALL_CASE_INIT,
-       CALL_CASE_GENERATOR, CALL_CASE_OTHER };
+       CALL_CASE_GENERATOR, CALL_CASE_PLAN, CALL_CASE_OTHER };
 
 static bool
 call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs,
@@ -2594,6 +2594,32 @@ call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs,
     }
     int version = _PyFunction_GetVersionForCurrentState(func);
     if (!_PyFunction_IsVersionValid(version)) {
+        return false;
+    }
+    fb->func_version = version;
+    return true;
+}
+
+/* The old specialize_py_call's CALL_PY_GENERAL: a function of the default
+ * call that the exact arms do not take, whose binding plan (the arguments, a
+ * self slot that is absent at run time) is the site's.  A generator function
+ * takes the vectorcall. */
+static bool
+call_classify_plan(_PyFbCall *fb, PyFunctionObject *func, int nargs, int skip)
+{
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        function_signature(code) == UNOPTIMIZED_SIGNATURE ||
+        code_creates_generator(code) ||
+        !prepare_function_exec(code))
+    {
+        return false;
+    }
+    int version = _PyFunction_GetVersionForCurrentState(func);
+    if (!_PyFunction_IsVersionValid(version) ||
+        !_PyBindPlan_Init(&fb->plan, code, nargs, skip, 0, NULL, 0))
+    {
         return false;
     }
     fb->func_version = version;
@@ -2641,8 +2667,11 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
         if (call_classify_function(fb, func, nargs, false)) {
             return CALL_CASE_EXACT;
         }
-        return call_classify_function(fb, func, nargs, true)
-            ? CALL_CASE_GENERATOR : CALL_CASE_OTHER;
+        if (call_classify_function(fb, func, nargs, true)) {
+            return CALL_CASE_GENERATOR;
+        }
+        return call_classify_plan(fb, func, nargs, self_slot && !self_present)
+            ? CALL_CASE_PLAN : CALL_CASE_OTHER;
     }
     if (self_present) {
         return CALL_CASE_OTHER;

@@ -180,7 +180,7 @@ class TestClassMethodCache(unittest.TestCase):
         reset_code(invoke)
         warm(invoke, Receiver)
         self.assertIn("GetMethod.ClassMethod", handlers(invoke))
-        self.assertIn("Call.Generic", handlers(invoke))
+        self.assertIn("Call.PyGeneral", handlers(invoke))
         function = Receiver.__dict__["selected"].__func__
         function.__defaults__ = (20,)
         self.assertEqual(invoke(Receiver), (Receiver, 20))

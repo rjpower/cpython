@@ -175,7 +175,7 @@ def decl_lines(d: Decl) -> list[str]:
         select = ("" if not d.select else
                   f" select({', '.join(m.value for m in d.select)})")
         entry = "" if d.entry is None else f" entry({d.entry})"
-        observes = (" observes" if d.observes else "") + (" trailing" if d.trailing else "")
+        observes = (" observes" if d.observes else "") + (" trailing" if d.trailing else "") + (" displacing" if d.displacing else "")
         completion = "" if d.completion is None else f" completion({d.completion})"
         return ([f"arm {d.name}{completion} {d.region.value}{select}{entry}{observes}"]
                 + _contract(d.contract, True, True) + _graph(d.graph))

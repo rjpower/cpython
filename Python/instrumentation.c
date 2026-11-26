@@ -9,6 +9,7 @@
 #include "pycore_genobject.h"     // _PyGen_SetStopIterationValue()
 #include "pycore_interpframe.h"   // _PyFrame_GetBytecode()
 #include "pycore_ir_source.h"
+#include "pycore_rop_metadata.h"   // ROP_HANDLER_Instruction_Hook
 #include "pycore_jit.h"           // _PyJit_Retire()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
@@ -2134,7 +2135,7 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     uint8_t original_opcode;
 done:
     original_opcode = _PyCode_GetOriginalOpcode(line_data, i);
-    if (IR_HANDLER(*instr) == IR_H_INSTRUMENTED_INSTRUCTION) {
+    if (IR_HANDLER(*instr) == ROP_HANDLER_Instruction_Hook) {
         /* A LINE callback may have disabled the last LINE tool while
          * leaving INSTRUCTION monitoring enabled. */
         original_opcode = INSTRUMENTED_INSTRUCTION;

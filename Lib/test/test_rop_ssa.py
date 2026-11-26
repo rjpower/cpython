@@ -1176,6 +1176,10 @@ def cx():
 UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
               "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
+    # Monitoring: a displacing arm runs another handler, which the evaluator
+    # does not model; test_monitoring and test_sys_settrace run them
+    "Line.Hook": "covered by test_monitoring and test_sys_settrace",
+    "Instruction.Hook": "covered by test_monitoring and test_sys_settrace",
     # Iteration (rir90 FI): the arms are checked by test_rop_iter
     "IterOpen.Generic": "covered by test_rop_iter",
     "ForIter.Generic": "covered by test_rop_iter",

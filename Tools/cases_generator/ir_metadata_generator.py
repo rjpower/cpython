@@ -270,7 +270,7 @@ def arm_flags(analysis: Analysis, arm: ir_arms.ArmEntry) -> str:
             parts.append("_PyIR_H_SAVES_IP")
     if arm.adaptive and not arm.is_generic:
         parts.append("_PyIR_H_SPECIALIZED")
-    if arm.observes is not None:
+    if arm.observes is not None or arm.displacing:
         parts.append("_PyIR_H_INSTRUMENTED")
     if twin_by_tools(analysis, arm):
         parts.append("_PyIR_H_TWIN_BY_TOOLS")
@@ -501,6 +501,12 @@ def generate_ir_metadata(
         for number in range(256):
             handler = next((ids[name] for name, inst in analysis.instructions.items()
                             if inst.opcode == number and name in ids), None)
+            if handler is None:
+                # A displacing arm is the handler of its family's one op, the
+                # instrumented opcode that monitoring puts in a word
+                handler = next((arm_id(analysis, arm) for arm in arms
+                                if arm.displacing and numbers.get(arm.base) == number),
+                               None)
             out.emit(f"[{number}] = {none if handler is None else handler},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

@@ -766,11 +766,20 @@ C_EXIT = {"unwind": "raise"}
 def disagreement(cx: Context, out: Outcome, obs: Observation, homes: dict[int, str]) -> str | None:
     """Why an outcome does not agree with C, or None.  homes maps each slot
     that is an operand home to its operand"""
-    if C_EXIT.get(out.exit, out.exit) != obs.exit:
+    # A jump or branch is judged by its target: C's run shows only the word
+    # it reached, so one that lands on the following word reads as next.
+    # The target is a Head when the path names it (an operand, site or
+    # next_head); a head that an opaque row returns (jit_warm's jump) is
+    # unknown, and the declared exit admits any word C reaches, next too
+    jumps = out.exit in ("branch", "jump")
+    target = (out.args[0].index if jumps and out.args and isinstance(out.args[0], Head)
+              else None)
+    lands_next = (jumps and obs.exit == "next" and obs.next is not None
+                  and target in (None, obs.next))
+    if C_EXIT.get(out.exit, out.exit) != obs.exit and not lands_next:
         return f"exit {out.exit}, C took {obs.exit}"
-    if (out.exit in ("branch", "jump") and obs.next is not None and out.args
-            and isinstance(out.args[0], Head) and out.args[0].index != obs.next):
-        return f"{out.exit} to {out.args[0].index}, C went to {obs.next}"
+    if target is not None and obs.next is not None and target != obs.next:
+        return f"{out.exit} to {target}, C went to {obs.next}"
     binding: dict = {}
     if obs.delivered is not None:
         # A return: the frame is gone; the value delivered to the caller is

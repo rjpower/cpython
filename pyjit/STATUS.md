@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `871e8237b78` (pushed) holds:
+`pyjit/rir90` at `0952d8626c3` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -87,7 +87,13 @@ interpreter hold no reference to the stack at step D, and tests check it.
   tables and the verifier's dead owner-program paths are deleted.  This
   fixes three classes of wrong answers in the old planner: a completed
   value reported NULL, an IterClose cursor never named, and a keep-mode
-  BranchTruth jump reported as retired.
+  BranchTruth jump reported as retired;
+- D's commit A: the planner and the verifier find a word's fall-through
+  edge in its declared normal edges, not in stack scope-exit and
+  jump-always tests;
+- WF4's first half: the register format keeps no stack field; the
+  translator reads its own stack format, generated from `stack_ops.py`,
+  and the generated tables equal the old ones row for row.
 
 No word runs an inherited handler. The last merge check passed the smoke set
 on release and assert, and the verifier reports no error over 108,929 code
@@ -103,12 +109,13 @@ join.
 
 Running, for the end condition that the IR and the interpreter hold no
 reference to the stack:
-- WF4 (Opus) splits the format: the translator reads its own stack format,
-  and the register format keeps no stack field.
-- D, beside it, switches the remaining stack-op name tests in the verifier,
-  the planner and the outcome readers to declared data; after WF4 it
-  deletes the opcode maps that lose their last reader and adds the test
-  that no stack reference remains. Its migration check found three classes of wrong
+- WF4's second commit (Opus) gives each translated op its stack op and
+  moves the stack format and tables into translator headers.
+- D adds the test that no runtime source names a stack op (every file under
+  `Python/`, `Objects/` and `Include/internal/`, less the compiler,
+  translator and opcode schema, with function-scoped exceptions), deletes
+  the handler-to-opcode maps, and moves the `.rop` `ops(...)` mapping into
+  `stack_ops.py`, so the register IR's own sources name no stack op. Its migration check found three classes of wrong
   answers in the old f_lineno planner, which the new format fixes.
 
 Then full suites and approximate timing.

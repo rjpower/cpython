@@ -136,12 +136,31 @@ _PyIR_ExceptionNext(const unsigned char **cursor, const unsigned char *end,
     return _PyIR_ExceptionDecode(cursor, end, _PyIR_EXCEPTION_FIELDS, entry);
 }
 
-/* The recipe of index + 1 in the code's recipes, NULL for none: its count,
- * then its pairs */
+/* The recipe of index + 1 in the code's recipes, NULL for none.  It is the
+ * parallel move of n pairs of a source slot and a home, sequenced when the
+ * code is lowered (_PyRegCfg_SequenceRecipe()), so the unwinder solves
+ * nothing:
+ *     n, then n pairs (source, home);
+ *     the pairs of no cycle come first, in order: each one exchanges its
+ *     source and home, which leaves what the home held at the source;
+ *     then the pairs of each cycle in turn, one after the other, each home
+ *     being the next pair's source, which turn one place through a C local;
+ *     then the number of cycles and the length of each;
+ *     then the number of released sources and those slots: the sources of
+ *     the exchanges that no home takes, left with what their homes held,
+ *     which the unwinder closes. */
 static inline const int32_t *
 _PyIR_Recipe(const _PyCodeIR *ir, int recipe)
 {
     return recipe ? &ir->recipes[recipe - 1] : NULL;
+}
+
+/* The entries of a recipe, its tail included */
+static inline int
+_PyIR_RecipeSize(const int32_t *r)
+{
+    int n = r[0], ncycles = r[1 + 2 * n];
+    return 1 + 2 * n + 1 + ncycles + 1 + r[2 + 2 * n + ncycles];
 }
 
 /* Whether recipe index + 1 of ir is whole, with sources in the frame and
@@ -158,9 +177,40 @@ _PyIR_RecipeValid(const _PyCodeIR *ir, int recipe, int nlocals, int floor)
     const int32_t *r = &ir->recipes[recipe - 1];
     int n = r[0];
     if (n <= 0 || n > (int)ir->nslots ||
-        (uint32_t)(recipe + 2 * n) > ir->nrecipes)
+        (uint32_t)(recipe + 2 * n + 1) > ir->nrecipes)
     {
         return 0;
+    }
+    int ncycles = r[1 + 2 * n];
+    if (ncycles < 0 || ncycles > n / 2 ||
+        (uint32_t)(recipe + 2 * n + ncycles + 2) > ir->nrecipes)
+    {
+        return 0;
+    }
+    int nrel = r[2 + 2 * n + ncycles];
+    if (nrel < 0 || nrel > n ||
+        (uint32_t)(recipe - 1 + _PyIR_RecipeSize(r)) > ir->nrecipes)
+    {
+        return 0;
+    }
+    int cyclic = 0;
+    for (int c = 0; c < ncycles; c++) {
+        int len = r[2 + 2 * n + c];
+        if (len < 2 || len > n - cyclic) {
+            return 0;
+        }
+        cyclic += len;
+    }
+    int npath = n - cyclic;
+    // Each cycle's homes are its sources in turn
+    for (int c = 0, first = npath; c < ncycles; first += r[2 + 2 * n + c++]) {
+        int len = r[2 + 2 * n + c];
+        for (int i = 0; i < len; i++) {
+            int next = first + (i + 1) % len;
+            if (r[2 + 2 * (first + i)] != r[1 + 2 * next]) {
+                return 0;
+            }
+        }
     }
     for (int q = 0; q < n; q++) {
         int src = r[1 + 2 * q], home = r[2 + 2 * q];
@@ -173,6 +223,12 @@ _PyIR_RecipeValid(const _PyCodeIR *ir, int recipe, int nlocals, int floor)
             if (r[2 + 2 * p] == home || r[1 + 2 * p] == src) {
                 return 0;
             }
+        }
+    }
+    for (int k = 0; k < nrel; k++) {
+        int slot = r[3 + 2 * n + ncycles + k];
+        if (slot < nlocals || slot >= (int)ir->nslots) {
+            return 0;
         }
     }
     return 1;

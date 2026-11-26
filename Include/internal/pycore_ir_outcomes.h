@@ -458,13 +458,44 @@ _PyIR_SpanReadsHome(const _PyIRWord *wp, int home)
     return 0;
 }
 
+/* A move word's pair count and source count: a Retire has sources only */
+static inline void
+_PyIR_MoveCounts(const _PyIRWord *wp, int *nd, int *ns)
+{
+    if (_PyIR_FormatOf(IR_HANDLER(*wp))->flags & _PyIR_VACANT_SPAN) {
+        *nd = 0;
+        *ns = (int)IR_A(*wp);
+        return;
+    }
+    *nd = (int)IR_A(*wp);
+    *ns = (int)IR_B(*wp);
+}
+
+/* Rotate.Cycle's one span is a cycle of homes: element j + 1 takes element
+ * j's owner, and element 0 the last's */
+static inline int
+_PyIR_IsRotateWord(const _PyIRWord *wp)
+{
+    return IR_HANDLER(*wp) == ROP_HANDLER_Rotate_Cycle;
+}
+
 /* The pair of a Move whose source is home, or -1; *extra says that home is
- * a source past the pairs, which Move.Retire closes */
+ * a source past the pairs, which Retire.Close closes */
 static inline int
 _PyIR_MoveSourceOf(const _PyIRWord *wp, int home, int *extra)
 {
-    int nd = (int)IR_A(*wp), ns = (int)IR_B(*wp);
+    int nd, ns;
+    _PyIR_MoveCounts(wp, &nd, &ns);
     *extra = 0;
+    if (_PyIR_IsRotateWord(wp)) {
+        // Every home of the cycle is a source and a destination
+        for (int k = 0; k < ns; k++) {
+            if (_PyIR_SpanElement(wp, IR_HANDLER(*wp), k) == home) {
+                return k;
+            }
+        }
+        return -1;
+    }
     for (int k = 0; k < ns; k++) {
         if (_PyIR_SpanElement(wp, IR_HANDLER(*wp), nd + k) == home) {
             *extra = k >= nd;
@@ -478,7 +509,16 @@ _PyIR_MoveSourceOf(const _PyIRWord *wp, int home, int *extra)
 static inline int
 _PyIR_MoveGives(const _PyIRWord *wp, int home)
 {
-    int nd = (int)IR_A(*wp);
+    int nd, ns;
+    _PyIR_MoveCounts(wp, &nd, &ns);
+    if (_PyIR_IsRotateWord(wp)) {
+        for (int k = 0; k < ns; k++) {
+            if (_PyIR_SpanElement(wp, IR_HANDLER(*wp), k) == home) {
+                return _PyIR_SpanElement(wp, IR_HANDLER(*wp), (k + ns - 1) % ns);
+            }
+        }
+        return -1;
+    }
     for (int k = 0; k < nd; k++) {
         if (_PyIR_SpanElement(wp, IR_HANDLER(*wp), k) == home) {
             return _PyIR_SpanElement(wp, IR_HANDLER(*wp), nd + k);

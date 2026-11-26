@@ -529,6 +529,13 @@ PyAPI_FUNC(int) _PyRegPass_SetKeepAcrossCode(int keep);
 /* Reserve n operands in the pool, which may move it; *index is the first. */
 int _PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index);
 
+/* Sequencing of parallel moves (Python/regcfg.c) */
+PyAPI_FUNC(int) _PyRegCfg_SequenceMoves(int n, int *src, int *dst,
+                                        int *scratch, int *cyc,
+                                        int *cycle_len, int *ncycles);
+PyAPI_FUNC(int) _PyRegCfg_SequenceRecipe(int n, const int *from,
+                                         const int *home, int32_t *out);
+
 /* Replace register from by to in every op of the region of block b. */
 void _PyRegCfg_Rename(_PyRegCfg *cfg, int b, int from, int to);
 

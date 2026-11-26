@@ -113,7 +113,9 @@ def vacant_homes(fam: Family) -> tuple[str, ...]:
     names of `vacant(...)`, a group standing for its projections, and every
     optional source (Maybe<Src>)"""
     operands = {p.name: p.type for p in fam.params}
-    named = [h for n in fam.vacant for h in expand_group(n, operands)]
+    named = [h for n in fam.vacant
+             if not (isinstance(operands.get(n), WrapType) and operands[n].wrap is Wrap.Span)
+             for h in expand_group(n, operands)]
     return tuple(dict.fromkeys(named + optional_sources(fam)))
 
 
@@ -611,7 +613,8 @@ def check_homes(c: Checker, fam: Family) -> None:
         if is_out(operands.get(root)):
             c.report(fam.span, fam.name, f"vacant({n}): {root} is defined, not read")
             continue
-        inner = t.arg if isinstance(t, WrapType) and t.wrap is Wrap.Maybe else t
+        # A span's elements are vacant by the format's flag, not by a home
+        inner = t.arg if isinstance(t, WrapType) and t.wrap in (Wrap.Maybe, Wrap.Span) else t
         if not (isinstance(inner, HandleType) and inner.handle in SOURCE_HANDLES
                 and inner.handle is not Handle.Args):
             c.report(fam.span, fam.name, f"vacant({n}): operand {n} is "

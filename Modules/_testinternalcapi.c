@@ -2082,18 +2082,19 @@ apply_recipe(PyObject *self, PyObject *args)
         return NULL;
     }
     int nslots = _PyFrame_NumSlots(frame);
-    int32_t *recipe = PyMem_Calloc(1 + 2 * n, sizeof(int32_t));
-    if (n == 0 || n > nslots || recipe == NULL) {
-        if (recipe == NULL) {
+    int32_t *recipe = PyMem_Calloc(4 * n + 3, sizeof(int32_t));
+    int *slots = PyMem_Calloc(2 * n + 1, sizeof(int));
+    if (n == 0 || n > nslots || recipe == NULL || slots == NULL) {
+        if (recipe == NULL || slots == NULL) {
             PyErr_NoMemory();
         }
         else {
             PyErr_SetString(PyExc_ValueError, "bad number of pairs");
         }
         PyMem_Free(recipe);
+        PyMem_Free(slots);
         return NULL;
     }
-    recipe[0] = (int32_t)n;
     for (Py_ssize_t q = 0; q < n; q++) {
         int s, h;
         PyObject *pair = PySequence_GetItem(pairs, q);
@@ -2104,10 +2105,18 @@ apply_recipe(PyObject *self, PyObject *args)
                 PyErr_SetString(PyExc_ValueError, "slot out of range");
             }
             PyMem_Free(recipe);
+            PyMem_Free(slots);
             return NULL;
         }
-        recipe[1 + 2 * q] = s;
-        recipe[2 + 2 * q] = h;
+        slots[q] = s;
+        slots[n + q] = h;
+    }
+    // The lowering's sequencing of a recipe, as the assembler does it
+    int entries = _PyRegCfg_SequenceRecipe((int)n, slots, slots + n, recipe);
+    PyMem_Free(slots);
+    if (entries < 0) {
+        PyMem_Free(recipe);
+        return NULL;
     }
     _PyFrame_ApplyRecipe(frame, recipe);
     PyMem_Free(recipe);

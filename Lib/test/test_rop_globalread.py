@@ -97,7 +97,7 @@ class LoweringTests(unittest.TestCase):
     def test_discarded_read_has_no_retire(self):
         words = warmed(discard_global)
         self.assertEqual(words.count("GlobalRead.Generic"), 1)
-        self.assertFalse([w for w in words if w.startswith("Move.Retire")], words)
+        self.assertFalse([w for w in words if w.startswith("Retire.Close")], words)
         discard_global()
 
     def test_name_error(self):

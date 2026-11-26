@@ -2510,71 +2510,35 @@ register_stopped_state_bind(PyFrameObject *self, RegisterResumeAnalysis *analysi
 }
 
 /* The origins after recipe, as the unwinder applies it (ceval.c's
- * error_apply_recipe()): each home takes its source's origin as if all
- * moved at once, and a source that is no home is released. */
+ * _PyFrame_ApplyRecipe()): the pairs of no cycle exchange their origins in
+ * order, each cycle turns one place, and the released sources are vacated. */
 static void
 register_apply_recipe(int *origins, int nl, const int32_t *recipe)
 {
     int n = recipe[0];
-    uint64_t done[IR_MAX_SLOTS / 64 + 1] = {0};
-    int progress = 1;
-    while (progress) {
-        progress = 0;
-        for (int q = 0; q < n; q++) {
-            if ((done[q >> 6] >> (q & 63)) & 1) {
-                continue;
-            }
-            int h = recipe[2 + 2 * q], pending = 0;
-            for (int p = 0; p < n; p++) {
-                pending |= !((done[p >> 6] >> (p & 63)) & 1)
-                           && recipe[1 + 2 * p] == h;
-            }
-            if (pending) {
-                continue;
-            }
-            int s = recipe[1 + 2 * q];
-            int held = origins[h - nl];
-            origins[h - nl] = origins[s - nl];
-            origins[s - nl] = held;
-            done[q >> 6] |= (uint64_t)1 << (q & 63);
-            progress = 1;
-        }
+    int ncycles = recipe[1 + 2 * n];
+    const int32_t *lengths = &recipe[2 + 2 * n];
+    int npath = n;
+    for (int c = 0; c < ncycles; c++) {
+        npath -= lengths[c];
     }
-    for (int q = 0; q < n; q++) {
-        if ((done[q >> 6] >> (q & 63)) & 1) {
-            continue;
-        }
-        int vacant = recipe[1 + 2 * q];
-        int first = origins[vacant - nl];
-        for (;;) {
-            int r = -1;
-            for (int p = 0; p < n && r < 0; p++) {
-                if (!((done[p >> 6] >> (p & 63)) & 1)
-                    && recipe[2 + 2 * p] == vacant)
-                {
-                    r = p;
-                }
-            }
-            if (r < 0) {
-                break;
-            }
-            done[r >> 6] |= (uint64_t)1 << (r & 63);
-            if (r == q) {
-                origins[vacant - nl] = first;
-                break;
-            }
-            origins[vacant - nl] = origins[recipe[1 + 2 * r] - nl];
-            vacant = recipe[1 + 2 * r];
-        }
+    for (int q = 0; q < npath; q++) {
+        int s = recipe[1 + 2 * q] - nl, h = recipe[2 + 2 * q] - nl;
+        int held = origins[h];
+        origins[h] = origins[s];
+        origins[s] = held;
     }
-    for (int q = 0; q < n; q++) {
-        int s = recipe[1 + 2 * q], home = 0;
-        for (int p = 0; p < n; p++) {
-            home |= recipe[2 + 2 * p] == s;
+    for (int c = 0, q = npath; c < ncycles; q += lengths[c++]) {
+        int last = q + lengths[c] - 1;
+        int held = origins[recipe[1 + 2 * last] - nl];
+        for (int i = last; i > q; i--) {
+            origins[recipe[2 + 2 * (i - 1)] - nl] = origins[recipe[1 + 2 * (i - 1)] - nl];
         }
-        if (!home) {
-            origins[s - nl] = 0;
-        }
+        origins[recipe[2 + 2 * last] - nl] = held;
+    }
+    const int32_t *released = &lengths[ncycles];
+    for (int k = 1; k <= released[0]; k++) {
+        origins[released[k] - nl] = 0;
     }
 }
 

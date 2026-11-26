@@ -1383,7 +1383,7 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
  *   2. The producer absorbs it: an op that may discard its result
  *      (_PyStack_DISCARDS), which nothing else read, writes it nowhere
  *      (_PyReg_DISCARD).
- *   3. A retirement: Move.Retire of the value, which closes it and may run
+ *   3. A retirement: Retire.Close of the value, which closes it and may run
  *      Python.  A retirement right after another on the same line and
  *      under the same handler joins it: one word closes both, in pop
  *      order.  An edge's Move set that follows takes it in (bind_edge()).
@@ -1463,7 +1463,7 @@ sole_producer(_PyRegTr *t, int v)
 }
 
 /* The retirement that the op being translated may join: the last op of the
- * block, past source-only ops, if it is a Move.Retire on src's line under
+ * block, past source-only ops, if it is a Retire.Close on src's line under
  * src's handler */
 static _PyRegOp *
 joinable_retire(_PyRegTr *t, const _PyRegOp *src)
@@ -1473,7 +1473,7 @@ joinable_retire(_PyRegTr *t, const _PyRegOp *src)
         if (op->loc.lineno != src->loc.lineno || op->except != src->except) {
             return NULL;
         }
-        if (op->opcode == ROP_SELECT_Move_retire) {
+        if (op->opcode == ROP_OP_Retire_Close) {
             return op->nout == 0 ? op : NULL;
         }
         if (op->opcode != NOP || op->nread != 0 || op->nout != 0) {
@@ -1554,7 +1554,7 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
     int v = t->stack[t->sp - 1];
     _PyRegOp *prod = sole_producer(t, v);
     _PyRegOp *retire = NULL, *dead = NULL;
-    int emitted = NOP;  // a CFG op number: NOP or the tagged Move.Retire
+    int emitted = NOP;  // a CFG op number: NOP or the tagged Retire.Close
     if (prod != NULL && prod->loc.lineno == src->loc.lineno &&
         prod->except == src->except && only_makes_value(t->cfg, prod))
     {
@@ -1574,7 +1574,7 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
         RETURN_IF_ERROR(retire_also(t, retire, v));
     }
     else {
-        emitted = ROP_SELECT_Move_retire;
+        emitted = ROP_OP_Retire_Close;
     }
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, emitted, &v,
@@ -5011,7 +5011,7 @@ has_duplicate(const _PyRegCfg *cfg, const int *vs, int n)
 }
 
 /* Ownership: each value has one owner (RV change 9).  An op takes no value
- * twice; a parallel move, a recipe and a Move.Retire name each value once;
+ * twice; a parallel move, a recipe and a Retire.Close name each value once;
  * and within a region nothing names a temporary after an op took it,
  * unless an op has defined it again.  A wrong alias breaks one of these:
  * a value released twice, or a home read after it was emptied.  Ops that
@@ -5562,9 +5562,13 @@ _PyRegCfg_Build(_PyRegCfg *cfg)
  * moves before an op and the parallel moves (_PyReg_MOVES) that bind a
  * region's parameters at an edge.  Each set becomes one Move.Transfer
  * word (Python/register_ops/values.rop), whose run is the parallel move
- * that the unwinder's recipes use too (_PyFrame_ParallelMove()).  A
+ * that the unwinder's recipes sequence the same way
+ * (_PyRegCfg_SequenceRecipe()).  A
  * move's target is vacant (NULL) or the source of another move of the
- * set, so no value ever has two owners, and none is left behind.  The word
+ * set, so no value ever has two owners, and none is left behind.  The
+ * set is sequenced here: the pairs that form no cycle are ordered so that
+ * each destination is vacant when its pair runs, and each cycle becomes a
+ * Rotate.Cycle word of its own.  The word
  * keeps its op's handler, with the recipe that finds the handler's values
  * where they are before it (_PyReg_SLOT_RECIPE). */
 
@@ -5638,6 +5642,139 @@ collect_moves(_PyRegCfg *cfg, _PyRegOp *op, move_set *m, int *from,
     return SUCCESS;
 }
 
+/* Sequence the n pairs src[q] to dst[q], which are a parallel move: the
+ * pairs that form no cycle, in place and in order (a pair runs when no pair
+ * that has not run reads its destination), the number of which is returned,
+ * and the cycles after them in cyc[], each as the homes in turn: home i + 1
+ * takes home i's owner, and home 0 the last's.  cycle_len[] gets the length
+ * of each and *ncycles their number.  scratch has room for 3n ints. */
+int
+_PyRegCfg_SequenceMoves(int n, int *src, int *dst, int *scratch, int *cyc,
+                        int *cycle_len, int *ncycles)
+{
+    int *src0 = scratch, *dst0 = scratch + n, *ran = scratch + 2 * n;
+    memcpy(src0, src, n * sizeof(int));
+    memcpy(dst0, dst, n * sizeof(int));
+    memset(ran, 0, n * sizeof(int));
+    int out = 0, left = n, ncyc = 0;
+    *ncycles = 0;
+    for (int progress = 1; progress && left > 0;) {
+        progress = 0;
+        for (int q = 0; q < n; q++) {
+            int blocked = 0;
+            for (int p = 0; p < n && !blocked; p++) {
+                blocked = !ran[p] && p != q && src0[p] == dst0[q];
+            }
+            if (ran[q] || blocked) {
+                continue;
+            }
+            src[out] = src0[q];
+            dst[out] = dst0[q];
+            out++;
+            ran[q] = 1;
+            left--;
+            progress = 1;
+        }
+    }
+    // What is left is cycles: pair q's destination is the next pair's source
+    for (int q = 0; q < n; q++) {
+        if (ran[q]) {
+            continue;
+        }
+        int len = 0;
+        for (int p = q;;) {
+            cyc[ncyc++] = src0[p];
+            len++;
+            ran[p] = 1;
+            int next = -1;
+            for (int r = 0; r < n && next < 0; r++) {
+                if (!ran[r] && src0[r] == dst0[p]) {
+                    next = r;
+                }
+            }
+            if (next < 0) {
+                break;
+            }
+            p = next;
+        }
+        cycle_len[(*ncycles)++] = len;
+    }
+    return out;
+}
+
+/* The sequenced ingress recipe (pycore_ir_exception.h) of the n pairs of a
+ * source slot and a home, in out[], which has room for 4 * n + 3 entries:
+ * the pairs that form no cycle in order, then the pairs of each cycle in
+ * turn, then the cycles' lengths and the sources that no home takes, which
+ * the unwinder releases.  Returns the entries, or -1 with MemoryError. */
+int
+_PyRegCfg_SequenceRecipe(int n, const int *from, const int *home, int32_t *out)
+{
+    int *buf = PyMem_Malloc(8 * (size_t)n * sizeof(int));
+    if (buf == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    int *src = buf, *dst = buf + n, *scratch = buf + 2 * n;
+    int *cyc = buf + 5 * n, *cycle_len = buf + 6 * n;
+    memcpy(src, from, n * sizeof(int));
+    memcpy(dst, home, n * sizeof(int));
+    int ncycles;
+    int npath = _PyRegCfg_SequenceMoves(n, src, dst, scratch, cyc, cycle_len,
+                                        &ncycles);
+    int at = 0;
+    out[at++] = n;
+    for (int q = 0; q < npath; q++) {
+        out[at++] = src[q];
+        out[at++] = dst[q];
+    }
+    for (int c = 0, first = 0; c < ncycles; first += cycle_len[c++]) {
+        for (int i = 0; i < cycle_len[c]; i++) {
+            out[at++] = cyc[first + i];
+            out[at++] = cyc[first + (i + 1) % cycle_len[c]];
+        }
+    }
+    out[at++] = ncycles;
+    for (int c = 0; c < ncycles; c++) {
+        out[at++] = cycle_len[c];
+    }
+    int nrel_at = at++;
+    int nrel = 0;
+    for (int q = 0; q < npath; q++) {
+        int is_home = 0;
+        for (int p = 0; p < n; p++) {
+            is_home |= home[p] == src[q];
+        }
+        if (!is_home) {
+            out[at++] = src[q];
+            nrel++;
+        }
+    }
+    out[nrel_at] = nrel;
+    PyMem_Free(buf);
+    return at;
+}
+
+/* A resolved move word at the place of op: the slots are operands[at...],
+ * counts first */
+static void
+init_move_word(_PyRegOp *move, const _PyRegOp *op, int opcode, int elems,
+               int npairs, int recipe_at)
+{
+    *move = *op;
+    move->opcode = opcode;
+    move->oparg = 0;
+    move->in = elems;
+    move->nread = move->npop = move->nimplicit = move->nout = 0;
+    move->nstage = 0;
+    move->dst = move->target = -1;
+    move->reader = -1;
+    move->completion = move->kwnames = 0;
+    move->flags = _PyReg_SLOT_RECIPE | _PyReg_MOVE_SLOTS;
+    move->nrecipe = npairs;
+    move->recipe = recipe_at;
+}
+
 static int
 resolve_moves(_PyRegCfg *cfg)
 {
@@ -5648,7 +5785,8 @@ resolve_moves(_PyRegCfg *cfg)
             continue;
         }
         int n = ((op->flags & _PyReg_MOVES) ? op->nout : 0) + op->nstage;
-        extra += n > 0;
+        // A word for the pairs that form no cycle, and one for each cycle
+        extra += n > 0 ? n / 2 + 1 : 0;
         max = Py_MAX(max, n + op->nrecipe);
     }
     if (extra == 0) {
@@ -5658,13 +5796,15 @@ resolve_moves(_PyRegCfg *cfg)
     _PyRegOp *ops = PyMem_Calloc(cfg->nops + extra, sizeof(_PyRegOp));
     int *first = PyMem_Malloc((cfg->nops + 1) * sizeof(int));
     int *index = PyMem_Malloc((cfg->nops + 1) * sizeof(int));
-    int *buf = PyMem_Malloc(8 * max * sizeof(int));
+    int *buf = PyMem_Malloc(12 * max * sizeof(int));
     if (ops == NULL || first == NULL || index == NULL || buf == NULL) {
         PyErr_NoMemory();
         goto done;
     }
     move_set m = {.src = buf, .dst = buf + max};
     int *from = buf + 4 * max, *home = buf + 5 * max;
+    int *scratch = buf + 6 * max, *cyc = buf + 9 * max;
+    int *cycle_len = buf + 10 * max;
     int nops = 0;
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
@@ -5685,10 +5825,8 @@ resolve_moves(_PyRegCfg *cfg)
             for (int q = 0; q < nrec; q++) {
                 npairs += from[q] != home[q];
             }
-            int at = 0, elems;
-            if ((npairs && _PyRegCfg_AddOperands(cfg, 2 * npairs, &at) < 0) ||
-                _PyRegCfg_AddOperands(cfg, 2 + 2 * m.n, &elems) < 0)
-            {
+            int at = 0;
+            if (npairs && _PyRegCfg_AddOperands(cfg, 2 * npairs, &at) < 0) {
                 goto done;
             }
             int *pairs = &cfg->operands[at];
@@ -5699,26 +5837,43 @@ resolve_moves(_PyRegCfg *cfg)
                     p++;
                 }
             }
-            // Its counts, then the destinations, then the sources
-            int *e = &cfg->operands[elems];
-            e[0] = e[1] = m.n;
-            for (int q = 0; q < m.n; q++) {
-                e[2 + q] = m.dst[q];
-                e[2 + m.n + q] = m.src[q];
+            int ncycles;
+            m.n = _PyRegCfg_SequenceMoves(m.n, m.src, m.dst, scratch, cyc,
+                                          cycle_len, &ncycles);
+            // The first word of the set carries the recipe: the others
+            // follow it with no op between
+            int first_word = 1;
+            int homes = 0;
+            for (int c = 0; c < ncycles; c++) {
+                int len = cycle_len[c], elems;
+                if (_PyRegCfg_AddOperands(cfg, 2 + len, &elems) < 0) {
+                    goto done;
+                }
+                int *e = &cfg->operands[elems];
+                e[0] = len;
+                e[1] = 0;
+                memcpy(e + 2, cyc + homes, len * sizeof(int));
+                homes += len;
+                init_move_word(&ops[nops++], op, ROP_OP_Rotate_Cycle, elems,
+                               first_word ? npairs : 0, first_word ? at : 0);
+                first_word = 0;
             }
-            _PyRegOp *move = &ops[nops++];
-            *move = *op;
-            move->opcode = ROP_SELECT_Move_transfer;
-            move->oparg = 0;
-            move->in = elems;
-            move->nread = move->npop = move->nimplicit = move->nout = 0;
-            move->nstage = 0;
-            move->dst = move->target = -1;
-            move->reader = -1;
-            move->completion = move->kwnames = 0;
-            move->flags = _PyReg_SLOT_RECIPE | _PyReg_MOVE_SLOTS;
-            move->nrecipe = npairs;
-            move->recipe = at;
+            if (m.n > 0) {
+                int elems;
+                if (_PyRegCfg_AddOperands(cfg, 2 + 2 * m.n, &elems) < 0) {
+                    goto done;
+                }
+                // Its counts, then the destinations, then the sources
+                int *e = &cfg->operands[elems];
+                e[0] = e[1] = m.n;
+                for (int q = 0; q < m.n; q++) {
+                    e[2 + q] = m.dst[q];
+                    e[2 + m.n + q] = m.src[q];
+                }
+                init_move_word(&ops[nops++], op, ROP_SELECT_Move_transfer,
+                               elems, first_word ? npairs : 0,
+                               first_word ? at : 0);
+            }
         }
         index[i] = nops;
         if (moves) {

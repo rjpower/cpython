@@ -2377,7 +2377,7 @@ class LocalArmTest(unittest.TestCase):
                 f(*args)
                 names = handlers(f)
                 self.assertEqual([n for n in names if n.startswith("Move.")
-                                  and n != "Move.Retire"], [])
+                                  and n != "Retire.Close"], [])
         self.assertIn("SaveLocal.Take", handlers(comp))
         self.assertIn("LocalWrite.Restore", handlers(comp))
         self.assertEqual(handlers(swap).count("LocalWrite.Store"), 2)
@@ -2873,7 +2873,7 @@ class RegCfgTest(unittest.TestCase):
             x
             1
             return x
-        self.assertNotIn("Move.Retire", self.names(f))
+        self.assertNotIn("Retire.Close", self.names(f))
         # Each line keeps its event
         first = f.__code__.co_firstlineno
         _, events = trace(f, 0)
@@ -2881,7 +2881,7 @@ class RegCfgTest(unittest.TestCase):
                          [1, 2, 3])
 
     def test_pop_top_retires_each_value_once(self):
-        # A popped value is closed by its producer or a Move.Retire, never
+        # A popped value is closed by its producer or a Retire.Close, never
         # by a POP_TOP word: here the intermediate objects of a dotted
         # import, each closed by the ImportFrom.FromLast that reads it last
         # and finalized exactly once
@@ -2908,7 +2908,7 @@ class RegCfgTest(unittest.TestCase):
 
     def test_adjacent_retirements_share_a_word(self):
         # The three values below a with statement's handler retire on one
-        # line: one Move.Retire closes them all, in pop order
+        # line: one Retire.Close closes them all, in pop order
         class Suppress:
             def __enter__(self):
                 return self
@@ -2918,10 +2918,27 @@ class RegCfgTest(unittest.TestCase):
             with cm:
                 raise ValueError
             return 1
-        retires = [w for w in get_ir(f.__code__) if w[0] == "Move.Retire"]
-        self.assertIn(3, [w[2] for w in retires])
+        retires = [w for w in get_ir(f.__code__) if w[0] == "Retire.Close"]
+        self.assertIn(3, [w[1] for w in retires])
         for _ in range(3):
             self.assertEqual(f(Suppress()), 1)
+
+    def test_a_cycle_of_moves_is_a_rotation(self):
+        # An edge that renames its stack values in a cycle gets a Rotate.Cycle
+        # word, which turns the owners in place
+        class Point:
+            __match_args__ = ("x", "y")
+            def __init__(self, x, y):
+                self.x, self.y = x, y
+        def f(w):
+            match w:
+                case (Point(x1, y1), Point(x2, y2) as p2):
+                    return (x1, y1, x2, y2, p2)
+            return None
+        words = [w[0] for w in get_ir(f.__code__)]
+        self.assertIn("Rotate.Cycle", words)
+        a, b = Point(1, 2), Point(3, 4)
+        self.assertEqual(f([a, b]), (1, 2, 3, 4, b))
 
     def test_slots_do_not_creep(self):
         # IMPORT_FROM; SWAP 2; POP_TOP leaves the survivor above the slot
@@ -2939,7 +2956,7 @@ class RegCfgTest(unittest.TestCase):
         # that follows is on its line
         def f(g):
             g()
-        self.assertNotIn("Move.Retire", self.names(f))
+        self.assertNotIn("Retire.Close", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
 
     def test_call_discard_across_source_lines(self):
@@ -2947,7 +2964,7 @@ class RegCfgTest(unittest.TestCase):
         def f(g):
             g()
             return 1
-        self.assertNotIn("Move.Retire", self.names(f))
+        self.assertNotIn("Retire.Close", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
         call = next(word for word in get_ir(f.__code__) if word[0] == "Call.Generic+NO_SELF")
         self.assertEqual(call[1], IR_FIELD_MAX)
@@ -2968,7 +2985,7 @@ class RegCfgTest(unittest.TestCase):
         self.assertIn(KEEP_IF_TRUE, modes(disj))
         for f in conj, disj:
             self.assertNotIn("Move.Copy", self.names(f))
-            self.assertNotIn("Move.Retire", self.names(f))
+            self.assertNotIn("Retire.Close", self.names(f))
         empty, full = [], [1]
         for x, b in ((empty, "b"), (full, "b"), (0, None), (2.5, 0)):
             o = types.SimpleNamespace(x=x)
@@ -2991,7 +3008,7 @@ class RegCfgTest(unittest.TestCase):
         def window(a, b):
             return list((a or b(), 1))
         self.assertIn(KEEP_IF_TRUE, modes(disj))
-        self.assertNotIn("Move.Retire", self.names(disj))
+        self.assertNotIn("Retire.Close", self.names(disj))
         empty, full = [], [1]
         for a in empty, full, 0, 2.5:
             self.assertIs(disj(a, full), a or full)

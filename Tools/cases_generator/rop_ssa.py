@@ -65,7 +65,6 @@ class OpKind(enum.Enum):
     old = "old"                 # attr: home; the displaced owner of a destination
     store = "store"             # attr: home; args: (owner,)
     null = "null"               # the vacancy a publish may write
-    rest = "rest"               # attr: span home; args: (owners,): the items past its count
     count = "count"             # attr: span home, or args: (span value,): its number of items
     # On a span operand, read, take, old, store and dup act on every item:
     # read gives the items borrowed, take and old their owners, store writes
@@ -419,16 +418,10 @@ class Expander:
             self.homes[target] = HomeState("defined", v)
         self.emit(OpKind.checkpoint, None, (), s.point)
         self.point = s.point
-        targets = {b.value.name: b.target for b in s.bindings
-                   if b.vector and not b.owners and isinstance(b.value, Name)}
         for d in s.debts:
             if d.kind is DebtKind.spent and d.subject not in taken:
                 continue
-            if d.kind is DebtKind.spent and d.subject in moved:
-                # A moved span's items past its destination's count
-                arg = self.emit(OpKind.rest, owners, (taken[d.subject],),
-                                targets[d.subject], f"rest_{d.subject}")
-            elif d.kind is DebtKind.spent:
+            if d.kind is DebtKind.spent:
                 arg = taken[d.subject]
             elif d.kind is DebtKind.old:
                 arg = olds[d.subject]

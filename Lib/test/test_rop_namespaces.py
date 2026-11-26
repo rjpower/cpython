@@ -100,7 +100,7 @@ class WordTests(unittest.TestCase):
         names = self.check("from os import path, sep, curdir\n")
         self.assertEqual(names.count("ImportFrom.From"), 2)
         self.assertEqual(names.count("ImportFrom.FromLast"), 1)
-        self.assertNotIn("Move.Retire", names)
+        self.assertNotIn("Retire.Close", names)
 
     def test_eager_import_in_a_handler(self):
         names = self.check(

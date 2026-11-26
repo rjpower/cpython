@@ -55,15 +55,15 @@ class ContractTests(unittest.TestCase):
             return testapi.ir_normal_physical_transfer(
                 named[name], *fields, edge, home, nl, limit)
 
-        # POP_TOP lowers to a retirement: Move.Retire([], [src]) is
-        # A = 0 destinations, B = 1 source, the source in C
-        retire = (0, 1, 4, 4095)
-        self.assertEqual(transfer("Move.Retire", retire, 0, 4), set_null)
-        self.assertEqual(transfer("Move.Retire", retire, 0, 5), preserve)
+        # POP_TOP lowers to a retirement: Retire.Close([src]) is
+        # A = 1 source, the source in B
+        retire = (1, 4, 4095, 4095)
+        self.assertEqual(transfer("Retire.Close", retire, 0, 4), set_null)
+        self.assertEqual(transfer("Retire.Close", retire, 0, 5), preserve)
         # Successive retirements retain each other's NULL facts.
-        self.assertEqual(transfer("Move.Retire", (0, 1, 5, 4095), 0, 4), preserve)
-        self.assertEqual(transfer("Move.Retire", (0, 1, 5, 4095), 0, 5), set_null)
-        self.assertEqual(transfer("Move.Retire", retire, 1, 4), unknown)
+        self.assertEqual(transfer("Retire.Close", (1, 5, 4095, 4095), 0, 4), preserve)
+        self.assertEqual(transfer("Retire.Close", (1, 5, 4095, 4095), 0, 5), set_null)
+        self.assertEqual(transfer("Retire.Close", retire, 1, 4), unknown)
 
         # ForIter(item, pair): the next edge keeps the receiver and
         # rewrites the cursor and the item; the taken edge retires the pair.

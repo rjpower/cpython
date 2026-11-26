@@ -144,8 +144,11 @@ assemble_recipe(struct assembler *a, _PyRegCfg *cfg, const _PyRegOp *op,
     if (op->nrecipe == 0) {
         return SUCCESS;
     }
-    int32_t *entry = PyMem_Malloc((1 + 2 * (size_t)op->nrecipe) * sizeof(int32_t));
-    if (entry == NULL) {
+    int *pairs = PyMem_Malloc(2 * (size_t)op->nrecipe * sizeof(int));
+    int32_t *entry = PyMem_Malloc((4 * (size_t)op->nrecipe + 3) * sizeof(int32_t));
+    if (entry == NULL || pairs == NULL) {
+        PyMem_Free(pairs);
+        PyMem_Free(entry);
         PyErr_NoMemory();
         return ERROR;
     }
@@ -163,8 +166,8 @@ assemble_recipe(struct assembler *a, _PyRegCfg *cfg, const _PyRegOp *op,
                 cfg, _PyReg_CANON(cfg, cfg->operands[op->recipe + q]));
         }
         if (from != home) {
-            entry[1 + 2 * n] = from;
-            entry[2 + 2 * n] = home;
+            pairs[n] = from;
+            pairs[op->nrecipe + n] = home;
             n++;
         }
     }
@@ -172,12 +175,18 @@ assemble_recipe(struct assembler *a, _PyRegCfg *cfg, const _PyRegOp *op,
     if (n == 0) {
         goto done;
     }
-    entry[0] = n;
-    size_t size = (size_t)(1 + 2 * n) * sizeof(int32_t);
+    int entries = _PyRegCfg_SequenceRecipe(n, pairs, pairs + op->nrecipe, entry);
+    if (entries < 0) {
+        res = ERROR;
+        goto done;
+    }
+    size_t size = (size_t)entries * sizeof(int32_t);
     const int32_t *table = (const int32_t *)a->a_recipes.data;
     size_t count = a->a_recipes.size / sizeof(int32_t);
-    for (size_t at = 0; at < count; at += 1 + 2 * (size_t)table[at]) {
-        if (table[at] == n && memcmp(&table[at], entry, size) == 0) {
+    for (size_t at = 0; at < count; at += _PyIR_RecipeSize(&table[at])) {
+        if (_PyIR_RecipeSize(&table[at]) == entries &&
+            memcmp(&table[at], entry, size) == 0)
+        {
             *index = (int)at + 1;
             goto done;
         }
@@ -185,6 +194,7 @@ assemble_recipe(struct assembler *a, _PyRegCfg *cfg, const _PyRegOp *op,
     res = buffer_write(&a->a_recipes, entry, size);
     *index = res == SUCCESS ? (int)count + 1 : 0;
 done:
+    PyMem_Free(pairs);
     PyMem_Free(entry);
     return res;
 }
@@ -888,7 +898,7 @@ lower_completions(_PyRegCfg *cfg)
             }
             // The retirement of the resume input alone (rule_pop_top)
             int pop = next_frontend_op(cfg, i + 1, 1);
-            if (pop >= 0 && cfg->ops[pop].opcode == ROP_SELECT_Move_retire &&
+            if (pop >= 0 && cfg->ops[pop].opcode == ROP_OP_Retire_Close &&
                 op->nout == 1 && cfg->ops[pop].nout == 0 &&
                 cfg->ops[pop].nread == 1 &&
                 _PyReg_IN(cfg, &cfg->ops[pop])[0] == _PyReg_OUT(cfg, op)[0])

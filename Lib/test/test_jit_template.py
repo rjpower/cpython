@@ -768,7 +768,7 @@ class TemplateTests(unittest.TestCase):
         # its middle operand when the first test fails.
         for source, args, handler, result in (
                 ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x",
-                 (2, 1), "Move.Retire", False),):
+                 (2, 1), "Retire.Close", False),):
             with self.subTest(handler=handler):
                 f = self.compile(source, args)
                 index = word_of(f, handler)[0]

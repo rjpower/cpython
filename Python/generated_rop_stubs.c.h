@@ -3,7 +3,7 @@
 //   Python/register_ops/add.rop, Python/register_ops/attrs.rop, Python/register_ops/calls.rop, Python/register_ops/cells.rop, Python/register_ops/cleanup.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/displays.rop, Python/register_ops/exceptions.rop, Python/register_ops/functions.rop, Python/register_ops/getattr.rop, Python/register_ops/items.rop, Python/register_ops/iteration.rop, Python/register_ops/monitoring.rop, Python/register_ops/names.rop, Python/register_ops/namespaces.rop, Python/register_ops/numeric.rop, Python/register_ops/patterns.rop, Python/register_ops/resume.rop, Python/register_ops/suspend.rop, Python/register_ops/tests.rop, Python/register_ops/text.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 //
-// 101 stubs.
+// 102 stubs.
 
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
@@ -488,7 +488,7 @@ _PyIR_Rop_Stub_SuperAttr_Generic(
     _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h);
     goto rop_SuperAttr_Generic_Run;
     rop_SuperAttr_Generic_Failed:
-    PROCESS_ERROR_AT(RAISE, 178, this_instr);
+    PROCESS_ERROR_AT(RAISE, 180, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -554,7 +554,7 @@ _PyIR_Rop_Stub_SuperAttrExplicit_Generic(
     _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h);
     goto rop_SuperAttrExplicit_Generic_Run;
     rop_SuperAttrExplicit_Generic_Failed:
-    PROCESS_ERROR_AT(RAISE, 180, this_instr);
+    PROCESS_ERROR_AT(RAISE, 182, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -633,7 +633,7 @@ _PyIR_Rop_Stub_SuperMethod_Generic(
     _PyRop_Backoff(&((_PyFbUnary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
     goto rop_SuperMethod_Generic_Run;
     rop_SuperMethod_Generic_Failed:
-    PROCESS_ERROR_AT(RAISE, 182, this_instr);
+    PROCESS_ERROR_AT(RAISE, 184, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -712,7 +712,7 @@ _PyIR_Rop_Stub_SuperMethodExplicit_Generic(
     _PyRop_Backoff(&((_PyFbUnary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
     goto rop_SuperMethodExplicit_Generic_Run;
     rop_SuperMethodExplicit_Generic_Failed:
-    PROCESS_ERROR_AT(RAISE, 184, this_instr);
+    PROCESS_ERROR_AT(RAISE, 186, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -797,7 +797,7 @@ _PyIR_Rop_Stub_Unpack_Generic(
     }
     goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
     rop_Unpack_Generic_Failed:
-    PROCESS_ERROR_AT(RAISE, 194, this_instr);
+    PROCESS_ERROR_AT(RAISE, 196, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -1573,7 +1573,7 @@ _PyIR_Rop_Stub_SetItem_Generic(
     a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
     srcs6 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}};
     _PyRop_RetireFailedCall(&a_all5, &srcs6);
-    PROCESS_ERROR_AT(RAISE, 168, this_instr);
+    PROCESS_ERROR_AT(RAISE, 170, this_instr);
     rop_SetItem_Generic_setitem_at_origin1_Moved:
     IR_STUB_ESCAPE();
     a_all7 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
@@ -2710,7 +2710,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs11 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all10, &srcs11);
-    PROCESS_ERROR_AT(RAISE, 186, this_instr);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
     rop_TestBranch_Generic_compare_test_at_origin2_No:
     if (!_PyRop_RedirectPending(frame)) {
         compare_test_at_origin2_hit = false;
@@ -2958,7 +2958,7 @@ _PyIR_Rop_Stub_Truth_Generic(
     a_all9 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs10 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
     _PyRop_RetireFailedCall(&a_all9, &srcs10);
-    PROCESS_ERROR_AT(RAISE, 190, this_instr);
+    PROCESS_ERROR_AT(RAISE, 192, this_instr);
     rop_Truth_Generic_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         truth_at_origin1_hit = false;
@@ -3492,7 +3492,7 @@ _PyIR_Rop_Stub_SpecialLookup_Generic(
     a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs12 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
     _PyRop_RetireFailedCall(&a_all11, &srcs12);
-    PROCESS_ERROR_AT(RAISE, 176, this_instr);
+    PROCESS_ERROR_AT(RAISE, 178, this_instr);
     rop_SpecialLookup_Generic_special_at_origin1_Moved:
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(special_at_origin1_dropped);
@@ -3724,13 +3724,13 @@ _PyIR_Rop_Stub_WithExit_Generic(
     b_all3 = (_PyRopAnchors){2, {b_view0, b_view1}, {b_owned0, b_owned1}};
     srcs4 = (_PyRopSrcs){frame, 0, {}, {}};
     _PyRop_RetireFailedCall(&b_all3, &srcs4);
-    PROCESS_ERROR_AT(RAISE, 200, this_instr);
+    PROCESS_ERROR_AT(RAISE, 202, this_instr);
     rop_WithExit_Generic_MethodFailed:
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
     srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
     _PyRop_RetireFailedCall(&a_all5, &srcs6);
-    PROCESS_ERROR_AT(RAISE, 200, this_instr);
+    PROCESS_ERROR_AT(RAISE, 202, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -4016,7 +4016,7 @@ _PyIR_Rop_Stub_UpdateContainer_Extend(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Extend_Failed:
-    PROCESS_ERROR_AT(RAISE, 198, this_instr);
+    PROCESS_ERROR_AT(RAISE, 200, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -4051,7 +4051,7 @@ _PyIR_Rop_Stub_UpdateContainer_Union(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Union_Failed:
-    PROCESS_ERROR_AT(RAISE, 198, this_instr);
+    PROCESS_ERROR_AT(RAISE, 200, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -4086,7 +4086,7 @@ _PyIR_Rop_Stub_UpdateContainer_Overlay(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Overlay_Failed:
-    PROCESS_ERROR_AT(RAISE, 198, this_instr);
+    PROCESS_ERROR_AT(RAISE, 200, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -4205,7 +4205,7 @@ _PyIR_Rop_Stub_Unpack_List(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_Unpack_List_Failed:
-    PROCESS_ERROR_AT(RAISE, 194, this_instr);
+    PROCESS_ERROR_AT(RAISE, 196, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -4246,7 +4246,7 @@ _PyIR_Rop_Stub_UnpackStar_Iterable(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UnpackStar_Iterable_Failed:
-    PROCESS_ERROR_AT(RAISE, 196, this_instr);
+    PROCESS_ERROR_AT(RAISE, 198, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -4504,7 +4504,7 @@ _PyIR_Rop_Stub_SliceRead_Generic(
     a_all2 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
     srcs3 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_D), !!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_stop, home_start, home_obj}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
-    PROCESS_ERROR_AT(RAISE, 172, this_instr);
+    PROCESS_ERROR_AT(RAISE, 174, this_instr);
     rop_SliceRead_Generic_binary_slice_at_origin1_Moved:
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(binary_slice_at_origin1_dropped);
@@ -4593,7 +4593,7 @@ _PyIR_Rop_Stub_SliceWrite_Generic(
     a_all2 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
     srcs3 = (_PyRopSrcs){frame, 4, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_D)}, {home_stop, home_start, home_obj, home_value}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
-    PROCESS_ERROR_AT(RAISE, 174, this_instr);
+    PROCESS_ERROR_AT(RAISE, 176, this_instr);
     rop_SliceWrite_Generic_store_slice_at_origin1_Moved:
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
@@ -5019,7 +5019,7 @@ _PyIR_Rop_Stub_SetupAnnotations_Setup(
     }
     DISPATCH();
     rop_SetupAnnotations_Setup_Failed:
-    PROCESS_ERROR_AT(RAISE, 170, this_instr);
+    PROCESS_ERROR_AT(RAISE, 172, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -5518,7 +5518,7 @@ _PyIR_Rop_Stub_Unary_Generic(
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_Unary_Generic_Failed:
-    PROCESS_ERROR_AT(RAISE, 192, this_instr);
+    PROCESS_ERROR_AT(RAISE, 194, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -6533,7 +6533,7 @@ _PyIR_Rop_Stub_TestBranch_Set(
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
-    PROCESS_ERROR_AT(RAISE, 186, this_instr);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
     rop_TestBranch_Set_set_test_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         set_test_at_origin1_hit = false;
@@ -6640,7 +6640,7 @@ _PyIR_Rop_Stub_TestBranch_Dict(
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
-    PROCESS_ERROR_AT(RAISE, 186, this_instr);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
     rop_TestBranch_Dict_dict_test_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         dict_test_at_origin1_hit = false;
@@ -6747,7 +6747,7 @@ _PyIR_Rop_Stub_TestBranch_Sequence(
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
-    PROCESS_ERROR_AT(RAISE, 186, this_instr);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
     rop_TestBranch_Sequence_sequence_test_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         sequence_test_at_origin1_hit = false;
@@ -7184,7 +7184,7 @@ _PyIR_Rop_Stub_Truth_Slot(
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
-    PROCESS_ERROR_AT(RAISE, 190, this_instr);
+    PROCESS_ERROR_AT(RAISE, 192, this_instr);
     rop_Truth_Slot_slot_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         slot_truth_at_origin1_hit = false;
@@ -7452,38 +7452,7 @@ _PyIR_Rop_Stub_Move_Transfer(
     _PyRopSpan span2;
     span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 2, 0};
     span2 = (_PyRopSpan){frame, this_instr, IR_A(ir_word), IR_B(ir_word), 2, 0};
-    _PyRop_ParallelMove(&span1, &span2);
-    DISPATCH();
-}
-
-static Py_NO_INLINE int
-_PyIR_Rop_Stub_Move_Retire(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
-{
-    _PyInstr *next_instr = site;
-    _PyIRWord ir_word = *site;
-    int ir_status = 0;
-
-    // Move.Retire (shared)
-    int opcode = ROP_HANDLER_Move_Retire;
-    (void)opcode;
-    _PyIRWord *const this_instr = next_instr;
-    (void)this_instr;
-    frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
-    next_instr += 1 + (IR_A(ir_word) + IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
-    INSTRUCTION_STATS(ROP_HANDLER_Move_Retire);
-    _PyRopSpan span1;
-    _PyRopSpan span2;
-    _PyRopSpan span3;
-    _PyRopSpan span4;
-    span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 2, 0};
-    span2 = (_PyRopSpan){frame, this_instr, IR_A(ir_word), IR_B(ir_word), 2, 0};
-    _PyRop_ParallelMove(&span1, &span2);
-    IR_STUB_ESCAPE();
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 2, 0};
-    span4 = (_PyRopSpan){frame, this_instr, IR_A(ir_word), IR_B(ir_word), 2, 0};
-    _PyRop_CloseRest(&span3, &span4);
+    _PyRop_MoveInOrder(&span1, &span2);
     DISPATCH();
 }
 
@@ -7509,6 +7478,53 @@ _PyIR_Rop_Stub_Move_Copy(
     span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 2, 0};
     span2 = (_PyRopSpan){frame, this_instr, IR_A(ir_word), IR_B(ir_word), 2, 0};
     _PyRop_CopyHomes(&span1, &span2);
+    DISPATCH();
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Rotate_Cycle(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Rotate.Cycle (shared)
+    int opcode = ROP_HANDLER_Rotate_Cycle;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1 + (IR_A(ir_word) + 0) / IR_OPERANDS_PER_WORD;
+    INSTRUCTION_STATS(ROP_HANDLER_Rotate_Cycle);
+    _PyRopSpan span1;
+    span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 3, 0};
+    _PyRop_RotateHomes(frame, &span1);
+    DISPATCH();
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Retire_Close(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Retire.Close (shared)
+    int opcode = ROP_HANDLER_Retire_Close;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1 + (IR_A(ir_word) + 0) / IR_OPERANDS_PER_WORD;
+    INSTRUCTION_STATS(ROP_HANDLER_Retire_Close);
+    _PyRopSpan span1;
+    IR_STUB_ESCAPE();
+    span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 3, 0};
+    _PyRop_CloseSpan(&span1);
     DISPATCH();
 }
 
@@ -7688,12 +7704,12 @@ _PyRop_Complete_Send_CompleteObserved(
     a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs4 = (_PyRopSrcs){frame, 0, {}, {}};
     _PyRop_RetireFailedCall(&a_all3, &srcs4);
-    PROCESS_ERROR_AT(RAISE, 161, this_instr);
+    PROCESS_ERROR_AT(RAISE, 163, this_instr);
     rop_Send_CompleteObserved_Moved:
     PyValue_XCLOSE(a_owned0);
     IR_REDIRECT();
     rop_Send_CompleteObserved_ExitFailed:
-    PROCESS_ERROR_AT(RAISE, 163, this_instr);
+    PROCESS_ERROR_AT(RAISE, 165, this_instr);
     rop_Send_CompleteObserved_ExitMoved:
     IR_REDIRECT();
 }
@@ -7972,52 +7988,52 @@ const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [230] = {_PyIR_PLAN_SHARED, 0, 230, (const void *)_PyIR_Rop_Stub_SaveLocal_Take, NULL},  // SaveLocal_Take
     [231] = {_PyIR_PLAN_SHARED, 1, 231, (const void *)_PyIR_Rop_Stub_LocalDelete_Checked, NULL},  // LocalDelete_Checked
     [232] = {_PyIR_PLAN_SHARED, 0, 232, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
-    [233] = {_PyIR_PLAN_SHARED, 1, 233, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
-    [234] = {_PyIR_PLAN_SHARED, 0, 234, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
-    [235] = {_PyIR_PLAN_NONE, 1, 235, NULL, NULL},  // SuperAttr_Observed
+    [233] = {_PyIR_PLAN_SHARED, 0, 233, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
+    [234] = {_PyIR_PLAN_SHARED, 0, 234, (const void *)_PyIR_Rop_Stub_Rotate_Cycle, NULL},  // Rotate_Cycle
+    [235] = {_PyIR_PLAN_SHARED, 1, 235, (const void *)_PyIR_Rop_Stub_Retire_Close, NULL},  // Retire_Close
     [236] = {_PyIR_PLAN_NONE, 1, 236, NULL, NULL},  // SuperAttr_Observed
-    [237] = {_PyIR_PLAN_NONE, 1, 237, NULL, NULL},  // SuperAttrExplicit_Observed
+    [237] = {_PyIR_PLAN_NONE, 1, 237, NULL, NULL},  // SuperAttr_Observed
     [238] = {_PyIR_PLAN_NONE, 1, 238, NULL, NULL},  // SuperAttrExplicit_Observed
-    [239] = {_PyIR_PLAN_NONE, 1, 239, NULL, NULL},  // SuperMethod_Observed
+    [239] = {_PyIR_PLAN_NONE, 1, 239, NULL, NULL},  // SuperAttrExplicit_Observed
     [240] = {_PyIR_PLAN_NONE, 1, 240, NULL, NULL},  // SuperMethod_Observed
-    [241] = {_PyIR_PLAN_NONE, 1, 241, NULL, NULL},  // SuperMethodExplicit_Observed
+    [241] = {_PyIR_PLAN_NONE, 1, 241, NULL, NULL},  // SuperMethod_Observed
     [242] = {_PyIR_PLAN_NONE, 1, 242, NULL, NULL},  // SuperMethodExplicit_Observed
-    [243] = {_PyIR_PLAN_NONE, 1, 243, NULL, NULL},  // Call_Observed
+    [243] = {_PyIR_PLAN_NONE, 1, 243, NULL, NULL},  // SuperMethodExplicit_Observed
     [244] = {_PyIR_PLAN_NONE, 1, 244, NULL, NULL},  // Call_Observed
     [245] = {_PyIR_PLAN_NONE, 1, 245, NULL, NULL},  // Call_Observed
     [246] = {_PyIR_PLAN_NONE, 1, 246, NULL, NULL},  // Call_Observed
     [247] = {_PyIR_PLAN_NONE, 1, 247, NULL, NULL},  // Call_Observed
-    [248] = {_PyIR_PLAN_NONE, 1, 248, NULL, NULL},  // Return_Observed
+    [248] = {_PyIR_PLAN_NONE, 1, 248, NULL, NULL},  // Call_Observed
     [249] = {_PyIR_PLAN_NONE, 1, 249, NULL, NULL},  // Return_Observed
     [250] = {_PyIR_PLAN_NONE, 1, 250, NULL, NULL},  // Return_Observed
     [251] = {_PyIR_PLAN_NONE, 1, 251, NULL, NULL},  // Return_Observed
-    [252] = {_PyIR_PLAN_NONE, 1, 252, NULL, NULL},  // CallKw_Observed
-    [253] = {_PyIR_PLAN_NONE, 1, 253, NULL, NULL},  // Call_Observed
-    [254] = {_PyIR_PLAN_NONE, 1, 254, NULL, NULL},  // CallKw_Observed
+    [252] = {_PyIR_PLAN_NONE, 1, 252, NULL, NULL},  // Return_Observed
+    [253] = {_PyIR_PLAN_NONE, 1, 253, NULL, NULL},  // CallKw_Observed
+    [254] = {_PyIR_PLAN_NONE, 1, 254, NULL, NULL},  // Call_Observed
     [255] = {_PyIR_PLAN_NONE, 1, 255, NULL, NULL},  // CallKw_Observed
     [256] = {_PyIR_PLAN_NONE, 1, 256, NULL, NULL},  // CallKw_Observed
     [257] = {_PyIR_PLAN_NONE, 1, 257, NULL, NULL},  // CallKw_Observed
-    [258] = {_PyIR_PLAN_NONE, 1, 258, NULL, NULL},  // CallEx_Observed
+    [258] = {_PyIR_PLAN_NONE, 1, 258, NULL, NULL},  // CallKw_Observed
     [259] = {_PyIR_PLAN_NONE, 1, 259, NULL, NULL},  // CallEx_Observed
     [260] = {_PyIR_PLAN_NONE, 1, 260, NULL, NULL},  // CallEx_Observed
-    [261] = {_PyIR_PLAN_NONE, 1, 261, NULL, NULL},  // EndAsyncFor_Observed
-    [262] = {_PyIR_PLAN_NONE, 1, 262, NULL, NULL},  // ForIter_Observed
+    [261] = {_PyIR_PLAN_NONE, 1, 261, NULL, NULL},  // CallEx_Observed
+    [262] = {_PyIR_PLAN_NONE, 1, 262, NULL, NULL},  // EndAsyncFor_Observed
     [263] = {_PyIR_PLAN_NONE, 1, 263, NULL, NULL},  // ForIter_Observed
     [264] = {_PyIR_PLAN_NONE, 1, 264, NULL, NULL},  // ForIter_Observed
     [265] = {_PyIR_PLAN_NONE, 1, 265, NULL, NULL},  // ForIter_Observed
     [266] = {_PyIR_PLAN_NONE, 1, 266, NULL, NULL},  // ForIter_Observed
     [267] = {_PyIR_PLAN_NONE, 1, 267, NULL, NULL},  // ForIter_Observed
     [268] = {_PyIR_PLAN_NONE, 1, 268, NULL, NULL},  // ForIter_Observed
-    [269] = {_PyIR_PLAN_NONE, 1, 269, NULL, NULL},  // IterClose_Observed
-    [270] = {_PyIR_PLAN_NONE, 1, 270, NULL, NULL},  // Resume_Observed
+    [269] = {_PyIR_PLAN_NONE, 1, 269, NULL, NULL},  // ForIter_Observed
+    [270] = {_PyIR_PLAN_NONE, 1, 270, NULL, NULL},  // IterClose_Observed
     [271] = {_PyIR_PLAN_NONE, 1, 271, NULL, NULL},  // Resume_Observed
-    [272] = {_PyIR_PLAN_NONE, 1, 272, NULL, NULL},  // Yield_Observed
-    [273] = {_PyIR_PLAN_NONE, 1, 273, NULL, NULL},  // YieldFrom_Observed
-    [274] = {_PyIR_PLAN_NONE, 1, 274, NULL, NULL},  // Send_Observed
+    [272] = {_PyIR_PLAN_NONE, 1, 272, NULL, NULL},  // Resume_Observed
+    [273] = {_PyIR_PLAN_NONE, 1, 273, NULL, NULL},  // Yield_Observed
+    [274] = {_PyIR_PLAN_NONE, 1, 274, NULL, NULL},  // YieldFrom_Observed
     [275] = {_PyIR_PLAN_NONE, 1, 275, NULL, NULL},  // Send_Observed
     [276] = {_PyIR_PLAN_NONE, 1, 276, NULL, NULL},  // Send_Observed
     [277] = {_PyIR_PLAN_NONE, 1, 277, NULL, NULL},  // Send_Observed
-    [278] = {_PyIR_PLAN_NONE, 1, 278, NULL, NULL},  // TestBranch_Observed
+    [278] = {_PyIR_PLAN_NONE, 1, 278, NULL, NULL},  // Send_Observed
     [279] = {_PyIR_PLAN_NONE, 1, 279, NULL, NULL},  // TestBranch_Observed
     [280] = {_PyIR_PLAN_NONE, 1, 280, NULL, NULL},  // TestBranch_Observed
     [281] = {_PyIR_PLAN_NONE, 1, 281, NULL, NULL},  // TestBranch_Observed
@@ -8025,7 +8041,7 @@ const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [283] = {_PyIR_PLAN_NONE, 1, 283, NULL, NULL},  // TestBranch_Observed
     [284] = {_PyIR_PLAN_NONE, 1, 284, NULL, NULL},  // TestBranch_Observed
     [285] = {_PyIR_PLAN_NONE, 1, 285, NULL, NULL},  // TestBranch_Observed
-    [286] = {_PyIR_PLAN_NONE, 1, 286, NULL, NULL},  // BranchTruth_Observed
+    [286] = {_PyIR_PLAN_NONE, 1, 286, NULL, NULL},  // TestBranch_Observed
     [287] = {_PyIR_PLAN_NONE, 1, 287, NULL, NULL},  // BranchTruth_Observed
     [288] = {_PyIR_PLAN_NONE, 1, 288, NULL, NULL},  // BranchTruth_Observed
     [289] = {_PyIR_PLAN_NONE, 1, 289, NULL, NULL},  // BranchTruth_Observed
@@ -8033,8 +8049,9 @@ const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [291] = {_PyIR_PLAN_NONE, 1, 291, NULL, NULL},  // BranchTruth_Observed
     [292] = {_PyIR_PLAN_NONE, 1, 292, NULL, NULL},  // BranchTruth_Observed
     [293] = {_PyIR_PLAN_NONE, 1, 293, NULL, NULL},  // BranchTruth_Observed
-    [294] = {_PyIR_PLAN_NONE, 1, 294, NULL, NULL},  // BranchNone_Observed
-    [295] = {_PyIR_PLAN_NONE, 1, 295, NULL, NULL},  // Jump_Observed
+    [294] = {_PyIR_PLAN_NONE, 1, 294, NULL, NULL},  // BranchTruth_Observed
+    [295] = {_PyIR_PLAN_NONE, 1, 295, NULL, NULL},  // BranchNone_Observed
     [296] = {_PyIR_PLAN_NONE, 1, 296, NULL, NULL},  // Jump_Observed
     [297] = {_PyIR_PLAN_NONE, 1, 297, NULL, NULL},  // Jump_Observed
+    [298] = {_PyIR_PLAN_NONE, 1, 298, NULL, NULL},  // Jump_Observed
 };

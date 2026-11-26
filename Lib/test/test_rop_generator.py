@@ -251,9 +251,25 @@ class StubTests(unittest.TestCase):
         self.assertIn("v = _PyRop_Split(", text)
         self.assertRegex(text, r"n = \(Py_ssize_t\)IR_\w+\(ir_word\);")
         order = [text.index(mark) for mark in (
-            "_PyRop_StoreOwners(&(_PyRopSpan){", "IR_STUB_ESCAPE();",
+            "_PyRop_StoreOwners(&span", "IR_STUB_ESCAPE();",
             "_PyRop_CloseOwners(&v);")]
         self.assertEqual(order, sorted(order))
+
+    def test_anchors_of_a_literal_span_are_scalars(self):
+        # Binary.Generic anchors [x, y]: a view and an owner per source on
+        # the hot path; the aggregate exists only on the exits whose rows
+        # consume the whole anchor, and no aggregate is a compound literal
+        # taken by address
+        text = "\n".join(products().lowered["Binary.Generic"].body)
+        self.assertNotIn("_PyRop_AnchorForCall(", text)
+        self.assertNotIn("_PyRop_AnchorArg(", text)
+        self.assertNotIn("&(_PyRop", text)
+        self.assertIn("a_view0 = PyValue_Borrow(*home_x);", text)
+        self.assertIn("a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) "
+                      ": PyValue_NULL;", text)
+        hot = text[:text.index("DISPATCH();")]
+        self.assertNotIn("_PyRopAnchors", hot)
+        self.assertIn("PyValue_XCLOSE(a_owned0);\nPyValue_XCLOSE(a_owned1);", hot)
 
     def test_unwind_enters_the_unwinder_without_a_raise_event(self):
         program = rop_check.check([rop_syntax.parse(UNWIND, "t.rop")])

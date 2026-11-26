@@ -552,6 +552,8 @@ class ArmLowerer:
         self.next_label: str | None = None
         self.acquired: set[str] = set()      # operands whose owner acquire() took
         self.acquired_in: dict[str, frozenset[str]] = {}  # ... on every path into a block
+        # Anchors made from a literal span, as scalars: name -> source count
+        self.anchors: dict[str, int] = {}
 
     # Names
 
@@ -664,9 +666,46 @@ class ArmLowerer:
                 raise Unsupported(f"{self.arm.name}: a span item {item} is not an operand")
             names.append(item.name)
         homes = ", ".join(self.home(n) for n in names)
-        flags = ", ".join("0" if self.local_flag(n) is None
-                          else f"!!(ir_word & {self.local_flag(n)})" for n in names)
-        return (f"&(_PyRopSrcs){{frame, {len(names)}, {{{flags}}}, {{{homes}}}}}")
+        # Built where a row needs it, which is a cold exit: a named local
+        # rather than an address-taken compound literal
+        srcs = self.new_temp("_PyRopSrcs", "srcs")
+        self.emit(f"{srcs} = (_PyRopSrcs){{frame, {len(names)}, "
+                  f"{{{self.local_flags(names)}}}, {{{homes}}}}};")
+        return f"&{srcs}"
+
+    def local_flags(self, names: list[str]) -> str:
+        return ", ".join("0" if self.local_flag(n) is None
+                         else f"!!(ir_word & {self.local_flag(n)})" for n in names)
+
+    def anchor_scalars(self, name: str, span: SpanLit) -> None:
+        """anchor_for_call over a literal span, as a view and an owner per
+        source (_PyRop_AnchorForSrcs): a local's view is held by an owner of
+        its own, a temporary's by its home"""
+        for i, item in enumerate(span.items):
+            if not isinstance(item, Name) or not self.is_home(item.name):
+                raise Unsupported(f"{self.arm.name}: a span item {item} is not an operand")
+            view, owned = f"{name}_view{i}", f"{name}_owned{i}"
+            self.declare(view, "PyValueBorrow")
+            self.declare(owned, "PyValue")
+            self.emit(f"{view} = PyValue_Borrow(*{self.home(item.name)});")
+            flag = self.local_flag(item.name)
+            if flag is None:
+                self.emit(f"{owned} = PyValue_NULL;")
+            else:
+                self.emit(f"{owned} = (ir_word & {flag}) ? PyValue_DUP({view}) : PyValue_NULL;")
+
+    def anchor_aggregate(self, name: str) -> str:
+        """A scalar anchor as the aggregate a row that consumes it takes"""
+        n = self.anchors[name]
+        whole = self.new_temp("_PyRopAnchors", f"{name}_all")
+        views = ", ".join(f"{name}_view{i}" for i in range(n))
+        owned = ", ".join(f"{name}_owned{i}" for i in range(n))
+        self.emit(f"{whole} = (_PyRopAnchors){{{n}, {{{views}}}, {{{owned}}}}};")
+        return f"&{whole}"
+
+    def close_anchors(self, name: str) -> None:
+        for i in range(self.anchors[name]):
+            self.emit(f"PyValue_XCLOSE({name}_owned{i});")
 
     def is_span_operand(self, operand: str) -> bool:
         """A vector operand other than an argument descriptor (Args), whose
@@ -690,8 +729,10 @@ class ArmLowerer:
             if self.is_span_operand(name):
                 before.append(self.field(name))
         first = " + ".join(before) or "0"
-        return (f"&(_PyRopSpan){{frame, this_instr, opcode, {first}, "
-                f"{self.field(operand)}}}")
+        span = self.new_temp("_PyRopSpan", "span")
+        self.emit(f"{span} = (_PyRopSpan){{frame, this_instr, opcode, {first}, "
+                  f"{self.field(operand)}}};")
+        return f"&{span}"
 
     def row_symbol(self, x: Extern) -> str:
         assert x.c is not None
@@ -711,6 +752,9 @@ class ArmLowerer:
                 out.append(self.srcs(a))
             elif self.is_span(a):
                 out.append(self.span(a.name))
+            elif (isinstance(t, HandleType) and t.handle is Handle.Anchors
+                  and isinstance(a, Name) and a.name in self.anchors):
+                out.append(self.anchor_aggregate(a.name))
             elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
                 out.append("&" + self.expr_text(a))
             elif (t in (HandleType(Handle.Src), HandleType(Handle.Local),
@@ -845,6 +889,13 @@ class ArmLowerer:
         x = self.program.externs.get(e.callee)
         if x is None or x.c is None:
             raise Unsupported(f"{self.arm.name}: {e.callee} has no C body (pending)")
+        if (e.callee == "arg" and isinstance(e.args[0], Name)
+                and e.args[0].name in self.anchors):
+            # The view the scalar anchor recorded
+            index = e.args[1]
+            if not isinstance(index, Nat):
+                raise Unsupported(f"{self.arm.name}: arg() of a computed index")
+            return f"{e.args[0].name}_view{index.value}"
         conv = CONVENTIONS[x.c.convention]
         if not conv.single:
             raise Unsupported(f"{self.arm.name}: {e.callee} has cases; use a call")
@@ -861,6 +912,9 @@ class ArmLowerer:
             if isinstance(b.term, CallTerm) and is_transfer(self.program, b.term.callee)
             for e in b.term.edges}
         self.acquired_in = acquired_on_entry(self.program, self.blocks)
+        self.anchors = {
+            st.name: len(st.value.args[0].items)
+            for b in self.blocks.values() for st in b.stmts if is_span_anchor(st)}
         order = [label for label in self.layout() if label not in self.transfer_blocks]
         for i, label in enumerate(order):
             self.next_label = order[i + 1] if i + 1 < len(order) else None
@@ -948,6 +1002,9 @@ class ArmLowerer:
             raise Unsupported(f"{self.arm.name}: statement {s}")
 
     def lower_let(self, s: Let) -> None:
+        if is_span_anchor(s):
+            self.anchor_scalars(self.local(s.name), s.value.args[0])
+            return
         t = c_type(s.type)
         if isinstance(s.value, Call):
             x = self.program.externs.get(s.value.callee)
@@ -1056,6 +1113,8 @@ class ArmLowerer:
                 self.emit(f"_PyRop_CloseOwners(&{stored[d.subject]});")
             elif d.kind is DebtKind.old:
                 self.emit(f"PyValue_XCLOSE(old_{cname(d.subject)});")
+            elif d.kind is DebtKind.roots and d.subject in self.anchors:
+                self.close_anchors(d.subject)
             elif d.kind is DebtKind.roots:
                 self.emit(f"_PyRop_CloseAnchors(&{d.subject});")
 
@@ -1090,6 +1149,8 @@ class ArmLowerer:
     def jump(self, target: Target, payload: tuple[str, ...] = (), indent: str = "",
              force: bool = False) -> None:
         params = self.blocks[target.label].params
+        if any(isinstance(a, Name) and a.name in self.anchors for a in target.args):
+            raise Unsupported(f"{self.arm.name}: a scalar anchor passed to a block")
         values = list(payload) + [self.expr(a) for a in target.args]
         pairs = [(p, v) for p, v in zip(params, values) if c_type(p.type) is not None]
         if len(pairs) > 1:
@@ -1237,6 +1298,14 @@ class ArmLowerer:
 
 # The families whose yield suspends in the delegating state
 DELEGATING_FAMILIES = frozenset({"YieldFrom"})
+
+
+def is_span_anchor(s) -> bool:
+    """A let of anchors made from a literal span of sources, which lowers
+    to scalars (ArmLowerer.anchor_scalars)"""
+    return (isinstance(s, Let) and s.type == HandleType(Handle.Anchors)
+            and isinstance(s.value, Call) and len(s.value.args) == 1
+            and isinstance(s.value.args[0], SpanLit))
 
 
 def cname(operand: str) -> str:

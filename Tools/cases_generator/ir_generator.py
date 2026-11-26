@@ -68,6 +68,7 @@ Invariants:
 """
 
 import argparse
+import os
 import io
 from collections.abc import Sequence
 import ir_contract
@@ -1040,13 +1041,23 @@ def inherited_handler_names(analysis: Analysis) -> list[str]:
          if name not in stack_only), key=lambda item: item[1])]
 
 
+def id_base() -> int:
+    """The id of the first handler: 0, or PYJIT_IR_ID_BASE for a guard build.
+    A guard build leaves the ids below the base unused, so an opcode or CFG
+    number that is mistaken for a handler id lands on an empty row, and the
+    ordinary suites assert on it (see ps/design.md, step 3).  The checked-in
+    generated files use 0."""
+    return int(os.environ.get("PYJIT_IR_ID_BASE", "0"))
+
+
 def handler_ids(analysis: Analysis) -> dict[str, int]:
     """Handler id of each handler, by name.  The ids are dense and their own:
     a handler's id is no stack opcode, and a stack-only stub has none.  The
     handlers that a stack op has come first, in the order of the stack
     opcodes, then the IR-only handlers; the arms follow them."""
     names = inherited_handler_names(analysis) + ir_only_handler_names(analysis)
-    return {name: number for number, name in enumerate(names)}
+    base = id_base()
+    return {name: base + number for number, name in enumerate(names)}
 
 
 def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
@@ -6934,8 +6945,8 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
         plan = plans[name]
         stub = (f"(const void *){stub_function_name(plan.arm)}"
                 if plan.region == "shared" else "NULL")
-        outfile.write(f"    [{ids[name]}] = {{_PyIR_PLAN_{plan.region.upper()}, "
-                      f"{int(plan.escapes)}, {ids[plan.arm]}, {stub}, "
+        outfile.write(f"    [IR_H_{name}] = {{_PyIR_PLAN_{plan.region.upper()}, "
+                      f"{int(plan.escapes)}, IR_H_{plan.arm}, {stub}, "
                       f"(const void *){stub_function_name(plan.family)}}},  "
                       f"// {name}\n")
     outfile.write("};\n")
@@ -8240,8 +8251,8 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 
 
 def num_old_handlers(analysis: Analysis) -> int:
-    "The arms start here: the count of the handlers that bytecodes.c defines"
-    return len(handler_ids(analysis))
+    "The arms start here: id_base() plus the handlers that bytecodes.c defines"
+    return id_base() + len(handler_ids(analysis))
 
 
 def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:

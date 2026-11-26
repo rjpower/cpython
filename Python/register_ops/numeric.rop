@@ -84,7 +84,7 @@ extern primitive text_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
 // the rest of the entry.  Evidence only: every arm guards what it relies on.
 extern helper record_operands(f:Fb<Binary>, a:B, b:B) -> Unit
   effects(reads, writes)
-  feedback(write(entry))
+  feedback(read(entry), write(entry))
   c _PyRop_RecordOperands as unit
   evidence(
     review: "Reviewed BN. specialize.c: the old fb_begin_binary of each binary"

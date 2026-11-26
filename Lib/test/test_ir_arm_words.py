@@ -288,7 +288,7 @@ class ForceArmTests(unittest.TestCase):
             with self.subTest(arm=name):
                 # The head's handler field is the low 9 bits of its word
                 length = _opcode.get_ir_word_length(handler)
-                self.assertEqual(length, 2 if name.startswith(("GetMethod.", "Binary.")) else 1)
+                self.assertEqual(length, 2 if name.startswith(("GetMethod.", "Binary.", "AppendText.")) else 1)
                 self.assertIsNotNone(contract[handler])
 
     def test_every_arm_stands_for_a_stack_op_of_its_family(self):

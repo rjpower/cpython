@@ -381,6 +381,12 @@ MODULE_SOURCE = ("import types\n"
                  "f = types.FunctionType(compile(%r, 'm', 'exec'), globals())\n")
 
 # The code of a generic function's scope, which makes its type parameters
+TYPEVAR_SOURCE = (
+    "import types\n"
+    "m = compile('def g[T](): pass', 'm', 'exec')\n"
+    "scope = next(c for c in m.co_consts if hasattr(c, 'co_code'))\n"
+    "f = types.FunctionType(scope, globals())\n")
+
 PAIR_SOURCE = (
     "import types\n"
     "m = compile('def g[T: int](): pass', 'm', 'exec')\n"
@@ -647,12 +653,12 @@ SCENARIOS = {
                          for v in ((1,), (), (None, 2))],
             "all": [{"code": identity.__code__, "fields": [(1,), {"k": 2}, {"k": int}]}]}),
     "Intrinsic": Scenario("Intrinsic", {
-        "unary": "def f(a):\n    return (*a, 1)\n",
+        "unary": TYPEVAR_SOURCE,
         "stopiteration": "def f(a):\n    yield a\n",
         "import_star": MODULE_SOURCE % "from sys import *"},
         [{"x": v} for v in (1, 1.5, 2**70, "s", Plain(), [1])], warm=(1,),
         inputs_by_source={
-            "unary": [{"x": v} for v in ([], [1], [1, "a"], [[2]])],
+            "unary": [{"x": v} for v in ("T", "name")],
             # (A StopIteration becomes a new error that holds it, which the
             # count check cannot see; test_rop_functions runs that case)
             "stopiteration": [{"x": v} for v in (ValueError(1), KeyError("k"))],

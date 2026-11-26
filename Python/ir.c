@@ -220,19 +220,6 @@ _PyCode_IsTrailing(PyCodeObject *co, int i)
 }
 
 int
-_PyCode_HandlerFor(PyCodeObject *co, int i, int observed)
-{
-    int handler = _PyCode_InstrHandler(co, i);
-    if (!observed) {
-        return handler;
-    }
-    // A handler whose family declares events has an observed twin
-    int twin = _PyIR_FormatOf(handler)->twin;
-    assert(twin != _PyIR_NO_HANDLER && handler >= IR_FIRST_ARM);
-    return twin;
-}
-
-int
 _PyIR_RealHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
 {
     int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
@@ -245,7 +232,7 @@ _PyIR_RealHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
 
 /* The handler that the word at instr runs once a LINE or INSTRUCTION
  * wrapper has passed it on: the monitoring tables hold what the wrapper
- * displaced, which may be the other wrapper over an observed word. */
+ * displaced, which may be the other wrapper. */
 int
 _PyIR_DispatchedHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
 {
@@ -628,10 +615,7 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
     PyCodeObject *co = frame->f_executable;
     _PyIRWord word = _PyCode_IRWords(co)[continuation - 1];
     int handler = IR_HANDLER(word);
-    if (handler != ROP_HANDLER_YieldFrom_Delegated &&
-        handler != ROP_HANDLER_YieldFrom_Delegated_Observed &&
-        handler != ROP_HANDLER_YieldFrom_Observed)
-    {
+    if (handler != ROP_HANDLER_YieldFrom_Delegated) {
         return -1;
     }
     // The word's value (A) and the sent value (B) are the value home of the

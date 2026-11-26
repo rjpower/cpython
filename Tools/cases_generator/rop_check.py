@@ -1087,15 +1087,15 @@ def check_arm(c: Checker, a: Arm) -> None:
 
 
 def observer_of(arms: Iterable[Arm], family: str) -> Arm | None:
-    """The family's observed wrapper (`observes`): the twin of each of its
-    other arms runs it when the word is instrumented"""
+    """The family's observer arm (`observes`): the observing evaluator runs
+    it for the words of the family's other arms"""
     return next((a for a in arms if a.family == family and a.observes), None)
 
 
 def check_observer(c: Checker, a: Arm, fam: Family) -> None:
-    """An observed wrapper runs for the twins of a family that has events;
-    nothing selects or installs it, and it adapts nothing.  A family has
-    one."""
+    """An observer arm runs, in the observing evaluator, for the words of a
+    family that has events; nothing selects or installs it, and it adapts
+    nothing.  A family has one."""
     others = [b.name for b in c.arms.values()
               if b.family == fam.name and b.observes and b.name != a.name]
     if others and others[0] < a.name:
@@ -1124,8 +1124,8 @@ def check_completion_arm(c: Checker, a: Arm) -> None:
     """`arm F.A completion(P)`: runs in the consumer's frame when a
     generator that F's word entered returns, with the child's value, from
     the homes of P, the resume point of that enter.  A family has at most
-    one plain completion and one observed one, which runs under the
-    instrumented twins."""
+    one plain completion and one observed one, which the observing
+    evaluator runs."""
     assert a.completion is not None
     parts = a.name.split(".")
     fam = c.families.get(parts[0])

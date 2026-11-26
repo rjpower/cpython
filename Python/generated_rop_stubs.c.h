@@ -6975,7 +6975,10 @@ _PyIR_Rop_Stub_Resume_Poll(
     goto rop_Resume_Poll_Done;
     rop_Resume_Poll_Pending:
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_Poll(tstate, this_instr);
+    ret1 = _PyRop_Poll(tstate, frame, this_instr);
+    if (ret1 > 0) {
+        goto rop_Resume_Poll_Moved;
+    }
     if (ret1 < 0) {
         goto rop_Resume_Poll_PollFailed;
     }
@@ -6990,6 +6993,7 @@ _PyIR_Rop_Stub_Resume_Poll(
     if (ret2 < 0) {
         goto rop_Resume_Poll_InstrumentFailed;
     }
+    rop_Resume_Poll_Moved:
     IR_REDIRECT();
     rop_Resume_Poll_InstrumentFailed:
     PROCESS_ERROR_AT(RAISE, 154, this_instr);
@@ -9997,28 +10001,34 @@ typedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,
 
 const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS] = {
     [ROP_HANDLER_ForIter_Generic - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_Complete,
-    [ROP_HANDLER_ForIter_Generic_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
     [ROP_HANDLER_ForIter_List - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_Complete,
-    [ROP_HANDLER_ForIter_List_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
     [ROP_HANDLER_ForIter_Tuple - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_Complete,
-    [ROP_HANDLER_ForIter_Tuple_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
     [ROP_HANDLER_ForIter_Range - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_Complete,
-    [ROP_HANDLER_ForIter_Range_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
     [ROP_HANDLER_ForIter_Indexed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_Complete,
-    [ROP_HANDLER_ForIter_Indexed_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
     [ROP_HANDLER_ForIter_Gen - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_Complete,
-    [ROP_HANDLER_ForIter_Gen_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
     [ROP_HANDLER_ForIter_Slot - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_Complete,
-    [ROP_HANDLER_ForIter_Slot_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
     [ROP_HANDLER_ForIter_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
     [ROP_HANDLER_Send_Generic - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
-    [ROP_HANDLER_Send_Generic_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
     [ROP_HANDLER_Send_Gen - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
-    [ROP_HANDLER_Send_Gen_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
     [ROP_HANDLER_Send_Virtual - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
-    [ROP_HANDLER_Send_Virtual_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
     [ROP_HANDLER_Send_AsyncGen - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
-    [ROP_HANDLER_Send_AsyncGen_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
+    [ROP_HANDLER_Send_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
+};
+
+/* The completions of the observing evaluator */
+const _PyRopCompletion _PyRop_ObservingCompletions[ROP_NUM_HANDLERS] = {
+    [ROP_HANDLER_ForIter_Generic - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
+    [ROP_HANDLER_ForIter_List - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
+    [ROP_HANDLER_ForIter_Tuple - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
+    [ROP_HANDLER_ForIter_Range - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
+    [ROP_HANDLER_ForIter_Indexed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
+    [ROP_HANDLER_ForIter_Gen - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
+    [ROP_HANDLER_ForIter_Slot - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
+    [ROP_HANDLER_ForIter_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_ForIter_CompleteObserved,
+    [ROP_HANDLER_Send_Generic - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
+    [ROP_HANDLER_Send_Gen - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
+    [ROP_HANDLER_Send_Virtual - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
+    [ROP_HANDLER_Send_AsyncGen - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
     [ROP_HANDLER_Send_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
 };
 
@@ -10318,85 +10328,4 @@ const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [282] = {_PyIR_PLAN_SHARED, 0, 282, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
     [283] = {_PyIR_PLAN_SHARED, 0, 283, (const void *)_PyIR_Rop_Stub_Rotate_Cycle, NULL},  // Rotate_Cycle
     [284] = {_PyIR_PLAN_SHARED, 1, 284, (const void *)_PyIR_Rop_Stub_Retire_Close, NULL},  // Retire_Close
-    [285] = {_PyIR_PLAN_NONE, 1, 285, NULL, NULL},  // SuperAttr_Observed
-    [286] = {_PyIR_PLAN_NONE, 1, 286, NULL, NULL},  // SuperAttr_Observed
-    [287] = {_PyIR_PLAN_NONE, 1, 287, NULL, NULL},  // SuperAttrExplicit_Observed
-    [288] = {_PyIR_PLAN_NONE, 1, 288, NULL, NULL},  // SuperAttrExplicit_Observed
-    [289] = {_PyIR_PLAN_NONE, 1, 289, NULL, NULL},  // SuperMethod_Observed
-    [290] = {_PyIR_PLAN_NONE, 1, 290, NULL, NULL},  // SuperMethod_Observed
-    [291] = {_PyIR_PLAN_NONE, 1, 291, NULL, NULL},  // SuperMethodExplicit_Observed
-    [292] = {_PyIR_PLAN_NONE, 1, 292, NULL, NULL},  // SuperMethodExplicit_Observed
-    [293] = {_PyIR_PLAN_NONE, 1, 293, NULL, NULL},  // Call_Observed
-    [294] = {_PyIR_PLAN_NONE, 1, 294, NULL, NULL},  // Call_Observed
-    [295] = {_PyIR_PLAN_NONE, 1, 295, NULL, NULL},  // Call_Observed
-    [296] = {_PyIR_PLAN_NONE, 1, 296, NULL, NULL},  // Call_Observed
-    [297] = {_PyIR_PLAN_NONE, 1, 297, NULL, NULL},  // Call_Observed
-    [298] = {_PyIR_PLAN_NONE, 1, 298, NULL, NULL},  // Return_Observed
-    [299] = {_PyIR_PLAN_NONE, 1, 299, NULL, NULL},  // Return_Observed
-    [300] = {_PyIR_PLAN_NONE, 1, 300, NULL, NULL},  // Return_Observed
-    [301] = {_PyIR_PLAN_NONE, 1, 301, NULL, NULL},  // Return_Observed
-    [302] = {_PyIR_PLAN_NONE, 1, 302, NULL, NULL},  // CallKw_Observed
-    [303] = {_PyIR_PLAN_NONE, 1, 303, NULL, NULL},  // Call_Observed
-    [304] = {_PyIR_PLAN_NONE, 1, 304, NULL, NULL},  // CallKw_Observed
-    [305] = {_PyIR_PLAN_NONE, 1, 305, NULL, NULL},  // CallKw_Observed
-    [306] = {_PyIR_PLAN_NONE, 1, 306, NULL, NULL},  // CallKw_Observed
-    [307] = {_PyIR_PLAN_NONE, 1, 307, NULL, NULL},  // CallKw_Observed
-    [308] = {_PyIR_PLAN_NONE, 1, 308, NULL, NULL},  // CallEx_Observed
-    [309] = {_PyIR_PLAN_NONE, 1, 309, NULL, NULL},  // CallEx_Observed
-    [310] = {_PyIR_PLAN_NONE, 1, 310, NULL, NULL},  // CallEx_Observed
-    [311] = {_PyIR_PLAN_NONE, 1, 311, NULL, NULL},  // EndAsyncFor_Observed
-    [312] = {_PyIR_PLAN_NONE, 1, 312, NULL, NULL},  // ForIter_Observed
-    [313] = {_PyIR_PLAN_NONE, 1, 313, NULL, NULL},  // ForIter_Observed
-    [314] = {_PyIR_PLAN_NONE, 1, 314, NULL, NULL},  // ForIter_Observed
-    [315] = {_PyIR_PLAN_NONE, 1, 315, NULL, NULL},  // ForIter_Observed
-    [316] = {_PyIR_PLAN_NONE, 1, 316, NULL, NULL},  // ForIter_Observed
-    [317] = {_PyIR_PLAN_NONE, 1, 317, NULL, NULL},  // ForIter_Observed
-    [318] = {_PyIR_PLAN_NONE, 1, 318, NULL, NULL},  // ForIter_Observed
-    [319] = {_PyIR_PLAN_NONE, 1, 319, NULL, NULL},  // IterClose_Observed
-    [320] = {_PyIR_PLAN_NONE, 1, 320, NULL, NULL},  // Resume_Observed
-    [321] = {_PyIR_PLAN_NONE, 1, 321, NULL, NULL},  // Resume_Observed
-    [322] = {_PyIR_PLAN_NONE, 1, 322, NULL, NULL},  // Yield_Observed
-    [323] = {_PyIR_PLAN_NONE, 1, 323, NULL, NULL},  // YieldFrom_Observed
-    [324] = {_PyIR_PLAN_NONE, 1, 324, NULL, NULL},  // Send_Observed
-    [325] = {_PyIR_PLAN_NONE, 1, 325, NULL, NULL},  // Send_Observed
-    [326] = {_PyIR_PLAN_NONE, 1, 326, NULL, NULL},  // Send_Observed
-    [327] = {_PyIR_PLAN_NONE, 1, 327, NULL, NULL},  // Send_Observed
-    [328] = {_PyIR_PLAN_NONE, 1, 328, NULL, NULL},  // TestBranch_Observed
-    [329] = {_PyIR_PLAN_NONE, 1, 329, NULL, NULL},  // TestBranch_Observed
-    [330] = {_PyIR_PLAN_NONE, 1, 330, NULL, NULL},  // TestBranch_Observed
-    [331] = {_PyIR_PLAN_NONE, 1, 331, NULL, NULL},  // TestBranch_Observed
-    [332] = {_PyIR_PLAN_NONE, 1, 332, NULL, NULL},  // TestBranch_Observed
-    [333] = {_PyIR_PLAN_NONE, 1, 333, NULL, NULL},  // TestBranch_Observed
-    [334] = {_PyIR_PLAN_NONE, 1, 334, NULL, NULL},  // TestBranch_Observed
-    [335] = {_PyIR_PLAN_NONE, 1, 335, NULL, NULL},  // TestBranch_Observed
-    [336] = {_PyIR_PLAN_NONE, 1, 336, NULL, NULL},  // TestBranch_Observed
-    [337] = {_PyIR_PLAN_NONE, 1, 337, NULL, NULL},  // TestBranch_Observed
-    [338] = {_PyIR_PLAN_NONE, 1, 338, NULL, NULL},  // TestBranch_Observed
-    [339] = {_PyIR_PLAN_NONE, 1, 339, NULL, NULL},  // TestBranch_Observed
-    [340] = {_PyIR_PLAN_NONE, 1, 340, NULL, NULL},  // TestBranch_Observed
-    [341] = {_PyIR_PLAN_NONE, 1, 341, NULL, NULL},  // TestBranch_Observed
-    [342] = {_PyIR_PLAN_NONE, 1, 342, NULL, NULL},  // TestBranch_Observed
-    [343] = {_PyIR_PLAN_NONE, 1, 343, NULL, NULL},  // TestBranch_Observed
-    [344] = {_PyIR_PLAN_NONE, 1, 344, NULL, NULL},  // TestBranch_Observed
-    [345] = {_PyIR_PLAN_NONE, 1, 345, NULL, NULL},  // TestBranch_Observed
-    [346] = {_PyIR_PLAN_NONE, 1, 346, NULL, NULL},  // TestBranch_Observed
-    [347] = {_PyIR_PLAN_NONE, 1, 347, NULL, NULL},  // BranchTruth_Observed
-    [348] = {_PyIR_PLAN_NONE, 1, 348, NULL, NULL},  // BranchTruth_Observed
-    [349] = {_PyIR_PLAN_NONE, 1, 349, NULL, NULL},  // BranchTruth_Observed
-    [350] = {_PyIR_PLAN_NONE, 1, 350, NULL, NULL},  // BranchTruth_Observed
-    [351] = {_PyIR_PLAN_NONE, 1, 351, NULL, NULL},  // BranchTruth_Observed
-    [352] = {_PyIR_PLAN_NONE, 1, 352, NULL, NULL},  // BranchTruth_Observed
-    [353] = {_PyIR_PLAN_NONE, 1, 353, NULL, NULL},  // BranchTruth_Observed
-    [354] = {_PyIR_PLAN_NONE, 1, 354, NULL, NULL},  // BranchTruth_Observed
-    [355] = {_PyIR_PLAN_NONE, 1, 355, NULL, NULL},  // BranchTruth_Observed
-    [356] = {_PyIR_PLAN_NONE, 1, 356, NULL, NULL},  // BranchTruth_Observed
-    [357] = {_PyIR_PLAN_NONE, 1, 357, NULL, NULL},  // BranchTruth_Observed
-    [358] = {_PyIR_PLAN_NONE, 1, 358, NULL, NULL},  // BranchTruth_Observed
-    [359] = {_PyIR_PLAN_NONE, 1, 359, NULL, NULL},  // BranchTruth_Observed
-    [360] = {_PyIR_PLAN_NONE, 1, 360, NULL, NULL},  // BranchTruth_Observed
-    [361] = {_PyIR_PLAN_NONE, 1, 361, NULL, NULL},  // BranchTruth_Observed
-    [362] = {_PyIR_PLAN_NONE, 1, 362, NULL, NULL},  // BranchNone_Observed
-    [363] = {_PyIR_PLAN_NONE, 1, 363, NULL, NULL},  // Jump_Observed
-    [364] = {_PyIR_PLAN_NONE, 1, 364, NULL, NULL},  // Jump_Observed
-    [365] = {_PyIR_PLAN_NONE, 1, 365, NULL, NULL},  // Jump_Observed
 };

@@ -30,6 +30,18 @@ extern primitive instrumentation_current(t:Thread, f:Frame) -> Bool
     lowering: "none yet",
     test: "test_rop_resume");
 
+// The same for the observing evaluator: the code also carries the observed
+// mark (_PyCode_OBSERVED_MARK), which the eval breaker never holds
+extern primitive observing_current(t:Thread, f:Frame) -> Bool
+  effects(reads)
+  c _PyRop_ObservingCurrent as bool
+  evidence(
+    review: "OB. instrumentation_current with the observed mark of the code's"
+            "version.",
+    contract: "Two relaxed or acquire loads, an or and a compare: no failure, no callback.",
+    lowering: "none yet",
+    test: "test_rop_resume");
+
 // Whether the kind of resume point polls: not the delegation loops or a
 // generator expression's start
 extern primitive resume_polls(kind:Enum<ResumeKind>) -> Bool
@@ -43,9 +55,10 @@ extern primitive resume_polls(kind:Enum<ResumeKind>) -> Bool
     test: "test_rop_resume");
 
 // _MAYBE_INSTRUMENT: when the code's version is not the global one and the
-// thread is not tracing, instrument the code.  The word then runs again, now
-// under the handler that instrumentation installed: the redirect names this
-// word.  A thread that is tracing never instruments here.
+// thread is not tracing, instrument the code.  A thread that is tracing never
+// instruments here.  If the code is observed, the frame goes on in the
+// observing evaluator, where the word runs again: the redirect names the
+// switch word (Python/ceval_evaluator.h).
 extern helper instrument_if_stale(t:Thread, f:Frame, at:Site)
   cases(ok(), moved(r:Route), err(e:Err))
   effects(runs_python, raises, writes)
@@ -55,7 +68,18 @@ extern helper instrument_if_stale(t:Thread, f:Frame, at:Site)
             "next_instr = this_instr; DISPATCH_SAME_OPARG().",
     contract: "_Py_Instrument rewrites the code's words, which may run Python"
               "(it takes the world's attention); an error is -1 with an"
-              "exception set. A positive status names this word in return_pc.");
+              "exception set. A positive status names the switch word in return_pc.");
+
+// The same for the observing evaluator, which a code object without the
+// observed mark leaves
+extern helper observe_if_stale(t:Thread, f:Frame, at:Site)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises, writes)
+  c _PyRop_ObserveIfStale as int_redirect
+  evidence(
+    review: "OB. instrument_if_stale for the observing evaluator.",
+    contract: "As instrument_if_stale. A positive status names the switch word"
+              "in return_pc.");
 
 // The PY_START event of a frame's start, the PY_RESUME of any other resume
 extern helper resume_event(t:Thread, f:Frame, at:Site, kind:Enum<ResumeKind>)
@@ -89,8 +113,9 @@ arm Resume.Poll shared select(jit_off)
   Due():
     branch events_pending(thread) -> Pending(), Done();
   Pending():
-    call poll(thread, site) {
+    call poll(thread, frame, site) {
       ok -> Done();
+      moved -> Moved();
       err -> PollFailed();
     }
   Done():
@@ -122,8 +147,9 @@ arm Resume.Warm split select(jit_on)
   Due():
     branch events_pending(thread) -> Pending(), Warm();
   Pending():
-    call poll(thread, site) {
+    call poll(thread, frame, site) {
       ok -> Warm();
+      moved -> Moved();
       err -> PollFailed();
     }
   Warm():
@@ -143,16 +169,16 @@ arm Resume.Warm split select(jit_on)
     exit raise(Resume.PollFailed, pe);
 }
 
-// The twin of every Resume arm
+// The observer of the Resume arms, which the observing evaluator runs
 arm Resume.Observed split observes
   effects(runs_python, polls, raises)
   feedback()
   exits(next, raise, redirect)
 {
   entry():
-    branch instrumentation_current(thread, frame) -> Current(), Stale();
+    branch observing_current(thread, frame) -> Current(), Stale();
   Stale():
-    call instrument_if_stale(thread, frame, site) {
+    call observe_if_stale(thread, frame, site) {
       ok -> Current();
       moved -> Moved();
       err -> InstrumentFailed();
@@ -162,8 +188,9 @@ arm Resume.Observed split observes
   Due():
     branch events_pending(thread) -> Pending(), Event();
   Pending():
-    call poll(thread, site) {
+    call poll(thread, frame, site) {
       ok -> Event();
+      moved -> Moved();
       err -> PollFailed();
     }
   Event():

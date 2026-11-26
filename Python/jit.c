@@ -1024,18 +1024,16 @@ free_unit(_PyJitUnit *unit)
 }
 
 /* Compile the words of exec, the executing copy of code, into a new unit
- * and make it the exec's.  Returns NULL if the words hold an instrumented
- * handler or the code cannot be placed. */
+ * and make it the exec's.  Returns NULL if the code is observed, which runs
+ * in the observing evaluator, or cannot be placed. */
 static _PyJitUnit *
 compile(PyCodeObject *code, _PyCodeExec *exec)
 {
+    if (_PyCode_IsObserved(code)) {
+        return NULL;
+    }
     const _PyIRWord *words = exec->words;
     uint32_t nwords = exec->nwords;
-    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
-        if (_PyIR_HandlerFlags[IR_HANDLER(words[i])] & _PyIR_H_INSTRUMENTED) {
-            return NULL;
-        }
-    }
     _PyJitUnit *unit = PyMem_RawCalloc(1, sizeof(_PyJitUnit));
     _PyJitLabel *labels = PyMem_RawMalloc(nwords * sizeof(_PyJitLabel));
     if (unit == NULL || labels == NULL) {

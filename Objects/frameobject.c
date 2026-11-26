@@ -3475,6 +3475,11 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
 
     bool is_suspended = frame_is_suspended(self);
+    /* The jump reads and writes the frame's resume point, which a monitoring
+     * change may have sent to the switch word */
+    if (!is_suspended) {
+        _PyEval_SwitchResolve(PyThreadState_GET(), self->f_frame);
+    }
     /* Event eligibility permits a request; the phase and owner proofs below
      * still decide whether this particular transfer can be performed. */
     int what_event = PyThreadState_GET()->what_event;

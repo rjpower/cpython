@@ -1990,6 +1990,28 @@ error:
     return NULL;
 }
 
+/* Whether CODE is observed: it runs in the observing evaluator, whose table
+ * sends the words of the families with events to their observers
+ * (_PyCode_OBSERVED_MARK) */
+static PyObject *
+code_is_observed(PyObject *self, PyObject *code)
+{
+    if (!PyCode_Check(code)) {
+        PyErr_SetString(PyExc_TypeError, "expected a code object");
+        return NULL;
+    }
+    return PyBool_FromLong(_PyCode_IsObserved((PyCodeObject *)code));
+}
+
+/* The number of the current thread's frames at the switch word
+ * (_PyThreadStateImpl.eval_switches) */
+static PyObject *
+eval_switch_count(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)_PyThreadState_GET();
+    return PyLong_FromLong(impl->eval_switches.count);
+}
+
 /* The words that the lowering of CODE made, or with ADAPTIVE those of its
  * executing copy, which specialisation and instrumentation rewrite:
  * per word a tuple (handler, a, b, c, d) of the name of its handler and its
@@ -5790,6 +5812,8 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"code_is_observed", code_is_observed, METH_O, NULL},
+    {"eval_switch_count", eval_switch_count, METH_NOARGS, NULL},
     {"ir_span_probe", ir_span_probe, METH_VARARGS, NULL},
     {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},

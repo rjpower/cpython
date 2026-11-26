@@ -170,10 +170,8 @@ _Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *li
 /* The flags in the first byte of a lines[] entry and in a
  * per_instruction_state[] entry.  What a LINE or INSTRUCTION wrapper
  * displaced is the code object's own handler for the word, which monitoring
- * never rewrites (_PyCode_HandlerFor), or its observed twin: the flags say
- * which. */
+ * never rewrites, or for LINE the INSTRUCTION wrapper. */
 #define _PyCo_LINE_STARTS 1          // lines: the word starts a line
-#define _PyCo_DISPLACED_OBSERVED 2   // the displaced handler is the observed twin
 #define _PyCo_DISPLACED_INSTRUCTION 4 // lines: the INSTRUCTION wrapper is what LINE displaced
 #define _PyCo_STATE_SET 1            // per_instruction_state: the entry is set
 

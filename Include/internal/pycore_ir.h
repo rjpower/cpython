@@ -103,6 +103,15 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
               "handler ids must fit in IR_HANDLER_BITS");
 
 #define IR_HANDLER(W)   ((int)((W) & IR_HANDLER_MASK))
+
+/* The id of the switch word: the last id the field holds, which no arm or
+ * word kind takes.  No code object's words hold it.  A frame that must go on
+ * in the other compilation of the evaluator (Python/ceval_observing.c) is
+ * sent to a static word with this id, and the real word is kept with the
+ * frame (_PyEval_SwitchLoop). */
+#define IR_H_SWITCH IR_HANDLER_MASK
+static_assert(IR_NUM_HANDLERS <= IR_H_SWITCH,
+              "the switch word's id is free");
 #define IR_FLAGS(W)     ((int)((W) & IR_FLAGS_MASK))
 
 /* Slot-class flags: field X of the word names a local, a cell or a free
@@ -248,8 +257,8 @@ enum {
     _PyIR_LOC_BC,       // B and C, 24 bits
 };
 
-/* _PyIRFormat.flags: the format, shared by a family, its instrumented twins
- * and the IR-only handlers named after a member.  What a flag says holds
+/* _PyIRFormat.flags: the format, shared by a family and the IR-only
+ * handlers named after a member.  What a flag says holds
  * for a word of the format whichever of them runs.  The translator's rows
  * (Include/internal/pycore_regcfg.h) have flags of their own in the bits
  * that are free here: 0x2, 0x10, 0x40, 0x800. */
@@ -352,9 +361,7 @@ typedef struct _PyIRFormat {
                             // may carry: IR_F_CALL_ROLES or a subset
     uint32_t edges;         // _PyIR_HOME_* of home h after edge e, in the two
                             // bits at 2 * (_PyIR_HOMES * e + h)
-    uint16_t twin;          // the handler that instrumentation runs on the
-                            // word (itself for a twin), or _PyIR_NO_HANDLER
-    uint32_t events;        // bit e: semantic handler or twin can fire event e
+    uint32_t events;        // bit e: the family's observer can fire event e
 } _PyIRFormat;
 
 
@@ -751,14 +758,9 @@ PyAPI_FUNC(int) _PyIR_RealHandler(struct _PyInterpreterFrame *frame,
                                   const _PyIRWord *instr);
 
 /* The handler that the word at instr runs once a LINE or INSTRUCTION wrapper
- * has passed it on; the observed one if monitoring displaced it. */
+ * has passed it on. */
 PyAPI_FUNC(int) _PyIR_DispatchedHandler(struct _PyInterpreterFrame *frame,
                                           const _PyIRWord *instr);
-
-/* The handler of the word at index i of co while monitoring runs it: the
- * code object's handler, or when observed is true the observed twin that
- * its family declares (events(...)).  Specialisation is not kept. */
-PyAPI_FUNC(int) _PyCode_HandlerFor(PyCodeObject *co, int i, int observed);
 
 /* Whether the word at index i of co is a jump that the assembler adds after
  * a relaxed FOR_ITER, SEND or conditional branch (_PyIR_H_TRAILING). */
@@ -799,7 +801,7 @@ _PyIR_CanonicalFlagsValid(_PyIRWord word)
 }
 
 /* Whether the handler is a member of the CALL, CALL_KW or CALL_FUNCTION_EX
- * family or one of their instrumented twins: its words have operand words. */
+ * family: its words have operand words. */
 static inline int
 _PyIR_HandlerHasOperands(int handler)
 {

@@ -59,10 +59,11 @@ class EmptyReturnTests(unittest.TestCase):
                     for enabled in (False, True, False, True):
                         monitor.set_local_events(tool, code, event if enabled else 0)
                         function(*argument)
-                        # The observed wrapper of the selected arm
-                        expected = [name + (".Observed" if enabled else "")
-                                    for name in plain]
-                        self.assertEqual(returns(code, True), expected)
+                        # The selected arm, which the observing evaluator
+                        # runs the observer for while the event is enabled
+                        self.assertEqual(returns(code, True), plain)
+                        self.assertEqual(
+                            _testinternalcapi.code_is_observed(code), enabled)
                     monitor.set_local_events(tool, code, 0)
                     self.assertEqual(sum(actual is code for actual, _ in seen), previous + 2)
         finally:

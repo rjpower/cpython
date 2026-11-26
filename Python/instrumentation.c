@@ -59,9 +59,14 @@
 
 #endif
 
-/* Instrumentation rewrites the handlers of the executing copy of a code
- * object, which force_instrument_lock_held() makes sure exists, and indexes
- * its tables by word.  Every build has one executing copy per code object.
+/* Instrumentation keeps per-word tool tables for the executing copy of a
+ * code object, which force_instrument_lock_held() makes sure exists, and
+ * marks the code observed (_PyCode_OBSERVED_MARK) while any local event is
+ * active.  Observed code runs in the observing evaluator, whose dispatch
+ * table sends the words of the families that declare events to their
+ * observers; the words themselves never change for those events.  Only the
+ * LINE and INSTRUCTION wrappers still rewrite a word.  Every build has one
+ * executing copy per code object.
  * Relaxation helpers share logical LINE/branch grouping with their step;
  * every dispatched real helper still receives INSTRUCTION observation. */
 
@@ -71,6 +76,10 @@ exec_words(PyCodeObject *code)
     assert(code->_co_exec != NULL);
     return code->_co_exec->words;
 }
+
+/* The local events, PY_START to STOP_ITERATION: their words, or LINE and
+ * INSTRUCTION, observe in the observing evaluator */
+#define _PY_OBSERVING_EVENTS (PY_MONITORING_EVENT_STOP_ITERATION + 1)
 
 #define LINE_HOOK ROP_HANDLER_Line_Hook
 #define INSTRUCTION_HOOK ROP_HANDLER_Instruction_Hook
@@ -97,20 +106,12 @@ is_hook(int handler)
     return handler == LINE_HOOK || handler == INSTRUCTION_HOOK;
 }
 
-/* Whether handler is the observed twin of a handler: the one that a word
- * runs while a tool listens to the events of its family */
-static inline bool
-is_observed(int handler)
-{
-    return (_PyIR_HandlerFlags[handler] & _PyIR_H_INSTRUMENTED) && !is_hook(handler);
-}
-
 /* Whether the family of the handler declares events(...), so that its
- * word has an observed twin */
+ * words run the family's observer in the observing evaluator */
 static inline bool
 has_events(int handler)
 {
-    return _PyIR_FormatOf(handler)->twin != _PyIR_NO_HANDLER;
+    return _PyIR_PrimaryEvent[handler] >= 0;
 }
 
 static inline bool
@@ -130,6 +131,16 @@ primary_event(PyCodeObject *code, int i)
                                                : PY_MONITORING_EVENT_PY_START;
     }
     return event;
+}
+
+/* Whether a tool listens at the word at index i, which has events: the
+ * per-location tables that DISABLE clears */
+static inline bool
+location_observed(_PyCoMonitoringData *m, int i)
+{
+    return (m->tools != NULL && m->tools[i] != 0) ||
+           (m->left_tools != NULL && m->left_tools[i] != 0) ||
+           (m->stop_tools != NULL && m->stop_tools[i] != 0);
 }
 
 static inline bool
@@ -651,7 +662,7 @@ sanity_check_instrumentation(PyCodeObject *code)
     _PyIRWord *words = exec_words(code);
     for (int i = 0; i < code_len;) {
         int base = base_handler(code, i);
-        CHECK(!is_hook(base) && !is_observed(base));
+        CHECK(!is_hook(base));
         word_state state = word_state_of(code, words, data, i);
         if (state.line) {
             CHECK(data->lines);
@@ -662,19 +673,10 @@ sanity_check_instrumentation(PyCodeObject *code)
         else if (data->lines) {
             /* A LINE wrapper that has de-instrumented itself leaves no
              * displaced state behind: it would run an invalid wrapper */
-            CHECK(!(*get_line_flags_ptr(data->lines, i) &
-                    (_PyCo_DISPLACED_OBSERVED | _PyCo_DISPLACED_INSTRUCTION)));
+            CHECK(!(*get_line_flags_ptr(data->lines, i) & _PyCo_DISPLACED_INSTRUCTION));
         }
         if (state.instruction) {
             CHECK(data->per_instruction_state[i] & _PyCo_STATE_SET);
-        }
-        if (state.observed) {
-            CHECK(has_events(base));
-            int event = primary_event(code, i);
-            CHECK(active_monitors.tools[event] != 0 ||
-                  active_monitors.tools[PY_MONITORING_EVENT_BRANCH_LEFT] != 0 ||
-                  active_monitors.tools[PY_MONITORING_EVENT_STOP_ITERATION] != 0 ||
-                  (data->source_forced && (data->source_forced[i] & _PyIR_SOURCE_BRANCH_WRAPPER)));
         }
         if (data->left_tools) {
             uint8_t left = data->left_tools[i];
@@ -719,8 +721,8 @@ specializes(PyCodeObject *code, int i)
 }
 
 /* Restart the specialisation warmup of the instruction at index i, whose
- * handler changes between its instrumented and uninstrumented forms.  The
- * shared entry never warms up. */
+ * handler a LINE or INSTRUCTION wrapper displaced: the word goes back to the
+ * code object's handler.  The shared entry never warms up. */
 static void
 warm_up(PyCodeObject *code, int i)
 {
@@ -742,12 +744,10 @@ warm_up(PyCodeObject *code, int i)
 /* What monitoring has done to the word at index i of the executing copy.
  * The word runs the INSTRUCTION wrapper if instruction is set, else the LINE
  * wrapper if line is set (LINE may sit over INSTRUCTION), else the code
- * object's handler, which is its observed twin if observed is set.  A
- * wrapper's tables keep the observed bit of what it displaced. */
+ * object's handler. */
 typedef struct {
     bool line;
     bool instruction;
-    bool observed;
 } word_state;
 
 static word_state
@@ -760,16 +760,9 @@ word_state_of(PyCodeObject *code, _PyIRWord *words,
         uint8_t flags = *get_line_flags_ptr(monitoring->lines, i);
         state.line = true;
         state.instruction = (flags & _PyCo_DISPLACED_INSTRUCTION) != 0;
-        state.observed = state.instruction
-            ? (monitoring->per_instruction_state[i] & _PyCo_DISPLACED_OBSERVED) != 0
-            : (flags & _PyCo_DISPLACED_OBSERVED) != 0;
     }
     else if (handler == INSTRUCTION_HOOK) {
         state.instruction = true;
-        state.observed = (monitoring->per_instruction_state[i] & _PyCo_DISPLACED_OBSERVED) != 0;
-    }
-    else {
-        state.observed = is_observed(handler);
     }
     return state;
 }
@@ -781,17 +774,16 @@ static void
 set_word_state(PyCodeObject *code, _PyIRWord *words,
                _PyCoMonitoringData *monitoring, int i, word_state state)
 {
-    uint8_t displaced = state.observed ? _PyCo_DISPLACED_OBSERVED : 0;
     uint8_t *flags = monitoring->lines ? get_line_flags_ptr(monitoring->lines, i) : NULL;
     if (state.instruction) {
         FT_ATOMIC_STORE_UINT8_RELAXED(monitoring->per_instruction_state[i],
-                                      _PyCo_STATE_SET | displaced);
+                                      _PyCo_STATE_SET);
     }
     if (state.line) {
         assert(flags != NULL);
         FT_ATOMIC_STORE_UINT8_RELAXED(*flags,
             (*flags & _PyCo_LINE_STARTS) |
-            (state.instruction ? _PyCo_DISPLACED_INSTRUCTION : displaced));
+            (state.instruction ? _PyCo_DISPLACED_INSTRUCTION : 0));
         set_word_handler(code, words, i, LINE_HOOK);
         return;
     }
@@ -799,26 +791,7 @@ set_word_state(PyCodeObject *code, _PyIRWord *words,
         FT_ATOMIC_STORE_UINT8_RELAXED(*flags, *flags & _PyCo_LINE_STARTS);
     }
     set_word_handler(code, words, i,
-                     state.instruction ? INSTRUCTION_HOOK
-                                       : _PyCode_HandlerFor(code, i, state.observed));
-}
-
-static void
-de_instrument(PyCodeObject *code, _PyIRWord *words, _PyCoMonitoringData *monitoring, int i,
-              int event)
-{
-    assert(event != PY_MONITORING_EVENT_INSTRUCTION);
-    assert(event != PY_MONITORING_EVENT_LINE);
-
-    word_state state = word_state_of(code, words, monitoring, i);
-    if (!state.observed) {
-        return;
-    }
-    state.observed = false;
-    set_word_state(code, words, monitoring, i, state);
-    if (specializes(code, i)) {
-        warm_up(code, i);
-    }
+                     state.instruction ? INSTRUCTION_HOOK : base_handler(code, i));
 }
 
 static void
@@ -854,21 +827,6 @@ de_instrument_per_instruction(PyCodeObject *code, _PyIRWord *words,
 }
 
 static void
-instrument(PyCodeObject *code, _PyIRWord *words, _PyCoMonitoringData *monitoring, int i)
-{
-    assert(word_has_events(code, i));
-    word_state state = word_state_of(code, words, monitoring, i);
-    if (state.observed) {
-        return;
-    }
-    state.observed = true;
-    set_word_state(code, words, monitoring, i, state);
-    if (specializes(code, i)) {
-        warm_up(code, i);
-    }
-}
-
-static void
 instrument_line(PyCodeObject *code, _PyIRWord *words, _PyCoMonitoringData *monitoring, int i)
 {
     /* Entry instrumentation must refresh the code before any observer. */
@@ -896,6 +854,9 @@ instrument_per_instruction(PyCodeObject *code, _PyIRWord *words,
     set_word_state(code, words, monitoring, i, state);
 }
 
+/* Every word with events has its tools in the per-location tables while an
+ * instrumented event is active (update_instrumentation_data()), so DISABLE
+ * clears a bit there and rewrites no word. */
 static void
 remove_tools(PyCodeObject * code, int offset, int event, int tools)
 {
@@ -905,34 +866,17 @@ remove_tools(PyCodeObject * code, int offset, int event, int tools)
     assert(PY_MONITORING_IS_INSTRUMENTED_EVENT(event));
     assert(word_has_events(code, offset));
     _PyCoMonitoringData *monitoring = code->_co_monitoring;
-    assert(monitoring);
-    bool should_de_instrument;
-    if (monitoring->tools) {
-        if (in_stop_tools(code, offset, event)) {
-            assert(monitoring->stop_tools);
-            monitoring->stop_tools[offset] &= ~tools;
-        }
-        else if (in_left_tools(code, offset, event)) {
-            assert(monitoring->left_tools);
-            monitoring->left_tools[offset] &= ~tools;
-        }
-        else {
-            monitoring->tools[offset] &= ~tools;
-        }
-        should_de_instrument = (monitoring->tools[offset] == 0 &&
-            (monitoring->left_tools == NULL || monitoring->left_tools[offset] == 0) &&
-            (monitoring->stop_tools == NULL || monitoring->stop_tools[offset] == 0));
+    assert(monitoring && monitoring->tools);
+    if (in_stop_tools(code, offset, event)) {
+        assert(monitoring->stop_tools);
+        monitoring->stop_tools[offset] &= ~tools;
+    }
+    else if (in_left_tools(code, offset, event)) {
+        assert(monitoring->left_tools);
+        monitoring->left_tools[offset] &= ~tools;
     }
     else {
-        /* Single tool */
-        uint8_t single_tool = monitoring->active_monitors.tools[event];
-        assert(_Py_popcount32(single_tool) <= 1);
-        should_de_instrument = ((single_tool & tools) == single_tool);
-    }
-    if (should_de_instrument &&
-        !(monitoring->source_forced && (monitoring->source_forced[offset] & _PyIR_SOURCE_BRANCH_WRAPPER)))
-    {
-        de_instrument(code, exec_words(code), monitoring, offset, event);
+        monitoring->tools[offset] &= ~tools;
     }
 }
 
@@ -980,28 +924,20 @@ add_tools(PyCodeObject * code, int offset, int event, int tools)
     assert(event != PY_MONITORING_EVENT_LINE);
     assert(event != PY_MONITORING_EVENT_INSTRUCTION);
     assert(PY_MONITORING_IS_INSTRUMENTED_EVENT(event));
-    assert(code->_co_monitoring);
-    if (code->_co_monitoring &&
-        code->_co_monitoring->tools
-    ) {
-        if (in_stop_tools(code, offset, event)) {
-            assert(code->_co_monitoring->stop_tools);
-            code->_co_monitoring->stop_tools[offset] |= tools;
-        }
-        else if (in_left_tools(code, offset, event)) {
-            assert(code->_co_monitoring->left_tools);
-            code->_co_monitoring->left_tools[offset] |= tools;
-        }
-        else {
-            code->_co_monitoring->tools[offset] |= tools;
-        }
+    _PyCoMonitoringData *monitoring = code->_co_monitoring;
+    assert(monitoring && monitoring->tools);
+    assert(tools_is_subset_for_event(code, event, tools));
+    if (in_stop_tools(code, offset, event)) {
+        assert(monitoring->stop_tools);
+        monitoring->stop_tools[offset] |= tools;
+    }
+    else if (in_left_tools(code, offset, event)) {
+        assert(monitoring->left_tools);
+        monitoring->left_tools[offset] |= tools;
     }
     else {
-        /* Single tool */
-        assert(_Py_popcount32(tools) == 1);
-        assert(tools_is_subset_for_event(code, event, tools));
+        monitoring->tools[offset] |= tools;
     }
-    instrument(code, exec_words(code), code->_co_monitoring, offset);
 }
 
 static void
@@ -1168,6 +1104,8 @@ set_global_version(PyThreadState *tstate, uint32_t version)
     ASSERT_WORLD_STOPPED();
 
     assert((version & _PY_EVAL_EVENTS_MASK) == 0);
+    /* The eval breaker never holds the observed mark of a code's version */
+    assert(((uintptr_t)version & _PyCode_OBSERVED_MARK) == 0);
     PyInterpreterState *interp = tstate->interp;
     set_version_raw(&interp->ceval.instrumentation_version, version);
 
@@ -1188,7 +1126,8 @@ static bool
 is_version_up_to_date(PyCodeObject *code, PyInterpreterState *interp)
 {
     ASSERT_WORLD_STOPPED_OR_LOCKED(code);
-    return global_version(interp) == code->_co_instrumentation_version;
+    return global_version(interp) ==
+           (code->_co_instrumentation_version & ~_PyCode_OBSERVED_MARK);
 }
 
 #ifndef NDEBUG
@@ -1227,23 +1166,27 @@ get_tools_for_instruction(PyCodeObject *code, PyInterpreterState *interp, int i,
         event = PY_MONITORING_EVENT_CALL;
     }
     assert(_PY_MONITORING_IS_UNGROUPED_EVENT(event));
+    /* An observer may run for code that no tool observes: a frame that has
+     * not yet left the observing evaluator after monitoring ended */
+    if (code->_co_monitoring == NULL) {
+        return 0;
+    }
     CHECK(debug_check_sanity(interp, code));
     if (PY_MONITORING_IS_INSTRUMENTED_EVENT(event)) {
-        /* Instrumented events use per-instruction tool bitmaps. */
-        if (code->_co_monitoring->tools) {
-            if (in_stop_tools(code, i, event)) {
-                uint8_t *stop_tools = code->_co_monitoring->stop_tools;
-                return stop_tools ? stop_tools[i] : 0;
-            }
-            if (in_left_tools(code, i, event)) {
-                uint8_t *left_tools = code->_co_monitoring->left_tools;
-                return left_tools ? left_tools[i] : 0;
-            }
-            tools = code->_co_monitoring->tools[i];
+        /* Instrumented events use per-instruction tool bitmaps, which exist
+         * while any instrumented event is active */
+        if (code->_co_monitoring->tools == NULL) {
+            return 0;
         }
-        else {
-            tools = code->_co_monitoring->active_monitors.tools[event];
+        if (in_stop_tools(code, i, event)) {
+            uint8_t *stop_tools = code->_co_monitoring->stop_tools;
+            return stop_tools ? stop_tools[i] : 0;
         }
+        if (in_left_tools(code, i, event)) {
+            uint8_t *left_tools = code->_co_monitoring->left_tools;
+            return left_tools ? left_tools[i] : 0;
+        }
+        tools = code->_co_monitoring->tools[i];
     }
     else {
         /* Other (non-instrumented) events are not tied to specific instructions;
@@ -1994,12 +1937,11 @@ done:;
     if (state.instruction) {
         return INSTRUCTION_HOOK;
     }
-    return _PyCode_HandlerFor(code, i, state.observed);
+    return base_handler(code, i);
 }
 
 /* The handler that the LINE wrapper at index displaced: the INSTRUCTION
- * wrapper if that sits under it, else the word's own handler or its observed
- * twin */
+ * wrapper if that sits under it, else the word's own handler */
 int
 _PyCode_LineDisplaced(PyCodeObject *code, int index)
 {
@@ -2007,15 +1949,14 @@ _PyCode_LineDisplaced(PyCodeObject *code, int index)
     if (flags & _PyCo_DISPLACED_INSTRUCTION) {
         return INSTRUCTION_HOOK;
     }
-    return _PyCode_HandlerFor(code, index, (flags & _PyCo_DISPLACED_OBSERVED) != 0);
+    return base_handler(code, index);
 }
 
 int
 _PyCode_InstructionDisplaced(PyCodeObject *code, int index)
 {
-    uint8_t state = code->_co_monitoring->per_instruction_state[index];
-    assert(state & _PyCo_STATE_SET);
-    return _PyCode_HandlerFor(code, index, (state & _PyCo_DISPLACED_OBSERVED) != 0);
+    assert(code->_co_monitoring->per_instruction_state[index] & _PyCo_STATE_SET);
+    return base_handler(code, index);
 }
 
 Py_NO_INLINE int
@@ -2072,23 +2013,10 @@ initialize_tools(PyCodeObject *code)
 
     assert(tools != NULL);
     int code_len = (int)_PyCode_IRSize(code);
-    _PyIRWord *words = exec_words(code);
     for (int i = 0; i < code_len; i++) {
         int length = instr_length(code, i);
         if (word_has_events(code, i)) {
-            if (word_state_of(code, words, code->_co_monitoring, i).observed) {
-                int event = primary_event(code, i);
-                assert(event >= 0);
-                assert(PY_MONITORING_IS_INSTRUMENTED_EVENT(event));
-                tools[i] = code->_co_monitoring->active_monitors.tools[event];
-                CHECK(tools[i] != 0 ||
-                      ((has_stop_slot(base_handler(code, i)) || has_left(base_handler(code, i))) &&
-                       (code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_BRANCH_LEFT] ||
-                        code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_STOP_ITERATION])));
-            }
-            else {
-                tools[i] = 0;
-            }
+            tools[i] = 0;
         }
 #ifdef Py_DEBUG
         /* Initialize tools for invalid locations to all ones to try to catch errors */
@@ -2251,13 +2179,19 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
         interp->monitors,
         code->_co_monitoring->local_monitors);
     bool multitools = multiple_tools(&all_events);
-    /* BRANCH_LEFT tools are per location, as are those of the other events
-     * of a location that has two, so a tool that is alone still needs them. */
+    /* The tools of the instrumented events are always per location: DISABLE
+     * clears a location's bit, and the observers read it. */
+    bool instrumented = false;
+    for (int e = 0; e < _PY_OBSERVING_EVENTS; e++) {
+        if (PY_MONITORING_IS_INSTRUMENTED_EVENT(e) && all_events.tools[e]) {
+            instrumented = true;
+        }
+    }
     bool left = all_events.tools[PY_MONITORING_EVENT_BRANCH_LEFT] != 0;
     bool stop = all_events.tools[PY_MONITORING_EVENT_STOP_ITERATION] != 0;
     bool source_lines = all_events.tools[PY_MONITORING_EVENT_LINE] &&
                         observation_map(code).positions.nrecords;
-    if (code->_co_monitoring->tools == NULL && (multitools || left || stop || source_lines)) {
+    if (code->_co_monitoring->tools == NULL && (instrumented || source_lines)) {
         code->_co_monitoring->tools = PyMem_Malloc(code_len);
         if (code->_co_monitoring->tools == NULL) {
             PyErr_NoMemory();
@@ -2385,20 +2319,13 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
             }
             // Initialize all of the instructions so if local events change while another thread is executing
             // we know whether the instruction was observed.
-            _PyIRWord *words = exec_words(code);
             /* Every entry, the operand words' too: de-instrumentation may
-             * read any index that a source edge names.  An operand word is
-             * payload with no handler, so it takes its head's state; the
-             * length comes from the code object's word, which is never
-             * wrapped. */
+             * read any index that a source edge names.  The length comes
+             * from the code object's word, which is never wrapped. */
             for (int i = 0; i < code_len; ) {
-                uint8_t state = _PyCo_STATE_SET;
-                if (word_state_of(code, words, code->_co_monitoring, i).observed) {
-                    state |= _PyCo_DISPLACED_OBSERVED;
-                }
                 int length = _PyCode_InstrLength(code, i);
                 for (int k = 0; k < length; k++) {
-                    code->_co_monitoring->per_instruction_state[i + k] = state;
+                    code->_co_monitoring->per_instruction_state[i + k] = _PyCo_STATE_SET;
                 }
                 i += length;
             }
@@ -2437,7 +2364,8 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     /* Source edges borrow branch wrappers only while LINE observation is
      * enabled. Remove that private forcing before updating ordinary tools. */
     _PyCoMonitoringData *old = code->_co_monitoring;
-    bool restarted = interp->last_restart_version > code->_co_instrumentation_version;
+    uintptr_t code_version = code->_co_instrumentation_version & ~_PyCode_OBSERVED_MARK;
+    bool restarted = interp->last_restart_version > code_version;
     uint8_t old_line = old ? old->active_monitors.tools[PY_MONITORING_EVENT_LINE] : 0;
     uint8_t local_line = old ? old->local_monitors.tools[PY_MONITORING_EVENT_LINE] : 0;
     for (int tool = 0; old && tool < PY_MONITORING_TOOL_IDS; tool++) {
@@ -2452,7 +2380,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         /* Tool identities advance the global version. Unlike local versions,
          * this successful-code snapshot is not overwritten by SetLocalEvents. */
         if ((relevant_line & (1 << tool)) &&
-            interp->monitoring_tool_versions[tool] > code->_co_instrumentation_version)
+            interp->monitoring_tool_versions[tool] > code_version)
         {
             stale_line |= 1 << tool;
         }
@@ -2467,9 +2395,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     }
     if (old && old->source_forced) {
         for (int i = 0; i < code_len; i++) {
-            if (old->source_forced[i] & _PyIR_SOURCE_BRANCH_WRAPPER) {
-                de_instrument(code, exec->words, old, i, PY_MONITORING_EVENT_JUMP);
-            }
             if ((old->source_forced[i] & _PyIR_SOURCE_INGRESS_WRAPPER) &&
                 (!old->per_instruction_tools || !old->per_instruction_tools[i]))
             {
@@ -2624,7 +2549,6 @@ done:;
                     word_has_events(code, from))
                 {
                     monitoring->source_forced[from] |= _PyIR_SOURCE_BRANCH_WRAPPER;
-                    instrument(code, exec->words, monitoring, from);
                 }
                 else if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
                          !(fmt->flags & _PyIR_NAMES_TARGET) &&
@@ -2638,23 +2562,18 @@ done:;
             monitoring->source_forced[to] |= _PyIR_SOURCE_LINE_WRAPPER;
             add_line_tools(code, to, line_tools);
         }
-        /* Restoring a forced wrapper above must not remove unchanged ordinary
-         * branch monitoring when LINE itself has just been disabled. */
-        if (!line_tools) {
-            for (int i = _PyCode_FirstTraceable(code), length; i < code_len; i += length) {
-                /* Read before the body: a wrapper that it installs has no operand words */
-                length = _PyCode_InstrLength(code, i);
-                if (word_has_events(code, i)) {
-                    int event = primary_event(code, i);
-                    if (event >= 0 && active_events.tools[event]) {
-                        instrument(code, exec->words, monitoring, i);
-                    }
-                }
-            }
+    }
+    /* Code with any local event active runs in the observing evaluator,
+     * and not in a compiled unit */
+    uintptr_t version = global_version(interp);
+    for (int e = 0; e < _PY_OBSERVING_EVENTS; e++) {
+        if (active_events.tools[e]) {
+            version |= _PyCode_OBSERVED_MARK;
+            _PyJit_Retire(exec);
+            break;
         }
     }
-    FT_ATOMIC_STORE_UINTPTR_RELEASE(code->_co_instrumentation_version,
-                                    global_version(interp));
+    FT_ATOMIC_STORE_UINTPTR_RELEASE(code->_co_instrumentation_version, version);
 
 #ifdef INSTRUMENT_DEBUG
     sanity_check_instrumentation(code);
@@ -2716,6 +2635,9 @@ instrument_all_executing_code_objects(PyInterpreterState *interp)
     }
 done:
     _Py_FOR_EACH_TSTATE_END(interp);
+    if (err == 0) {
+        err = _PyEval_RedirectFrames(interp);
+    }
     /* After a failure, the frames not yet reached run older code until their
      * next RESUME; a complete walk brings every executing code object up to
      * the version.  Debug builds check this (ceval.c,
@@ -2827,7 +2749,10 @@ _PyMonitoring_SetLocalEvents(PyCodeObject *code, int tool_id, _PyMonitoringEvent
     }
     set_local_events(local, tool_id, events);
 
-    return force_instrument_lock_held(code, interp);
+    if (force_instrument_lock_held(code, interp) < 0) {
+        return -1;
+    }
+    return _PyEval_RedirectFrames(interp);
 }
 
 int
@@ -3744,7 +3669,7 @@ branch_word(PyCodeObject *code, int offset)
     for (int w = first; w < (int)code->_co_exec->nwords &&
                         _PyCode_WordOffset(code, w) == start; w += _PyCode_InstrLength(code, w)) {
         int handler = word_handler(exec_words(code), w);
-        if (is_observed(handler) || is_hook(handler) ||
+        if (has_events(base_handler(code, w)) || is_hook(handler) ||
             has_left(base_handler(code, w))) {
             return w;
         }
@@ -3786,7 +3711,8 @@ branch_handler_vectorcall(
     }
     int handler = word_handler(exec_words(code), src_offset);
     int base = base_handler(code, src_offset);
-    if (!is_observed(handler) && !is_hook(handler)) {
+    if (!(has_events(base) && location_observed(code->_co_monitoring, src_offset)) &&
+        !is_hook(handler)) {
         /* Already disabled */
         return disable;
     }

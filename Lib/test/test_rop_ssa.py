@@ -393,8 +393,8 @@ class Scenario:
     words_of: dict[str, str] = field(default_factory=dict)
     # The sources whose code has local events (EVENTS).  An arm
     # that `observes` runs only on them: its event rows require
-    # instrumented(site), which its declaration grants on the instrumented
-    # twin's words only
+    # instrumented(site), which its declaration grants on the words of
+    # observed code only
     monitored: tuple[str, ...] = ()
     # Arms the probe cannot run on these words, and why (the report lists them)
     skip: dict[str, str] = field(default_factory=dict)

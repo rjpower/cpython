@@ -297,7 +297,8 @@ instrumentation_is_current(PyThreadState *tstate, PyCodeObject *code)
 {
     uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
                       ~_PY_EVAL_EVENTS_MASK;
-    uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version);
+    uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version)
+                        & ~_PyCode_OBSERVED_MARK;
     uintptr_t failed = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
         tstate->interp->ceval.instrumentation_failed_version);
     if (version == epoch || version < failed || PyErr_Occurred()) {
@@ -1062,10 +1063,90 @@ _PyRop_Polls(uint32_t interrupt)
     return interrupt == 0;
 }
 
-static inline int
-_PyRop_EndPoll(PyThreadState *tstate, _PyInterpreterFrame *frame)
+/* The two evaluators (Python/ceval_evaluator.h) and their switch.  A frame
+ * moves to the other evaluator at the switch word, whose handler id is
+ * IR_H_SWITCH: a frame's resume point (return_pc) is redirected to it, and
+ * the thread's list of switches (_PyThreadStateImpl.eval_switches) keeps the
+ * word that the frame goes on at.  The redirections happen where a frame
+ * starts or resumes (RESUME), at a poll after a monitoring change, and for
+ * the frames already on a stack, during the stop-the-world change
+ * (_PyEval_RedirectFrames()). */
+PyValue _PyEval_EvalNormal(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                           int throwflag);
+PyValue _PyEval_EvalObserving(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                              int throwflag);
+extern _PyInstr _PyEval_SwitchWord;
+
+/* Whether frame, which runs in the evaluator that observing names, goes on
+ * in the other one: the one that its code's observed mark asks for.  A
+ * generator frame does not leave the observing evaluator, since its return
+ * goes on in its consumer through a completion (gen_return) in the evaluator
+ * that it ran in, and the consumer may be observed. */
+static inline bool
+_PyEval_SwitchesLoop(_PyInterpreterFrame *frame, int observing)
 {
-    return check_periodics_at_end(tstate, frame);
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        return false;
+    }
+    if (_PyCode_IsObserved(_PyFrame_GetCode(frame))) {
+        return !observing;
+    }
+    return observing && frame->owner != FRAME_OWNED_BY_GENERATOR;
+}
+
+/* A frame that runs in its code's compiled unit goes back to the unit when
+ * its child returns (IR_JIT_RESUME()), and the unit runs only code that is
+ * not observed: the frame needs no switch, and the unit has no entry for
+ * the switch word.  Monitoring retires the unit of code that it observes. */
+static inline bool
+_PyEval_SwitchSkips(_PyInterpreterFrame *frame)
+{
+    return frame->owner != FRAME_OWNED_BY_INTERPRETER &&
+           (frame->jit_flags & _PyFrame_JIT_RESUME) &&
+           !_PyCode_IsObserved(_PyFrame_GetCode(frame));
+}
+
+/* Make frame go on at real through the switch word: push the switch and
+ * redirect return_pc.  Returns 1, the status of a redirect. */
+int _PyEval_SwitchAt(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *real);
+
+/* The word that frame goes on at, whose resume point the switch word
+ * stands in for: the switch's newest entry for frame, which this removes.
+ * An entry frame's switch passes the switch on to the frame that called the
+ * activation, at its next poll. */
+_PyInstr *_PyEval_SwitchLoop(PyThreadState *tstate, _PyInterpreterFrame *frame);
+
+/* Drop the switch of frame, an error unwinds into it */
+void _PyEval_SwitchDrop(PyThreadState *tstate, _PyInterpreterFrame *frame);
+
+/* The pending events of a poll, with the loop switch first: the poll's word
+ * runs again at the switch word, real, and the other events wait for it */
+static Py_NO_INLINE _Py_COLD_FUNCTION int
+_PyRop_HandlePoll(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  _PyInstr *real)
+{
+    if (_Py_eval_breaker_bit_is_set(tstate, _PY_EVAL_LOOP_SWITCH_BIT)) {
+        _Py_unset_eval_breaker_bit(tstate, _PY_EVAL_LOOP_SWITCH_BIT);
+        if (!_PyEval_SwitchSkips(frame)) {
+            return _PyEval_SwitchAt(tstate, frame, real);
+        }
+    }
+    return _Py_HandlePending(tstate);
+}
+
+/* The poll after a call: as _PyRop_Poll(), where a loop switch goes on at
+ * the next word, next */
+static inline int
+_PyRop_EndPoll(PyThreadState *tstate, _PyInterpreterFrame *frame,
+               _PyInstr *next)
+{
+    _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+    QSBR_QUIESCENT_STATE(tstate);
+    if (Py_UNLIKELY(_Py_EvalBreakerHasEvents(tstate))) {
+        return _PyRop_HandlePoll(tstate, frame, next);
+    }
+    return 0;
 }
 
 /* The rows of AttrWrite, SuperAttr, SuperMethod and SpecialLookup
@@ -1511,12 +1592,17 @@ _PyRop_InstructionEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         _PyInstr *site, int *handler);
 
 /* The poll of a word that is interruptible (the backedge Jump arms, Resume):
- * signals, the GC and other pending events */
+ * signals, the GC and other pending events, and a loop switch, after which
+ * the word runs again */
 static inline int
-_PyRop_Poll(PyThreadState *tstate, _PyInstr *site)
+_PyRop_Poll(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site)
 {
-    (void)site;
-    return check_periodics(tstate);
+    _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+    QSBR_QUIESCENT_STATE(tstate);
+    if (_Py_EvalBreakerHasEvents(tstate)) {
+        return _PyRop_HandlePoll(tstate, frame, site);
+    }
+    return 0;
 }
 
 /* The rows of Resume (Python/register_ops/resume.rop) */
@@ -1536,9 +1622,25 @@ _PyRop_ResumePolls(uint32_t kind)
     return kind < RESUME_AFTER_YIELD_FROM;
 }
 
+/* The code's instrumentation is current and no event is pending, for the
+ * observing evaluator: the code carries the observed mark */
+static inline bool
+_PyRop_ObservingCurrent(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    return (_Py_EvalBreaker(tstate) | _PyCode_OBSERVED_MARK) ==
+           FRAME_CODE_INSTRUMENTATION_VERSION();
+}
+
+/* Instrument the code if its version is out of date, and switch the frame
+ * to the other evaluator if the code's mark asks for it: in the normal
+ * evaluator (observing 0) if the code is observed, in the observing one if
+ * it is not */
 Py_NO_INLINE int
 _PyRop_InstrumentIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          _PyInstr *site);
+Py_NO_INLINE int
+_PyRop_ObserveIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *site);
 
 Py_NO_INLINE int
 _PyRop_ResumeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
@@ -3812,6 +3914,8 @@ PyValue _PyRop_SuperMethodExplicitObserved(PyThreadState *tstate, _PyInterpreter
 typedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,
                                 _PyIRWord *, PyValue);
 extern const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS];
+/* The observing evaluator's: an observer's for each arm of an event family */
+extern const _PyRopCompletion _PyRop_ObservingCompletions[ROP_NUM_HANDLERS];
 
 /* The event of an instrumented branch (Python/ceval_forms.c), which the
  * evaluator calls, and the function-form executor, which it runs under

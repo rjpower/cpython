@@ -85,7 +85,7 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->builtins_version, uint32_t: 1, de
 static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
               "recipe Global.index: _PyGlobalRecipe.index is not uint32_t");
 //
-// 41 templates.  Inline arms that keep the call of their form:
+// 40 templates.  Inline arms that keep the call of their form:
 //   AttrWrite.Hint: AttrWrite.Hint: home has no leaf lowering
 //   AttrWrite.Instance: AttrWrite.Instance: home has no leaf lowering
 //   AttrWrite.Shape: AttrWrite.Shape: admitted_store_shape has no leaf lowering
@@ -110,6 +110,7 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: poly_method has no leaf lowering
 //   IterOpen.Indexed: IterOpen.Indexed: iter_by_index has no leaf lowering
 //   IterOpen.Self: IterOpen.Self: iter_self has no leaf lowering
+//   Jump.Poll: Jump.Poll: exit redirect has no leaf lowering
 //   Pattern.Flag: Pattern.Flag: type_has_flag has no leaf lowering
 //   SetItem.Dict: SetItem.Dict: dict_assign_slot has no leaf lowering
 //   SetItem.ListIndex: SetItem.ListIndex: list_in_bounds has no leaf lowering
@@ -2866,53 +2867,6 @@ jit_template_Jump_Trailing(_PyJitWordCx *cx)
     _PyJitAsm_Jmp(a, cx->target);
 }
 
-// The leaf graph of Jump.Poll:
-//   b0:
-//     %0:bool = prim _Py_EvalBreakerHasEvents
-//     br %0, b4, b5
-//   b1:
-//     %1:i32 = call _Py_HandlePending
-//     %2:i32 = const 0
-//     %3:bool = cmp ne %1, %2
-//     raise_if %3
-//     jmp b2
-//   b2:
-//     jump
-//   b3:
-//     raise
-//   b4:
-//     jmp b1
-//   b5:
-//     jmp b2
-static void
-jit_template_Jump_Poll(_PyJitWordCx *cx)
-{
-    _PyJitAsm *a = cx->a;
-    _PyIRWord ir_word = cx->word;
-    (void)ir_word;
-    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L3 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel raise = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Bind(a, L0);
-    int c1 = _PyJitLower__Py_EvalBreakerHasEvents(cx, (const uint8_t[]){0}, NULL);
-    _PyJitAsm_Jcc(a, c1, L5);
-    _PyJitAsm_Bind(a, L3);
-    _PyJitAsm_Jmp(a, cx->target);
-    _PyJitLower_ColdBegin(cx);
-    _PyJitAsm_Bind(a, L5);
-    cx->live = 0x0; cx->live_xmm = 0x0;
-    _PyJitLower_Call(cx, (const void *)_Py_HandlePending, 1, 1, (const _PyJitArg[]){_PyJitArg_GPR(_PyJit_TSTATE)}, _PyJitArg_GPR(_PyJitReg_RAX));
-    _PyJitAsm_ShiftRI(a, _PyJitShift_SHL, _PyJitReg_RAX, 32);
-    _PyJitAsm_ShiftRI(a, _PyJitShift_SAR, _PyJitReg_RAX, 32);
-    _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
-    int c4 = _PyJitCond_NE;
-    _PyJitAsm_Jcc(a, c4, raise);
-    _PyJitAsm_Jmp(a, L3);
-    _PyJitTemplate_Raise(cx, raise);
-    _PyJitLower_ColdEnd(cx);
-}
-
 // The leaf graph of Const.Pool:
 //   b0:
 //     %0:PyObject* = prim FRAME_CO_CONSTS
@@ -3067,7 +3021,6 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [ROP_HANDLER_BranchNone_Test] = jit_template_BranchNone_Test,
     [ROP_HANDLER_Jump_Direct] = jit_template_Jump_Direct,
     [ROP_HANDLER_Jump_Trailing] = jit_template_Jump_Trailing,
-    [ROP_HANDLER_Jump_Poll] = jit_template_Jump_Poll,
     [ROP_HANDLER_Const_Pool] = jit_template_Const_Pool,
     [ROP_HANDLER_Const_Small] = jit_template_Const_Small,
     [ROP_HANDLER_LocalRead_Bound] = jit_template_LocalRead_Bound,

@@ -1,5 +1,33 @@
 // Macros and other things needed by ceval.c and the generated arms
 
+/* The compilation of the evaluator body (Python/ceval_evaluator.h): 0 for
+ * ir_evaluate() in Python/ceval.c, 1 for the observing evaluator in
+ * Python/ceval_observing.c.  The function forms (Python/ceval_forms.c) are
+ * compiled once, with 0, and their executor picks a word's form by the
+ * observed mark of its code. */
+#ifndef IR_OBSERVING
+#  define IR_OBSERVING 0
+#endif
+/* The throwflag of an evaluator that goes on at frame->instr_ptr, where the
+ * other compilation left the frame (the switch word, IR_H_SWITCH) */
+#define IR_ENTER_SWITCH 2
+#if IR_OBSERVING
+#  define IR_OTHER_EVALUATOR _PyEval_EvalNormal
+#  define IR_COMPLETIONS _PyRop_ObservingCompletions
+#else
+#  define IR_OTHER_EVALUATOR _PyEval_EvalObserving
+#  define IR_COMPLETIONS _PyRop_Completions
+#endif
+/* The evaluator's switch where an error routine resumes frame at
+ * next_instr: to the other evaluator if the frame goes on there */
+#define IR_ERROR_SWITCH() \
+    do { \
+        if (_PyEval_SwitchesLoop(frame, IR_OBSERVING)) { \
+            frame->return_pc = next_instr; \
+            Py_MUSTTAIL return IR_OTHER_EVALUATOR(tstate, frame, IR_ENTER_SWITCH); \
+        } \
+    } while (0)
+
 /* Use macros rather than inline functions, to make it as clear as possible
  * to the C compiler that the tracing check is a simple test then branch.
  * We want to be sure that the compiler knows this before it generates
@@ -898,7 +926,14 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
 #else
 #  define ROP_ENTER_GATE_TLBC() 1
 #endif
-#define ROP_ENTER_GATE() ROP_ENTER_GATE_IF(IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Poll)
+/* The observing evaluator never skips: RESUME's observer reports PY_START,
+ * and the RESUME of code that is not observed sends the frame back to the
+ * normal evaluator. */
+#if IR_OBSERVING
+#  define ROP_ENTER_GATE() ((void)0)
+#else
+#  define ROP_ENTER_GATE() ROP_ENTER_GATE_IF(IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Poll)
+#endif
 /* IS_RESUME: the word at next_instr is a RESUME to skip */
 #define ROP_ENTER_GATE_IF(IS_RESUME) \
     do { \

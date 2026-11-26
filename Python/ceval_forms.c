@@ -59,11 +59,31 @@
 #undef IR_STORE_RETURN
 #pragma push_macro("IR_PIN_DEPARTING")
 #undef IR_PIN_DEPARTING
+#pragma push_macro("IR_ERROR_SWITCH")
+#undef IR_ERROR_SWITCH
+#pragma push_macro("IR_COMPLETIONS")
+#undef IR_COMPLETIONS
+/* The forms are compiled once: a word runs the form of the table that its
+ * frame's code asks for, the observer of its family in observed code
+ * (ir_observing_forms).  The switch word only takes the frame's entry off
+ * the switch list (_PyEval_SwitchLoop()). */
+static const _PyIRForm ir_handler_forms[512];
+static const _PyIRForm ir_observing_forms[512];
+static inline bool
+ir_frame_observed(_PyInterpreterFrame *frame)
+{
+    return frame->owner != FRAME_OWNED_BY_INTERPRETER &&
+           _PyCode_IsObserved(_PyFrame_GetCode(frame));
+}
+#define IR_FORMS(FRAME) (ir_frame_observed(FRAME) ? ir_observing_forms : ir_handler_forms)
+#define IR_COMPLETIONS \
+    (ir_frame_observed(frame) ? _PyRop_ObservingCompletions : _PyRop_Completions)
+#define IR_ERROR_SWITCH() ((void)0)
 #define DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_GOTO() \
     do { \
-        Py_MUSTTAIL return ir_handler_forms[opcode](tstate, frame, next_instr, ir_word); \
+        Py_MUSTTAIL return IR_FORMS(frame)[opcode](tstate, frame, next_instr, ir_word); \
     } while (0)
 #define DISPATCH_INLINED(NEW_FRAME) \
     do { \
@@ -218,7 +238,12 @@ static _PyIRTransfer ir_start_frame(PyThreadState *, _PyInterpreterFrame *,
                                     _PyInstr *);
 static _PyIRTransfer ir_throw_error(PyThreadState *, _PyInterpreterFrame *,
                                     _PyInstr *);
-static const _PyIRForm ir_handler_forms[512];
+static _PyIRTransfer
+ir_run_switch_loop(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    return (_PyIRTransfer){frame, _PyEval_SwitchLoop(tstate, frame)};
+}
 
 #define IR_FUNCTION_FORMS
 #include "ceval_labels.h"
@@ -277,7 +302,7 @@ _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int thro
         int opcode;
         NEXTOPARG();
         PRE_DISPATCH_GOTO();
-        t = ir_handler_forms[opcode](tstate, frame, next_instr, ir_word);
+        t = IR_FORMS(frame)[opcode](tstate, frame, next_instr, ir_word);
     }
 }
 #pragma pop_macro("DISPATCH")
@@ -302,3 +327,5 @@ _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int thro
 #pragma pop_macro("IR_JIT_RESUME")
 #pragma pop_macro("IR_STORE_RETURN")
 #pragma pop_macro("IR_PIN_DEPARTING")
+#pragma pop_macro("IR_ERROR_SWITCH")
+#pragma pop_macro("IR_COMPLETIONS")

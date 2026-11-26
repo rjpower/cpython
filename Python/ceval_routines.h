@@ -31,7 +31,8 @@
  * value to the consumer.  A consumer that the evaluator entered from C takes it
  * as its return value.  The word of a frame that entered the generator is a
  * Send, whose completion arm runs in that frame with the value
- * (_PyRop_Completions, from the family's declaration): it publishes the
+ * (IR_COMPLETIONS, from the family's declaration, or its observer's in the
+ * observing evaluator): it publishes the
  * completed value and the head to go on at, or raises or redirects.  A
  * finalizer that runs during the retirement can redirect the resumer; a
  * changed pc or control generation is taken as a redirect. */
@@ -65,8 +66,8 @@ IR_HOT_ROUTINE(gen_return, PyValue gen_value, _PyInterpreterFrame *gen_dying,
     }
     int handler = _PyIR_DispatchedHandler(frame, site);
     assert(handler >= ROP_FIRST_HANDLER &&
-           _PyRop_Completions[handler - ROP_FIRST_HANDLER] != NULL);
-    int status = _PyRop_Completions[handler - ROP_FIRST_HANDLER](
+           IR_COMPLETIONS[handler - ROP_FIRST_HANDLER] != NULL);
+    int status = IR_COMPLETIONS[handler - ROP_FIRST_HANDLER](
         tstate, frame, site, value);
     if (status & _PyIR_RAISED) {
         GEN_RAISED();
@@ -96,6 +97,9 @@ IR_ROUTINE(process_error, _PyInstr *process_error_origin,
         next_instr = ir_error_result.next;
         /* A handler of a frame that ran in its unit runs there */
         IR_JIT_RESUME();
+        /* A frame that unwound into the evaluator that its code does not
+         * ask for goes on in the other one */
+        IR_ERROR_SWITCH();
         int opcode;
         DISPATCH();
     }

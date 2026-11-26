@@ -298,7 +298,7 @@ READ_ONLY_EFFECTS = frozenset({Effect.reads})
 
 
 class MonitoringEvent(enum.Enum):
-    """The sys.monitoring events that a family's observed wrapper can fire,
+    """The sys.monitoring events that a family's observer arm can fire,
     by the names of PY_MONITORING_EVENT_*.  LINE and INSTRUCTION are not a
     family's: every word has them."""
     PY_START = "PY_START"
@@ -524,7 +524,7 @@ class Fact(enum.Enum):
     vacant_scratch = "vacant_scratch"
     interruptible = "interruptible"
     jit_on = "jit_on"
-    # The word runs under its instrumented twin: an `observes` arm's entry
+    # The observing evaluator runs the word: an `observes` arm's entry
     instrumented = "instrumented"
 
     @property

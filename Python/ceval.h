@@ -211,6 +211,11 @@ lltrace_instruction(_PyInterpreterFrame *frame,
                     _PyIRWord *next_instr,
                     int opcode)
 {
+    if (opcode == IR_H_SWITCH) {
+        printf("switch\n");
+        fflush(stdout);
+        return;
+    }
     _PyIRWord word = *next_instr;
     uint32_t a = IR_A(word), b = IR_B(word), c = IR_C(word), d = IR_D(word);
     const char *name = _PyIR_HandlerName(opcode);

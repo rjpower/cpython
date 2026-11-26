@@ -43,10 +43,15 @@ PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation(PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *instr);
 
+/* Fire the LINE event of the word at instr and return the handler that the
+ * word goes on to (what the LINE hook displaced), or -1 with an exception
+ * set. */
 PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
                               _PyInstr *instr, _PyInstr *prev);
 
+/* Fire the INSTRUCTION event of the word at instr and return the handler
+ * that it displaced, or -1 */
 PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation_instruction(
     PyThreadState *tstate, _PyInterpreterFrame* frame, _PyInstr *instr);
@@ -152,8 +157,9 @@ typedef struct _PyCoMonitoringData {
      * INSTRUCTION wrapper recording otherwise unsaved ingress PC (4). */
     uint8_t *source_forced;
     /* Information to support instruction events */
-    /* The underlying instructions, which can themselves be instrumented */
-    uint8_t *per_instruction_opcodes;
+    /* Per word, whether the instruction under an INSTRUCTION wrapper is
+     * observed (_PyCo_ flags) */
+    uint8_t *per_instruction_opcodes;  /* state flags, not opcodes: kept under its name for the free in codeobject.c, to be renamed with the WF3 sites */
     /* The tools that are to be notified for instruction events for the matching code unit */
     uint8_t *per_instruction_tools;
 } _PyCoMonitoringData;
@@ -161,14 +167,19 @@ typedef struct _PyCoMonitoringData {
 extern int
 _Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index);
 
-static inline uint8_t
-_PyCode_GetOriginalOpcode(_PyCoLineInstrumentationData *line_data, int index)
-{
-    return line_data->data[index*line_data->bytes_per_entry];
-}
+/* The flags in the first byte of a lines[] entry and in a
+ * per_instruction_opcodes[] entry.  What a LINE or INSTRUCTION wrapper
+ * displaced is the code object's own handler for the word, which monitoring
+ * never rewrites (_PyCode_HandlerFor), or its observed twin: the flags say
+ * which. */
+#define _PyCo_LINE_STARTS 1          // lines: the word starts a line
+#define _PyCo_DISPLACED_OBSERVED 2   // the displaced handler is the observed twin
+#define _PyCo_DISPLACED_INSTRUCTION 4 // lines: the INSTRUCTION wrapper is what LINE displaced
+#define _PyCo_STATE_SET 1            // per_instruction_state: the entry is set
 
-// Exported for external JIT support
-PyAPI_FUNC(uint8_t) _PyCode_Deinstrument(uint8_t opcode);
+/* The handler that the LINE or INSTRUCTION wrapper at word index displaced */
+PyAPI_FUNC(int) _PyCode_LineDisplaced(PyCodeObject *code, int index);
+PyAPI_FUNC(int) _PyCode_InstructionDisplaced(PyCodeObject *code, int index);
 
 #ifdef __cplusplus
 }

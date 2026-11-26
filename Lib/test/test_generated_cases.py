@@ -2474,8 +2474,10 @@ class TestIRCases(unittest.TestCase):
         # The handler ids are dense and apart from the stack opcodes:
         # emitted in ir_handler_ids.h, with the arms after the old handlers.
         ids = ir_generator.handler_ids(analysis)
-        self.assertEqual(ir_generator.num_old_handlers(analysis), 4)
-        self.assertEqual(sorted(ids.values()), [0, 1, 2, 3])
+        self.assertEqual(ir_generator.num_old_handlers(analysis),
+                         ir_generator.id_base() + 4)
+        base = ir_generator.id_base()
+        self.assertEqual(sorted(ids.values()), list(range(base, base + 4)))
         self.assertGreater(ids["IR_BACON"], ids["LOAD"])
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
         # Only the twin runs Python itself; the format does, as the twin's.
@@ -3254,9 +3256,11 @@ class TestIRCases(unittest.TestCase):
         }
     """
         analysis = self.analyze(input)
+        # A guard build (PYJIT_IR_ID_BASE) starts the ids above 0
+        base = ir_generator.id_base()
         self.assertEqual(ir_generator.handler_ids(analysis),
-                         {"GO": 0, "IR_BACON": 1, "IR_PASS": 2})
-        self.assertEqual(ir_generator.num_old_handlers(analysis), 3)
+                         {"GO": base, "IR_BACON": base + 1, "IR_PASS": base + 2})
+        self.assertEqual(ir_generator.num_old_handlers(analysis), base + 3)
 
 
 def generated_address_sites(text):

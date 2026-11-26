@@ -98,15 +98,19 @@ _HANDLER_MASK = _opcode.IR_HANDLER_MASK
 # after its handler's as +NAME: "CALL+NO_SELF" is a CALL whose self input is
 # virtual NULL.  The executing copy's slot-class flags are not shown.
 _WORD_FLAGS = {"NO_SELF": _opcode.IR_F_NO_SELF, "NO_KW": _opcode.IR_F_NO_KW,
-               "KW": _opcode.IR_F_KW, "EX": _opcode.IR_F_EX}
+               "KW": _opcode.IR_F_KW, "EX": _opcode.IR_F_EX,
+               "UNINTERRUPTED": _opcode.IR_F_UNINTERRUPTED}
 
 def _handler_name(field):
     """The name of a word's handler field: its handler's, then its flags"""
-    # Bit 13 is NO_KW on an EX word and NO_SELF on any other
-    ex = field & _opcode.IR_F_EX
-    return _all_opname[field & _HANDLER_MASK] + "".join(
-        "+" + name for name, bit in _WORD_FLAGS.items()
-        if field & bit and (name != ("NO_SELF" if ex else "NO_KW")))
+    # EX is both of the bits that KW and UNINTERRUPTED are one of; bit 13
+    # is NO_KW on an EX word and NO_SELF on any other
+    kind = field & _opcode.IR_F_EX
+    names = {_opcode.IR_F_EX: ["EX"], _opcode.IR_F_KW: ["KW"],
+             _opcode.IR_F_UNINTERRUPTED: ["UNINTERRUPTED"], 0: []}[kind]
+    if field & _opcode.IR_F_NO_SELF:
+        names.insert(0, "NO_KW" if kind == _opcode.IR_F_EX else "NO_SELF")
+    return _all_opname[field & _HANDLER_MASK] + "".join("+" + n for n in names)
 
 def _handler_field(name):
     """The handler field of the word that _handler_name() names name"""
@@ -612,7 +616,8 @@ def _unpack_opargs(code, fbinit=None):
             # The oparg is that of the stack instruction: the arguments
             # (and for CALL_KW the keyword values) without the self; the
             # last operand of a CALL_KW indexes its names in the constants
-            has_self = not word & (_opcode.IR_F_NO_SELF | _opcode.IR_F_EX)
+            has_self = not (word & _opcode.IR_F_NO_SELF or
+                            word & _opcode.IR_F_EX == _opcode.IR_F_EX)
             if _deoptop(handler) == CALL_KW:
                 operands.pop()
                 arg = count - 1 - has_self

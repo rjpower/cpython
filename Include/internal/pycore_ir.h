@@ -169,17 +169,21 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 /* The kind of a CALL_KW or CALL_FUNCTION_EX word, which its handler id does
  * not tell: INSTRUMENTED_LINE runs the word's own handler with the id of the
  * line handler in head[0].  IR_F_KW marks CALL_KW, whose last operand is the
- * names; IR_F_EX marks CALL_FUNCTION_EX, which has no self operand.  On an
- * EX word, bit 13 is IR_F_NO_KW. */
-#define IR_F_KW         (1 << 14)
-#define IR_F_EX         (1 << 15)
-#define IR_F_NO_KW      (1 << 13)
-/* IR_F_UNINTERRUPTED, on CALL: the call does not poll for signals and
+ * names.  IR_F_EX marks CALL_FUNCTION_EX, which has no self operand: both
+ * bits 14 and 15, which no other word carries together.  On an EX word, bit
+ * 13 is IR_F_NO_KW.
+ *
+ * IR_F_UNINTERRUPTED, on CALL: the call does not poll for signals and
  * collection when it returns.  The translator sets it on the call that
  * follows a special-method lookup, so that `with` enters its body before a
- * pending event runs (the Interrupt operand of the Call family).  It shares
- * bit 15 with IR_F_EX, which only a CALL_FUNCTION_EX word carries. */
+ * pending event runs (the Interrupt operand of the Call family).  It is bit
+ * 15 alone. */
+#define IR_F_KW         (1 << 14)
 #define IR_F_UNINTERRUPTED (1 << 15)
+#define IR_F_EX         (IR_F_KW | IR_F_UNINTERRUPTED)
+#define IR_F_NO_KW      (1 << 13)
+#define IR_IS_EX_WORD(W) (((W) & IR_F_EX) == IR_F_EX)
+#define IR_IS_KW_WORD(W) (((W) & IR_F_EX) == IR_F_KW)
 #define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_KW | IR_F_EX)
 
 /* What a native call owes, on the head of a call-family word, which the
@@ -1172,13 +1176,13 @@ _PyIR_CallOperand(const _PyIRWord *head, int k)
 static inline int
 _PyIR_CallHasSelf(_PyIRWord word)
 {
-    return !(word & (IR_F_NO_SELF | IR_F_EX));
+    return !(word & IR_F_NO_SELF) && !IR_IS_EX_WORD(word);
 }
 
 static inline int
 _PyIR_CallSlotOperands(_PyIRWord word)
 {
-    return (int)IR_C(word) - !!(word & IR_F_KW);
+    return (int)IR_C(word) - IR_IS_KW_WORD(word);
 }
 
 /* The slot-class flags of word in an executing copy of code with

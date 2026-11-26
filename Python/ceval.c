@@ -7082,7 +7082,7 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
 static inline int
 rop_call_keywords(const _PyIRWord *head)
 {
-    return (head[0] & IR_F_KW) != 0;
+    return IR_IS_KW_WORD(head[0]);
 }
 
 /* The rows of Call.Generic (Python/register_ops/calls.rop) on call_run's

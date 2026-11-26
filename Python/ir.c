@@ -297,7 +297,7 @@ static _PyIRWord
 exec_discard_slot(_PyIRWord word, uint32_t discard)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (!(fmt->flags & _PyIR_DISCARDS)) {
+    if (!_PyIR_HasDst(fmt)) {
         return word;
     }
     for (int r = 0; r < 4; r++) {

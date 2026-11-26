@@ -331,7 +331,7 @@ extern helper generator_frame(f:Frame) -> Bool
 // Adaptation evidence (specialize.c): the call specializer in collecting
 // mode fills the site's entry and answers with the arm the call stands for
 extern helper classify_call(at:Site, f:Fb<Call>, fn:B, a:Args)
-  cases(exact(), bound_exact(), init(), generator(), plan(),
+  cases(exact(), bound_exact(), init(), generator(), plan(), plan_generator(), bound_general(),
         type_1(), str_1(), tuple_1(), builtin_class(), builtin_o(), builtin_fast(), builtin_fast_keywords(), len(), isinstance(), list_append(), descriptor_o(), descriptor_fast(), descriptor_fast_keywords(), descriptor_noargs(), other())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
@@ -586,6 +586,8 @@ macro adapt_before_use_call(f:Fb<Call>, fn:Src, a:Args)
       init -> Init();
       generator -> Generator();
       plan -> Planned();
+      plan_generator -> PlannedGenerator();
+      bound_general -> BoundGeneral();
       type_1 -> NType1();
       str_1 -> NStr1();
       tuple_1 -> NTuple1();
@@ -731,6 +733,20 @@ macro adapt_before_use_call(f:Fb<Call>, fn:Src, a:Args)
   Planned():
     let cp:Candidate<Call> = candidate(Call.PyGeneral);
     call install(site, f, cp) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PlannedGenerator():
+    let cpg:Candidate<Call> = candidate(Call.PlanGenerator);
+    call install(site, f, cpg) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  BoundGeneral():
+    let cbg:Candidate<Call> = candidate(Call.BoundGeneral);
+    call install(site, f, cbg) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();
@@ -1497,6 +1513,79 @@ arm Call.PyGeneral split
     exit enter(c) resume Call.Returned;
   Failed(e:Err):
     exit raise(Call.Failed, e);
+}
+
+// CALL_PY_GENERAL of a generator function: the call creates the generator
+// from the site's plan; a call that the plan does not fit binds generally
+// (the vectorcall)
+arm Call.PlanGenerator split
+  effects(runs_python, reads, writes, allocates, raises, switches_frame, releases on (dst))
+  feedback(read(entry.func_version), read(entry.plan))
+  exits(next, raise, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard function_version(use(fn), fb) else miss;
+    guard recursion_budget(thread) else miss;
+    branch plan_fits(thread, frame, use(fn), args, fb) -> Planned(), Vector();
+  Planned():
+    call plan_generator(thread, frame, fn, args, fb) {
+      ok -> Made();
+      err -> Failed();
+    }
+  Made(z:O):
+    publish [dst = z] retire [old(dst)] at Call.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(Call.Failed, e);
+  Vector():
+    call call_native(thread, frame, fn, args) {
+      ok -> Result();
+      err -> NativeFailed();
+    }
+  Result(r:O):
+    publish [dst = r] retire [spent(args), spent(fn), old(dst)] at Call.Done;
+    exit next();
+  NativeFailed(ne:Err):
+    let saved:Err = retire_failed_args(frame, fn, args, ne);
+    exit raise(Call.Failed, saved);
+}
+
+// CALL_BOUND_METHOD_GENERAL: a bound method of a function that the exact arm
+// does not take (a generator function, or arguments that need defaults, *args or
+// keyword-only parameters); the method is expanded, then the call pushes the
+// frame or, for a generator function, creates the generator
+arm Call.BoundGeneral split
+  effects(runs_python, reads, writes, allocates, raises, switches_frame, releases on (dst))
+  feedback(read(entry.func_version))
+  exits(next, enter, raise, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard self_absent(frame, args) else miss;
+    guard method_version(use(fn), fb) else miss;
+    guard recursion_budget(thread) else miss;
+    branch python_target(thread, frame, fn, args) -> Python(), Created();
+  Python():
+    call push_python(thread, frame, fn, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume Call.Returned;
+  Failed(e:Err):
+    exit raise(Call.Failed, e);
+  Created():
+    call call_native(thread, frame, fn, args) {
+      ok -> Result();
+      err -> NativeFailed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
+    exit next();
+  NativeFailed(ne:Err):
+    let saved:Err = retire_failed_args(frame, fn, args, ne);
+    exit raise(Call.Failed, saved);
 }
 
 // The native specializations: each guards the callable (and the call's shape), calls

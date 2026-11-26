@@ -2576,7 +2576,8 @@ _PyRop_ClassifySetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
  * arguments; every other callable is "other", which runs in
  * Call.Generic. */
 enum { CALL_CASE_EXACT, CALL_CASE_BOUND_EXACT, CALL_CASE_INIT,
-       CALL_CASE_GENERATOR, CALL_CASE_PLAN,
+       CALL_CASE_GENERATOR, CALL_CASE_PLAN, CALL_CASE_PLAN_GENERATOR,
+       CALL_CASE_BOUND_GENERAL,
        CALL_CASE_TYPE_1, CALL_CASE_STR_1, CALL_CASE_TUPLE_1,
        CALL_CASE_BUILTIN_CLASS, CALL_CASE_BUILTIN_O, CALL_CASE_BUILTIN_FAST,
        CALL_CASE_BUILTIN_FAST_KEYWORDS, CALL_CASE_LEN, CALL_CASE_ISINSTANCE,
@@ -2609,7 +2610,7 @@ call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs,
 /* The old specialize_py_call's CALL_PY_GENERAL: a function of the default
  * call that the exact arms do not take, whose binding plan (the arguments, a
  * self slot that is absent at run time) is the site's.  A generator function
- * takes the vectorcall. */
+ * has the plan too: its arm creates the generator from it. */
 static bool
 call_classify_plan(_PyFbCall *fb, PyFunctionObject *func, int nargs, int skip)
 {
@@ -2617,7 +2618,6 @@ call_classify_plan(_PyFbCall *fb, PyFunctionObject *func, int nargs, int skip)
     if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) ||
         func->vectorcall != _PyFunction_Vectorcall ||
         function_signature(code) == UNOPTIMIZED_SIGNATURE ||
-        code_creates_generator(code) ||
         !prepare_function_exec(code))
     {
         return false;
@@ -2626,6 +2626,28 @@ call_classify_plan(_PyFbCall *fb, PyFunctionObject *func, int nargs, int skip)
     if (!_PyFunction_IsVersionValid(version) ||
         !_PyBindPlan_Init(&fb->plan, code, nargs, skip, 0, NULL, 0))
     {
+        return false;
+    }
+    fb->func_version = version;
+    return true;
+}
+
+/* The old specialize_py_call's CALL_BOUND_METHOD_GENERAL: the method of a
+ * function of the default call that the exact arm does not take; there is no
+ * plan, the call binds generally */
+static bool
+call_classify_bound_general(_PyFbCall *fb, PyFunctionObject *func)
+{
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        function_signature(code) == UNOPTIMIZED_SIGNATURE ||
+        !prepare_function_exec(code))
+    {
+        return false;
+    }
+    int version = _PyFunction_GetVersionForCurrentState(func);
+    if (!_PyFunction_IsVersionValid(version)) {
         return false;
     }
     fb->func_version = version;
@@ -2768,8 +2790,11 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
         if (call_classify_function(fb, func, nargs, true)) {
             return CALL_CASE_GENERATOR;
         }
-        return call_classify_plan(fb, func, nargs, self_slot && !self_present)
-            ? CALL_CASE_PLAN : CALL_CASE_OTHER;
+        if (!call_classify_plan(fb, func, nargs, self_slot && !self_present)) {
+            return CALL_CASE_OTHER;
+        }
+        return code_creates_generator((PyCodeObject *)func->func_code)
+            ? CALL_CASE_PLAN_GENERATOR : CALL_CASE_PLAN;
     }
     int oparg = (int)IR_C(word) - _PyIR_CallHasSelf(word);
     if (PyCFunction_CheckExact(callable)) {
@@ -2787,9 +2812,14 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
     }
     if (PyMethod_Check(callable)) {
         PyObject *func = ((PyMethodObject *)callable)->im_func;
-        return PyFunction_Check(func) &&
-            call_classify_function(fb, (PyFunctionObject *)func, nargs + 1, false)
-            ? CALL_CASE_BOUND_EXACT : CALL_CASE_OTHER;
+        if (!PyFunction_Check(func)) {
+            return CALL_CASE_OTHER;
+        }
+        if (call_classify_function(fb, (PyFunctionObject *)func, nargs + 1, false)) {
+            return CALL_CASE_BOUND_EXACT;
+        }
+        return call_classify_bound_general(fb, (PyFunctionObject *)func)
+            ? CALL_CASE_BOUND_GENERAL : CALL_CASE_OTHER;
     }
     if (PyType_Check(callable)) {
         PyTypeObject *tp = (PyTypeObject *)callable;

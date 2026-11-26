@@ -518,7 +518,8 @@ class InlineIntTest(unittest.TestCase):
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
         for name in existing("Const.Small",
-                             "Add.Int", "Binary.Int", "ForIter.Range"):
+                             "Add.Int", "Binary.Int_NB_MULTIPLY",
+                             "Binary.Int_NB_SUBTRACT", "ForIter.Range"):
             self.assertIn(name, names)
         self.assertIn("Add.Int", opnames(add3))
 
@@ -791,7 +792,8 @@ class InlineFloatTest(unittest.TestCase):
             return total, total < 1e300
         warm(f, 3)
         names = opnames(f)
-        for name in existing("Const.Pool", "Add.Float", "Binary.Float"):
+        for name in existing("Const.Pool", "Add.Float", "Binary.Float_NB_MULTIPLY",
+                             "Binary.Float_NB_SUBTRACT", "Binary.Float_NB_TRUE_DIVIDE"):
             self.assertIn(name, names)
         self.assertIn("Add.Float", handler_names(f))
         self.assertNotIn("Binary.Extended", names)
@@ -948,7 +950,7 @@ class InlineFloatTest(unittest.TestCase):
             1 / 0
         with self.assertRaises(ZeroDivisionError):
             1.0 / 0.0
-        self.assertIn("Binary.Float", opnames(div))
+        self.assertIn("Binary.Float_NB_TRUE_DIVIDE", opnames(div))
         self.assertEqual(div(1e308, 1e-308), math.inf)
 
     def test_float_subclass(self):
@@ -1006,7 +1008,9 @@ class InlineIntOpsTest(unittest.TestCase):
 
     def test_quickened(self):
         names = opnames(int_ops) | opnames(shifts)
-        self.assertIn("Binary.Int", names)
+        for op in ("NB_FLOOR_DIVIDE", "NB_REMAINDER", "NB_AND", "NB_OR", "NB_XOR",
+                   "NB_LSHIFT", "NB_RSHIFT"):
+            self.assertIn(f"Binary.Int_{op}", names)
         def f(a, b):
             q = a // b
             m = a % b
@@ -1043,7 +1047,7 @@ class InlineIntOpsTest(unittest.TestCase):
                     int_ops(a, 0)
                 with self.assertRaises(ZeroDivisionError):
                     int_ops(a, make_inline(0))
-        self.assertIn("Binary.Int", opnames(int_ops))
+        self.assertIn("Binary.Int_NB_FLOOR_DIVIDE", opnames(int_ops))
 
     def test_shifts(self):
         ops = (operator.lshift, operator.rshift)

@@ -31,7 +31,7 @@ from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLay
                          CSource, CTest, DebtKind, FieldKind, Handle, Scalar,
                          Schema, SchemaCtor, Wrap)
 from rop_cgen import Unsupported, arm_facts, facts_at, flatten, home_views
-from rop_check import Program
+from rop_check import Program, enum_c_name
 from rop_model import (Arm, EnumType, Extern, HandleType, Publish, ScalarType, SchemaType,
                        Type, WrapType)
 from rop_ssa import (INTACT, BranchTerm, ExitTerm, Jump, Op, OpKind, SsaArm, Switch,
@@ -411,10 +411,14 @@ class LeafBuilder:
             self.env[op.result] = Opaque(op.attr)
         elif k is OpKind.const:
             t = self.ssa.types[op.result]
-            lt = leaf_type(t)
-            if lt is None or isinstance(t, EnumType):
+            if isinstance(t, EnumType):
+                # An enum member is its number, as an immediate of the word is
+                self.env[op.result] = Imm(
+                    enum_c_name(t.name, op.attr.rpartition(".")[2]), "u32")
+            elif (lt := leaf_type(t)) is None:
                 self.refuse(f"a constant of type {t}")
-            self.env[op.result] = self.const(lt, int(op.attr))
+            else:
+                self.env[op.result] = self.const(lt, int(op.attr))
         elif k in (OpKind.prim, OpKind.call):
             results = self.row(op.attr, args)
             self.env[op.result] = results[0] if results else None
@@ -651,10 +655,6 @@ def _imm(b: LeafBuilder, rep: Rep) -> str:
     if not isinstance(rep, Imm):
         b.refuse(f"{rep} is not an immediate of the word")
     return rep.expr
-
-
-def _branch_drops(b, mode):
-    return (b.emit1("jconst", "bool", (), f"({_imm(b, mode)}) < 2"),)
 
 
 def _branch_taken(b, mode, hit):
@@ -951,7 +951,6 @@ def _truth_object(b, test, invert):
 ROW_LOWERINGS: dict[str, LoweringFn] = {
     # A branch's tests of its mode or sense: functions of the word, or a
     # test result negated or not by the word
-    "_PyRop_BranchDrops": _branch_drops,
     "_PyRop_BranchTaken": _branch_taken,
     "_PyRop_SameBool": _same_bool,
     "_PyValue_BorrowPresent": _borrow_present,

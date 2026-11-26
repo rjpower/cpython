@@ -36,7 +36,7 @@ from rop_cgen import (ESCAPING, Lowering, Unsupported, inline_rows, lower_arm,
                       outlined_name, pending_blockers, row_signature)
 from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, FieldKind,
                          Handle, Slot, Wrap)
-from rop_check import Program, select_dimension
+from rop_check import Program, enum_c_name, select_dimension
 from rop_model import Arm, Encoding, HandleType, Param, WrapType
 from rop_print import type_text
 from rop_ssa import SsaError
@@ -967,6 +967,11 @@ def write_encodings(out: TextIO, p: Products) -> None:
                   f'_PyRop_Operands_{f}}},\n')
     out.write("};\n\n")
     enums = sorted(prog.enums.values(), key=lambda e: e.name)
+    out.write("/* The declared enums: each member's number is its declaration order,\n"
+              " * which the words' immediates carry */\n")
+    for e in enums:
+        names = ", ".join(f"{enum_c_name(e.name, m)} = {i}" for i, m in enumerate(e.members))
+        out.write(f"enum {{ {names} }};\n")
     for e in enums:
         members = ", ".join(f'"{m}"' for m in e.members)
         out.write(f"static const char *const _PyRop_EnumMembers_{e.name}[] = "
@@ -1032,6 +1037,7 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
         if arm.select:
             members = "_".join(m.value for m in arm.select)
             out.write(f"#define ROP_SELECT_{arm.family}_{members} ROP_ARM({c_name(name)})\n")
+    write_member_tables(out, prog)
     out.write("\n/* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */\n")
     for name, k in p.points.items():
         out.write(f"#define ROP_POINT_{c_name(name)} {k}\n")
@@ -1105,6 +1111,29 @@ typedef struct {
     out.write("};\n\n")
     write_selectors(out, prog)
     out.write("#endif\n")
+
+
+def member_table(name: str) -> str:
+    """The C table of a member set (rop_check.MemberSet)"""
+    return f"_PyRop_Members_{c_name(name)}"
+
+
+def write_member_tables(out: TextIO, prog: Program) -> None:
+    """Each member set's arm by member number: the member's arm, else the rest
+    arm, else the family's generic arm, whose install changes nothing"""
+    if not prog.member_sets:
+        return
+    out.write("\n/* The arms of the arms stated over an enum operand (`over(...)`), by\n"
+              " * member number: the member's arm, else the rest arm, else the family's\n"
+              " * generic arm.  Adaptation installs from them (candidate()). */\n")
+    for name, ms in prog.member_sets.items():
+        generic = prog.families[ms.family].generic
+        fallback = ms.rest or (f"{ms.family}.{generic}" if generic else None)
+        members = prog.enums[ms.enum].members
+        if fallback is None and len(ms.arms) != len(members):
+            raise GenerateError(f"{name}: a member has no arm, and the family no generic arm")
+        items = ", ".join(f"ROP_ARM({c_name(ms.arm_of(m) or fallback)})" for m in members)
+        out.write(f"static const uint16_t {member_table(name)}[{len(members)}] = {{{items}}};\n")
 
 
 def write_selectors(out: TextIO, prog: Program) -> None:

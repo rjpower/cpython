@@ -19,7 +19,7 @@ from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, ExcRole, Fac
                          FrameRole,
                          Handle, MonitoringEvent, PcRole, Region, RowKind, Scalar, Schema, Select,
                          SchemaCtor, Wrap)
-from rop_model import (Access, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
+from rop_model import (Access, Advance, Arm, Over, Binding, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, CaseDecl, CBinding, Contract, Debt, Decl,
                        Diagnostic, Each, EdgeFact, Edge, EffectDecl, EnumDecl,
                        EnumType, EvidenceItem, Exit, Expr, Extern, FactUse, Family,
@@ -315,6 +315,7 @@ class Parser:
         if self.accept("select"):
             self.expect("(")
             select = self.comma_list(")", lambda: self.enum_word(Select, "a selection")[0])
+        over = self.over() if self.peek("over") else None
         entry: str | None = None
         if self.accept("entry"):
             self.expect("(")
@@ -326,7 +327,23 @@ class Parser:
         contract = self.contract(exits=True)
         graph = self.graph()
         return Arm(name.text, region, contract, graph, start.span, select, entry, observes,
-                   completion, trailing, displacing)
+                   completion, trailing, displacing, over)
+
+    def over(self) -> Over:
+        """`over(operand: M1, M2[; rest])`"""
+        start = self.expect("over")
+        self.expect("(")
+        operand = self.ident("an enum operand").text
+        self.expect(":")
+        members = [self.ident("an enum member").text]
+        while self.accept(","):
+            members.append(self.ident("an enum member").text)
+        rest = False
+        if self.accept(";"):
+            self.expect("rest")
+            rest = True
+        self.expect(")")
+        return Over(operand, tuple(members), rest, start.span)
 
     def macro(self) -> Macro:
         start = self.take()

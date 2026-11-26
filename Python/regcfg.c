@@ -32,7 +32,6 @@
 #include "pycore_regcfg_metadata.h"  // _PyStack_Formats
 #include "pycore_rop_metadata.h"       // ROP_OP_GetAttr_Generic
 #include "pycore_rop_metadata.h"      // ROP_OP_Add_Generic, ROP_OP_Call_Generic
-#include "pycore_rop_rows.h"          // BRANCH_IF_FALSE
 #include "pycore_jit.h"             // _PyJIT_OFF
 
 // The CFG names an arm by its tagged ROP_OP_ number, not its handler id
@@ -1697,7 +1696,8 @@ emit_unary(_PyRegTr *t, const _PyRegOp *src, int op_kind)
 static int
 rule_unary(_PyRegTr *t, const _PyRegOp *src)
 {
-    return emit_unary(t, src, src->opcode == UNARY_NEGATIVE ? NEGATIVE : INVERT);
+    return emit_unary(t, src, src->opcode == UNARY_NEGATIVE ? ROP_UNARYOP_NEGATIVE
+                                                            : ROP_UNARYOP_INVERT);
 }
 
 /* The item and slice stack ops (Python/register_ops/items.rop).  The uses
@@ -1810,8 +1810,8 @@ rule_test(_PyRegTr *t, const _PyRegOp *src)
         case COMPARE_OP:
             cfg_op = ROP_OP_Compare_Generic;
             imm = ROP_PACK_Compare_relation(src->oparg >> 5)
-                  | ROP_PACK_Compare_result(src->oparg & 16 ? ROP_RESULT_TRUTH
-                                                             : ROP_RESULT_RICH);
+                  | ROP_PACK_Compare_result(src->oparg & 16 ? ROP_COMPARERESULT_TRUTH
+                                                             : ROP_COMPARERESULT_RICH);
             break;
         case IS_OP:
             cfg_op = ROP_OP_Identity_Test, imm = src->oparg;
@@ -1843,10 +1843,10 @@ rule_branch(_PyRegTr *t, const _PyRegOp *src)
     int cfg_op, imm;
     switch (src->opcode) {
         case POP_JUMP_IF_FALSE:
-            cfg_op = ROP_OP_BranchTruth_Generic, imm = BRANCH_IF_FALSE;
+            cfg_op = ROP_OP_BranchTruth_Generic, imm = ROP_BRANCHMODE_BRANCH_IF_FALSE;
             break;
         case POP_JUMP_IF_TRUE:
-            cfg_op = ROP_OP_BranchTruth_Generic, imm = BRANCH_IF_TRUE;
+            cfg_op = ROP_OP_BranchTruth_Generic, imm = ROP_BRANCHMODE_BRANCH_IF_TRUE;
             break;
         case POP_JUMP_IF_NONE:
             cfg_op = ROP_OP_BranchNone_Test, imm = 1;
@@ -1875,14 +1875,14 @@ rule_get_iter(_PyRegTr *t, const _PyRegOp *src)
     int mode;
     switch (src->oparg) {
         case 0:
-            mode = ITER_ORDINARY;
+            mode = ROP_ITERMODE_ORDINARY_ITER;
             break;
         case GET_ITER_YIELD_FROM_NO_CHECK:
-            mode = ITER_DELEGATE_COROUTINE_OK;
+            mode = ROP_ITERMODE_DELEGATE_COROUTINE_OK;
             break;
         default:
             assert(src->oparg == GET_ITER_YIELD_FROM_CORO_CHECK);
-            mode = ITER_DELEGATE_NO_COROUTINE;
+            mode = ROP_ITERMODE_DELEGATE_NO_COROUTINE;
             break;
     }
     RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
@@ -2415,7 +2415,7 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
             return ERROR;
         }
         if (n == INTRINSIC_UNARY_POSITIVE) {
-            return emit_unary(t, src, POSITIVE);
+            return emit_unary(t, src, ROP_UNARYOP_POSITIVE);
         }
         id = n < INTRINSIC_UNARY_POSITIVE ? n - 1 : n - 2;
         cfg_op = _PyRop_SelectIntrinsic(
@@ -3404,17 +3404,17 @@ translate_test_branch(_PyRegTr *t, const _PyRegOp *cmp, const _PyRegOp *jump)
     switch (cmp->opcode) {
         case COMPARE_OP:
             cfg_op = ROP_OP_TestBranch_Generic;
-            test = ROP_TEST_LT + (cmp->oparg >> 5);
+            test = ROP_BRANCHTEST_TEST_LT + (cmp->oparg >> 5);
             break;
         case IS_OP:
             cfg_op = ROP_OP_TestBranch_Identity;
-            test = ROP_TEST_IDENTITY;
+            test = ROP_BRANCHTEST_IDENTITY;
             sense ^= cmp->oparg;
             break;
         default:
             assert(cmp->opcode == CONTAINS_OP);
             cfg_op = ROP_OP_TestBranch_Generic;
-            test = ROP_TEST_CONTAINS;
+            test = ROP_BRANCHTEST_CONTAINS;
             sense ^= cmp->oparg;
             break;
     }

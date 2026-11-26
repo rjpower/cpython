@@ -59,34 +59,52 @@ extern primitive float_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
   test(inline_number(a), inline_number(b))
   c _PyRop_FloatBinaryApplies as bool
   evidence(
-    review: "Reviewed BN. pycore_rop_rows.h: the float operand pair, and an"
-            "operator among add, subtract, multiply and true divide by a nonzero.",
+    review: "Reviewed BN; AR adds power. pycore_rop_rows.h: the float operand pair,"
+            "and an operator the pair's result admits (float_op_admits).",
     contract: "Reads the two words and the operator: no memory, no failure, no"
               "callback.",
     lowering: "none: the arm that uses it is shared and is not compiled inline",
     test: "test_rop_binary");
 
-// The operator admits the decoded right operand
-extern primitive float_op_admits(op:Enum<Numeric>, b:F64) -> Bool
+// The operator's double result of two decoded operands: C's +, -, *, / or
+// pow.  The operator admits it or not (float_op_admits).
+extern primitive float_value(op:Enum<Numeric>, a:F64, b:F64) -> F64
   effects()
-  c _PyRop_FloatOpAdmits as bool
+  c _PyRop_FloatValue as scalar
   evidence(
-    review: "TB. pycore_rop_rows.h: the operator half of _PyRop_FloatBinaryApplies:"
-            "add, subtract, multiply, and true divide by a nonzero.",
-    contract: "Reads the operator and the value: no memory, no failure.",
+    review: "AR. pycore_rop_rows.h: the operations of floatobject.c's float_add,"
+            "float_sub, float_mul, float_div and float_pow, before their checks.",
+    contract: "Arithmetic on doubles: no memory, no failure.  pow may set errno,"
+              "which no reader trusts without clearing it first.",
     lowering: "none: the arm that uses it is shared and is not compiled inline",
     test: "test_rop_binary");
 
-extern helper float_binary(op:Enum<Numeric>, a:F64, b:F64)
-  cases(ok(z:O), err(e:Err))
-  effects(allocates, raises)
-  ensures(ok.exact<float>(z))
-  c _PyRop_FloatBinary as value_or_null
+// Whether the float operation's result is the language's: always for add,
+// subtract and multiply; for true divide when the divisor is nonzero; for
+// power when the base is positive and finite, the exponent finite and the
+// result zero or a normal float, where float_pow returns pow(a, b) with no
+// error and no special case.  Anything else is the generic arm's, which
+// raises or makes a complex.
+extern primitive float_op_admits(op:Enum<Numeric>, a:F64, b:F64, z:F64) -> Bool
+  effects()
+  c _PyRop_FloatOpAdmits as bool
   evidence(
-    review: "Reviewed BN. pycore_rop_rows.h: PyValue_FromDouble of the result,"
-            "which allocates only for NaN.",
-    contract: "The operator admits the pair (asserted). NULL with MemoryError only"
-              "if the NaN box fails. No finalizer, no Python.");
+    review: "TB; AR adds power. pycore_rop_rows.h: floatobject.c float_div's zero"
+            "test and float_pow's cases.",
+    contract: "Reads the operator and the doubles: no memory, no failure.",
+    lowering: "none: the arm that uses it is shared and is not compiled inline",
+    test: "test_rop_binary");
+
+// The float of an admitted result, boxed only when it is NaN
+extern helper box_float(z:F64)
+  cases(ok(v:O), err(e:Err))
+  effects(allocates, raises)
+  ensures(ok.exact<float>(v))
+  c PyValue_FromDouble as value_or_null inline
+  evidence(
+    review: "AR. pycore_value.h PyValue_FromDouble, which allocates only for NaN.",
+    contract: "NULL with MemoryError only if the NaN box fails. No finalizer, no"
+              "Python.");
 
 // Text rows: the in-place add of two exact strings
 
@@ -175,7 +193,13 @@ macro adapt_before_use_binary(f:Fb<Binary>, x:Src, y:Src, op:Enum<Numeric>)
     exit run();
 }
 
-arm Binary.Int shared
+// One arm per operator of the hot set (`over(op: ...)`), the operator its
+// constant; the in-place floor divide, remainder, bitwise and shift forms are
+// rare, and share the rest arm, which reads the operator from the word
+arm Binary.Int shared over(op: NB_INPLACE_ADD, NB_SUBTRACT, NB_INPLACE_SUBTRACT,
+                           NB_MULTIPLY, NB_INPLACE_MULTIPLY, NB_FLOOR_DIVIDE,
+                           NB_REMAINDER, NB_AND, NB_OR, NB_XOR, NB_LSHIFT, NB_RSHIFT;
+                           rest)
   effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)
@@ -199,7 +223,11 @@ arm Binary.Int shared
     exit next();
 }
 
-arm Binary.Float shared
+// One arm per operator the pair admits (`over(op: ...)`): the operator is
+// the arm's constant
+arm Binary.Float shared over(op: NB_INPLACE_ADD, NB_SUBTRACT, NB_INPLACE_SUBTRACT,
+                             NB_MULTIPLY, NB_INPLACE_MULTIPLY, NB_TRUE_DIVIDE,
+                             NB_INPLACE_TRUE_DIVIDE, NB_POWER, NB_INPLACE_POWER)
   effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)
@@ -211,8 +239,9 @@ arm Binary.Float shared
     guard float_operands(l, r) else miss;
     let a:F64 = number_as_double(l);
     let b:F64 = number_as_double(r);
-    guard float_op_admits(op, b) else miss;
-    call float_binary(op, a, b) {
+    let v:F64 = float_value(op, a, b);
+    guard float_op_admits(op, a, b, v) else miss;
+    call box_float(v) {
       ok -> Finish();
       err -> Failed();
     }

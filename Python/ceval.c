@@ -1509,11 +1509,11 @@ _PyRop_OpenIter(_PyInterpreterFrame *frame, PyValueBorrow source, uint32_t mode)
 {
     (void)frame;
     static const int oparg_of_mode[] = {
-        [ITER_ORDINARY] = 0,
-        [ITER_DELEGATE_COROUTINE_OK] = GET_ITER_YIELD_FROM_NO_CHECK,
-        [ITER_DELEGATE_NO_COROUTINE] = GET_ITER_YIELD_FROM_CORO_CHECK,
+        [ROP_ITERMODE_ORDINARY_ITER] = 0,
+        [ROP_ITERMODE_DELEGATE_COROUTINE_OK] = GET_ITER_YIELD_FROM_NO_CHECK,
+        [ROP_ITERMODE_DELEGATE_NO_COROUTINE] = GET_ITER_YIELD_FROM_CORO_CHECK,
     };
-    assert(mode <= ITER_DELEGATE_NO_COROUTINE);
+    assert(mode <= ROP_ITERMODE_DELEGATE_NO_COROUTINE);
     bool indexed = _PyType_IteratesByIndex(PyValue_TYPE(source));
     _PyValuePair got = _PyEval_GetIter(PyValue_DUP(source), oparg_of_mode[mode]);
     if (PyValue_IsNull(got.first)) {
@@ -1821,7 +1821,7 @@ _PyEval_gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *
             assert(IR_A(exec->words[1]) == exec->nfixed);
             assert(IR_B(exec->words[1]) == 0);
             _PyStatusValue opened = _PyRop_OpenIter(
-                frame, PyValue_Borrow(frame->base[0]), ITER_ORDINARY);
+                frame, PyValue_Borrow(frame->base[0]), ROP_ITERMODE_ORDINARY_ITER);
             stack[0] = opened.value;
             stack[1] = opened.status == 1 ? _PyRop_TaggedZero() : PyValue_NULL;
         }
@@ -2410,11 +2410,11 @@ _PyRop_ImportName(PyThreadState *tstate, _PyInterpreterFrame *frame,
     int ilevel = value_import_level(level);
     PyObject *res_o = NULL;
     if (ilevel != -1 || !_PyErr_Occurred(tstate)) {
-        if (kind != IMPORT_EAGER) {
+        if (kind != ROP_IMPORTKIND_IMPORT_EAGER) {
             res_o = _PyEval_LazyImportName(tstate, frame->f_builtins,
                                            frame->f_globals, frame->f_locals,
                                            name, fromlist_o, ilevel,
-                                           kind == IMPORT_LAZY);
+                                           kind == ROP_IMPORTKIND_IMPORT_LAZY);
         }
         else {
             res_o = _PyEval_ImportName(tstate, frame->f_builtins,
@@ -7056,7 +7056,7 @@ _PyRop_UnaryOp(uint32_t op, PyValue x)
 {
     PyValue value = x;
     PyValue res;
-    if (op == NEGATIVE) {
+    if (op == ROP_UNARYOP_NEGATIVE) {
         if (PyValue_IsInlineInt(value)) {
             res = PyValue_FromInt64(-PyValue_InlineInt64(value));
         }
@@ -7067,11 +7067,11 @@ _PyRop_UnaryOp(uint32_t op, PyValue x)
             res = _PyValue_Negative(value);
         }
     }
-    else if (op == POSITIVE) {
+    else if (op == ROP_UNARYOP_POSITIVE) {
         res = _PyValue_Positive(value);
     }
     else {
-        assert(op == INVERT);
+        assert(op == ROP_UNARYOP_INVERT);
         res = _PyValue_Invert(value);
     }
     PyValue_XCLOSE(value);

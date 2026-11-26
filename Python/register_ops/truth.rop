@@ -195,15 +195,6 @@ extern primitive branch_keeps(mode:Enum<BranchMode>) -> Bool
     lowering: "none yet",
     test: "test_rop_truth");
 
-extern primitive branch_drops(mode:Enum<BranchMode>) -> Bool
-  effects()
-  c _PyRop_BranchDrops as bool
-  evidence(
-    review: "Reviewed P5. POP_JUMP_IF_x retires the owner on both edges.",
-    contract: "A function of the immediate: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_truth");
-
 extern primitive same_bool(a:Bool, b:Bool) -> Bool
   effects()
   c _PyRop_SameBool as bool
@@ -680,7 +671,7 @@ arm Truth.Generic shared
 }
 
 
-arm BranchTruth.Bool inline
+arm BranchTruth.Bool inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -688,7 +679,6 @@ arm BranchTruth.Bool inline
   entry():
     let v:B = use(value);
     guard exact_bool(v) else miss;
-    guard branch_drops(mode) else miss;
     goto Test(bool_is_true(v));
   Test(hit:Bool):
     branch branch_taken(mode, hit) -> Taken(), Fall();
@@ -700,7 +690,7 @@ arm BranchTruth.Bool inline
     exit next();
 }
 
-arm BranchTruth.Int inline
+arm BranchTruth.Int inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -708,7 +698,6 @@ arm BranchTruth.Int inline
   entry():
     let v:B = use(value);
     guard exact_int(v) else miss;
-    guard branch_drops(mode) else miss;
     goto Test(int_nonzero(v));
   Test(hit:Bool):
     branch branch_taken(mode, hit) -> Taken(), Fall();
@@ -720,7 +709,7 @@ arm BranchTruth.Int inline
     exit next();
 }
 
-arm BranchTruth.List inline
+arm BranchTruth.List inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -728,7 +717,6 @@ arm BranchTruth.List inline
   entry():
     let v:B = use(value);
     guard exact_list(v) else miss;
-    guard branch_drops(mode) else miss;
     goto Test(list_nonempty(v));
   Test(hit:Bool):
     branch branch_taken(mode, hit) -> Taken(), Fall();
@@ -740,7 +728,7 @@ arm BranchTruth.List inline
     exit next();
 }
 
-arm BranchTruth.None inline
+arm BranchTruth.None inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -748,7 +736,6 @@ arm BranchTruth.None inline
   entry():
     let v:B = use(value);
     guard exact_none(v) else miss;
-    guard branch_drops(mode) else miss;
     goto Test(false);
   Test(hit:Bool):
     branch branch_taken(mode, hit) -> Taken(), Fall();
@@ -760,7 +747,7 @@ arm BranchTruth.None inline
     exit next();
 }
 
-arm BranchTruth.Str inline
+arm BranchTruth.Str inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -768,7 +755,6 @@ arm BranchTruth.Str inline
   entry():
     let v:B = use(value);
     guard exact_str(v) else miss;
-    guard branch_drops(mode) else miss;
     goto Test(str_nonempty(v));
   Test(hit:Bool):
     branch branch_taken(mode, hit) -> Taken(), Fall();
@@ -780,7 +766,7 @@ arm BranchTruth.Str inline
     exit next();
 }
 
-arm BranchTruth.Plain inline
+arm BranchTruth.Plain inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
   effects(reads, writes, releases)
   feedback(read(entry.type_version))
   exits(next, branch, miss)
@@ -788,7 +774,6 @@ arm BranchTruth.Plain inline
   entry():
     let v:B = use(value);
     guard none_or_plain(fb, v) else miss;
-    guard branch_drops(mode) else miss;
     goto Test(not_none(v));
   Test(hit:Bool):
     branch branch_taken(mode, hit) -> Taken(), Fall();
@@ -800,7 +785,7 @@ arm BranchTruth.Plain inline
     exit next();
 }
 
-arm BranchTruth.Slot shared
+arm BranchTruth.Slot shared over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
   effects(reads, runs_python, writes, releases, raises)
   feedback(read(entry.type_version))
   exits(next, branch, miss, raise, redirect)
@@ -809,7 +794,6 @@ arm BranchTruth.Slot shared
     let v:B = use(value);
     guard is_object(v) else miss;
     guard slot_applies(fb, v) else miss;
-    guard branch_drops(mode) else miss;
     let a:Anchors = anchor_for_call([value]);
     call slot_truth_at_origin(a) {
       yes -> Yes();

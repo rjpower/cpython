@@ -20,6 +20,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import rop_generator
     import rop_leaf
     import rop_model
+    import rop_print
     import rop_syntax
     import rop_verify
 
@@ -596,6 +597,98 @@ class ArmRowTests(unittest.TestCase):
                                     "513 handler ids, past the 512"):
             handler_table.num_handlers(arms)
         self.assertEqual(handler_table.num_handlers(arms[:511]), 512)
+
+
+MEMBERS = """\
+enum Op(A, B, C);
+family F(x:Src, op:Enum<Op>) exits(next, miss);
+extern primitive op_ok(op:Enum<Op>, v:B) -> Bool
+  effects()
+  c op_ok_c as bool
+  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+arm F.Fast shared OVER effects() feedback() exits(next, miss)
+{
+  entry():
+    guard op_ok(op, use(x)) else miss;
+    exit next();
+}
+"""
+
+
+def members_program(over: str) -> "rop_check.Program":
+    return rop_check.check([rop_syntax.parse(MEMBERS.replace("OVER", over), "m.rop")])
+
+
+def guard_args(arm: "rop_model.Arm") -> tuple:
+    (guard,) = arm.graph.blocks[0].stmts
+    return guard.cond.args
+
+
+class MemberArmTests(unittest.TestCase):
+    """An arm stated over the members of an enum operand (`over(op: ...)`)"""
+
+    def test_each_member_is_an_arm_with_the_member_a_constant(self):
+        program = members_program("over(op: A, B)")
+        self.assertEqual(program.diagnostics, ())
+        self.assertEqual(list(program.arms), ["F.Fast_A", "F.Fast_B"])
+        for member in ("A", "B"):
+            arm = program.arms[f"F.Fast_{member}"]
+            self.assertEqual(arm.member, member)
+            self.assertEqual(guard_args(arm)[0], rop_model.Name(member))
+        ms = program.member_sets["F.Fast"]
+        self.assertEqual((ms.operand, ms.enum, ms.rest), ("op", "Op", None))
+        self.assertIsNone(ms.arm_of("C"))
+
+    def test_the_rest_arm_reads_the_operand(self):
+        program = members_program("over(op: A; rest)")
+        self.assertEqual(program.diagnostics, ())
+        self.assertEqual(list(program.arms), ["F.Fast_A", "F.Fast"])
+        self.assertEqual(guard_args(program.arms["F.Fast"])[0], rop_model.Name("op"))
+        self.assertEqual(program.member_sets["F.Fast"].arm_of("C"), "F.Fast")
+
+    def test_refusals(self):
+        cases = [
+            ("over(x: A)", "over(x): not an Enum<E> operand of family F"),
+            ("over(op: A, D)", "over(op): D not a member of Op"),
+            ("over(op: A, A)", "over(op): a member is listed twice"),
+            ("over(op: A, B, C; rest)", "over(op): rest, but every member of Op is listed"),
+        ]
+        for over, message in cases:
+            with self.subTest(over=over):
+                program = members_program(over)
+                self.assertEqual([d.message for d in program.diagnostics], [message])
+
+    def test_the_clause_prints_as_parsed(self):
+        source = MEMBERS.replace("OVER", "over(op: A, B; rest)")
+        (arm,) = [d for d in rop_syntax.parse(source, "m.rop").decls
+                  if isinstance(d, rop_model.Arm)]
+        self.assertIn("over(op: A, B; rest)", "\n".join(rop_print.decl_lines(arm)))
+
+    def test_branch_truth_arms_take_their_mode_as_a_constant(self):
+        p = products()
+        ms = p.program.member_sets["BranchTruth.Bool"]
+        self.assertEqual(ms.arms, {"BRANCH_IF_FALSE": "BranchTruth.Bool_BRANCH_IF_FALSE",
+                                   "BRANCH_IF_TRUE": "BranchTruth.Bool_BRANCH_IF_TRUE"})
+        self.assertNotIn("BranchTruth.Bool", p.program.arms)
+        out = io.StringIO()
+        rop_generator.write_cases(out, p, [])
+        text = out.getvalue()
+        body = text[text.index("TARGET(BranchTruth_Bool_BRANCH_IF_TRUE)"):]
+        body = body[:body.index("\n        }\n")]
+        self.assertIn("_PyRop_BranchTaken(ROP_BRANCHMODE_BRANCH_IF_TRUE, hit)", body)
+        # The mode sits in field C: the arm does not read it
+        self.assertNotIn("IR_C(ir_word)", body)
+        # The generic arm installs the member arm of the word's mode
+        self.assertIn("_PyRop_Members_BranchTruth_Bool[(uint32_t)IR_C(ir_word)]", text)
+
+    def test_the_table_maps_an_unlisted_member_to_the_generic_arm(self):
+        out = io.StringIO()
+        rop_generator.write_member_tables(out, products().program)
+        self.assertIn(
+            "static const uint16_t _PyRop_Members_BranchTruth_Bool[4] = {"
+            "ROP_ARM(BranchTruth_Bool_BRANCH_IF_FALSE), "
+            "ROP_ARM(BranchTruth_Bool_BRANCH_IF_TRUE), ROP_ARM(BranchTruth_Generic), "
+            "ROP_ARM(BranchTruth_Generic)};", out.getvalue())
 
 
 ENVIRONMENT = """\

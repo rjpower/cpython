@@ -18,7 +18,7 @@ from dataclasses import dataclass, field, replace
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          PcRole, Slot, UNCOUNTED_FACTS, Wrap)
-from rop_check import GraphInfo, Program, expand_debts, expand_group, group_part_decls, group_parts, is_args
+from rop_check import GraphInfo, Program, enum_c_name, enum_of_member, expand_debts, expand_group, group_part_decls, group_parts, is_args
 from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
@@ -799,6 +799,9 @@ class ArmLowerer:
             if e.name in ENVIRONMENT_C:
                 return ENVIRONMENT_C[e.name]
             if e.name not in self.info.types:
+                member = enum_of_member(self.program.enums, e.name)
+                if member is not None:
+                    return enum_c_name(*member)
                 return e.name.rsplit(".", 1)[-1]
             return self.local(e.name)
         if isinstance(e, Nat):
@@ -895,7 +898,18 @@ class ArmLowerer:
         if e.callee == "candidate":
             arm = e.args[0]
             assert isinstance(arm, Name)
-            return "ROP_HANDLER_" + arm.name.replace(".", "_")
+            members = self.program.member_sets.get(arm.name)
+            if members is None:
+                return "ROP_HANDLER_" + arm.name.replace(".", "_")
+            # The member arm for this word's operand, which a word of another
+            # family that installs the arm (AppendText's Binary arms) holds too
+            mine = next((p.type for p in self.family.params if p.name == members.operand),
+                        None)
+            if mine != EnumType(members.enum):
+                raise Unsupported(f"{self.arm.name}: candidate({arm.name}) needs the "
+                                  f"operand {members.operand}:Enum<{members.enum}>")
+            table = "_PyRop_Members_" + arm.name.replace(".", "_")
+            return f"{table}[{self.operand_value(members.operand)}]"
         x = self.program.externs.get(e.callee)
         if x is None or x.c is None:
             raise Unsupported(f"{self.arm.name}: {e.callee} has no C body (pending)")

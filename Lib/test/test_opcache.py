@@ -1428,8 +1428,8 @@ class TestSpecializer(TestBase):
         binary_op_int_wide_inline()
         if int_producers:
             self.assert_specialized(binary_op_int_wide_inline, "Add.Int")
-            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int")
-            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int")
+            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int_NB_SUBTRACT")
+            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int_NB_MULTIPLY")
 
         def binary_op_int_boxed():
             # Outside the inline int51 range, so the int is a box, which the
@@ -1445,8 +1445,8 @@ class TestSpecializer(TestBase):
 
         binary_op_int_boxed()
         self.assert_no_opcode(binary_op_int_boxed, "Add.Int")
-        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int")
-        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int")
+        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int_NB_SUBTRACT")
+        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int_NB_MULTIPLY")
 
         def binary_op_add_unicode():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1504,8 +1504,12 @@ class TestSpecializer(TestBase):
         binary_op_add_extend()
         # Float arithmetic takes an int operand.
         if int_producers:
-            for opname in ("Add.Float", "Binary.Float"):
-                self.assert_specialized(binary_op_add_extend, opname)
+            self.assert_specialized(binary_op_add_extend, "Add.Float")
+            # Binary.Float has an arm per operator
+            for op in ("NB_SUBTRACT", "NB_MULTIPLY", "NB_TRUE_DIVIDE", "NB_INPLACE_ADD",
+                       "NB_INPLACE_SUBTRACT", "NB_INPLACE_MULTIPLY",
+                       "NB_INPLACE_TRUE_DIVIDE"):
+                self.assert_specialized(binary_op_add_extend, f"Binary.Float_{op}")
         self.assert_no_opcode(binary_op_add_extend, "Binary.Extended")
 
         def binary_op_add_extend_sequences():
@@ -1593,7 +1597,9 @@ class TestSpecializer(TestBase):
 
         binary_op_bitwise_extend()
         if int_producers:
-            for opname in ("Binary.Int",):
+            # The in-place forms share the rest arm
+            for opname in ("Binary.Int_NB_AND", "Binary.Int_NB_OR", "Binary.Int_NB_XOR",
+                           "Binary.Int"):
                 self.assert_specialized(binary_op_bitwise_extend, opname)
         self.assert_no_opcode(binary_op_bitwise_extend, "Binary.Extended")
 
@@ -1607,7 +1613,8 @@ class TestSpecializer(TestBase):
 
         binary_op_int_division_and_shifts()
         if int_producers:
-            for opname in ("Binary.Int",):
+            for opname in ("Binary.Int_NB_FLOOR_DIVIDE", "Binary.Int_NB_REMAINDER",
+                           "Binary.Int_NB_LSHIFT", "Binary.Int_NB_RSHIFT"):
                 self.assert_specialized(binary_op_int_division_and_shifts, opname)
 
     @cpython_only
@@ -1858,9 +1865,11 @@ class TestSpecializer(TestBase):
                 self.assert_no_opcode(f, "Truth.Generic")
 
     def assert_jump_specialized(self, f, kind):
-        # Either sense: the layout of the blocks may invert a jump
+        # Either sense, each its own member arm: the layout of the blocks may
+        # invert a jump
         names = adaptive_names(f)
-        self.assertIn(f"BranchTruth.{kind.capitalize()}", names)
+        arm = f"BranchTruth.{kind.capitalize()}"
+        self.assertTrue({f"{arm}_BRANCH_IF_FALSE", f"{arm}_BRANCH_IF_TRUE"} & names, names)
         self.assertNotIn("BranchTruth.Generic", names)
 
     @cpython_only
@@ -2140,7 +2149,7 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_int()
-        self.assert_specialized(compare_op_int, "Compare.Int")
+        self.assert_specialized(compare_op_int, "Compare.Int_EQ")
         self.assert_no_opcode(compare_op_int, "Compare.Generic")
 
         def compare_op_float():
@@ -2150,7 +2159,7 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_float()
-        self.assert_specialized(compare_op_float, "Compare.Float")
+        self.assert_specialized(compare_op_float, "Compare.Float_EQ")
         self.assert_no_opcode(compare_op_float, "Compare.Generic")
 
         def compare_op_str():
@@ -2160,7 +2169,7 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_str()
-        self.assert_specialized(compare_op_str, "Compare.Str")
+        self.assert_specialized(compare_op_str, "Compare.Str_EQ")
         self.assert_no_opcode(compare_op_str, "Compare.Generic")
 
 

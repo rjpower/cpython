@@ -174,6 +174,9 @@ def decl_lines(d: Decl) -> list[str]:
     if isinstance(d, Arm):
         select = ("" if not d.select else
                   f" select({', '.join(m.value for m in d.select)})")
+        if d.over is not None:
+            rest = "; rest" if d.over.rest else ""
+            select += f" over({d.over.operand}: {', '.join(d.over.members)}{rest})"
         entry = "" if d.entry is None else f" entry({d.entry})"
         observes = (" observes" if d.observes else "") + (" trailing" if d.trailing else "") + (" displacing" if d.displacing else "")
         completion = "" if d.completion is None else f" completion({d.completion})"

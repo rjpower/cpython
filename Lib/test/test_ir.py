@@ -407,7 +407,7 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
             self.assertEqual(f(False, noop), 2)
         self.assertEqual(f(True, noop), 1)
-        self.assertIn("BranchTruth.Bool", handlers(f))
+        self.assertIn("BranchTruth.Bool_BRANCH_IF_FALSE", handlers(f))
         instructions = list(dis.get_instructions(f))
         self.assertNotIn("NOP", origins(f))
         source_line = f.__code__.co_firstlineno + 5  # try:
@@ -565,8 +565,10 @@ class AssemblerTest(unittest.TestCase):
                 expected = xs.count(y) + 10 * (len(xs) - xs.count(y))
                 self.assertEqual(f(xs, y), expected)
                 ir = handlers(f)
-                self.assertEqual(ir.count(handler), 3)
-                self.assertNotIn("BranchTruth.Bool", ir)
+                # An arm per test: two equalities and one inequality
+                self.assertEqual(ir.count(f"{handler}_TEST_EQ"), 2)
+                self.assertEqual(ir.count(f"{handler}_TEST_NE"), 1)
+                self.assertFalse([h for h in ir if h.startswith("BranchTruth.Bool")])
                 self.assertEqual(f(xs, y), expected)
                 # Operands of another type deoptimise the compare
                 self.assertEqual(f([None, y], y), 11)
@@ -583,7 +585,7 @@ class AssemblerTest(unittest.TestCase):
 
         xs = [1, 2, 3] * _testinternalcapi.SPECIALIZATION_THRESHOLD
         self.assertEqual(f(xs), len(xs) // 3)
-        self.assertIn("TestBranch.Int", handlers(f))
+        self.assertIn("TestBranch.Int_TEST_LT", handlers(f))
         jump = [instr for instr in dis.get_instructions(f)
                 if instr.family == "TestBranch"][0]
         if_true = bool(jump.get("sense"))
@@ -1837,8 +1839,12 @@ class TruthTest(unittest.TestCase):
                     self.assertEqual(g(false), 2 if false else 1)
                 arm = {"BOOL": "Bool", "INT": "Int", "LIST": "List", "NONE": "None",
                        "STR": "Str", "ALWAYS_TRUE": "Plain"}[kind]
-                self.assertIn(f"BranchTruth.{arm}", handlers(f))
-                self.assertIn(f"BranchTruth.{arm}", handlers(g))
+                # Each sense is its own arm: `if x` jumps on false, `if not x`
+                # on true
+                self.assertIn(f"BranchTruth.{arm}_BRANCH_IF_FALSE", handlers(f))
+                self.assertIn(f"BranchTruth.{arm}_BRANCH_IF_TRUE", handlers(g))
+                self.assertNotIn(f"BranchTruth.{arm}_BRANCH_IF_TRUE", handlers(f))
+                self.assertNotIn(f"BranchTruth.{arm}_BRANCH_IF_FALSE", handlers(g))
                 # Another type deoptimises
                 for value in (Falsy(), 0.0, (), 1.5, (1,)):
                     self.assertEqual(f(value), 1 if value else 2)
@@ -3698,7 +3704,8 @@ class FusedJumpTest(AssemblerTestCase):
                                       (1.0, nan), (nan, nan)],
             "TestBranch.Str": [("a", "b"), ("b", "b"), ("c", "b")],
         }
-        for op in ("<", "<=", ">", ">=", "==", "!="):
+        relations = {"<": "LT", "<=": "LE", ">": "GT", ">=": "GE", "==": "EQ", "!=": "NE"}
+        for op, relation in relations.items():
             for negated in ("", "not "):
                 for family, cases in families.items():
                     if family.endswith("Str") and op not in ("==", "!="):
@@ -3707,7 +3714,8 @@ class FusedJumpTest(AssemblerTestCase):
                     with self.subTest(test=test, family=family):
                         f = self.run_cases(test, cases)
                         if SPECIALIZES:
-                            self.assertEqual(fused_names(f), [family])
+                            # An arm per test; `not` is the word's sense
+                            self.assertEqual(fused_names(f), [f"{family}_TEST_{relation}"])
                         # Operands of another type deoptimise the site
                         for a, b in ((None, None), (1, 2.5), (1.5, 2),
                                      ("a", "b")):

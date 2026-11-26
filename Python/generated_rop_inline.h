@@ -20,3 +20,4 @@ static Py_ALWAYS_INLINE bool _PyRop_PyCallableEx(PyValueBorrow);
 static Py_ALWAYS_INLINE bool _PyRop_NotPyCallableEx(PyValueBorrow);
 static Py_ALWAYS_INLINE _PyRopItems _PyRop_UnpackTuple(PyValue *, size_t);
 static Py_ALWAYS_INLINE bool _PyRop_ClaimableForGenerator(PyThreadState *, PyValueBorrow);
+static Py_ALWAYS_INLINE PyValue PyValue_FromDouble(double);

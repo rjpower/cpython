@@ -17,6 +17,7 @@ unknown, so the assembler cannot select it.
 """
 
 import argparse
+import enum
 import sys
 from collections.abc import Mapping
 import dataclasses
@@ -490,7 +491,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                 window_name = pl.operand
             elif kind == "ITERPAIR":
                 pair = pl.operand
-                if pair in defined:
+                if rop_check.is_out(param.type):
                     role = "_PyIR_ROLE_DST"
                     pair_writes = 2
                 elif any(f"{pair}.receiver" in pt.keep
@@ -620,6 +621,85 @@ def arm_transfer(exits: set[str], ninputs: int, family: str, touches_homes: bool
     return "_PyIR_TRANSFER_UNKNOWN"
 
 
+# Home states: what a family's word leaves in each of its homes on each
+# normal edge, from the points its arms publish there
+
+class HomeState(enum.Enum):
+    """A home after a normal edge (_PyIR_HOME_*)"""
+    PRESERVE = "PRESERVE"   # untouched, or read and kept with its owner
+    VACATE = "VACATE"       # its owner retired; the home is left empty
+    DEFINE = "DEFINE"       # holds a value the word published
+    UNKNOWN = "UNKNOWN"     # the arms leave it differently
+
+
+@dataclass(frozen=True, slots=True)
+class FamilyHomes:
+    """The homes a family's word names, in declaration order with a home
+    group as its projections; those it reads, those that may be vacant when
+    it starts, the group's width and whether it is Out<G>, and the state of
+    each home after the fall-through (edges[0]) and taken (edges[1]) edges"""
+    homes: tuple[str, ...]
+    read: frozenset[str]
+    vacant: frozenset[str]
+    group: int
+    out: bool
+    edges: tuple[Mapping[str, HomeState], Mapping[str, HomeState]]
+
+
+def point_states(program: Program, operands: Mapping[str, object],
+                 homes: tuple[str, ...], name: str | None) -> dict[str, HomeState]:
+    """The homes as point `name` leaves them: a def is defined (spent or
+    not), a spent source vacated, the rest preserved.  No point: no publish,
+    every home preserved."""
+    p = program.points.get(name or "")
+    if p is None:
+        return {h: HomeState.PRESERVE for h in homes}
+    defs = {h for n in p.defs for h in rop_check.expand_group(n, operands)}
+    spent = {h for n in p.spent for h in rop_check.expand_group(n, operands)}
+    return {h: HomeState.DEFINE if h in defs else
+            HomeState.VACATE if h in spent else HomeState.PRESERVE for h in homes}
+
+
+def family_homes(program: Program, family: str) -> FamilyHomes:
+    """The family's homes and their states on each edge: the meet, over
+    its arms, observed wrapper and completions, of the point in force at
+    each normal exit (rop_verify records them and checks the homes against
+    them).  Arms that agree give their state; arms that differ, UNKNOWN.
+    An edge no arm takes leaves every home preserved."""
+    fam = program.families[family]
+    operands = {p.name: p.type for p in fam.params}
+    homes: list[str] = []
+    read: set[str] = set()
+    group, out = 0, False
+    for p in fam.params:
+        parts = rop_check.group_parts(p.type)
+        if parts:
+            names = rop_check.expand_group(p.name, operands)
+            group, out = len(parts), rop_check.is_out(p.type)
+            homes += names
+            if not out:
+                read.update(names)
+        elif rop_check.field_kind(p.type) is FieldKind.home:
+            homes.append(p.name)
+            if rop_check.is_source(p.type):
+                read.add(p.name)
+    arms = [a.name for a in (*program.arms.values(), *program.completions.values())
+            if a.family == family]
+    edges = []
+    for edge in (rop_verify.EDGE_NEXT, rop_verify.EDGE_TAKEN):
+        seen: dict[str, set[HomeState]] = {h: set() for h in homes}
+        for name in sorted({pt for a in arms for e, pt in program.exit_points.get(a, ())
+                            if e == edge}, key=lambda n: n or ""):
+            for h, s in point_states(program, operands, tuple(homes), name).items():
+                seen[h].add(s)
+        edges.append({h: (next(iter(s)) if len(s) == 1 else
+                          HomeState.PRESERVE if not s else HomeState.UNKNOWN)
+                      for h, s in seen.items()})
+    return FamilyHomes(tuple(homes), frozenset(read),
+                       frozenset(rop_check.vacant_homes(fam)), group, out,
+                       (edges[0], edges[1]))
+
+
 def observer(program: Program, family: str) -> str | None:
     """The family's observed wrapper (the arm that `observes`), if it has
     one: every twin of the family's other arms runs it."""
@@ -739,7 +819,8 @@ def operand_role(param: Param) -> tuple[str, bool]:
     """The role of a home operand and whether it is optional"""
     t, optional = param.type, False
     if isinstance(t, WrapType):
-        t, optional = t.arg, True
+        # Out<G> is the group, defined rather than read; not optional
+        t, optional = t.arg, t.wrap is not Wrap.Out
     if isinstance(t, HandleType):
         return HOME_ROLES.get(t.handle, "NONE"), optional
     return "NONE", optional

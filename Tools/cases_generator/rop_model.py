@@ -412,6 +412,9 @@ class Family:
     span: SrcSpan = _span()
     # The arm a miss restarts in (`generic(Arm)`), by its short name
     generic: str | None = None
+    # The home operands and group projections that may hold nothing when the
+    # word starts (`vacant(...)`); a Maybe<Src> operand is one by its type
+    vacant: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

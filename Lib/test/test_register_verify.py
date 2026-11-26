@@ -1224,7 +1224,8 @@ class UnwindTests(unittest.TestCase):
 
 
 GROUPS = """\
-family G(item:Dst, pair:IterPair, done:NearHead) exits(next, branch) ops(NOP);
+family G(item:Dst, pair:IterPair, done:NearHead) exits(next, branch) ops(NOP)
+  vacant(pair.cursor);
 point G.Stepped(current, next_head, clear) keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor);
 point G.Done(current, next_head, clear) keep() spent(pair) defs();
 extern helper next_item(r:B, c:B) cases(hit(v:O), absent()) effects(reads)
@@ -1255,6 +1256,16 @@ arm W.Drop shared effects(writes, releases) feedback() exits(next)
     publish [] retire [spent(window.value), spent(window.cursor)] at W.Done;
     exit next();
 }
+family O(pair:Out<IterPair>, source:Src) exits(next, raise) ops(NOP);
+point O.Done(current, next_head, clear) keep() spent(source, pair) defs(pair);
+point O.Failed(current, site, pending) keep(pair, source) spent() defs();
+arm O.Open shared effects(reads, writes, releases) feedback() exits(next)
+{
+  entry():
+    let s:O = acquire(source);
+    publish [pair.receiver = s, pair.cursor = null] retire [spent(source), old(pair.receiver), old(pair.cursor)] at O.Done;
+    exit next();
+}
 """
 
 
@@ -1262,51 +1273,92 @@ GROUPS_CASES = [
     ('publish without old',
      'retire [old(item), old(pair.cursor)]',
      'retire [old(item)]', [
-         (18, 5, 'G.Step', 'publish: pair.cursor is bound but its displaced owner is not retired: add old(pair.cursor)'),
-         (18, 5, 'G.Step', 'points: publish at G.Stepped: G.Stepped lists pair.cursor in spent, but pair.cursor is intact'),
+         (19, 5, 'G.Step', 'publish: pair.cursor is bound but its displaced owner is not retired: add old(pair.cursor)'),
+         (19, 5, 'G.Step', 'points: publish at G.Stepped: G.Stepped lists pair.cursor in spent, but pair.cursor is intact'),
      ]),
     ('old of a group',
      'old(pair.cursor)]',
      'old(pair)]', [
-         (18, 60, 'G.Step', 'old(pair): pair is not a destination operand'),
+         (19, 60, 'G.Step', 'old(pair): pair is not a destination operand'),
      ]),
     ('use of a whole group',
      'let c:B = use(pair.cursor);',
      'let c:B = use(pair);', [
-         (14, 19, 'G.Step', 'pair is IterPair, expected Src'),
+         (15, 19, 'G.Step', 'pair is IterPair, expected Src'),
      ]),
     ('unknown projection',
      'let c:B = use(pair.cursor);',
      'let c:B = use(pair.value);', [
-         (14, 19, 'G.Step', 'unknown name pair.value'),
+         (15, 19, 'G.Step', 'unknown name pair.value'),
      ]),
     ('point keeps the republished cursor',
      'keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor)',
      'keep(pair) spent() defs(item, pair.cursor)', [
-         (18, 5, 'G.Step', 'points: publish at G.Stepped: G.Stepped lists pair.cursor in keep, but pair.cursor is spent by publish at G.Stepped at t.rop:18'),
+         (19, 5, 'G.Step', 'points: publish at G.Stepped: G.Stepped lists pair.cursor in keep, but pair.cursor is spent by publish at G.Stepped at t.rop:19'),
      ]),
     ('point names an unknown projection',
      'spent(window.cursor, window.value)',
      'spent(window.cursor, window.sent)', [
-         (25, 1, 'W.Done', 'spent(window.sent): W has no operand window.sent'),
-         (29, 5, 'W.Drop', 'points: publish at W.Done: W.Done does not list window.value, but window.value is spent by publish at W.Done at t.rop:29'),
+         (26, 1, 'W.Done', 'spent(window.sent): W has no operand window.sent'),
+         (30, 5, 'W.Drop', 'points: publish at W.Done: W.Done does not list window.value, but window.value is spent by publish at W.Done at t.rop:30'),
      ]),
     ('row takes a group',
      'extern helper next_index(c:B)',
      'extern helper next_index(c:B, w:SendWindow)', [
-         (7, 31, 'next_index', 'parameter w:SendWindow: a row takes one home of a group, a projection g.p, as a Src'),
-         (17, 15, 'G.Step', 'next_index takes 2 arguments, not 1'),
+         (8, 31, 'next_index', 'parameter w:SendWindow: a row takes one home of a group, a projection g.p, as a Src'),
+         (18, 15, 'G.Step', 'next_index takes 2 arguments, not 1'),
      ]),
     ('spent twice by group',
      'retire [spent(window.value), spent(window.cursor)]',
      'retire [spent(window), spent(window.cursor)]', [
-         (29, 5, 'W.Drop', 'points: publish at W.Done: W.Done lists window.receiver in keep, but window.receiver is spent by publish at W.Done at t.rop:29'),
-         (29, 39, 'W.Drop', 'publish: spent(window.cursor) is retired twice: a repeated operand makes one claim on its temporary'),
+         (30, 5, 'W.Drop', 'points: publish at W.Done: W.Done lists window.receiver in keep, but window.receiver is spent by publish at W.Done at t.rop:30'),
+         (30, 39, 'W.Drop', 'publish: spent(window.cursor) is retired twice: a repeated operand makes one claim on its temporary'),
      ]),
     ('cursor release undeclared',
      'arm W.Drop shared effects(writes, releases)',
      'arm W.Drop shared effects(writes)', [
-         (29, 5, 'W.Drop', 'effects: publish at W.Done (spent(window.value), spent(window.cursor)) may releases, which effects(writes) does not declare'),
+         (30, 5, 'W.Drop', 'effects: publish at W.Done (spent(window.value), spent(window.cursor)) may releases, which effects(writes) does not declare'),
+     ]),
+    ('vacant names no operand',
+     'vacant(pair.cursor)', 'vacant(pair.index)', [
+         (1, 1, 'G', 'vacant(pair.index): G has no operand pair.index'),
+     ]),
+    ('vacant names a destination',
+     'vacant(pair.cursor)', 'vacant(pair.cursor, item)', [
+         (1, 1, 'G', 'vacant(item): operand item is Dst, not a source home'),
+     ]),
+    ('vacant twice',
+     'vacant(pair.cursor)', 'vacant(pair.cursor, pair.cursor)', [
+         (1, 1, 'G', 'a vacant home is listed twice'),
+     ]),
+    ('vacant part of an Out group',
+     'source:Src) exits(next, raise) ops(NOP);',
+     'source:Src) exits(next, raise) ops(NOP) vacant(pair.cursor);', [
+         (33, 1, 'O', 'vacant(pair.cursor): pair is defined, not read'),
+     ]),
+    ('two home groups',
+     'family W(window:SendWindow)', 'family W(window:SendWindow, extra:IterPair)', [
+         (25, 1, 'W', 'a family has at most one home group: window, extra'),
+         (30, 5, 'W.Drop', 'points: publish at W.Done: W.Done does not list extra.cursor, but extra.cursor is intact'),
+         (30, 5, 'W.Drop', 'points: publish at W.Done: W.Done does not list extra.receiver, but extra.receiver is intact'),
+     ]),
+    ('Out of a home that is no group',
+     'source:Src) exits(next, raise)', 'source:Out<Src>) exits(next, raise)', [
+         (33, 30, 'O', 'operand source:Out<Src>: Out wraps a home group'),
+         (33, 30, 'O', 'operand source:Out<Src> has no field kind'),
+         (39, 23, 'O.Open', 'source is Out<Src>, expected Src'),
+         (40, 61, 'O.Open', 'spent(source): source is not a source operand'),
+     ]),
+    ('Out group read',
+     '    let s:O = acquire(source);\n',
+     '    let s:O = acquire(source);\n    let r:B = use(pair.receiver);\n', [
+         (40, 19, 'O.Open', 'ownership: pair.receiver is read, but pair is Out<IterPair>: the word defines it'),
+     ]),
+    ('Out group left undefined',
+     '    let s:O = acquire(source);\n    publish [pair.receiver = s, pair.cursor = null] '
+     'retire [spent(source), old(pair.receiver), old(pair.cursor)] at O.Done;\n',
+     '', [
+         (39, 5, 'O.Open', 'points: exit next: pair is Out, but no publish leaves pair.receiver, pair.cursor undefined'),
      ]),
 ]
 

@@ -3,22 +3,23 @@
 // have no word).  The receiver and the cursor of one loop are an IterPair:
 // two adjacent temporaries for the life of the loop.  The cursor holds a
 // tagged index (an index-protocol receiver) or nothing; closing it is a
-// no-op.
+// no-op.  The open defines the pair (Out) and reads nothing there; the
+// words that use it may find the cursor vacant.
 
 // The oparg of GET_ITER: 0, or for `yield from` the code's flags settle
 // whether a coroutine is allowed (Objects/codeobject.c)
 enum IterMode(ORDINARY_ITER, DELEGATE_COROUTINE_OK, DELEGATE_NO_COROUTINE);
 
-family IterOpen(pair:IterPair, source:Src, fb:Fb<Iter>, mode:Enum<IterMode>)
+family IterOpen(pair:Out<IterPair>, source:Src, fb:Fb<Iter>, mode:Enum<IterMode>)
   exits(next, raise, miss, again) generic(Generic) ops(GET_ITER);
 
 family ForIter(item:Dst, pair:IterPair, fb:Fb<Iter>, done:NearHead)
   exits(next, branch, raise, miss, again, redirect) generic(Generic) ops(FOR_ITER)
-  events(BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION);
+  events(BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION) vacant(pair.cursor);
 
 family IterClose(pair:IterPair)
   exits(next, raise, redirect) ops(POP_ITER)
-  events(BRANCH_RIGHT);
+  events(BRANCH_RIGHT) vacant(pair.cursor);
 
 // The iterator and its cursor are published; the source is gone
 point IterOpen.Done(current, next_head, clear) keep() spent(source, pair) defs(pair);

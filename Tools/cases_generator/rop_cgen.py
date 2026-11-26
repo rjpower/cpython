@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
-                         Slot, Wrap)
+                         PcRole, Slot, Wrap)
 from rop_check import GraphInfo, Program, expand_debts, expand_group, group_parts, is_args
 from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
@@ -1194,7 +1194,10 @@ class ArmLowerer:
             point = t.args[0]
             assert isinstance(point, Name)
             ingress = t.kind.upper()
-            self.emit(f"PROCESS_ERROR_AT({ingress}, {self.points[point.name]}, this_instr);")
+            origin = ("frame->instr_ptr"
+                      if self.program.points[point.name].pc is PcRole.left
+                      else "this_instr")
+            self.emit(f"PROCESS_ERROR_AT({ingress}, {self.points[point.name]}, {origin});")
         elif t.kind == "enter":
             self.emit(f"ROP_ENTER({self.expr(t.args[0])}, {self.resume_slot(t)});")
         elif t.kind == "yield":

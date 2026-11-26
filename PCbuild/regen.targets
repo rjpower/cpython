@@ -87,15 +87,15 @@
           Inputs="@(_CasesSources)" Outputs="@(_CasesOutputs)"
           DependsOnTargets="FindPythonForBuild">
     <Message Text="Regenerate cases" Importance="high" />
-    <Exec Command="$(PythonForBuild) Tools\cases_generator\opcode_id_generator.py Python\bytecodes.c"
+    <Exec Command="$(PythonForBuild) Tools\cases_generator\opcode_id_generator.py Tools\cases_generator\stack_ops.py"
           WorkingDirectory="$(PySourcePath)" />
-    <Exec Command="$(PythonForBuild) Tools\cases_generator\py_metadata_generator.py Python\bytecodes.c"
+    <Exec Command="$(PythonForBuild) Tools\cases_generator\py_metadata_generator.py Tools\cases_generator\stack_ops.py"
           WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\ir_generator.py Python\bytecodes.c"
           WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\ir_metadata_generator.py Python\bytecodes.c"
           WorkingDirectory="$(PySourcePath)" />
-    <Exec Command="$(PythonForBuild) Tools\cases_generator\opcode_metadata_generator.py Python\bytecodes.c"
+    <Exec Command="$(PythonForBuild) Tools\cases_generator\opcode_metadata_generator.py Tools\cases_generator\stack_ops.py"
           WorkingDirectory="$(PySourcePath)" />
   </Target>
 

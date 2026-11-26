@@ -1,91 +1,52 @@
 """Generate opcode metadata for Python.
-Reads the instruction definitions from bytecodes.c.
+Reads the stack ops from stack_ops.py.
 Writes the metadata to _opcode_metadata.py by default.
 """
 
 import argparse
 
-from analyzer import (
-    Analysis,
-    Uop,
-    analyze_files,
-)
-from generators_common import (
-    DEFAULT_INPUT,
-    ROOT,
-    write_header,
-)
+from generators_common import ROOT, write_header
 from cwriter import CWriter
 from collections.abc import Sequence
 
 import ir_arms
-from ir_generator import (all_instructions, is_abort_body, stack_only_names,
-                          handler_ids, ir_only_handler_names, num_old_handlers)
+from stack_ops import (HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE, OLD_HANDLERS,
+                       OLD_ONLY_HANDLERS, PSEUDOS, STACK_OPS)
 from typing import TextIO
 
 
 DEFAULT_OUTPUT = ROOT / "Lib/_opcode_metadata.py"
 
 
-def get_specialized(analysis: Analysis) -> set[str]:
-    specialized: set[str] = set()
-    for family in analysis.families.values():
-        for member in family.members:
-            specialized.add(member.name)
-    return specialized
-
-
-def generate_specializations(analysis: Analysis, out: CWriter) -> None:
+def generate_specializations(out: CWriter) -> None:
+    # No stack op is specialised: the families are register instructions
     out.emit("_specializations = frozendict(\n")
-    for family in analysis.families.values():
-        out.emit(f'{family.name}=(\n')
-        seen = set()
-        for member in family.members:
-            if member.name in seen:
-                continue
-            seen.add(member.name)
-            out.emit(f'    "{member.name}",\n')
-        out.emit("),\n")
     out.emit(")\n\n")
 
 
-def generate_specialized_opmap(analysis: Analysis, out: CWriter) -> None:
+def generate_specialized_opmap(out: CWriter) -> None:
     out.emit("_specialized_opmap = frozendict(\n")
-    names = []
-    seen = set()
-    for family in analysis.families.values():
-        for member in family.members:
-            if member.name == family.name:
-                continue
-            if member.name in seen:
-                continue
-            seen.add(member.name)
-            names.append(member.name)
-    for name in sorted(names):
-        out.emit(f"{name}={analysis.opmap[name]},\n")
     out.emit(")\n\n")
 
 
-def generate_opmap(analysis: Analysis, out: CWriter) -> None:
-    specialized = get_specialized(analysis)
+def generate_opmap(out: CWriter) -> None:
     out.emit("opmap = frozendict(\n")
-    for inst, op in analysis.opmap.items():
-        if inst not in specialized:
-            out.emit(f"{inst}={analysis.opmap[inst]},\n")
+    for op in (*(op for op in STACK_OPS if not op.translator_only), *PSEUDOS):
+        out.emit(f"{op.name}={op.opcode},\n")
     out.emit(")\n\n")
 
 
-def generate_ir_opmap(analysis: Analysis, out: CWriter,
+def generate_ir_opmap(out: CWriter,
                       arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
     """The register IR's handlers by name and id: the ones that bytecodes.c
     defines, then the register instruction arms by their dotted names.  The
     ids are no opcodes; the translator-only ops are no handlers"""
     out.emit("_ir_handlers = frozendict(\n")
-    ids = handler_ids(analysis)
-    only = set(ir_only_handler_names(analysis))
+    ids = {name: number for number, name in enumerate(OLD_HANDLERS)}
+    only = set(OLD_ONLY_HANDLERS)
     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
         out.emit(f"{name}={handler},\n")
-    first = num_old_handlers(analysis)
+    first = len(OLD_HANDLERS)
     if arms:
         out.emit(") | frozendict({\n")
         for arm in arms:
@@ -94,9 +55,9 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter,
     else:
         out.emit(")\n\n")
     out.emit("_ir_translator_only = frozendict(\n")
-    for name, inst in sorted(analysis.translator_only.items(),
-                             key=lambda item: item[1].opcode):
-        out.emit(f"{name}={inst.opcode},\n")
+    for op in sorted((op for op in STACK_OPS if op.translator_only),
+                     key=lambda op: op.opcode):
+        out.emit(f"{op.name}={op.opcode},\n")
     out.emit(")\n\n")
     numbers = sorted([ids[name] for name in only]
                      + [first + arm.index for arm in arms])
@@ -106,22 +67,21 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter,
     out.emit("))\n\n")
 
 
-def classify_handlers(analysis: Analysis) -> tuple[list[str], list[str]]:
+def classify_handlers() -> tuple[list[str], list[str]]:
     """The handlers that bytecodes.c still defines, as (inherited register
     instructions, stack-only stubs).  A stub is a stack op that has no
     handler of its own or whose body
     only aborts: the register instructions its lowering emits run instead.  The arms are not in either list."""
-    stubs = {*stack_only_names(analysis)}
-    stubs.update(name for name in all_instructions(analysis)
-                 if is_abort_body(analysis, name))
-    inherited = set(handler_ids(analysis)) | set(analysis.translator_only)
+    stubs = {op.name for op in STACK_OPS if op.stack_only or op.abort_stub}
+    stubs.update(OLD_ONLY_HANDLERS)
+    inherited = set(OLD_HANDLERS) | {op.name for op in STACK_OPS if op.translator_only}
     return sorted(inherited - stubs), sorted(stubs)
 
 
-def generate_handler_classes(analysis: Analysis, out: CWriter) -> None:
+def generate_handler_classes(out: CWriter) -> None:
     """The handlers outside the families, which only shrink as the families
     port (Lib/test/test_ir_ceiling.py checks them against a ceiling)"""
-    inherited, stubs = classify_handlers(analysis)
+    inherited, stubs = classify_handlers()
     for table, names in (("_ir_inherited_handlers", inherited),
                          ("_ir_stack_stubs", stubs)):
         out.emit(f"{table} = (\n")
@@ -131,18 +91,18 @@ def generate_handler_classes(analysis: Analysis, out: CWriter) -> None:
 
 
 def generate_py_metadata(
-    filenames: list[str], analysis: Analysis, outfile: TextIO,
+    filenames: list[str], outfile: TextIO,
     arms: Sequence[ir_arms.ArmEntry] = ()
 ) -> None:
     write_header(__file__, filenames, outfile, "#")
     out = CWriter(outfile, 0, False)
-    generate_specializations(analysis, out)
-    generate_specialized_opmap(analysis, out)
-    generate_opmap(analysis, out)
-    generate_ir_opmap(analysis, out, arms)
-    generate_handler_classes(analysis, out)
-    out.emit(f"HAVE_ARGUMENT = {analysis.have_arg}\n")
-    out.emit(f"MIN_INSTRUMENTED_OPCODE = {analysis.min_instrumented}\n")
+    generate_specializations(out)
+    generate_specialized_opmap(out)
+    generate_opmap(out)
+    generate_ir_opmap(out, arms)
+    generate_handler_classes(out)
+    out.emit(f"HAVE_ARGUMENT = {HAVE_ARGUMENT}\n")
+    out.emit(f"MIN_INSTRUMENTED_OPCODE = {MIN_INSTRUMENTED_OPCODE}\n")
 
 
 arg_parser = argparse.ArgumentParser(
@@ -155,15 +115,14 @@ arg_parser.add_argument(
 )
 
 arg_parser.add_argument(
-    "input", nargs=argparse.REMAINDER, help="Instruction definition file(s)"
+    "input", nargs=argparse.REMAINDER, help="Source files, named in the header"
 )
 
 if __name__ == "__main__":
     args = arg_parser.parse_args()
     if len(args.input) == 0:
-        args.input.append(DEFAULT_INPUT)
-    data = analyze_files(args.input)
+        args.input.append(str(ROOT / "Tools/cases_generator/stack_ops.py"))
     with open(args.output, "w") as outfile:
         import rop_generator
-        generate_py_metadata(args.input, data, outfile,
+        generate_py_metadata(args.input, outfile,
                              rop_generator.load_arm_entries())

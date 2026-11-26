@@ -144,9 +144,9 @@ import sys
 import _testinternalcapi as capi
 
 MON = sys.monitoring
-from _opcode_metadata import _ir_opmap
+from _opcode_metadata import _ir_handlers
 
-LOW = {"decoy": dis.opmap["RETURN_VALUE"], "marker": _ir_opmap["IR_OPERANDS"]}
+LOW = {"decoy": dis.opmap["RETURN_VALUE"], "marker": _ir_handlers["IR_OPERANDS"]}
 
 
 def gen(flag, o):
@@ -288,7 +288,11 @@ class ForceArmTests(unittest.TestCase):
             with self.subTest(arm=name):
                 # The head's handler field is the low 9 bits of its word
                 length = _opcode.get_ir_word_length(handler)
-                self.assertEqual(length, 2 if name.startswith("GetMethod.") else 1)
+                # A feedback entry named by an operand word makes the head two words
+                two = name.startswith(("GetMethod.", "SuperMethod.", "SuperMethodExplicit.",
+                                       "Compare.", "Contains.", "TestBranch.",
+                                       "Binary.", "AppendText."))
+                self.assertEqual(length, 2 if two else 1)
                 self.assertIsNotNone(contract[handler])
 
     def test_every_arm_stands_for_a_stack_op_of_its_family(self):

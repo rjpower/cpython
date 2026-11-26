@@ -3650,9 +3650,10 @@ class TestMagicNumber(unittest.TestCase):
     def test_magic_number_endianness(self):
         magic_number_bytes = _imp.pyc_magic_number_token.to_bytes(4, 'little')
         self.assertEqual(magic_number_bytes[2:], b'\r\n')
-        # The runtime uses a private cache namespace, separate from upstream's.
+        # The runtime uses a private cache namespace, separate from upstream's,
+        # with magic numbers from 64400 (upstream 3.n uses 2900+50n).
         magic_number = int.from_bytes(magic_number_bytes[:2], 'little')
-        self.assertEqual(magic_number, 64447)
+        self.assertIn(magic_number, range(64400, 64500))
         self.assertEqual(sys.implementation.cache_tag,
                          f'cpython-valrc1-{sys.version_info.major}{sys.version_info.minor}')
 

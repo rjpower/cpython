@@ -26,7 +26,7 @@ class AbruptOperandTests(unittest.TestCase):
         self.assertEqual(match([1, 2, 3]), (1, [2, 3]))
         self.assertIsNone(match(5))
         names = {row[0] for row in _testinternalcapi.get_ir(match.__code__, True)}
-        self.assertIn("GET_LEN", names)
+        self.assertIn("Length.Size", names)
         # The subject outlives the peek of its length
         subject = [1, 2]
         for code in routes(match.__code__):
@@ -81,7 +81,7 @@ class AbruptOperandTests(unittest.TestCase):
             return function(value=[item async for item in source])
 
         names = {row[0] for row in _testinternalcapi.get_ir(invoke.__code__)}
-        self.assertIn("CALL_KW+NO_SELF", names)
+        self.assertIn("CallKw.Generic+NO_SELF", names)
         for code in routes(invoke.__code__):
             function = types.FunctionType(code, globals())
             for values in ((), (17, 23)):

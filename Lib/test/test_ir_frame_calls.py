@@ -46,7 +46,7 @@ class FrameCallTests(unittest.TestCase):
             with self.subTest(names=names):
                 expected = tuple(names.index(name) for name in "abc")
                 self.assertEqual(warm(call), expected)
-                self.assertIn("CALL_KW_PY+NO_SELF", [w[0] for w in
+                self.assertIn("CallKw.Plan+NO_SELF", [w[0] for w in
                     _testinternalcapi.get_ir(call.__code__, True)])
 
         for arguments in ("0, 1, c=2", "0, c=2, b=1"):
@@ -375,7 +375,7 @@ class FrameCallTests(unittest.TestCase):
         self.assertIsNot(first, second)
         first["changed"] = True
         self.assertEqual(second, {})
-        self.assertIn("MATERIALIZE_KWARGS", [w[0] for w in
+        self.assertIn("MaterializeKwargs.Pending", [w[0] for w in
             _testinternalcapi.get_ir(target.__code__)])
 
     def test_folded_window_read(self):

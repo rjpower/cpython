@@ -1,0 +1,1096 @@
+// 1D: attribute writes, super and special-method resolution (batch AW).
+//
+// Every source of these families is read by a row that can run Python, so
+// each arm anchors its sources before the call and retires them after it,
+// as GetAttr.Generic does.
+
+enum Special(ENTER, EXIT, AENTER, AEXIT);
+
+// AttrWrite: o.name = value, or `del o.name` when the value is absent.  The
+// compiler writes a deletion as PUSH_NULL and the store, so the word names
+// the NULL temporary and the arm tests the home at run time.
+family AttrWrite(obj:Src, name:Name, value:Maybe<Src>, fb:Fb<Attr>)
+  exits(next, miss, again, raise, redirect) generic(Generic) ops(STORE_ATTR);
+
+point AttrWrite.Done(current, next_head, clear) keep() spent(obj, value) defs();
+point AttrWrite.Failed(current, site, pending) keep() spent(obj, value) defs();
+// A delete has no value to spend
+point AttrWrite.DeleteDone(current, next_head, clear) keep(value) spent(obj) defs();
+point AttrWrite.DeleteFailed(current, site, pending) keep(value) spent(obj) defs();
+
+extern helper value_setattr(o:B, n:Name, v:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_SetAttr as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_SetAttr: _PyValue_SetAttr(owner, name, value), both borrowed.",
+    contract: "The owner and the value are borrowed on every path. 0, or -1 with the exception set. Callbacks: arbitrary Python (a descriptor, __setattr__, a finalizer of the old value).");
+
+extern helper value_delattr(o:B, n:Name)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_DelAttr as int_zero_ok
+  evidence(
+    review: "ceval.c _PyRop_DelAttr: _PyValue_SetAttr(owner, name, NULL), the deletion protocol.",
+    contract: "The owner is borrowed. 0, or -1 with the exception set. Callbacks: arbitrary Python.");
+
+macro setattr_at_origin(n:Name, a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_setattr(arg(a, 0), n, arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro delattr_at_origin(n:Name, a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_delattr(arg(a, 0), n) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+// The kind of store the site's receiver stands for, nominated by the same
+// analysis as the loads (specialize.c attr_classify, with the store's
+// descriptor rules) and installed by the macro below.
+extern helper classify_setattr(v:B, at:Site, f:Fb<Attr>, n:Name)
+  cases(instance(r:Recipe<Attr>), shape(r:Recipe<Attr>), shape_add(r:Recipe<Attr>),
+        hint(r:Recipe<Attr>), slot(r:Recipe<Attr>), none())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyAttr_ClassifySetAttr as case_index
+  evidence(
+    review: "specialize.c attr_classify: runs the store specializer with its handler choice collected; the case is the choice, the recipe is the entry it wrote.",
+    contract: "Writes the site's entry and poly table and sets no handler. No Python runs: the lookups are NoAlloc.");
+
+macro adapt_before_use_setattr(f:Fb<Attr>, o:Src, n:Name)
+  cases(run(), changed(t:Ticket<Attr>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_setattr(use(o), site, f, n) {
+      instance -> LInstance();
+      shape -> LShape();
+      shape_add -> LShapeAdd();
+      hint -> LHint();
+      slot -> LSlot();
+      none -> Other();
+    }
+  LInstance(rInstance:Recipe<Attr>):
+    let cInstance:Candidate<Attr> = candidate(AttrWrite.Instance, rInstance);
+    call install(site, f, cInstance) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LShape(rShape:Recipe<Attr>):
+    let cShape:Candidate<Attr> = candidate(AttrWrite.Shape, rShape);
+    call install(site, f, cShape) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LShapeAdd(rShapeAdd:Recipe<Attr>):
+    let cShapeAdd:Candidate<Attr> = candidate(AttrWrite.ShapeAdd, rShapeAdd);
+    call install(site, f, cShapeAdd) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LHint(rHint:Recipe<Attr>):
+    let cHint:Candidate<Attr> = candidate(AttrWrite.Hint, rHint);
+    call install(site, f, cHint) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LSlot(rSlot:Recipe<Attr>):
+    let cSlot:Candidate<Attr> = candidate(AttrWrite.Slot, rSlot);
+    call install(site, f, cSlot) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Attr>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm AttrWrite.Generic shared
+  effects(runs_python, raises, releases)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    branch present_src(value) -> Adapt(), Delete();
+  Adapt():
+    call adapt_before_use_setattr(fb, obj, name) {
+      run -> Store();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Attr>):
+    exit again(t);
+  Store():
+    let a:Anchors = anchor_for_call([obj, value]);
+    call setattr_at_origin(name, a) {
+      ok -> Stored();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Stored():
+    publish [] retire [roots(a), spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj, value], e);
+    exit raise(AttrWrite.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+  Delete():
+    let d:Anchors = anchor_for_call([obj]);
+    call delattr_at_origin(name, d) {
+      ok -> Deleted();
+      err -> DeleteFailed();
+      redirected -> DeleteGone();
+    }
+  Deleted():
+    publish [] retire [roots(d), spent(obj)] at AttrWrite.DeleteDone;
+    exit next();
+  DeleteFailed(de:Err):
+    let dsaved:Err = retire_failed_call(d, [obj], de);
+    exit raise(AttrWrite.DeleteFailed, dsaved);
+  DeleteGone(droute:Route):
+    let dcurrent:Route = retire_abandoned(d, droute);
+    exit redirect(dcurrent);
+}
+
+// The arms below store into the owner under the type version of the site's
+// recipe.  Each guards first, then takes the value's owner, so that a guard
+// that fails leaves the word to Generic untouched.  The store helpers take
+// the owner as a borrowed word, not an interior pointer, because they write.
+// The arms of the inline values, the member slots and the hinted entries take
+// the lock the old handlers took; a store that cannot take it, or whose
+// checks fail under it, runs the generic store in the arm.
+
+// A shape recipe for a store: the entry holds the type version, the owner's
+// shape and, for an addition, the shape after the store
+extern helper admitted_store_shape(f:Fb<Attr>, n:Name)
+  cases(hit(r:Recipe<Attr>), absent())
+  effects(reads)
+  feedback(read(entry.type_version), read(entry.shape), read(entry.shape_to), read(entry.offset))
+  c _PyAttr_AdmittedStoreShape as bool_out_hit
+  evidence(
+    review: "pycore_attr_recipe.h: the entry is the recipe when it holds a type version and a shape.",
+    contract: "Reads the entry only; no callee, no failure.");
+
+// The owner has no dictionary, its inline values are valid, and a store
+// that fills a vacant slot has the shape transition to follow
+extern primitive store_values_ready(o:Obj, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  requires(type_version(o, r))
+  test(has_values(o))
+  c _PyAttr_StoreValuesReady as bool
+  evidence(
+    review: "The old _GUARD_DORV_NO_DICT and the transition check of _STORE_ATTR_INSTANCE_VALUE.",
+    contract: "Reads the owner's dictionary pointer, the valid byte and the shape tree; no memory write, no callee.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_shapes");
+
+// The owner's shape is the recipe's and the slot is filled (Shape) or
+// vacant (ShapeAdd)
+extern primitive store_shape_filled(o:Obj, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  requires(type_version(o, r))
+  test(has_values(o))
+  c _PyAttr_StoreShapeFilled as bool
+  evidence(
+    review: "shape_current plus a test that the slot holds a value.",
+    contract: "Two loads; no memory write, no callee.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_shapes");
+
+extern primitive store_shape_vacant(o:Obj, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  requires(type_version(o, r))
+  test(has_values(o))
+  c _PyAttr_StoreShapeVacant as bool
+  evidence(
+    review: "shape_current plus a test that the slot is NULL.",
+    contract: "Two loads; no memory write, no callee.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_shapes");
+
+// The managed dictionary has an unwatched entry at the recipe's hint whose
+// key is the name.  A dictionary with watchers declines: its notification
+// may run Python, which Generic anchors.
+extern primitive hint_store_ready(o:Obj, n:Name, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  requires(type_version(o, r))
+  c _PyAttr_HintStoreReady as bool
+  evidence(
+    review: "The guards of the old _STORE_ATTR_WITH_HINT: the dict, the hinted entry's key, a value in the slot, no watcher.",
+    contract: "Reads the dictionary; no memory write, no callee.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_shapes");
+
+// The stores that the old handlers made under a lock: the owner's for the
+// inline values and the member slot, the dictionary's for a hinted entry.
+// Each takes the lock, checks again what the old handler checked under it,
+// counts x, stores and unlocks.  absent: the lock was not taken or a check
+// failed under it; nothing changed and x was not counted, so the arm runs
+// the generic store.  The previous owner is absent when the store added the
+// attribute.
+extern helper store_instance_locked(v:B, r:Recipe<Attr>, x:B)
+  cases(hit(old:Maybe<O>), absent())
+  effects(reads, writes)
+  c _PyRop_StoreInstanceLocked as bool_out_hit
+  evidence(
+    review: "The old STORE_ATTR_INSTANCE_VALUE: LOCK_OBJECT, _GUARD_TYPE_VERSION_LOCKED and _GUARD_DORV_NO_DICT under the lock, the swap of the slot, AddToInsertionOrder and the shape transition of a vacant one, UNLOCK_OBJECT.",
+    contract: "The owner and x are borrowed; a hit counts x. Nothing runs: no Python, no failure. The previous owner is the caller's to close.");
+
+// A member slot of the owner
+extern helper store_member_locked(v:B, r:Recipe<Attr>, x:B)
+  cases(hit(old:Maybe<O>), absent())
+  effects(reads, writes)
+  c _PyRop_StoreMemberLocked as bool_out_hit
+  evidence(
+    review: "The old STORE_ATTR_SLOT: LOCK_OBJECT of the owner, the swap of the member, UNLOCK_OBJECT, with the type version checked again under the lock.",
+    contract: "The owner and x are borrowed; a hit counts x. Nothing runs: no Python, no failure. The previous owner is the caller's to close.");
+
+// The hinted entry of the managed dictionary
+extern helper store_hinted_locked(v:B, n:Name, r:Recipe<Attr>, x:B)
+  cases(hit(old:O), absent())
+  effects(reads, writes)
+  c _PyRop_StoreHintedLocked as bool_out_hit
+  evidence(
+    review: "The old STORE_ATTR_WITH_HINT: LOCK_OBJECT of the dictionary, the hint, the key, the value and the watchers checked under it, the swap of the entry, UNLOCK_OBJECT.",
+    contract: "The owner and x are borrowed; a hit counts x. Nothing runs: no Python, no failure. The previous owner is never NULL and the caller's to close.");
+
+extern helper store_shape_slot(v:B, r:Recipe<Attr>, x:O) -> O
+  effects(reads, writes)
+  c _PyAttr_StoreShapeSlot as value
+  evidence(
+    review: "The old _STORE_ATTR_SHAPE: _PyValueSlot_ExchangeFilled.",
+    contract: "Takes x. The shape proves the slot filled, so the old owner is never NULL. No callback.");
+
+extern helper store_shape_add(v:B, r:Recipe<Attr>, x:O) -> Unit
+  effects(reads, writes)
+  c _PyAttr_StoreShapeAdd as unit
+  evidence(
+    review: "The old _STORE_ATTR_SHAPE_ADD: fill the vacant slot, add it to the insertion order, set the shape.",
+    contract: "Takes x. The shape proves the slot vacant. No callback.");
+
+arm AttrWrite.Instance inline entry(instance)
+  effects(runs_python, raises, reads, writes, releases)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    call admitted_instance_slot(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    guard present_src(value) else miss;
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard store_values_ready(o, r) else miss;
+    let w:B = use(value);
+    call store_instance_locked(v, r, w) {
+      hit -> Stored();
+      absent -> Slow();
+    }
+  Stored(old:Maybe<O>):
+    let _:Unit = discard_maybe_result(old);
+    publish [] retire [spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Miss():
+    exit miss();
+  Slow():
+    let a:Anchors = anchor_for_call([obj, value]);
+    call setattr_at_origin(name, a) {
+      ok -> Slowed();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Slowed():
+    publish [] retire [roots(a), spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj, value], e);
+    exit raise(AttrWrite.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm AttrWrite.Shape inline entry(shape)
+  effects(reads, writes, releases)
+  feedback(read(entry.type_version), read(entry.shape), read(entry.shape_to), read(entry.offset))
+  exits(next, miss)
+{
+  entry():
+    call admitted_store_shape(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    guard present_src(value) else miss;
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard store_shape_filled(o, r) else miss;
+    let x:O = acquire(value);
+    let old:O = store_shape_slot(v, r, x);
+    publish [] retire [owned(old), spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm AttrWrite.ShapeAdd inline entry(shape_add)
+  effects(reads, writes, releases)
+  feedback(read(entry.type_version), read(entry.shape), read(entry.shape_to), read(entry.offset))
+  exits(next, miss)
+{
+  entry():
+    call admitted_store_shape(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    guard present_src(value) else miss;
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard store_shape_vacant(o, r) else miss;
+    let x:O = acquire(value);
+    let _:Unit = store_shape_add(v, r, x);
+    publish [] retire [spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm AttrWrite.Hint inline entry(hint)
+  effects(runs_python, raises, reads, writes, releases)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    call admitted_instance_slot(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    guard present_src(value) else miss;
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard hint_store_ready(o, name, r) else miss;
+    let w:B = use(value);
+    call store_hinted_locked(v, name, r, w) {
+      hit -> Stored();
+      absent -> Slow();
+    }
+  Stored(old:O):
+    publish [] retire [owned(old), spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Miss():
+    exit miss();
+  Slow():
+    let a:Anchors = anchor_for_call([obj, value]);
+    call setattr_at_origin(name, a) {
+      ok -> Slowed();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Slowed():
+    publish [] retire [roots(a), spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj, value], e);
+    exit raise(AttrWrite.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm AttrWrite.Slot inline entry(slot)
+  effects(runs_python, raises, reads, writes, releases)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    call admitted_instance_slot(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    guard present_src(value) else miss;
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    let w:B = use(value);
+    call store_member_locked(v, r, w) {
+      hit -> Stored();
+      absent -> Slow();
+    }
+  Stored(old:Maybe<O>):
+    let _:Unit = discard_maybe_result(old);
+    publish [] retire [spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Miss():
+    exit miss();
+  Slow():
+    let a:Anchors = anchor_for_call([obj, value]);
+    call setattr_at_origin(name, a) {
+      ok -> Slowed();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Slowed():
+    publish [] retire [roots(a), spent(obj), spent(value)] at AttrWrite.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj, value], e);
+    exit raise(AttrWrite.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// SuperAttr and SuperAttrExplicit: super(...).name.  The span holds the
+// loaded `super`, the class and the receiver, in the order the compiler loads them.  The
+// first family is `super()` (the class implied, so the call has no
+// arguments), the second `super(C, self)`: the call of a replaced `super`
+// and the CALL event differ.  The method form of the compiler's op
+// is SuperMethod or SuperMethodExplicit, below.
+family SuperAttr(dst:Dst, parts:Span<Src>, name:Name, fb:Fb<Super>)
+  exits(next, miss, again, raise) generic(Generic)
+  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+
+family SuperAttrExplicit(dst:Dst, parts:Span<Src>, name:Name, fb:Fb<Super>)
+  exits(next, miss, again, raise) generic(Generic)
+  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+
+point SuperAttr.Done(current, next_head, clear) keep() spent(parts) defs(dst);
+point SuperAttr.Failed(current, site, pending) keep() spent(parts) defs();
+point SuperAttrExplicit.Done(current, next_head, clear) keep() spent(parts) defs(dst);
+point SuperAttrExplicit.Failed(current, site, pending) keep() spent(parts) defs();
+
+extern helper super_lookup(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperLookup as value_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup: the super call, then _PyValue_GetAttr of its result, as _LOAD_SUPER_ATTR did.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor).");
+
+extern helper super_lookup_observed(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  requires(instrumented(at))
+  c _PyRop_SuperLookupObserved as value_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup: the super call with the CALL, C_RETURN and C_RAISE events, then _PyValue_GetAttr of its result, as INSTRUMENTED_LOAD_SUPER_ATTR did.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor); a callback that raises in C_RETURN closes the super object.");
+
+extern helper super_lookup_explicit(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperLookupExplicit as value_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup: the super call, then _PyValue_GetAttr of its result, as _LOAD_SUPER_ATTR did.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor).");
+
+extern helper super_lookup_explicit_observed(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  requires(instrumented(at))
+  c _PyRop_SuperLookupExplicitObserved as value_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup: the super call with the CALL, C_RETURN and C_RAISE events, then _PyValue_GetAttr of its result, as INSTRUMENTED_LOAD_SUPER_ATTR did.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor); a callback that raises in C_RETURN closes the super object.");
+
+// The site's `super` is the builtin and its class a type: the lookup then
+// needs no super object (the old LOAD_SUPER_ATTR_ATTR)
+extern primitive super_builtin_ready(parts:Span<Src>) -> Bool
+  effects(reads)
+  c _PyRop_SuperBuiltinReady as bool
+  evidence(
+    review: "The old _GUARD_LOAD_SUPER_ATTR_METHOD and the guards of LOAD_SUPER_ATTR_ATTR: super is PySuper_Type, the class is a type.",
+    contract: "Reads the first two parts; no memory write, no callee.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_super");
+
+extern helper super_lookup_builtin(parts:Span<Src>, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperLookupBuiltin as value_or_null
+  evidence(
+    review: "The old LOAD_SUPER_ATTR_ATTR: _PySuper_LookupValue on the class and the receiver, the parts closed.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a descriptor of the found attribute).");
+
+// Whether the site's operands are the builtin super and a class, as the
+// old _Py_Specialize_LoadSuperAttr tested them
+extern helper classify_super(parts:Span<Src>, at:Site, f:Fb<Super>)
+  cases(builtin(), none())
+  effects(reads)
+  feedback()
+  c _PyRop_ClassifySuper as case_index
+  evidence(
+    review: "specialize.c: the shadowed-super and bad-class tests of _Py_Specialize_LoadSuperAttr.",
+    contract: "Reads the first two parts only; no entry write, no callee.");
+
+macro adapt_before_use_super(f:Fb<Super>, p:Span<Src>)
+  cases(run(), changed(t:Ticket<Super>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_super(p, site, f) {
+      builtin -> Builtin();
+      none -> Other();
+    }
+  Builtin():
+    let c:Candidate<Super> = candidate(SuperAttr.Builtin);
+    call install(site, f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Super>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+macro adapt_before_use_super_explicit(f:Fb<Super>, p:Span<Src>)
+  cases(run(), changed(t:Ticket<Super>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_super(p, site, f) {
+      builtin -> Builtin();
+      none -> Other();
+    }
+  Builtin():
+    let c:Candidate<Super> = candidate(SuperAttrExplicit.Builtin);
+    call install(site, f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Super>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm SuperAttr.Generic shared
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise)
+{
+  entry():
+    call adapt_before_use_super(fb, parts) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Super>):
+    exit again(t);
+  Run():
+    call super_lookup(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttr.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttr.Failed, e);
+}
+
+arm SuperAttr.Builtin inline entry(builtin)
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback()
+  exits(next, miss, raise)
+{
+  entry():
+    guard super_builtin_ready(parts) else miss;
+    call super_lookup_builtin(parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttr.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttr.Failed, e);
+}
+
+arm SuperAttr.Observed split observes
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_lookup_observed(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttr.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttr.Failed, e);
+}
+
+arm SuperAttrExplicit.Generic shared
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise)
+{
+  entry():
+    call adapt_before_use_super_explicit(fb, parts) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Super>):
+    exit again(t);
+  Run():
+    call super_lookup_explicit(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttrExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttrExplicit.Failed, e);
+}
+
+arm SuperAttrExplicit.Builtin inline entry(builtin)
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback()
+  exits(next, miss, raise)
+{
+  entry():
+    guard super_builtin_ready(parts) else miss;
+    call super_lookup_builtin(parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttrExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttrExplicit.Failed, e);
+}
+
+arm SuperAttrExplicit.Observed split observes
+  effects(runs_python, raises, allocates, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_lookup_explicit_observed(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at SuperAttrExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperAttrExplicit.Failed, e);
+}
+
+// SuperMethod and SuperMethodExplicit: the method form of the two families
+// above, which the compiler asks for with the call that follows.  They
+// publish the callable and, when the lookup found an unbound method, the
+// receiver as the call's first argument; a bound result has no receiver.
+family SuperMethod(callable:Dst, self_dst:Maybe<Dst>, parts:Span<Src>, name:Name, fb:Fb<Super>)
+  exits(next, miss, again, raise) generic(Generic)
+  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+
+family SuperMethodExplicit(callable:Dst, self_dst:Maybe<Dst>, parts:Span<Src>, name:Name, fb:Fb<Super>)
+  exits(next, miss, again, raise) generic(Generic)
+  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+
+point SuperMethod.Done(current, next_head, clear) keep() spent(parts) defs(callable, self_dst);
+point SuperMethod.Failed(current, site, pending) keep() spent(parts) defs();
+point SuperMethodExplicit.Done(current, next_head, clear) keep() spent(parts) defs(callable, self_dst);
+point SuperMethodExplicit.Failed(current, site, pending) keep() spent(parts) defs();
+
+// The generic and observed lookups bind the result, so they have no receiver
+// to publish
+extern helper super_method(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperMethod as value_out_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup, as super_lookup; the second output is absent, as _NULL_SLOT_CONDITIONAL left it.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor).");
+
+extern helper super_method_observed(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  requires(instrumented(at))
+  c _PyRop_SuperMethodObserved as value_out_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup with the events, as super_lookup_observed; the second output is absent.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor); a callback that raises in C_RETURN closes the super object.");
+
+extern helper super_method_explicit(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperMethodExplicit as value_out_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup, as super_lookup_explicit; the second output is absent.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor).");
+
+extern helper super_method_explicit_observed(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  requires(instrumented(at))
+  c _PyRop_SuperMethodExplicitObserved as value_out_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup with the events, as super_lookup_explicit_observed; the second output is absent.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor); a callback that raises in C_RETURN closes the super object.");
+
+// The old LOAD_SUPER_ATTR_METHOD: the lookup asks for an unbound method when
+// the receiver's type has the generic getattro, and then the receiver moves
+// from the parts to the second output
+extern helper super_lookup_builtin_method(parts:Span<Src>, n:Name)
+  cases(ok(f:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperLookupBuiltinMethod as value_out_or_null
+  evidence(
+    review: "The old _LOAD_SUPER_ATTR_METHOD: _PySuper_LookupValue with want_method set for a receiver whose type has PyObject_GenericGetAttr; an unbound result keeps the receiver as the call's self, otherwise the receiver is closed.",
+    contract: "The super and the class are closed, the receiver is closed or moved to the second output; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a descriptor of the found attribute).");
+
+macro adapt_before_use_super_method(f:Fb<Super>, p:Span<Src>)
+  cases(run(), changed(t:Ticket<Super>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_super(p, site, f) {
+      builtin -> Builtin();
+      none -> Other();
+    }
+  Builtin():
+    let c:Candidate<Super> = candidate(SuperMethod.Builtin);
+    call install(site, f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Super>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm SuperMethod.Generic shared
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise)
+{
+  entry():
+    call adapt_before_use_super_method(fb, parts) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Super>):
+    exit again(t);
+  Run():
+    call super_method(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethod.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethod.Failed, e);
+}
+
+arm SuperMethod.Builtin inline entry(builtin)
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback()
+  exits(next, miss, raise)
+{
+  entry():
+    guard super_builtin_ready(parts) else miss;
+    call super_lookup_builtin_method(parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethod.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethod.Failed, e);
+}
+
+arm SuperMethod.Observed split observes
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_method_observed(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethod.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethod.Failed, e);
+}
+
+macro adapt_before_use_super_method_explicit(f:Fb<Super>, p:Span<Src>)
+  cases(run(), changed(t:Ticket<Super>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_super(p, site, f) {
+      builtin -> Builtin();
+      none -> Other();
+    }
+  Builtin():
+    let c:Candidate<Super> = candidate(SuperMethodExplicit.Builtin);
+    call install(site, f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Super>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm SuperMethodExplicit.Generic shared
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise)
+{
+  entry():
+    call adapt_before_use_super_method_explicit(fb, parts) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Super>):
+    exit again(t);
+  Run():
+    call super_method_explicit(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethodExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethodExplicit.Failed, e);
+}
+
+arm SuperMethodExplicit.Builtin inline entry(builtin)
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback()
+  exits(next, miss, raise)
+{
+  entry():
+    guard super_builtin_ready(parts) else miss;
+    call super_lookup_builtin_method(parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethodExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethodExplicit.Failed, e);
+}
+
+arm SuperMethodExplicit.Observed split observes
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_method_explicit_observed(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethodExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethodExplicit.Failed, e);
+}
+
+// SpecialLookup: the method of a special name on an object's type, for
+// `with` and `async with` (enter and exit).  An unbound method comes with
+// the receiver as its first argument; a bound one with no receiver.
+family SpecialLookup(fn:Dst, self_dst:Maybe<Dst>, obj:Src, which:Enum<Special>)
+  exits(next, raise, redirect) ops(LOAD_SPECIAL);
+
+point SpecialLookup.Done(current, next_head, clear) keep() spent(obj) defs(fn, self_dst);
+point SpecialLookup.Failed(current, site, pending) keep() spent(obj) defs();
+
+// The method and the receiver as an owner when the method is unbound.  A
+// missing method raises the protocol's TypeError, with the suggestion of the
+// asynchronous protocol when the type has that one.
+extern helper value_lookup_special(o:B, which:Enum<Special>)
+  cases(ok(f:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_LookupSpecial as value_out_or_null
+  evidence(
+    review: "ceval.c _PyRop_LookupSpecial: _PyObject_LookupSpecialMethod on a counted copy of the receiver, then the error of _LOAD_SPECIAL: _PyEval_SpecialMethodCanSuggest picks error_suggestion or error.",
+    contract: "The receiver is borrowed; the method owned and the self owned or absent, or NULL with an exception set. Callbacks: a descriptor's __get__.");
+
+macro special_at_origin(which:Enum<Special>, a:Anchors)
+  cases(ok(f:O, s:Maybe<O>), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_lookup_special(arg(a, 0), which) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(callable:O, receiver:Maybe<O>):
+    call redirect_status(frame) {
+      running -> Done(callable, receiver);
+      redirected -> Moved(callable, receiver);
+    }
+  Done(kept:O, self_kept:Maybe<O>):
+    exit ok(kept, self_kept);
+  Moved(r:Route, dropped:O, self_dropped:Maybe<O>):
+    let _:Unit = discard_result(dropped);
+    let _:Unit = discard_maybe_result(self_dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm SpecialLookup.Generic shared
+  effects(runs_python, raises, releases on (fn, self_dst))
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj]);
+    call special_at_origin(which, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [fn = f, self_dst = s]
+      retire [roots(a), spent(obj), old(fn), old(self_dst)] at SpecialLookup.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj], e);
+    exit raise(SpecialLookup.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}

@@ -459,6 +459,14 @@ def opnames(func):
     return names | {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
 
 
+def existing(*names):
+    """The names of old handlers that this build still has, and every arm
+    name (it has a dot).  A port deletes the old handlers of its family."""
+    return [name for name in names
+            if "." in name or name in dis._ir_handlers
+            or name in dis._specialized_opmap or name in dis.opmap]
+
+
 def handler_names(func):
     return [row[0] for row in _testinternalcapi.get_ir(func.__code__, True)]
 
@@ -510,9 +518,8 @@ class InlineIntTest(unittest.TestCase):
         names = opnames(f)
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
-        for name in ("Const.Small",
-                     "Add.Int", "BINARY_OP_SUBTRACT_INT",
-                     "BINARY_OP_MULTIPLY_INT"):
+        for name in existing("Const.Small",
+                             "Add.Int", "Binary.Int", "ForIter.Range"):
             self.assertIn(name, names)
         self.assertIn("Add.Int", opnames(add3))
 
@@ -785,12 +792,10 @@ class InlineFloatTest(unittest.TestCase):
             return total, total < 1e300
         warm(f, 3)
         names = opnames(f)
-        for name in ("Const.Pool", "Add.Float",
-                     "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
-                     "BINARY_OP_TRUEDIV_FLOAT"):
+        for name in existing("Const.Pool", "Add.Float", "Binary.Float"):
             self.assertIn(name, names)
         self.assertIn("Add.Float", handler_names(f))
-        self.assertNotIn("BINARY_OP_EXTEND", names)
+        self.assertNotIn("Binary.Extended", names)
         self.assertEqual(f(3), (1.125, True))
 
     def test_results_are_inline(self):
@@ -944,7 +949,7 @@ class InlineFloatTest(unittest.TestCase):
             1 / 0
         with self.assertRaises(ZeroDivisionError):
             1.0 / 0.0
-        self.assertIn("BINARY_OP_TRUEDIV_FLOAT", opnames(div))
+        self.assertIn("Binary.Float", opnames(div))
         self.assertEqual(div(1e308, 1e-308), math.inf)
 
     def test_float_subclass(self):
@@ -1002,10 +1007,7 @@ class InlineIntOpsTest(unittest.TestCase):
 
     def test_quickened(self):
         names = opnames(int_ops) | opnames(shifts)
-        for name in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
-                     "BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT",
-                     "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
-            self.assertIn(name, names)
+        self.assertIn("Binary.Int", names)
         def f(a, b):
             q = a // b
             m = a % b
@@ -1042,7 +1044,7 @@ class InlineIntOpsTest(unittest.TestCase):
                     int_ops(a, 0)
                 with self.assertRaises(ZeroDivisionError):
                     int_ops(a, make_inline(0))
-        self.assertIn("BINARY_OP_FLOOR_DIVIDE_INT", opnames(int_ops))
+        self.assertIn("Binary.Int", opnames(int_ops))
 
     def test_shifts(self):
         ops = (operator.lshift, operator.rshift)

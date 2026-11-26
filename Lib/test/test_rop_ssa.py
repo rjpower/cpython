@@ -14,6 +14,7 @@ path of the expansion must agree with C:
 The path must also balance its own owners.  For C, each input object's count
 must change by exactly the number of homes that hold it afterwards."""
 
+import builtins
 import functools
 import sys
 import types
@@ -198,6 +199,21 @@ class RaisesBool:
         raise ZeroDivisionError("bool")
 
 
+class BadStr:
+    def __str__(self):
+        return 1
+
+    def __repr__(self):
+        return "bad"
+
+    def __format__(self, spec):
+        raise ZeroDivisionError("format")
+
+
+class StrSub(str):
+    pass
+
+
 class Point:
     def __init__(self):
         self.x = 1
@@ -267,11 +283,79 @@ def materialised():
     return o
 
 
+class Shadowed:
+    "A class attribute that the store shadows: kept apart from ClassAttr, whose\n    GetAttr arm a shadowing instance would refuse"
+    x = 5
+
+
+class RaisesSetAttr:
+    def __setattr__(self, name, value):
+        raise ZeroDivisionError("setattr")
+
+
+class SA:
+    x = 5
+
+    def m(self):
+        return 1
+
+
+class SB(SA):
+    def attr(self):
+        return super().x
+
+    def method(self):
+        return super().m()
+
+    def explicit(self):
+        return super(SB, self).x
+
+    def explicit_method(self):
+        return super(SB, self).m()
+
+
+# A module that names `super` makes the compiler keep `super()` calls; the
+# builtin is found by attribute so that SB's methods use LOAD_SUPER_ATTR
+SUPER = getattr(builtins, "super")
+
+
+def fake_super(*args):
+    return SA()
+
+
+class Manager:
+    def __enter__(self):
+        return 1
+
+    def __exit__(self, *exc):
+        return False
+
+
+class AsyncManager:
+    async def __aenter__(self):
+        return 1
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def method_of(name):
+    "A source that makes a function of SB's method, with a code object of its own"
+    return ("import types\nfrom test.test_rop_ssa import SB\n"
+            f"fn = SB.__dict__[{name!r}]\n"
+            "f = types.FunctionType(fn.__code__.replace(), globals(), None, None, "
+            "fn.__closure__)\n")
+
+
 TRUTHS = [True, False, 0, 1, -1, 2**50, 2**60, 0.0, 1.5, None, "", "a", [], [1], (), {1: 2},
           Plain(), Slotted(0), Slotted(3), Sized(0), Sized(2), RaisesBool()]
 PAIRS = [(3, 4), (2**50, 2**50), (2**60, 5), (-2**50, -2**50), (1.5, 2), (2, 0.25),
          ("a", "b"), ([1], [2]), ((1,), (2,)), (Bump(1), 2), (2, Bump(5)),
          (RaisesAdd(), 1), (1, "a"), (b"x", b"y")]
+
+
+SMALL_PAIRS = [(3, 4), (2, 70), (-2, 3), (2, -1), (0, 0), (1.5, 2), (2, 0.25),
+               ("a", "b"), ([1], [2]), (7, 0)]
 
 
 COMPARE_PAIRS = PAIRS + [(2**60, 2**60), (float("nan"), float("nan")), (1, 1), ("a", "a"),
@@ -377,6 +461,12 @@ MODULE_SOURCE = ("import types\n"
                  "f = types.FunctionType(compile(%r, 'm', 'exec'), globals())\n")
 
 # The code of a generic function's scope, which makes its type parameters
+TYPEVAR_SOURCE = (
+    "import types\n"
+    "m = compile('def g[T](): pass', 'm', 'exec')\n"
+    "scope = next(c for c in m.co_consts if hasattr(c, 'co_code'))\n"
+    "f = types.FunctionType(scope, globals())\n")
+
 PAIR_SOURCE = (
     "import types\n"
     "m = compile('def g[T: int](): pass', 'm', 'exec')\n"
@@ -384,12 +474,53 @@ PAIR_SOURCE = (
     "f = types.FunctionType(scope, globals())\n")
 
 
+TEXTS = [1, 2**50, 2**60, 1.5, True, None, "", "s", "\u00e9", StrSub("t"), Plain(), BadStr(), [1]]
+SPECS = [(1, "5"), (2**60, ">30"), (1.5, ".1f"), ("s", ">4"), (Plain(), ""), (BadStr(), "x"),
+         (1, "zz"), (None, ""), (StrSub("t"), "<3")]
+
 SCENARIOS = {
+    "Convert": Scenario("Convert", {
+        "locals": "def f(a):\n    return f'{a!r}'\n",
+        "temporaries": "def f(a):\n    return f'{(a * 1)!s}'\n",
+        "ascii": "def f(a):\n    return f'{a!a}'\n"},
+        [{"value": v, "kind": k} for v in TEXTS for k in (0, 1, 2)], warm=(1,)),
+    "Format": Scenario("Format", {
+        "plain": "def f(a):\n    return f'{a}'\n",
+        "temporaries": "def f(a):\n    return f'{(a * 1)}'\n"},
+        [{"value": v} for v in TEXTS], warm=(1,)),
+    "FormatSpec": Scenario("FormatSpec", {
+        "spec": "def f(a, b):\n    return f'{a:{b}}'\n"},
+        [{"value": v, "spec": sp} for v, sp in SPECS], warm=(1,)),
     "Add": Scenario("Add", {
         "locals": "def f(a, b):\n    return a + b\n",
         "temporaries": "def f(a, b):\n    return (a * 1) + (b * 1)\n",
         "alias": "def f(a, b):\n    a = a + b\n    return a\n"},
         [{"x": x, "y": y} for x, y in PAIRS], warm=([1], [2])),
+    "Binary": Scenario("Binary", {
+        "subtract": "def f(a, b):\n    return a - b\n",
+        "multiply": "def f(a, b):\n    return [a][0] * [b][0]\n",
+        "floor_divide": "def f(a, b):\n    return a // b\n",
+        "remainder": "def f(a, b):\n    return a % b\n",
+        "power": "def f(a, b):\n    return a ** b\n",
+        "shift": "def f(a, b):\n    return a << b\n",
+        "bits": "def f(a, b):\n    return (a & b) | (a ^ b)\n",
+        "true_divide": "def f(a, b):\n    return a / b\n",
+        "in_place": "def f(a, b):\n    a -= b\n    return a\n",
+        "alias": "def f(a, b):\n    a *= b\n    return a\n"},
+        [{"x": x, "y": y} for x, y in PAIRS + [(7, 0), (7, -2), (2, 70), (7.5, 0)]],
+        warm=(3, 4),
+        # Powers and shifts of the large pairs would build huge numbers
+        inputs_by_source={
+            "power": [{"x": x, "y": y} for x, y in SMALL_PAIRS],
+            "shift": [{"x": x, "y": y} for x, y in SMALL_PAIRS]}),
+    "Unary": Scenario("Unary", {
+        "negative": "def f(a):\n    return -a\n",
+        "temporary": "def f(a):\n    return -(a * 1)\n",
+        "invert": "def f(a):\n    return ~a\n",
+        "positive": "def f(a):\n    return +a\n"},
+        [{"value": v} for v in (1, -2**50, 2**50 - 1, 0, 1.5, -0.0, float("nan"), 2**70,
+                                True, "s", Plain(), [1])],
+        warm=(1,)),
     "Truth": Scenario("Truth", {
         "locals": "def f(a):\n    return not a\n",
         "temporaries": "def f(a):\n    return not (a * 1)\n"},
@@ -462,6 +593,10 @@ SCENARIOS = {
     "ImportFrom": Scenario("ImportFrom", {
         "from": "def f(a):\n    from os import path, sep\n    return a\n"},
         [{"module": __import__("os")}], warm=(1,)),
+    "Resume": Scenario("Resume", {
+        "entry": "def f(a):\n    return a\n",
+        "monitored": "def f(a):\n    return a\n"},
+        [{}], warm=(0,), monitored=("monitored",)),
     "Jump": Scenario("Jump", {
         "loop": "def f(n):\n    while n:\n        n -= 1\n    return n\n",
         "forward": "def f(a):\n    x = 1 if a else 2\n    y = (x, x)\n    return y\n",
@@ -618,11 +753,12 @@ SCENARIOS = {
                          for v in ((1,), (), (None, 2))],
             "all": [{"code": identity.__code__, "fields": [(1,), {"k": 2}, {"k": int}]}]}),
     "Intrinsic": Scenario("Intrinsic", {
-        "unary": "def f(a):\n    return +a\n",
+        "unary": TYPEVAR_SOURCE,
         "stopiteration": "def f(a):\n    yield a\n",
         "import_star": MODULE_SOURCE % "from sys import *"},
         [{"x": v} for v in (1, 1.5, 2**70, "s", Plain(), [1])], warm=(1,),
         inputs_by_source={
+            "unary": [{"x": v} for v in ("T", "name")],
             # (A StopIteration becomes a new error that holds it, which the
             # count check cannot see; test_rop_functions runs that case)
             "stopiteration": [{"x": v} for v in (ValueError(1), KeyError("k"))],
@@ -635,6 +771,59 @@ SCENARIOS = {
             # TYPEVAR_WITH_BOUND (a name, the bound's evaluator): the new
             # typevar holds the evaluator, so it is immortal
             "binary": [{"x": x, "y": None} for x in ("T", "U")]}),
+    "AttrWrite": Scenario("AttrWrite", {
+        "store": "def f(a, v):\n    a.x = v\n",
+        "delete": "def f(a):\n    del a.x\n"},
+        # The stored value is held by its object, which the count check cannot see
+        [{"obj": Point(), "value": 1}], warm=(Point(), 1), holds=True,
+        inputs_by_source={
+            "store": [{"obj": o, "value": v}
+                      for o in (Point(), WithSlots(), Plain(), Shadowed(), 1, Many(),
+                                RaisesSetAttr(), materialised())
+                      for v in (1, "s", None, Plain(), 2**70)],
+            "delete": [{"obj": o} for o in (Point(), Plain(), WithSlots(), 1, Many(),
+                                            RaisesSetAttr(), materialised())]}),
+    "SuperAttr": Scenario("SuperAttr", {
+        "attr": method_of("attr"),
+        "monitored": method_of("attr")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SuperAttrExplicit": Scenario("SuperAttrExplicit", {
+        "attr": method_of("explicit"),
+        "monitored": method_of("explicit")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SuperMethod": Scenario("SuperMethod", {
+        "method": method_of("method"),
+        "monitored": method_of("method")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SuperMethodExplicit": Scenario("SuperMethodExplicit", {
+        "method": method_of("explicit_method"),
+        "monitored": method_of("explicit_method")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SpecialLookup": Scenario("SpecialLookup", {
+        "with": "def f(a):\n    with a:\n        pass\n",
+        "async": "async def f(a):\n    async with a:\n        pass\n"},
+        [{"obj": v} for v in (Manager(), AsyncManager(), 3, Plain())],
+        warm=(Manager(),)),
     "Compare": Scenario("Compare", {
         "rich": "def f(a, b):\n    return a < b\n",
         "equal": "def f(a, b):\n    return a == b\n",
@@ -906,7 +1095,7 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
     arm_name = arm.name
     handler = capi.arm_handlers()[arm_name]
     run = CRun(f, index, slots, mode, handler)
-    jump_kind = "jump" if arm.family == "Jump" else "branch"
+    jump_kind = "jump" if arm.family in ("Jump", "Resume") else "branch"
     exit = classify(run, mode, index, length, jump_kind)
     if arm.family == "NamespaceWrite" and "value" in inputs and exit == "next":
         # The value's new owner is the globals dict, which the count of the
@@ -977,6 +1166,8 @@ def cx():
 
 
 # The arms no scenario runs, and why.  Each expands.
+UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
+              "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
     # Iteration (rir90 FI): the arms are checked by test_rop_iter
     "IterOpen.Generic": "covered by test_rop_iter",
@@ -984,6 +1175,40 @@ NOT_RUN = {
     "ForIter.Observed": "covered by test_rop_iter",
     "IterClose.Retire": "covered by test_rop_iter",
     "IterClose.Observed": "covered by test_rop_iter",
+    "ForIter.Indexed": "covered by test_rop_iter",
+    "ForIter.Slot": "covered by test_rop_iter",
+    "ForIter.List": "covered by test_rop_iter",
+    "ForIter.Tuple": "covered by test_rop_iter",
+    "ForIter.Range": "covered by test_rop_iter",
+    "IterOpen.GenMethod": "covered by test_rop_iter",
+    "IterOpen.Indexed": "covered by test_rop_iter",
+    "IterOpen.Self": "covered by test_rop_iter",
+    # BuildText's rows take spans of homes, as the display rows do
+    "BuildText.Join": "no scenario; test_rop_text runs it",
+    "BuildText.Interpolation": "no scenario; test_rop_text runs it",
+    "BuildText.Template": "no scenario; test_rop_text runs it",
+    # The tracer's view of the pattern and length arms waits for the interpreter
+    "Length.Size": "no scenario yet; test_rop_patterns runs it",
+    "Pattern.Flag": "no scenario yet; test_rop_patterns runs it",
+    "PatternClass.Match": "no scenario yet; test_rop_patterns runs it",
+    "PatternKeys.Match": "no scenario yet; test_rop_patterns runs it",
+    # The tracer's view of the keyword and expanded calls is deferred while the
+    # interpreter ports finish (rir90 interpreter-first rule)
+    "CallKw.Plan": "deferred: binds keywords by a site's plan",
+    "CallKw.Generic": "deferred: the keyword call that adapts, then binds or calls",
+    "CallKw.Observed": "deferred: the keyword call under monitoring",
+    "CallEx.Generic": "deferred: the call with the star tuple (its owner is a block parameter)",
+    "CallEx.Observed": "deferred: the star call under monitoring",
+    "MaterializeKwargs.Pending": "deferred: the pending **kwargs dict of a frame",
+    "AttrWrite.Instance": "needs a warmed recipe in the entry; scenarios are not extended in the interpreter-first batch",
+    "AttrWrite.Shape": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.ShapeAdd": "needs a warmed shape recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.Hint": "needs a warmed hint recipe in the entry; as AttrWrite.Instance",
+    "AttrWrite.Slot": "needs a warmed slot recipe in the entry; as AttrWrite.Instance",
+    "SuperAttr.Builtin": "installed only by adaptation; as AttrWrite.Instance",
+    "SuperAttrExplicit.Builtin": "installed only by adaptation; as AttrWrite.Instance",
+    "SuperMethod.Builtin": "installed only by adaptation; as AttrWrite.Instance",
+    "SuperMethodExplicit.Builtin": "installed only by adaptation; as AttrWrite.Instance",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Awaitable.Await": "its source is an awaitable of a native coroutine type, whose "
@@ -1009,8 +1234,22 @@ NOT_RUN = {
     "CellMapRead.Lookup": "LOAD_FROM_DICT_OR_DEREF occurs in class code",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
+    "Unpack.Generic": UNPACK_WHY,
+    "Unpack.Tuple": UNPACK_WHY,
+    "Unpack.List": UNPACK_WHY,
+    "UnpackStar.Iterable": UNPACK_WHY,
+    "AppendText.Text": "no scenario yet: the tracer's view is deferred, and the arm "
+                       "takes the string out of its own destination local",
+    "AppendText.Generic": "no scenario yet: the tracer's view is deferred",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",
     "Import.Lazy": "`lazy import` is a module-level statement",
+    "Raise.Throw": "no scenario drives an unwinding exit yet",
+    "Reraise.Plain": "no scenario drives an unwinding exit yet",
+    "Reraise.Origin": "no scenario drives an unwinding exit yet",
+    "ExceptEnter.Install": "no scenario drives an unwinding exit yet",
+    "ExceptLeave.Restore": "no scenario drives an unwinding exit yet",
+    "ExceptMatch.Match": "no scenario drives an unwinding exit yet",
+    "ExceptGroupMatch.Split": "no scenario drives an unwinding exit yet",
     # select(jit_on) and select(jit_off): the word is the one the JIT's
     # state chose when the function was lowered
     "Intrinsic.StopIteration": STOPITERATION_WHY,
@@ -1019,11 +1258,14 @@ NOT_RUN = {
                           "to one on a word",
     "Jump.Poll" if sys._jit.is_enabled() else "Jump.Warm": "the JIT's state selects the "
                                                            "other loop jump",
+    "Resume.Poll" if sys._jit.is_enabled() else "Resume.Warm": "the JIT's state selects "
+                                                               "the other resume",
 }
 
 
 def evaluated_arms():
-    return [n for n in SSA if PROGRAM.arms[n].family in SCENARIOS]
+    return [n for n in SSA
+            if PROGRAM.arms[n].family in SCENARIOS and n not in NOT_RUN]
 
 
 class AgainstCTests(unittest.TestCase):

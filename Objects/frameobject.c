@@ -1355,7 +1355,7 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
     }
     /* Project optimized forms through their frontend shadow before removing
      * instrumentation. Encoded family identity alone is not a CFG opcode. */
-    int opcode = _PyIR_HandlerBase[_PyIR_BaseOpcode(IR_HANDLER(word))];
+    int opcode = _PyIR_OpcodeBase[_PyIR_BaseOpcode(IR_HANDLER(word))];
     if (IS_SCOPE_EXIT_OPCODE(opcode) ||
         (fmt->flags & _PyIR_JUMP_ALWAYS))
     {
@@ -1532,7 +1532,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
         current >= 0 && current < _PyCode_IRSize(_PyFrame_GetCode(frame)) &&
         frame->instr_ptr == _PyFrame_InstrAt(frame, current) &&
-        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == INSTRUMENTED_LINE)
+        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == IR_H_INSTRUMENTED_LINE)
     {
         phase.kind = REGISTER_RESUME_PRE_WORD;
     }
@@ -2311,12 +2311,9 @@ register_context_forget_reads(PyCodeObject *code, int pc,
         int home = analysis->nl + j;
         if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[pc], arg, home) ||
             /* A call's child frame lies above the parent's, so it only
-             * takes the call's operands, which the read test covers. A
-             * yield suspends this frame and takes nothing else with it. */
+             * takes the call's operands, which the read test covers */
             (fmt->operands == _PyIR_OPERANDS_NONE &&
-             (fmt->effects & _PyIR_PUSHES_FRAME) &&
-             !(fmt->events & (1u << PY_MONITORING_EVENT_PY_YIELD)) &&
-             (base < 0 || home >= base)))
+             (fmt->effects & _PyIR_PUSHES_FRAME) && (base < 0 || home >= base)))
         {
             origins[j] = 0;
         }
@@ -2372,7 +2369,10 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
     int base = -1;
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] == _PyIR_ROLE_BASE ||
-            (opcode == POP_EXCEPT && fmt->roles[f] == _PyIR_ROLE_IN0))
+            (opcode == POP_EXCEPT && fmt->roles[f] == _PyIR_ROLE_IN0) ||
+            // The saved exception: ExceptEnter's first destination
+            (opcode == PUSH_EXC_INFO && fmt->roles[f] == _PyIR_ROLE_DST &&
+             base < 0))
         {
             base = (int)fields[f] - analysis->nl;
         }

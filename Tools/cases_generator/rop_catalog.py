@@ -131,7 +131,7 @@ class Schema(enum.Enum):
 SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
     Schema.Binary: ("kind", "descr"),
     Schema.Attr: ("kind", "type_version", "offset", "shape", "keys_version", "index",
-                  "descr", "rows", "class_value"),
+                  "descr", "rows", "class_value", "shape_to"),
     Schema.Global: ("globals_version", "builtins_version", "index"),
     Schema.Truth: ("kind", "type_version"),
     Schema.Compare: ("kind",),
@@ -140,7 +140,8 @@ SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
     Schema.Unpack: ("kind", "length"),
     Schema.Iter: ("kind", "type_version", "func_version"),
     Schema.Send: ("kind", "func_version"),
-    Schema.Call: ("kind", "func_version", "type_version", "argcount", "convention"),
+    Schema.Call: ("kind", "func_version", "type_version", "argcount", "convention",
+                  "plan"),
     Schema.Super: ("kind", "type_version"),
 }
 
@@ -207,13 +208,17 @@ FB_LAYOUT: dict[Schema, CLayout] = {
         "index": CField("index", _U32),
         "descr": CField("descr", "PyObject *"),
         "rows": CField("h.poly", _U32),
-        "class_value": CField("class_value", "_PyValueGuarded")},
+        "class_value": CField("class_value", "_PyValueGuarded"),
+        "shape_to": CField("shape_to", _U32)},
         unions=(
             # A module's keys version, a class's version or a shape index
             CUnion(("keys_version", "shape"),
                    ("dict_version", "func_version", "class_version", "shape")),
             CUnion(("offset", "index"), ("index", "offset", "hint", "dictoffset")),
-            CUnion(("descr",), ("descr", "fget", "getattribute", "shape_to")))),
+            CUnion(("descr", "shape_to"), ("descr", "fget", "getattribute", "shape_to")))),
+    # The super sites record nothing but the counter: the guards read the
+    # operands
+    Schema.Super: CLayout("_PyFbUnary", {"kind": _NONE, "type_version": _NONE}),
     Schema.Global: CLayout("_PyFbGlobal", {
         "globals_version": CField("globals_version", _U32),
         "builtins_version": CField("builtins_version", _U32),
@@ -224,6 +229,7 @@ FB_LAYOUT: dict[Schema, CLayout] = {
     Schema.Contains: CLayout("_PyFbContains", {
         "kind": CField("kind", _U32),
         "type_version": CField("type_version", _U32)}),
+    Schema.Unpack: CLayout("_PyFbUnary", {"kind": _NONE, "length": _NONE}),
     # The item sites share the binary entry; their evidence is the type
     # versions that it records
     Schema.Item: CLayout("_PyFbBinary", {
@@ -233,7 +239,8 @@ FB_LAYOUT: dict[Schema, CLayout] = {
     Schema.Call: CLayout("_PyFbCall", {
         "kind": _NONE, "func_version": CField("func_version", _U32),
         "type_version": CField("type_version", _U32),
-        "argcount": _NONE, "convention": _NONE}),
+        "argcount": _NONE, "convention": _NONE,
+        "plan": CField("plan", "_PyBindPlan")}),
 }
 
 # A recipe (Recipe<S>): the fields that an admission row copies out of an
@@ -245,6 +252,7 @@ RECIPE_LAYOUT: dict[Schema, CLayout] = {
         "aux": CField("aux", _U32),
         "offset": CField("offset", _U32),
         "read_kind": CField("read_kind", _U32),
+        "shape_to": CField("shape_to", _U32),
         "values_layout": CField("values_layout", "bool"),
         "class_value": CField("class_value", "_PyValueGuarded")}),
     Schema.Global: CLayout("_PyGlobalRecipe", {
@@ -410,6 +418,9 @@ class Select(enum.Enum):
     extend = "extend"                      # UpdateContainer: a list takes an iterable
     union = "union"                        # UpdateContainer: a set takes an iterable
     overlay = "overlay"                    # UpdateContainer: a dict takes a mapping
+    join = "join"                          # BuildText: the pieces of an f-string
+    interpolation = "interpolation"        # BuildText: one `{value!c:spec}` of a template
+    template = "template"                  # BuildText: the strings and interpolations of a template
     present = "present"                    # the family's optional operands hold values
     absent = "absent"                      # its optional operands are vacant
 
@@ -432,6 +443,7 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "display": (Select.tuple, Select.list, Select.set, Select.map),
     "element": (Select.append, Select.add),
     "update": (Select.extend, Select.union, Select.overlay),
+    "text": (Select.join, Select.interpolation, Select.template),
     "operand": (Select.present, Select.absent),
 }
 
@@ -612,9 +624,13 @@ class FieldKind(enum.Enum):
     feedback = "feedback"
     target = "target"
     vector = "vector"
+    flag = "flag"
 
 
 INDEX_BITS = 12
+# One-bit enums that live in a flag of the word's handler field rather than
+# in a field: the enum's name and the flag's bit (pycore_ir.h IR_F_*)
+HEAD_FLAG_ENUMS = {"Interrupt": 15}
 TARGET_BITS = {Handle.NearHead: 12, Handle.FarHead: 24}
 # Widest immediate the rule packs: two adjacent fields of one word
 WIDEST_IMMEDIATE = 32
@@ -748,6 +764,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("int_zero_ok", CReturn.int_status,
           COutcome(CTest.zero, _RES, (), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # ok(vals): zero, the owners the row made written through the last
+    # parameter (a Span<O>, in storage from PyMem_Malloc); err(e): negative,
+    # the exception set and nothing written
+    _conv("owners_or_raised", CReturn.int_status,
+          COutcome(CTest.zero, _RES, (CSource.out,), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
     # A truth int: 1 true, 0 false, negative raised
     _conv("int_truth", CReturn.int_status,
           COutcome(CTest.positive, _RES, (), False),
@@ -799,6 +821,11 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (_VAL, CSource.out), False),
           COutcome(CTest.zero, _RES, (_VAL,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # _PyStatusValue: status 1 an item (the next cursor written through the last
+    # parameter), 0 the end; neither raises
+    _conv("step_pair", CReturn.status_value,
+          COutcome(CTest.positive, _RES, (_VAL, CSource.out), False),
+          COutcome(CTest.zero, _RES, (_VAL,), False)),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,
           COutcome(CTest.zero, _RES, (_VAL,), False),

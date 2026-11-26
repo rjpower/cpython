@@ -29,10 +29,14 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
-#include "pycore_rop_metadata.h"       // ROP_HANDLER_GetAttr_Generic
-#include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic, ROP_HANDLER_Call_Generic
+#include "pycore_rop_metadata.h"       // ROP_OP_GetAttr_Generic
+#include "pycore_rop_metadata.h"      // ROP_OP_Add_Generic, ROP_OP_Call_Generic
 #include "pycore_rop_rows.h"          // BRANCH_IF_FALSE
 #include "pycore_jit.h"             // _PyJIT_OFF
+
+// The CFG names an arm by its tagged ROP_OP_ number, not its handler id
+#undef ROP_ARM
+#define ROP_ARM(name) ROP_OP_##name
 
 #undef SUCCESS
 #undef ERROR
@@ -225,11 +229,15 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
 const _PyIRFormat *
 _PyRegCfg_FormatOf(int opcode, int oparg)
 {
-    // The handlers of BINARY_OP's operations share its format
-    if (opcode == BINARY_OP) {
-        return _PyIR_FormatOf(_PyIR_BINARY_OP_FIRST);
+    if (ROP_CFG_IS_ARM(opcode)) {
+        return _PyIR_FormatOf(ROP_CFG_HANDLER(opcode));
     }
-    return _PyIR_FormatOf(opcode);
+    // A stack op has a handler, or only a format for the CFG
+    int handler = _PyIR_OpcodeHandler[opcode];
+    if (handler != _PyIR_NO_HANDLER) {
+        return _PyIR_FormatOf(handler);
+    }
+    return &_PyIR_StackOnlyFormats[opcode];
 }
 
 /* Whether op jumps to its target.  END_ASYNC_FOR names the SEND of its
@@ -874,6 +882,20 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
               const int *uses, int nuses, const int *defs, int ndefs,
               _PyRegOp **result)
 {
+    return _PyRegTr_EmitTaking(t, src, opcode, uses, nuses, nuses, defs, ndefs,
+                               result);
+}
+
+/* Emit, for an op that takes only the last ntaken of its nuses inputs and
+ * leaves the others where they are.  The parameters that it holds and takes
+ * (note_op) follow the taken inputs: an op that only reads a parameter
+ * keeps it held, so that no later rename gives its home to another
+ * identity. */
+int
+_PyRegTr_EmitTaking(_PyRegTr *t, const _PyRegOp *src, int opcode,
+                    const int *uses, int nuses, int ntaken, const int *defs,
+                    int ndefs, _PyRegOp **result)
+{
     _PyRegCfg *cfg = t->cfg;
 #ifndef NDEBUG
     for (int k = 0; k < nuses; k++) {
@@ -893,7 +915,8 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
         RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, nrec, &op->recipe));
     }
     op->opcode = opcode;
-    op->nread = op->npop = (int16_t)nuses;
+    op->nread = (int16_t)nuses;
+    op->npop = (int16_t)ntaken;
     int *in = _PyReg_IN(cfg, op);
     if (nuses > 0) {
         memcpy(in, uses, nuses * sizeof(int));
@@ -961,7 +984,7 @@ collapse_unwound(_PyRegTr *t, const _PyRegOp *instr, int k)
     for (int q = 0; q < t->ncopies; q++) {
         int c = t->copies[q];
         _PyRegOp *copy = &t->ops[c];
-        if (copy->opcode != ROP_HANDLER_Move_Copy || copy->nread != 1 ||
+        if (copy->opcode != ROP_OP_Move_Copy || copy->nread != 1 ||
             copy->nout != 1 || _PyReg_IN(cfg, copy)[0] != x)
         {
             continue;
@@ -1022,9 +1045,9 @@ collapse_unwound(_PyRegTr *t, const _PyRegOp *instr, int k)
 }
 
 /* The rule of an unported stack op: its old handler op.  It reads the top
- * nread identities, the popped ones on top, and for a raise every identity
- * below; a register-style op's outputs below its dst pass their inputs
- * through, and a window's are its stack positions from its base. */
+ * nread identities, the popped ones on top; a register-style op's outputs
+ * below its dst pass their inputs through, and a window's are its stack
+ * positions from its base. */
 int
 _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
 {
@@ -1032,10 +1055,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(instr->opcode, instr->oparg);
     int window = (fmt->flags & _PyIR_WINDOW) != 0;
     int popped = _PyOpcode_num_popped(instr->opcode, instr->oparg);
-    // A scope exit leaves nothing behind for this frame: RETURN_VALUE
-    // pushes its result to the caller's, and RERAISE does not go on
-    int pushed = IS_SCOPE_EXIT_OPCODE(instr->opcode)
-        ? 0 : _PyOpcode_num_pushed(instr->opcode, instr->oparg);
+    int pushed = _PyOpcode_num_pushed(instr->opcode, instr->oparg);
     // Every handler finds its parameters before the op can raise: renamed
     // while the region keeps stack order, else by the edge's recipe
     if (instr->except >= 0 && !t->permuted) {
@@ -1062,18 +1082,6 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
                      instr->loc.lineno);
         return ERROR;
-    }
-    int nimplicit = IS_RAISE_OPCODE(instr->opcode) ? depth - popped : 0;
-    // The values the raise leaves, less those whose one owner a copy
-    // already spent (collapse_unwound())
-    char unwound[IR_MAX_SLOTS];
-    int nleft = 0;
-    for (int k = 0; k < nimplicit; k++) {
-        int merged = k < IR_MAX_SLOTS && collapse_unwound(t, instr, k);
-        if (k < IR_MAX_SLOTS) {
-            unwound[k] = (char)merged;
-        }
-        nleft += !merged;
     }
     // Register style: the outputs below dst pass their inputs through
     int through = 0;
@@ -1108,7 +1116,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     }
     _PyRegOp *op;
     if (err == SUCCESS) {
-        err = new_op(t, instr, nread + nleft + nrec, pushed, &op);
+        err = new_op(t, instr, nread + nrec, pushed, &op);
     }
     if (err == SUCCESS && nrec) {
         err = _PyRegCfg_AddOperands(cfg, nrec, &op->recipe);
@@ -1118,27 +1126,20 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         for (int k = 0; k < nread; k++) {
             in[k] = t->stack[depth - nread + k];
         }
-        int left = 0;
-        for (int k = 0; k < nimplicit; k++) {
-            if (k >= IR_MAX_SLOTS || !unwound[k]) {
-                in[nread + left++] = t->stack[k];
-            }
-        }
-        nimplicit = left;
         // A window's outputs go from its base: where its first input is,
         // unless allocation stages its inputs
         int wbase = window && nread > 0 ? natural_pos(t, in[0]) : -1;
         op->nread = (int16_t)nread;
         op->npop = (int16_t)popped;
-        op->nimplicit = (int16_t)nimplicit;
+        op->nimplicit = 0;
         memcpy(_PyReg_OUT(cfg, op), out, pushed * sizeof(int));
         note_op(t, op);
         // The recipe's identities live until the op, which takes none
         for (int q = 0; q < nrec; q++) {
-            in[nread + nimplicit + q] = t->rec[2 * q];
+            in[nread + q] = t->rec[2 * q];
             cfg->operands[op->recipe + q] = t->rec[2 * q + 1];
         }
-        op->nimplicit = (int16_t)(nimplicit + nrec);
+        op->nimplicit = (int16_t)nrec;
         op->nrecipe = (int16_t)nrec;
         for (int j = 0; wbase >= 0 && j < pushed; j++) {
             if (out[j] >= _PyReg_FRESH0(cfg)) {
@@ -1194,13 +1195,13 @@ static int read_local(_PyRegTr *t, const _PyRegOp *src, int local,
  * or run code that may rebind it through frame.f_locals (the rule of
  * CopyProp and of check_folded_load()) */
 static int
-may_change_local(const _PyRegOp *op, int x)
+may_change_local(const _PyRegCfg *cfg, const _PyRegOp *op, int x)
 {
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
     int role = _PyIR_OpargRole(fmt);
-    return _PyRegOp_WritesLocal(op, x)
+    return _PyRegOp_WritesLocal(cfg, op, x)
         || (op->oparg == x
-            && (op->opcode == ROP_HANDLER_SaveLocal_Take
+            && (op->opcode == ROP_OP_SaveLocal_Take
                 || role == _PyIR_ROLE_LOCAL_OUT
                 || role == _PyIR_ROLE_LOCAL_CLEAR
                 || role == _PyIR_ROLE_LOCAL_MOVE))
@@ -1223,8 +1224,8 @@ stable_local(const _PyRegTr *t, int v, const _PyRegOp *src)
         return -1;
     }
     const _PyRegOp *read = &t->ops[p];
-    if ((read->opcode != ROP_HANDLER_LocalRead_Bound &&
-         read->opcode != ROP_HANDLER_LocalRead_Checked) ||
+    if ((read->opcode != ROP_OP_LocalRead_Bound &&
+         read->opcode != ROP_OP_LocalRead_Checked) ||
         read->nout != 1 || _PyReg_OUT(cfg, read)[0] != v)
     {
         return -1;
@@ -1236,7 +1237,7 @@ stable_local(const _PyRegTr *t, int v, const _PyRegOp *src)
     for (int i = p + 1; i < t->nops; i++) {
         const _PyRegOp *op = &t->ops[i];
         if (op->opcode != _PyReg_DEAD &&
-            (op->loc.lineno != read->loc.lineno || may_change_local(op, x)))
+            (op->loc.lineno != read->loc.lineno || may_change_local(t->cfg, op, x)))
         {
             return -1;
         }
@@ -1258,9 +1259,9 @@ const_producer(const _PyRegTr *t, int v)
     }
     const _PyRegOp *op = &t->ops[p];
     switch (op->opcode) {
-        case ROP_HANDLER_Const_Pool:
-        case ROP_HANDLER_Const_Small:
-        case ROP_HANDLER_Const_Common:
+        case ROP_OP_Const_Pool:
+        case ROP_OP_Const_Small:
+        case ROP_OP_Const_Common:
             break;
         default:
             return NULL;
@@ -1293,9 +1294,8 @@ rule_copy(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_Move_copy,
-                                  &v, 1, &dst, 1, &op));
-    op->npop = 0;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, ROP_SELECT_Move_copy,
+                                        &v, 1, 0, &dst, 1, &op));
     op->oparg = 0;
     RETURN_IF_ERROR(grow((void **)&t->copies, &t->acopies, t->ncopies + 1,
                          sizeof(int)));
@@ -1356,11 +1356,11 @@ static int
 only_makes_value(const _PyRegCfg *cfg, const _PyRegOp *p)
 {
     switch (p->opcode) {
-        case ROP_HANDLER_LocalRead_Bound:
-        case ROP_HANDLER_Const_Pool:
-        case ROP_HANDLER_Const_Small:
-        case ROP_HANDLER_Const_Common:
-        case ROP_HANDLER_Move_Copy:
+        case ROP_OP_LocalRead_Bound:
+        case ROP_OP_Const_Pool:
+        case ROP_OP_Const_Small:
+        case ROP_OP_Const_Common:
+        case ROP_OP_Move_Copy:
             break;
         default: {
             const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode, p->oparg);
@@ -1487,7 +1487,7 @@ spend_import_module(_PyRegTr *t, int v)
             }
             continue;
         }
-        if (op->opcode != ROP_HANDLER_ImportFrom_From || op->nread != 1 ||
+        if (op->opcode != ROP_OP_ImportFrom_From || op->nread != 1 ||
             in[0] != v || op->nimplicit != 0)
         {
             return 0;
@@ -1495,7 +1495,7 @@ spend_import_module(_PyRegTr *t, int v)
         if (op->except >= 0 && handler_base(cfg, op->except) > pos) {
             return 0;
         }
-        op->opcode = ROP_HANDLER_ImportFrom_FromLast;
+        op->opcode = ROP_OP_ImportFrom_FromLast;
         op->npop = 1;
         return 1;
     }
@@ -1511,7 +1511,7 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
     int v = t->stack[t->sp - 1];
     _PyRegOp *prod = sole_producer(t, v);
     _PyRegOp *retire = NULL, *dead = NULL;
-    int handler = NOP;
+    int emitted = NOP;  // a CFG op number: NOP or the tagged Move.Retire
     if (prod != NULL && prod->loc.lineno == src->loc.lineno &&
         prod->except == src->except && only_makes_value(t->cfg, prod))
     {
@@ -1531,11 +1531,11 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
         RETURN_IF_ERROR(retire_also(t, retire, v));
     }
     else {
-        handler = ROP_SELECT_Move_retire;
+        emitted = ROP_SELECT_Move_retire;
     }
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &v,
-                                  handler == NOP ? 0 : 1, NULL, 0, &op));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, emitted, &v,
+                                  emitted == NOP ? 0 : 1, NULL, 0, &op));
     if (dead != NULL) {
         // The source-only op stands for both, with the producer's span
         op->loc = dead->loc;
@@ -1563,7 +1563,7 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
     if (!(src->oparg & 1)) {
         int dst;
         RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-        RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GetAttr_Generic,
+        RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_GetAttr_Generic,
                                       &obj, 1, &dst, 1, &op));
         op->oparg = name;
         RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
@@ -1572,7 +1572,7 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
     int defs[2];
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GetMethod_Generic,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_GetMethod_Generic,
                                   &obj, 1, defs, 2, &op));
     op->oparg = name;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
@@ -1590,7 +1590,7 @@ rule_load_global(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GlobalRead_Generic,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_GlobalRead_Generic,
                                   NULL, 0, &dst, 1, &op));
     op->oparg = src->oparg >> 1;
     RETURN_IF_ERROR(_PyRegTr_Push(t, dst));
@@ -1605,40 +1605,56 @@ rule_load_global(_PyRegTr *t, const _PyRegOp *src)
 
 /* BINARY_OP.  The selector routes to a family; this is the one place that
  * does.  Addition is the Add family (Python/register_ops/add.rop) and
- * subscription the GetItem family (items.rop): the register instruction is
- * the family's Generic arm, with the operands in their declared order (x and
- * y, or obj and key) in and dst out.  The word starts on that arm, which
- * installs the arm the operands call for.  The other operations are
- * unported (-1). */
-static int
-binary_op_handler(int oparg)
-{
-    switch (oparg) {
-        case NB_ADD:
-            return ROP_HANDLER_Add_Generic;
-        case NB_SUBSCR:
-            return ROP_HANDLER_GetItem_Generic;
-        default:
-            return -1;
-    }
-}
-
+ * subscription the GetItem family (items.rop); every other operation is the
+ * Binary family (numeric.rop), which takes the selector as its op operand.
+ * The register instruction is the family's Generic arm, with the operands in
+ * their declared order (x and y, or obj and key) in and dst out.  The word
+ * starts on that arm, which installs the arm the operands call for. */
 static int
 rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
 {
-    int handler = binary_op_handler(src->oparg);
-    if (handler < 0) {
-        return _PyRegTr_Legacy(t, src);
+    if (src->oparg < 0 || src->oparg > NB_OPARG_LAST) {
+        PyErr_SetString(PyExc_SystemError, "invalid BINARY_OP selector");
+        return ERROR;
     }
+    int handler = src->oparg == NB_ADD ? ROP_OP_Add_Generic
+        : src->oparg == NB_SUBSCR ? ROP_OP_GetItem_Generic
+        : ROP_OP_Binary_Generic;
     if (t->sp < 2) {
         return stack_underflow(src);
     }
     int dst;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler,
-                                  &t->stack[t->sp - 2], 2, &dst, 1, NULL));
+                                  &t->stack[t->sp - 2], 2, &dst, 1, &op));
+    op->oparg = handler == ROP_OP_Binary_Generic ? src->oparg : 0;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
     return _PyRegTr_Push(t, dst);
+}
+
+/* UNARY_NEGATIVE and UNARY_INVERT, and the intrinsic that is unary plus,
+ * are the Unary family (numeric.rop); the operation is its op operand. */
+static int
+emit_unary(_PyRegTr *t, const _PyRegOp *src, int op_kind)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_Unary_Generic,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = op_kind;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_unary(_PyRegTr *t, const _PyRegOp *src)
+{
+    return emit_unary(t, src, src->opcode == UNARY_NEGATIVE ? NEGATIVE : INVERT);
 }
 
 /* The item and slice stack ops (Python/register_ops/items.rop).  The uses
@@ -1671,7 +1687,7 @@ static int
 rule_store_subscr(_PyRegTr *t, const _PyRegOp *src)
 {
     static const int depth[] = {2, 1, 3};
-    return item_op(t, src, ROP_HANDLER_SetItem_Generic, depth, 3, 0);
+    return item_op(t, src, ROP_OP_SetItem_Generic, depth, 3, 0);
 }
 
 /* DELETE_SUBSCR: container, key (top) */
@@ -1679,7 +1695,7 @@ static int
 rule_delete_subscr(_PyRegTr *t, const _PyRegOp *src)
 {
     static const int depth[] = {2, 1};
-    return item_op(t, src, ROP_HANDLER_DelItem_Generic, depth, 2, 0);
+    return item_op(t, src, ROP_OP_DelItem_Generic, depth, 2, 0);
 }
 
 /* BINARY_SLICE: container, start, stop (top) */
@@ -1687,7 +1703,7 @@ static int
 rule_binary_slice(_PyRegTr *t, const _PyRegOp *src)
 {
     static const int depth[] = {3, 2, 1};
-    return item_op(t, src, ROP_HANDLER_SliceRead_Generic, depth, 3, 1);
+    return item_op(t, src, ROP_OP_SliceRead_Generic, depth, 3, 1);
 }
 
 /* STORE_SLICE: value, container, start, stop (top) */
@@ -1695,7 +1711,7 @@ static int
 rule_store_slice(_PyRegTr *t, const _PyRegOp *src)
 {
     static const int depth[] = {3, 2, 1, 4};
-    return item_op(t, src, ROP_HANDLER_SliceWrite_Generic, depth, 4, 0);
+    return item_op(t, src, ROP_OP_SliceWrite_Generic, depth, 4, 0);
 }
 
 /* BUILD_SLICE: two or three parts, as the span of the family */
@@ -1708,7 +1724,7 @@ rule_build_slice(_PyRegTr *t, const _PyRegOp *src)
     }
     int dst;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_BuildSlice_Generic,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_BuildSlice_Generic,
                                   &t->stack[t->sp - n], n, &dst, 1, NULL));
     RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
     return _PyRegTr_Push(t, dst);
@@ -1727,7 +1743,7 @@ rule_truth(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Truth_Generic,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_Truth_Generic,
                                   &t->stack[t->sp - 1], 1, &dst, 1, &op));
     op->oparg = src->opcode == UNARY_NOT;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
@@ -1749,17 +1765,17 @@ rule_test(_PyRegTr *t, const _PyRegOp *src)
     int handler, imm;
     switch (src->opcode) {
         case COMPARE_OP:
-            handler = ROP_HANDLER_Compare_Generic;
+            handler = ROP_OP_Compare_Generic;
             imm = ROP_PACK_Compare_relation(src->oparg >> 5)
                   | ROP_PACK_Compare_result(src->oparg & 16 ? ROP_RESULT_TRUTH
                                                              : ROP_RESULT_RICH);
             break;
         case IS_OP:
-            handler = ROP_HANDLER_Identity_Test, imm = src->oparg;
+            handler = ROP_OP_Identity_Test, imm = src->oparg;
             break;
         default:
             assert(src->opcode == CONTAINS_OP);
-            handler = ROP_HANDLER_Contains_Generic, imm = src->oparg;
+            handler = ROP_OP_Contains_Generic, imm = src->oparg;
             break;
     }
     int dst;
@@ -1784,17 +1800,17 @@ rule_branch(_PyRegTr *t, const _PyRegOp *src)
     int handler, imm;
     switch (src->opcode) {
         case POP_JUMP_IF_FALSE:
-            handler = ROP_HANDLER_BranchTruth_Generic, imm = BRANCH_IF_FALSE;
+            handler = ROP_OP_BranchTruth_Generic, imm = BRANCH_IF_FALSE;
             break;
         case POP_JUMP_IF_TRUE:
-            handler = ROP_HANDLER_BranchTruth_Generic, imm = BRANCH_IF_TRUE;
+            handler = ROP_OP_BranchTruth_Generic, imm = BRANCH_IF_TRUE;
             break;
         case POP_JUMP_IF_NONE:
-            handler = ROP_HANDLER_BranchNone_Test, imm = 1;
+            handler = ROP_OP_BranchNone_Test, imm = 1;
             break;
         default:
             assert(src->opcode == POP_JUMP_IF_NOT_NONE);
-            handler = ROP_HANDLER_BranchNone_Test, imm = 0;
+            handler = ROP_OP_BranchNone_Test, imm = 0;
             break;
     }
     RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
@@ -1829,7 +1845,7 @@ rule_get_iter(_PyRegTr *t, const _PyRegOp *src)
     RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == GET_ITER);
-    op->opcode = ROP_HANDLER_IterOpen_Generic;
+    op->opcode = ROP_OP_IterOpen_Generic;
     op->oparg = mode;
     return SUCCESS;
 }
@@ -1840,7 +1856,7 @@ rule_for_iter(_PyRegTr *t, const _PyRegOp *src)
     RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == FOR_ITER);
-    op->opcode = ROP_HANDLER_ForIter_Generic;
+    op->opcode = ROP_OP_ForIter_Generic;
     return SUCCESS;
 }
 
@@ -1850,7 +1866,7 @@ rule_pop_iter(_PyRegTr *t, const _PyRegOp *src)
     RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == POP_ITER);
-    op->opcode = ROP_HANDLER_IterClose_Retire;
+    op->opcode = ROP_OP_IterClose_Retire;
     return SUCCESS;
 }
 
@@ -1863,7 +1879,7 @@ rule_send(_PyRegTr *t, const _PyRegOp *src)
     RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == SEND);
-    op->opcode = ROP_HANDLER_Send_Generic;
+    op->opcode = ROP_OP_Send_Generic;
     return SUCCESS;
 }
 
@@ -1878,6 +1894,23 @@ rule_jump(_PyRegTr *t, const _PyRegOp *src)
     int jit = _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF
                   ? ROP_SELECT_JIT_ON : ROP_SELECT_JIT_OFF;
     int handler = _PyRop_SelectJump(interrupt, jit);
+    assert(handler >= 0);
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == src->opcode);
+    op->opcode = handler;
+    return SUCCESS;
+}
+
+/* RESUME: the Resume family (Python/register_ops/resume.rop).  With the
+ * baseline JIT on, the gate is also the code's warm-up event: the arm that
+ * the JIT's setting selects. */
+static int
+rule_resume(_PyRegTr *t, const _PyRegOp *src)
+{
+    int jit = _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF
+                  ? ROP_SELECT_JIT_ON : ROP_SELECT_JIT_OFF;
+    int handler = _PyRop_SelectResume(jit);
     assert(handler >= 0);
     RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
@@ -1984,7 +2017,7 @@ rule_load_fast_and_clear(_PyRegTr *t, const _PyRegOp *src)
     int dst, local = src->oparg;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_SaveLocal_Take,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_SaveLocal_Take,
                                   &local, 1, &dst, 1, &op));
     op->oparg = local;
     t->maybe[dst - _PyReg_FRESH0(t->cfg)] = 1;
@@ -1996,7 +2029,7 @@ rule_delete_fast(_PyRegTr *t, const _PyRegOp *src)
 {
     int local = src->oparg;
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_LocalDelete_Checked,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_LocalDelete_Checked,
                                   NULL, 0, &local, 1, &op));
     op->oparg = local;
     op->dst = local;
@@ -2013,7 +2046,7 @@ rule_make_cell(_PyRegTr *t, const _PyRegOp *src)
 {
     int local = src->oparg;
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellMake_Wrap,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_CellMake_Wrap,
                                   NULL, 0, &local, 1, &op));
     op->oparg = local;
     op->dst = local;
@@ -2027,7 +2060,7 @@ rule_load_deref(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellRead_Get,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_CellRead_Get,
                                   NULL, 0, &dst, 1, &op));
     op->oparg = src->oparg;
     return _PyRegTr_Push(t, dst);
@@ -2043,7 +2076,7 @@ rule_load_from_dict_or_deref(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellMapRead_Lookup,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_CellMapRead_Lookup,
                                   &t->stack[t->sp - 1], 1, &dst, 1, &op));
     op->oparg = src->oparg;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
@@ -2058,7 +2091,7 @@ rule_store_deref(_PyRegTr *t, const _PyRegOp *src)
         return stack_underflow(src);
     }
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellStore_Set,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_CellStore_Set,
                                   &t->stack[t->sp - 1], 1, NULL, 0, &op));
     op->oparg = src->oparg;
     return _PyRegTr_Pop(t, 1, NULL);
@@ -2068,7 +2101,7 @@ static int
 rule_delete_deref(_PyRegTr *t, const _PyRegOp *src)
 {
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_CellDelete_Unbind,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_CellDelete_Unbind,
                                   NULL, 0, NULL, 0, &op));
     op->oparg = src->oparg;
     return SUCCESS;
@@ -2126,11 +2159,77 @@ rule_call(_PyRegTr *t, const _PyRegOp *src)
         return stack_underflow(src);
     }
     int dst;
+    // The call that follows a special-method lookup (`with` and `async
+    // with`) does not poll when it returns: the body runs before a pending
+    // signal or collection does.  Source-only ops between them (an elided
+    // PUSH_NULL) do not count.
+    int after_lookup = 0;
+    for (int i = t->nops - 1; i >= t->block_op; i--) {
+        const _PyRegOp *prev = &t->ops[i];
+        if (prev->opcode == NOP && prev->nread == 0 && prev->nout == 0) {
+            continue;
+        }
+        after_lookup = prev->opcode == ROP_OP_SpecialLookup_Generic;
+        break;
+    }
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Call_Generic,
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_Call_Generic,
+                                  &t->stack[t->sp - nuses], nuses, &dst, 1,
+                                  &op));
+    if (after_lookup) {
+        op->flags |= _PyReg_CALL_UNINTERRUPTED;
+    }
+    t->sp -= nuses;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* The pseudo op that PrepareKwargs puts before a read of a lazy **kwargs
+ * local is MaterializeKwargs: the home it may write is the local's. */
+static int
+rule_materialize_kwargs(_PyRegTr *t, const _PyRegOp *src)
+{
+    int local = src->oparg;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_MaterializeKwargs_Pending,
+                                  NULL, 0, &local, 1, &op));
+    op->oparg = local;
+    op->dst = local;
+    return SUCCESS;
+}
+
+/* CALL_KW is CallKw (Python/register_ops/calls.rop): fn, self, the arguments
+ * and the constant tuple of the names (which pass f0 reads off the load
+ * before it) in; dst out. */
+static int
+rule_call_kw(_PyRegTr *t, const _PyRegOp *src)
+{
+    int nuses = 3 + src->oparg;
+    if (nuses > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_CallKw_Generic,
                                   &t->stack[t->sp - nuses], nuses, &dst, 1,
                                   NULL));
     t->sp -= nuses;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* CALL_FUNCTION_EX is CallEx: fn, the reserved NULL, the positional
+ * arguments and the kwargs (virtual NULL for none) in; dst out. */
+static int
+rule_call_function_ex(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (4 > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_CallEx_Generic,
+                                  &t->stack[t->sp - 4], 4, &dst, 1, NULL));
+    t->sp -= 4;
     return _PyRegTr_Push(t, dst);
 }
 
@@ -2146,7 +2245,7 @@ rule_make_function(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Function_Make,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_Function_Make,
                                   &t->stack[t->sp - 1], 1, &dst, 1, &op));
     // The attributes of the SET_FUNCTION_ATTRIBUTEs that follow join the word
     op->oparg = 0;
@@ -2185,7 +2284,7 @@ rule_set_function_attribute(_PyRegTr *t, const _PyRegOp *src)
         make = op;
         break;
     }
-    if (make == NULL || make->opcode != ROP_HANDLER_Function_Make ||
+    if (make == NULL || make->opcode != ROP_OP_Function_Make ||
         _PyReg_OUT(cfg, make)[0] != func || (make->oparg & flag))
     {
         PyErr_Format(PyExc_SystemError,
@@ -2215,9 +2314,9 @@ rule_set_function_attribute(_PyRegTr *t, const _PyRegOp *src)
 
 /* CALL_INTRINSIC_1 is the Intrinsic family and CALL_INTRINSIC_2 IntrinsicPair
  * (functions.rop).  The compiler's number is the member of IntrinsicId: n - 1
- * for the unary table, n + 11 for the binary one, whose escapes (comparisons,
- * GETATTR, SETATTR) follow its seven functions.  The number also picks the
- * arm. */
+ * for the unary table below unary plus, n - 2 above it, and n + 10 for the
+ * binary one, whose escapes (comparisons, GETATTR, SETATTR) follow its seven
+ * functions.  The number also picks the arm.  Unary plus is the Unary family. */
 static int
 rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
 {
@@ -2230,7 +2329,10 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
             PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
             return ERROR;
         }
-        id = n - 1;
+        if (n == INTRINSIC_UNARY_POSITIVE) {
+            return emit_unary(t, src, POSITIVE);
+        }
+        id = n < INTRINSIC_UNARY_POSITIVE ? n - 1 : n - 2;
         handler = _PyRop_SelectIntrinsic(
             n == INTRINSIC_IMPORT_STAR ? ROP_SELECT_IMPORT_STAR
             : n == INTRINSIC_STOPITERATION_ERROR ? ROP_SELECT_STOPITERATION
@@ -2243,7 +2345,7 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
         }
         // The ids of IntrinsicId follow the unary ones in order; the
         // numbers 8 to 21 are unused
-        id = n < INTRINSIC_GETATTR ? n + 11 : n - 3;
+        id = n < INTRINSIC_GETATTR ? n + 10 : n - 4;
         handler = _PyRop_SelectIntrinsicPair(
             n < INTRINSIC_GETATTR ? ROP_SELECT_BINARY : ROP_SELECT_ATTR);
     }
@@ -2272,7 +2374,7 @@ rule_get_awaitable(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Awaitable_Await,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_Awaitable_Await,
                                   &t->stack[t->sp - 1], 1, &dst, 1, &op));
     op->oparg = src->oparg;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
@@ -2289,7 +2391,7 @@ rule_get_aiter(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_AsyncIterOpen_Open,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_AsyncIterOpen_Open,
                                   &t->stack[t->sp - 1], 1, &dst, 1, &op));
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
     return _PyRegTr_Push(t, dst);
@@ -2306,7 +2408,7 @@ rule_get_anext(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_AsyncIterNext_Next,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_AsyncIterNext_Next,
                                   &t->stack[t->sp - 1], 1, &dst, 1, &op));
     return _PyRegTr_Push(t, dst);
 }
@@ -2324,8 +2426,8 @@ rule_yield_value(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src,
-                                  delegated ? ROP_HANDLER_YieldFrom_Delegated
-                                            : ROP_HANDLER_Yield_Ordinary,
+                                  delegated ? ROP_OP_YieldFrom_Delegated
+                                            : ROP_OP_Yield_Ordinary,
                                   &t->stack[t->sp - 1], 1, &dst, 1, NULL));
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
     return _PyRegTr_Push(t, dst);
@@ -2394,7 +2496,7 @@ rule_load_from_dict_or_globals(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_NamespaceReadFrom_Mapping,
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_NamespaceReadFrom_Mapping,
                                   &t->stack[t->sp - 1], 1, &dst, 1, &op));
     op->oparg = src->oparg;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
@@ -2432,8 +2534,83 @@ rule_store_global(_PyRegTr *t, const _PyRegOp *src)
 static int
 rule_setup_annotations(_PyRegTr *t, const _PyRegOp *src)
 {
-    return _PyRegTr_Emit(t, src, ROP_HANDLER_SetupAnnotations_Setup,
+    return _PyRegTr_Emit(t, src, ROP_OP_SetupAnnotations_Setup,
                          NULL, 0, NULL, 0, NULL);
+}
+
+/* STORE_ATTR (Python/register_ops/attrs.rop).  The word starts on
+ * AttrWrite.Generic with the owner and the value in the family's order.  The
+ * compiler writes `del o.x` as PUSH_NULL and the store: the elided
+ * PUSH_NULL's register holds NULL, which the arm's optional value reads as
+ * absent, so the same word deletes. */
+static int
+rule_store_attr(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int uses[2] = {t->stack[t->sp - 1], t->stack[t->sp - 2]};
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_AttrWrite_Generic,
+                                  uses, 2, NULL, 0, &op));
+    op->oparg = src->oparg;
+    return _PyRegTr_Pop(t, 2, NULL);
+}
+
+/* LOAD_SUPER_ATTR is SuperAttr (`super()`) or SuperAttrExplicit
+ * (`super(C, self)`): the loaded super, the class and the receiver in, the
+ * attribute out.  The oparg's bit 1 says the class was written, the rest is
+ * the name.  Its bit 0 asks for a method: SuperMethod or SuperMethodExplicit
+ * then define the callable and the self the call takes, which is absent when
+ * the lookup bound the result. */
+static int
+rule_load_super_attr(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 3) {
+        return stack_underflow(src);
+    }
+    bool method = src->oparg & 1;
+    bool explicit = src->oparg & 2;
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    if (method) {
+        RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    }
+    int handler = method
+        ? (explicit ? ROP_OP_SuperMethodExplicit_Generic
+                    : ROP_OP_SuperMethod_Generic)
+        : (explicit ? ROP_OP_SuperAttrExplicit_Generic
+                    : ROP_OP_SuperAttr_Generic);
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 3], 3,
+                                  defs, method ? 2 : 1, &op));
+    op->oparg = src->oparg >> 2;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 3, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    if (method) {
+        RETURN_IF_ERROR(_PyRegTr_Push(t, defs[1]));
+    }
+    return SUCCESS;
+}
+
+/* LOAD_SPECIAL: the method and its self, as the call that follows reads
+ * them */
+static int
+rule_load_special(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_SpecialLookup_Generic,
+                                  &t->stack[t->sp - 1], 1, defs, 2, &op));
+    op->oparg = src->oparg;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    return _PyRegTr_Push(t, defs[1]);
 }
 
 /* IMPORT_NAME: level and fromlist are the two uses; the oparg's low bits
@@ -2468,9 +2645,9 @@ rule_import_from(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_ImportFrom_module_kept,
-                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
-    op->npop = 0;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, ROP_SELECT_ImportFrom_module_kept,
+                                        &t->stack[t->sp - 1], 1, 0, &dst, 1,
+                                        &op));
     op->oparg = src->oparg;
     return _PyRegTr_Push(t, dst);
 }
@@ -2504,6 +2681,44 @@ rule_build(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* UNPACK_SEQUENCE and UNPACK_EX: the Unpack and UnpackStar families
+ * (Python/register_ops/displays.rop).  The one input is the source.  The
+ * outputs are the registers the op pushes, bottom first, as the allocator
+ * places them: the first target is on top, so it is the last output.  The
+ * row makes its owners in that order. */
+static int
+rule_unpack(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int star = src->opcode == UNPACK_EX;
+    int n = star ? (src->oparg & 0xFF) + 1 + (src->oparg >> 8) : src->oparg;
+    int *outs = n ? PyMem_Malloc(n * sizeof(int)) : NULL;
+    if (n && outs == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    int res = SUCCESS;
+    for (int k = 0; k < n && res == SUCCESS; k++) {
+        res = _PyRegTr_Fresh(t, &outs[k]);
+    }
+    if (res == SUCCESS) {
+        res = _PyRegTr_Emit(t, src,
+                            star ? ROP_OP_UnpackStar_Iterable
+                                 : ROP_OP_Unpack_Generic,
+                            &t->stack[t->sp - 1], 1, outs, n, NULL);
+    }
+    if (res == SUCCESS) {
+        res = _PyRegTr_Pop(t, 1, NULL);
+    }
+    for (int k = 0; k < n && res == SUCCESS; k++) {
+        res = _PyRegTr_Push(t, outs[k]);
+    }
+    PyMem_Free(outs);
+    return res;
+}
+
 /* LIST_APPEND, SET_ADD, MAP_ADD, LIST_EXTEND, SET_UPDATE, DICT_UPDATE and
  * DICT_MERGE: the container lies oparg positions below the top operand (the
  * callable of DICT_MERGE three below the container) and stays; the top
@@ -2516,12 +2731,12 @@ rule_insert(_PyRegTr *t, const _PyRegOp *src)
     switch (src->opcode) {
         case LIST_APPEND: handler = ROP_SELECT_AddElement_append; popped = 1; break;
         case SET_ADD: handler = ROP_SELECT_AddElement_add; popped = 1; break;
-        case MAP_ADD: handler = ROP_HANDLER_AddEntry_Put; popped = 2; break;
+        case MAP_ADD: handler = ROP_OP_AddEntry_Put; popped = 2; break;
         case LIST_EXTEND: handler = ROP_SELECT_UpdateContainer_extend; popped = 1; break;
         case SET_UPDATE: handler = ROP_SELECT_UpdateContainer_union; popped = 1; break;
         case DICT_UPDATE: handler = ROP_SELECT_UpdateContainer_overlay; popped = 1; break;
         default:
-            handler = ROP_HANDLER_MergeKeywords_Merge;
+            handler = ROP_OP_MergeKeywords_Merge;
             popped = 1;
             extra = 3;
             break;
@@ -2539,15 +2754,307 @@ rule_insert(_PyRegTr *t, const _PyRegOp *src)
     for (int k = 0; k < popped; k++) {
         uses[n++] = t->stack[t->sp - popped + k];
     }
-    _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, uses, n, NULL, 0, &op));
-    op->npop = (int16_t)popped;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, handler, uses, n, popped, NULL,
+                                        0, NULL));
     return _PyRegTr_Pop(t, popped, NULL);
+}
+
+/* The text families (Python/register_ops/text.rop).  BUILD_STRING,
+ * BUILD_INTERPOLATION and BUILD_TEMPLATE are BuildText: the parts are the
+ * top identities, the stack op's operand is the word's flags (a conversion
+ * and a format bit for an interpolation, which says how many parts), and
+ * the arm is the kind of text. */
+static int
+rule_build_text(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n, handler, flags = 0;
+    switch (src->opcode) {
+        case BUILD_STRING:
+            n = src->oparg;
+            handler = ROP_SELECT_BuildText_join;
+            break;
+        case BUILD_INTERPOLATION:
+            n = 2 + (src->oparg & 1);
+            handler = ROP_SELECT_BuildText_interpolation;
+            flags = src->oparg;
+            break;
+        default:
+            assert(src->opcode == BUILD_TEMPLATE);
+            n = 2;
+            handler = ROP_SELECT_BuildText_template;
+            break;
+    }
+    if (n > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - n], n,
+                                  &dst, 1, &op));
+    op->oparg = flags;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* CONVERT_VALUE: one use; its operand is FVC_STR, FVC_REPR or FVC_ASCII,
+ * the family's kind counted from 0 */
+static int
+rule_convert_value(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    assert(src->oparg >= FVC_STR && src->oparg <= FVC_ASCII);
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_Convert_Text,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = src->oparg - FVC_STR;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* FORMAT_SIMPLE has the value as its one use, FORMAT_WITH_SPEC the value
+ * and then the specification */
+static int
+rule_format(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->opcode == FORMAT_WITH_SPEC ? 2 : 1;
+    if (n > t->sp) {
+        return stack_underflow(src);
+    }
+    int handler = n == 2 ? ROP_OP_FormatSpec_Value : ROP_OP_Format_Simple;
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - n], n,
+                                  &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* GET_LEN, MATCH_MAPPING, MATCH_SEQUENCE, MATCH_KEYS and MATCH_CLASS: the
+ * word reads the top nuses stack positions and leaves them, except that
+ * MATCH_CLASS spends them, and defines the value that the stack op pushed.
+ * imm is the word's immediate. */
+static int
+peek_rule(_PyRegTr *t, const _PyRegOp *src, int handler, int nuses, int npop,
+          int imm)
+{
+    if (t->sp < nuses) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    // What the word leaves on the stack it only reads
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, handler,
+                                        &t->stack[t->sp - nuses], nuses, npop,
+                                        &dst, 1, &op));
+    op->oparg = imm;
+    if (npop > 0) {
+        RETURN_IF_ERROR(_PyRegTr_Pop(t, npop, NULL));
+    }
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_get_len(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_OP_Length_Size, 1, 0, 0);
+}
+
+static int
+rule_match_flag(_PyRegTr *t, const _PyRegOp *src)
+{
+    // The family's kind: Mapping is 0, Sequence 1
+    int kind = src->opcode == MATCH_MAPPING ? 0 : 1;
+    return peek_rule(t, src, ROP_OP_Pattern_Flag, 1, 0, kind);
+}
+
+static int
+rule_match_keys(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_OP_PatternKeys_Match, 2, 0, 0);
+}
+
+static int
+rule_match_class(_PyRegTr *t, const _PyRegOp *src)
+{
+    return peek_rule(t, src, ROP_OP_PatternClass_Match, 3, 3, src->oparg);
+}
+
+/* The exception stack ops (Python/register_ops/exceptions.rop) */
+
+/* A raise that ends its block (RAISE_VARARGS, RERAISE).  The op reads the
+ * identities at the stack positions pos[0..nuses) and takes the last ntaken
+ * of them; the stack op pops nstack positions.  The values it leaves on the
+ * stack are the unwinder's, and the op names them as implicit reads, so that
+ * allocation keeps their homes until then, less those whose one owner a
+ * copy already spent (collapse_unwound()).  The caller's positions name the
+ * stack as it is on entry. */
+static int
+emit_terminal_raise(_PyRegTr *t, const _PyRegOp *src, int handler,
+                    const int *pos, int nuses, int ntaken, int nstack)
+{
+    _PyRegCfg *cfg = t->cfg;
+    int depth = t->sp;
+    // Every handler finds its parameters before the op can raise: renamed
+    // while the region keeps stack order, else by the edge's recipe
+    if (src->except >= 0 && !t->permuted) {
+        int hbase = Py_MIN(handler_base(cfg, src->except), depth);
+        for (int k = 0; k < hbase; k++) {
+            (void)rename_param(t, k);
+        }
+    }
+    t->nrec = 0;
+    if (src->except >= 0) {
+        RETURN_IF_ERROR(handler_recipe(t, handler_base(cfg, src->except)));
+    }
+    int nrec = t->nrec;
+    int *left = PyMem_Malloc(Py_MAX(depth, 1) * sizeof(int));
+    if (left == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    int nleft = 0;
+    for (int k = 0; k < depth; k++) {
+        int used = 0;
+        for (int q = 0; q < nuses; q++) {
+            used |= pos[q] == k;
+        }
+        if (used || (k < IR_MAX_SLOTS && collapse_unwound(t, src, k))) {
+            continue;
+        }
+        left[nleft++] = t->stack[k];
+    }
+    _PyRegOp *op;
+    int err = new_op(t, src, nuses + nleft + nrec, 0, &op);
+    if (err == SUCCESS && nrec) {
+        err = _PyRegCfg_AddOperands(cfg, nrec, &op->recipe);
+    }
+    if (err == SUCCESS) {
+        op->opcode = handler;
+        int *in = _PyReg_IN(cfg, op);
+        for (int q = 0; q < nuses; q++) {
+            in[q] = t->stack[pos[q]];
+        }
+        memcpy(in + nuses, left, nleft * sizeof(int));
+        op->nread = (int16_t)nuses;
+        op->npop = (int16_t)ntaken;
+        op->nimplicit = (int16_t)nleft;
+        note_op(t, op);
+        for (int q = 0; q < nrec; q++) {
+            in[nuses + nleft + q] = t->rec[2 * q];
+            cfg->operands[op->recipe + q] = t->rec[2 * q + 1];
+        }
+        op->nimplicit = (int16_t)(nleft + nrec);
+        op->nrecipe = (int16_t)nrec;
+        t->sp -= nstack;
+    }
+    PyMem_Free(left);
+    return err;
+}
+
+/* RAISE_VARARGS: the exception and the cause, if any, are the span, all
+ * taken */
+static int
+rule_raise_varargs(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->oparg;
+    if (n > 2 || n > t->sp) {
+        return stack_underflow(src);
+    }
+    int pos[2] = {t->sp - n, t->sp - n + 1};
+    return emit_terminal_raise(t, src, ROP_OP_Raise_Throw, pos, n, n, n);
+}
+
+/* RERAISE n: the exception (top) is taken.  For n > 0 the origin is the
+ * identity n below it, which the unwinder wrote; for n = 2 the value between
+ * them is left to the unwinder. */
+static int
+rule_reraise(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->oparg;
+    if (n > 2 || n + 1 > t->sp) {
+        return stack_underflow(src);
+    }
+    int top = t->sp - 1;
+    int pos[2] = {top - n, top};
+    int handler = n > 0 ? ROP_SELECT_Reraise_present : ROP_SELECT_Reraise_absent;
+    return emit_terminal_raise(t, src, handler, n > 0 ? pos : pos + 1,
+                               n > 0 ? 2 : 1, 1, n + 1);
+}
+
+/* PUSH_EXC_INFO: the exception becomes the handled one.  The previous
+ * handled exception is pushed under the handler's exception. */
+static int
+rule_push_exc_info(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_ExceptEnter_Install,
+                                  &t->stack[t->sp - 1], 1, defs, 2, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    return _PyRegTr_Push(t, defs[1]);
+}
+
+static int
+rule_pop_except(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_ExceptLeave_Restore,
+                                  &t->stack[t->sp - 1], 1, NULL, 0, NULL));
+    return _PyRegTr_Pop(t, 1, NULL);
+}
+
+/* CHECK_EXC_MATCH: the exception (below) stays; the pattern (top) goes */
+static int
+rule_check_exc_match(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_ExceptMatch_Match,
+                                  &t->stack[t->sp - 2], 2, &dst, 1, &op));
+    op->npop = 1;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* CHECK_EG_MATCH: both operands go; the rest is pushed, then the match */
+static int
+rule_check_eg_match(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int defs[2];  // the rest, then the match: the stack order
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_ExceptGroupMatch_Split,
+                                  &t->stack[t->sp - 2], 2, defs, 2, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    return _PyRegTr_Push(t, defs[1]);
 }
 
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
+    [UNARY_NEGATIVE] = rule_unary,
+    [UNARY_INVERT] = rule_unary,
     [COMPARE_OP] = rule_test,
     [IS_OP] = rule_test,
     [CONTAINS_OP] = rule_test,
@@ -2561,10 +3068,14 @@ static const _PyRegRule rules[256] = {
     [FOR_ITER] = rule_for_iter,
     [POP_ITER] = rule_pop_iter,
     [SEND] = rule_send,
+    [RESUME] = rule_resume,
     [JUMP_FORWARD] = rule_jump,
     [JUMP_BACKWARD] = rule_jump,
     [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,
     [CALL] = rule_call,
+    [CALL_KW] = rule_call_kw,
+    [MATERIALIZE_KWARGS] = rule_materialize_kwargs,
+    [CALL_FUNCTION_EX] = rule_call_function_ex,
     [COPY] = rule_copy,
     [DELETE_FAST] = rule_delete_fast,
     [MAKE_CELL] = rule_make_cell,
@@ -2612,10 +3123,15 @@ static const _PyRegRule rules[256] = {
     [SETUP_ANNOTATIONS] = rule_setup_annotations,
     [IMPORT_NAME] = rule_import_name,
     [IMPORT_FROM] = rule_import_from,
+    [STORE_ATTR] = rule_store_attr,
+    [LOAD_SUPER_ATTR] = rule_load_super_attr,
+    [LOAD_SPECIAL] = rule_load_special,
     [BUILD_TUPLE] = rule_build,
     [BUILD_LIST] = rule_build,
     [BUILD_SET] = rule_build,
     [BUILD_MAP] = rule_build,
+    [UNPACK_SEQUENCE] = rule_unpack,
+    [UNPACK_EX] = rule_unpack,
     [LIST_APPEND] = rule_insert,
     [SET_ADD] = rule_insert,
     [MAP_ADD] = rule_insert,
@@ -2624,6 +3140,23 @@ static const _PyRegRule rules[256] = {
     [DICT_UPDATE] = rule_insert,
     [DICT_MERGE] = rule_insert,
     [LOAD_GLOBAL] = rule_load_global,
+    [BUILD_STRING] = rule_build_text,
+    [BUILD_INTERPOLATION] = rule_build_text,
+    [BUILD_TEMPLATE] = rule_build_text,
+    [CONVERT_VALUE] = rule_convert_value,
+    [FORMAT_SIMPLE] = rule_format,
+    [FORMAT_WITH_SPEC] = rule_format,
+    [GET_LEN] = rule_get_len,
+    [MATCH_MAPPING] = rule_match_flag,
+    [MATCH_SEQUENCE] = rule_match_flag,
+    [MATCH_KEYS] = rule_match_keys,
+    [MATCH_CLASS] = rule_match_class,
+    [RAISE_VARARGS] = rule_raise_varargs,
+    [RERAISE] = rule_reraise,
+    [PUSH_EXC_INFO] = rule_push_exc_info,
+    [POP_EXCEPT] = rule_pop_except,
+    [CHECK_EXC_MATCH] = rule_check_exc_match,
+    [CHECK_EG_MATCH] = rule_check_eg_match,
 };
 
 /* An edge binds the parameters of the positions below depth: one that
@@ -2759,17 +3292,17 @@ translate_test_branch(_PyRegTr *t, const _PyRegOp *cmp, const _PyRegOp *jump)
     int handler, test;
     switch (cmp->opcode) {
         case COMPARE_OP:
-            handler = ROP_HANDLER_TestBranch_Generic;
+            handler = ROP_OP_TestBranch_Generic;
             test = ROP_TEST_LT + (cmp->oparg >> 5);
             break;
         case IS_OP:
-            handler = ROP_HANDLER_TestBranch_Identity;
+            handler = ROP_OP_TestBranch_Identity;
             test = ROP_TEST_IDENTITY;
             sense ^= cmp->oparg;
             break;
         default:
             assert(cmp->opcode == CONTAINS_OP);
-            handler = ROP_HANDLER_TestBranch_Generic;
+            handler = ROP_OP_TestBranch_Generic;
             test = ROP_TEST_CONTAINS;
             sense ^= cmp->oparg;
             break;
@@ -3107,7 +3640,7 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         slots->in[k] = 0;
     }
     slots->out[1] = 0;
-    if (op->opcode >= IR_NUM_OLD_HANDLERS && op->nout > 1) {
+    if (ROP_CFG_IS_ARM(op->opcode) && op->nout > 1) {
         // A register family's second output has a DST role of its own
         slots->out[1] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
                     : _PyRegCfg_Slot(cfg, out[1]);
@@ -3118,10 +3651,6 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         int first = op->nread - fmt->ninputs;
         for (int k = 0; k < fmt->ninputs && k < 4; k++) {
             slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
-        }
-        if (fmt->flags & _PyIR_UNPACKS) {
-            slots->out[0] = op->dst >= 0 ? op->dst : IR_NO_DST;
-            return;
         }
         slots->out[0] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
                    : op->dst >= 0 ? op->dst : slots->base + fmt->dst;
@@ -3834,6 +4363,24 @@ reuse_slot(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
     return -1;
 }
 
+/* Whether an output of op from first on is a temporary.  Most ops give the
+ * output at `first` itself; an unpack's targets that stores sent to locals
+ * leave the others (or none) */
+static int
+any_temp_output(const _PyRegCfg *cfg, const _PyRegOp *op, int first)
+{
+    const int *out = _PyReg_OUT(cfg, op);
+    for (int j = first; j < op->nout; j++) {
+        if (out[j] >= cfg->nlocalsplus) {
+            return 1;
+        }
+        if (!_PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg))) {
+            return 0;
+        }
+    }
+    return 0;
+}
+
 static int
 compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
 {
@@ -3913,11 +4460,17 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
     }
     else {
         int through = _PyRegOp_Through(op, fmt);
-        if (through < op->nout && out[through] >= nl) {
+        if (through < op->nout && any_temp_output(cfg, op, through)) {
             int dst;
-            int v0 = out[through];
-            if (_PyReg_IS_CANON(cfg, v0)) {
-                dst = _PyRegCfg_Slot(cfg, v0) - through;
+            // An output that is a parameter has a fixed home, whichever of
+            // the outputs it is: the others follow it
+            int canon = through;
+            while (canon < op->nout - 1 && !(out[canon] >= nl
+                                             && _PyReg_IS_CANON(cfg, out[canon]))) {
+                canon++;
+            }
+            if (out[canon] >= nl && _PyReg_IS_CANON(cfg, out[canon])) {
+                dst = _PyRegCfg_Slot(cfg, out[canon]) - canon;
                 RETURN_IF_ERROR(evict(cfg, o, op, i, dst + through,
                                       dst + op->nout));
                 in = _PyReg_IN(cfg, op);
@@ -3978,7 +4531,10 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
                 }
             }
             for (int j = through; j < op->nout; j++) {
-                RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
+                // An unpack's output that a store sent to a local has no slot
+                if (out[j] >= nl) {
+                    RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
+                }
             }
         }
     }
@@ -4005,8 +4561,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
         cfg->ntemps = Py_MAX(cfg->ntemps, s - nl + 1);
         // A jump whose result a store elimination sent to a local leaves
         // the result's slot NULL where it falls through
-        if ((op->flags & _PyReg_UNPACK_LOCALS)
-            || (op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)
+        if ((op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)
             || ((op->flags & _PyReg_DISCARD) && j == stored)) {
             continue;
         }
@@ -4305,7 +4860,7 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
         }
         const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
         int role = _PyIR_OpargRole(fmt);
-        if (_PyRegOp_WritesLocal(op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
+        if (_PyRegOp_WritesLocal(cfg, op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
                                                 || role == _PyIR_ROLE_LOCAL_CLEAR
                                                 || role == _PyIR_ROLE_LOCAL_MOVE)))
         {
@@ -4574,7 +5129,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                 }
             }
             if (op->dst >= 0
-                && !(fmt->flags & (_PyIR_STORE_DST | _PyIR_UNPACKS))) {
+                && !(fmt->flags & _PyIR_STORE_DST)) {
                 err = verify_error(after, op, "a local dst");
             }
             // A jump gives a temporary where it goes by leaving it in
@@ -4746,7 +5301,7 @@ dump(const _PyRegCfg *cfg, const char *after)
         for (int i = blk->start; i < blk->end; i++) {
             const _PyRegOp *op = &cfg->ops[i];
             const char *name = op->opcode == _PyReg_DEAD ? "(dead)"
-                               : op->opcode >= ROP_FIRST_HANDLER ? "(arm)"
+                               : op->opcode >= ROP_CFG_BASE ? "(arm)"
                                : _PyOpcode_OpName[op->opcode];
             fprintf(stderr, "  %4d %-24s %3d", op->loc.lineno, name, op->oparg);
             const int *out = _PyReg_OUT(cfg, op);
@@ -4854,7 +5409,6 @@ static const struct {
 } passes[] = {
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},
-    {"unpack to locals", _PyRegPass_UnpackLocals},
     {"truth folding", _PyRegPass_TruthFold},
     {"call keyword names", _PyRegPass_KwNames},
     {"null elision", _PyRegPass_ElideNull},

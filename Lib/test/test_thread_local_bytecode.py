@@ -41,8 +41,8 @@ class TLBCTests(unittest.TestCase):
         t.start()
         t.join()
 
-        assert "BINARY_OP_ADD_INT" in all_opnames(get_tlbc(f))
-        assert "BINARY_OP_ADD_INT" not in all_opnames(q.get())
+        assert "Add.Int" in all_opnames(get_tlbc(f))
+        assert "Add.Int" not in all_opnames(q.get())
         """)
         assert_python_ok("-X", "tlbc=1", "-c", code)
 
@@ -76,10 +76,10 @@ class TLBCTests(unittest.TestCase):
         t.start()
         t.join()
 
-        assert "BINARY_OP_ADD_INT" in all_opnames(get_tlbc(f))
+        assert "Add.Int" in all_opnames(get_tlbc(f))
         t_opnames = all_opnames(q.get())
-        assert "BINARY_OP_ADD_INT" not in t_opnames
-        assert "BINARY_OP_ADD_UNICODE" in t_opnames
+        assert "Add.Int" not in t_opnames
+        assert "Add.Text" in t_opnames
         """)
         assert_python_ok("-X", "tlbc=1", "-c", code)
 
@@ -158,7 +158,7 @@ class TLBCTests(unittest.TestCase):
         for _ in range(100):
             f(1, 2)
 
-        assert "BINARY_OP_ADD_INT" not in all_opnames(f)
+        assert "Add.Int" not in all_opnames(f)
         """)
         assert_python_ok("-X", "tlbc=0", "-c", code)
 

@@ -321,7 +321,7 @@ _PyIR_CallNumSlots(_PyIRWord word)
 static inline int
 _PyIR_CallOperandNullable(_PyIRWord word, int k)
 {
-    if (_PyIR_FormatOf(IR_HANDLER(word))->operands == _PyIR_OPERANDS_EX) {
+    if (IR_IS_EX_WORD(word)) {
         return k == 1;
     }
     return k == 0 && _PyIR_CallHasSelf(word);
@@ -352,11 +352,6 @@ _PyIR_CallReadsOperandHome(const _PyIRWord *wp, int home, int *nullable)
 static inline uint32_t
 _PyIR_NullableInputs(_PyIRWord word)
 {
-    /* Deletion is a capability of these actual handlers, not of every
-     * STORE_ATTR specialization. Static deletion sites never specialize. */
-    if (IR_HANDLER(word) == STORE_ATTR) {
-        return 1u;
-    }
     switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
         case CALL:
         case CALL_KW:
@@ -768,10 +763,6 @@ _PyIR_DefinesOf(_PyIRWord word, int arg)
     }
     int through = _PyIR_Extent(fmt->through, arg);
     int writes = _PyIR_Extent(fmt->writes, arg);
-    if (fmt->flags & _PyIR_UNPACKS) {
-        int first = dst == IR_NO_DST ? window + through : dst;
-        return (_PyIRDefines){first, first + writes - through, INT_MIN, INT_MIN};
-    }
     switch (fmt->output_kind) {
         case _PyIR_OUTPUT_REGISTER_DST:
             if (dst >= 0 && dst != IR_NO_DST) {
@@ -916,7 +907,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
                 return;
             }
             if (dst == IR_NO_DST &&
-                !(fmt->flags & (_PyIR_DISCARDS | _PyIR_UNPACKS))) {
+                !(fmt->flags & _PyIR_DISCARDS)) {
                 return;
             }
         }
@@ -1005,7 +996,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
             return;
         case POP_EXCEPT:
             /* It detaches scratch A, the saved exception */
-            if (edge || handler != POP_EXCEPT ||
+            if (edge || handler != ROP_HANDLER_ExceptLeave_Restore ||
                 fmt->roles[0] != _PyIR_ROLE_IN0 ||
                 fmt->roles[1] != _PyIR_ROLE_NONE ||
                 fmt->roles[2] != _PyIR_ROLE_NONE ||

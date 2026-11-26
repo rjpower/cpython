@@ -91,7 +91,15 @@ _PyIR_HandlerName(int handler)
 {
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     return _PyIR_IsOnlyHandler(handler)
-        ? _PyIR_OnlyNames[handler] : _PyOpcode_OpName[handler];
+        ? _PyIR_OnlyNames[handler] : _PyOpcode_OpName[_PyIR_HandlerOpcode[handler]];
+}
+
+int
+_PyIR_OriginOpcode(PyCodeObject *co, int word)
+{
+    assert(word >= 0 && word < (int)_PyCode_IR(co)->nwords);
+    int offset = (int)_PyCode_IR(co)->pcmap[word];
+    return _PyOpcode_Deopt[_PyCode_CODE(co)[offset].op.code];
 }
 
 int
@@ -105,13 +113,10 @@ _PyIR_BaseOpcode(int handler)
         // Part of the instruction before it, as a CACHE is upstream
         return CACHE;
     }
-    if (_PyIR_IsOnlyHandler(handler)) {
-        handler = _PyIR_Formats[handler].shadow;
-        assert(!_PyIR_IsOnlyHandler(handler));
-    }
-    // _PyOpcode_Deopt is sized for the stack ops: a handler id is no index
-    assert(handler < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
-    return _PyOpcode_Deopt[handler];
+    // The shadow of a handler is the stack opcode that it stands for
+    int shadow = _PyIR_Formats[handler].shadow;
+    assert(shadow < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
+    return _PyOpcode_Deopt[shadow];
 }
 
 /* The value of the field at loc of word */
@@ -136,13 +141,6 @@ read_field(_PyIRWord word, int loc)
         default:
             Py_UNREACHABLE();
     }
-}
-
-static inline int
-is_binary_op_handler(int handler)
-{
-    return handler >= _PyIR_BINARY_OP_FIRST
-           && handler <= _PyIR_BINARY_OP_FIRST + NB_SUBSCR - 1;
 }
 
 int
@@ -358,27 +356,6 @@ _PyCode_InstrDiscards(PyCodeObject *co, int i)
 }
 
 int
-_PyCode_InstrUnpackedLocals(PyCodeObject *co, int i)
-{
-    assert(i >= 0 && i < _PyCode_IRSize(co));
-    _PyIRWord word = _PyCode_IRWords(co)[i];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (!(fmt->flags & _PyIR_UNPACKS)) {
-        return 0;
-    }
-    for (int r = 0; r < 4; r++) {
-        if (fmt->roles[r] == _PyIR_ROLE_DST) {
-            int dst = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
-            if (dst >= _PyCode_IRFixed(co)) {
-                return 0;
-            }
-            return _PyIR_Extent(fmt->writes, _PyCode_InstrOparg(co, i));
-        }
-    }
-    return 0;
-}
-
-int
 _PyCode_InstrFbIndex(PyCodeObject *co, int i)
 {
     assert(i >= 0 && i < _PyCode_IRSize(co));
@@ -405,9 +382,6 @@ _PyCode_InstrOparg(PyCodeObject *co, int i)
         case _PyIR_LOC_NONE:
             return 0;
         case _PyIR_LOC_FBARG: {
-            if (is_binary_op_handler(handler)) {
-                return handler - _PyIR_BINARY_OP_FIRST;
-            }
             // The sites that need the operation have an entry of their own
             int i = _PyCode_FbOrdinal(co, read_field(word, fmt->fb));
             assert(i > 0);
@@ -457,8 +431,8 @@ ordinary_handler_for(int handler, int opcode)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
-        opcode >= MIN_INSTRUMENTED_OPCODE && !_PyIR_IsOnlyHandler(opcode) &&
-        _PyIR_HandlerBase[opcode] == _PyIR_HandlerBase[handler])
+        opcode >= MIN_INSTRUMENTED_OPCODE &&
+        _PyIR_OpcodeBase[opcode] == _PyIR_HandlerBase[handler])
     {
         // A register instruction arm of a family that has events: the
         // instrumented form of its stack op runs the arm's observed
@@ -469,13 +443,42 @@ ordinary_handler_for(int handler, int opcode)
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
-    return opcode;
+    // The handler that the stack op has
+    assert(_PyIR_OpcodeHandler[opcode] != _PyIR_NO_HANDLER);
+    return _PyIR_OpcodeHandler[opcode];
+}
+
+/* Whether a tool observes the SEND at word i.  SEND has no instrumented
+ * stack opcode (upstream has none), so monitoring does not rewrite its
+ * opcode: its word runs the observed twin of its handler while a tool
+ * listens for its events. */
+static int
+send_observed(PyCodeObject *co, int i)
+{
+    _PyCoMonitoringData *monitoring = co->_co_monitoring;
+    if (monitoring == NULL) {
+        return 0;
+    }
+    if (monitoring->tools != NULL) {
+        return monitoring->tools[i] != 0 ||
+               (monitoring->stop_tools != NULL && monitoring->stop_tools[i] != 0) ||
+               (monitoring->left_tools != NULL && monitoring->left_tools[i] != 0);
+    }
+    return monitoring->active_monitors.tools[PY_MONITORING_EVENT_STOP_ITERATION] != 0 ||
+           monitoring->active_monitors.tools[PY_MONITORING_EVENT_BRANCH_LEFT] != 0;
 }
 
 int
 _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
 {
-    return ordinary_handler_for(_PyCode_InstrHandler(co, i), opcode);
+    int handler = ordinary_handler_for(_PyCode_InstrHandler(co, i), opcode);
+    if (opcode == SEND && send_observed(co, i)) {
+        int twin = _PyIR_FormatOf(handler)->twin;
+        if (twin != 0 && handler >= IR_NUM_OLD_HANDLERS) {
+            return twin;
+        }
+    }
+    return handler;
 }
 
 int

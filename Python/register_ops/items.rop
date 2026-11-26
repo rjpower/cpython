@@ -514,16 +514,18 @@ extern helper dict_first_probe(v:B, k:B)
     contract: "A hit gives a new owner of the value; declining leaves everything"
               "as it was. No hash or equality callback.");
 
-// Stores a value into a list slot under the list's lock and returns the
-// displaced owner, which the arm closes once the lock is released.
-extern helper list_exchange(v:B, k:B, x:O) -> O
+// Stores a value into a list slot under the list's lock, as the old
+// _STORE_SUBSCR_LIST_INT did: lock, check the bounds again, swap the item, unlock.
+// absent: the lock was not taken or the index is out of bounds under it;
+// nothing changed and x was not counted, so the arm runs the generic store.
+extern helper list_exchange_locked(v:B, k:B, x:B)
+  cases(hit(old:O), absent())
   effects(reads, writes)
-  requires(exact<list>(v), in_bounds(k, v))
-  c _PyRop_ListExchange as value
+  requires(exact<list>(v), inline_int(k))
+  c _PyRop_ListExchangeLocked as bool_out_hit
   evidence(
-    review: "Reviewed IT. The old _STORE_SUBSCR_LIST_INT: LOCK_OBJECT, the"
-            "swap of the slot, UNLOCK_OBJECT before the close.",
-    contract: "Takes x. Returns the old item, which is never NULL. No callback.");
+    review: "The old _STORE_SUBSCR_LIST_INT: LOCK_OBJECT, the swap of the slot, UNLOCK_OBJECT before the close; the bounds are checked again under the lock.",
+    contract: "The list, the index and x are borrowed; a hit counts x and returns the old item, which is never NULL. No callback.");
 
 extern helper list_slice(v:B, s:B)
   cases(ok(z:O), err(e:Err))
@@ -860,9 +862,9 @@ arm GetItem.Dict inline entry(dict)
 }
 
 arm SetItem.ListIndex inline entry(list_index)
-  effects(reads, writes, releases, runs_python)
+  effects(reads, writes, releases, runs_python, raises)
   feedback()
-  exits(next, miss)
+  exits(next, miss, raise, redirect)
 {
   entry():
     let l:B = use(obj);
@@ -870,10 +872,30 @@ arm SetItem.ListIndex inline entry(list_index)
     guard exact_list(l) else miss;
     guard inline_int_key(i) else miss;
     guard list_in_bounds(l, i) else miss;
-    let x:O = acquire(value);
-    let old:O = list_exchange(l, i, x);
+    let w:B = use(value);
+    call list_exchange_locked(l, i, w) {
+      hit -> Stored();
+      absent -> Slow();
+    }
+  Stored(old:O):
     publish [] retire [owned(old), spent(key), spent(obj), spent(value)] at SetItem.Done;
     exit next();
+  Slow():
+    let a:Anchors = anchor_for_call([obj, key, value]);
+    call setitem_at_origin(a) {
+      ok -> Slowed();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Slowed():
+    publish [] retire [roots(a), spent(key), spent(obj), spent(value)] at SetItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj, value], e);
+    exit raise(SetItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
 }
 
 arm SetItem.Dict inline entry(dict)

@@ -208,7 +208,6 @@ static const int8_t EVENT_FOR_OPCODE[256] = {
     [FOR_ITER] = PY_MONITORING_EVENT_BRANCH_RIGHT,
     [INSTRUMENTED_FOR_ITER] = PY_MONITORING_EVENT_BRANCH_RIGHT,
     [SEND] = PY_MONITORING_EVENT_STOP_ITERATION,
-    [INSTRUMENTED_SEND] = PY_MONITORING_EVENT_STOP_ITERATION,
     [POP_ITER] = PY_MONITORING_EVENT_BRANCH_RIGHT,
     [INSTRUMENTED_POP_ITER] = PY_MONITORING_EVENT_BRANCH_RIGHT,
     [END_FOR] = PY_MONITORING_EVENT_STOP_ITERATION,
@@ -237,7 +236,6 @@ static const uint8_t DE_INSTRUMENT[256] = {
     [INSTRUMENTED_POP_ITER] = POP_ITER,
     [INSTRUMENTED_END_FOR] = END_FOR,
     [INSTRUMENTED_END_SEND] = END_SEND,
-    [INSTRUMENTED_SEND] = SEND,
     [INSTRUMENTED_LOAD_SUPER_ATTR] = LOAD_SUPER_ATTR,
     [INSTRUMENTED_END_ASYNC_FOR] = END_ASYNC_FOR,
 };
@@ -273,8 +271,6 @@ static const uint8_t INSTRUMENTED_OPCODES[256] = {
     [INSTRUMENTED_JUMP_IF_TRUE_OR_POP] = INSTRUMENTED_JUMP_IF_TRUE_OR_POP,
     [END_FOR] = INSTRUMENTED_END_FOR,
     [INSTRUMENTED_END_FOR] = INSTRUMENTED_END_FOR,
-    [SEND] = INSTRUMENTED_SEND,
-    [INSTRUMENTED_SEND] = INSTRUMENTED_SEND,
     [END_SEND] = INSTRUMENTED_END_SEND,
     [INSTRUMENTED_END_SEND] = INSTRUMENTED_END_SEND,
     [FOR_ITER] = INSTRUMENTED_FOR_ITER,
@@ -799,7 +795,7 @@ sanity_check_instrumentation(PyCodeObject *code)
         CHECK(valid_opcode(opcode));
         if (data->tools) {
             uint8_t local_tools = data->tools[i];
-            if (opcode_has_event(base)) {
+            if (opcode_has_event(base) || base == SEND) {
                 int event = EVENT_FOR_OPCODE[base];
                 if (event == -1) {
                     /* RESUME fixup */
@@ -946,6 +942,19 @@ de_instrument_per_instruction(PyCodeObject *code, _PyIRWord *words,
     assert(word_opcode(words, i) != INSTRUMENTED_INSTRUCTION);
 }
 
+/* Make the SEND at word i run the handler that its tools call for, its
+ * observed twin or not (_PyCode_HandlerFor).  A LINE or INSTRUCTION wrapper
+ * over it displaces SEND, which resolves its handler when dispatched. */
+static void
+refresh_send(PyCodeObject *code, _PyIRWord *words, int i)
+{
+    int opcode = word_opcode(words, i);
+    if (opcode == INSTRUMENTED_LINE || opcode == INSTRUMENTED_INSTRUCTION) {
+        return;
+    }
+    set_word_opcode(code, words, i, SEND);
+}
+
 static void
 instrument(PyCodeObject *code, _PyIRWord *words, _PyCoMonitoringData *monitoring, int i)
 {
@@ -1015,7 +1024,7 @@ remove_tools(PyCodeObject * code, int offset, int event, int tools)
     assert(event != PY_MONITORING_EVENT_LINE);
     assert(event != PY_MONITORING_EVENT_INSTRUCTION);
     assert(PY_MONITORING_IS_INSTRUMENTED_EVENT(event));
-    assert(opcode_has_event(base_opcode(code, offset)));
+    assert(opcode_has_event(base_opcode(code, offset)) || base_opcode(code, offset) == SEND);
     _PyCoMonitoringData *monitoring = code->_co_monitoring;
     assert(monitoring);
     bool should_de_instrument;
@@ -1041,7 +1050,10 @@ remove_tools(PyCodeObject * code, int offset, int event, int tools)
         assert(_Py_popcount32(single_tool) <= 1);
         should_de_instrument = ((single_tool & tools) == single_tool);
     }
-    if (should_de_instrument &&
+    if (should_de_instrument && base_opcode(code, offset) == SEND) {
+        refresh_send(code, exec_words(code), offset);
+    }
+    else if (should_de_instrument &&
         !(monitoring->source_forced && (monitoring->source_forced[offset] & _PyIR_SOURCE_BRANCH_WRAPPER)))
     {
         de_instrument(code, exec_words(code), monitoring, offset, event);
@@ -1119,7 +1131,12 @@ add_tools(PyCodeObject * code, int offset, int event, int tools)
         assert(_Py_popcount32(tools) == 1);
         assert(tools_is_subset_for_event(code, event, tools));
     }
-    instrument(code, exec_words(code), code->_co_monitoring, offset);
+    if (base_opcode(code, offset) != SEND) {
+        instrument(code, exec_words(code), code->_co_monitoring, offset);
+    }
+    else {
+        refresh_send(code, exec_words(code), offset);
+    }
 }
 
 static void
@@ -1998,7 +2015,7 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     bool source_branch_wrapper = branch && monitoring->source_forced &&
                                  (monitoring->source_forced[prev_index] & _PyIR_SOURCE_BRANCH_WRAPPER);
     if (!source_branch_wrapper && !source_advanced) {
-        /* Noninterrupting jumps have no instrumentation twin.
+        /* SEND and noninterrupting jumps have no instrumentation twin.
          * Their actual landing identifies the observed outcome; do not
          * install opcode zero beneath a transparent LINE wrapper. */
         int edge = branch &&
@@ -2028,6 +2045,9 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     }
     if (prev_line == line) {
         int prev_opcode = word_opcode(frame->ir_words, prev_index);
+        if (_PyIR_OriginOpcode(code, prev_index) == RESUME) {
+            prev_opcode = RESUME;
+        }
         /* RESUME and INSTRUMENTED_RESUME are needed for the operation of
             * instrumentation, so must never be hidden by an INSTRUMENTED_LINE.
             */
@@ -2113,7 +2133,7 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     uint8_t original_opcode;
 done:
     original_opcode = _PyCode_GetOriginalOpcode(line_data, i);
-    if (IR_HANDLER(*instr) == INSTRUMENTED_INSTRUCTION) {
+    if (IR_HANDLER(*instr) == IR_H_INSTRUMENTED_INSTRUCTION) {
         /* A LINE callback may have disabled the last LINE tool while
          * leaving INSTRUCTION monitoring enabled. */
         original_opcode = INSTRUMENTED_INSTRUCTION;
@@ -2195,8 +2215,8 @@ initialize_tools(PyCodeObject *code)
             assert(opcode != 0);
         }
         opcode = _PyOpcode_Deopt[opcode];
-        if (opcode_has_event(opcode)) {
-            if (instrumented) {
+        if (opcode_has_event(opcode) || opcode == SEND) {
+            if (instrumented || opcode == SEND) {
                 int8_t event;
                 if (opcode == RESUME) {
                     event = _PyCode_InstrOparg(code, i) != 0;
@@ -2208,7 +2228,7 @@ initialize_tools(PyCodeObject *code)
                 assert(event >= 0);
                 assert(PY_MONITORING_IS_INSTRUMENTED_EVENT(event));
                 tools[i] = code->_co_monitoring->active_monitors.tools[event];
-                CHECK(tools[i] != 0 ||
+                CHECK(opcode == SEND || tools[i] != 0 ||
                       (opcode == FOR_ITER &&
                        (code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_BRANCH_LEFT] ||
                         code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_STOP_ITERATION])));
@@ -2665,7 +2685,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         length = instr_length(code, i);
         int base = base_opcode(code, i);
         CHECK(base != 0);
-        if (opcode_has_event(base)) {
+        if (opcode_has_event(base) || base == SEND) {
             int8_t event;
             if (base == RESUME) {
                 event = _PyCode_InstrOparg(code, i) > 0;
@@ -3902,6 +3922,10 @@ branch_word(PyCodeObject *code, int offset)
         first--;
     }
     int start = _PyCode_WordOffset(code, first);
+    // The last word that starts before the jump may be an operand word
+    while (first > 0 && _PyCode_WordOffset(code, first - 1) == start) {
+        first--;
+    }
     for (int w = first; w < (int)code->_co_exec->nwords &&
                         _PyCode_WordOffset(code, w) == start; w += _PyCode_InstrLength(code, w)) {
         int base = base_opcode(code, w);
@@ -3947,7 +3971,7 @@ branch_handler_vectorcall(
     }
     int opcode = word_opcode(exec_words(code), src_offset);
     int base = base_opcode(code, src_offset);
-    if (!is_instrumented(opcode)) {
+    if (!is_instrumented(opcode) && base != SEND) {
         /* Already disabled */
         return disable;
     }

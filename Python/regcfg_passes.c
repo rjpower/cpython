@@ -15,9 +15,13 @@
 #include "pycore_opcode_utils.h"
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_regcfg.h"
-#include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic
+#include "pycore_rop_metadata.h"    // ROP_OP_Call_Generic
 #include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_value.h"           // PyValue_FromInlineInt()
+
+// The CFG names an arm by its tagged ROP_OP_ number, not its handler id
+#undef ROP_ARM
+#define ROP_ARM(name) ROP_OP_##name
 
 #undef SUCCESS
 #undef ERROR
@@ -123,7 +127,7 @@ static int
 written_local(const _PyRegOp *op)
 {
     // SaveLocal names the local it vacates as its source
-    if (op->opcode == ROP_HANDLER_SaveLocal_Take) {
+    if (op->opcode == ROP_OP_SaveLocal_Take) {
         return op->oparg;
     }
     int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode, op->oparg));
@@ -223,7 +227,7 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
                 }
             }
             npend = n;
-            if (op->opcode == ROP_HANDLER_LocalRead_Bound
+            if (op->opcode == ROP_OP_LocalRead_Bound
                 && is_fresh(cfg, _PyReg_OUT(cfg, op)[0]))
             {
                 pend[npend].load = op;
@@ -250,7 +254,7 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
 static int
 touches_local(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
 {
-    if (_PyRegOp_WritesLocal(op, z) || written_local(op) == z) {
+    if (_PyRegOp_WritesLocal(cfg, op, z) || written_local(op) == z) {
         return 1;
     }
     // A handler that reads the slot its oparg names
@@ -282,6 +286,16 @@ store_producer(_PyRegCfg *cfg, int region_start, int s)
         if (op->nout > 0 && out[op->nout - 1] == value) {
             return op;
         }
+        // An unpack's outputs are all its targets', in any order
+        if (op->nout > 1
+            && _PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg)))
+        {
+            for (int j = 0; j < op->nout; j++) {
+                if (out[j] == value) {
+                    return op;
+                }
+            }
+        }
         // An op that writes a local releases its old value, which may run
         // other code, as STORE_FAST does
         if (op->loc.lineno != store->loc.lineno || op->target >= 0
@@ -310,7 +324,7 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
         }
         for (int i = blk->start; i < blk->end; i++) {
             _PyRegOp *op = &cfg->ops[i];
-            if (op->opcode != ROP_HANDLER_LocalWrite_Store) {
+            if (op->opcode != ROP_OP_LocalWrite_Store) {
                 continue;
             }
             _PyRegOp *p = store_producer(cfg, region_start, i);
@@ -321,6 +335,27 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 continue;
             }
             const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode, p->oparg);
+            if (_PyIR_IsDstSpanFormat(fmt)) {
+                // The store of one of an unpack's outputs names that output
+                // the local: the publish writes it and closes its old
+                // binding with the others', after every target is written
+                int *outs = _PyReg_OUT(cfg, p);
+                int k = 0;
+                while (k < p->nout && outs[k] != _PyReg_IN(cfg, op)[0]) {
+                    k++;
+                }
+                int twice = 0;
+                for (int j = 0; j < p->nout; j++) {
+                    twice |= outs[j] == op->oparg;
+                }
+                if (k == p->nout || twice) {
+                    continue;
+                }
+                outs[k] = op->oparg;
+                op->opcode = _PyReg_DEAD;
+                op->flags |= _PyReg_STORE_FOLDED;
+                continue;
+            }
             if (!(fmt->flags & _PyIR_STORE_DST) || fmt->dst == _PyIR_NO_DST) {
                 continue;
             }
@@ -331,6 +366,14 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 continue;
             }
             p->dst = op->oparg;
+            // `s += t` into the local that holds s: the word starts on the
+            // family that appends in place (numeric.rop AppendText)
+            if (p->opcode == ROP_OP_Binary_Generic
+                && p->oparg == NB_INPLACE_ADD
+                && _PyReg_IN(cfg, p)[0] == p->dst)
+            {
+                p->opcode = ROP_OP_AppendText_Generic;
+            }
             // A jump's outputs stay canonical for its target, where the
             // handler leaves the slot of the result NULL
             if (!(p->target >= 0)) {
@@ -341,96 +384,6 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
         }
     }
     return SUCCESS;
-}
-
-
-/* Unpacks to locals (pass b2).
- *
- * An UNPACK_SEQUENCE or UNPACK_EX whose n live successors are STORE_FASTs
- * of its outputs on its own line, in element order, into n consecutive
- * locals t, t+1, ..., becomes a word whose dst field is t: the handler
- * stores the element i to local t+i and the STORE_FASTs die.  Any other
- * targets keep the stores. */
-
-static _PyRegOp *live_neighbour(_PyRegCfg *cfg, int start, int end, int i,
-                                int step);
-
-enum {
-    UNPACK_OK, UNPACK_NOT_STORE_FAST, UNPACK_OTHER_LINE, UNPACK_WRONG_ORDER,
-    UNPACK_NOT_CONSECUTIVE
-};
-
-static int
-unpack_locals_site(_PyRegCfg *cfg, int start, int end, _PyRegOp *op,
-                   _PyRegOp **stores)
-{
-    int n = op->nout;
-    const int *out = _PyReg_OUT(cfg, op);
-    _PyRegOp *prev = op;
-    int first = -1;
-    for (int k = 0; k < n; k++) {
-        _PyRegOp *s = live_neighbour(cfg, start, end, (int)(prev - cfg->ops), 1);
-        if (s == NULL || s->opcode != ROP_HANDLER_LocalWrite_Store) {
-            return UNPACK_NOT_STORE_FAST;
-        }
-        if (s->loc.lineno != op->loc.lineno) {
-            return UNPACK_OTHER_LINE;
-        }
-        if (_PyReg_IN(cfg, s)[0] != out[n - 1 - k]) {
-            return UNPACK_WRONG_ORDER;
-        }
-        if (k == 0) {
-            first = s->oparg;
-        }
-        else if (s->oparg != first + k) {
-            return UNPACK_NOT_CONSECUTIVE;
-        }
-        stores[k] = s;
-        prev = s;
-    }
-    return UNPACK_OK;
-}
-
-static int
-unpack_locals_region(_PyRegCfg *cfg, int start, int end)
-{
-    _PyRegOp **stores = NULL;
-    int astores = 0;
-    for (int i = start; i < end; i++) {
-        _PyRegOp *op = &cfg->ops[i];
-        if ((op->opcode != UNPACK_SEQUENCE && op->opcode != UNPACK_EX)
-            || op->dst >= 0 || op->nout < 1)
-        {
-            continue;
-        }
-        if (op->nout > astores) {
-            PyMem_Free(stores);
-            astores = op->nout;
-            stores = PyMem_Malloc(astores * sizeof(_PyRegOp *));
-            if (stores == NULL) {
-                PyErr_NoMemory();
-                return ERROR;
-            }
-        }
-        int why = unpack_locals_site(cfg, start, end, op, stores);
-        if (why != UNPACK_OK) {
-            continue;
-        }
-        op->dst = stores[0]->oparg;
-        op->flags |= _PyReg_UNPACK_LOCALS;
-        for (int k = 0; k < op->nout; k++) {
-            stores[k]->opcode = _PyReg_DEAD;
-            stores[k]->flags |= _PyReg_STORE_FOLDED;
-        }
-    }
-    PyMem_Free(stores);
-    return SUCCESS;
-}
-
-int
-_PyRegPass_UnpackLocals(_PyRegCfg *cfg)
-{
-    return for_each_region_backward(cfg, unpack_locals_region);
 }
 
 
@@ -509,7 +462,7 @@ fall_through_pop(_PyRegCfg *cfg, int start, int end, _PyRegOp *jump, int v)
 static inline int
 plain_branch_sense(const _PyRegOp *op)
 {
-    if (op->opcode != ROP_HANDLER_BranchTruth_Generic) {
+    if (op->opcode != ROP_OP_BranchTruth_Generic) {
         return -1;
     }
     return op->oparg == BRANCH_IF_FALSE ? 0 : op->oparg == BRANCH_IF_TRUE ? 1 : -1;
@@ -575,13 +528,13 @@ truth_fold_region(_PyRegCfg *cfg, int start, int end)
 {
     for (int i = start; i < end; i++) {
         _PyRegOp *copy = &cfg->ops[i];
-        if (copy->opcode == ROP_HANDLER_LocalRead_Bound && copy->nout == 1
+        if (copy->opcode == ROP_OP_LocalRead_Bound && copy->nout == 1
             && copy->dst < 0)
         {
             RETURN_IF_ERROR(fold_local_truth(cfg, start, end, copy));
             continue;
         }
-        if (copy->opcode != ROP_HANDLER_Move_Copy || copy->nread != 1
+        if (copy->opcode != ROP_OP_Move_Copy || copy->nread != 1
             || copy->nout != 1)
         {
             continue;
@@ -661,7 +614,7 @@ static int
 const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
               uintptr_t *bits)
 {
-    if (load->opcode == ROP_HANDLER_Const_Pool) {
+    if (load->opcode == ROP_OP_Const_Pool) {
         if (load->oparg >= PyTuple_GET_SIZE(consts)) {
             return 0;
         }
@@ -672,10 +625,10 @@ const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
         *bits = _PyValue_Identity(*value);
         return 1;
     }
-    if (load->opcode == ROP_HANDLER_Const_Small) {
+    if (load->opcode == ROP_OP_Const_Small) {
         *value = PyValue_Borrow(PyValue_FromInlineInt(load->oparg));
     }
-    else if (load->opcode == ROP_HANDLER_Const_Common
+    else if (load->opcode == ROP_OP_Const_Common
              && (load->oparg == CONSTANT_NONE || load->oparg == CONSTANT_TRUE
                  || load->oparg == CONSTANT_FALSE
                  || load->oparg == CONSTANT_MINUS_ONE
@@ -748,9 +701,9 @@ find_const_folds(_PyRegCfg *cfg, PyObject *consts, const_fold **folds,
             npend = n;
             PyValueBorrow value;
             uintptr_t bits;
-            if ((op->opcode == ROP_HANDLER_Const_Pool
-                 || op->opcode == ROP_HANDLER_Const_Small
-                 || op->opcode == ROP_HANDLER_Const_Common)
+            if ((op->opcode == ROP_OP_Const_Pool
+                 || op->opcode == ROP_OP_Const_Small
+                 || op->opcode == ROP_OP_Const_Common)
                 && is_fresh(cfg, _PyReg_OUT(cfg, op)[0])
                 && const_of_load(op, consts, &value, &bits))
             {
@@ -911,12 +864,12 @@ kw_names_region(_PyRegCfg *cfg, int start, int end)
 {
     for (int i = start; i < end; i++) {
         _PyRegOp *call = &cfg->ops[i];
-        if (call->opcode != CALL_KW) {
+        if (call->opcode != ROP_OP_CallKw_Generic) {
             continue;
         }
         int v = _PyReg_IN(cfg, call)[call->nread - 1];
         _PyRegOp *load = live_neighbour(cfg, start, end, i, -1);
-        if (load == NULL || load->opcode != ROP_HANDLER_Const_Pool || load->dst >= 0
+        if (load == NULL || load->opcode != ROP_OP_Const_Pool || load->dst >= 0
             || load->nout != 1 || _PyReg_OUT(cfg, load)[0] != v
             || load->except != call->except)
         {
@@ -1038,7 +991,7 @@ call_null_step(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *state, uint8_t *outputs)
         if (op->opcode == PUSH_NULL) {
             value = 1;
         }
-        else if (op->opcode == COPY || op->opcode == ROP_HANDLER_Move_Copy) {
+        else if (op->opcode == COPY || op->opcode == ROP_OP_Move_Copy) {
             int k = j < op->nread ? j : 0;
             value = call_null_get(cfg, state, in[k]);
         }
@@ -1078,8 +1031,8 @@ call_roles(_PyRegCfg *cfg, int verify)
         _PyRegOp *op = &cfg->ops[i];
         needed |= verify
             ? (op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)) != 0
-            : op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW ||
-              op->opcode == CALL_FUNCTION_EX;
+            : op->opcode == ROP_OP_Call_Generic || op->opcode == ROP_OP_CallKw_Generic ||
+              op->opcode == ROP_OP_CallEx_Generic;
     }
     if (!needed) {
         return SUCCESS;
@@ -1164,14 +1117,14 @@ call_roles(_PyRegCfg *cfg, int verify)
                 continue;
             }
             int roles = 0;
-            if (proof.reached[b] && (op->opcode == ROP_HANDLER_Call_Generic ||
-                                    op->opcode == CALL_KW ||
-                                    op->opcode == CALL_FUNCTION_EX))
+            if (proof.reached[b] && (op->opcode == ROP_OP_Call_Generic ||
+                                    op->opcode == ROP_OP_CallKw_Generic ||
+                                    op->opcode == ROP_OP_CallEx_Generic))
             {
                 // CALL_FUNCTION_EX has no self operand, whatever its
                 // reserved input is; its kwargs input may be absent
                 int *in = _PyReg_IN(cfg, op);
-                if (op->opcode == CALL_FUNCTION_EX) {
+                if (op->opcode == ROP_OP_CallEx_Generic) {
                     if (call_null_get(cfg, state, in[3])) {
                         roles |= _PyReg_CALL_NO_KWARGS;
                     }

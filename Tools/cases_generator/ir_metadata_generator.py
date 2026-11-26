@@ -4,8 +4,7 @@ Reads the instruction definitions from Python/bytecodes.c and writes
 Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
 
 - the handler indices of the IR-only instructions (annotation `ir_only`),
-  which follow the 256 opcodes in name order, then those of the BINARY_OP
-  operations, and IR_NUM_HANDLERS;
+  which follow the 256 opcodes in name order, and IR_NUM_HANDLERS;
 - _PyFb_<family>, the type of the feedback entry of each family that has
   one (ir_generator.FEEDBACK_LAYOUTS);
 - _PyIR_Formats, the instruction contract of every handler, indexed by
@@ -27,19 +26,16 @@ import argparse
 from collections.abc import Sequence
 
 import ir_arms
-from analyzer import Analysis, Uop, analyze_files
+from analyzer import Analysis, Uop, analyze_files, stack_ops_of
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
-    BINARY_OP_FAMILY,
     EXECUTION_VARIANTS,
     canonical_handler,
     Extent,
     HandlerContract,
     IRFormat,
     OwnershipEvent,
-    binary_op_handlers,
-    binary_ops,
     call_role_flags,
     compute_formats,
     operand_metadata,
@@ -48,7 +44,7 @@ from ir_generator import (
     handler_instructions,
     ir_only_handler_names,
     monitoring_events,
-    STACK_ONLY,
+    stack_only_names,
     num_handlers,
     num_old_handlers,
     uses_feedback,
@@ -61,8 +57,6 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP."""
-    if name in binary_op_handlers(analysis):
-        return BINARY_OP_FAMILY
     # An IR-only member of a real family (LOAD_ATTR_GETSET) stands for the
     # family head, as the specialisations that have an opcode stand for
     # themselves
@@ -72,26 +66,40 @@ def shadow_of(name: str, analysis: Analysis) -> str:
     return canonical_handler(name)
 
 
+def stack_numbers(analysis: Analysis) -> dict[str, int]:
+    "The stack opcode of each stack op, or CFG number of a translator-only op"
+    return {name: inst.opcode for name, inst in stack_ops_of(analysis).items()}
+
+
+def base_number(name: str, numbers: dict[str, int], ids: dict[str, int]) -> int:
+    """The number that stands for a canonical op in _PyIR_HandlerBase: its
+    stack opcode, or for a handler that has no stack op (YIELD_DELEGATED) a
+    number past every stack opcode and pseudo-instruction"""
+    return numbers[name] if name in numbers else 512 + ids[name]
+
+
 def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
                   ) -> tuple[dict[str, int], dict[str, str], dict[str, list[str]]]:
-    """The named IR domain, its canonical bases and generated properties."""
-    # A pseudo-instruction has no handler: its number may name one.
-    ids = {name: number for name, number in analysis.opmap.items()
-           if name not in analysis.pseudos} | handler_ids(analysis)
-    dispatch = handler_ids(analysis)
+    """The named handlers with their ids, the canonical stack op of each
+    handler (by name; a stack-only stub can be one) and generated properties."""
+    ids = handler_ids(analysis)
+    numbers = stack_numbers(analysis)
+    dispatch = ids
     insts = handler_instructions(analysis)
-    binary = set(binary_op_handlers(analysis))
+
     bases = {}
     flags = {}
-    for name in ids:
+    for name in [*ids, *(name for name in numbers if name not in ids)]:
         ordinary = name
-        inst = insts.get(name) or analysis.instructions.get(ordinary)
+        inst = insts.get(name) or stack_ops_of(analysis).get(ordinary)
         base = inst.family.name if inst is not None and inst.family else ordinary
         if ordinary.startswith("INSTRUMENTED_") and base == ordinary:
             original = ordinary[len("INSTRUMENTED_"):]
-            if original in ids:
+            if original in numbers or original in ids:
                 base = original
         bases[name] = base
+        if name not in ids:
+            continue
         parts = ["_PyIR_H_METADATA"]
         if name in dispatch:
             parts.append("_PyIR_H_DISPATCH")
@@ -101,8 +109,6 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
             parts.append("_PyIR_H_SPECIALIZED")
         if ordinary.startswith("INSTRUMENTED_"):
             parts.append("_PyIR_H_INSTRUMENTED")
-        if name in binary:
-            parts.append("_PyIR_H_BINARY_OP")
         if name in analysis.ir_only or name in EXECUTION_VARIANTS:
             parts.append("_PyIR_H_IR_ONLY")
         if name.endswith("_NOFB"):
@@ -125,10 +131,8 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
                 parts.append("_PyIR_H_ADAPTIVE")
         flags[name] = parts
     for name, base in bases.items():
-        if base not in ids or bases[base] != base:
+        if base not in numbers and base not in ids:
             raise ValueError(f"noncanonical handler base: {name} -> {base}")
-    if len(set(ids.values())) != len(ids) or max(ids.values()) >= num_old_handlers(analysis):
-        raise ValueError("invalid handler domain")
     return ids, bases, flags
 
 
@@ -143,11 +147,13 @@ def extent_initializer(e: Extent) -> str:
 
 def format_initializer(fmt: IRFormat, shadow: str,
                        contract: HandlerContract, events: list[str],
-                       owner_program: tuple[int, int] = (0, 0)) -> str:
+                       stack_only: frozenset[str],
+                       owner_program: tuple[int, int] = (0, 0),
+                       twin: str = "0") -> str:
     if fmt.operands != "_PyIR_OPERANDS_NONE":
         fmt = operand_metadata(fmt)
     # A STACK_ONLY opcode has a format for the CFG but no handler to run
-    flags = [] if fmt.group in STACK_ONLY else ["_PyIR_VALID"]
+    flags = [] if fmt.group in stack_only else ["_PyIR_VALID"]
     for present, flag in (
             (fmt.window, "_PyIR_WINDOW"),
             (fmt.jumps, "_PyIR_JUMPS"),
@@ -189,7 +195,8 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".writes = {extent_initializer(contract.writes)}, "
         f".through = {extent_initializer(contract.through)}, "
         f".shadow = {shadow}, "
-        f".twin = {contract.twin or 0}, .events = {events_init} }}"
+        f".twin = {twin}, "
+        f".events = {events_init} }}"
     )
 
 
@@ -198,17 +205,17 @@ def arm_id(analysis: Analysis, arm: ir_arms.ArmEntry) -> int:
 
 
 def arm_base_ids(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry],
-                 fact_ids: dict[str, int], bases: dict[str, str]) -> dict[str, int]:
-    """The canonical old handler of each stack op that a family names"""
+                 numbers: dict[str, int], bases: dict[str, str]) -> dict[str, int]:
+    """The stack opcode of the canonical stack op that a family names"""
     result = {}
     for arm in arms:
         op = arm.base
         if op not in analysis.opmap or op in analysis.pseudos:
             raise ValueError(f"{arm.dotted}: ops({op}) is not a stack op")
-        if bases[op] != op:
+        if bases.get(op, op) != op:
             raise ValueError(f"{arm.dotted}: ops({op}) is not a canonical opcode "
                              f"(its base is {bases[op]})")
-        result[op] = fact_ids[op]
+        result[op] = numbers[op]
     return result
 
 
@@ -318,7 +325,8 @@ def generate_ir_metadata(
     ids = handler_ids(analysis)
     fact_ids, bases, flags = handler_facts(analysis, formats)
     n = num_handlers(analysis, arms)
-    base_ids = arm_base_ids(analysis, arms, fact_ids, bases)
+    numbers = stack_numbers(analysis)
+    base_ids = arm_base_ids(analysis, arms, numbers, bases)
     ir_only = sorted(ir_only_handler_names(analysis), key=lambda name: ids[name])
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
@@ -339,13 +347,8 @@ def generate_ir_metadata(
         if not ownership:
             out.emit("{0},\n")
         out.emit("};\n#endif\n\n")
-        out.emit("/* Handlers of the IR only: the numbers that no opcode holds, "
-                 "then 256 and up */\n")
-        for name in ir_only:
-            out.emit(f"#define {name:<46} {ids[name]}\n")
-        out.emit("\n")
         for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
-                          ("BINARY_OP", 4), ("IR_ONLY", 8), ("NOFB", 16),
+                          ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
                           ("SAVES_IP", 1024), ("JIT_EVENT", 2048)):
@@ -355,7 +358,7 @@ def generate_ir_metadata(
                 ("uint16_t", "_PyIR_HandlerFlags", {
                     name: " | ".join(flags[name]) for name in fact_ids}),
                 ("uint16_t", "_PyIR_HandlerBase", {
-                    name: str(fact_ids[bases[name]]) for name in fact_ids})):
+                    name: str(base_number(bases[name], numbers, fact_ids)) for name in fact_ids})):
             out.emit(f"PyAPI_DATA(const {ctype}) {table}[IR_NUM_HANDLERS];\n")
             out.emit("#ifdef NEED_IR_METADATA\n")
             out.emit(f"const {ctype} {table}[IR_NUM_HANDLERS] = {{\n")
@@ -366,16 +369,6 @@ def generate_ir_metadata(
                          else str(base_ids[arm.base]))
                 out.emit(f"[{arm_id(analysis, arm)}] = {value}, /* {arm.dotted} */\n")
             out.emit("};\n#endif\n\n")
-        ops = binary_op_handlers(analysis)
-        if ops:
-            out.emit("/* The handler of BINARY_OP operation OP is "
-                     "_PyIR_BINARY_OP_FIRST + OP */\n")
-            out.emit(f"#define {'_PyIR_BINARY_OP_FIRST':<46} {ops[0]}\n")
-            for op, name in zip(binary_ops(), ops):
-                out.emit(f"static_assert({name} == _PyIR_BINARY_OP_FIRST + NB_{op}, "
-                         f'"{name}");\n')
-            out.emit("\n")
-
         layouts = sorted({(fmt.group, fmt.fb_layout) for fmt in formats.values()
                           if fmt.fb_layout is not None})
         if layouts:
@@ -388,29 +381,27 @@ def generate_ir_metadata(
         out.emit(f"PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[{n}];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit(f"const _PyIRFormat _PyIR_Formats[{n}] = {{\n")
-        # BINARY_OP has a format but no handler: its operations decode as
-        # it.  Its row is that of its generic handlers.
-        indices = dict(ids)
-        rows = dict(contracts)
-        if BINARY_OP_FAMILY in analysis.instructions:
-            indices[BINARY_OP_FAMILY] = analysis.instructions[BINARY_OP_FAMILY].opcode
-            rows[BINARY_OP_FAMILY] = contracts[binary_op_handlers(analysis)[0]]
-        # So have the STACK_ONLY opcodes, which the CFG reads
-        for name in STACK_ONLY:
-            if name in analysis.instructions:
-                indices[name] = analysis.instructions[name].opcode
-        for name in sorted(indices, key=lambda name: indices[name]):
-            twin = rows[name].twin
+        stack_only = stack_only_names(analysis)
+        stack_ops = stack_ops_of(analysis)
+
+        def row(name: str) -> str:
+            twin = contracts[name].twin
             # Semantic completion can report events without a separate
             # instrumented handler (SEND). Keep that capability in its row.
             event_handler = twin or name
             events = (monitoring_events(event_handler, insts[event_handler])
                       if event_handler in insts else [])
-            init = format_initializer(formats[name], shadow_of(name, analysis),
-                                      rows[name], events,
-                                      programs[rows[name].ownership_events, rows[name].error_checkpoints,
-                                               rows[name].normal_storage])
-            out.emit(f"[{name}] = {init},\n")
+            shadow = shadow_of(name, analysis)
+            return format_initializer(
+                formats[name], shadow if shadow in numbers else "0",
+                contracts[name], events, stack_only,
+                programs[contracts[name].ownership_events,
+                         contracts[name].error_checkpoints,
+                         contracts[name].normal_storage],
+                f"IR_H_{twin}" if twin in ids else "0")
+
+        for name in sorted(ids, key=ids.get):
+            out.emit(f"[{ids[name]}] = {row(name)},  /* {name} */\n")
         for arm in arms:
             assert arm.format is not None
             program = programs[arm_owner_program(arm.format), (), None]
@@ -419,11 +410,56 @@ def generate_ir_metadata(
         out.emit("};\n")
         out.emit("#endif\n\n")
 
+        # The CFG reads the format of a stack op by its stack number
+        # (_PyRegCfg_FormatOf): the ops that have a handler go through
+        # _PyIR_OpcodeHandler, the others have a row here
+        out.emit("PyAPI_DATA(const _PyIRFormat) _PyIR_StackOnlyFormats[256];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const _PyIRFormat _PyIR_StackOnlyFormats[256] = {\n")
+        for name in sorted(stack_only, key=lambda name: numbers.get(name, 0)):
+            if name in stack_ops and name not in ids:
+                out.emit(f"[{numbers[name]}] = {row(name)},  /* {name} */\n")
+        out.emit("};\n")
+        out.emit("#endif\n\n")
+
+        none = "_PyIR_NO_HANDLER"
+        out.emit("/* The stack opcode that a handler is, or _PyIR_NO_OPCODE; the "
+                 "handler of a\n * stack opcode, or _PyIR_NO_HANDLER */\n")
+        out.emit("#define _PyIR_NO_HANDLER 0xffff\n#define _PyIR_NO_OPCODE 0xffff\n")
+        out.emit("PyAPI_DATA(const uint16_t) _PyIR_HandlerOpcode[IR_NUM_HANDLERS];\n")
+        out.emit("PyAPI_DATA(const uint16_t) _PyIR_OpcodeHandler[256];\n")
+        out.emit("PyAPI_DATA(const uint16_t) _PyIR_OpcodeBase[256];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const uint16_t _PyIR_HandlerOpcode[IR_NUM_HANDLERS] = {\n")
+        by_id = {number: name for name, number in ids.items()}
+        for i in range(n):
+            name = by_id.get(i)
+            own = (analysis.instructions[name].opcode
+                   if name in analysis.instructions else None)
+            out.emit(f"[{i}] = {'_PyIR_NO_OPCODE' if own is None else own},\n")
+        out.emit("};\n")
+        out.emit("const uint16_t _PyIR_OpcodeBase[256] = {\n")
+        by_number = {number: name for name, number in numbers.items()
+                     if name in analysis.instructions}
+        for number in range(256):
+            name = by_number.get(number)
+            base = ('_PyIR_NO_OPCODE' if name is None
+                    else base_number(bases[name], numbers, fact_ids))
+            out.emit(f"[{number}] = {base},\n")
+        out.emit("};\n")
+        out.emit("const uint16_t _PyIR_OpcodeHandler[256] = {\n")
+        for number in range(256):
+            handler = next((ids[name] for name, inst in analysis.instructions.items()
+                            if inst.opcode == number and name in ids), None)
+            out.emit(f"[{number}] = {none if handler is None else handler},\n")
+        out.emit("};\n")
+        out.emit("#endif\n\n")
+
         out.emit(f"PyAPI_DATA(const char *const) _PyIR_OnlyNames[IR_NUM_HANDLERS];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit("const char *const _PyIR_OnlyNames[IR_NUM_HANDLERS] = {\n")
         for name in ir_only:
-            out.emit(f'[{name}] = "{name}",\n')
+            out.emit(f'[{ids[name]}] = "{name}",\n')
         for arm in arms:
             out.emit(f'[{arm_id(analysis, arm)}] = "{arm.dotted}",\n')
         out.emit("};\n")

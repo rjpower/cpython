@@ -717,6 +717,8 @@ class ArmLowerer:
     def immediate(self, operand: str) -> str:
         """An immediate operand's value: its head fields, low field first"""
         p = self.placements[operand]
+        if p.kind is FieldKind.flag:
+            return f"(((uint32_t)(ir_word) >> {p.shift}) & 1u)"
         if not p.slots or any(s.word != 0 for s in p.slots):
             raise Unsupported(f"{self.arm.name}: immediate {operand} is not in the head")
         if p.shared:
@@ -734,7 +736,7 @@ class ArmLowerer:
         p = self.placements[operand]
         if p.kind is FieldKind.home:
             return self.home(operand)
-        if p.kind is FieldKind.imm:
+        if p.kind in (FieldKind.imm, FieldKind.flag):
             return self.immediate(operand)
         if p.kind is FieldKind.name:
             return f"GETITEM(FRAME_CO_NAMES, {self.field(operand)})"

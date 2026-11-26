@@ -17,7 +17,7 @@ import struct
 
 import _opcode
 import _testinternalcapi
-from _opcode_metadata import _ir_opmap, _ir_only_handlers
+from _opcode_metadata import _ir_handlers, _ir_only_handlers, _ir_translator_only
 from opcode import *
 from opcode import (
     MIN_INSTRUMENTED_OPCODE,
@@ -71,20 +71,31 @@ END_ASYNC_FOR = opmap['END_ASYNC_FOR']
 
 CACHE = opmap["CACHE"]
 
-# The handlers share one number space: the opcodes, their specialisations
-# and the IR's own.
+# Handler ids and stack opcodes are separate number spaces.  _all_opname
+# and _all_opmap name the handlers, which the words hold.  An Instruction's
+# opcode is the stack opcode of the instruction that its word stands for
+# (the opcodes, their specialisations, the translator-only ops), or
+# _HANDLER_OP + h for a handler that stands for none; opname names both.
+_HANDLER_OP = 512
 _all_opname = ['<%r>' % (op,) for op in range(_opcode.IR_NUM_HANDLERS)]
-_all_opmap = {}
-# ... and the register instruction arms, named Family.Arm
-for _names in (opmap, _specialized_opmap, _ir_opmap):
-    for name, op in _names.items():
-        _all_opname[op] = name
-        _all_opmap[name] = op
+_all_opmap = dict(_ir_handlers)
+for _name, _h in _ir_handlers.items():
+    _all_opname[_h] = _name
+_stack_opmap = {**opmap, **_specialized_opmap, **_ir_translator_only}
+# The handler of each stack opcode that has one
+_STACK_HANDLER = {op: _ir_handlers[name] for name, op in _stack_opmap.items()
+                  if name in _ir_handlers}
+_HANDLER_STACK = {h: op for op, h in _STACK_HANDLER.items()}
+opname = ['<%r>' % (op,) for op in range(_HANDLER_OP + _opcode.IR_NUM_HANDLERS)]
+for _name, _op in _stack_opmap.items():
+    opname[_op] = _name
+for _name, _h in _ir_handlers.items():
+    opname[_HANDLER_OP + _h] = _name
 # The arms of the register instruction families, which have no stack opcode
 for name, op in _testinternalcapi.arm_handlers().items():
     _all_opname[op] = name
     _all_opmap[name] = op
-opname = _all_opname
+    opname[_HANDLER_OP + op] = name
 
 deoptmap = {
     specialized: base for base, family in _specializations.items() for specialized in family
@@ -97,12 +108,20 @@ _HANDLER_MASK = _opcode.IR_HANDLER_MASK
 # The canonical flags of the handler field, which the name of a word shows
 # after its handler's as +NAME: "CALL+NO_SELF" is a CALL whose self input is
 # virtual NULL.  The executing copy's slot-class flags are not shown.
-_WORD_FLAGS = {"NO_SELF": _opcode.IR_F_NO_SELF, "NO_KW": _opcode.IR_F_NO_KW}
+_WORD_FLAGS = {"NO_SELF": _opcode.IR_F_NO_SELF, "NO_KW": _opcode.IR_F_NO_KW,
+               "KW": _opcode.IR_F_KW, "EX": _opcode.IR_F_EX,
+               "UNINTERRUPTED": _opcode.IR_F_UNINTERRUPTED}
 
 def _handler_name(field):
     """The name of a word's handler field: its handler's, then its flags"""
-    return _all_opname[field & _HANDLER_MASK] + "".join(
-        "+" + name for name, bit in _WORD_FLAGS.items() if field & bit)
+    # EX is both of the bits that KW and UNINTERRUPTED are one of; bit 13
+    # is NO_KW on an EX word and NO_SELF on any other
+    kind = field & _opcode.IR_F_EX
+    names = {_opcode.IR_F_EX: ["EX"], _opcode.IR_F_KW: ["KW"],
+             _opcode.IR_F_UNINTERRUPTED: ["UNINTERRUPTED"], 0: []}[kind]
+    if field & _opcode.IR_F_NO_SELF:
+        names.insert(0, "NO_KW" if kind == _opcode.IR_F_EX else "NO_SELF")
+    return _all_opname[field & _HANDLER_MASK] + "".join("+" + n for n in names)
 
 def _handler_field(name):
     """The handler field of the word that _handler_name() names name"""
@@ -120,8 +139,6 @@ _LOC_AB = _opcode.IR_LOC_AB
 _LOC_FBARG = _opcode.IR_LOC_FBARG
 _IR_JUMPS = _opcode.IR_JUMPS
 _IR_FORWARD = _opcode.IR_FORWARD
-_BINARY_OP_FIRST = _ir_opmap["BINARY_OP_ADD"]
-_BINARY_OP_LAST = _BINARY_OP_FIRST + len(_nb_ops) - 1
 _FEEDBACK_KINDS = ("COUNTER", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL",
                    "COMPARE", "CONTAINS")
 _FEEDBACK_STATES = ("COLD", "MONO", "POLY", "MEGA", "OFF")
@@ -336,7 +353,21 @@ def _deoptop(op):
     if row is None:
         return op
     name = _ARM_OPS.get(_all_opname[op])
-    return row.base if name is None else _all_opmap[name]
+    return row.base if name is None else _stack_opmap[name]
+
+def _op_of_name(name):
+    """The opcode that Instruction.opcode holds for the name of an instruction"""
+    if name in _stack_opmap:
+        return _stack_opmap[name]
+    return _HANDLER_OP + _all_opmap[name]
+
+def _base_handler(op):
+    """The handler of the base operation of handler op, or op itself if that
+    operation has none"""
+    base = _deoptop(op)
+    if base >= _HANDLER_OP:
+        return base - _HANDLER_OP
+    return _STACK_HANDLER.get(base, op)
 
 def _get_code_array(co, adaptive):
     return co._co_code_adaptive if adaptive else co.co_code
@@ -454,7 +485,7 @@ def _get_jump_target(op, arg, offset):
 
     Otherwise return None.
     """
-    row = _ir_contract[_deoptop(op)]
+    row = _ir_contract[_base_handler(op)]
     if arg is None or row is None:
         return None
     if row.flags & _IR_JUMPS:
@@ -536,10 +567,7 @@ def _decode_word(handler, fields, fbinit=None):
     elif imm == _LOC_NONE:
         arg = 0
     elif imm == _LOC_FBARG:
-        if _BINARY_OP_FIRST <= handler <= _BINARY_OP_LAST:
-            arg = handler - _BINARY_OP_FIRST
-        else:
-            arg = _feedback_arg(fbinit, fb)
+        arg = _feedback_arg(fbinit, fb)
     else:
         arg = _field(fields, imm)
         if row.flags & _IR_FORWARD and arg >= 0x800:
@@ -613,7 +641,8 @@ def _unpack_opargs(code, fbinit=None):
             # The oparg is that of the stack instruction: the arguments
             # (and for CALL_KW the keyword values) without the self; the
             # last operand of a CALL_KW indexes its names in the constants
-            has_self = not word & _opcode.IR_F_NO_SELF
+            has_self = not (word & _opcode.IR_F_NO_SELF or
+                            word & _opcode.IR_F_EX == _opcode.IR_F_EX)
             if _deoptop(handler) == CALL_KW:
                 operands.pop()
                 arg = count - 1 - has_self
@@ -658,7 +687,7 @@ class Instruction(_Instruction):
     ):
         if handler is None:
             handler = opname
-        return Instruction(opname, _all_opmap[opname], arg, argval, argrepr, offset,
+        return Instruction(opname, _op_of_name(opname), arg, argval, argrepr, offset,
                            start_offset, starts_line, line_number, label, positions, cache_info,
                            handler, dst, srcs, fb, length)
 
@@ -673,7 +702,8 @@ class Instruction(_Instruction):
 
         Otherwise equal to Instruction.opcode.
         """
-        return _deoptop(self.opcode)
+        name = opname[self.opcode]
+        return _op_of_name(deoptmap.get(name, name))
 
     @property
     def baseopname(self):
@@ -699,7 +729,12 @@ class Instruction(_Instruction):
 
         Otherwise return None.
         """
-        return _get_jump_target(self.opcode, self.arg, self.offset)
+        # The handler of the word names the instruction, which may stand for
+        # a stack instruction that has no handler of its own
+        handler = _all_opmap.get(self.handler.partition("+")[0])
+        if handler is None:
+            return None
+        return _get_jump_target(handler, self.arg, self.offset)
 
     @property
     def is_jump_target(self):
@@ -903,11 +938,12 @@ class ArgResolver:
                 _, argrepr = _nb_ops[arg]
             elif deop == CALL_INTRINSIC_1:
                 # The word holds the IntrinsicId index; the compiler's number
-                # is one more (unary) or 11 less (binary), and 3 more for
-                # GETATTR and SETATTR (ids 8 to 21 are unused)
-                argrepr = _intrinsic_1_descs[arg + 1]
+                # is one more (unary, below unary plus, which is the Unary
+                # family), two more above it, or 10 less (binary), and 4 more
+                # for GETATTR and SETATTR (ids 8 to 21 are unused)
+                argrepr = _intrinsic_1_descs[arg + 1 if arg < 4 else arg + 2]
             elif deop == CALL_INTRINSIC_2:
-                argrepr = _intrinsic_2_descs[arg - 11 if arg < 19 else arg + 3]
+                argrepr = _intrinsic_2_descs[arg - 10 if arg < 18 else arg + 4]
             elif deop == LOAD_COMMON_CONSTANT:
                 obj = _common_constants[arg]
                 argval = obj
@@ -1037,16 +1073,16 @@ def _exact_op(op, handler, fields):
     the mode, sense or direction of the word says which one"""
     name = _all_opname[handler]
     if name.startswith("BranchTruth."):
-        return _all_opmap[("POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
+        return _stack_opmap[("POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
                            "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP")[fields[2]]]
     if name.startswith("BranchNone."):
-        return _all_opmap["POP_JUMP_IF_NONE" if fields[1] else "POP_JUMP_IF_NOT_NONE"]
+        return _stack_opmap["POP_JUMP_IF_NONE" if fields[1] else "POP_JUMP_IF_NOT_NONE"]
     if name.startswith("Jump."):
         if name in ("Jump.Poll", "Jump.Warm"):
-            return _all_opmap["JUMP_BACKWARD"]
+            return _stack_opmap["JUMP_BACKWARD"]
         # The target is a signed distance in A and B
         backward = fields[1] >= 0x800
-        return _all_opmap["JUMP_BACKWARD_NO_INTERRUPT" if backward else "JUMP_FORWARD"]
+        return _stack_opmap["JUMP_BACKWARD_NO_INTERRUPT" if backward else "JUMP_FORWARD"]
     return op
 
 
@@ -1090,16 +1126,16 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # the code object's
             runs = int.from_bytes(code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
                                   sys.byteorder) & _HANDLER_MASK
-            # A handler of the IR only, such as BINARY_OP_ADD,
+            # A handler of the IR only, such as IR_JUMP,
             # shows as the instruction that it runs; a specialisation shows
             # as itself
             if runs in _ir_only_handlers:
                 # Execution-only variants preserve their specialization in
                 # the adaptive view; structural IR handlers keep their base.
                 shadow = _ir_contract[runs].shadow
-                op = shadow if shadow not in _ir_only_handlers else _deoptop(runs)
+                op = shadow if shadow else _deoptop(runs)
             else:
-                op = runs
+                op = _HANDLER_STACK.get(runs, _HANDLER_OP + runs)
         if arg_resolver:
             argval, argrepr = arg_resolver.get_argval_argrepr(handler, arg, offset)
         else:
@@ -1117,7 +1153,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
                                sys.byteorder) & ~_HANDLER_MASK
         op = _exact_op(op, handler, _word_fields(int.from_bytes(
             original_code[offset * _WORD_SIZE:(offset + 1) * _WORD_SIZE], sys.byteorder)))
-        yield Instruction(_all_opname[op], op, arg, argval, argrepr,
+        yield Instruction(opname[op], op, arg, argval, argrepr,
                           offset, offset, starts_line, line_number,
                           label, positions, cache_info,
                           _handler_name(runs | flags), dst, srcs, fb, length)

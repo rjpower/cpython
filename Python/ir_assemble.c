@@ -7,13 +7,17 @@
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
-#include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic, ROP_FIRST_HANDLER
+#include "pycore_rop_metadata.h"    // ROP_OP_Call_Generic, ROP_FIRST_HANDLER
 #include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
 
 #include <stdbool.h>
+
+// The CFG names an arm by its tagged ROP_OP_ number, not its handler id
+#undef ROP_ARM
+#define ROP_ARM(name) ROP_OP_##name
 
 #undef SUCCESS
 #undef ERROR
@@ -363,10 +367,10 @@ assemble_pcmap(struct assembler *a, _PyRegCfg *cfg)
 
 /* The loop word of a for statement: the ForIter arm that the translator
  * emits, before any specialization chooses another */
-#define IS_FOR_ITER(op) ((op)->opcode == ROP_HANDLER_ForIter_Generic)
+#define IS_FOR_ITER(op) ((op)->opcode == ROP_OP_ForIter_Generic)
 
 /* The delegation word of await and yield from */
-#define IS_SEND(op) ((op)->opcode == ROP_HANDLER_Send_Generic)
+#define IS_SEND(op) ((op)->opcode == ROP_OP_Send_Generic)
 
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
 int _PyIR_MaxForward = IR_MAX_FORWARD;
@@ -403,14 +407,14 @@ operand_word_count(int n)
 static int
 call_has_self(const _PyRegOp *op)
 {
-    return op->opcode != CALL_FUNCTION_EX &&
+    return op->opcode != ROP_OP_CallEx_Generic &&
            !(op->flags & _PyReg_CALL_NO_SELF);
 }
 
 static int
 call_noperands(const _PyRegOp *op)
 {
-    if (op->opcode == CALL_FUNCTION_EX) {
+    if (op->opcode == ROP_OP_CallEx_Generic) {
         return 1 + !(op->flags & _PyReg_CALL_NO_KWARGS);
     }
     return op->nread - 1 - !call_has_self(op);
@@ -421,11 +425,11 @@ call_noperands(const _PyRegOp *op)
 static uint32_t
 call_operand_field(_PyRegCfg *cfg, const _PyRegOp *op, int k, int n)
 {
-    if (op->opcode == CALL_KW && k == n - 1) {
+    if (op->opcode == ROP_OP_CallKw_Generic && k == n - 1) {
         return op->kwnames > 0 ? (uint32_t)(op->kwnames - 1) : 0;
     }
     const int *in = _PyReg_IN(cfg, op);
-    int first = op->opcode == CALL_FUNCTION_EX ? 2 : 2 - call_has_self(op);
+    int first = op->opcode == ROP_OP_CallEx_Generic ? 2 : 2 - call_has_self(op);
     return (uint32_t)_PyRegCfg_Slot(cfg, in[first + k]);
 }
 
@@ -476,12 +480,8 @@ span_elems(_PyRegCfg *cfg, const _PyRegOp *op, int counts[2], int *elems)
         span_out = 1;
     }
     else {
-        // The span is the outputs unless the word has a destination of its own
-        int has_dst = 0;
-        for (int f = 0; f < 4; f++) {
-            has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
-        }
-        span_out = !has_dst;
+        // The span is the outputs unless the word reads it (_PyIR_SingleSpanReads())
+        span_out = !_PyIR_SingleSpanReads(fmt);
         counts[0] = span_out ? op->nout : op->nread - nfixed_in;
     }
     int n = 0;
@@ -516,12 +516,11 @@ span_nelems(_PyRegCfg *cfg, const _PyRegOp *op)
     if (_PyIR_SpanCountFields(fmt) == 2) {
         return op->nout + op->nread;
     }
-    int nfixed_in = 0, has_dst = 0;
+    int nfixed_in = 0;
     for (int f = 0; f < 4; f++) {
         nfixed_in += fmt->roles[f] >= _PyIR_ROLE_IN0;
-        has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
     }
-    return has_dst ? op->nread - nfixed_in : op->nout;
+    return _PyIR_SingleSpanReads(fmt) ? op->nread - nfixed_in : op->nout;
 }
 
 /* The words of a span instruction (pycore_ir.h, _PyIR_SpanElement()): the
@@ -568,6 +567,9 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
         else if (role >= _PyIR_ROLE_IN0) {
             fields[f] = (uint32_t)_PyRegCfg_Slot(cfg, _PyReg_IN(cfg, op)[fixed_in++]);
         }
+        else if (role == _PyIR_ROLE_FB) {
+            fields[f] = (uint32_t)(op->fb > 0 ? op->fb : IR_FB_SHARED);
+        }
         else if (role == _PyIR_ROLE_IMM) {
             // A scalar next to the spans (Function's `present`): the op's oparg
             fields[f] = (uint32_t)op->oparg;
@@ -594,13 +596,21 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
 static int
 call_role_flags(const _PyRegOp *op)
 {
-    if (op->opcode == CALL_FUNCTION_EX) {
-        return (op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0;
+    if (op->opcode == ROP_OP_CallEx_Generic) {
+        return IR_F_EX | ((op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0);
     }
-    if (op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW) {
-        return (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
+    if (op->opcode == ROP_OP_CallKw_Generic) {
+        return IR_F_KW | ((op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0);
     }
-    assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)));
+    if (op->opcode == ROP_OP_Call_Generic) {
+        int flags = (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
+        if (op->flags & _PyReg_CALL_UNINTERRUPTED) {
+            flags |= IR_F_UNINTERRUPTED;
+        }
+        return flags;
+    }
+    assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS |
+                          _PyReg_CALL_UNINTERRUPTED)));
     return 0;
 }
 
@@ -612,26 +622,11 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     int opcode = op->opcode;
     int oparg = op->oparg;
     /* A rule that emitted a register family's arm named its handler */
-    if (opcode >= IR_NUM_OLD_HANDLERS) {
-        return opcode;
+    if (ROP_CFG_IS_ARM(opcode)) {
+        return ROP_CFG_HANDLER(opcode);
     }
-    /* With the baseline JIT on, frame entries and resumes are its warm-up
-     * events and hand-offs (Python/jit.c): a choice made here, so that with
-     * the JIT off the words are what they were.  A backedge's is the Jump
-     * family's (the translator's rule). */
-    if (opcode == RESUME && _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
-        return RESUME_JIT;
-    }
-    if (opcode == BINARY_OP) {
-        // NB_SUBSCR is the GetItem family's, never a BINARY_OP handler
-        if (oparg >= NB_SUBSCR) {
-            PyErr_Format(PyExc_SystemError,
-                         "invalid BINARY_OP operation %d", oparg);
-            return ERROR;
-        }
-        return _PyIR_BINARY_OP_FIRST + oparg;
-    }
-    return opcode;
+    assert(_PyIR_OpcodeHandler[opcode] != _PyIR_NO_HANDLER);
+    return _PyIR_OpcodeHandler[opcode];
 }
 
 /* END_ASYNC_FOR names its semantic SEND site for branch observation. */
@@ -783,13 +778,20 @@ done:
     return res;
 }
 
+/* The translator's Resume words (the rule of RESUME in Python/regcfg.c) */
+static inline int
+is_resume_word(int opcode)
+{
+    return opcode == ROP_OP_Resume_Poll || opcode == ROP_OP_Resume_Warm;
+}
+
 static int
 next_frontend_op(_PyRegCfg *cfg, int first, int skip_resume)
 {
     while (first < cfg->nops) {
         int opcode = cfg->ops[first].opcode;
         if (opcode != _PyReg_DEAD && opcode != NOP &&
-            !(skip_resume && opcode == RESUME))
+            !(skip_resume && is_resume_word(opcode)))
         {
             return first;
         }
@@ -853,7 +855,7 @@ lower_completions(_PyRegCfg *cfg)
             op->completion = target + 1;
             if (IS_FOR_ITER(op)) {
                 int pop = next_frontend_op(cfg, target + 1, 0);
-                if (pop < 0 || cfg->ops[pop].opcode != ROP_HANDLER_IterClose_Retire ||
+                if (pop < 0 || cfg->ops[pop].opcode != ROP_OP_IterClose_Retire ||
                     cfg->ops[pop].nread != 2 ||
                     memcmp(_PyReg_IN(cfg, &cfg->ops[pop]),
                            _PyReg_OUT(cfg, op), 2 * sizeof(int)))
@@ -877,7 +879,7 @@ lower_completions(_PyRegCfg *cfg)
             cfg->ops[target].flags |= _PyReg_COMPLETED;
         }
         else if (op->opcode == RETURN_GENERATOR ||
-                 op->opcode == ROP_HANDLER_Yield_Ordinary)
+                 op->opcode == ROP_OP_Yield_Ordinary)
         {
             if (op->flags & _PyReg_DISCARD) {
                 /* The ordinary fresh-result sink pass already proved the
@@ -984,13 +986,13 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             continue;
         }
         // A register instruction arm is its own handler
-        assert(op->opcode >= ROP_FIRST_HANDLER ||
+        assert(ROP_CFG_IS_ARM(op->opcode) ||
                (!IS_PSEUDO_INSTR(op->opcode) && IS_VALID_OPCODE(op->opcode)));
         // The marker of a generator's code runs nothing: a call creates the
         // generator, with its frame at the entry RESUME
         if (op->opcode == NOP || op->opcode == RETURN_GENERATOR ||
             (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
-            op->handler = NOP;
+            op->handler = IR_H_NOP;
             op->nwords = 0;
             continue;
         }
@@ -1004,7 +1006,7 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             if (op->noperands > IR_FIELD_MAX) {
                 return too_large("call operands", op->noperands);
             }
-            if (op->opcode == CALL_KW && op->kwnames - 1 >= IR_FIELD_MAX) {
+            if (op->opcode == ROP_OP_CallKw_Generic && op->kwnames - 1 >= IR_FIELD_MAX) {
                 return too_large("call keyword names constant", op->kwnames - 1);
             }
             op->nwords += operand_word_count(op->noperands);
@@ -1329,6 +1331,11 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             }
             if (_PyIR_FormatOf(op->handler)->operands == _PyIR_OPERANDS_SPANS) {
                 RETURN_IF_ERROR(encode_spans(cfg, op, &words[w]));
+                if (_PyIR_FormatOf(op->handler)->fixed_words) {
+                    // The feedback entry of a span word that has no head field
+                    // left for it (SuperMethod)
+                    words[w + 1] = (_PyIRWord)(op->fb > 0 ? op->fb : IR_FB_SHARED);
+                }
                 continue;
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
@@ -1448,7 +1455,7 @@ make_ir(struct assembler *a, _PyRegCfg *cfg, int nfixed, int nslots,
     ir->first_traceable = ir->nwords;
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
-        if (op->nwords && op->opcode == RESUME &&
+        if (op->nwords && is_resume_word(op->opcode) &&
             (op->oparg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_GEN_EXPR_START)
         {
             ir->first_traceable = (uint32_t)op->word;

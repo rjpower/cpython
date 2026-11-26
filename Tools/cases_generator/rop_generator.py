@@ -410,6 +410,13 @@ LOC_NAMES = {Slot.A: "_PyIR_LOC_A", Slot.B: "_PyIR_LOC_B", Slot.C: "_PyIR_LOC_C"
              Slot.D: "_PyIR_LOC_D"}
 
 
+# The layout of an argument descriptor (Args) by the stack op that the
+# family's words stand for: CALL_KW's last operand is the constant tuple of
+# the names, CALL_FUNCTION_EX has no self operand
+ARGS_OPERANDS = {"CALL_KW": "_PyIR_OPERANDS_KW",
+                 "CALL_FUNCTION_EX": "_PyIR_OPERANDS_EX"}
+
+
 def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     """The fields of the arm's _PyIRFormat row.  Which homes a word reads and
     defines come from the family's derived encoding: a Src operand is an
@@ -440,6 +447,9 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     for slot in enc.elements:
         roles[HEAD_FIELDS[slot]] = "_PyIR_ROLE_ELEMENT"
     for pl in enc.placements:
+        if pl.kind is FieldKind.flag:
+            # A flag of the handler field: no field of the format
+            continue
         param = params[pl.operand]
         inner = param.type.arg if isinstance(param.type, WrapType) else param.type
         is_args = isinstance(inner, HandleType) and inner.handle is Handle.Args
@@ -491,8 +501,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         elif pl.kind is FieldKind.feedback:
             role = "_PyIR_ROLE_FB"
             fb_schema = param.type.schema.value
-            if fb_schema == "Truth":
-                # Truth sites share the unary entry
+            if fb_schema in ("Truth", "Unpack", "Super"):
+                # Truth, unpack and super sites share the unary entry
                 fb_schema = "Unary"
             elif fb_schema == "Item":
                 # The item families keep the entry of BINARY_OP and STORE_SUBSCR
@@ -555,9 +565,10 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         imm, fb, ninputs,
         2 if window else -ninputs if writes or pair_writes else None,
         (1 << ninputs) - 1,
-        fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
+        fb_schema, (ARGS_OPERANDS.get(fam.ops[0], "_PyIR_OPERANDS_CALL") if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
-        0 if has_args else enc.words, writes + pair_writes, arm_transfer(exits, ninputs, arm.family), target,
+        0 if has_args else enc.words, writes + pair_writes, arm_transfer(exits, ninputs, arm.family, writes or pair_writes > 0 or bool(
+            {e.name for e in arm.contract.effect_set} & HOME_EFFECTS)), target,
         ("_PyIR_OBSERVER_NONE" if send_window else
          "_PyIR_OBSERVER_FOR_BODY" if window else
          "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE"),
@@ -571,7 +582,11 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
 ABNORMAL_EXITS = frozenset({"raise", "unwind", "redirect"})
 
 
-def arm_transfer(exits: set[str], ninputs: int, family: str) -> str:
+# Effects of an arm that may change what its homes hold
+HOME_EFFECTS = frozenset({"writes", "releases", "allocates"})
+
+
+def arm_transfer(exits: set[str], ninputs: int, family: str, touches_homes: bool) -> str:
     """The normal-edge ownership contract (_PyIR_TRANSFER_*) that an arm's
     declared exits give.  An arm whose every normal exit leaves the frame
     (return, exit) takes its one input with it: EXIT.  The other contracts
@@ -579,6 +594,9 @@ def arm_transfer(exits: set[str], ninputs: int, family: str) -> str:
     normal = exits - ABNORMAL_EXITS
     if normal and normal <= {"return", "exit"} and ninputs == 1:
         return "_PyIR_TRANSFER_EXIT"
+    # A word with no operand that touches no home leaves every owner as it was
+    if not ninputs and not touches_homes and normal <= {"next", "jump"}:
+        return "_PyIR_TRANSFER_PRESERVE"
     # BranchNone tests its value and retires it on both edges
     if family == "BranchNone":
         return "_PyIR_TRANSFER_RETIRE"
@@ -723,7 +741,7 @@ def write_encodings(out: TextIO, p: Products) -> None:
         for pl in enc.placements:
             role, optional = operand_role(params[pl.operand])
             slots = pl.slots
-            offset = slots[0].offset + pl.shift if slots else 0
+            offset = slots[0].offset + pl.shift if slots else pl.shift
             flag = (f"IR_F_LOCAL_{slots[0].name}" if pl.kind is FieldKind.home
                     and slots and slots[0].word == 0 else "0")
             out.write(f'    {{"{pl.operand}", ROP_FIELD_{pl.kind.name.upper()}, '
@@ -754,7 +772,7 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     write_header(__file__, sources, out)
     families = sorted(prog.families)
     out.write("\n#ifndef Py_INTERNAL_ROP_METADATA_H\n#define Py_INTERNAL_ROP_METADATA_H\n")
-    out.write('\n#include "opcode_ids.h"        // IR_NUM_OLD_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
+    out.write('\n#include "ir_handler_ids.h"     // IR_NUM_OLD_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
     wrapped = wrapped_arms(prog)
     twins = len(wrapped)
     out.write("\n/* The arms' handler ids follow the old handlers, in definition order; the\n"
@@ -776,12 +794,26 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     for k, name in enumerate(wrapped):
         out.write(f"#define {handler(name)}_Observed "
                   f"(ROP_FIRST_HANDLER + {len(prog.arms) + k})\n")
+    out.write("\n/* The translator's CFG holds stack opcodes below 256 in its ops, so an op\n"
+              " * that names an arm is tagged: ROP_OP_<arm> is ROP_CFG_BASE plus the arm's\n"
+              " * handler offset, and ROP_CFG_HANDLER() takes it back to the handler id */\n")
+    out.write("#define ROP_CFG_BASE 512\n")
+    out.write("#define ROP_CFG_IS_ARM(op) ((op) >= ROP_CFG_BASE)\n")
+    out.write("#define ROP_CFG_HANDLER(op) ((op) - ROP_CFG_BASE + ROP_FIRST_HANDLER)\n")
+    for name in prog.arms:
+        out.write(f"#define ROP_OP_{c_name(name)} (ROP_CFG_BASE + {p.numbers[name]})\n")
+    for k, name in enumerate(wrapped):
+        out.write(f"#define ROP_OP_{c_name(name)}_Observed "
+                  f"(ROP_CFG_BASE + {len(prog.arms) + k})\n")
+    out.write("\n/* ROP_ARM(name) is the arm's handler id; the translator's CFG files\n"
+              " * (regcfg*.c, ir_assemble.c) redefine it as the tagged ROP_OP_<name> */\n")
+    out.write("#ifndef ROP_ARM\n#define ROP_ARM(name) ROP_HANDLER_##name\n#endif\n")
     out.write("\n/* The arm of a statically selected family that each selection admits\n"
               " * (its `select`): ROP_SELECT_<Family>_<member>... */\n")
     for name, arm in prog.arms.items():
         if arm.select:
             members = "_".join(m.value for m in arm.select)
-            out.write(f"#define ROP_SELECT_{arm.family}_{members} {handler(name)}\n")
+            out.write(f"#define ROP_SELECT_{arm.family}_{members} ROP_ARM({c_name(name)})\n")
     out.write("\n/* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */\n")
     for name, k in p.points.items():
         out.write(f"#define ROP_POINT_{c_name(name)} {k}\n")
@@ -791,7 +823,8 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
  * the head and operand words, the width and, for a home in the head, the
  * word flag that says it names a local.  A vector follows in the payload. */
 enum { ROP_FIELD_HOME, ROP_FIELD_IMM, ROP_FIELD_NAME, ROP_FIELD_CONST,
-       ROP_FIELD_FEEDBACK, ROP_FIELD_TARGET, ROP_FIELD_VECTOR };
+       ROP_FIELD_FEEDBACK, ROP_FIELD_TARGET, ROP_FIELD_VECTOR,
+       ROP_FIELD_FLAG };
 enum { ROP_ROLE_NONE, ROP_ROLE_SRC, ROP_ROLE_DST, ROP_ROLE_LOCAL, ROP_ROLE_CELL,
        ROP_ROLE_FREE, ROP_ROLE_ITERPAIR, ROP_ROLE_SENDWINDOW };
 
@@ -871,7 +904,7 @@ def write_selectors(out: TextIO, prog: Program) -> None:
         for a in arms:
             tests = " && ".join(f"({select_dimension(m)}) == ROP_SELECT_{m.value.upper()}"
                                 for m in a.select)
-            out.write(f"    ({tests}) ? {handler(a.name)} : \\\n")
+            out.write(f"    ({tests}) ? ROP_ARM({c_name(a.name)}) : \\\n")
         out.write("    -1)\n")
     out.write("\n")
 

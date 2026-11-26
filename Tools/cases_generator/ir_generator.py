@@ -38,18 +38,14 @@ A wide oparg of an instruction with an entry takes CD if two fields are free
 and otherwise the one free field, as D (LOAD_ATTR, STORE_ATTR and
 LOAD_SUPER_ATTR; the compiler lowers an access whose oparg does not fit,
 Python/codegen.c); only an oparg that has no field left stays in the entry
-(COMPARE_OP, CONTAINS_OP and BINARY_OP), so that the sites past the
+(COMPARE_OP and CONTAINS_OP), so that the sites past the
 feedback limit, which share entry 0 and never specialise, need no second
-handler.  BINARY_OP has one handler per operation (BINARY_OP_ADD, ...), each
-with its operation as a constant, and its specialisations deoptimise to the
-handler of the operation that the entry records.
+handler.
 
 Invariants:
 
 - The handler index of an instruction with an opcode is its opcode. IR-only
-  handlers (annotation `ir_only`) follow the pseudo-instructions, then the
-  handlers of the
-  BINARY_OP operations in the order of their NB_ constants.
+  handlers (annotation `ir_only`) follow the pseudo-instructions.
 - Members of a family share the format of the family, and INSTRUMENTED_X that
   of X, so specialisation and instrumentation rewrite only the handler field.
   INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION take no format: they run
@@ -99,6 +95,7 @@ from dataclasses import dataclass, fields, replace
 
 from analyzer import (
     Analysis,
+    stack_ops_of,
     IR_HELPER_CALLEES,
     IR_HELPER_EFFECTS,
     IR_MARKER_EFFECTS,
@@ -195,6 +192,7 @@ class ExecutionVariant:
 EXECUTION_VARIANTS: dict[str, ExecutionVariant] = {}
 
 
+
 def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
     """Intersect only bodies selectable with the same physical entry."""
     # A family's baseline(...) arm is compiled code's, never a word's
@@ -227,9 +225,9 @@ OPERAND_CALLS = {
 # operand.  A handler of the family reads them from its word, so
 # specialisation and instrumentation keep them by keeping the flags.
 CALL_ROLE_FLAGS = {
-    "CALL": ("IR_F_NO_SELF",),
-    "CALL_KW": ("IR_F_NO_SELF",),
-    "CALL_FUNCTION_EX": ("IR_F_NO_KW",),
+    "CALL": ("IR_F_NO_SELF", "IR_F_UNINTERRUPTED"),
+    "CALL_KW": ("IR_F_NO_SELF", "IR_F_KW"),
+    "CALL_FUNCTION_EX": ("IR_F_NO_KW", "IR_F_EX"),
 }
 
 
@@ -318,32 +316,6 @@ APPEND_SOURCES = {"LIST_APPEND": 1, "SET_ADD": 1, "MAP_ADD": 2}
 # Instructions whose oparg can need more than 12 bits although their bodies
 # name no constant or name table, see wide_oparg().
 WIDE_OPARGS = ("UNPACK_EX",)
-
-# The operations of BINARY_OP, by their NB_ constants in Include/opcode.h.
-BINARY_OP_FAMILY = "BINARY_OP"
-
-
-def binary_ops() -> list[str]:
-    "The NB_ operations, in the order of their values"
-    ops: dict[int, str] = {}
-    with open(ROOT / "Include/opcode.h") as f:
-        for line in f:
-            m = re.match(r"#define NB_(\w+)\s+(\d+)", line)
-            # NB_SUBSCR is the GetItem family's (register_ops/items.rop), not
-            # a handler of BINARY_OP
-            if m and m.group(1) not in ("OPARG_LAST", "SUBSCR"):
-                ops[int(m.group(2))] = m.group(1)
-    assert sorted(ops) == list(range(len(ops))), ops
-    return [ops[i] for i in range(len(ops))]
-
-
-def binary_op_handlers(analysis: Analysis) -> list[str]:
-    """The generic handlers of BINARY_OP, one per operation, or none if the
-    input defines no BINARY_OP"""
-    if BINARY_OP_FAMILY not in analysis.instructions:
-        return []
-    return [f"{BINARY_OP_FAMILY}_{op}" for op in binary_ops()]
-
 
 @dataclass
 class IRFormat:
@@ -601,9 +573,8 @@ INPLACE_READERS = {
     "monitor_stop_iteration", "PyValue_Borrow",
     "_PyEval_FormatKwargsError",
     # Python/specialize.c: they read types and values
-    "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
+    "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp",
-    "_Py_Specialize_StoreAttr",
 }
 
 
@@ -623,22 +594,9 @@ OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
 # (OBJECT_READERS_SEEN); that a name only reads is checked by review.
 # Uses inside assert() vanish from release builds and are not checked.
 OBJECT_READERS = {
-    # Statements
-    "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
     "Py_TYPE",
     "PyUnicode_CheckExact",
-    "_PyObject_GetManagedDict", "_PyObject_InlineValues",
-    "_PyObject_Shape", "_PyObject_ValueSlot",
-    # Operations that read their operands and count what they keep
-    "PyErr_GivenExceptionMatches",
-    "PyUnicode_Concat",
-
-    "value_exception_group_match",
-    "_PyTemplate_Build",
-    # The indirect calls of BINARY_OP_EXTEND, through a table of functions
-    # that read their operands
-    "action",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -1023,99 +981,72 @@ def group_name(inst: Instruction, analysis: Analysis) -> str:
 
 
 def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
-    return {**analysis.instructions, **analysis.ir_only}
+    return {**analysis.instructions, **analysis.ir_only,
+            **analysis.translator_only}
 
 
 # Opcodes of the compiler's stack model that no word ever has: the register
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("RETURN_GENERATOR", "CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
-              "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
-              "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
-              "LOAD_FAST_LOAD_FAST",
-              "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
-              "STORE_FAST_STORE_FAST", "TO_BOOL", "UNARY_NOT", "POP_JUMP_IF_FALSE",
-              "POP_JUMP_IF_TRUE", "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE",
-              "JUMP_FORWARD", "JUMP_BACKWARD", "JUMP_BACKWARD_NO_INTERRUPT",
-              "INSTRUMENTED_JUMP_FORWARD", "INSTRUMENTED_JUMP_BACKWARD",
-              "INSTRUMENTED_POP_JUMP_IF_TRUE", "INSTRUMENTED_POP_JUMP_IF_FALSE",
-              "INSTRUMENTED_POP_JUMP_IF_NONE", "INSTRUMENTED_POP_JUMP_IF_NOT_NONE",
-              "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
-              "INSTRUMENTED_JUMP_IF_FALSE_OR_POP", "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
-              "LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
-              "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP",
-              "POP_TOP", "MAKE_FUNCTION", "SET_FUNCTION_ATTRIBUTE",
-              "CALL_INTRINSIC_1", "CALL_INTRINSIC_2",
-              "LOAD_NAME", "LOAD_LOCALS", "LOAD_BUILD_CLASS",
-              "LOAD_FROM_DICT_OR_GLOBALS", "STORE_NAME", "STORE_GLOBAL",
-              "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM",
-              "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
-              "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
-              "COMPARE_OP", "IS_OP", "CONTAINS_OP",
-              "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
-              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
-              "GET_AITER", "GET_ANEXT", "GET_AWAITABLE",
-              "YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
-              "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER",
-              "INSTRUMENTED_FOR_ITER", "INSTRUMENTED_END_FOR",
-              "INSTRUMENTED_POP_ITER", "SEND", "INSTRUMENTED_SEND", "END_SEND",
-              "INSTRUMENTED_END_SEND")
+#
+# A stack op whose body only aborts (`exits(abort)`, a ported op's stub) is
+# stack-only by that declaration: a port edits no list.  These are the ones
+# that have a real body, or none, and still have no handler.
+STACK_ONLY_WITH_BODY = (
+    "PUSH_NULL", "TO_BOOL", "UNARY_NOT", "POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
+    "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE", "JUMP_FORWARD", "JUMP_BACKWARD",
+    "JUMP_BACKWARD_NO_INTERRUPT", "JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
+    # The loop stubs keep the bodies that name their exits (FOR_ITER is a jump)
+    "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER", "INSTRUMENTED_FOR_ITER",
+    "INSTRUMENTED_END_FOR", "INSTRUMENTED_POP_ITER",
+    "SEND")
 
-# Handlers that the register passes make and that no stack bytecode has, but
-# whose opcode numbers lie in the opcode space (their instrumented forms are
-# tables indexed by opcode).  They are not in opcode.opmap, which lists what
-# co_code can hold.
-IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
+# Abort stubs that still have a handler and an id (the cell ops that CE
+# ported were left out of the old list; IR_OPERANDS is a word, not an op).
+# Dropping one frees its id, which changes the generated products, so it goes
+# with its own regen.
+ABORT_STUBS_WITH_HANDLERS = (
+    "IR_OPERANDS", "MAKE_CELL", "DELETE_DEREF", "LOAD_FROM_DICT_OR_DEREF", "LOAD_DEREF",
+    "STORE_DEREF", "COPY_FREE_VARS", "CACHE", "RESERVED")
+
+
+def is_abort_body(analysis: Analysis, name: str) -> bool:
+    "Whether name is a ported stack op's stub: a body that only aborts"
+    inst = all_instructions(analysis).get(name)
+    return inst is not None and any(
+        isinstance(part, Uop) and tuple(part.clauses.get("exits", ())) == ("abort",)
+        for part in inst.parts)
+
+
+def stack_only_names(analysis: Analysis) -> frozenset[str]:
+    "The stack ops that have a format for the CFG and no handler"
+    return frozenset(
+        {name for name in all_instructions(analysis)
+         if is_abort_body(analysis, name) and name not in ABORT_STUBS_WITH_HANDLERS}
+        | set(STACK_ONLY_WITH_BODY))
 
 
 def ir_only_handler_names(analysis: Analysis) -> list[str]:
     "The IR-only handlers, in the order that numbers them"
-    return (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-            + list(execution_variants(analysis)))
+    return sorted(analysis.ir_only) + list(execution_variants(analysis))
 
 
-def ir_only_numbers(analysis: Analysis, names: list[str]) -> list[int]:
-    """The numbers of the IR-only handlers, in order.  They take the free
-    numbers below 256 and continue from 256.  The handlers of BINARY_OP are
-    one run of consecutive numbers (_PyIR_BINARY_OP_FIRST + operation), so
-    the free numbers that are left short of such a run stay unused."""
-    free = list(analysis.free_ids)
-    wide = 256
-    binary = binary_op_handlers(analysis)
-    first = names.index(binary[0]) if binary else -1
-    numbers: list[int] = []
-    for i, name in enumerate(names):
-        if i == first:
-            while free and not run_fits(free, len(binary)):
-                free.pop(0)
-        if free:
-            numbers.append(free.pop(0))
-        else:
-            numbers.append(wide)
-            wide += 1
-    return numbers
-
-
-def run_fits(free: list[int], count: int) -> bool:
-    "Whether the first count free numbers are consecutive"
-    return len(free) >= count and free[count - 1] - free[0] == count - 1
+def inherited_handler_names(analysis: Analysis) -> list[str]:
+    "The stack ops that have a handler, in the order of their stack opcodes"
+    stack_only = stack_only_names(analysis)
+    return [name for name, _ in sorted(
+        ((name, inst.opcode) for name, inst in analysis.instructions.items()
+         if name not in stack_only), key=lambda item: item[1])]
 
 
 def handler_ids(analysis: Analysis) -> dict[str, int]:
-    """Handler index of each handler, by name.  The real opcodes keep their
-    opcode.  The IR-only handlers, in a fixed order, take the numbers below
-    256 that no opcode holds, then continue from 256: a pseudo-instruction
-    has no handler, so its number is free to name one.  BINARY_OP itself has
-    none: its operations do, and a STACK_ONLY opcode has none."""
-    ids = {name: inst.opcode for name, inst in analysis.instructions.items()
-           if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
-    names = ir_only_handler_names(analysis)
-    for number, name in zip(ir_only_numbers(analysis, names), names):
-        ids[name] = number
-    return ids
+    """Handler id of each handler, by name.  The ids are dense and their own:
+    a handler's id is no stack opcode, and a stack-only stub has none.  The
+    handlers that a stack op has come first, in the order of the stack
+    opcodes, then the IR-only handlers; the arms follow them."""
+    names = inherited_handler_names(analysis) + ir_only_handler_names(analysis)
+    return {name: number for number, name in enumerate(names)}
 
 
 def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
@@ -1123,8 +1054,6 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
     insts = all_instructions(analysis)
     result = {name: insts[name] for name in handler_ids(analysis)
               if name in insts}
-    for name in binary_op_handlers(analysis):
-        result[name] = insts[BINARY_OP_FAMILY]
     for name, variant in execution_variants(analysis).items():
         if variant.base in result:
             result[name] = result[variant.base]
@@ -2010,8 +1939,6 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
         fmt = compute_format(group, members)
         for m in members:
             formats[m.name] = fmt
-    for name in binary_op_handlers(analysis):
-        formats[name] = formats[BINARY_OP_FAMILY]
     for name in sorted(transparent):
         # INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION call a monitoring
         # callback before they run the word's own handler
@@ -3065,8 +2992,6 @@ class IREmitter(Emitter):
         self.observer_errors = set()
         self.observer_terminals = set()
         self.observer_calls = set()
-        # Emitting the one body that every generic BINARY_OP operation shares
-        self.shared_binary_op = False
         # The uops of the handler being printed whose entry sets the stub's
         # ESCAPED bit (stub_escapes()), or None if it has no stub
         self.stub_escapes: frozenset[str] | None = None
@@ -3112,12 +3037,10 @@ class IREmitter(Emitter):
         self._replacers["IR_UNPACK_ITEMS"] = self.unpack_items_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_CLOSE_INPUTS"] = self.close_input_homes
-        self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
         self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
         self._replacers["IR_BUILD_LIST"] = self.home_helper
-        self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
         for marker in ELEMENT_INTRINSICS:
             self._replacers[marker] = self.element_operation
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
@@ -3249,12 +3172,8 @@ class IREmitter(Emitter):
                 raise analysis_error("steal-success helper needs an unboxed terminal handoff", tkn)
             helper = IR_HELPER_CALLEES[tkn.text]
             expression = f"{helper}({local.name}, oparg)"
-        elif tkn.text == "IR_LOOKUP_SPECIAL":
-            expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
-                          f"&{local.name}[0], &{local.name}[1])")
         else:
-            helper = {"IR_BUILD_STRING": "_Py_BuildString_ValueSteal",
-                      "IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
+            helper = {"IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
                       "IR_BUILD_SET": "_Py_BuildSet_ValueSteal"}[tkn.text]
             expression = f"{helper}(frame, {local.name}, oparg)"
         self.out.emit_at(expression, tkn)
@@ -4988,11 +4907,6 @@ class IREmitter(Emitter):
         deopt = self.record.deopt if self.record is not None else ""
         kind, _, head = deopt.partition("(")
         head = head.rstrip(")")
-        if kind == "BINARY_OP_BY_ENTRY":
-            # The handler of the operation that the entry records
-            self.emit(f"UPDATE_MISS_STATS({BINARY_OP_FAMILY});\n")
-            self.emit(f"IR_DEOPT_BINARY_OP({field_expr(fmt.fb)});\n")
-            return
         if kind == "GENERATOR_SHAPE":
             if not head:
                 raise analysis_error("generator deopt has no complete source shape", inst.where)
@@ -5005,7 +4919,12 @@ class IREmitter(Emitter):
             self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{head});\n")
             return
         if kind == "FAMILY_HEAD":
-            super().emit_jump_to_predicted(inst)
+            family_name = inst.family.name
+            # opcode is a handler id here: the stack op it stands for, not
+            # _PyOpcode_Deopt, names its family
+            self.emit(f"UPDATE_MISS_STATS({family_name});\n")
+            self.emit(f"assert(_PyIR_BaseOpcode(opcode) == ({family_name}));\n")
+            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{family_name});\n")
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
                              inst.where)
@@ -5251,8 +5170,6 @@ def deopt_target(inst: Instruction, analysis: Analysis) -> str:
     if inst.family is None:
         return ""
     family = inst.family.name
-    if family == BINARY_OP_FAMILY:
-        return "BINARY_OP_BY_ENTRY"
     if inst.name in analysis.ir_only:
         return f"IR_ONLY_HEAD({family})"
     return f"FAMILY_HEAD({family})"
@@ -5417,8 +5334,6 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
                  analysis: Analysis, formats: dict[str, IRFormat]) -> OperationRecord:
     "The record of handler name, which runs inst in a word of format fmt"
     operation = None
-    if name != inst.name and name not in EXECUTION_VARIANTS:
-        operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     oparg = oparg_source(inst, fmt, operation)
     walk = walk_values(inst)
     outputs = [Entry(external, item, aliased)
@@ -5495,7 +5410,6 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
 def build_records(analysis: Analysis,
                   formats: dict[str, IRFormat]) -> dict[str, OperationRecord]:
     "The record of every handler, by name"
-    shared = set(binary_op_handlers(analysis))
     records = {}
     for name, inst in handler_instructions(analysis).items():
         record = build_record(name, inst, formats[name], analysis, formats)
@@ -5503,8 +5417,6 @@ def build_records(analysis: Analysis,
             record = replace(record, form=f"EDGE_TWIN({EDGE_TWINS[name][0]})")
         elif name in EVENT_TWINS:
             record = replace(record, form=f"EVENT_TWIN({EVENT_TWINS[name][1]})")
-        elif name in shared:
-            record = replace(record, form="SHARED_BODY(binary_op)")
         check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
         ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
         fmt = formats[name]
@@ -5819,7 +5731,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("home drain needs its sole owning array and unconditional handoff", token)
                 index = 0
                 covered.add(id(args[0][0]))
-            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", "IR_BUILD_SET",
+            elif token.text in {"IR_BUILD_MAP", "IR_BUILD_SET",
                                 *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)
@@ -5994,7 +5906,7 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
         tstate->py_recursion_remaining--;
         RELOAD_STACK();
         LOAD_IP(0);
-        IR_SKIP_RESUME();
+        ROP_ENTER_GATE();
         DTRACE_FUNCTION_ENTRY();
         LLTRACE_RESUME_FRAME();
     }"""
@@ -6414,22 +6326,17 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     emitter.call_finished = False
     is_target = inst.is_target and name == inst.name
     out.emit("\n")
-    if emitter.shared_binary_op:
-        out.emit("LABEL(binary_op) {\n")
-        handler_id = "_PyIR_BINARY_OP_FIRST + binary_op_operation"
-    else:
-        out.emit(f"TARGET({name}) {{\n")
-        handler_id = canonical_handler(name)
-    out.emit(f"int opcode = {handler_id};\n")
+    out.emit(f"TARGET({name}) {{\n")
+    handler_id = canonical_handler(name)
+    out.emit(f"int opcode = IR_H_{handler_id};\n")
     out.emit(f"(void)(opcode);\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR",
-                                   "STORE_ATTR_WITH_HINT", "LOAD_GLOBAL",
+                                   "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
-                                   "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
                                    "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
                                    "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr;\n")
@@ -6442,7 +6349,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
              else "next_instr += 1;\n")
     out.emit(f"INSTRUCTION_STATS({handler_id});\n")
     if is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
+        qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         back = ("IR_CALL_LENGTH(ir_word)" if fmt.operands != "_PyIR_OPERANDS_NONE"
                 else "1")
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - {back};\n")
@@ -6462,8 +6369,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                  f"IR_FB({field_expr(fmt.fb)});\n")
     if record.oparg:
         if record.oparg == "OPERATION":
-            out.emit("int oparg = binary_op_operation;\n" if emitter.shared_binary_op
-                     else f"int oparg = {operation};\n")
+            out.emit(f"int oparg = {operation};\n")
         elif record.oparg == "FBARG_ENTRY":
             out.emit("int oparg = (int)((_PyFbHeader *)fb)->arg;\n")
         elif record.oparg == "FBARG":
@@ -6513,7 +6419,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
             out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
             out.emit("(void)call_feedback;\n")
     if inst.properties.uses_opcode:
-        out.emit(f"opcode = {canonical_handler(name)};\n")
+        out.emit(f"opcode = IR_H_{canonical_handler(name)};\n")
     mode = record.store_mode
     if mode == STORE_LEAVE:
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
@@ -6601,15 +6507,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     out.emit("}")
     out.emit("\n")
     assert isinstance(stack, IRStack)
-    if not emitter.ownership_events and inst.name == "BINARY_OP":
-        # The generic operation reads both inputs, detaches them and writes
-        # a fresh result: the program that the verifier proves homes with
-        for index in range(2):
-            emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_READ", src=index))
-            emitter.ownership_events.append(OwnershipEvent(
-                "_PyIR_OWNER_TAKE", dst=index, src=index))
-        emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_FRESH"))
-        emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_NORMAL_EXIT"))
     if not emitter.ownership_events:
         kind = normal_transfer_kind(inst, fmt)
         if kind != "_PyIR_TRANSFER_UNKNOWN":
@@ -6652,7 +6549,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
 EVALUATOR_ONLY = re.compile(
     r"\bgoto\b|\bLABEL_\w+|\bTARGET_\w+|\bopcode_targets\b|\bJUMP_TO_LABEL\b|"
     r"\blastopcode\b|\b(?:process_error_origin|process_error_entry|gen_value|"
-    r"gen_dying|gen_empty|gen_transfer|binary_op_operation)\b")
+    r"gen_dying|gen_empty|gen_transfer)\b")
 
 
 def check_body(name: str, text: str, where: object, routine_operand: str = "") -> None:
@@ -6737,27 +6634,6 @@ def function_form(name: str, text: str) -> str:
     marker = f"TARGET({name}) {{"
     assert marker in text
     return text.replace(marker, form_header(f"ir_run_{name}"), 1)
-
-
-# The operation of the shared BINARY_OP body: the operand of its routine,
-# ir_binary_op(), which the generic handlers pass from their number and the
-# specialisations' deopts from their entry
-BINARY_OP_OPERAND = "binary_op_operation"
-
-
-def binary_op_routine(text: str) -> str:
-    "The function form of the shared BINARY_OP body"
-    marker = "LABEL(binary_op) {"
-    assert marker in text
-    return text.replace(marker, form_header(
-        "ir_binary_op", f", _PyIRWord ir_word, int {BINARY_OP_OPERAND}"), 1)
-
-
-def binary_op_function(name: str, operation: str) -> str:
-    "The function form of the generic BINARY_OP handler `name`"
-    return (form_header(f"ir_run_{name}") +
-            f"\n    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, "
-            f"{operation});\n}}\n")
 
 
 def event_twin_function(name: str, event: str, base: str) -> str:
@@ -6943,34 +6819,12 @@ def stub_function(function: str, text: str, marker: str, extra: str = "") -> str
     return text.replace(marker, stub_header(function, extra), 1)
 
 
-BINARY_OP_STUB = stub_function_name("binary_op")
-
-
-def binary_op_stub(name: str, operation: str) -> str:
-    "The stub of the generic BINARY_OP handler `name`"
-    return (f"\nstatic Py_NO_INLINE int\n{stub_function_name(name)}({STUB_PARAMETERS})\n{{\n"
-            f"    Py_MUSTTAIL return {BINARY_OP_STUB}(tstate, frame, site, {operation});\n}}\n")
-
-
-def binary_op_family_stub(fb: str) -> str:
-    """BINARY_OP's generic stub after a specialised arm's miss: the shared
-    body with the word's operation, which its entry keeps (as the forms'
-    IR_DEOPT_BINARY_OP)"""
-    return (f"\nstatic Py_NO_INLINE int\n{stub_function_name(BINARY_OP_FAMILY)}"
-            f"({STUB_PARAMETERS})\n{{\n"
-            "    _PyIRWord ir_word = *site;\n"
-            f"    Py_MUSTTAIL return {BINARY_OP_STUB}(tstate, frame, site,\n"
-            f"        (int)((_PyFbHeader *)IR_FB({fb}))->arg);\n}}\n")
-
-
 # The transfer macros that a stub binds (g1a/abi.md).  The others that the
 # forms bind are left undefined, so that a stub using one does not compile.
 STUB_BINDINGS = {
     "DISPATCH()": "return ir_status",
     "DISPATCH_SAME_OPARG()": "return ir_status | _PyIR_AGAIN",
     "JUMP_TO_PREDICTED(name)":
-        "do { assert(ir_status == 0); return _PyIR_MISS; } while (0)",
-    "IR_DEOPT_BINARY_OP(F)":
         "do { assert(ir_status == 0); return _PyIR_MISS; } while (0)",
     "PROCESS_ERROR_AT(ingress, checkpoint, origin)": (
         "do { \\\n"
@@ -7055,13 +6909,9 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
     write_header(__file__, [], outfile)
     prologue, names = stub_prologue()
     outfile.write(prologue)
-    # The shared BINARY_OP body first: the operations' stubs call it
-    for function in sorted(stubs, key=lambda f: (f != BINARY_OP_STUB, f)):
+    for function in sorted(stubs):
         outfile.write(stubs[function])
     families = sorted({plan.family for plan in plans.values()})
-    if BINARY_OP_FAMILY in families:
-        fmt = formats[binary_op_handlers(analysis)[0]]
-        outfile.write(binary_op_family_stub(field_expr(fmt.fb)))
     for name in reversed(names):
         outfile.write(f'#pragma pop_macro("{name}")\n')
     outfile.write("\n/* The plan of each handler that has one: its region, whether "
@@ -7104,11 +6954,6 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     functions: list[str] = []
     twin_functions: list[str] = []
     outlined_names: set[str] = set()
-    # The generic handlers of BINARY_OP differ only in the operation.  Each
-    # sets it and enters the one body, which handles any operation, so that
-    # the body is in the evaluator once, not once per operation.
-    binary_ops = frozenset(binary_op_handlers(analysis))
-    shared_binary_op_done = False
     family_heads = {inst.family.name for inst in all_instructions(analysis).values()
                     if inst.family is not None} | set(analysis.families)
     plans = stub_plans(analysis)
@@ -7117,19 +6962,6 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         # The shared arms' stubs, and each family's generic (its head's)
         stub = (plan is not None and stubs is not None
                 and (plan.region == "shared" or name == plan.family))
-        if name in binary_ops:
-            operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
-            out.emit(f"TARGET({name}) {{\n")
-            out.emit(f"{BINARY_OP_OPERAND} = {operation};\n")
-            out.emit("goto LABEL_binary_op;\n")
-            out.emit("}\n")
-            functions.append(binary_op_function(name, operation))
-            if stub:
-                stubs[stub_function_name(name)] = binary_op_stub(name, operation)
-            if shared_binary_op_done:
-                continue
-            shared_binary_op_done = True
-            emitter.shared_binary_op = True
         if name in EDGE_TWINS:
             base, taken_event = EDGE_TWINS[name]
             twin_functions.append(edge_twin_function(name, base, taken_event))
@@ -7155,41 +6987,30 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                         and any(isinstance(part, Uop) and
                                 "specializing" in part.annotations
                                 for part in inst.parts))
-        outlined = ((inst.outlined or inst.properties.outlined or generic_head)
-                    and not emitter.shared_binary_op)
+        outlined = inst.outlined or inst.properties.outlined or generic_head
         buffer = io.StringIO()
         emitter.out = CWriter(buffer, 2, lines)
         generate_handler(name, inst, formats[name], emitter, emitter.out)
         emitter.out = out
         text = buffer.getvalue()
-        if emitter.shared_binary_op:
-            check_body("binary_op", text, inst.where, BINARY_OP_OPERAND)
-            functions.append(binary_op_routine(text))
-            outfile.write(text)
-            if stub:
-                stubs[BINARY_OP_STUB] = stub_function(
-                    BINARY_OP_STUB, text, "LABEL(binary_op) {",
-                    f", int {BINARY_OP_OPERAND}")
+        check_body(name, text, inst.where)
+        functions.append(function_form(name, text))
+        if stub:
+            stubs[stub_function_name(name)] = stub_function(
+                stub_function_name(name), text, f"TARGET({name}) {{")
+        if outlined:
+            outlined_names.add(name)
+            out.emit(f"TARGET({name}) {{\n")
+            out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
+            out.emit("}\n")
         else:
-            check_body(name, text, inst.where)
-            functions.append(function_form(name, text))
-            if stub:
-                stubs[stub_function_name(name)] = stub_function(
-                    stub_function_name(name), text, f"TARGET({name}) {{")
-            if outlined:
-                outlined_names.add(name)
-                out.emit(f"TARGET({name}) {{\n")
-                out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
-                out.emit("}\n")
-            else:
-                outfile.write(text)
+            outfile.write(text)
         for checkpoint in (checkpoints or {}).get(name, ()):
             if emitter.error_checkpoint_sites.get(checkpoint.id) != checkpoint:
                 raise analysis_error("error checkpoint changed during final emission", inst.where)
         emitter.handler_format = None
         emitter.execution_variant = None
         emitter.stub_escapes = None
-        emitter.shared_binary_op = False
     handlers = handler_instructions(analysis)
     for twin, (base, _) in EDGE_TWINS.items():
         if twin in handlers and base not in outlined_names:
@@ -7285,8 +7106,6 @@ def form_declarations(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ())
                    | {"UNKNOWN_OPCODE"} | {arm.name for arm in arms if arm.emitted})
     lines = [f"static _PyIRTransfer ir_run_{name}({FORM_PARAMETERS}, _PyIRWord ir_word);\n"
              for name in names]
-    lines.append(f"static _PyIRTransfer ir_binary_op({FORM_PARAMETERS}, _PyIRWord ir_word, "
-                 f"int {BINARY_OP_OPERAND});\n")
     lines += [f"static _PyIRTransfer ir_{name}({FORM_PARAMETERS});\n"
               for name in entry_labels(analysis)]
     lines.append(f"static const _PyIRForm ir_handler_forms[{ir_arms.IR_LIMIT}];\n")
@@ -7733,48 +7552,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             == [token.text for token in tokenize(body)]
             for part, body in zip(parts, bodies))
 
-    if inst.name in ("RESUME", "RESUME_JIT") and scalar_shape(0, 0):
-        # These audited helper contracts may poll/instrument and change
-        # control flow; ordinary completion writes no scratch. Require the
-        # complete bodies, not a token blacklist that can miss pointer stores.
-        # Callback/error phases remain uncovered.  RESUME_JIT ends in the
-        # JIT's warm-up event, which moves no value.
-        expected_parts = ["_MAYBE_INSTRUMENT", "_CHECK_PERIODIC_IF_NOT_YIELD_FROM"]
-        if inst.name == "RESUME_JIT":
-            expected_parts.append("_JIT_EVENT")
-        if [part.name for part in parts] != expected_parts:
-            return unknown
-        instrument = """{
-            #ifdef Py_GIL_DISABLED
-            int check_instrumentation = 1;
-            #else
-            int check_instrumentation = (tstate->tracing == 0);
-            #endif
-            if (check_instrumentation) {
-                uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
-                uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                if (code_version != global_version) {
-                    int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-                    if (err) { ERROR_NO_POP(); }
-                    next_instr = this_instr;
-                    DISPATCH_SAME_OPARG();
-                }
-            }
-        }"""
-        periodic = """{
-            if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
-                int err = check_periodics(tstate);
-                ERROR_IF(err != 0);
-            }
-        }"""
-        event = "{ IR_JIT_EVENT(); }"
-        if (any(part.stack.inputs or part.stack.outputs for part in parts)
-                or any(statement_shape(part.body)
-                       != statement_shape(Parser(body, "<RESUME contract>").block())
-                       for part, body in zip(parts, (instrument, periodic, event)))):
-            return unknown
-        return "_PyIR_TRANSFER_PRESERVE"
-
     scalar = {
         "LOAD_COMMON_CONSTANT": ("{ assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "
                                  "_PyValue_CommonConstant(tstate->interp->common_consts[oparg]); "
@@ -8155,6 +7932,7 @@ def handler_contracts(analysis: Analysis,
                       formats: dict[str, IRFormat]) -> dict[str, HandlerContract]:
     "The handler's own columns of the contract, by handler name"
     ids = handler_ids(analysis)
+    stack_only = stack_only_names(analysis)
     programs = {}
     abrupt = {}
     operand_abrupt = {}
@@ -8192,8 +7970,9 @@ def handler_contracts(analysis: Analysis,
                 normal_storage[name] = None
     result = {}
     insts = {**handler_instructions(analysis),
-             **{name: analysis.instructions[name] for name in STACK_ONLY
-                if name in analysis.instructions}}
+             **{name: inst for name, inst in
+                stack_ops_of(analysis).items()
+                if name in stack_only_names(analysis)}}
     # A family's baseline(...) arm runs in compiled code only, never on a
     # word, so instrumentation never replaces it: it has no twin
     baselines = {family.baseline for family in analysis.families.values()}
@@ -8214,7 +7993,7 @@ def handler_contracts(analysis: Analysis,
             transfer_kind=normal_transfer_kind(inst, fmt),
             ownership_events=programs.get(name, ()),
             # A stack-only op has no handler, so no word admits flags
-            word_flags=() if name in STACK_ONLY else call_role_flags(name, inst),
+            word_flags=() if name in stack_only else call_role_flags(name, inst),
             abrupt_prefix=abrupt.get(name, False),
             abrupt_operands=operand_abrupt.get(name, False),
             error_routes=error_routes.get(name, ()),
@@ -8461,11 +8240,8 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
 
 
 def num_old_handlers(analysis: Analysis) -> int:
-    """The arms start here.  The IR-only handlers fill the free numbers below
-    256 and continue from 256, so the arms' range stays contiguous.  If they
-    do not fill the free numbers, the rest stay unused."""
-    names = ir_only_handler_names(analysis)
-    return max([256, *(n + 1 for n in ir_only_numbers(analysis, names))])
+    "The arms start here: the count of the handlers that bytecodes.c defines"
+    return len(handler_ids(analysis))
 
 
 def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:

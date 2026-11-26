@@ -10,6 +10,7 @@ extern "C" {
 
 #include "pycore_ir.h"          // IR_MAX_SLOTS
 #include "pycore_opcode_utils.h" // IS_NO_FALLTHROUGH_OPCODE
+#include "pycore_rop_metadata.h" // ROP_OP_CallKw_Generic
 #include "pycore_symtable.h"    // _Py_SourceLocation
 
 /* The register CFG (boil/design/07-compiler-passes.md).
@@ -56,6 +57,7 @@ extern "C" {
 #define _PyReg_COMPLETED       512 // frontend completion performed by its producer
 #define _PyReg_CALL_NO_SELF   1024 // the reserved self input is virtual NULL
 #define _PyReg_CALL_NO_KWARGS 2048 // EX's reserved kwargs input is virtual NULL
+#define _PyReg_CALL_UNINTERRUPTED 65536 // the call does not poll when it returns
 #define _PyReg_LOAD_FOLDED      1   // a load that its consumer reads in place
 #define _PyReg_STORE_FOLDED     2   // a store that its producer does
 #define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps
@@ -66,7 +68,6 @@ extern "C" {
 #define _PyReg_ELIDED_NOP       32  // ... but a NOP stands for it, because it
                                     // alone holds its line
 
-#define _PyReg_UNPACK_LOCALS    128 // an unpack whose elements go to the run
                                     // of locals from dst; out[] stay as the
                                     // window's scratch registers
 #define _PyReg_KWNAMES         4096 // an elided LOAD_CONST of the names of
@@ -209,21 +210,29 @@ _PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
 static inline int
 _PyRegOp_CallBorrows(const _PyRegOp *op, int k)
 {
-    return k != 1 && !(op->opcode == CALL_KW && k == op->nread - 1);
+    return k != 1 && !(op->opcode == ROP_OP_CallKw_Generic && k == op->nread - 1);
 }
 
-/* Whether op writes local z through its dst (a run of nout locals for an
- * unpack) */
+const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
+
+/* Whether op writes local z through its dst, or, for a word whose outputs
+ * are a destination span (Unpack), as one of its outputs */
 static inline int
-_PyRegOp_WritesLocal(const _PyRegOp *op, int z)
+_PyRegOp_WritesLocal(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
 {
-    if (op->dst < 0) {
+    if (op->dst >= 0) {
+        return z == op->dst;
+    }
+    if (op->nout == 0 || !_PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg))) {
         return 0;
     }
-    if (op->flags & _PyReg_UNPACK_LOCALS) {
-        return z >= op->dst && z < op->dst + op->nout;
+    const int *out = _PyReg_OUT(cfg, op);
+    for (int j = 0; j < op->nout; j++) {
+        if (out[j] == z) {
+            return 1;
+        }
     }
-    return z == op->dst;
+    return 0;
 }
 
 /* Building: blocks in layout order, each with its stack instructions,
@@ -258,6 +267,10 @@ int _PyRegTr_Fresh(_PyRegTr *t, int *id);
 int _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
                   const int *uses, int nuses, const int *defs, int ndefs,
                   _PyRegOp **op);
+/* The same for an op that takes only the last ntaken of its inputs */
+int _PyRegTr_EmitTaking(_PyRegTr *t, const _PyRegOp *src, int opcode,
+                        const int *uses, int nuses, int ntaken,
+                        const int *defs, int ndefs, _PyRegOp **op);
 /* The rule of an unported stack op: its old handler op */
 int _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *src);
 
@@ -324,7 +337,6 @@ void _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
 /* The format of the stack instruction of an op: the generic handler's,
  * which its family shares. */
 struct _PyIRFormat;
-const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
 
 /* Internal to Python/regcfg.c and Python/regcfg_passes.c */
 
@@ -346,7 +358,6 @@ int _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical);
 /* The passes, in the order the driver runs them */
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
-int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);
 int _PyRegPass_KwNames(_PyRegCfg *cfg);
 int _PyRegPass_ElideNull(_PyRegCfg *cfg);
 int _PyRegPass_CallRoles(_PyRegCfg *cfg);

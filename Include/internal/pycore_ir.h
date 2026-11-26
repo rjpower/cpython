@@ -9,6 +9,11 @@ extern "C" {
 #endif
 
 #include "opcode.h"              // NB_ADD
+#include "ir_handler_ids.h"      // IR_H_*, IR_NUM_HANDLERS
+
+/* The handlers of the words that are not instructions: handler-only names */
+#define IR_JUMP IR_H_IR_JUMP
+#define IR_OPERANDS IR_H_IR_OPERANDS
 #include "pycore_feedback.h"    // _PyFbBlock, _PyFbHeader
 #include "pycore_structs.h"     // _PyIRWord
 
@@ -121,8 +126,25 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
  * the family reads them from its word, so specialisation and instrumentation
  * keep them by keeping the flags (_PyIRFormat.word_flags). */
 #define IR_F_NO_SELF    (1 << 13)
-#define IR_F_NO_KW      (1 << 14)
-#define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_NO_KW)
+/* The kind of a CALL_KW or CALL_FUNCTION_EX word, which its handler id does
+ * not tell: INSTRUMENTED_LINE runs the word's own handler with the id of the
+ * line handler in head[0].  IR_F_KW marks CALL_KW, whose last operand is the
+ * names.  IR_F_EX marks CALL_FUNCTION_EX, which has no self operand: both
+ * bits 14 and 15, which no other word carries together.  On an EX word, bit
+ * 13 is IR_F_NO_KW.
+ *
+ * IR_F_UNINTERRUPTED, on CALL: the call does not poll for signals and
+ * collection when it returns.  The translator sets it on the call that
+ * follows a special-method lookup, so that `with` enters its body before a
+ * pending event runs (the Interrupt operand of the Call family).  It is bit
+ * 15 alone. */
+#define IR_F_KW         (1 << 14)
+#define IR_F_UNINTERRUPTED (1 << 15)
+#define IR_F_EX         (IR_F_KW | IR_F_UNINTERRUPTED)
+#define IR_F_NO_KW      (1 << 13)
+#define IR_IS_EX_WORD(W) (((W) & IR_F_EX) == IR_F_EX)
+#define IR_IS_KW_WORD(W) (((W) & IR_F_EX) == IR_F_KW)
+#define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_KW | IR_F_EX)
 
 /* What a native call owes, on the head of a call-family word, which the
  * executing copy derives from the fields and co_nlocalsplus
@@ -846,6 +868,12 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
+/* The stack opcode that the translator lowered into the word at index
+ * `word` of co: the first stack instruction the word covers, from the
+ * public offset that pcmap records.  Instrumentation and the generator
+ * machinery read a word's origin here, whatever handler the word has. */
+PyAPI_FUNC(int) _PyIR_OriginOpcode(PyCodeObject *co, int word);
+
 /* The opcode that sys.monitoring sees the word as: the base opcode. */
 PyAPI_FUNC(int) _PyIR_EventOpcode(int handler);
 
@@ -898,7 +926,6 @@ PyAPI_FUNC(int) _PyCode_InstrDiscards(PyCodeObject *co, int i);
 /* The number of elements that the unpack at index i stores to locals (its
  * dst names a run of them), where its stack instruction pushed them; 0 if
  * its elements stay in the window or it is no unpack. */
-PyAPI_FUNC(int) _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */
@@ -1026,8 +1053,8 @@ _PyIR_SpanWordLength(int handler, _PyIRWord word)
 /* The spans of a span format: the number of COUNT fields, which are the
  * spans in declaration order, and the direction of each.  A Move has two,
  * its destinations and its sources.  A family with one span reads it when it
- * also has a destination of its own (Build's items) and writes it when it
- * has none (Unpack's destinations). */
+ * also has a destination of its own (Build's items) or no input of its own
+ * (Raise's operands), and writes it otherwise (Unpack's destinations). */
 static inline int
 _PyIR_SpanCountFields(const _PyIRFormat *fmt)
 {
@@ -1036,6 +1063,34 @@ _PyIR_SpanCountFields(const _PyIRFormat *fmt)
         n += fmt->roles[f] == _PyIR_ROLE_COUNT;
     }
     return n;
+}
+
+/* Whether the one span of a single-span format is read */
+static inline int
+_PyIR_SingleSpanReads(const _PyIRFormat *fmt)
+{
+    int has_dst = 0, has_input = 0;
+    for (int f = 0; f < 4; f++) {
+        has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
+        has_input |= fmt->roles[f] >= _PyIR_ROLE_IN0;
+    }
+    return has_dst || !has_input;
+}
+
+/* A span format whose one span is destinations (Unpack's): it has no DST
+ * role of its own and the span is not counted twice as Move's are */
+static inline int
+_PyIR_IsDstSpanFormat(const _PyIRFormat *fmt)
+{
+    if (fmt->operands != _PyIR_OPERANDS_SPANS || _PyIR_SpanCountFields(fmt) != 1) {
+        return 0;
+    }
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static inline int
@@ -1051,9 +1106,8 @@ _PyIR_SpanBounds(const _PyIRWord *head, int handler, int k, int *first,
                  int *is_source)
 {
     const _PyIRFormat *fmt = &_PyIR_Formats[handler];
-    int seen = 0, before = 0, count = 0, has_dst = 0;
+    int seen = 0, before = 0, count = 0;
     for (int f = 0; f < 4; f++) {
-        has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
         if (fmt->roles[f] == _PyIR_ROLE_COUNT) {
             int c = (int)((head[0] >> (16 + 12 * f)) & IR_FIELD_MAX);
             if (seen++ < k) {
@@ -1065,7 +1119,7 @@ _PyIR_SpanBounds(const _PyIRWord *head, int handler, int k, int *first,
         }
     }
     *first = before;
-    *is_source = seen == 2 ? k == 1 : has_dst;
+    *is_source = seen == 2 ? k == 1 : _PyIR_SingleSpanReads(fmt);
     return count;
 }
 
@@ -1098,15 +1152,13 @@ _PyIR_CallOperand(const _PyIRWord *head, int k)
 static inline int
 _PyIR_CallHasSelf(_PyIRWord word)
 {
-    return !(word & IR_F_NO_SELF)
-           && _PyIR_Formats[IR_HANDLER(word)].operands != _PyIR_OPERANDS_EX;
+    return !(word & IR_F_NO_SELF) && !IR_IS_EX_WORD(word);
 }
 
 static inline int
 _PyIR_CallSlotOperands(_PyIRWord word)
 {
-    return (int)IR_C(word)
-           - (_PyIR_Formats[IR_HANDLER(word)].operands == _PyIR_OPERANDS_KW);
+    return (int)IR_C(word) - IR_IS_KW_WORD(word);
 }
 
 /* The slot-class flags of word in an executing copy of code with

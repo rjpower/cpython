@@ -1576,7 +1576,36 @@ class PilotTests(unittest.TestCase):
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
         iter_open = at("iteration.rop", "exit raise(IterOpen.Failed, saved);", 5)
+        iter_gen_method = at("iteration.rop", "exit raise(IterOpen.Failed, saved);", 5, last=True)
+        # Every arm of attrs.rop that raises through retire_failed_call: the
+        # generic store and delete, the stores that fall back to the generic
+        # store, the special lookup; the super arms spend their parts in the
+        # row and so have no such raise
+        attr_spent = {"AttrWrite.Failed": ("obj", "value"),
+                      "AttrWrite.DeleteFailed": ("obj",),
+                      "SpecialLookup.Failed": ("obj",)}
+        attr_diagnostics = []
+        arm = None
+        for number, source in enumerate(
+                (ROP_DIR / "attrs.rop").read_text().splitlines(), 1):
+            if source.startswith("arm "):
+                arm = source.split()[1]
+            elif source.lstrip().startswith("exit raise(") and \
+                    source.split("raise(")[1].split(",")[0] in attr_spent:
+                point = source.split("raise(")[1].split(",")[0]
+                attr_diagnostics.extend(
+                    f"attrs.rop:{number}:5: {arm}: points: raise at {point}: "
+                    f"{point} lists {name} in spent, but {name} is intact"
+                    for name in attr_spent[point])
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
+        pattern_class = at("patterns.rop", "exit raise(PatternClass.Failed, saved);", 5)
+        convert = at("text.rop", "exit raise(Convert.Failed, saved);", 5)
+        format_ = at("text.rop", "exit raise(Format.Failed, saved);", 5)
+        format_spec = at("text.rop", "exit raise(FormatSpec.Failed, saved);", 5)
+        binary_extended = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5)
+        binary_raise = at("numeric.rop", "exit raise(Binary.OpFailed, saved);", 5, last=True)
+        append_text = at("numeric.rop", "exit raise(AppendText.Failed, saved);", 5)
+        append_raise = at("numeric.rop", "exit raise(AppendText.OpFailed, saved);", 5)
         # The arms of tests.rop that raise, in order of line: the family, the
         # arm and the operands that its point lists in spent
         tests_raises = [
@@ -1632,6 +1661,7 @@ class PilotTests(unittest.TestCase):
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact",
+              *attr_diagnostics,
               f"{cell_map}: CellMapRead.Lookup: points: raise at CellMapRead.Failed: "
               "CellMapRead.Failed lists mapping in spent, but mapping is intact",
               f"{raise_getset}: GetAttr.GetSet: points: raise at GetAttr.Failed: "
@@ -1643,10 +1673,37 @@ class PilotTests(unittest.TestCase):
               *item_diagnostics,
               f"{iter_open}: IterOpen.Generic: points: raise at IterOpen.Failed: "
               "IterOpen.Failed lists source in spent, but source is intact",
+              f"{iter_gen_method}: IterOpen.GenMethod: points: raise at IterOpen.Failed: "
+              "IterOpen.Failed lists source in spent, but source is intact",
               f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
               "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "
               "spent, but mapping is intact",
+              f"{binary_extended}: Binary.Extended: points: raise at Binary.OpFailed: "
+              "Binary.OpFailed lists x in spent, but x is intact",
+              f"{binary_extended}: Binary.Extended: points: raise at Binary.OpFailed: "
+              "Binary.OpFailed lists y in spent, but y is intact",
+              f"{binary_raise}: Binary.Generic: points: raise at Binary.OpFailed: "
+              "Binary.OpFailed lists x in spent, but x is intact",
+              f"{binary_raise}: Binary.Generic: points: raise at Binary.OpFailed: "
+              "Binary.OpFailed lists y in spent, but y is intact",
+              f"{append_text}: AppendText.Text: points: raise at AppendText.Failed: "
+              "AppendText.Failed lists y in spent, but y is intact",
+              f"{append_raise}: AppendText.Generic: points: raise at AppendText.OpFailed: "
+              "AppendText.OpFailed lists x in spent, but x is intact",
+              f"{append_raise}: AppendText.Generic: points: raise at AppendText.OpFailed: "
+              "AppendText.OpFailed lists y in spent, but y is intact",
+              f"{pattern_class}: PatternClass.Match: points: raise at "
+              "PatternClass.Failed: PatternClass.Failed lists parts in spent, but "
+              "parts is intact",
               *tests_raises,
+              f"{convert}: Convert.Text: points: raise at Convert.Failed: "
+              "Convert.Failed lists value in spent, but value is intact",
+              f"{format_}: Format.Simple: points: raise at Format.Failed: "
+              "Format.Failed lists value in spent, but value is intact",
+              f"{format_spec}: FormatSpec.Value: points: raise at FormatSpec.Failed: "
+              "FormatSpec.Failed lists spec in spent, but spec is intact",
+              f"{format_spec}: FormatSpec.Value: points: raise at FormatSpec.Failed: "
+              "FormatSpec.Failed lists value in spent, but value is intact",
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "

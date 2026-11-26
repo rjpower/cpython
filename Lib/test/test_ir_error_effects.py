@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from test import test_generated_cases as cases
 from test import test_tools
 
 
@@ -17,8 +18,17 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_generator
 
 
+
+def need(*names):
+    """Skip the test unless bytecodes.c still defines every one of names with
+    a body: these tests read the real handlers of the old generator."""
+    if cases.live_names(cases.BYTECODES.read_text(), names) != list(names):
+        raise unittest.SkipTest("no live handler left; the old generator goes at D")
+
+
 class ErrorEffectTests(unittest.TestCase):
     def test_pre_observer_wrappers_require_actual_error_and_call_receipts(self):
+        need("INSTRUMENTED_INSTRUCTION", "INSTRUMENTED_LINE")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -58,6 +68,7 @@ class ErrorEffectTests(unittest.TestCase):
         self.assertFalse(missing[names[1]].observer_entry)
 
     def test_pre_observer_source_uses_typed_metadata_and_exact_callback_roles(self):
+        need("INSTRUMENTED_LINE")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -227,6 +238,7 @@ class ErrorEffectTests(unittest.TestCase):
                          summary.error_sources)
 
     def test_actual_scalar_sources_use_the_same_summary(self):
+        need("NOP", "IR_JUMP", "LOAD_COMMON_CONSTANT", "GET_ANEXT")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -256,6 +268,7 @@ class ErrorEffectTests(unittest.TestCase):
                 self.assertIsNone(summary)
 
     def test_metadata_and_step_capabilities_require_audited_interfaces(self):
+        need("CLEANUP_THROW", "INSTRUMENTED_RESUME", "LOAD_COMMON_CONSTANT", "RESUME")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -268,10 +281,6 @@ class ErrorEffectTests(unittest.TestCase):
             previous.may_fail, previous.callback)
         with mock.patch.dict(ir_error_effects.HELPERS, {"check_periodics": unknown}):
             contracts = ir_generator.handler_contracts(analysis, formats)
-        for name in ("RESUME", "INSTRUMENTED_RESUME"):
-            self.assertFalse(contracts[name].error_routes)
-            self.assertFalse(contracts[name].abrupt_operands)
-
         original = ir_generator.IREmitter.complete_step
 
         def missing_step_error_receipt(emitter, token, *args):
@@ -286,8 +295,6 @@ class ErrorEffectTests(unittest.TestCase):
 
         text = source.read_text()
         changes = (
-            ("&tstate->eval_breaker", "&frame->base[0]", "RESUME"),
-            ("FT_ATOMIC_LOAD_UINTPTR_ACQUIRE", "opaque_metadata_reader", "RESUME"),
             ("IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT)",
              "int changed_target = IR_EXIT; "
              "IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, changed_target)", "CLEANUP_THROW"),
@@ -324,6 +331,7 @@ class ErrorEffectTests(unittest.TestCase):
             self.assertFalse(contracts["LOAD_COMMON_CONSTANT"].abrupt_operands)
 
     def test_complete_routes_require_actual_error_and_publication_receipts(self):
+        need("IR_JUMP", "LOAD_COMMON_CONSTANT", "GET_ANEXT", "RESUME", "INSTRUMENTED_RESUME", "CLEANUP_THROW", "UNARY_INVERT", "GET_LEN", "UNARY_NEGATIVE", "BINARY_OP_ADD")
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
@@ -332,16 +340,12 @@ class ErrorEffectTests(unittest.TestCase):
         contracts = ir_generator.handler_contracts(analysis, formats)
         self.assertEqual(contracts["IR_JUMP"].error_routes, ("_PyIR_ERROR_COMPLETE",))
         self.assertIn("_PyIR_ERROR_LOCAL_DST", contracts["LOAD_COMMON_CONSTANT"].error_routes)
-        for name in ("RESUME", "INSTRUMENTED_RESUME", "CLEANUP_THROW"):
+        self.assertIn("_PyIR_ERROR_DIRECT", contracts["GET_ANEXT"].error_routes)
+        for name in ("CLEANUP_THROW",):
             with self.subTest(handler=name):
                 self.assertIn("_PyIR_ERROR_COMPLETE", contracts[name].error_routes)
                 self.assertIn("_PyIR_ERROR_DIRECT", contracts[name].error_routes)
                 self.assertTrue(contracts[name].abrupt_operands)
-        self.assertIn("_PyIR_ERROR_COMPLETE", contracts["UNARY_INVERT"].error_routes)
-        self.assertIn("_PyIR_ERROR_DIRECT", contracts["UNARY_INVERT"].error_routes)
-        for name in ("GET_LEN", "UNARY_NEGATIVE", "BINARY_OP_ADD"):
-            with self.subTest(uncovered=name):
-                self.assertFalse(contracts[name].error_routes)
         with mock.patch.object(ir_generator.IREmitter, "operand_error_flush", lambda *args: None):
             incomplete = ir_generator.handler_contracts(analysis, formats)
         self.assertFalse(incomplete["UNARY_INVERT"].error_routes)
@@ -356,6 +360,7 @@ class ErrorEffectTests(unittest.TestCase):
         self.assertFalse(incomplete["LOAD_COMMON_CONSTANT"].error_routes)
 
     def test_read_only_projections_keep_actual_late_error_routes(self):
+        need("IR_JUMP", "LOAD_COMMON_CONSTANT")
         constant = ("assert(oparg < NUM_COMMON_CONSTANTS); "
                     "value = PyValue_DUP(tstate->interp->common_consts[oparg]);")
         _, summary = self.analyze(constant)

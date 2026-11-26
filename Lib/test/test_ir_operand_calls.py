@@ -25,7 +25,7 @@ def head_rows(code):
     result = []
     for i, row in enumerate(rows):
         # The stack op CALL lowers to the Call family's arms
-        if row[0].startswith(("CALL", "INSTRUMENTED_CALL", "Call.")):
+        if row[0].startswith(("CALL", "INSTRUMENTED_CALL", "Call.", "CallKw.", "CallEx.")):
             result.append((row, rows[i + 1:i + 1 + (row[3] + 3) // 4]))
     return result
 
@@ -572,10 +572,9 @@ class ObservationTests(unittest.TestCase):
         self.addCleanup(monitoring.set_local_events, tool, f.__code__, 0)
         self.assertEqual(f(1), 2)
         rows = _testinternalcapi.get_ir(f.__code__)
-        # RESUME (RESUME_JIT under the JIT), at offset 0, has no event of
-        # its own
+        # The Resume word, at offset 0, has no event of its own
         heads = [i for i, row in enumerate(rows)
-                 if row[0] not in ("IR_OPERANDS", "RESUME", "RESUME_JIT")]
+                 if row[0] != "IR_OPERANDS" and not row[0].startswith("Resume.")]
         operand_words = [i for i, row in enumerate(rows)
                          if row[0] == "IR_OPERANDS"]
         self.assertTrue(operand_words)

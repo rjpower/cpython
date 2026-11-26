@@ -116,24 +116,23 @@ def hot_sequence(lines):
     return names
 
 
-def old_template(name):
-    text = (ROOT / "Python" / "jit_templates.c.h").read_text()
-    start = text.index(f"jit_template_{name}(_PyJitWordCx *cx)")
-    return text[start:text.index("\n}\n", start)].splitlines()
-
-
 class AddIntTemplateTests(unittest.TestCase):
-    def test_hot_path_matches_the_old_handler(self):
+    def test_hot_path(self):
+        # The old BINARY_OP_ADD_INT template's hot path, with its add and the
+        # branch on overflow spelled as the primitive that is both
         prog = products().program
         arm = prog.arms["Add.Int"]
         new = rop_leaf.template_of_arm(prog, arm, "Add_Int")
-        old = hot_sequence(old_template("BINARY_OP_ADD_INT"))
-        # The old template spells the checked add as an add and a branch on
-        # overflow; the new one has the primitive that is both
-        i = old.index("_PyJitAsm_AluRR")
-        self.assertEqual(old[i:i + 2], ["_PyJitAsm_AluRR", "_PyJitAsm_Jcc"])
-        old[i:i + 2] = ["_PyJitLower__PyValue_AddCheckedScaled"]
-        self.assertEqual(hot_sequence(new), old)
+        self.assertEqual(hot_sequence(new), [
+            "_PyJitAsm_MovRM", "_PyJitAsm_MovRM",
+            "_PyJitLower_PyValue_BothInlineInt", "_PyJitAsm_Jcc",
+            "_PyJitLower__PyValue_IntScaled", "_PyJitLower__PyValue_IntScaled",
+            "_PyJitLower__PyValue_AddCheckedScaled",
+            "_PyJitLower__PyValue_FromIntScaled",
+            "if (!(ir_word & IR_F_LOCAL_B))", "_PyJitAsm_MovMI",
+            "if (!(ir_word & IR_F_LOCAL_C))", "_PyJitAsm_MovMI",
+            "if ((ir_word & IR_F_LOCAL_A))", "_PyJitAsm_MovRM", "_PyJitAsm_MovMR",
+            "if ((ir_word & IR_F_LOCAL_A))", "_PyJitLower_PyValue_XCLOSE"])
 
 
 SHARED = """\
@@ -465,7 +464,7 @@ class ArmRowTests(unittest.TestCase):
     def test_every_arm_has_a_row_in_every_generated_table(self):
         entries = rop_generator.arm_entries(products())
         header = (ROOT / "Include/internal/pycore_ir_metadata.h").read_text()
-        ids = (ROOT / "Include/opcode_ids.h").read_text()
+        ids = (ROOT / "Include/ir_handler_ids.h").read_text()
         old = int(re.search(r"IR_NUM_OLD_HANDLERS\s+(\d+)", ids).group(1))
         total = int(re.search(r"IR_NUM_HANDLERS\s+(\d+)", ids).group(1))
         self.assertEqual(total, old + len(entries))

@@ -8,6 +8,7 @@
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
 #include "pycore_jit_lower.h"     // _PyEval_JitRaiseExit
 #include "pycore_jit.h"           // _PyJitUnit
+#include "pycore_interpolation.h" // _PyInterpolation_BuildValue()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"
 #include "pycore_long_value.h"    // _PyValue_AsInt()
@@ -16,6 +17,7 @@
 #include "pycore_rop_rows.h"      // _PyRop_AnchorForCall()
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_template.h"      // _PyTemplate_Build()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 #include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
 
@@ -900,6 +902,81 @@ value_subscript(PyValueBorrow container, PyValueBorrow key)
     return _PyValue_GetItem(container, key);
 }
 
+/* The rows of Convert and Format (Python/register_ops/text.rop): the value
+ * is borrowed, the result a new owner or NULL with an exception set. */
+static PyValue
+_PyRop_ConvertValue(int kind, PyValueBorrow v)
+{
+    PyObject *res_o = kind == 0 ? (_PyValue_Str)(v)
+                    : kind == 1 ? (_PyValue_Repr)(v)
+                                : (_PyValue_ASCII)(v);
+    return res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+}
+
+static PyValue
+_PyRop_FormatPlain(PyValueBorrow v)
+{
+    // An inline int or float formats as it prints: format(x, "") is str(x)
+    PyObject *res_o = PyValue_IsObject(v) ? _PyValue_Format(v, PyValue_NULL)
+                                          : (_PyValue_Str)(v);
+    return res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+}
+
+static PyValue
+_PyRop_FormatValue(PyValueBorrow v, PyValueBorrow spec)
+{
+    PyObject *res_o = (_PyValue_Format)(v, spec);
+    return res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+}
+
+/* The rows of Length and the patterns (Python/register_ops/patterns.rop):
+ * the operands are borrowed, the result a new owner or NULL with an
+ * exception set. */
+static PyValue
+_PyRop_ValueLength(PyValueBorrow v)
+{
+    Py_ssize_t len = _PyValue_Size(v);
+    if (len < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromInt64(len);
+}
+
+static int
+_PyRop_TypeHasFlag(int kind, PyValueBorrow v)
+{
+    unsigned long flag = kind == 0 ? Py_TPFLAGS_MAPPING : Py_TPFLAGS_SEQUENCE;
+    return (PyValue_TYPE(v)->tp_flags & flag) != 0;
+}
+
+static PyValue
+_PyRop_MatchClass(int count, PyValueBorrow subject, PyValueBorrow type,
+                  PyValueBorrow names)
+{
+    assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *attrs_o = _PyEval_MatchClass(tstate, subject, type, count,
+                                           PyValue_AsKnownObjectBorrow(names));
+    if (attrs_o != NULL) {
+        assert(PyTuple_CheckExact(attrs_o));
+        return PyValue_FromObjectSteal(attrs_o);
+    }
+    if (_PyErr_Occurred(tstate)) {
+        return PyValue_NULL;
+    }
+    return PyValue_None;
+}
+
+static PyValue
+_PyRop_MatchKeys(PyValueBorrow subject, PyValueBorrow keys)
+{
+    assert(PyValue_IsObject(subject));
+    assert(PyValue_IsObject(keys));
+    PyObject *values_o = _PyEval_MatchKeys(_PyThreadState_GET(),
+        PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
+    return values_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(values_o);
+}
+
 /* lhs op rhs for BINARY_OP's operation oparg; both operands are borrowed. */
 static PyValue
 value_binary_op(int oparg, PyValueBorrow lhs, PyValueBorrow rhs)
@@ -961,29 +1038,6 @@ value_exception_group_match(_PyInterpreterFrame *frame, PyObject *exc_value,
 /* Helper functions to keep the size of the largest uops down */
 
 PyObject *
-_Py_BuildString_ValueSteal(
-    _PyInterpreterFrame *frame,
-    PyValue *arguments,
-    int total_args)
-{
-    /* The pieces are str objects (constants and the results of FORMAT_*),
-     * never inline words: the join reads the window's objects in place on
-     * the borrow stack. */
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    _PyValue_RecheckWindow(arguments, total_args);
-    PyObject **objects = _PyBorrow_ValueVector(arguments, total_args);
-    PyObject *res = NULL;
-    if (objects != NULL) {
-        res = _PyUnicode_JoinArray(&_Py_STR(empty), objects, total_args);
-    }
-    _PyBorrowScope_Exit(tstate, mark);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-    clear_value_arguments(frame, arguments, total_args);
-    return res;
-}
-
-PyObject *
 _Py_BuildMap_ValueSteal(
     _PyInterpreterFrame *frame,
     PyValue *arguments,
@@ -1027,22 +1081,6 @@ _Py_BuildSet_ValueSteal(
     }
     return set;
 }
-
-/* Out of line: the vectorcall's argument array is a local, which would be
- * the handler's (spec 3.5, R-c).  super(class, self), or super() when nargs
- * is 0. */
-static Py_NO_INLINE PyValue
-super_call(PyValueBorrow global_super, PyValueBorrow class, PyValue self, int nargs)
-{
-    PyValue stack[] = {PyValue_DUP(class), self};
-    PyValue super = _PyValue_Vectorcall(global_super, stack, nargs, NULL);
-    PyValue_CLOSE(stack[0]);
-    return super;
-}
-
-#define super_call(G, C, S, N) \
-    (super_call)(PyValue_Borrow(G), PyValue_Borrow(C), S, N)
-
 
 /* Out of line, as super_call: exit_func(exit_self, exc, val, tb), or
  * exit_func(exc, val, tb) when exit_self is NULL.  exit_func is any attribute
@@ -2057,7 +2095,7 @@ _PyRop_FunctionVersion(PyValueBorrow fn, const _PyFbCall *fb)
 static inline int
 rop_call_self_state(_PyInterpreterFrame *frame, const _PyIRWord *head)
 {
-    if (head[0] & IR_F_NO_SELF) {
+    if (!_PyIR_CallHasSelf(head[0])) {
         return 0;
     }
     PyValue self = _PyFrame_Slots(frame)[_PyIR_CallOperand(head, 0)];
@@ -2202,8 +2240,8 @@ rop_call_retire_operands(_PyInterpreterFrame *frame, const _PyIRWord *head)
 {
     PyObject *exc = PyErr_GetRaisedException();
     _PyIRWord word = head[0];
-    call_release_rest(_PyFrame_Slots(frame), head, word, (int)IR_C(word),
-                      UINT32_MAX);
+    call_release_rest(_PyFrame_Slots(frame), head, word,
+                      _PyIR_CallSlotOperands(word), UINT32_MAX);
     PyErr_SetRaisedException(exc);
 }
 
@@ -2241,7 +2279,7 @@ _PyRop_SpendArgs(_PyInterpreterFrame *frame, const _PyIRWord *head,
                  const PyValue *kept)
 {
     PyValue *slots = _PyFrame_Slots(frame);
-    int operands = (int)IR_C(head[0]);
+    int operands = _PyIR_CallSlotOperands(head[0]);
     PyValue owners[operands + 1];
     int taken = 0;
     for (int w = 1, left = operands; left > 0;
@@ -2262,10 +2300,274 @@ _PyRop_SpendArgs(_PyInterpreterFrame *frame, const _PyIRWord *head,
     }
 }
 
+/* The Interrupt operand of a call word: whether the call polls when it
+ * returns (INTERRUPTIBLE is 0) */
+static inline bool
+_PyRop_Polls(uint32_t interrupt)
+{
+    return interrupt == 0;
+}
+
 static inline int
 _PyRop_EndPoll(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
     return check_periodics_at_end(tstate, frame);
+}
+
+/* The rows of AttrWrite, SuperAttr, SuperMethod and SpecialLookup
+ * (Python/register_ops/attrs.rop).  Every source is borrowed. */
+
+static Py_NO_INLINE int
+_PyRop_SetAttr(PyValueBorrow owner, PyObject *name, PyValueBorrow value)
+{
+    return (_PyValue_SetAttr)(owner, name, value);
+}
+
+/* The deletion protocol: a store of no value */
+static Py_NO_INLINE int
+_PyRop_DelAttr(PyValueBorrow owner, PyObject *name)
+{
+    return (_PyValue_SetAttr)(owner, name, PyValue_Borrow(PyValue_NULL));
+}
+
+/* super(class, self), or super() when the class was implied; the class and
+ * the receiver are counted for the call as its argument vector needs. */
+static Py_NO_INLINE PyValue
+_PyRop_SuperCall(PyValueBorrow sup, PyValueBorrow cls, PyValueBorrow self,
+                 bool explicit)
+{
+    PyValue stack[] = {PyValue_DUP(cls), PyValue_DUP(self)};
+    PyValue super = _PyValue_Vectorcall(sup, stack, explicit ? 2 : 0, NULL);
+    PyValue_CLOSE(stack[1]);
+    PyValue_CLOSE(stack[0]);
+    return super;
+}
+
+static void rop_take_items(const _PyRopSpan *span, PyValue *vals);
+
+/* The argument that the CALL event reports besides `super`: the class, or
+ * MISSING when the class was implied */
+static inline PyValueBorrow
+_PyRop_SuperEventArg(PyValueBorrow cls, bool explicit)
+{
+    return explicit ? cls
+                    : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
+}
+
+/* The attribute of super(...): the span holds super, the class and the
+ * receiver, which the row owns and closes on both outcomes.  With observed
+ * set, the CALL event runs before the call and C_RETURN or C_RAISE after it,
+ * as INSTRUMENTED_LOAD_SUPER_ATTR did; a callback that raises in C_RETURN
+ * closes the super object. */
+static inline PyValue
+rop_super_lookup(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *site, const _PyRopSpan *parts, bool explicit,
+                 PyObject *name, bool observed)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    PyValueBorrow sup = PyValue_Borrow(vals[0]);
+    PyValueBorrow cls = PyValue_Borrow(vals[1]);
+    PyValueBorrow self = PyValue_Borrow(vals[2]);
+    PyValue attr = PyValue_NULL;
+    PyValueBorrow arg = _PyRop_SuperEventArg(cls, explicit);
+    if (observed &&
+        (_Py_call_instrumentation_2args)(tstate, PY_MONITORING_EVENT_CALL,
+                                         frame, site, sup, arg) < 0) {
+        goto done;
+    }
+    PyValue super = _PyRop_SuperCall(sup, cls, self, explicit);
+    if (PyValue_IsNull(super)) {
+        if (observed) {
+            (_Py_call_instrumentation_exc2)(
+                tstate, PY_MONITORING_EVENT_C_RAISE, frame, site, sup, arg);
+        }
+        goto done;
+    }
+    if (observed &&
+        (_Py_call_instrumentation_2args)(tstate, PY_MONITORING_EVENT_C_RETURN,
+                                         frame, site, sup, arg) < 0) {
+        PyValue_CLEAR(super);
+        goto done;
+    }
+    attr = (_PyValue_GetAttr)(PyValue_Borrow(super), name);
+    PyValue_CLOSE(super);
+done:
+    {
+        PyObject *exc = PyValue_IsNull(attr) ? PyErr_GetRaisedException()
+                                             : NULL;
+        for (int i = 0; i < 3; i++) {
+            PyValue_XCLOSE(vals[i]);
+        }
+        if (exc != NULL) {
+            PyErr_SetRaisedException(exc);
+        }
+    }
+    return attr;
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookup(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                   const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, false, name,
+                            false);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupObserved(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                           const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, false, name,
+                            true);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupExplicit(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                           const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, true, name,
+                            false);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupExplicitObserved(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                                   const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, true, name,
+                            true);
+}
+
+/* The method forms of the lookups above: the attribute is bound, so the call
+ * has no receiver of its own */
+#define ROP_SUPER_METHOD_WRAPPER(name, from)                                  \
+    static Py_NO_INLINE PyValue                                               \
+    name(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,   \
+         const _PyRopSpan *parts, PyObject *attr_name, PyValue *self)        \
+    {                                                                         \
+        *self = PyValue_NULL;                                                 \
+        return from(tstate, frame, site, parts, attr_name);                   \
+    }
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethod, _PyRop_SuperLookup)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodObserved, _PyRop_SuperLookupObserved)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodExplicit, _PyRop_SuperLookupExplicit)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodExplicitObserved,
+                         _PyRop_SuperLookupExplicitObserved)
+#undef ROP_SUPER_METHOD_WRAPPER
+
+/* The part i of a super span, borrowed from its home */
+static inline PyValueBorrow
+rop_super_part(const _PyRopSpan *parts, int i)
+{
+    int slot = _PyIR_SpanElement(parts->head, parts->handler, parts->first + i);
+    return PyValue_Borrow(parts->frame->base[slot]);
+}
+
+/* `super` is the builtin and the class is a type: the lookup needs no super
+ * object */
+static inline bool
+_PyRop_SuperBuiltinReady(const _PyRopSpan *parts)
+{
+    PyValueBorrow sup = rop_super_part(parts, 0);
+    PyValueBorrow cls = rop_super_part(parts, 1);
+    return PyValue_IsObject(sup) && PyValue_IsObject(cls)
+        && PyValue_AsKnownObjectBorrow(sup) == (PyObject *)&PySuper_Type
+        && PyType_Check(PyValue_AsKnownObjectBorrow(cls));
+}
+
+/* The case of the adaptation row: 0 when the site can use the builtin
+ * lookup, 1 when it cannot */
+static inline int
+_PyRop_ClassifySuper(const _PyRopSpan *parts, _PyInstr *site,
+                     const _PyFbUnary *fb)
+{
+    (void)site;
+    (void)fb;
+    return _PyRop_SuperBuiltinReady(parts) ? 0 : 1;
+}
+
+/* super(...).name without the super object, as LOAD_SUPER_ATTR_ATTR did: the
+ * parts are the row's to close on both outcomes */
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupBuiltin(const _PyRopSpan *parts, PyObject *name)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    _PyStatusValue found = _PySuper_LookupValue(
+        (PyTypeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(vals[1])),
+        PyValue_Borrow(vals[2]), name, 0);
+    PyObject *exc = found.status < 0 ? PyErr_GetRaisedException() : NULL;
+    for (int i = 0; i < 3; i++) {
+        PyValue_XCLOSE(vals[i]);
+    }
+    if (exc != NULL) {
+        PyErr_SetRaisedException(exc);
+        return PyValue_NULL;
+    }
+    return found.value;
+}
+
+/* LOAD_SUPER_ATTR_METHOD: an unbound method comes with the receiver as the
+ * call's self, which moves from the parts to *self; a bound result closes
+ * it.  Only a receiver whose type has the generic getattro can have a method
+ * returned unbound.  The parts are the row's to close on both outcomes. */
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupBuiltinMethod(const _PyRopSpan *parts, PyObject *name,
+                                PyValue *self)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    *self = PyValue_NULL;
+    _PyStatusValue found = _PySuper_LookupValue(
+        (PyTypeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(vals[1])),
+        PyValue_Borrow(vals[2]), name,
+        PyValue_TYPE(PyValue_Borrow(vals[2]))->tp_getattro
+            == PyObject_GenericGetAttr);
+    PyObject *exc = found.status < 0 ? PyErr_GetRaisedException() : NULL;
+    int keep_self = found.status > 0;
+    for (int i = 0; i < 3; i++) {
+        if (i == 2 && keep_self) {
+            *self = vals[2];
+            continue;
+        }
+        PyValue_XCLOSE(vals[i]);
+    }
+    if (exc != NULL) {
+        PyErr_SetRaisedException(exc);
+        return PyValue_NULL;
+    }
+    return found.value;
+}
+
+/* The method of a special name on the receiver's type.  The lookup works on
+ * a counted copy of the receiver, which it keeps (*self) when the method is
+ * unbound and closes when the method is bound.  A missing method raises the
+ * protocol's TypeError, naming the asynchronous protocol when the type has
+ * it. */
+static Py_NO_INLINE PyValue
+_PyRop_LookupSpecial(PyValueBorrow obj, int which, PyValue *self)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue receiver = PyValue_DUP(obj);
+    PyValue method = PyValue_NULL;
+    int rc = _PyObject_LookupSpecialMethod(NULL, _Py_SpecialMethods[which].name,
+                                           &method, &receiver);
+    *self = PyValue_NULL;
+    if (rc <= 0) {
+        if (rc == 0) {
+            PyTypeObject *owner_type = PyValue_TYPE(receiver);
+            const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner_type, which)
+                ? _Py_SpecialMethods[which].error_suggestion
+                : _Py_SpecialMethods[which].error;
+            assert(!_PyErr_Occurred(tstate));
+            assert(errfmt != NULL);
+            _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner_type);
+        }
+        PyValue_XCLOSE(receiver);
+        return PyValue_NULL;
+    }
+    *self = receiver;
+    return method;
 }
 
 static Py_NO_INLINE void
@@ -2282,6 +2584,26 @@ static inline bool _PyRop_PythonTarget(PyThreadState *tstate,
 static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
+/* The rows of Raise, Reraise, ExceptEnter, ExceptLeave, ExceptMatch and
+ * ExceptGroupMatch (Python/register_ops/exceptions.rop) */
+static int _PyRop_RaiseArgs(PyThreadState *tstate, const _PyRopSpan *args);
+static void _PyRop_ReraisePending(PyThreadState *tstate,
+                                  _PyInterpreterFrame *frame, _PyInstr *at);
+static void _PyRop_RestoreException(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, _PyInstr *at,
+                                    PyValue *home);
+static void _PyRop_SetOrigin(_PyInterpreterFrame *frame, PyValue *home);
+static void _PyRop_RetireFailedOperand(_PyInterpreterFrame *frame,
+                                       PyValue *home);
+static PyValue _PyRop_SwapHandled(PyThreadState *tstate, PyValue *home);
+static void _PyRop_RestoreHandled(PyThreadState *tstate, PyValue x);
+static int _PyRop_CheckExceptType(PyThreadState *tstate, PyValue *home);
+static bool _PyRop_ExceptionMatches(PyValueBorrow exc, PyValueBorrow pattern);
+static int _PyRop_CheckExceptStarType(PyThreadState *tstate, PyValue *home);
+static PyValue _PyRop_GroupMatch(PyThreadState *tstate,
+                                 _PyInterpreterFrame *frame, PyValue *exc,
+                                 PyValue *pattern, PyValue *rest);
+static PyValue _PyRop_UnaryOp(uint32_t op, PyValue x);
 /* The rows of Function and Intrinsic (Python/register_ops/functions.rop) */
 static PyValue _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
                                    const _PyRopSpan *fields, uint32_t present);
@@ -2304,6 +2626,56 @@ static PyValue _PyRop_CallNativeObserved(PyThreadState *tstate,
                                          _PyInterpreterFrame *frame,
                                          _PyInstr *site, PyValue *fn,
                                          const _PyIRWord *head);
+
+static PyValue _PyRop_StarTuple(PyThreadState *tstate,
+                                _PyInterpreterFrame *frame, PyValue *fn,
+                                _PyInstr *head);
+static _PyInterpreterFrame *_PyRop_PushPythonEx(PyThreadState *tstate,
+                                                _PyInterpreterFrame *frame,
+                                                PyValue *fn, PyValue fo,
+                                                PyValue ko, PyValue tup,
+                                                _PyInstr *head);
+static PyValue _PyRop_CallNativeEx(PyThreadState *tstate,
+                                   _PyInterpreterFrame *frame, PyValue fo,
+                                   PyValue ko, PyValue tup, _PyInstr *head);
+static PyValue _PyRop_CallEventEx(PyThreadState *tstate,
+                                  _PyInterpreterFrame *frame, _PyInstr *site,
+                                  PyValue fo, PyValue tup, _PyInstr *head);
+static PyValue _PyRop_CallNativeObservedEx(PyThreadState *tstate,
+                                           _PyInterpreterFrame *frame,
+                                           _PyInstr *site, PyValue fo,
+                                           PyValue ko, PyValue tup,
+                                           _PyInstr *head);
+static bool _PyRop_PythonTargetHeld(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, PyValue fo,
+                                    const _PyIRWord *head);
+static _PyInterpreterFrame *_PyRop_PushPythonHeld(PyThreadState *tstate,
+                                                  _PyInterpreterFrame *frame,
+                                                  PyValue *fn, PyValue fo,
+                                                  _PyInstr *head);
+static PyValue _PyRop_CallNativeObservedHeld(PyThreadState *tstate,
+                                             _PyInterpreterFrame *frame,
+                                             _PyInstr *site, PyValue *fn,
+                                             PyValue fo,
+                                             const _PyIRWord *head);
+static inline void _PyRop_RetireFailedHeld(_PyInterpreterFrame *frame,
+                                           PyValue *fn, PyValue fo,
+                                           const _PyIRWord *head);
+static PyValue _PyRop_HoldKwargs(_PyInterpreterFrame *frame,
+                                 const _PyIRWord *head);
+static inline void _PyRop_RetireFailedHeldEx(_PyInterpreterFrame *frame,
+                                             PyValue *fn, PyValue fo,
+                                             PyValue ko,
+                                             const _PyIRWord *head);
+static bool _PyRop_PlanFits(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                            PyValueBorrow fn, const _PyIRWord *head,
+                            const _PyFbCall *fb);
+static _PyInterpreterFrame *_PyRop_PushPlan(PyThreadState *tstate,
+                                            _PyInterpreterFrame *frame,
+                                            PyValue *fn, _PyInstr *head,
+                                            const _PyFbCall *fb);
+static bool _PyRop_KwargsPending(_PyInterpreterFrame *frame, PyValue *local);
+static PyValue _PyRop_NewKwargs(_PyInterpreterFrame *frame, PyValue *local);
 
 static int _PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                             _PyInstr *site, bool taken, int event);
@@ -2369,6 +2741,188 @@ _PyRop_ForIterStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return (_PyStatusValue){1, step.value};
 }
 
+/* The tests and steps of the specialised IterOpen and ForIter arms */
+static inline bool
+_PyRop_IterByIndex(PyValueBorrow v)
+{
+    return _PyType_IteratesByIndex(PyValue_TYPE(v));
+}
+
+static inline bool
+_PyRop_IterSelf(PyValueBorrow v)
+{
+    return PyValue_TYPE(v)->tp_iter == PyObject_SelfIter;
+}
+
+static inline bool
+_PyRop_ExactRangeIter(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)
+        || Py_TYPE(PyValue_AsKnownObjectBorrow(v)) != &PyRangeIter_Type) {
+        return false;
+    }
+#ifdef Py_GIL_DISABLED
+    // Only a range iterator that nothing else references: this thread alone
+    // steps it
+    return _PyObject_IsUniquelyReferenced(PyValue_AsKnownObjectBorrow(v));
+#else
+    return true;
+#endif
+}
+
+static inline bool
+_PyRop_ExactListIter(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)
+        || !PyList_CheckExact(PyValue_AsKnownObjectBorrow(v))) {
+        return false;
+    }
+#ifdef Py_GIL_DISABLED
+    // A list another thread owns, and that is not shared, is not stepped here
+    PyObject *list_o = PyValue_AsKnownObjectBorrow(v);
+    return _Py_IsOwnedByCurrentThread(list_o) || _PyObject_GC_IS_SHARED(list_o);
+#else
+    return true;
+#endif
+}
+
+static inline bool
+_PyRop_CursorIsIndex(PyValueBorrow c)
+{
+    return PyValue_IsTaggedIndex(c);
+}
+
+static inline bool
+_PyRop_CursorIsVacant(PyValueBorrow c)
+{
+    return PyValue_IsNull(c);
+}
+
+static inline bool
+_PyRop_HasIternextValue(PyValueBorrow v)
+{
+    return PyValue_IsObject(v)
+        && _PyType_VALUE_SLOT(Py_TYPE(PyValue_AsKnownObjectBorrow(v)), iternext) != NULL;
+}
+
+/* IterOpen.GenMethod's guard: the type's cached __iter__ function, a
+ * generator function of one argument, is at the version the cache holds */
+static inline bool
+_PyRop_IterGenMethod(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)) {
+        return false;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
+    if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
+        return false;
+    }
+    PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
+    PyObject *iter_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.iter);
+    if (iter_o == NULL) {
+        return false;
+    }
+    assert(PyFunction_Check(iter_o));
+    return ((PyFunctionObject *)iter_o)->func_version ==
+           FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.iter_version);
+}
+
+/* One step of an exact list at its tagged cursor: 1 an item (the next cursor
+ * in *next), 0 the end, whose value is None */
+static inline _PyStatusValue
+_PyRop_ListStep(PyValueBorrow it, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *list_o = PyValue_AsKnownObjectBorrow(it);
+    assert(PyList_CheckExact(list_o));
+    intptr_t i = PyValue_UntagIndex(cursor);
+    if ((size_t)i >= (size_t)PyList_GET_SIZE(list_o)) {
+        return (_PyStatusValue){0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(i + 1);
+    return (_PyStatusValue){1, PyValue_DUP(_PyValue_PublishedItem(
+        PyList_GET_VALUE(list_o, i)))};
+}
+
+static inline _PyStatusValue
+_PyRop_TupleStep(PyValueBorrow it, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *tuple_o = PyValue_AsKnownObjectBorrow(it);
+    assert(PyTuple_CheckExact(tuple_o));
+    intptr_t i = PyValue_UntagIndex(cursor);
+    if ((size_t)i >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+        return (_PyStatusValue){0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(i + 1);
+    return (_PyStatusValue){1, PyValue_DUP(_PyValue_PublishedItem(
+        PyTuple_GET_VALUE(tuple_o, i)))};
+}
+
+/* A range iterator's step: status 0 the int, 1 the end (None), -1 raised.
+ * start and len change before the int is made. */
+static inline _PyStatusValue
+_PyRop_RangeStep(PyValueBorrow it)
+{
+    _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(it);
+    assert(Py_TYPE(r) == &PyRangeIter_Type);
+    if (r->len <= 0) {
+        return (_PyStatusValue){1, PyValue_None};
+    }
+    long value = r->start;
+    r->start = value + r->step;
+    r->len--;
+    PyValue next = PyValue_FromInt64(value);
+    if (PyValue_IsNull(next)) {
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    return (_PyStatusValue){0, next};
+}
+
+/* The tagged branch of the generic step: 1 an item (the next cursor in
+ * *next), 0 the end, -1 raised */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_IndexedStep(PyValueBorrow iter, PyValueBorrow cursor, PyValue *next)
+{
+    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+    intptr_t i = PyValue_UntagIndex(cursor);
+    assert(i >= 0);
+    _PyValueIndexPair step = Py_TYPE(iter_o)->_tp_iteritem(iter_o, i);
+    if (PyValue_IsNull(step.value)) {
+        return (_PyStatusValue){step.index < 0 ? -1 : 0, PyValue_None};
+    }
+    *next = PyValue_TagIndex(step.index);
+    return (_PyStatusValue){1, step.value};
+}
+
+/* The value-slot branch of the generic step: status 0 the item, 1 the
+ * completion value, -1 raised; a StopIteration is the end */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_SlotStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                PyValueBorrow iter)
+{
+    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+    PyTypeObject *iter_type = Py_TYPE(iter_o);
+    _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(iter_type, iternext);
+    _PyStatusValue step;
+    if (next_value != NULL) {
+        _PyType_CHECK_VALUE_ROW(iter_type, _Py_VALUE_SLOT_INDEX_iternext);
+        step = next_value(iter_o);
+    }
+    else {
+        step = _PyValue_IterStep(iter_o);
+    }
+    if (step.status == PYGEN_NEXT) {
+        return (_PyStatusValue){0, step.value};
+    }
+    if (step.status == PYGEN_RETURN) {
+        return (_PyStatusValue){1, PyValue_IsNull(step.value) ? PyValue_None
+                                                              : step.value};
+    }
+    if (_PyForIter_StopIsExhaustion(tstate, frame)) {
+        return (_PyStatusValue){1, PyValue_None};
+    }
+    return (_PyStatusValue){-1, PyValue_NULL};
+}
+
 /* ForIter.Observed's STOP_ITERATION: the event of the completion value,
  * reported before the loop's pair is retired.  The exit is where the word
  * goes on exhaustion.  The value is closed on every path. */
@@ -2397,12 +2951,81 @@ _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return _PyRop_EdgeEvent(tstate, frame, site, true, PY_MONITORING_EVENT_JUMP);
 }
 
-/* The backedge's poll (Jump.Poll, Jump.Observed): signals, the GC and other
- * pending events, as _CHECK_PERIODIC */
+/* The poll of a word that is interruptible (the backedge Jump arms, Resume):
+ * signals, the GC and other pending events */
 static inline int
-_PyRop_Poll(PyThreadState *tstate)
+_PyRop_Poll(PyThreadState *tstate, _PyInstr *site)
 {
+    (void)site;
     return check_periodics(tstate);
+}
+
+/* The rows of Resume (Python/register_ops/resume.rop) */
+
+/* The code's instrumentation is current and no event is pending */
+static inline bool
+_PyRop_InstrumentationCurrent(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    return _Py_EvalBreaker(tstate) == FRAME_CODE_INSTRUMENTATION_VERSION();
+}
+
+/* Whether a resume point of this kind polls (the delegation loops and a
+ * generator expression's start do not) */
+static inline bool
+_PyRop_ResumePolls(uint32_t kind)
+{
+    return kind < RESUME_AFTER_YIELD_FROM;
+}
+
+/* Instrument the code if its version is out of date, as _MAYBE_INSTRUMENT.
+ * A positive result means the word runs again: return_pc names it, and it
+ * now has the handler that instrumentation installed. */
+static Py_NO_INLINE int
+_PyRop_InstrumentIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *site)
+{
+#ifdef Py_GIL_DISABLED
+    // For thread-safety, the instrumentation version is checked even when
+    // tracing: another thread may rewrite the bytecode while this one runs.
+    int check_instrumentation = 1;
+#else
+    int check_instrumentation = (tstate->tracing == 0);
+#endif
+    if (!check_instrumentation) {
+        return 0;
+    }
+    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
+                               & ~_PY_EVAL_EVENTS_MASK;
+    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+        _PyFrame_GetCode(frame)->_co_instrumentation_version);
+    if (code_version == global_version) {
+        return 0;
+    }
+    if (_Py_Instrument(_PyFrame_GetCode(frame), tstate->interp)) {
+        return -1;
+    }
+    frame->return_pc = site;
+    return 1;
+}
+
+/* PY_START at a frame's start, PY_RESUME at any other resume point.  A
+ * callback that moves the frame leaves the word to run in return_pc. */
+static Py_NO_INLINE int
+_PyRop_ResumeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *site, uint32_t kind)
+{
+    int err = _Py_call_instrumentation(
+        tstate, kind == RESUME_AT_FUNC_START ? PY_MONITORING_EVENT_PY_START
+                                             : PY_MONITORING_EVENT_PY_RESUME,
+        frame, site);
+    if (err) {
+        return -1;
+    }
+    if (frame->instr_ptr != site) {
+        frame->return_pc = frame->instr_ptr;
+        return 1;
+    }
+    return 0;
 }
 
 /* Whether the jump word at site goes back */
@@ -2569,7 +3192,11 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
             stack[0] = _PyEval_GetAIter(tstate, PyValue_DUP(frame->base[0]));
         }
         else {
-            // The row of IterOpen.Generic
+            // A word of IterOpen, whichever arm the site has adapted to: the
+            // argument is its source and its pair is the first two slots of
+            // the stack
+            assert(IR_A(exec->words[1]) == exec->nfixed);
+            assert(IR_B(exec->words[1]) == 0);
             _PyStatusValue opened = _PyRop_OpenIter(
                 frame, PyValue_Borrow(frame->base[0]), ITER_ORDINARY);
             stack[0] = opened.value;
@@ -2592,6 +3219,31 @@ gen_prologue(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
         return 0;
     }
     return gen_prologue_run(tstate, gen, code);
+}
+
+/* The generator of the iterable's cached __iter__ function, made at once
+ * with the iterable (a new owner of it) as its argument.  NULL, with the
+ * exception set, if the generator or its prologue failed; the iterable is
+ * not touched. */
+static Py_NO_INLINE PyValue
+_PyRop_NewIterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        PyValueBorrow iterable)
+{
+    PyHeapTypeObject *ht =
+        (PyHeapTypeObject *)Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
+    PyFunctionObject *func = (PyFunctionObject *)ht->_spec_cache.iter;
+    PyGenObject *gen = _PyGen_NewCall(
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
+        NULL, (PyCodeObject *)func->func_code, frame);
+    if (gen == NULL) {
+        return PyValue_NULL;
+    }
+    gen->gi_iframe.base[0] = PyValue_DUP(iterable);
+    if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
+        _PyGen_DiscardCall(gen);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal((PyObject *)gen);
 }
 
 /* The generator that the call at head creates, when the callee is a generator
@@ -2663,10 +3315,6 @@ borrowed_word(PyObject *obj)
 
 /* The handlers' calls (call_run_*), after the binder
  * (eval_frame_push_and_init_code), which they use. */
-static _PyCallResult call_run_keywords(
-    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
-static _PyCallResult call_run_ex(
-    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_bind_positional(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue,
     const _PyBindPlan *);
@@ -2906,6 +3554,25 @@ _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home)
     _PyEval_FormatExcCheckArg(
         _PyThreadState_GET(), PyExc_UnboundLocalError, UNBOUNDLOCAL_ERROR_MSG,
         _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, index));
+}
+
+/* AppendText.Text (numeric.rop): the in-place append of `s += t`.  The
+ * string's owner leaves the local before the append, so PyUnicode_Append sees
+ * the local's reference as the only one and may extend the buffer in place;
+ * that keeps a loop of appends linear.  Failure leaves the local vacant and
+ * the string released, as the old handler did. */
+PyValue
+_PyRop_AppendText(PyValue *home, PyValueBorrow right)
+{
+    PyValue held = *home;
+    assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(held)));
+    *home = PyValue_NULL;
+    PyObject *left = value_unicode_append(PyValue_AsKnownObjectSteal(held),
+                                          PyValue_AsKnownObjectBorrow(right));
+    if (left == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromNonNumberSteal(left);
 }
 
 PyValue
@@ -3445,6 +4112,21 @@ rop_take_items(const _PyRopSpan *span, PyValue *vals)
     }
 }
 
+_PyRopSrcs
+_PyRop_SrcsOfSpan(const _PyRopSpan *span)
+{
+    _PyInterpreterFrame *frame = span->frame;
+    int nlocals = _PyCode_IRFixed(_PyFrame_GetCode(frame));
+    assert(span->count <= _PY_ROP_MAX_SRCS);
+    _PyRopSrcs s = {.frame = frame, .n = (uint8_t)span->count};
+    for (int i = 0; i < span->count; i++) {
+        int slot = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+        s.home[i] = &frame->base[slot];
+        s.local[i] = slot < nlocals;
+    }
+    return s;
+}
+
 static void
 rop_close_items(PyValue *vals, int n)
 {
@@ -3518,6 +4200,58 @@ _PyRop_BuildMap(const _PyRopSpan *items)
         return PyValue_NULL;
     }
     return PyValue_FromObjectSteal(map);
+}
+
+/* The rows of BuildText (Python/register_ops/text.rop).  Every piece is
+ * spent on every outcome. */
+PyValue
+_PyRop_JoinText(const _PyRopSpan *parts)
+{
+    int n = parts->count;
+    PyValue vals[n + 1];
+    PyObject *objects[n + 1];
+    rop_take_items(parts, vals);
+    // The pieces are str objects (constants and the results of Format),
+    // never inline words
+    for (int i = 0; i < n; i++) {
+        assert(PyValue_IsObject(vals[i]));
+        objects[i] = PyValue_AsKnownObjectBorrow(vals[i]);
+    }
+    PyObject *res = _PyUnicode_JoinArray(&_Py_STR(empty), objects, n);
+    rop_close_items(vals, n);
+    return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
+}
+
+PyValue
+_PyRop_BuildInterpolation(const _PyRopSpan *parts, int flags)
+{
+    int n = parts->count;
+    assert(n == 2 + (flags & 1));
+    PyValue vals[n + 1];
+    rop_take_items(parts, vals);
+    PyObject *str_o = PyValue_AsKnownObjectBorrow(vals[1]);
+    PyObject *format_o = (flags & 1) ? PyValue_AsKnownObjectBorrow(vals[2])
+                                     : &_Py_STR(empty);
+    // The value may be a number: the interpolation holds its box
+    PyObject *res = _PyInterpolation_BuildValue(vals[0], str_o, flags >> 2,
+                                                format_o);
+    rop_close_items(vals, n);
+    return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
+}
+
+PyValue
+_PyRop_BuildTemplate(const _PyRopSpan *parts)
+{
+    assert(parts->count == 2);
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    // Both are tuples that the compiler built
+    assert(PyValue_IsObject(vals[0]));
+    assert(PyValue_IsObject(vals[1]));
+    PyObject *res = _PyTemplate_Build(PyValue_AsKnownObjectBorrow(vals[0]),
+                                      PyValue_AsKnownObjectBorrow(vals[1]));
+    rop_close_items(vals, 2);
+    return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
 }
 
 int
@@ -3680,6 +4414,139 @@ done:
     return res;
 }
 
+/* Unpack and UnpackStar (Python/register_ops/displays.rop): the values of
+ * the iterable as owners the publish moves into the homes of the targets,
+ * which are in stack order (the first target is the last element).  The source stays in its home and is held across the call. */
+static int
+rop_unpack(PyValue *source_home, int before, int after, Py_ssize_t count,
+           _PyRopOwners *out)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue seq = PyValue_DUP(PyValue_Borrow(*source_home));
+    int ok = 0;
+    // A number is not iterable
+    if (!PyValue_IsObject(PyValue_Borrow(seq))) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "cannot unpack non-iterable %.200s object",
+                      PyValue_TYPE(PyValue_Borrow(seq))->tp_name);
+        goto done;
+    }
+    PyValue *items = count ? PyMem_Malloc(count * sizeof(PyValue)) : NULL;
+    if (count && items == NULL) {
+        _PyErr_NoMemory(tstate);
+        goto done;
+    }
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(seq));
+    if (!_PyEval_UnpackIterableValue(tstate, seq_o, before, after, items)) {
+        PyMem_Free(items);
+        goto done;
+    }
+    // The outputs are in stack order, bottom first: the first target is last
+    for (Py_ssize_t i = 0, j = count - 1; i < j; i++, j--) {
+        PyValue tmp = items[i];
+        items[i] = items[j];
+        items[j] = tmp;
+    }
+    out->items = items;
+    out->count = count;
+    ok = 1;
+done:
+    PyValue_CLOSE(seq);
+    return ok ? 0 : -1;
+}
+
+int
+_PyRop_UnpackIterable(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    return rop_unpack(source_home, (int)n, -1, n, out);
+}
+
+int
+_PyRop_UnpackStar(PyValue *source_home, Py_ssize_t shape, _PyRopOwners *out)
+{
+    int before = shape & 0xFF, after = shape >> 8;
+    return rop_unpack(source_home, before, after, before + 1 + after, out);
+}
+
+/* The specialized arms: the items of an exact tuple or list of n items,
+ * duplicated, in stack order.  The guard has checked the type and length; the
+ * list's length is checked again under its lock, and a list that changed goes
+ * the generic way. */
+int
+_PyRop_UnpackTuple(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyTuple_CheckExact(seq_o) && PyTuple_GET_SIZE(seq_o) == n);
+    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
+    if (n && items == NULL) {
+        _PyErr_NoMemory(_PyThreadState_GET());
+        return -1;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyTuple_ITEMS(seq_o)[i]));
+    }
+    out->items = items;
+    out->count = n;
+    return 0;
+}
+
+int
+_PyRop_UnpackList(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyList_CheckExact(seq_o));
+    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
+    if (n && items == NULL) {
+        _PyErr_NoMemory(_PyThreadState_GET());
+        return -1;
+    }
+    int same = 1;
+    Py_BEGIN_CRITICAL_SECTION(seq_o);
+    if (PyList_GET_SIZE(seq_o) != n) {
+        same = 0;
+    }
+    else {
+        for (Py_ssize_t i = 0; i < n; i++) {
+            items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyList_ITEMS(seq_o)[i]));
+        }
+    }
+    Py_END_CRITICAL_SECTION();
+    if (!same) {
+        PyMem_Free(items);
+        return _PyRop_UnpackIterable(source_home, n, out);
+    }
+    out->items = items;
+    out->count = n;
+    return 0;
+}
+
+bool
+_PyRop_TupleHasLength(PyValueBorrow v, Py_ssize_t n)
+{
+    return (PyValue_IsObject)(v)
+           && PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(v))
+           && PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) == n;
+}
+
+bool
+_PyRop_ListHasLength(PyValueBorrow v, Py_ssize_t n)
+{
+    return (PyValue_IsObject)(v)
+           && PyList_CheckExact(PyValue_AsKnownObjectBorrow(v))
+           && PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) == n;
+}
+
+/* The case of classify_unpack: 0 an exact tuple of n items, 1 an exact list
+ * of n items, 2 any other */
+int
+_PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n)
+{
+    if (_PyRop_TupleHasLength(v, n)) {
+        return 0;
+    }
+    return _PyRop_ListHasLength(v, n) ? 1 : 2;
+}
+
 void
 _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v)
 {
@@ -3828,7 +4695,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline PyValue
 generator_payload(_PyIRWord payload)
 {
-    return (PyValue){.bits = payload};
+    return _PyValue_FromTransferWord(payload);
 }
 
 static inline uint64_t
@@ -3877,8 +4744,6 @@ generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef IR_EXIT
 #pragma push_macro("JUMP_TO_PREDICTED")
 #undef JUMP_TO_PREDICTED
-#pragma push_macro("IR_DEOPT_BINARY_OP")
-#undef IR_DEOPT_BINARY_OP
 #pragma push_macro("IR_OBSERVE_EDGE")
 #undef IR_OBSERVE_EDGE
 #pragma push_macro("IR_HOLD_NEXT")
@@ -3944,12 +4809,6 @@ generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
     do { \
         Py_MUSTTAIL return ir_run_##name(tstate, frame, this_instr, ir_word); \
     } while (0)
-#define IR_DEOPT_BINARY_OP(F) \
-    do { \
-        Py_MUSTTAIL return ir_binary_op( \
-            tstate, frame, this_instr, ir_word, \
-            (int)((_PyFbHeader *)IR_FB(F))->arg); \
-    } while (0)
 #define IR_HOLD_NEXT() ((void)0)
 #define IR_STEP_DONE(STEP) return (STEP)
 #define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
@@ -3968,7 +4827,7 @@ generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define GEN_DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
-        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), (V).bits); \
+        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
     } while (0)
 /* The error that a completion arm reported in the activation, for the
  * caller to resolve */
@@ -4214,20 +5073,88 @@ _PyRop_DictFirstProbe(PyValueBorrow v, PyValueBorrow k, PyValue *out)
     return true;
 }
 
-/* The lock is held for the exchange only.  The guard proved the index, and
- * this build has the GIL. */
-static inline PyValue
-_PyRop_ListExchange(PyValueBorrow v, PyValueBorrow k, PyValue x)
+/* The old STORE_ATTR_INSTANCE_VALUE: lock the owner, check the type version
+   and the inline values again, store.  true with the previous owner, which
+   is NULL when the store added the attribute. */
+static inline bool
+_PyRop_StoreInstanceLocked(PyValueBorrow owner, _PyAttrRecipe r,
+                            PyValueBorrow x, PyValue *old)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    if (!LOCK_OBJECT(o)) {
+        return false;
+    }
+    if (!_PyAttr_InstanceVersion(o, r) || !_PyAttr_StoreValuesReady(o, r)) {
+        UNLOCK_OBJECT(o);
+        return false;
+    }
+    *old = PyValue_NULL;
+    _PyAttr_StoreInstanceValue(owner, r, PyValue_DUP(x), old);
+    UNLOCK_OBJECT(o);
+    return true;
+}
+
+/* The old STORE_ATTR_SLOT: lock the owner, check the type version again,
+   store.  true with the previous owner, which is NULL for a vacant slot. */
+static inline bool
+_PyRop_StoreMemberLocked(PyValueBorrow owner, _PyAttrRecipe r,
+                          PyValueBorrow x, PyValue *old)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    if (!LOCK_OBJECT(o)) {
+        return false;
+    }
+    if (!_PyAttr_InstanceVersion(o, r)) {
+        UNLOCK_OBJECT(o);
+        return false;
+    }
+    _PyAttr_StoreMemberSlot(owner, r, PyValue_DUP(x), old);
+    UNLOCK_OBJECT(o);
+    return true;
+}
+
+/* The old STORE_ATTR_WITH_HINT: lock the managed dictionary, check the
+   hinted entry again, store.  true with the previous owner, never NULL. */
+static inline bool
+_PyRop_StoreHintedLocked(PyValueBorrow owner, PyObject *name,
+                          _PyAttrRecipe r, PyValueBorrow x, PyValue *old)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(owner);
+    PyDictObject *dict = _PyObject_GetManagedDict(o);
+    if (dict == NULL || !LOCK_OBJECT(dict)) {
+        return false;
+    }
+    if (!_PyAttr_InstanceVersion(o, r) || !_PyAttr_HintStoreReady(o, name, r)) {
+        UNLOCK_OBJECT(dict);
+        return false;
+    }
+    *old = _PyAttr_StoreHinted(owner, r, x);
+    UNLOCK_OBJECT(dict);
+    return true;
+}
+
+/* The old _STORE_SUBSCR_LIST_INT: lock the list, check the bounds again,
+ * exchange the item, unlock.  true with the displaced owner, which is never
+ * NULL; false, having changed nothing and not counted x, when the lock is not
+ * taken or the index is out of bounds under it.  The guard before the row
+ * only keeps a word that cannot hit from taking the lock. */
+static inline bool
+_PyRop_ListExchangeLocked(PyValueBorrow v, PyValueBorrow k, PyValueBorrow x,
+                          PyValue *old)
 {
     PyObject *list = PyValue_AsKnownObjectBorrow(v);
-    int locked = LOCK_OBJECT(list);
-    assert(locked);
-    (void)locked;
+    if (!LOCK_OBJECT(list)) {
+        return false;
+    }
     Py_ssize_t index = _PyRop_ListIndex(list, k);
-    assert(0 <= index && index < PyList_GET_SIZE(list));
-    PyValue old = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, x);
+    if (index < 0 || index >= PyList_GET_SIZE(list)) {
+        UNLOCK_OBJECT(list);
+        return false;
+    }
+    *old = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index,
+                                       PyValue_DUP(x));
     UNLOCK_OBJECT(list);
-    return old;
+    return true;
 }
 
 static inline PyValue
@@ -4459,7 +5386,6 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("PROCESS_ERROR_AT")
 #pragma pop_macro("IR_EXIT")
 #pragma pop_macro("JUMP_TO_PREDICTED")
-#pragma pop_macro("IR_DEOPT_BINARY_OP")
 #pragma pop_macro("IR_OBSERVE_EDGE")
 #pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
@@ -4490,10 +5416,8 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
     /* The operands of the shared bodies that the labels below read: the
-     * generic BINARY_OP's operation and the VM routines' (Python/
-     * ceval_routines.h), which the transfer macros set.  None is live across
-     * a dispatch. */
-    int binary_op_operation;
+     * VM routines' (Python/ceval_routines.h), which the transfer macros set.
+     * None is live across a dispatch. */
     _PyInstr *process_error_origin;
     uint32_t process_error_entry;
     PyValue gen_value;
@@ -6316,8 +7240,8 @@ call_bind_dict_kwargs(const _CallDict *items)
     int count = 0;
     for (int i = 0; i < items->count; i++) {
         if (items->dests[i] == _Py_CALL_BIND_TO_KWARGS) {
-            keys[count] = (PyValue){items->keys[i].bits};
-            values[count] = (PyValue){items->values[i].bits};
+            keys[count] = _PyIR_AdoptTemp(items->keys[i]);
+            values[count] = _PyIR_AdoptTemp(items->values[i]);
             count++;
         }
     }
@@ -6788,11 +7712,12 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
     return (_PyCallResult){0, NULL};
 }
 
-static Py_NO_INLINE _PyCallResult
-call_run_keywords(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                  _PyInstr *head, int flags)
+/* Whether the call whose head is head is a CALL_KW: its last operand is the
+ * constant tuple of the keyword names, which is no slot */
+static inline int
+rop_call_keywords(const _PyIRWord *head)
 {
-    return call_run(tstate, frame, head, flags, 1);
+    return IR_IS_KW_WORD(head[0]);
 }
 
 /* The rows of Call.Generic (Python/register_ops/calls.rop) on call_run's
@@ -6818,22 +7743,26 @@ _PyRop_PushPython(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   PyValue *fn, _PyInstr *head)
 {
     _PyIRWord word = head[0];
-    assert(fn == &_PyFrame_Slots(frame)[IR_B(word)]);
     PyValue receiver;
     PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
                                           &receiver);
     int lead = !PyValue_IsNull(receiver);
     int skip = call_skipped_operands(_PyFrame_Slots(frame), head, word);
     PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+    int keywords = rop_call_keywords(head);
     _PyBindPlan plan;
     _PyCallResult pushed = {1, NULL};
-    if (_PyBindPlan_ForCall(&plan, (PyCodeObject *)func->func_code,
+    /* A keyword call has no plan here (no site's keyword destinations):
+     * the general binding takes it */
+    if (!keywords &&
+        _PyBindPlan_ForCall(&plan, (PyCodeObject *)func->func_code,
                             lead + (int)IR_C(word) - skip, skip, lead)) {
         pushed = call_bind_positional(tstate, frame, head, callable, receiver,
                                       &plan);
     }
     if (pushed.status > 0) {
-        pushed = call_push_python(tstate, frame, head, callable, receiver, 0);
+        pushed = call_push_python(tstate, frame, head, callable, receiver,
+                                  keywords);
     }
     if (pushed.status < 0) {
         rop_call_retire_operands(frame, head);
@@ -6851,7 +7780,84 @@ _PyRop_CallNative(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyValue receiver;
     PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
                                           &receiver);
-    return call_vector_impl(tstate, frame, head, callable, receiver, 0);
+    return call_vector_impl(tstate, frame, head, callable, receiver,
+                            rop_call_keywords(head));
+}
+
+/* The rows of CallKw.Plan (Python/register_ops/calls.rop): a call of a
+ * function whose keyword names the site's plan places.  plan_fits is every
+ * test that call_bind_core makes before it changes anything, so that
+ * push_plan has no decline: the plan is valid for this call's self slot, the
+ * frame fits the arena, the function's own defaults cover what the plan
+ * leaves to them, and its keyword-only defaults are there. */
+static inline bool
+_PyRop_PlanFits(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                PyValueBorrow fn, const _PyIRWord *head, const _PyFbCall *fb)
+{
+#ifdef Py_GIL_DISABLED
+    return false;
+#else
+    const _PyBindPlan *plan = &fb->plan;
+    int bits = plan->flags;
+    if (!(bits & _Py_CALL_BIND_VALID)) {
+        return false;
+    }
+    _PyIRWord word = head[0];
+    PyFunctionObject *func =
+        (PyFunctionObject *)PyValue_AsKnownObjectBorrow(fn);
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (call_skipped_operands(_PyFrame_Slots(frame), head, word) !=
+        !!(bits & _Py_CALL_BIND_SKIP)) {
+        return false;
+    }
+    if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+        return false;
+    }
+    int argcount = code->co_argcount;
+    int need = plan->need;
+    PyObject *defaults = func->func_defaults;
+    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+    if ((size_t)(ndefaults - need) > (size_t)(argcount - need)) {
+        return false;
+    }
+    unsigned int kwonly_mask = (bits & _Py_CALL_BIND_GENERAL)
+        ? plan->kwonly_mask : 0;
+    if (!kwonly_mask) {
+        return true;
+    }
+    PyObject *kwdefs = func->func_kwdefaults;
+    if (kwdefs == NULL || !PyDict_CheckExact(kwdefs) ||
+        !DK_IS_UNICODE(((PyDictObject *)kwdefs)->ma_keys)) {
+        return false;
+    }
+    for (unsigned int rest = kwonly_mask; rest; rest &= rest - 1) {
+        PyObject *name = _PyTuple_GET_OBJECT(code->co_localsplusnames,
+                                             argcount + __builtin_ctz(rest));
+        PyValue value;
+        if (PyUnstable_Unicode_GET_CACHED_HASH(name) == -1 ||
+            !_PyDict_GetUnicodeValue((PyDictObject *)kwdefs, name, &value)) {
+            return false;
+        }
+    }
+    return true;
+#endif
+}
+
+static Py_NO_INLINE _PyInterpreterFrame *
+_PyRop_PushPlan(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                PyValue *fn, _PyInstr *head, const _PyFbCall *fb)
+{
+    assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
+    _PyCallResult pushed = call_bind_positional(tstate, frame, head, *fn,
+                                                PyValue_NULL, &fb->plan);
+    /* plan_fits proved every test of the binding: it does not decline */
+    assert(pushed.status <= 0);
+    if (pushed.status < 0) {
+        rop_call_retire_operands(frame, head);
+        return NULL;
+    }
+    assert(pushed.child != NULL);
+    return pushed.child;
 }
 
 /* The rows of Call.Observed: the events of call_run with CALL_INSTRUMENTED */
@@ -6865,7 +7871,7 @@ _PyRop_CallEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
                                           &receiver);
     PyValue first = call_first_argument(_PyFrame_Slots(frame), head,
-                                        receiver, 0);
+                                        receiver, rop_call_keywords(head));
     return call_monitor(tstate, frame, site, callable, first);
 }
 
@@ -6875,14 +7881,14 @@ static Py_NO_INLINE PyValue
 _PyRop_CallNativeObserved(PyThreadState *tstate, _PyInterpreterFrame *frame,
                           _PyInstr *site, PyValue *fn, const _PyIRWord *head)
 {
-    assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
     PyValue receiver;
     PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
                                           &receiver);
+    int keywords = rop_call_keywords(head);
     PyValue first = call_first_argument(_PyFrame_Slots(frame), head,
-                                        receiver, 0);
+                                        receiver, keywords);
     PyValue result = call_vector_impl(tstate, frame, site, callable, receiver,
-                                      0);
+                                      keywords);
     if (call_is_python_function(tstate, callable)) {
         return result;
     }
@@ -6925,167 +7931,293 @@ call_args_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return tuple;
 }
 
-/* The generic CALL_FUNCTION_EX, instrumented or not.  The operands are the
- * positional iterable or tuple and, with CALL_KWARGS_PRESENT, the kwargs
- * dict.  A Python callee takes new references to them and to the function
- * (and the tuple, if the call prepared one), and the operands are released
- * once its frame is current; a native callee and every instrumented call go
- * through _PyValue_Call() as upstream's do. */
-static Py_NO_INLINE _PyCallResult
-call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
-            int flags)
+/* The rows of CallEx (Python/register_ops/calls.rop): the tuple, the CALL
+ * event, the binding of a Python callee, and the native call.  The tuple that star_tuple made is an owner of the call: each
+ * row below takes it. */
+
+static inline PyObject *
+rop_ex_callargs(PyValue tup)
 {
-    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*head);
-    PyValue *slots = _PyFrame_Slots(frame);
-    PyValue callable = slots[IR_B(word)];
-    PyValue args = slots[_PyIR_CallOperand(head, 0)];
-    PyObject *kwargs = (flags & CALL_KWARGS_PRESENT)
-        ? PyValue_AsKnownObjectBorrow(slots[_PyIR_CallOperand(head, 1)]) : NULL;
-    int operands = 1 + ((flags & CALL_KWARGS_PRESENT) != 0);
-    int instrumented = (flags & CALL_INSTRUMENTED) != 0;
-    PyObject *tuple = NULL;
-    if (!PyValue_IsObject(args) ||
-        !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(args))) {
-        tuple = call_args_tuple(tstate, frame, head, callable, args);
-        if (tuple == NULL) {
-            return (_PyCallResult){-1, NULL};
-        }
+    return PyValue_AsKnownObjectBorrow(tup);
+}
+
+/* The kwargs dict of the call is the one that the call held first (a
+ * NULL owner if the word has none): the iteration of the arguments can run
+ * Python, which can rebind the local that the dict was read from */
+static inline PyObject *
+rop_ex_kwargs(PyValue ko)
+{
+    return PyValue_IsNull(ko) ? NULL : PyValue_AsKnownObjectBorrow(ko);
+}
+
+static PyValue
+_PyRop_HoldKwargs(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    if (head[0] & IR_F_NO_KW) {
+        return PyValue_NULL;
     }
-    PyObject *callargs = tuple != NULL ? tuple : PyValue_AsKnownObjectBorrow(args);
-    // The first argument is for the monitoring events alone
+    return PyValue_DUP(_PyFrame_Slots(frame)[_PyIR_CallOperand(head, 1)]);
+}
+
+static PyValue
+_PyRop_StarTuple(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 PyValue *fn, _PyInstr *head)
+{
+    PyValue args = _PyFrame_Slots(frame)[_PyIR_CallOperand(head, 0)];
+    if (PyValue_IsObject(args) &&
+        PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(args))) {
+        return PyValue_DUP(args);
+    }
+    PyObject *tuple = call_args_tuple(tstate, frame, head, *fn, args);
+    if (tuple == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(tuple);
+}
+
+static PyValue
+_PyRop_CallEventEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *site, PyValue fo, PyValue tup, _PyInstr *head)
+{
+    PyObject *callargs = rop_ex_callargs(tup);
     PyValue first = PyValue_NULL;
-    if (instrumented) {
-        if (PyTuple_GET_SIZE(callargs)) {
-            first = _PyIR_AdoptTemp(PyTuple_GET_VALUE(callargs, 0));
-        }
-        if (call_monitor(tstate, frame, head, callable, first) < 0) {
-            Py_XDECREF(tuple);
-            return (_PyCallResult){-1, NULL};
-        }
+    if (PyTuple_GET_SIZE(callargs)) {
+        first = _PyIR_AdoptTemp(PyTuple_GET_VALUE(callargs, 0));
     }
-    PyValue receiver = PyValue_NULL;
-    PyValue target = instrumented ? callable
-        : call_expand_method(callable, 0, &receiver);
-    if (!instrumented && call_is_python_function(tstate, target)) {
-        /* The items of the tuple and the dict (an empty one is nothing)
-         * bind in place, after the receiver of a bound method: the child
-         * takes counts of them, and the operands and the tuple that this
-         * call prepared are released once it is current.  What the plan
-         * does not cover binds below. */
-        PyFunctionObject *callee =
-            (PyFunctionObject *)PyValue_AsKnownObjectBorrow(target);
-        PyCodeObject *callee_code = (PyCodeObject *)callee->func_code;
-        int lead = !PyValue_IsNull(receiver);
-        int count = lead + (int)Py_MIN(PyTuple_GET_SIZE(callargs), INT_MAX - 1);
-        _CallDict items;
-        const _CallDict *dict_items = NULL;
-        int plannable = 1;
-        if (kwargs != NULL && PyDict_GET_SIZE(kwargs) > 0) {
-            plannable = call_bind_dict_destinations(
-                callee_code, Py_MIN(count, callee_code->co_argcount), kwargs,
-                &items);
-            dict_items = &items;
-        }
-        /* The site's plan holds for the code and the arity it was made for,
-         * and for a call without items of a dict.  A site past the limit of
-         * the feedback vector shares entry 0, a header alone. */
-        const _PyFbCall *fb = (const _PyFbCall *)IR_FB(IR_D(word));
-        _PyBindPlan plan;
-        const _PyBindPlan *planned = &plan;
-        if (dict_items == NULL && fb->h.kind == FB_CALL &&
-            fb->func_version == callee_code->co_version &&
-            fb->plan.positional == count &&
-            !!(fb->plan.flags & _Py_CALL_BIND_LEAD) == lead &&
-            (fb->plan.flags & _Py_CALL_BIND_VALID))
-        {
-            planned = &fb->plan;
-        }
-        else if (!plannable ||
-                 !(dict_items != NULL
-                   ? _PyBindPlan_Init(&plan, callee_code, count, 0, lead,
-                                      items.dests, items.count)
-                   : _PyBindPlan_ForCall(&plan, callee_code, count, 0, lead)))
-        {
-            planned = NULL;
-        }
-        if (planned != NULL) {
-            _PyCallResult pushed = call_bind_tuple(
-                tstate, frame, head, target, receiver, callargs, dict_items,
-                planned);
-            if (pushed.status < 0) {
-                Py_XDECREF(tuple);
-                return pushed;
-            }
-            if (pushed.status == 0) {
-                call_release_rest(_PyFrame_Slots(frame), head, word, operands, UINT32_MAX);
-                Py_XDECREF(tuple);
-                return pushed;
-            }
-        }
+    if (call_monitor(tstate, frame, site, fo, first) < 0) {
+        PyValue_XCLOSE(tup);
+        return PyValue_NULL;
     }
-    if (!instrumented && PyValue_IsNull(receiver) &&
-        call_is_python_function(tstate, callable)) {
-        PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
-        PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
-        PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
-            : Py_NewRef(func->func_globals);
-        PyValue function = PyValue_DUP(callable);
-        Py_ssize_t nargs = PyTuple_GET_SIZE(callargs);
-        /* The binding consumes these on both outcomes */
-        PyObject *owned_args = tuple != NULL ? tuple : Py_NewRef(callargs);
-        PyObject *owned_kwargs = Py_XNewRef(kwargs);
-        _PyBound bound = eval_frame_push_and_init_ex_code(
-            tstate, function, locals, nargs, owned_args, owned_kwargs, frame,
-            code);
-        Py_DECREF(code);
-        if (bound.gen != NULL) {
-            /* The call is done: its object is the result, and the
-             * operands are still in their homes. */
-            return call_publish_object(tstate, frame, head, word, bound.gen,
-                                       operands);
-        }
-        _PyInterpreterFrame *child = bound.frame;
-        if (child == NULL) {
-            (void)call_refresh(tstate, frame, head);
-            return (_PyCallResult){-1, NULL};
-        }
-        call_commit(tstate, frame, head, child);
-        call_release_rest(_PyFrame_Slots(frame), head, word, operands, UINT32_MAX);
-        return (_PyCallResult){0, child};
+    return tup;
+}
+
+static PyValue
+_PyRop_CallNativeEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValue fo, PyValue ko, PyValue tup, _PyInstr *head)
+{
+    PyValue result = _PyValue_Call(tstate, fo, rop_ex_callargs(tup),
+                                   rop_ex_kwargs(ko));
+    PyValue_XCLOSE(tup);
+    PyValue_XCLOSE(ko);
+    PyValue_XCLOSE(fo);
+    return result;
+}
+
+/* A function or method fires no C event: the Python path pushes its frame */
+static PyValue
+_PyRop_CallNativeObservedEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                            _PyInstr *site, PyValue fo, PyValue ko, PyValue tup,
+                            _PyInstr *head)
+{
+    PyObject *callargs = rop_ex_callargs(tup);
+    PyValue callable = fo;
+    PyValue first = PyValue_NULL;
+    if (PyTuple_GET_SIZE(callargs)) {
+        first = _PyIR_AdoptTemp(PyTuple_GET_VALUE(callargs, 0));
     }
-    PyValue result = _PyValue_Call(tstate, callable, callargs, kwargs);
-    /* The call can run Python: check the frame before monitoring reads it. */
-    int refreshed = call_refresh(tstate, frame, head);
+    PyValue result = _PyValue_Call(tstate, callable, callargs,
+                                   rop_ex_kwargs(ko));
+    int refreshed = call_refresh(tstate, frame, site);
     int failed = PyValue_IsNull(result);
-    if (instrumented &&
-        !(PyValue_IsObject(callable) &&
+    if (!(PyValue_IsObject(callable) &&
           (PyFunction_Check(PyValue_AsKnownObjectBorrow(callable)) ||
            PyMethod_Check(PyValue_AsKnownObjectBorrow(callable))))) {
-        failed = call_monitor_result(tstate, frame, head, callable, first,
+        failed = call_monitor_result(tstate, frame, site, callable, first,
                                      failed || refreshed < 0);
-        /* The event can run Python too. */
         if (!failed && refreshed == 0) {
-            refreshed = call_refresh(tstate, frame, head);
+            refreshed = call_refresh(tstate, frame, site);
         }
     }
+    PyValue_XCLOSE(tup);
+    PyValue_XCLOSE(ko);
+    PyValue_XCLOSE(fo);
     if (failed || refreshed < 0) {
         PyValue_XCLOSE(result);
-        Py_XDECREF(tuple);
-        return (_PyCallResult){-1, NULL};
+        return PyValue_NULL;
     }
-    PyValue displaced = call_publish(frame, head, word, result, operands);
-    PyValue_XCLOSE(displaced);
-    Py_XDECREF(tuple);
-    /* Releasing the operands can run a finalizer. */
-    int status = call_refresh(tstate, frame, head);
-    if (status == 0 && (flags & CALL_PERIODIC)) {
-        /* Signal handlers and the GC can run Python. */
-        if (check_periodics_at_end(tstate, frame) < 0 ||
-            call_refresh(tstate, frame, head) < 0) {
-            status = -1;
+    return result;
+}
+
+static _PyInterpreterFrame *
+rop_push_python_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   PyValue callable, PyValue ko, PyValue tup, _PyInstr *head)
+{
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*head);
+    PyObject *callargs = rop_ex_callargs(tup);
+    PyObject *kwargs = rop_ex_kwargs(ko);
+    int operands = _PyIR_CallSlotOperands(word);
+    PyValue receiver;
+    PyValue target = call_expand_method(callable, 0, &receiver);
+    /* The items of the tuple and the dict (an empty one is nothing) bind in
+     * place, after the receiver of a bound method: the child takes counts of
+     * them, and the operands and the tuple are released once it is current.
+     * What the plan does not cover binds below, on one code snapshot. */
+    PyFunctionObject *callee =
+        (PyFunctionObject *)PyValue_AsKnownObjectBorrow(target);
+    PyCodeObject *callee_code = (PyCodeObject *)callee->func_code;
+    int lead = !PyValue_IsNull(receiver);
+    int count = lead + (int)Py_MIN(PyTuple_GET_SIZE(callargs), INT_MAX - 1);
+    _CallDict items;
+    const _CallDict *dict_items = NULL;
+    int plannable = 1;
+    if (kwargs != NULL && PyDict_GET_SIZE(kwargs) > 0) {
+        plannable = call_bind_dict_destinations(
+            callee_code, Py_MIN(count, callee_code->co_argcount), kwargs,
+            &items);
+        dict_items = &items;
+    }
+    _PyBindPlan plan;
+    const _PyBindPlan *planned = &plan;
+    if (!plannable ||
+        !(dict_items != NULL
+          ? _PyBindPlan_Init(&plan, callee_code, count, 0, lead, items.dests,
+                             items.count)
+          : _PyBindPlan_ForCall(&plan, callee_code, count, 0, lead)))
+    {
+        planned = NULL;
+    }
+    if (planned != NULL) {
+        _PyCallResult pushed = call_bind_tuple(
+            tstate, frame, head, target, receiver, callargs, dict_items,
+            planned);
+        if (pushed.status < 0) {
+            rop_call_retire_operands(frame, head);
+            PyValue_XCLOSE(tup);
+            return NULL;
+        }
+        if (pushed.status == 0) {
+            call_release_rest(_PyFrame_Slots(frame), head, word, operands,
+                              UINT32_MAX);
+            PyValue_XCLOSE(tup);
+            return pushed.child;
         }
     }
-    return (_PyCallResult){status, NULL};
+    PyCodeObject *code = (PyCodeObject *)Py_NewRef(callee_code);
+    PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
+        : Py_NewRef(callee->func_globals);
+    PyValue function = PyValue_DUP(target);
+    Py_ssize_t nargs = PyTuple_GET_SIZE(callargs);
+    /* The binding consumes these on both outcomes */
+    PyObject *owned_args;
+    if (lead) {
+        owned_args = PyTuple_New(nargs + 1);
+        if (owned_args == NULL) {
+            PyValue_XCLOSE(function);
+            Py_XDECREF(locals);
+            Py_DECREF(code);
+            rop_call_retire_operands(frame, head);
+            PyValue_XCLOSE(tup);
+            return NULL;
+        }
+        PyTuple_SET_VALUE(owned_args, 0, PyValue_DUP(receiver));
+        for (Py_ssize_t i = 0; i < nargs; i++) {
+            PyTuple_SET_VALUE(owned_args, i + 1,
+                              PyValue_DUP(PyTuple_GET_VALUE(callargs, i)));
+        }
+        nargs++;
+    }
+    else {
+        owned_args = Py_NewRef(callargs);
+    }
+    PyObject *owned_kwargs = Py_XNewRef(kwargs);
+    _PyBound bound = eval_frame_push_and_init_ex_code(
+        tstate, function, locals, nargs, owned_args, owned_kwargs, frame,
+        code);
+    Py_DECREF(code);
+    /* A generator function takes the native path (python_target) */
+    assert(bound.gen == NULL);
+    _PyInterpreterFrame *child = bound.frame;
+    if (child == NULL) {
+        (void)call_refresh(tstate, frame, head);
+        rop_call_retire_operands(frame, head);
+        PyValue_XCLOSE(tup);
+        return NULL;
+    }
+    call_commit(tstate, frame, head, child);
+    call_release_rest(_PyFrame_Slots(frame), head, word, operands, UINT32_MAX);
+    PyValue_XCLOSE(tup);
+    return child;
+}
+
+
+static _PyInterpreterFrame *
+_PyRop_PushPythonEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValue *fn, PyValue fo, PyValue ko, PyValue tup,
+                    _PyInstr *head)
+{
+    _PyInterpreterFrame *child =
+        rop_push_python_ex(tstate, frame, fo, ko, tup, head);
+    PyValue_XCLOSE(ko);
+    PyValue_XCLOSE(fo);
+    return child;
+}
+
+static inline void
+_PyRop_RetireFailedHeldEx(_PyInterpreterFrame *frame, PyValue *fn, PyValue fo,
+                          PyValue ko, const _PyIRWord *head)
+{
+    PyValue_XCLOSE(ko);
+    PyValue_XCLOSE(fo);
+    _PyRop_RetireFailedArgs(frame, fn, head);
+}
+
+/* The rows of the observed forms of Call and CallKw that hold the callable
+ * (CALL event first): the shared rows on the held value */
+
+static bool
+_PyRop_PythonTargetHeld(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        PyValue fo, const _PyIRWord *head)
+{
+    return _PyRop_PythonTarget(tstate, frame, &fo, head);
+}
+
+static _PyInterpreterFrame *
+_PyRop_PushPythonHeld(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      PyValue *fn, PyValue fo, _PyInstr *head)
+{
+    _PyInterpreterFrame *child = _PyRop_PushPython(tstate, frame, &fo, head);
+    PyValue_XCLOSE(fo);
+    return child;
+}
+
+static PyValue
+_PyRop_CallNativeObservedHeld(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                              _PyInstr *site, PyValue *fn, PyValue fo,
+                              const _PyIRWord *head)
+{
+    PyValue result = _PyRop_CallNativeObserved(tstate, frame, site, &fo, head);
+    PyValue_XCLOSE(fo);
+    return result;
+}
+
+static inline void
+_PyRop_RetireFailedHeld(_PyInterpreterFrame *frame, PyValue *fn, PyValue fo,
+                        const _PyIRWord *head)
+{
+    PyValue_XCLOSE(fo);
+    _PyRop_RetireFailedArgs(frame, fn, head);
+}
+
+static bool
+_PyRop_KwargsPending(_PyInterpreterFrame *frame, PyValue *local)
+{
+    return frame->pending_kwargs != IR_NO_DST;
+}
+
+static PyValue
+_PyRop_NewKwargs(_PyInterpreterFrame *frame, PyValue *local)
+{
+    uint16_t slot = frame->pending_kwargs;
+    assert(slot != IR_NO_DST);
+    assert(local == &_PyFrame_Slots(frame)[slot]);
+    (void)slot;
+    assert(PyValue_IsNull(*local));
+    PyObject *dict = PyDict_New();
+    if (dict == NULL) {
+        return PyValue_NULL;
+    }
+    frame->pending_kwargs = IR_NO_DST;
+    return PyValue_FromObjectSteal(dict);
 }
 
 /* Whether a call of code with nargs positional arguments and no keywords
@@ -7444,16 +8576,18 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
     return 0;
 }
 
-/* Consume v, iterate argcnt times and store the results via decreasing sp.
-   Return 1 for success, 0 if error.
+/* Iterate v (borrowed) argcnt times and store the results in out[0], out[1],
+   ... in the order they come.  Return 1 for success, 0 if error: the values
+   already stored are closed.
 
    If argcntafter == -1, do a simple unpack. If it is >= 0, do an unpack
-   with a variable target.
+   with a variable target, whose list is stored after the argcnt values,
+   followed by the argcntafter values that end the iterable.
 */
 
 Py_NO_INLINE int
 _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
-                       int argcnt, int argcntafter, PyValue *sp)
+                       int argcnt, int argcntafter, PyValue *out)
 {
     int i = 0, j = 0;
     Py_ssize_t ll = 0;
@@ -7462,12 +8596,6 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     PyObject *l = NULL; /* variable list */
     assert(v != NULL);
     assert(argcnt >= 0 && argcntafter >= -1);
-#ifndef NDEBUG
-    int capacity = argcnt + (argcntafter < 0 ? 0 : argcntafter + 1);
-    _PyInterpreterFrame *frame = tstate->current_frame;
-    assert(sp - frame->base >= capacity);
-    assert(sp <= frame->base + _PyFrame_NumSlots(frame));
-#endif
     int result = 0;
 
     it = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
@@ -7502,8 +8630,8 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
             }
             goto Error;
         }
-        *--sp = step.value;
-        _PyValue_CheckTemp(*sp);
+        out[i] = step.value;
+        _PyValue_CheckTemp(out[i]);
     }
 
     if (argcntafter == -1) {
@@ -7536,8 +8664,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     l = _PyValue_SequenceList(PyValue_FromObjectBorrow(it));
     if (l == NULL)
         goto Error;
-    *--sp = PyValue_FromObjectSteal(l);
-    i++;
+    out[i++] = PyValue_FromObjectSteal(l);
 
     ll = PyList_GET_SIZE(l);
     if (ll < argcntafter) {
@@ -7549,7 +8676,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
 
     /* Pop the "after-variable" args off the list. */
     for (j = argcntafter; j > 0; j--, i++) {
-        *--sp = _PyList_ITEMS(l)[ll - j];
+        out[i] = _PyList_ITEMS(l)[ll - j];
         _PyList_ITEMS(l)[ll - j] = PyValue_NULL;
     }
     /* Resize the list. */
@@ -7558,17 +8685,11 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     goto Done;
 
 Error:
-    /* The slots that the values went to are temporaries, which hold NULL
-       unless live */
-    for (; i > 0; i--, sp++) {
-        // a move: cleared below
-        PyValue ref = *sp;
-        *sp = PyValue_NULL;
-        PyValue_CLOSE(ref);
+    while (i > 0) {
+        PyValue_CLOSE(out[--i]);
     }
 Done:
     Py_XDECREF(it);
-    Py_DECREF(v);
     return result;
 }
 
@@ -8886,10 +10007,198 @@ _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
     return PyValue_FromObjectSteal((PyObject *)func_obj);
 }
 
+/* Raise, Reraise, ExceptEnter, ExceptLeave, ExceptMatch and ExceptGroupMatch:
+ * the rows (exceptions.rop) */
+
+/* RAISE_VARARGS: the exception and the cause, if any, are spent.  Returns 0
+ * for a bare raise that found a handled exception, now pending, and -1 for
+ * every other outcome, with an exception pending. */
+static int
+_PyRop_RaiseArgs(PyThreadState *tstate, const _PyRopSpan *args)
+{
+    int n = args->count;
+    assert(n < 3);
+    PyValue vals[3];
+    rop_take_items(args, vals);
+    PyObject *exc = NULL;
+    PyObject *cause = NULL;
+    bool bad_exc = false;
+    bool cause_is_number = false;
+    if (n > 0) {
+        // A number is not an exception
+        exc = PyValue_ObjectOrNull(vals[0]);
+        bad_exc = exc == NULL;
+    }
+    // A number is not a cause: do_raise reports it after the exception is made
+    if (n == 2) {
+        cause = PyValue_ObjectOrNull(vals[1]);
+        cause_is_number = cause == NULL;
+    }
+    // do_raise consumes owners of its own, made before the operands close
+    PyObject *exc_owner = Py_XNewRef(exc);
+    PyObject *cause_owner = Py_XNewRef(cause);
+    rop_close_items(vals, n);
+    if (bad_exc) {
+        _PyErr_SetString(tstate, PyExc_TypeError,
+                         "exceptions must derive from BaseException");
+        Py_XDECREF(cause_owner);
+        return -1;
+    }
+    return do_raise(tstate, exc_owner, cause_owner, cause_is_number) ? 0 : -1;
+}
+
+static void
+_PyRop_ReraisePending(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *at)
+{
+    monitor_reraise(tstate, frame, at);
+}
+
+/* The exception in the home becomes the pending one, with a reference of its
+ * own: the arm closes the home afterwards */
+static void
+_PyRop_RestoreException(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        _PyInstr *at, PyValue *home)
+{
+    // An exception being handled is an instance of BaseException
+    PyObject *exc = PyValue_AsKnownObjectBorrow(*home);
+    assert(exc && PyExceptionInstance_Check(exc));
+    _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
+    monitor_reraise(tstate, frame, at);
+}
+
+/* RERAISE n names the word that raised the exception: the unwinder's tagged
+ * index, which it wrote into the home below the exception */
+static void
+_PyRop_SetOrigin(_PyInterpreterFrame *frame, PyValue *home)
+{
+    frame->instr_ptr = _PyFrame_InstrAt(frame, (int)PyValue_UntagIndex(*home));
+}
+
+/* Closes the operand in the home, if it is a temporary, with the pending
+ * exception set aside; a local keeps its binding */
+static void
+_PyRop_RetireFailedOperand(_PyInterpreterFrame *frame, PyValue *home)
+{
+    if (home - _PyFrame_Slots(frame) < _PyCode_IRFixed(_PyFrame_GetCode(frame))) {
+        return;
+    }
+    PyObject *exc = PyErr_GetRaisedException();
+    PyValue_XCLOSE(_PyFrame_TakeHome(frame, home));
+    PyErr_SetRaisedException(exc);
+}
+
+/* The thread's handled exception (None when there is none) leaves the
+ * exception state; the exception in the home takes its place, with a new
+ * reference */
+static PyValue
+_PyRop_SwapHandled(PyThreadState *tstate, PyValue *home)
+{
+    _PyErr_StackItem *exc_info = tstate->exc_info;
+    PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
+    PyValue prev = prev_o != NULL ? PyValue_FromObjectSteal(prev_o)
+                                  : PyValue_None;
+    assert(PyValue_ExceptionInstanceCheck(*home));
+    exc_info->exc_value = PyValue_AsPyObjectNew(*home);
+    return prev;
+}
+
+/* The saved exception (or None) is the handled one again; the one it
+ * replaces is released */
+static void
+_PyRop_RestoreHandled(PyThreadState *tstate, PyValue x)
+{
+    _PyErr_StackItem *exc_info = tstate->exc_info;
+    if (PyValue_IsNone(x)) {
+        // Immortal: it owes no count
+        Py_CLEAR(exc_info->exc_value);
+        return;
+    }
+    Py_XSETREF(exc_info->exc_value, PyValue_AsKnownObjectSteal(x));
+}
+
+static int
+_PyRop_CheckExceptType(PyThreadState *tstate, PyValue *home)
+{
+    return _PyEval_CheckExceptTypeValidValue(tstate, PyValue_Borrow(*home));
+}
+
+static bool
+_PyRop_ExceptionMatches(PyValueBorrow exc, PyValueBorrow pattern)
+{
+    assert(PyValue_IsObject(exc) && PyValue_IsObject(pattern));
+    return PyErr_GivenExceptionMatches(PyValue_AsKnownObjectBorrow(exc),
+                                       PyValue_AsKnownObjectBorrow(pattern));
+}
+
+static int
+_PyRop_CheckExceptStarType(PyThreadState *tstate, PyValue *home)
+{
+    return _PyEval_CheckExceptStarTypeValidValue(tstate, PyValue_Borrow(*home));
+}
+
+/* The match is returned, the rest through *rest.  Both operands are spent. */
+static PyValue
+_PyRop_GroupMatch(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  PyValue *exc, PyValue *pattern, PyValue *rest)
+{
+    int nlocals = _PyCode_IRFixed(_PyFrame_GetCode(frame));
+    PyValue held_exc = exc - _PyFrame_Slots(frame) < nlocals
+        ? PyValue_DUP(PyValue_Borrow(*exc)) : _PyFrame_TakeHome(frame, exc);
+    PyValue held_type = pattern - _PyFrame_Slots(frame) < nlocals
+        ? PyValue_DUP(PyValue_Borrow(*pattern))
+        : _PyFrame_TakeHome(frame, pattern);
+    // The exception being handled is an object
+    PyObject *exc_value = PyValue_AsKnownObjectBorrow(held_exc);
+    PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
+    _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
+    PyValue_CLOSE(held_type);
+    PyValue_CLOSE(held_exc);
+    // A null match is an error, including a failed match
+    if (matched.match == NULL) {
+        return PyValue_NULL;
+    }
+    if (!Py_IsNone(matched.match)) {
+        PyErr_SetHandledException(matched.match);
+    }
+    *rest = PyValue_FromObjectSteal(matched.rest);
+    return PyValue_FromObjectSteal(matched.match);
+}
+
+/* The Unary row (Python/register_ops/numeric.rop): closes x on both outcomes.
+ * Only -Py_INT_MIN leaves the inline int range, and negating a float that is
+ * not NaN gives one that is not. */
+static PyValue
+_PyRop_UnaryOp(uint32_t op, PyValue x)
+{
+    PyValue value = x;
+    PyValue res;
+    if (op == NEGATIVE) {
+        if (PyValue_IsInlineInt(value)) {
+            res = PyValue_FromInt64(-PyValue_InlineInt64(value));
+        }
+        else if (PyValue_IsInlineFloat(value)) {
+            res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
+        }
+        else {
+            res = _PyValue_Negative(value);
+        }
+    }
+    else if (op == POSITIVE) {
+        res = _PyValue_Positive(value);
+    }
+    else {
+        assert(op == INVERT);
+        res = _PyValue_Invert(value);
+    }
+    PyValue_XCLOSE(value);
+    return res;
+}
+
 /* The compiler's number of each member of IntrinsicId, in declaration order */
 static const uint8_t rop_intrinsic_number[] = {
     INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
-    INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
+    INTRINSIC_ASYNC_GEN_WRAP,
     INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
     INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
     INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
@@ -8904,15 +10213,9 @@ static PyValue
 _PyRop_IntrinsicUnary(PyThreadState *tstate, uint32_t id, PyValue x)
 {
     PyValue value = x;
-    int number = rop_intrinsic_number[id];
-    PyValue res;
-    if (number == INTRINSIC_UNARY_POSITIVE) {
-        res = _PyValue_Positive(value);
-    }
-    else {
-        // The other intrinsics take objects: the helper boxes a number
-        res = _PyEval_CallIntrinsic1(tstate, number, value);
-    }
+    // The intrinsics take objects: the helper boxes a number
+    PyValue res = _PyEval_CallIntrinsic1(tstate, rop_intrinsic_number[id],
+                                         value);
     PyValue_XCLOSE(value);
     return res;
 }

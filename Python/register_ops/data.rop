@@ -1,33 +1,10 @@
 // Family interfaces of Appendix A, "Data, bindings, constructors, and
 // matching".  Arms come with their batches.
 
-enum TextKind(JOIN, INTERPOLATION, TEMPLATE);
 enum ConvertKind(STR, REPR, ASCII);
-enum PatternKind(Mapping, Sequence, Keys, Class);
+enum PatternKind(Mapping, Sequence);
 
 // 1E: displays, updates, comprehension insertion, keyword merge, unpack
 
-family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpack>)
-  exits(next, raise, miss, again) ops(UNPACK_SEQUENCE, UNPACK_EX);
 
 // 1F: namespaces, cells, globals, annotations, import
-
-// 1G: text
-
-family BuildText(dst:Dst, kind:Enum<TextKind>, parts:Span<Src>, flags:U8)
-  exits(next, raise) ops(BUILD_STRING, BUILD_INTERPOLATION, BUILD_TEMPLATE);
-
-family Convert(dst:Dst, value:Src, kind:Enum<ConvertKind>)
-  exits(next, raise) ops(CONVERT_VALUE);
-
-family Format(dst:Dst, value:Src, spec:Maybe<Src>)
-  exits(next, raise) ops(FORMAT_SIMPLE, FORMAT_WITH_SPEC);
-
-// 1H: length and patterns
-
-family Length(dst:Dst, value:Src)
-  exits(next, raise) ops(GET_LEN);
-
-family Pattern(dst:Maybe<Dst>, subject:Src, kind:Enum<PatternKind>, cls:Maybe<Src>,
-               names:Maybe<Src>, count:Maybe<U8>, mismatch:NearHead)
-  exits(next, branch, raise) ops(MATCH_CLASS, MATCH_KEYS, MATCH_MAPPING, MATCH_SEQUENCE);

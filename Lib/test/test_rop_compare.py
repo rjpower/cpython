@@ -106,8 +106,8 @@ class LoweringTests(unittest.TestCase):
         self.assertEqual(f(5), 5)
 
     def test_no_fused_handlers_remain(self):
-        from _opcode_metadata import _ir_opmap
-        fused = [n for n in _ir_opmap
+        from _opcode_metadata import _ir_handlers
+        fused = [n for n in _ir_handlers
                  if n.startswith(("COMPARE_OP_", "CONTAINS_OP_", "IS_OP_"))
                  or n.startswith(("INSTRUMENTED_COMPARE_OP", "INSTRUMENTED_CONTAINS_OP",
                                   "INSTRUMENTED_IS_OP"))]
@@ -330,6 +330,26 @@ class MonitorTests(unittest.TestCase):
                         self.assertEqual(
                             [(e[0], e[1]) for e in self.events],
                             [("BRANCH_RIGHT" if taken else "BRANCH_LEFT", jump.offset)])
+
+    def test_the_legacy_branch_event_reports_the_jump(self):
+        # E.BRANCH registers through a wrapper that finds the word of the
+        # jump's offset: the TestBranch word, past its operand word
+        for test, args in (("a < b", ((1, 2), (2, 1))), ("a is b", ((1, 2), (2, 1))),
+                           ("a in b", ((1, [1]), (2, [1])))):
+            f = make(f"def f(a, b):\n    if {test}:\n        return 1\n    return 2\n")
+            jump = self.jump_of(f)
+            seen = []
+            MON.register_callback(TOOL, MON.events.BRANCH_LEFT, None)
+            MON.register_callback(TOOL, MON.events.BRANCH_RIGHT, None)
+            MON.register_callback(TOOL, MON.events.BRANCH,
+                                  lambda code, src, dst: seen.append(src))
+            MON.set_local_events(TOOL, f.__code__, MON.events.BRANCH)
+            for a in args:
+                f(*a)
+            MON.set_local_events(TOOL, f.__code__, 0)
+            MON.register_callback(TOOL, MON.events.BRANCH, None)
+            with self.subTest(test=test):
+                self.assertEqual(seen, [jump.offset, jump.offset])
 
     def test_monitoring_a_warm_site_keeps_its_answers(self):
         f = make("def f(a, b):\n    if a in b:\n        return 1\n    return 2\n")

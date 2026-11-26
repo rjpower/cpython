@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `0a81f42d9bf` (pushed) holds:
+`pyjit/rir90` at `d8cb2109192` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -99,12 +99,16 @@ interpreter hold no reference to the stack at step D, and tests check it.
   translator and opcode schema, and fails on a stack op name, a
   handler-to-opcode map or a stack-shaped field; its exceptions name a file,
   its functions and a reason, and fail when stale.  The handler-to-opcode
-  maps and the `shadow` field are deleted.
+  maps and the `shadow` field are deleted, and the `.rop` sources have no
+  `ops(...)` clause;
+- PAR: the tests that expected stack specialization names (`test_embed`,
+  `test_type_cache`, `test_pyvalue`) ask which register arm a word runs.
 
 No word runs an inherited handler. The last merge check passed the smoke set
-on release and assert, and the verifier reports no error over 108,947 code
-objects. The id-shifted guard build passed at `efa0b20ac00`, after a fix to
-the Python handler ids it found. Ports keep the old handlers' object locks and turn every old
+on release and assert, and the verifier reports no error over 108,949 code
+objects. The full suites at `0a81f42d9bf` (release and assert, JIT off)
+failed only the three stale specialization tests PAR then fixed, and the
+id-shifted guard build passes at `d8cb2109192`. Ports keep the old handlers' object locks and turn every old
 specialization into an arm.
 
 Interpreter first (user, 2026-11-25): port every op, reach test parity, then
@@ -113,14 +117,23 @@ geomean, JIT off); only then the JIT. Units run the tests their branch
 touches; root runs the smoke set at each merge and full suites at the wave
 join.
 
-Running, for the end condition that the IR and the interpreter hold no
-reference to the stack:
-- D moves the `.rop` `ops(...)` mapping into `stack_ops.py`, so the
-  register IR's own sources name no stack op, and deletes the last
-  stack-op-to-handler map. Its migration check found three classes of wrong
-  answers in the old f_lineno planner, which the new format fixes.
+Interpreter timing at `d8cb2109192` (measure.py, both JIT off, all-29, two
+rounds, CPU 15): rir90 runs **1.559 of golden87's time**.  C-heavy work is
+near parity (pickle, unpickle and xml_etree_parse 1.04, json 1.08-1.10);
+pure-Python kernels are far off (nbody 3.18, unpack_sequence 3.01,
+spectral_norm 2.01, generators 1.88, chaos 1.86, nqueens 1.85).  nbody
+executes 2.05 times golden87's instructions at an IPC of 2.06 against 3.08;
+`ir_evaluate` takes 60% of its time and out-of-line routines most of the
+rest.
 
-Then full suites and approximate timing.
+Running:
+- D corrects a root error: item 6 moved the `.rop` `ops(...)` clauses into
+  `stack_ops.py` as a static stack-op-to-family table (`LOWERS_TO`), which
+  the user had ruled out (no fixed lowering per stack op).  The lowering
+  moves wholly into the translator's rules, and the table, the legacy
+  default rule and the opcode-indexed lowering array go.
+- IP (Opus) diagnoses the interpreter gap by structural cause and ranks the
+  design changes; perf-parity units follow, then the JIT.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

@@ -407,14 +407,15 @@ class CallOperandOwnershipTests(unittest.TestCase):
             # the whole binding
             for state in states:
                 self.assertEqual(state[4], 4)
-                _, _, _, base, _, _, values, present, _ = state
+                _, _, _, base, count, _, values, present, _ = state
+                last = base + count - 1
                 # The empty positional tuple is a constant in a fixed home
                 # below the window; MergeKeywords retires its source, so
                 # the merged dict is the window's last operand
-                for home in (base, base + 2):
+                for home in (base, last):
                     self.assertTrue(present & (1 << home))
                 self.assertIs(values[base], target)
-                self.assertEqual(values[base + 2], kwargs)
+                self.assertEqual(values[last], kwargs)
                 self.assertTrue(any(v == () and present & (1 << i)
                                     for i, v in enumerate(values) if v is not None))
         finally:

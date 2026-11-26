@@ -456,8 +456,8 @@ arm AttrWrite.Slot inline entry(slot)
 // loaded `super`, the class and the receiver, in the order the compiler loads them.  The
 // first family is `super()` (the class implied, so the call has no
 // arguments), the second `super(C, self)`: the call of a replaced `super`
-// and the CALL event differ.  The method form of the compiler's op is the family
-// followed by the vacant self the call expects.
+// and the CALL event differ.  The method form of the compiler's op
+// is SuperMethod or SuperMethodExplicit, below.
 family SuperAttr(dst:Dst, parts:Span<Src>, name:Name, fb:Fb<Super>)
   exits(next, miss, again, raise) generic(Generic)
   ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
@@ -718,6 +718,255 @@ arm SuperAttrExplicit.Observed split observes
     exit next();
   Failed(e:Err):
     exit raise(SuperAttrExplicit.Failed, e);
+}
+
+// SuperMethod and SuperMethodExplicit: the method form of the two families
+// above, which the compiler asks for with the call that follows.  They
+// publish the callable and, when the lookup found an unbound method, the
+// receiver as the call's first argument; a bound result has no receiver.
+family SuperMethod(callable:Dst, self_dst:Maybe<Dst>, parts:Span<Src>, name:Name, fb:Fb<Super>)
+  exits(next, miss, again, raise) generic(Generic)
+  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+
+family SuperMethodExplicit(callable:Dst, self_dst:Maybe<Dst>, parts:Span<Src>, name:Name, fb:Fb<Super>)
+  exits(next, miss, again, raise) generic(Generic)
+  ops(LOAD_SUPER_ATTR) events(CALL, C_RETURN, C_RAISE);
+
+point SuperMethod.Done(current, next_head, clear) keep() spent(parts) defs(callable, self_dst);
+point SuperMethod.Failed(current, site, pending) keep() spent(parts) defs();
+point SuperMethodExplicit.Done(current, next_head, clear) keep() spent(parts) defs(callable, self_dst);
+point SuperMethodExplicit.Failed(current, site, pending) keep() spent(parts) defs();
+
+// The generic and observed lookups bind the result, so they have no receiver
+// to publish
+extern helper super_method(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperMethod as value_out_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup, as super_lookup; the second output is absent, as _NULL_SLOT_CONDITIONAL left it.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor).");
+
+extern helper super_method_observed(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  requires(instrumented(at))
+  c _PyRop_SuperMethodObserved as value_out_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup with the events, as super_lookup_observed; the second output is absent.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor); a callback that raises in C_RETURN closes the super object.");
+
+extern helper super_method_explicit(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperMethodExplicit as value_out_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup, as super_lookup_explicit; the second output is absent.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor).");
+
+extern helper super_method_explicit_observed(t:Thread, f:Frame, at:Site, parts:Span<Src>, n:Name)
+  cases(ok(z:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  requires(instrumented(at))
+  c _PyRop_SuperMethodExplicitObserved as value_out_or_null
+  evidence(
+    review: "ceval.c rop_super_lookup with the events, as super_lookup_explicit_observed; the second output is absent.",
+    contract: "The parts are spent on both outcomes; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a replaced super, a descriptor); a callback that raises in C_RETURN closes the super object.");
+
+// The old LOAD_SUPER_ATTR_METHOD: the lookup asks for an unbound method when
+// the receiver's type has the generic getattro, and then the receiver moves
+// from the parts to the second output
+extern helper super_lookup_builtin_method(parts:Span<Src>, n:Name)
+  cases(ok(f:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises, allocates, writes, releases)
+  spends(parts)
+  c _PyRop_SuperLookupBuiltinMethod as value_out_or_null
+  evidence(
+    review: "The old _LOAD_SUPER_ATTR_METHOD: _PySuper_LookupValue with want_method set for a receiver whose type has PyObject_GenericGetAttr; an unbound result keeps the receiver as the call's self, otherwise the receiver is closed.",
+    contract: "The super and the class are closed, the receiver is closed or moved to the second output; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (a descriptor of the found attribute).");
+
+macro adapt_before_use_super_method(f:Fb<Super>, p:Span<Src>)
+  cases(run(), changed(t:Ticket<Super>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_super(p, site, f) {
+      builtin -> Builtin();
+      none -> Other();
+    }
+  Builtin():
+    let c:Candidate<Super> = candidate(SuperMethod.Builtin);
+    call install(site, f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Super>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm SuperMethod.Generic shared
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise)
+{
+  entry():
+    call adapt_before_use_super_method(fb, parts) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Super>):
+    exit again(t);
+  Run():
+    call super_method(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethod.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethod.Failed, e);
+}
+
+arm SuperMethod.Builtin inline entry(builtin)
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback()
+  exits(next, miss, raise)
+{
+  entry():
+    guard super_builtin_ready(parts) else miss;
+    call super_lookup_builtin_method(parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethod.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethod.Failed, e);
+}
+
+arm SuperMethod.Observed split observes
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_method_observed(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethod.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethod.Failed, e);
+}
+
+macro adapt_before_use_super_method_explicit(f:Fb<Super>, p:Span<Src>)
+  cases(run(), changed(t:Ticket<Super>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_super(p, site, f) {
+      builtin -> Builtin();
+      none -> Other();
+    }
+  Builtin():
+    let c:Candidate<Super> = candidate(SuperMethodExplicit.Builtin);
+    call install(site, f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Super>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm SuperMethodExplicit.Generic shared
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise)
+{
+  entry():
+    call adapt_before_use_super_method_explicit(fb, parts) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Super>):
+    exit again(t);
+  Run():
+    call super_method_explicit(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethodExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethodExplicit.Failed, e);
+}
+
+arm SuperMethodExplicit.Builtin inline entry(builtin)
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback()
+  exits(next, miss, raise)
+{
+  entry():
+    guard super_builtin_ready(parts) else miss;
+    call super_lookup_builtin_method(parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethodExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethodExplicit.Failed, e);
+}
+
+arm SuperMethodExplicit.Observed split observes
+  effects(runs_python, raises, allocates, releases on (callable, self_dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call super_method_explicit_observed(thread, frame, site, parts, name) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s] retire [old(callable), old(self_dst)] at SuperMethodExplicit.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(SuperMethodExplicit.Failed, e);
 }
 
 // SpecialLookup: the method of a special name on an object's type, for

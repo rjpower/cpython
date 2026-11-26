@@ -2352,33 +2352,37 @@ rule_store_attr(_PyRegTr *t, const _PyRegOp *src)
 /* LOAD_SUPER_ATTR is SuperAttr (`super()`) or SuperAttrExplicit
  * (`super(C, self)`): the loaded super, the class and the receiver in, the
  * attribute out.  The oparg's bit 1 says the class was written, the rest is
- * the name.  Its bit 0 asks for a method: the lookup binds, so the second
- * output the call takes as its absent self is a PUSH_NULL after the result,
- * as LOAD_GLOBAL pushes it. */
+ * the name.  Its bit 0 asks for a method: SuperMethod or SuperMethodExplicit
+ * then define the callable and the self the call takes, which is absent when
+ * the lookup bound the result. */
 static int
 rule_load_super_attr(_PyRegTr *t, const _PyRegOp *src)
 {
     if (t->sp < 3) {
         return stack_underflow(src);
     }
-    int dst;
-    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    bool method = src->oparg & 1;
+    bool explicit = src->oparg & 2;
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    if (method) {
+        RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    }
+    int handler = method
+        ? (explicit ? ROP_HANDLER_SuperMethodExplicit_Generic
+                    : ROP_HANDLER_SuperMethod_Generic)
+        : (explicit ? ROP_HANDLER_SuperAttrExplicit_Generic
+                    : ROP_HANDLER_SuperAttr_Generic);
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(
-        t, src,
-        (src->oparg & 2) ? ROP_HANDLER_SuperAttrExplicit_Generic
-                         : ROP_HANDLER_SuperAttr_Generic,
-        &t->stack[t->sp - 3], 3, &dst, 1, &op));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 3], 3,
+                                  defs, method ? 2 : 1, &op));
     op->oparg = src->oparg >> 2;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 3, NULL));
-    RETURN_IF_ERROR(_PyRegTr_Push(t, dst));
-    if (!(src->oparg & 1)) {
-        return SUCCESS;
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    if (method) {
+        RETURN_IF_ERROR(_PyRegTr_Push(t, defs[1]));
     }
-    _PyRegOp null = *src;
-    null.opcode = PUSH_NULL;
-    null.oparg = 0;
-    return _PyRegTr_Legacy(t, &null);
+    return SUCCESS;
 }
 
 /* LOAD_SPECIAL: the method and its self, as the call that follows reads

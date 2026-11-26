@@ -1372,6 +1372,11 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             }
             if (_PyIR_FormatOf(op->handler)->operands == _PyIR_OPERANDS_SPANS) {
                 RETURN_IF_ERROR(encode_spans(cfg, op, &words[w]));
+                if (_PyIR_FormatOf(op->handler)->fixed_words) {
+                    // The feedback entry of a span word that has no head field
+                    // left for it (SuperMethod)
+                    words[w + 1] = (_PyIRWord)(op->fb > 0 ? op->fb : IR_FB_SHARED);
+                }
                 continue;
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));

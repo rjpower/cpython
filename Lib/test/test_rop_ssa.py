@@ -714,7 +714,6 @@ SCENARIOS = {
                                             RaisesSetAttr(), materialised())]}),
     "SuperAttr": Scenario("SuperAttr", {
         "attr": method_of("attr"),
-        "method": method_of("method"),
         "monitored": method_of("attr")},
         [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
          {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
@@ -724,8 +723,25 @@ SCENARIOS = {
         holds=True),
     "SuperAttrExplicit": Scenario("SuperAttrExplicit", {
         "attr": method_of("explicit"),
-        "method": method_of("explicit_method"),
         "monitored": method_of("explicit")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SuperMethod": Scenario("SuperMethod", {
+        "method": method_of("method"),
+        "monitored": method_of("method")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SuperMethodExplicit": Scenario("SuperMethodExplicit", {
+        "method": method_of("explicit_method"),
+        "monitored": method_of("explicit_method")},
         [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
          {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
          {"parts": [SUPER, SA, SB()]}],
@@ -1089,6 +1105,8 @@ NOT_RUN = {
     "AttrWrite.Slot": "needs a warmed slot recipe in the entry; as AttrWrite.Instance",
     "SuperAttr.Builtin": "installed only by adaptation; as AttrWrite.Instance",
     "SuperAttrExplicit.Builtin": "installed only by adaptation; as AttrWrite.Instance",
+    "SuperMethod.Builtin": "installed only by adaptation; as AttrWrite.Instance",
+    "SuperMethodExplicit.Builtin": "installed only by adaptation; as AttrWrite.Instance",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "

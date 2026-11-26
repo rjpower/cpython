@@ -12,6 +12,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
 #include "pycore_ir_source.h"
 #include "pycore_ir_outcomes.h"
+#include "pycore_rop_metadata.h"   // ROP_HANDLER_Line_Hook
 #include "pycore_ir_exception.h"
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
@@ -1532,7 +1533,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
         current >= 0 && current < _PyCode_IRSize(_PyFrame_GetCode(frame)) &&
         frame->instr_ptr == _PyFrame_InstrAt(frame, current) &&
-        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == IR_H_INSTRUMENTED_LINE)
+        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == ROP_HANDLER_Line_Hook)
     {
         phase.kind = REGISTER_RESUME_PRE_WORD;
     }

@@ -2,21 +2,10 @@
 // from the leaf IR of Python/bytecodes.c.
 // Do not edit!
 //
-// 1 templates.  The handlers whose uops are all leaf but that
+// 0 templates.  The handlers whose uops are all leaf but that
 // keep the call of their form:
 
-static void
-jit_template_NOP(_PyJitWordCx *cx)
-{
-    _PyJitAsm *a = cx->a;
-    _PyIRWord ir_word = cx->word;
-    (void)ir_word;
-    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Bind(a, L0);
-}
-
 const _PyJitTemplate _PyJit_Templates[512] = {
-    [IR_H_NOP] = jit_template_NOP,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
     [ROP_HANDLER_GetAttr_Instance] = jit_template_GetAttr_Instance,
     [ROP_HANDLER_GetAttr_Shape] = jit_template_GetAttr_Shape,

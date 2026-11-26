@@ -10,10 +10,6 @@ enum BranchMode(BRANCH_IF_FALSE, BRANCH_IF_TRUE, BRANCH_KEEP_IF_FALSE, BRANCH_KE
 
 // P1: constants, local bindings, saved locals, residual moves, origins
 
-// An origin or legal-entry boundary
-family Nop()
-  exits(next) ops(NOP);
-
 // The arm is the kind of constant, chosen by the lowering: Pool, the
 // code's constant `index`; Small, the immediate int `index`; Common, the
 // interpreter root `index`

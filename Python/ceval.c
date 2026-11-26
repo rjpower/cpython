@@ -2947,6 +2947,60 @@ _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return _PyRop_EdgeEvent(tstate, frame, site, true, PY_MONITORING_EVENT_JUMP);
 }
 
+/* The rows of Line.Hook and Instruction.Hook (Python/register_ops/monitoring.rop):
+ * the event, then the handler that the word displaced, written through
+ * `handler` with its feedback counter paused, so that the word does not
+ * specialise over the instrumentation. */
+static inline void
+_PyRop_Displaced(_PyInterpreterFrame *frame, _PyInstr *site, int opcode,
+                 int *handler)
+{
+    int displaced = _PyIR_OriginalHandler(frame, site, opcode);
+    if (_PyFb_HasEntry(displaced)) {
+        PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, site, displaced));
+    }
+    *handler = displaced;
+}
+
+/* A positive result is a callback that moved the frame: return_pc names the
+ * word to run */
+static Py_NO_INLINE int
+_PyRop_LineEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *site, _PyInstr *prev, int *handler)
+{
+    int opcode;
+    if (tstate->tracing) {
+        PyCodeObject *code = _PyFrame_GetCode(frame);
+        int index = _PyFrame_InstrOffset(frame, site);
+        opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
+    }
+    else {
+        opcode = _Py_call_instrumentation_line(tstate, frame, site, prev);
+        if (opcode < 0) {
+            return -1;
+        }
+        if (frame->instr_ptr != site) {
+            frame->return_pc = frame->instr_ptr;
+            return 1;
+        }
+    }
+    _PyRop_Displaced(frame, site, opcode, handler);
+    return 0;
+}
+
+static Py_NO_INLINE int
+_PyRop_InstructionEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        _PyInstr *site, int *handler)
+{
+    int opcode = _Py_call_instrumentation_instruction(tstate, frame, site);
+    if (opcode < 0) {
+        return -1;
+    }
+    assert(opcode > 0 && opcode < 256);
+    _PyRop_Displaced(frame, site, opcode, handler);
+    return 0;
+}
+
 /* The poll of a word that is interruptible (the backedge Jump arms, Resume):
  * signals, the GC and other pending events */
 static inline int

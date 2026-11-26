@@ -79,6 +79,8 @@ class Handle(enum.Enum):
     Anchors = "Anchors"
     Err = "Err"
     Route = "Route"
+    # A handler id: the handler that a word runs (a displacing arm's dispatch)
+    Handler = "Handler"
     Claim = "Claim"
     Pin = "Pin"
     Stamp = "Stamp"
@@ -367,6 +369,9 @@ class ExitKind(enum.Enum):
     yield_ = "yield"
     exit = "exit"
     redirect = "redirect"
+    # The word goes on under another handler, with its own fields: only an arm
+    # declared `displacing` (the word that monitoring put in place of another)
+    dispatch = "dispatch"
 
 
 # The static evidence that selects an arm of a family without a miss
@@ -455,6 +460,8 @@ ENVIRONMENT = {
     "frame": Handle.Frame,
     "site": Handle.Site,
     "next_head": Handle.Head,
+    # The instruction pointer before the word saved it: a displacing arm's
+    "prev_head": Handle.Head,
 }
 
 # The C expression of each implicit name in every product.  The prologue of
@@ -466,6 +473,7 @@ ENVIRONMENT_C = {
     "frame": "frame",
     "site": "this_instr",
     "next_head": "next_instr",
+    "prev_head": "prev_instr",
 }
 
 # Types of which an owner, error or resource must be accounted for: `_`
@@ -763,6 +771,18 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     # A status int: 0 is success, negative raised
     _conv("int_zero_ok", CReturn.int_status,
           COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # ok(h): zero, the scalar written through the last parameter; err(e):
+    # negative, the exception set
+    _conv("out_or_raised", CReturn.int_status,
+          COutcome(CTest.zero, _RES, (CSource.out,), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # ok(h): zero, the scalar written through the last parameter; moved:
+    # positive, the frame moved (the token is the route to the word);
+    # negative raised
+    _conv("out_redirect", CReturn.int_status,
+          COutcome(CTest.zero, _RES, (CSource.out,), False),
+          COutcome(CTest.positive, _RES, (CSource.token,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
     # ok(vals): zero, the owners the row made written through the last
     # parameter (a Span<O>, in storage from PyMem_Malloc); err(e): negative,

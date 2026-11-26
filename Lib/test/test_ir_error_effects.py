@@ -231,12 +231,12 @@ class ErrorEffectTests(unittest.TestCase):
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
         analysis = analyzer.analyze_files([str(source)])
-        for name in ("NOP", "IR_JUMP", "LOAD_COMMON_CONSTANT", "GET_ANEXT"):
+        for name in ("NOP", "IR_JUMP", "LOAD_COMMON_CONSTANT", "UNARY_INVERT"):
             with self.subTest(handler=name):
                 instruction = {**analysis.instructions, **analysis.ir_only}[name]
                 summary = ir_error_effects.analyze_error_effects(instruction)
                 self.assertIsNotNone(summary)
-                self.assertEqual(bool(summary.error_sources), name == "GET_ANEXT")
+                self.assertEqual(bool(summary.error_sources), name == "UNARY_INVERT")
 
     def test_monitor_errors_keep_the_original_instruction_origin(self):
         call = ("int err = _Py_call_instrumentation(tstate, "
@@ -332,7 +332,6 @@ class ErrorEffectTests(unittest.TestCase):
         contracts = ir_generator.handler_contracts(analysis, formats)
         self.assertEqual(contracts["IR_JUMP"].error_routes, ("_PyIR_ERROR_COMPLETE",))
         self.assertIn("_PyIR_ERROR_LOCAL_DST", contracts["LOAD_COMMON_CONSTANT"].error_routes)
-        self.assertIn("_PyIR_ERROR_DIRECT", contracts["GET_ANEXT"].error_routes)
         for name in ("RESUME", "INSTRUMENTED_RESUME", "CLEANUP_THROW"):
             with self.subTest(handler=name):
                 self.assertIn("_PyIR_ERROR_COMPLETE", contracts[name].error_routes)
@@ -345,7 +344,7 @@ class ErrorEffectTests(unittest.TestCase):
                 self.assertFalse(contracts[name].error_routes)
         with mock.patch.object(ir_generator.IREmitter, "operand_error_flush", lambda *args: None):
             incomplete = ir_generator.handler_contracts(analysis, formats)
-        self.assertFalse(incomplete["GET_ANEXT"].error_routes)
+        self.assertFalse(incomplete["UNARY_INVERT"].error_routes)
         original = ir_generator.IREmitter.finish_stores
 
         def missing_publication_receipt(emitter, stack):

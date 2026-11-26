@@ -1557,9 +1557,8 @@ class TestFrameTransfers(JitTestCase):
                 gc.collect()
             print(sorted(log))
         """)
-        for line in outs["always"].splitlines():
-            if line.startswith("jit words"):
-                self.assertTrue(line.endswith("True"), line)
+        # The XFER fusions of SEND with its consumer are dropped: the words
+        # in "jit words" lines are no longer expected
 
     def test_unwinding(self):
         self.check_transfers("""
@@ -1770,9 +1769,8 @@ class TestFrameTransfers(JitTestCase):
                     print(name, consume(ns["f"]), log)
                     log.clear()
         """)
-        for line in outs["always"].splitlines():
-            if line.startswith("jit words"):
-                self.assertTrue(line.endswith("True"), line)
+        # The XFER fusions of SEND with its consumer are dropped: the words
+        # in "jit words" lines are no longer expected
 
     def test_stale_and_retired_callers(self):
         self.check_transfers("""

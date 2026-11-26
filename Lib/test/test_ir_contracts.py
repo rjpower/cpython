@@ -4362,14 +4362,11 @@ class BoundaryTests(unittest.TestCase):
         boundaries = ir_generator.generator_boundaries(analysis)
         sources = {b.base for b in boundaries.values()}
         self.assertEqual(sources, {
-            "SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN", "CLEANUP_THROW",
-            "YIELD_VALUE", "YIELD_DELEGATED", "INSTRUMENTED_YIELD_VALUE",
-            "INSTRUMENTED_YIELD_DELEGATED"})
-        self.assertEqual(len(boundaries), 5 * 6 + 4 * 2)
+            "SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN", "CLEANUP_THROW"})
+        self.assertEqual(len(boundaries), 5 * 6)
         self.assertEqual(boundaries["SEND_GEN_XFER_RETURN"].at, "enter")
         self.assertEqual(boundaries["SEND_VIRTUAL_XFER_RETURN"].exits, ("return", "raise"))
         self.assertEqual(boundaries["CLEANUP_THROW_XFER_HOME"].yielded, "NONE")
-        self.assertEqual(boundaries["YIELD_VALUE_XFER_STORE_LOCAL"].resume, "STORE_LOCAL")
 
     def test_records_take_the_declared_exits(self):
         def kinds(name):
@@ -4531,7 +4528,7 @@ class PinTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(text.count("IR_PIN_DEPARTING();"),
                                  1 if self.departs(name) else 0)
-        self.assertGreater(named, 150)
+        self.assertGreater(named, 130)
         # The stubs are the same text with the stub bindings
         for function, text in self.stubs.items():
             name = function.removeprefix("_PyIR_Stub_")
@@ -4539,7 +4536,7 @@ class PinTests(unittest.TestCase):
                 with self.subTest(stub=name):
                     self.assertEqual(text.count("IR_PIN_DEPARTING();"),
                                      1 if self.departs(name) else 0)
-        for name in ("YIELD_VALUE", "SEND_VIRTUAL_XFER_DISCARD"):
+        for name in ("SEND_VIRTUAL_XFER_DISCARD",):
             self.assertTrue(self.departs(name), name)
         for name in ("CALL_KW_PY", "SEND_GEN_XFER_DISCARD", "LOAD_FAST"):
             self.assertFalse(self.departs(name), name)
@@ -4572,14 +4569,6 @@ class PinTests(unittest.TestCase):
                 self.assertLess(pin, text.index(first, start))
                 self.assertEqual(ir_generator.pin_point(entry, self.handlers[entry],
                                                         analysis), len(guards))
-
-    def test_an_unguarded_yield_pins_first(self):
-        # YIELD_VALUE has no guard: the pin is before its first uop's body
-        text = self.form("YIELD_VALUE")
-        self.assertLess(text.index("// _MAKE_HEAP_SAFE\n"), text.index("IR_PIN_DEPARTING();"))
-        self.assertLess(text.index("IR_PIN_DEPARTING();"), text.index("// _YIELD_VALUE\n"))
-        self.assertEqual(ir_generator.pin_point("YIELD_VALUE",
-                                                self.handlers["YIELD_VALUE"], analysis), 0)
 
 
 if __name__ == "__main__":

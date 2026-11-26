@@ -42,7 +42,7 @@ IR_HOT_ROUTINE(gen_yield, PyValue gen_value)
             next_instr = yield;
             GEN_DISPATCH();
         }
-        INSTRUCTION_STATS(YIELD_DELEGATED);
+        INSTRUCTION_STATS(ROP_HANDLER_YieldFrom_Delegated);
         frame->instr_ptr = yield + 1;
         PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
         tstate->exc_info = gen->gi_exc_state.previous_item;
@@ -68,86 +68,11 @@ IR_HOT_ROUTINE(gen_yield, PyValue gen_value)
 }
 
 /* The generator that frame has just entered, with its debit done, resumes
- * with gen_value.  The word before its resume point tells how it
- * suspended.  If it was a delegation through a SEND that is native, its
- * resumption is the transfer of a send: the value goes down through the
- * RESUME and the loop back to the SEND, and the SEND enters the next
- * generator, and so on.  If it suspended with a native value-taking
- * resume, the value goes to its STORE_FAST. */
+ * with gen_value: the value goes to the slot that the frame that entered it
+ * named (its return slot), and it goes on at its instr_ptr. */
 IR_HOT_ROUTINE(gen_resume, PyValue gen_value)
 {
     PyValue value = gen_value;
-    bool thread_plain = generator_thread_is_plain(tstate);
-    for (;;) {
-        _PyInstr *resume = frame->instr_ptr;
-        if (resume <= frame->ir_words) {
-            break;
-        }
-        uint8_t kind = generator_resume_targets[IR_HANDLER(resume[-1])];
-        if (kind != GEN_RESUME_SEND && kind != GEN_RESUME_STORE) {
-            break;
-        }
-        if (!thread_plain || !generator_frame_is_plain(frame)) {
-            GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
-        }
-        next_instr = resume;
-        /* A frame that the chain passes through runs none of its words, so
-         * under the JIT its RESUME_JIT is skipped too: its warm-up event is
-         * not due, and it has nothing to hand off. */
-        IR_SKIP_RESUME_IF(IR_HANDLER(*next_instr) == RESUME ||
-                          (kind == GEN_RESUME_SEND &&
-                           IR_HANDLER(*next_instr) == RESUME_JIT));
-        if (next_instr == resume) {
-            GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
-        }
-        if (kind == GEN_RESUME_STORE) {
-            // LocalWrite.Store names the local in A (ir.c)
-            _PyIRWord store = *next_instr;
-            int destination = IR_A(store);
-            PyValue old = frame->base[destination];
-            if (_PyFrame_ObjectMayReenter(PyValue_IsObject(old)
-                    ? PyValue_AsKnownObjectBorrow(old) : NULL)) {
-                GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, next_instr, value);
-            }
-            INSTRUCTION_STATS(STORE_FAST);
-            frame->base[destination] = value;
-            _PyValue_CheckHome(value);
-            bool closed = _PyValue_TryXCloseNoReentry(old);
-            assert(closed);
-            (void)closed;
-            frame->instr_ptr = next_instr;
-            ++next_instr;
-            GEN_DISPATCH();
-        }
-        _PyIRWord jump = *next_instr;
-        assert(IR_HANDLER(jump) == ROP_HANDLER_Jump_Direct);
-        INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
-        next_instr += 1 + _PyIR_FormatDistance(_PyIR_FormatOf(ROP_HANDLER_Jump_Direct), jump);
-        PyValue receiver = frame->base[IR_B(*next_instr)];
-        if (generator_resume_targets[IR_HANDLER(*next_instr)] != GEN_SEND_INPUT ||
-            !PyValue_IsObject(receiver) || tstate->py_recursion_remaining <= 1) {
-            GEN_STEP_JUMP(GEN_SEND_INPUT_HOME, frame, next_instr, value);
-        }
-        PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
-        if ((Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type) ||
-            (FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED &&
-             !PyValue_IsNone(value)) || !gen_try_set_executing(gen)) {
-            GEN_STEP_JUMP(GEN_SEND_INPUT_HOME, frame, next_instr, value);
-        }
-        INSTRUCTION_STATS(SEND_GEN);
-        STAT_INC(SEND, hit);
-        frame->instr_ptr = next_instr;
-        frame->return_slot = (uint16_t)(IR_B(*next_instr) + 2);
-        frame->return_pc = next_instr + 1;
-        _PyInterpreterFrame *child = &gen->gi_iframe;
-        child->previous = frame;
-        gen->gi_exc_state.previous_item = tstate->exc_info;
-        tstate->exc_info = &gen->gi_exc_state;
-        frame = tstate->current_frame = child;
-        --tstate->py_recursion_remaining;
-    }
-    /* Not a chain: the generator resumes at its instr_ptr, and the value
-     * goes to the slot that the frame that entered it named. */
     _PyFrame_SetResumeValue(frame, value);
     LOAD_IP(0);
     IR_SKIP_RESUME();

@@ -233,9 +233,6 @@ GENERATOR_COMPLETIONS = {
 # the word's exit (GEN_THROWING in the completed table).
 GENERATOR_COMPLETION_KINDS = {"send": "_PY_IR_SEND", "throw": "_PY_IR_SEND_THROW"}
 
-# The resume routine's arms, by the consumer that a yield's variant fuses
-GENERATOR_RESUMES = {"SEND": "GEN_RESUME_SEND", "STORE_LOCAL": "GEN_RESUME_STORE"}
-
 
 def generator_boundaries(analysis: Analysis) -> dict[str, GeneratorBoundary]:
     """The generator-boundary variants SOURCE_XFER_CONSUMER, one per consumer
@@ -268,12 +265,6 @@ def generator_boundaries(analysis: Analysis) -> dict[str, GeneratorBoundary]:
                                      "arm in the completion routine", clause.where)
             result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
                 name, clause.at, clause.completion, clause.yields, consumer, exits=exits)
-        for consumer in clause.resumes:
-            if consumer not in GENERATOR_RESUMES:
-                raise analysis_error(f"boundary({clause.source}): {consumer} has no "
-                                     "arm in the resume routine", clause.where)
-            result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
-                name, clause.at, clause.completion, resume=consumer)
     return result
 
 
@@ -1258,7 +1249,7 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
+STACK_ONLY = ("RETURN_GENERATOR", "CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "INSTRUMENTED_RETURN_VALUE", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
               "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
               "LOAD_FAST_LOAD_FAST",
@@ -1282,7 +1273,9 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
               "COMPARE_OP", "IS_OP", "CONTAINS_OP",
               "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
-              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE")
+              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
+              "GET_AITER", "GET_ANEXT", "GET_AWAITABLE",
+              "YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -1301,9 +1294,21 @@ def ir_only_handler_names(analysis: Analysis) -> list[str]:
 
 
 def ir_only_numbers(analysis: Analysis, count: int) -> list[int]:
-    "The numbers of the first count IR-only handlers"
-    wide = max(0, count - len(analysis.free_ids))
-    return [*analysis.free_ids[:count], *range(256, 256 + wide)]
+    """The numbers of the first count IR-only handlers: the free numbers below
+    256, then 256 and up.  The handlers of BINARY_OP's operations follow the
+    pseudo-instructions and are consecutive (_PyIR_BINARY_OP_FIRST + the
+    operation), so they start at the first run of free numbers that holds
+    them all."""
+    first = len(analysis.ir_only)
+    block = len(binary_op_handlers(analysis))
+    pool = [*analysis.free_ids, *range(256, 256 + count + block)]
+    numbers = pool[:first]
+    at = first
+    while block and any(pool[at + i + 1] != pool[at + i] + 1
+                        for i in range(block - 1)):
+        at += 1
+    numbers += pool[at:at + count - first]
+    return numbers
 
 
 def handler_ids(analysis: Analysis) -> dict[str, int]:
@@ -1731,7 +1736,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
         discards=(store_dst and store_mode(head, io[head.name][1]) in
             (STORE_RESULT, STORE_RETURN)) or group in
-            {"SEND", "CLEANUP_THROW", "YIELD_VALUE", "YIELD_DELEGATED", "RETURN_GENERATOR"},
+            {"SEND", "CLEANUP_THROW", "YIELD_VALUE", "YIELD_DELEGATED"},
         unpacks=unpacks,
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
@@ -3505,7 +3510,6 @@ class IREmitter(Emitter):
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         self._replacers["IR_BINARY_READER"] = self.binary_reader
-        self._replacers["IR_GENERATOR_MARKER"] = self.generator_marker
         self._replacers["IR_METADATA_PASSTHROUGH"] = self.metadata_passthrough
         self._replacers["IR_SUSPEND_DELEGATED"] = self.suspend_delegated
         self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
@@ -3674,16 +3678,6 @@ class IREmitter(Emitter):
         self.out.emit_at(f"_PyFrame_CloseHomeRange(frame, {local.name}, oparg)", tkn)
         self.out.last_token = end
         local.kill()
-        return True
-
-    def generator_marker(self, tkn, tkn_iter, uop, storage, inst):
-        assert inst is not None
-        args = self.macro_args(tkn, tkn_iter, 0)
-        if args or not generator_marker_contract(inst, self.format_of(inst)):
-            raise analysis_error("IR_GENERATOR_MARKER needs its checked contract", tkn)
-        self.ownership_event("GENERATOR_MARKER")
-        self.out.start_line()
-        self.emit("Py_UNREACHABLE();\n")
         return True
 
     def metadata_passthrough(self, tkn, tkn_iter, uop, storage, inst):
@@ -8387,22 +8381,6 @@ def binary_reader_contract(inst: Instruction, fmt: IRFormat) -> bool:
                 Parser(specialize, "<binary specialization contract>").block()))
 
 
-def generator_marker_contract(inst: Instruction, fmt: IRFormat) -> bool:
-    """The marker at the start of a generator's code is never executed."""
-    inputs, outputs = external_io(inst)
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    if (inst.name != "RETURN_GENERATOR" or not fmt.window or inputs
-            or len(outputs) != 1 or len(parts) != 1
-            or len(inst.parts) != 1):
-        return False
-    expected = """{
-        IR_GENERATOR_MARKER();
-        res = PyValue_NULL;
-    }"""
-    return statement_shape(parts[0].body) == statement_shape(
-        Parser(expected, "<generator marker contract>").block())
-
-
 def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
     """Certify the bounded normal-edge subset from its actual owner operations.
 
@@ -9157,7 +9135,9 @@ def num_old_handlers(analysis: Analysis) -> int:
     """The arms start here.  The IR-only handlers fill the free numbers below
     256 and continue from 256, so the arms' range stays contiguous.  If they
     do not fill the free numbers, the rest stay unused."""
-    return 256 + max(0, len(ir_only_handler_names(analysis)) - len(analysis.free_ids))
+    names = ir_only_handler_names(analysis)
+    numbers = ir_only_numbers(analysis, len(names))
+    return max(256, numbers[-1] + 1 if numbers else 0)
 
 
 def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:
@@ -9189,7 +9169,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     out = CWriter(outfile, 0, False)
     boundaries = generator_boundaries(analysis)
     out.emit("#ifdef IR_GEN_TABLES\n")
-    for column in ("Yielded", "Completed", "Resume"):
+    for column in ("Yielded", "Completed"):
         out.emit(f"static const uint8_t generator_{column.lower()}_targets[{n}] = {{\n")
         for name, boundary in sorted(boundaries.items()):
             if not generator_boundary_source_closed(boundary, analysis, formats):
@@ -9200,12 +9180,6 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
             elif column == "Completed" and boundary.completed != "NONE":
                 target = ("GEN_THROWING | " if boundary.completion == "throw" else ""
                           ) + GENERATOR_COMPLETIONS[boundary.completed][0]
-            elif column == "Resume":
-                if boundary.resume != "NONE":
-                    target = GENERATOR_RESUMES[boundary.resume]
-                elif boundary.yielded == "DELEGATED":
-                    target = ("GEN_SEND_INPUT" if boundary.base == "SEND_GEN"
-                              else "GEN_SEND_INPUT_HOME")
             if target is not None:
                 out.emit(f"[{ids[name]}] = {target},\n")
         if column == "Completed":

@@ -345,7 +345,7 @@ class TestIRCases(unittest.TestCase):
             return analysis, formats, ir_generator.generator_boundaries(analysis)
 
         analysis, formats, rows = checked(source)
-        self.assertEqual(len(rows), 38)
+        self.assertEqual(len(rows), 30)
         for name, row in rows.items():
             with self.subTest(name=name):
                 self.assertTrue(ir_generator.generator_boundary_source_closed(
@@ -397,7 +397,6 @@ class TestIRCases(unittest.TestCase):
         # frame's boundary shape from the resume table
         self.assertIn("IR_GEN_RESUME(ir_resume_input);", body)
         self.assertNotIn("generator_resume_targets[", body)
-        self.assertIn("generator_resume_targets[IR_HANDLER(", generator_labels_source())
         self.assertTrue(any(event.kind == "_PyIR_OWNER_NATIVE_WINDOW_OUT"
                             for event in emitter.ownership_events))
 
@@ -818,101 +817,6 @@ class TestIRCases(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, 'used after transfer: cursor'):
             paths(helper, 'PyValue_Borrow(iter), cursor); steal(cursor);')
 
-    def test_canonical_frame_transfer_provenance_fails_closed(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-
-        def analyze(text):
-            Path(self.temp_input_filename).write_text(text)
-            with handle_stderr():
-                return analyzer.analyze_files([self.temp_input_filename])
-
-        original = analyze(source)
-        self.assertTrue(ir_generator.canonical_frame_transfer_input(
-            original.instructions["YIELD_VALUE"]))
-
-        changes = (
-            ("PyValue temp = retval;",
-             "retval = PyValue_DUP(retval); PyValue temp = retval;",
-             ("YIELD_VALUE",)),
-        )
-        for old, new, affected in changes:
-            with self.subTest(new=new):
-                self.assertIn(old, source)
-                analysis = analyze(source.replace(old, new, 1))
-                for name in affected:
-                    self.assertFalse(ir_generator.canonical_frame_transfer_input(
-                        analysis.instructions[name]))
-
-    def test_canonical_yield_sources(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        self.assertTrue(ir_generator.canonical_frame_transfer_input(
-            analysis.instructions['YIELD_VALUE']))
-        self.assertFalse(ir_generator.canonical_frame_transfer_input(
-            analysis.instructions['INSTRUMENTED_YIELD_VALUE']))
-        for name, store in (("YIELD_VALUE", "IR_STORE_RETURN(value);"),
-                            ("INSTRUMENTED_YIELD_VALUE", "IR_STORE_RETURN(value);")):
-            output = io.StringIO()
-            writer = CWriter(output, 0, False)
-            emitter = ir_generator.IREmitter(writer, analysis, formats)
-            ir_generator.generate_handler(name, analysis.instructions[name],
-                                          formats[name], emitter, writer)
-            self.assertIn(store, output.getvalue())
-
-        renamed = source.replace('YIELD_VALUE', 'RENAMED_YIELD')
-        Path(self.temp_input_filename).write_text(renamed)
-        other = analyzer.analyze_files([self.temp_input_filename])
-        self.assertTrue(ir_generator.canonical_frame_transfer_input(
-            other.instructions['RENAMED_YIELD']))
-
-    def test_canonical_yield_mutations_fail_closed(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        start = source.index('window op(_YIELD_VALUE,')
-        changes = (
-            ('PyValue temp = retval;', 'PyValue temp = PyValue_DUP(retval);'),
-            ('PyValue temp = retval;', 'opaque(&retval); PyValue temp = retval;'),
-            ('value = temp;', 'value = PyValue_DUP(temp);'),
-            ('value = temp;', 'value = temp; opaque(&value);'),
-            ('value = temp;', 'PyValue temp2 = PyValue_None; value = temp2;'),
-            ('value = temp;', '#define temp replacement\nvalue = temp;\n#undef temp'),
-            ('#endif\n            RELOAD_STACK();',
-             '#else\n            value = PyValue_None;\n#endif\n            RELOAD_STACK();'),
-            ('window op(_YIELD_VALUE, (retval: consumed -- value: moved(retval)))',
-             'window op(_YIELD_VALUE, (TAKE/1, retval: consumed -- value: moved(retval)))'),
-        )
-        for old, new in changes:
-            with self.subTest(new=new):
-                self.assertIn(old, source[start:])
-                changed = source[:start] + source[start:].replace(old, new, 1)
-                Path(self.temp_input_filename).write_text(changed)
-                with handle_stderr():
-                    analysis = analyzer.analyze_files([self.temp_input_filename])
-                self.assertFalse(ir_generator.canonical_frame_transfer_input(
-                    analysis.instructions['YIELD_VALUE']))
-
-        # An AST rewrite must not retain a proof from its stale source span.
-        for move_debug_arm in (False, True):
-            with self.subTest(ast_debug_arm=move_debug_arm):
-                Path(self.temp_input_filename).write_text(source)
-                with handle_stderr():
-                    analysis = analyzer.analyze_files([self.temp_input_filename])
-                instruction = analysis.instructions['YIELD_VALUE']
-                body = instruction.parts[-1].body
-                if move_debug_arm:
-                    debug = next(stmt for stmt in body.body
-                                 if isinstance(stmt, ir_generator.MacroIfStmt))
-                    debug.else_body, debug.body = debug.body, []
-                    debug.else_ = next(ir_generator.tokenize('#else\n'))
-                else:
-                    body.body.append(body.body[-1])
-                self.assertFalse(ir_generator.canonical_frame_transfer_input(
-                    instruction))
-
     def test_completion_result_local_does_not_capture_held_value(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -966,58 +870,6 @@ class TestIRCases(unittest.TestCase):
         formats = ir_generator.compute_formats(analysis)
         with self.assertRaisesRegex(SyntaxError, "unsupported completion kind"):
             emitted("FOR_ITER")
-
-    def test_exact_coroutine_await_transfers_existing_owner(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        instruction = analysis.instructions["GET_AWAITABLE"]
-        self.assertEqual(formats["GET_AWAITABLE"].borrow_mask, 1)
-        self.assertTrue(formats["GET_AWAITABLE"].store_dst)
-        self.assertFalse(formats["GET_AWAITABLE"].no_fold)
-        # Declared `iter: owned`: the transferred reference is the output's
-        # own, so it aliases no input
-        self.assertEqual(instruction.parts[0].aliased_outputs, ())
-        predicate = "coro_awaitable_can_transfer"
-        # The row declares no reentry, so the call does not escape
-        self.assertFalse(ir_contract.rows()[predicate].effects & ir_contract.REENTRY)
-        self.assertFalse(analyzer.call_escapes(predicate))
-        self.assertNotIn(predicate, analyzer.IR_MARKER_EFFECTS)
-        effect = ir_generator.analyze_error_effects(self.analyze(
-            "\ninst(OP, (value --)) { if (coro_awaitable_can_transfer(value)) { assert(true); } }\n"
-        ).instructions["OP"])
-        self.assertIsNotNone(effect)
-        self.assertFalse(effect.callback)
-        self.assertFalse(effect.may_fail)
-        self.assertEqual(effect.homes, ir_generator.HomeEffect.NO_ARENA_WRITE)
-        with self.subTest():
-            output = io.StringIO()
-            out = CWriter(output, 0, False)
-            ir_generator.generate_handler("GET_AWAITABLE", instruction,
-                formats["GET_AWAITABLE"], ir_generator.IREmitter(out, analysis, formats),
-                out)
-            handler = output.getvalue()
-            start = handler.index("if (coro_awaitable_can_transfer(iterable))")
-            end = handler.index("}\n", start)
-            arm = handler[start:end]
-            self.assertIn("IR_DETACH(ir_word, B, iterable)", arm)
-            self.assertIn("iter = IR_TAKEN_REQUIRED(iterable, ir_own_B)", arm)
-            self.assertNotIn("_PyEval_GetAwaitable", arm)
-            self.assertNotIn("PyValue_FromObjectSteal", arm)
-            self.assertEqual(handler.count("_PyEval_GetAwaitable("), 1)
-            self.assertIn("IR_STORE_DST(ir_word, A, iter);", handler)
-        body = instruction.parts[0].body.body[0]
-        self.assertIsInstance(body, ir_generator.IfStmt)
-        fallback = [ir_generator._statement_text(stmt) for stmt in body.else_body.body]
-        expected = ir_generator.Parser("""{
-            PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
-            PyValue_CLOSE(iterable);
-            ERROR_IF(iter_o == NULL);
-            iter = PyValue_FromObjectSteal(iter_o);
-        }""", "<unchanged await fallback>").block()
-        self.assertEqual(fallback, [ir_generator._statement_text(stmt) for stmt in expected.body])
 
     def test_alias_output_meets_no_fresh_owner(self):
         # An output declared moved(x) is x itself on every path. A result
@@ -1125,29 +977,6 @@ class TestIRCases(unittest.TestCase):
         # Guard-only inspection must not grant an ordinary error-route summary.
         guard_instruction = ir_generator.replace(instruction, parts=[guard])
         self.assertIsNone(ir_generator.analyze_error_effects(guard_instruction))
-
-    def test_a_suspension_is_declared(self):
-        # The frame switch of a body that names none (`frame = ...`) takes
-        # the switch exits its uop declares; the generator state the body
-        # writes decides nothing
-        def switches(inst):
-            return [t.kind for part in inst.parts if isinstance(part, analyzer.Uop)
-                    for t in ir_records.uop_transfers(part, "")
-                    if t.kind in (ir_records.ENTER_FRAME, ir_records.YIELD)]
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertEqual(switches(analysis.instructions[name]), [ir_records.YIELD])
-        declared = "effects(reads, writes, switches_frame) exits(yield)"
-        self.assertEqual(source.count(declared), 1)
-        source = source.replace(declared, "effects(reads, writes, switches_frame) exits(enter)")
-        Path(self.temp_input_filename).write_text(source)
-        mutated = analyzer.analyze_files([self.temp_input_filename])
-        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertEqual(switches(mutated.instructions[name]),
-                             [ir_records.ENTER_FRAME])
 
     def test_the_guarded_call_prefix_is_declared(self):
         # The binding plan relies on the callable's declared facts and on
@@ -3096,55 +2925,6 @@ class TestIRCases(unittest.TestCase):
         finally:
             branch.body.append(branch.else_body.pop(0))
 
-    def test_abrupt_prefix_requires_complete_suspension_source(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-        names = ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE")
-        contracts = ir_generator.handler_contracts(analysis, formats)
-        for name in names:
-            self.assertTrue(contracts[name].abrupt_prefix)
-        inst = analysis.instructions["YIELD_VALUE"]
-        producer = inst.parts[-1]
-        original = producer.body.body
-        for changed in (
-                "{ opaque(frame); }",
-                "{ gen_frame->return_slot = 0; }",
-                "{ frame->base[0] = PyValue_NULL; }"):
-            extra = self.analyze("\ninst(OP, (--)) " + changed + "\n")
-            producer.body.body = original + extra.instructions["OP"].parts[0].body.body
-            try:
-                self.assertFalse(ir_generator.abrupt_suspend_contract(inst, formats["YIELD_VALUE"]))
-            finally:
-                producer.body.body = original
-        # The twin's observer ingress must also be covered.  A statement
-        # that the verifier of the observer's declaration refuses (an
-        # `opaque(frame)` call is no row) never reaches this proof, so the
-        # statements are ones that the verifier accepts.  The generator's
-        # boundary then refuses the handler whose observer source is not the
-        # checked one.
-        twin = analysis.instructions["INSTRUMENTED_YIELD_VALUE"]
-        observer = twin.parts[0]
-        # This observer uop is also used by delegated suspension, whose
-        # metadata cursor has a stricter source contract. Mutate only the
-        # ordinary twin whose family permission is under test.
-        for changed in ("{ gen_frame->return_slot = 0; }",
-                        "{ frame->base[0] = PyValue_NULL; }",
-                        "{ frame->instr_ptr = this_instr; }"):
-            with self.subTest(observer=changed):
-                extra = self.analyze("\ninst(OP, (--)) " + changed + "\n")
-                body = replace(observer.body, body=observer.body.body +
-                               extra.instructions["OP"].parts[0].body.body)
-                twin.parts[0] = replace(observer, body=body)
-                try:
-                    self.assertFalse(ir_generator.abrupt_suspend_contract(
-                        twin, formats["INSTRUMENTED_YIELD_VALUE"]))
-                    with self.assertRaisesRegex(SyntaxError,
-                                                "needs checked yield transport"):
-                        ir_generator.handler_contracts(analysis, formats)
-                finally:
-                    twin.parts[0] = observer
-
     def test_normal_vacate_observer_frame_footprint(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
@@ -3524,22 +3304,6 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("_PyFrame_TakeHome(frame, &values[i])", output)
         self.assertNotIn("IR_TAKE_INPUT", output)
 
-    def test_generator_marker_contract_checks_actual_body(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-        inst = analysis.instructions["RETURN_GENERATOR"]
-        self.assertTrue(ir_generator.generator_marker_contract(inst, formats[inst.name]))
-        body = inst.parts[0].body
-        for statement in ("opaque(frame);", "*slots = PyValue_NULL;",
-                          "frame->base[0] = PyValue_NULL;"):
-            changed = self.analyze(f"\ninst(OP, (--)) {{ {statement} }}\n")
-            body.body.insert(0, changed.instructions["OP"].parts[0].body.body[0])
-            try:
-                self.assertFalse(ir_generator.generator_marker_contract(inst, formats[inst.name]))
-            finally:
-                body.body.pop(0)
-
     def test_unused_scalar_passthrough_keeps_distinct_array_geometry(self):
         source = """
         op(FIRST, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
@@ -3861,8 +3625,12 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(handlers[0], "BINARY_OP_ADD")
         ids = ir_generator.handler_ids(analysis)
         self.assertNotIn("BINARY_OP", ids)
-        self.assertEqual([ids["IR_BACON"], *(ids[name] for name in handlers)],
-                         analysis.free_ids[:1 + len(handlers)])
+        # The IR-only handler takes the first free number; the BINARY_OP
+        # block is one contiguous run of free numbers
+        block = [ids[name] for name in handlers]
+        self.assertEqual(block, list(range(block[0], block[0] + len(block))))
+        self.assertLess(ids["IR_BACON"], block[0])
+        self.assertTrue(set([ids["IR_BACON"], *block]) <= set(analysis.free_ids))
         formats = ir_generator.compute_formats(analysis)
         self.assertIs(formats["BINARY_OP_ADD"], formats["BINARY_OP"])
         self.assertEqual(
@@ -3995,7 +3763,7 @@ class TestCallMarkers(unittest.TestCase):
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
         # A floor, not a count: ported families delete old handlers
-        self.assertGreater(len(handlers), 140)
+        self.assertGreater(len(handlers), 130)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))
@@ -4074,7 +3842,7 @@ class TestCallMarkers(unittest.TestCase):
         # generator emits.  No handler keeps a value record or a box area.
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
-        self.assertGreater(len(sites), 150)
+        self.assertGreater(len(sites), 140)
         for name, found in sites.items():
             self.assertEqual(found, [], name)
 

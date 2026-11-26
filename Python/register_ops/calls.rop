@@ -3,9 +3,6 @@
 // generated wrapper bound to a family and arm, not a family.
 
 enum IterMode(ORDINARY_ITER, YIELD_FROM_ITER);
-enum AsyncIterMode(AITER, ANEXT);
-enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
-enum YieldMode(ORDINARY_YIELD, DELEGATED_YIELD);
 enum ExceptMode(ENTER_HANDLER, LEAVE_HANDLER);
 enum MatchMode(ORDINARY_MATCH, GROUP_MATCH);
 enum ResumeKind(FUNC_START, AFTER_YIELD, AFTER_YIELD_FROM, AFTER_AWAIT, GEN_EXPR_START);
@@ -755,19 +752,10 @@ family ForIter(item:Dst, pair:IterPair, body:FarHead, done:NearHead, fb:Fb<Iter>
 
 // 2C: async iteration, await, send, yield
 
-family AsyncIter(dst:Dst, source:Src, mode:Enum<AsyncIterMode>)
-  exits(next, raise) ops(GET_AITER, GET_ANEXT);
-
-family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>)
-  exits(next, raise) ops(GET_AWAITABLE);
-
 // A folded consumer can also return or yield
 family Send(yielded:Dst, completed:Dst, pair:IterPair, sent:Src, done:NearHead,
             fb:Fb<Send>)
   exits(next, branch, enter, return, yield, raise, redirect, miss, again) ops(SEND);
-
-family Yield(value:Src, resume:Dst, route:NearHead, mode:Enum<YieldMode>)
-  exits(yield, raise, redirect) ops(YIELD_VALUE);
 
 // 2D: exceptions
 

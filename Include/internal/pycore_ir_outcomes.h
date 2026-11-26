@@ -391,12 +391,6 @@ _PyIR_Outcome(_PyIRWord word, int taken)
                          : (_PyIRSlotOutcome){1, base + 2, 1, IR_NO_DST};
         case CLEANUP_THROW:
             return (_PyIRSlotOutcome){1, base, 4, dst};
-        case YIELD_VALUE:
-        case YIELD_DELEGATED:
-            /* The outgoing value is taken; the next activation supplies A. */
-            return (_PyIRSlotOutcome){1, base, 1, dst};
-        case RETURN_GENERATOR:
-            return (_PyIRSlotOutcome){1, 0, 0, IR_NO_DST};
         default:
             return (_PyIRSlotOutcome){0, 0, 0, IR_NO_DST};
     }
@@ -846,7 +840,6 @@ enum {
     _PyIR_PHYS_COPY,
     _PyIR_PHYS_SWAP,
     _PyIR_PHYS_MOVE,
-    _PyIR_PHYS_YIELD,
     _PyIR_PHYS_FOR_ITER,
     _PyIR_PHYS_COMPLETE,
     _PyIR_PHYS_GENERIC,
@@ -1039,20 +1032,6 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
                 return;
             }
             break;
-        case YIELD_VALUE:
-            if (_PyIR_HandlerBase[handler] == YIELD_DELEGATED) {
-                /* A send's delegated yield names its inputs in IN fields;
-                 * the generic rule keeps every other home. */
-                break;
-            }
-            if (edge || fmt->roles[0] != _PyIR_ROLE_DST ||
-                fmt->roles[1] != _PyIR_ROLE_BASE || reads != 1 || writes != 1 ||
-                through != 0 || base < 0)
-            {
-                return;
-            }
-            p->mode = _PyIR_PHYS_YIELD;
-            return;
         case FOR_ITER:
             if (fmt->roles[0] != _PyIR_ROLE_DST ||
                 fmt->roles[1] != _PyIR_ROLE_BASE || base < 0 ||
@@ -1168,11 +1147,6 @@ _PyIR_PhysicalAt(const _PyIRPhysicalWord *p, int home)
                 return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, p->base};
             }
             return preserve;
-        case _PyIR_PHYS_YIELD:
-            if (home == p->dst) {
-                return unknown;
-            }
-            return home == p->base ? set_null : preserve;
         case _PyIR_PHYS_FOR_ITER:
             if (p->completion && (home == p->base || home == p->base + 1)) {
                 return set_null;
@@ -1252,8 +1226,7 @@ _PyIR_NormalCallAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limi
          * Cursor/receiver updates have their own protocols, so the whole
          * affected window loses absence; no completion slot is guessed empty.
          * A prior empty tail stays owner-free after a completed child cleanup. */
-        if (opcode != YIELD_VALUE && opcode != SEND && opcode != FOR_ITER &&
-            opcode != CLEANUP_THROW)
+        if (opcode != SEND && opcode != FOR_ITER && opcode != CLEANUP_THROW)
         {
             return _PyIR_ABSENCE_UNKNOWN;
         }
@@ -1280,8 +1253,7 @@ _PyIR_NormalCallAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limi
                 ? _PyIR_ABSENCE_UNKNOWN : _PyIR_ABSENCE_PRESERVE;
         }
         if (home >= base && home - base < Py_MAX(reads, writes)) {
-            return opcode == YIELD_VALUE && reads == 1 && writes == 1 && home == base
-                ? _PyIR_ABSENCE_SET_EMPTY : _PyIR_ABSENCE_UNKNOWN;
+            return _PyIR_ABSENCE_UNKNOWN;
         }
         return _PyIR_ABSENCE_PRESERVE;
     }
@@ -1315,7 +1287,6 @@ _PyIR_CompletionWindow(int opcode)
         case FOR_ITER: return 2;
         case SEND: return 3;
         case CLEANUP_THROW: return 4;
-        case YIELD_VALUE: return 1;
         default: return 0;
     }
 }

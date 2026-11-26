@@ -225,9 +225,6 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
 const _PyIRFormat *
 _PyRegCfg_FormatOf(int opcode, int oparg)
 {
-    if (opcode == YIELD_VALUE && oparg == 1) {
-        return _PyIR_FormatOf(YIELD_DELEGATED);
-    }
     // The handlers of BINARY_OP's operations share its format
     if (opcode == BINARY_OP) {
         return _PyIR_FormatOf(_PyIR_BINARY_OP_FIRST);
@@ -1039,13 +1036,6 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     // pushes its result to the caller's, and RERAISE does not go on
     int pushed = IS_SCOPE_EXIT_OPCODE(instr->opcode)
         ? 0 : _PyOpcode_num_pushed(instr->opcode, instr->oparg);
-    if (instr->opcode == YIELD_VALUE && instr->oparg == 1) {
-        /* The frontend leaves receiver/cursor below its one-value yield.
-         * Canonical delegated IR retains both as explicit logical uses;
-         * allocation must see their identities before assigning homes. */
-        popped = 3;
-        pushed = 3;
-    }
     // Every handler finds its parameters before the op can raise: renamed
     // while the region keeps stack order, else by the edge's recipe
     if (instr->except >= 0 && !t->permuted) {
@@ -2208,6 +2198,77 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* Await and asynchronous iteration (Python/register_ops/suspend.rop) */
+
+/* GET_AWAITABLE: the iterator of the source, with the source's origin */
+static int
+rule_get_awaitable(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Awaitable_Await,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = src->oparg;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* GET_AITER: the asynchronous iterator replaces its source */
+static int
+rule_get_aiter(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_AsyncIterOpen_Open,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* GET_ANEXT: the awaitable of the next item goes above the iterator, which
+ * stays */
+static int
+rule_get_anext(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_AsyncIterNext_Next,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* YIELD_VALUE: the value goes out and the value sent in takes its place.  A
+ * delegated yield (oparg 1) leaves the receiver and cursor of its SEND below
+ * the value, where they stay. */
+static int
+rule_yield_value(_PyRegTr *t, const _PyRegOp *src)
+{
+    int delegated = src->oparg == 1;
+    if (t->sp < (delegated ? 3 : 1)) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src,
+                                  delegated ? ROP_HANDLER_YieldFrom_Delegated
+                                            : ROP_HANDLER_Yield_Ordinary,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
 /* RETURN_VALUE is the Return family: value in.  The frame it leaves and
  * whether a scratch slot may still own a value select the arm: a return
  * that finds only its value on the stack leaves none, since each op
@@ -2458,6 +2519,7 @@ static const _PyRegRule rules[256] = {
     [NOP] = rule_nop,
     [POP_TOP] = rule_pop_top,
     [RETURN_VALUE] = rule_return_value,
+    [YIELD_VALUE] = rule_yield_value,
     [STORE_FAST] = rule_store_fast,
     [STORE_FAST_LOAD_FAST] = rule_store_fast_load_fast,
     [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,
@@ -2470,6 +2532,9 @@ static const _PyRegRule rules[256] = {
     [BUILD_SLICE] = rule_build_slice,
     [MAKE_FUNCTION] = rule_make_function,
     [SET_FUNCTION_ATTRIBUTE] = rule_set_function_attribute,
+    [GET_AWAITABLE] = rule_get_awaitable,
+    [GET_AITER] = rule_get_aiter,
+    [GET_ANEXT] = rule_get_anext,
     [CALL_INTRINSIC_1] = rule_call_intrinsic,
     [CALL_INTRINSIC_2] = rule_call_intrinsic,
     [LOAD_NAME] = rule_load_name,

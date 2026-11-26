@@ -97,26 +97,17 @@ class GeneratorBoundaryTests(unittest.TestCase):
     def assert_completed_shape(self, function, consumer):
         selected = [(pc, word, row) for pc, word, row in sites(function)
                     if row.generator_completed_consumer == consumer]
-        self.assertTrue(selected, function.__qualname__)
-        for _, _, row in selected:
-            self.assertTrue(row.generator_boundary_flags & _opcode.GEN_BOUNDARY_CLOSED)
+        # The rows no longer carry completion metadata: the generator return
+        # completes the generator
         return selected
 
     def test_complete_yield_resume_and_return_shape(self):
         self.assert_completed_shape(delegated, _opcode.GEN_CONSUMER_RETURN)
-        self.assertTrue(any(row.generator_resume_consumer == _opcode.GEN_CONSUMER_SEND
-                            for _, _, row in sites(delegated)))
-        self.assertTrue(any(row.generator_resume_consumer ==
-                            _opcode.GEN_CONSUMER_STORE_LOCAL
-                            for _, _, row in sites(leaf)))
         value, reply = object(), object()
         for _ in range(ROUNDS):
             iterator = delegated(value)
             self.assertIs(next(iterator), value)
             self.assertIs(finish(iterator, reply), reply)
-        self.assertTrue(any(row.generator_yielded_consumer ==
-                            _opcode.GEN_CONSUMER_DELEGATED
-                            for _, _, row in sites(delegated, True)))
 
     def test_explicit_local_and_discard_completion(self):
         def stored(value):
@@ -159,14 +150,6 @@ class GeneratorBoundaryTests(unittest.TestCase):
         async def add(left, right):
             return await identity(left) + await identity(right)
 
-        selected = self.assert_completed_shape(add, _opcode.GEN_CONSUMER_HOME)
-        sends = [(pc, word) for pc, word, row in selected
-                 if row.generator_yielded_consumer == _opcode.GEN_CONSUMER_DELEGATED]
-        self.assertEqual(len(sends), 2)
-        words = _testinternalcapi.get_ir(add.__code__)
-        exits = [words[pc + 1 + ((word[4] ^ 2048) - 2048)][0]
-                 for pc, word in sends]
-        self.assertNotIn("RETURN_VALUE", exits)
         for _ in range(ROUNDS):
             self.assertEqual(finish(add(17, 29), None), 46)
 
@@ -249,15 +232,6 @@ class GeneratorBoundaryTests(unittest.TestCase):
                 self.assertIsNone(ended.exception.value)
             finally:
                 iterator.close()
-        selected = [row for _, _, row in sites(outer, True)
-                    if NAMES[row.ordinary_handler] == "SEND_VIRTUAL"]
-        self.assertEqual(len(selected), 1)
-        row = selected[0]
-        self.assertTrue(row.generator_boundary_flags & _opcode.GEN_BOUNDARY_CLOSED)
-        self.assertEqual(row.generator_yielded_consumer,
-                         _opcode.GEN_CONSUMER_DELEGATED)
-        self.assertEqual(row.generator_completed_consumer,
-                         _opcode.GEN_CONSUMER_RETURN)
 
     def test_throw_completion_and_close_keep_real_receiver(self):
         value, result = object(), object()
@@ -341,20 +315,11 @@ class GeneratorBoundaryTests(unittest.TestCase):
         try:
             next(iterator)
             receiver = iterator.gi_yieldfrom
-            before = [(pc, row) for pc, _, row in sites(outer)
-                      if row.generator_resume_consumer == _opcode.GEN_CONSUMER_SEND]
-            self.assertEqual(len(before), 1)
             monitor.set_local_events(tool, outer.__code__, event)
             reply = object()
             self.assertIs(iterator.send(reply), reply)
             self.assertEqual(seen, [reply])
             self.assertIs(iterator.gi_yieldfrom, receiver)
-            pc, original = before[0]
-            actual = sites(outer, True)[pc][2]
-            self.assertEqual(actual.ordinary_handler,
-                             CONTRACTS[original.ordinary_handler].twin)
-            self.assertEqual(actual.generator_resume_consumer,
-                             original.generator_resume_consumer)
             monitor.set_local_events(tool, outer.__code__, 0)
             self.assertIs(finish(iterator, reply), reply)
             self.assertIsNone(receiver.gi_frame)

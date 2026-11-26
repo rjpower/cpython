@@ -781,12 +781,9 @@ normal_window_result_offset(const _PyIRFormat *fmt)
 static int
 is_delegated_yield_handler(int handler)
 {
-    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
-    if (boundary == NULL) {
-        return 0;
-    }
-    return boundary->ordinary == YIELD_DELEGATED ||
-           boundary->ordinary == INSTRUMENTED_YIELD_DELEGATED;
+    return handler == ROP_HANDLER_YieldFrom_Delegated ||
+           handler == ROP_HANDLER_YieldFrom_Delegated_Observed ||
+           handler == ROP_HANDLER_YieldFrom_Observed;
 }
 
 typedef struct {
@@ -1338,18 +1335,10 @@ semantic_delegated_step(const semantic_image *image, semantic_worklist *work,
     _PyIRWord word = image->words[pc];
     int handler = IR_HANDLER(word);
     if (is_delegated_yield_handler(handler)) {
-        semantic_delegated pair = work->delegated;
-        int dst = (int)IR_A(word);
-        int valid = pair.kind == SEM_DELEGATED_KNOWN &&
-            pair.receiver == (int)IR_D(word) && pair.outgoing == (int)IR_B(word) &&
-            (dst < image->nl || dst == IR_NO_DST || dst == pair.outgoing ||
-             (semantic_home_facts(work, state, dst, image->nl) & (1u << SEM_NO_HOME)));
+        /* The yield is a register instruction: its operands are the value's
+         * home, which the verifier of the family checks.  It ends the pending
+         * pair of the SEND. */
         work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_NONE};
-        if (inspect && !valid) {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %d has no delegated SEND role proof", pc);
-            return -1;
-        }
         return 0;
     }
     if (work->delegated.kind != SEM_DELEGATED_KNOWN) {
@@ -1494,18 +1483,6 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                 return 0;
             case _PyIR_OWNER_CALL_DRAIN:
                 return semantic_leaf_step(image, work, state, pc, inspect, complete);
-            case _PyIR_OWNER_YIELD_DELEGATED:
-                /* The finite SEND role proof authorizes these inputs, not
-                 * an arbitrary suspended scratch shape. The outgoing owner
-                 * is detached; a later activation supplies the recipient. */
-                semantic_set_facts(work, state, (int)IR_B(word), nl,
-                                   (1u << SEM_NULL) | (1u << SEM_NO_HOME));
-                home = (int)IR_A(word);
-                if (home >= nl && home != IR_NO_DST) {
-                    semantic_set_facts(work, state, home, nl, 0);
-                }
-                *complete = 0;
-                return 0;
             case _PyIR_OWNER_NORMAL_COMPLETION:
                 /* Completion transport belongs to its selected edge. FOR's
                  * body destination is not produced on completion: retain
@@ -2221,12 +2198,6 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                 if (semantic_empty_return(IR_HANDLER(words[i]))) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has an unproved empty return", i);
-                    result = -1;
-                    break;
-                }
-                if (is_delegated_yield_handler(IR_HANDLER(words[i]))) {
-                    PyErr_Format(PyExc_ValueError,
-                                 "code: word %d has no delegated entry proof", i);
                     result = -1;
                     break;
                 }

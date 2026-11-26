@@ -858,20 +858,6 @@ leaf_probe__LOCK_OBJECT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int 
 }
 
 static int
-leaf_probe__MAKE_HEAP_SAFE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, taken;
-    value = stack_pointer[-1];
-    taken =      value ;
-    stack_pointer[-1] = taken;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__NOP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1129,7 +1115,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_ITER_NEXT_RANGE", leaf_probe__ITER_NEXT_RANGE, 2},
     {"_ITER_NEXT_TUPLE", leaf_probe__ITER_NEXT_TUPLE, 2},
     {"_LOCK_OBJECT", leaf_probe__LOCK_OBJECT, 1},
-    {"_MAKE_HEAP_SAFE", leaf_probe__MAKE_HEAP_SAFE, 1},
     {"_NOP", leaf_probe__NOP, 0},
     {"_NULL_SLOT_CONDITIONAL", leaf_probe__NULL_SLOT_CONDITIONAL, 0},
     {"_POP_ITER", leaf_probe__POP_ITER, 2},

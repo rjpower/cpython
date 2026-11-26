@@ -380,8 +380,6 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_CALL_KW": {"CALL", "C_RETURN", "C_RAISE"},
             "INSTRUMENTED_LINE": {"LINE"},
             "INSTRUMENTED_INSTRUCTION": {"INSTRUCTION"},
-            "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
-            "INSTRUMENTED_YIELD_DELEGATED": {"PY_YIELD"},
             "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
             "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
@@ -478,8 +476,7 @@ class ContractTests(unittest.TestCase):
                     if row.effects & _opcode.IR_SUSPENDS}
         # A send to a native iterator that suspends yields its value from
         # the outer frame, which the record states as a YIELD transfer
-        self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
-                                    "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
+        self.assertEqual(suspends, {
                                     "SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"})
         for name in ("CALL_KW_PY", "SEND", "SEND_GEN", "FOR_ITER_GEN"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
@@ -552,8 +549,7 @@ class AnalyzerTests(unittest.TestCase):
         # A handler that pushes a frame may raise and run Python: the
         # callee's exception propagates to its word; so may a yield, where
         # throw() raises
-        for name in ("CALL_KW_PY", "CALL_EX_PY",
-                     "YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
+        for name in ("CALL_KW_PY", "CALL_EX_PY"):
             effects = BY_NAME[name].effects
             self.assertTrue(effects & _opcode.IR_RAISES, name)
             self.assertTrue(effects & _opcode.IR_ESCAPES, name)

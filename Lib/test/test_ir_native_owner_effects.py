@@ -154,17 +154,6 @@ class NativeOwnerEffectTests(unittest.TestCase):
                 self.assertEqual(errors[-1] in summary.native_closed_errors, closed)
                 self.assertEqual(summary.native_exit_closed, closed)
 
-    def test_actual_get_anext_closes_only_its_null_error(self):
-        source = Path(__file__).resolve().parents[2] / "Python/bytecodes.c"
-        if not source.is_file():
-            self.skipTest("requires bytecodes.c")
-        analysis = analyzer.analyze_files([str(source)])
-        instruction = analysis.instructions["GET_ANEXT"]
-        summary = ir_error_effects.analyze_error_effects(instruction)
-        self.assertIsNotNone(summary)
-        self.assertEqual(summary.native_closed_errors, summary.error_sources)
-        self.assertTrue(summary.native_exit_closed)
-
     def test_native_truth_predicate_and_canonical_literals_share_the_parser(self):
         _, summary, errors = self.analyze("""
             int truth = _PyValue_IsTrue(input);

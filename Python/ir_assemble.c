@@ -608,9 +608,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     if (opcode >= IR_NUM_OLD_HANDLERS) {
         return opcode;
     }
-    if (opcode == YIELD_VALUE && oparg == 1) {
-        return YIELD_DELEGATED;
-    }
     /* With the baseline JIT on, frame entries and resumes are its warm-up
      * events and hand-offs (Python/jit.c): a choice made here, so that with
      * the JIT off the words are what they were.  A backedge's is the Jump
@@ -873,7 +870,7 @@ lower_completions(_PyRegCfg *cfg)
             cfg->ops[target].flags |= _PyReg_COMPLETED;
         }
         else if (op->opcode == RETURN_GENERATOR ||
-                 (op->opcode == YIELD_VALUE && op->oparg == 0))
+                 op->opcode == ROP_HANDLER_Yield_Ordinary)
         {
             if (op->flags & _PyReg_DISCARD) {
                 /* The ordinary fresh-result sink pass already proved the
@@ -982,7 +979,10 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
         // A register instruction arm is its own handler
         assert(op->opcode >= ROP_FIRST_HANDLER ||
                (!IS_PSEUDO_INSTR(op->opcode) && IS_VALID_OPCODE(op->opcode)));
-        if (op->opcode == NOP || (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
+        // The marker of a generator's code runs nothing: a call creates the
+        // generator, with its frame at the entry RESUME
+        if (op->opcode == NOP || op->opcode == RETURN_GENERATOR ||
+            (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
             op->handler = NOP;
             op->nwords = 0;
             continue;

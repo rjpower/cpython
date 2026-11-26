@@ -187,6 +187,38 @@
         IR_GEN_RETURN((V), (DYING), 0); \
     } while (0)
 
+/* ROP_YIELD: `exit yield(V) resume P` of a Yield word, ROP_YIELD_FROM of a
+ * YieldFrom word (a delegation, which suspends in the state that a throw into
+ * it must forward).  The generator suspends and V goes to its consumer's
+ * return slot, as the consumer's frame, which the generator's return_slot
+ * and its next word record for the resumption: SLOT is the home that the
+ * value sent in takes when it resumes, P's definition. */
+#define ROP_SUSPEND(V, SLOT, STATE) \
+    do { \
+        PyValue rop_yielded = (V); \
+        assert(frame->owner != FRAME_OWNED_BY_INTERPRETER); \
+        frame->instr_ptr = this_instr + 1; \
+        PyGenObject *rop_gen = _PyGen_GetGeneratorFromFrame(frame); \
+        DTRACE_FUNCTION_RETURN(); \
+        tstate->exc_info = rop_gen->gi_exc_state.previous_item; \
+        rop_gen->gi_exc_state.previous_item = NULL; \
+        _Py_LeaveRecursiveCallPy(tstate); \
+        _PyInterpreterFrame *rop_suspended = frame; \
+        rop_suspended->return_slot = (uint16_t)(SLOT); \
+        _PyThreadState_UpdateLastProfiledFrame(tstate, rop_suspended, \
+                                               rop_suspended->previous); \
+        frame = tstate->current_frame = rop_suspended->previous; \
+        rop_suspended->previous = NULL; \
+        ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD; \
+        FT_ATOMIC_STORE_INT8_RELEASE(rop_gen->gi_frame_state, (STATE)); \
+        next_instr = frame->return_pc; \
+        LLTRACE_RESUME_FRAME(); \
+        IR_STORE_RETURN(rop_yielded); \
+        DISPATCH(); \
+    } while (0)
+#define ROP_YIELD(V, SLOT) ROP_SUSPEND((V), (SLOT), FRAME_SUSPENDED)
+#define ROP_YIELD_FROM(V, SLOT) ROP_SUSPEND((V), (SLOT), FRAME_SUSPENDED_YIELD_FROM)
+
 /* The forms of these that do not depend on the binding */
 #define IR_GEN_YIELD(V) IR_GEN_YIELD_AT(this_instr, (V))
 /* Likewise V from the frame that a delegating YIELD has just suspended, if

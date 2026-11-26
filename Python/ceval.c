@@ -2386,6 +2386,30 @@ _PyRop_ReturnEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return value;
 }
 
+/* The row of Yield.Observed and YieldFrom.Observed: the PY_YIELD event, which
+ * fires before the generator suspends.  The value stays in its home, which
+ * the callback may not reach: a count of it is held across the call.  A
+ * callback that moves the frame leaves the word to run in frame->return_pc,
+ * where the redirect exit goes on. */
+static Py_NO_INLINE int
+_PyRop_YieldEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  _PyInstr *site, PyValue *home)
+{
+    PyValue val = PyValue_DUP(PyValue_Borrow(*home));
+    int err = _Py_call_instrumentation_arg(
+        tstate, PY_MONITORING_EVENT_PY_YIELD, frame, site,
+        PyValue_Borrow(val));
+    PyValue_CLOSE(val);
+    if (err) {
+        return -1;
+    }
+    if (frame->instr_ptr != site) {
+        frame->return_pc = frame->instr_ptr;
+        return 1;
+    }
+    return 0;
+}
+
 static inline bool
 _PyRop_GeneratorFrame(_PyInterpreterFrame *frame)
 {
@@ -2462,22 +2486,23 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
     _PyCodeExec *exec = code->_co_exec;
     if (exec->first_traceable > 1) {
         /* A generator expression: its code begins with RESUME, a bound
-         * LocalRead of the argument and GET_ITER or GET_AITER, before its
+         * LocalRead of the argument and GET_ITER, or AsyncIterOpen, before its
          * RETURN_GENERATOR, and nothing executes them.  The iterator, and for GET_ITER the
          * index, are the first two slots of the stack, where the loop reads
          * them: iter() of the outermost iterable runs here, at creation, as
          * the language requires, and the code takes any iterable as its
          * argument.  Its errors are those of the call. */
-        int handler = _PyIR_BaseOpcode(IR_HANDLER(exec->words[2]));
-        assert(IR_HANDLER(exec->words[1]) == ROP_HANDLER_LocalRead_Bound);
-        assert(handler == GET_ITER || handler == GET_AITER);
-        assert(IR_A(exec->words[2]) == exec->nfixed);
         PyValue *stack = frame->base + exec->nfixed;
         PyValue iterable = PyValue_DUP(frame->base[0]);
-        if (handler == GET_AITER) {
+        if (IR_HANDLER(exec->words[1]) == ROP_HANDLER_AsyncIterOpen_Open) {
+            // The register instruction reads the argument itself
+            assert(IR_A(exec->words[1]) == exec->nfixed);
             stack[0] = _PyEval_GetAIter(tstate, iterable);
         }
         else {
+            assert(IR_HANDLER(exec->words[1]) == ROP_HANDLER_LocalRead_Bound);
+            assert(_PyIR_BaseOpcode(IR_HANDLER(exec->words[2])) == GET_ITER);
+            assert(IR_A(exec->words[2]) == exec->nfixed);
             _PyValuePair got = _PyEval_GetIter(iterable, 0);
             stack[0] = got.first;
             stack[1] = got.second;
@@ -2495,7 +2520,7 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
 static inline Py_ALWAYS_INLINE int
 gen_prologue(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
 {
-    if (code->co_ncellvars == 0 && code->_co_exec->first_traceable == 1) {
+    if (code->co_ncellvars == 0 && code->_co_exec->first_traceable == 0) {
         return 0;
     }
     return gen_prologue_run(tstate, gen, code);
@@ -2833,6 +2858,33 @@ _PyRop_MakeCell(_PyInterpreterFrame *frame, PyValue *home)
         return PyValue_NULL;
     }
     return PyValue_FromObjectSteal(cell);
+}
+
+/* GET_AWAITABLE's protocol arm: the iterator of x, which is closed on both
+ * outcomes */
+PyValue
+_PyRop_GetAwaitable(PyValue x, uint32_t origin)
+{
+    PyObject *iter_o = _PyEval_GetAwaitable(x, (int)origin);
+    PyValue_CLOSE(x);
+    if (iter_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(iter_o);
+}
+
+/* GET_ANEXT: the awaitable of the next item of an iterator that GET_AITER
+ * accepted, which stays borrowed */
+PyValue
+_PyRop_GetANext(PyValue *aiter_home)
+{
+    PyValue aiter = PyValue_DUP(PyValue_Borrow(*aiter_home));
+    PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(PyValue_Borrow(aiter)));
+    PyValue_CLOSE(aiter);
+    if (awaitable_o == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(awaitable_o);
 }
 
 _PyStatusValue

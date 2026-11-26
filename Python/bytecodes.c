@@ -1201,39 +1201,29 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(GET_AITER, (obj: consumed -- iter: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: GET_AITER is the AsyncIterOpen family (Python/register_ops/suspend.rop). */
+        tier1 inst(GET_AITER, (obj: consumed -- iter: owned))
+            exits(abort)
         {
-            PyValue iterator = _PyEval_GetAIter(tstate, obj);
-            DEAD(obj);
-            ERROR_IF(PyValue_IsNull(iterator));
-            iter = iterator;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(GET_ANEXT,
-                (aiter: assumed(object) by GET_AITER -- aiter, awaitable: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: GET_ANEXT is the AsyncIterNext family (Python/register_ops/suspend.rop). */
+        tier1 inst(GET_ANEXT, (aiter: assumed(object) by GET_AITER -- aiter, awaitable: owned))
+            exits(abort)
         {
-            // GET_AITER accepted it: it has __anext__
-            PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
-            if (awaitable_o == NULL) {
-                ERROR_NO_POP();
-            }
-            awaitable = PyValue_FromObjectSteal(awaitable_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(GET_AWAITABLE, (iterable: consumed -- iter: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: GET_AWAITABLE is the Awaitable family (Python/register_ops/suspend.rop). */
+        tier1 inst(GET_AWAITABLE, (iterable: consumed -- iter: owned))
+            exits(abort)
         {
-            if (coro_awaitable_can_transfer(iterable)) {
-                iter = TAKE(iterable);
-            }
-            else {
-                PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
-                PyValue_CLOSE(iterable);
-                ERROR_IF(iter_o == NULL);
-                iter = PyValue_FromObjectSteal(iter_o);
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         family(SEND, INLINE_CACHE_ENTRIES_SEND) = {
@@ -1443,101 +1433,28 @@ dummy_func(
             _GUARD_3OS_ASYNC_GEN_ASEND +
             _SEND_ASYNC_GEN;
 
-        window op(_YIELD_VALUE, (retval: consumed -- value: moved(retval)))
-            effects(reads, writes, switches_frame) exits(yield)
+        /* Stack ops only: YIELD_VALUE and its instrumented form are the Yield
+         * and YieldFrom families (Python/register_ops/suspend.rop). */
+        tier1 inst(YIELD_VALUE, (retval: consumed -- value: owned))
+            exits(abort)
         {
-            // NOTE: It's important that YIELD_VALUE never raises an exception!
-            // The compiler treats any exception raised here as a failed close()
-            // or throw() call.
-            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-            frame->instr_ptr++;
-            PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
-            assert(FRAME_SUSPENDED_YIELD_FROM == FRAME_SUSPENDED + 1);
-            assert(oparg == 0 || oparg == 1);
-            PyValue temp = retval;
-            DEAD(retval);
-            SAVE_STACK();
-            DTRACE_FUNCTION_RETURN();
-            tstate->exc_info = gen->gi_exc_state.previous_item;
-            gen->gi_exc_state.previous_item = NULL;
-            _Py_LeaveRecursiveCallPy(tstate);
-            _PyInterpreterFrame *gen_frame = frame;
-            // The value sent in when the generator resumes takes the slot
-            // of the value it yields
-            gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
-            _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
-            frame = tstate->current_frame = frame->previous;
-            gen_frame->previous = NULL;
-            ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
-            FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
-            #ifdef Py_DEBUG
-            if (frame->f_executable != NULL) {
-                Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
-                assert(i >= 0 && i <= INT_MAX);
-                int opcode = _PyIR_BaseOpcode(
-                    _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
-                assert(opcode == SEND || opcode == FOR_ITER);
-            }
-            #endif
-            RELOAD_STACK();
-            next_instr = frame->return_pc;
-            value = temp;
-            LLTRACE_RESUME_FRAME();
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(YIELD_VALUE) =
-            _MAKE_HEAP_SAFE +
-            _YIELD_VALUE;
-
-        /* The variants *_XFER_<consumer> of the yields: the consumer that
-         * resumes the generator (a SEND, or the store of the sent value)
-         * runs fused with the resume.  They add no exit. */
-        boundary(YIELD_VALUE) at(last) resumes(SEND, STORE_LOCAL);
-
-        tier1 op(_YIELD_VALUE_EVENT, (val -- val))
-            effects(runs_python) exits(next, raise, redirect)
+        /* The observed form of YIELD_VALUE is the Observed arm of the Yield and
+         * YieldFrom families.  It is a macro, as it was, so that the instrumented
+         * opcodes keep their numbers. */
+        tier1 op(_YIELD_VALUE_OBSERVED, (retval: consumed -- value: owned))
+            exits(abort)
         {
-            int err = _Py_call_instrumentation_arg(
-                    tstate, PY_MONITORING_EVENT_PY_YIELD,
-                    frame, this_instr, val);
-            if (err) {
-                RELOAD_STACK();
-                ERROR_NO_POP();
-            }
-            if (frame->instr_ptr != this_instr) {
-                RELOAD_STACK();
-                DISPATCH_REDIRECT();
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(INSTRUMENTED_YIELD_VALUE) =
-            _YIELD_VALUE_EVENT +
-            _MAKE_HEAP_SAFE +
-            _YIELD_VALUE;
-
-        boundary(INSTRUMENTED_YIELD_VALUE) at(last) resumes(SEND, STORE_LOCAL);
-
-        // Contract (G0d1): retval moves into the caller's home through
-        // IR_SUSPEND_DELEGATED (ARGS(consumed); its row's effects; EXITS(yield));
-        // the outputs keep the homes of the inputs (`value` the home of retval).
-        ir_only no_fold op(_YIELD_DELEGATED,
-            (receiver, unused_cursor, retval: consumed
-             -- receiver, unused_cursor, value: moved(retval)))
-            effects(reads, writes, runs_python, switches_frame) exits(yield)
-        {
-            IR_METADATA_PASSTHROUGH(1);
-            PyValue outgoing = TAKE(retval);
-            IR_SUSPEND_DELEGATED(outgoing);
-        }
-
-        macro(YIELD_DELEGATED) = _YIELD_DELEGATED;
-
-        boundary(YIELD_DELEGATED) at(last) resumes(SEND, STORE_LOCAL);
-
-        macro(INSTRUMENTED_YIELD_DELEGATED) =
-            _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
-
-        boundary(INSTRUMENTED_YIELD_DELEGATED) at(last) resumes(SEND, STORE_LOCAL);
+        macro(INSTRUMENTED_YIELD_VALUE) = _YIELD_VALUE_OBSERVED;
 
         outlined inst(POP_EXCEPT, (exc_value: consumed assumed(object) by _PUSH_EXC_INFO -- ))
             effects(reads, releases) exits(next)
@@ -3759,15 +3676,14 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        // The marker at the start of a generator's code: nothing executes it,
-        // because a call creates the object (_PyGen_NewCall()) with its frame
-        // past this word.  The word stays for the first send's resume point,
-        // f_lasti and monitoring.
-        window inst(RETURN_GENERATOR, (-- res: inline null))
-            effects() exits(next)
+        /* A stack op only: the marker at the start of a generator's code.  A
+         * call creates the generator (_PyGen_NewCall()) with its frame at the
+         * entry RESUME, and the assembler emits no word for the marker. */
+        tier1 inst(RETURN_GENERATOR, (-- res: owned))
+            exits(abort)
         {
-            IR_GENERATOR_MARKER();
-            res = PyValue_NULL;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: BUILD_SLICE is the BuildSlice family (Python/register_ops/items.rop). */

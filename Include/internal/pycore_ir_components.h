@@ -2855,12 +2855,6 @@
      * local C struct that is neither heap nor a home; no failure, no \
      * callback.  Per-form macros cannot be one function */ \
     MACRO(IR_REPORT_EDGE, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
-    /* ir_generator.py generator_marker: emits Py_UNREACHABLE() after the \
-     * ownership event GENERATOR_MARKER.  No word executes \
-     * RETURN_GENERATOR: a call creates the generator in \
-     * _PyGen_NewCall (Objects/genobject.c) with its frame past this word. \
-     * No callee, no effect, no exit. */ \
-    MACRO(IR_GENERATOR_MARKER, ARGS(), NONE, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): ir_generator.py:3626: a marker that emits no code; it is accepted \
      * only when the word's metadata-only passthrough is certified (argument 1). */ \
     MACRO(IR_METADATA_PASSTHROUGH, ARGS(scalar), NONE, EFFECTS(), EXITS()) \

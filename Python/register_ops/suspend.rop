@@ -1,0 +1,223 @@
+// 2C: await, async iteration and yield (suspension).  Send comes with its
+// completion arms in a later step.
+
+enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
+
+// GET_AWAITABLE: the iterator that `await source` drives.  The origin says
+// which diagnostic a source that cannot be awaited gets.
+family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>)
+  exits(next, raise) ops(GET_AWAITABLE);
+
+point Awaitable.Done(current, next_head, clear) keep() spent(source) defs(dst);
+point Awaitable.Failed(current, site, pending) keep() spent(source) defs();
+
+// An exact coroutine that nobody awaits is its own awaitable: the source's
+// owner moves to dst
+extern helper awaitable_transfers(v:B) -> Bool
+  effects(reads)
+  c coro_awaitable_can_transfer as bool
+  evidence(
+    review: "ceval_macros.h coro_awaitable_can_transfer: the callback-free identity arm of"
+            "_PyEval_GetAwaitable.",
+    contract: "Reads the value and the coroutine's frame state; no memory, no failure.");
+
+// The iterator of an object that is not such a coroutine, by __await__
+extern helper get_awaitable(x:O, origin:Enum<AwaitOrigin>)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  c _PyRop_GetAwaitable as value_or_null
+  evidence(
+    review: "ceval.c _PyEval_GetAwaitable, as GET_AWAITABLE called it.",
+    contract: "x is consumed on both cases. The result is a new owner, or NULL with the"
+              "exception set. Callbacks: __await__ and what it reaches.");
+
+arm Awaitable.Await shared
+  effects(reads, allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    branch awaitable_transfers(use(source)) -> Transfer(), Protocol();
+  Transfer():
+    let v:O = acquire(source);
+    publish [dst = v] retire [old(dst)] at Awaitable.Done;
+    exit next();
+  Protocol():
+    let xo:O = acquire(source);
+    call get_awaitable(xo, origin) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at Awaitable.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(Awaitable.Failed, e);
+}
+
+// GET_AITER: the asynchronous iterator of the source, which is consumed
+family AsyncIterOpen(dst:Dst, source:Src)
+  exits(next, raise) ops(GET_AITER);
+
+point AsyncIterOpen.Done(current, next_head, clear) keep() spent(source) defs(dst);
+point AsyncIterOpen.Failed(current, site, pending) keep() spent(source) defs();
+
+extern helper get_aiter(t:Thread, x:O)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyEval_GetAIter as value_or_null
+  evidence(
+    review: "ceval.c _PyEval_GetAIter, as GET_AITER called it.",
+    contract: "x is consumed on both cases. The result is a new owner, or NULL with the"
+              "exception set. Callbacks: __aiter__.");
+
+arm AsyncIterOpen.Open shared
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(source);
+    call get_aiter(thread, xo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at AsyncIterOpen.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(AsyncIterOpen.Failed, e);
+}
+
+// GET_ANEXT: the awaitable of the next item; the iterator stays where it is
+family AsyncIterNext(dst:Dst, aiter:Src)
+  exits(next, raise) ops(GET_ANEXT);
+
+point AsyncIterNext.Done(current, next_head, clear) keep(aiter) spent() defs(dst);
+point AsyncIterNext.Failed(current, site, pending) keep(aiter) spent() defs();
+
+extern helper get_anext(aiter:Src)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_GetANext as value_or_null
+  evidence(
+    review: "ceval.c _PyEval_GetANext, as GET_ANEXT called it.",
+    contract: "Reads the home, which holds an object that GET_AITER accepted, and holds a count of it across the call, which runs Python. Nothing is spent. The result is a new owner. Callbacks: __anext__.");
+
+arm AsyncIterNext.Next shared
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call get_anext(aiter) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at AsyncIterNext.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(AsyncIterNext.Failed, e);
+}
+
+// YIELD_VALUE: a generator suspends and its value goes to its consumer.  The
+// exit is a frame exit that the evaluator's macro performs (`exit yield`):
+// the generator records its own resume slot and head, as an `enter` records
+// the caller's.  A delegation (`yield from`, `await`) is its own family: it
+// suspends in the SUSPENDED_YIELD_FROM state.  A word that the legacy SEND
+// runs after is unchanged: the sent value goes to `resume`, the SEND's value
+// home.
+
+family Yield(value:Src, resume:Dst)
+  exits(yield, raise, redirect) ops(YIELD_VALUE) events(PY_YIELD);
+
+family YieldFrom(value:Src, resume:Dst)
+  exits(yield, raise, redirect) ops(YIELD_VALUE) events(PY_YIELD);
+
+// The generator goes on here when it is resumed: the value sent in is resume
+point Yield.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
+point YieldFrom.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
+// The PY_YIELD callback raised: the generator has not suspended, the value
+// stays in its home
+point Yield.EventFailed(current, site, pending) keep(value) spent() defs();
+point YieldFrom.EventFailed(current, site, pending) keep(value) spent() defs();
+
+// The PY_YIELD event of an observed yield, which fires before the generator
+// suspends.  A callback may raise, or move the frame, whose return_pc then
+// names the word to run.  The value stays in its home.
+extern helper yield_event(t:Thread, f:Frame, at:Site, v:Src)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  requires(instrumented(at))
+  c _PyRop_YieldEvent as int_redirect
+  evidence(
+    review: "ceval.c _PyRop_YieldEvent: bytecodes.c _YIELD_VALUE_EVENT, the"
+            "_Py_call_instrumentation_arg call and the instr_ptr redirect test.",
+    contract: "Reads the home and holds a count of its value across the call, which runs"
+              "Python. A callback may raise or move the frame. Nothing is spent.");
+
+arm Yield.Ordinary split
+  effects(reads, writes, releases, switches_frame)
+  feedback()
+  exits(yield)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    exit yield(v) resume Yield.Resumed;
+}
+
+arm YieldFrom.Delegated split
+  effects(reads, writes, releases, switches_frame)
+  feedback()
+  exits(yield)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    exit yield(v) resume YieldFrom.Resumed;
+}
+
+// The observed twin of every Yield arm: the PY_YIELD event, then the yield
+arm Yield.Observed split observes
+  effects(reads, writes, releases, raises, runs_python, switches_frame)
+  feedback()
+  exits(yield, raise, redirect)
+{
+  entry():
+    call yield_event(thread, frame, site, value) {
+      ok -> Go();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Yield.EventFailed, e);
+  Moved(r:Route):
+    exit redirect(r);
+  Go():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    exit yield(v) resume Yield.Resumed;
+}
+
+arm YieldFrom.Observed split observes
+  effects(reads, writes, releases, raises, runs_python, switches_frame)
+  feedback()
+  exits(yield, raise, redirect)
+{
+  entry():
+    call yield_event(thread, frame, site, value) {
+      ok -> Go();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(YieldFrom.EventFailed, e);
+  Moved(r:Route):
+    exit redirect(r);
+  Go():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    exit yield(v) resume YieldFrom.Resumed;
+}

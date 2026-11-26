@@ -18,7 +18,6 @@
 GEN_STEP(GEN_ENTRY_EFFECT);
 GEN_STEP(GEN_REDIRECT_EFFECT);
 GEN_STEP(GEN_RESUME_EFFECT);
-GEN_STEP(GEN_SEND_INPUT_HOME);
 GEN_STEP(GEN_YIELD_INPUT_EFFECT);
 static Py_NO_INLINE _PyIRTransfer
 ir_GEN_COMPLETE_EFFECT(PyThreadState *tstate, _PyInterpreterFrame *frame,
@@ -39,16 +38,6 @@ enum {
     GEN_COMPLETE_FOR_ITER,
     GEN_THROWING = 16,
 };
-/* A resume by the word before the resume point: a YIELD whose resumer takes
- * the value in a SEND's window or in a STORE_FAST, or the SEND at the end of
- * its loop, which a generator or another iterator receives. */
-enum {
-    GEN_RESUME_SEND = 1,
-    GEN_RESUME_STORE,
-    GEN_SEND_INPUT,
-    GEN_SEND_INPUT_HOME,
-};
-
 #define IR_GEN_TABLES
 #include "ir_targets.h"
 #undef IR_GEN_TABLES
@@ -118,18 +107,6 @@ GEN_STEP(GEN_YIELD_INPUT_EFFECT)
     PyValue_XCLOSE(sent);
     frame = tstate->current_frame;
     next_instr = frame->instr_ptr;
-    GENERATOR_DISPATCH();
-}
-
-/* A private resumed input is not an ordinary handler ABI. Generic providers
- * and effects receive it once in their authoritative input home. */
-GEN_STEP(GEN_SEND_INPUT_HOME)
-{
-    PyValue result = generator_payload(ir_word);
-    int home = IR_B(*next_instr) + 2;
-    assert(PyValue_IsNull(frame->base[home]));
-    frame->base[home] = result;
-    _PyValue_CheckTemp(result);
     GENERATOR_DISPATCH();
 }
 

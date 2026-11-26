@@ -328,6 +328,8 @@ void _PyRop_UnboundCell(_PyInterpreterFrame *frame, PyValue *home);
 /* The binding taken out of the local into a new cell, or NULL with the
  * exception set (the binding is closed) */
 PyValue _PyRop_MakeCell(_PyInterpreterFrame *frame, PyValue *home);
+PyValue _PyRop_GetAwaitable(PyValue x, uint32_t origin);
+PyValue _PyRop_GetANext(PyValue *aiter_home);
 PyAPI_FUNC(_PyStatusValue) _PyRop_LoadFromDictCell(
     PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *);
 

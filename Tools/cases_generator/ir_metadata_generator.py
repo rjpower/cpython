@@ -64,10 +64,6 @@ def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP."""
     name = name.split("_XFER_", 1)[0]
-    if name == "YIELD_DELEGATED":
-        return "YIELD_VALUE"
-    if name == "INSTRUMENTED_YIELD_DELEGATED":
-        return "INSTRUMENTED_YIELD_VALUE"
     if name in binary_op_handlers(analysis):
         return BINARY_OP_FAMILY
     # An IR-only member of a real family (LOAD_ATTR_GETSET) stands for the

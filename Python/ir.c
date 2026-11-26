@@ -284,33 +284,8 @@ _PyIR_GeneratorBoundaryCandidate(const _PyIRWord *words, int nwords, int nl,
             return -1;
         }
         if (event->flags & _PyIR_COMPLETION_SEND_YIELDED) {
-            if (pc + 1 >= nwords || event->src != 3 || event->extent != 2 ||
-                !generator_is(words[pc + 1], YIELD_DELEGATED) ||
-                IR_D(words[pc + 1]) != IR_B(word) ||
-                IR_B(words[pc + 1]) != IR_B(word) + event->extent)
-            {
-                return -1;
-            }
-            int consumer;
-            if (generator_resume_shape(words, nwords, nl, pc + 1, &consumer) !=
-                    _PyIR_GEN_CONSUMER_SEND || consumer != pc)
-            {
-                return -1;
-            }
-            yielded = _PyIR_GEN_CONSUMER_DELEGATED;
-        }
-    }
-    else if (generator_is(word, YIELD_VALUE) ||
-             generator_is(word, YIELD_DELEGATED))
-    {
-        int consumer;
-        resume = generator_resume_shape(words, nwords, nl, pc, &consumer);
-        if (resume == _PyIR_GEN_CONSUMER_NONE ||
-            (generator_is(word, YIELD_DELEGATED) &&
-             (resume != _PyIR_GEN_CONSUMER_SEND || consumer != pc - 1)) ||
-            (!generator_is(word, YIELD_DELEGATED) &&
-             resume != _PyIR_GEN_CONSUMER_STORE_LOCAL))
-        {
+            // The yield that follows a SEND is a YieldFrom word, which has no
+            // boundary form to fuse with
             return -1;
         }
     }
@@ -763,14 +738,6 @@ ordinary_handler_for(int handler, int opcode)
         // instrumented opcode to its stack op.
         return fmt->twin;
     }
-    if (handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) {
-        if (opcode == YIELD_VALUE) {
-            return YIELD_DELEGATED;
-        }
-        if (opcode == INSTRUMENTED_YIELD_VALUE) {
-            return INSTRUMENTED_YIELD_DELEGATED;
-        }
-    }
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
@@ -1182,23 +1149,22 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
     PyCodeObject *co = frame->f_executable;
     _PyIRWord word = _PyCode_IRWords(co)[continuation - 1];
     int handler = IR_HANDLER(word);
-    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
-    if (boundary == NULL) {
+    if (handler != ROP_HANDLER_YieldFrom_Delegated &&
+        handler != ROP_HANDLER_YieldFrom_Delegated_Observed &&
+        handler != ROP_HANDLER_YieldFrom_Observed)
+    {
         return -1;
     }
-    handler = boundary->ordinary;
-    if (handler != YIELD_DELEGATED && handler != INSTRUMENTED_YIELD_DELEGATED) {
-        return -1;
-    }
-    int dst = (int)IR_A(word), outgoing = (int)IR_B(word), receiver = (int)IR_D(word);
+    // The word's value (A) and the sent value (B) are the value home of the
+    // SEND's window, which the receiver precedes by the cursor
+    int outgoing = (int)IR_A(word), dst = (int)IR_B(word);
     if (dst == IR_NO_DST) {
         dst = _PyFrame_DiscardSlotForCodeObject(co);
     }
-    if (dst != frame->return_slot ||
-        outgoing < _PyCode_IRFixed(co) || outgoing >= _PyFrame_NumSlotsForCodeObject(co) ||
+    int receiver = dst - 2;
+    if (dst != frame->return_slot || outgoing != dst ||
         receiver < _PyCode_IRFixed(co) ||
-        receiver >= _PyFrame_NumSlotsForCodeObject(co) ||
-        receiver == dst || receiver == outgoing)
+        dst >= _PyFrame_NumSlotsForCodeObject(co))
     {
         return -1;
     }

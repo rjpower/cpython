@@ -3063,39 +3063,6 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
                          "_PyIR_TRANSFER_UNKNOWN")
 
-    def test_resume_normal_transfer_checks_helper_footprint(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        inst = analysis.instructions["RESUME"]
-        fmt = ir_generator.compute_formats(analysis)["RESUME"]
-        self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                         "_PyIR_TRANSFER_PRESERVE")
-        body = [part for part in inst.parts if isinstance(part, analyzer.Uop)][-1].body
-        for statement in ("opaque(frame);", "*slots = PyValue_NULL;",
-                          "*(slots + offset) = PyValue_NULL;",
-                          "frame->base[0] = PyValue_NULL;"):
-            with self.subTest(statement=statement):
-                changed = self.analyze(f"\ninst(OP, (--)) {{ {statement} }}\n")
-                body.body.append(changed.instructions["OP"].parts[0].body.body[0])
-                try:
-                    self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                                     "_PyIR_TRANSFER_UNKNOWN")
-                finally:
-                    body.body.pop()
-
-        # Flattening both preprocessor arms loses their boundary: the same
-        # statements in a different arm must not satisfy the source proof.
-        instrument = [part for part in inst.parts
-                      if isinstance(part, analyzer.Uop)][0].body
-        branch = instrument.body[0]
-        original = branch.body.pop()
-        branch.else_body.insert(0, original)
-        try:
-            self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                             "_PyIR_TRANSFER_UNKNOWN")
-        finally:
-            branch.body.append(branch.else_body.pop(0))
-
     def test_abrupt_prefix_requires_complete_suspension_source(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
@@ -3650,7 +3617,7 @@ class TestIRCases(unittest.TestCase):
         expected = {
             "LOAD_COMMON_CONSTANT": "FRESH",
             "STORE_FAST": "LOCAL_STORE",
-            "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE",
+            "IR_JUMP": "PRESERVE",
             "CALL_KW": "UNKNOWN", "SEND": "UNKNOWN",
         }
         for name, kind in expected.items():

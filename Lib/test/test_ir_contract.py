@@ -122,7 +122,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 4), set_null)
         self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 5), set_null)
         self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 6), preserve)
-        self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 4), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 4), preserve)
         self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 5), unknown)
         self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 6), unknown)
         self.assertEqual(transfer("ForIter.Generic", for_iter, 0, 7), preserve)

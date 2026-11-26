@@ -172,10 +172,6 @@ _PyIR_HomeAfter(const _PyIRHomes *v, int edge, int home)
             continue;
         }
         int code = _PyIR_HomeCode(v->fmt, edge, h);
-        /* A source the points keep is not yet taken to stay in place */
-        if (code == _PyIR_HOME_PRESERVE && (v->read & (1u << h))) {
-            code = _PyIR_HOME_UNKNOWN;
-        }
         if (state < 0 || code == _PyIR_HOME_DEFINE) {
             state = code;
         }

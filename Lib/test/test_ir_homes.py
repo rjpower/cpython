@@ -86,7 +86,8 @@ class EdgeHomesTests(unittest.TestCase):
         for home in range(nl, nl + len(physical)):
             if home not in named:
                 self.assertEqual(physical[home - nl], PRESERVE, home)
-        self.assertEqual(physical[pair - nl], UNKNOWN)
+        # The step keeps the receiver in its home (a kept source)
+        self.assertEqual(physical[pair - nl], PRESERVE)
         nl, physical, _ = edge_homes(code, index, TAKEN)
         self.assertEqual(physical[pair - nl], SET_NULL)
         self.assertEqual(physical[pair + 1 - nl], SET_NULL)

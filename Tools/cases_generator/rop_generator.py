@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import TextIO
 
 import ir_arms
-import jit_template_generator
+import jit_backend
 import rop_check
 import rop_leaf
 import rop_verify
@@ -589,7 +589,6 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         reads, through)
 
 
-
 # The exits that end the word abnormally: they carry no normal-edge contract
 ABNORMAL_EXITS = frozenset({"raise", "unwind", "redirect"})
 
@@ -691,7 +690,7 @@ def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
         try:
             leaf = rop_leaf.leaf_of_arm(p.program, arm)
             lines = rop_leaf.template_of_arm(p.program, arm, c_name(name), leaf)
-        except (Unsupported, SsaError, jit_template_generator.Refused) as e:
+        except (Unsupported, SsaError, jit_backend.Refused) as e:
             refused[name] = str(e)
             continue
         made[name] = ["// The leaf graph of " + name + ":"] + [

@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import rop_primitives
-import jit_template_generator as jt
+import jit_backend
 from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLayout,
                          CSource, CTest, DebtKind, Fact, FieldKind, Handle, Scalar,
                          Schema, SchemaCtor, Wrap)
@@ -1034,9 +1034,9 @@ class TemplateBuilder:
         self.program = program
         self.arm = arm
         self.leaf = leaf
-        self.g = jt.Graph()
-        self.raises: jt.TBlock | None = None
-        self.deopt: jt.TBlock | None = None
+        self.g = jit_backend.Graph()
+        self.raises: jit_backend.TBlock | None = None
+        self.deopt: jit_backend.TBlock | None = None
         self.homes: dict[str, Home] = {}
         enc = program.encodings[arm.family]
         for p in enc.placements:
@@ -1054,15 +1054,15 @@ class TemplateBuilder:
             self.deopt.term = ("deopt",)
         return self.deopt.id
 
-    def build(self) -> jt.Graph:
+    def build(self) -> jit_backend.Graph:
         g, body = self.g, self.leaf.body
         entry = g.blocks[g.entry]
         views: dict[str, int] = {}
         for name in self.leaf.inputs:
             if name not in self.homes:
-                raise jt.Refused(f"{name} is not a home of the head")
+                raise jit_backend.Refused(f"{name} is not a home of the head")
             views[name] = g.value(rop_primitives.VALUE)
-            entry.ops.append(jt.TOp("view", [views[name]], [], self.homes[name].field))
+            entry.ops.append(jit_backend.TOp("view", [views[name]], [], self.homes[name].field))
         lmap: dict[int, int] = {}
         bmap = {}
         for b in body.blocks:
@@ -1075,7 +1075,7 @@ class TemplateBuilder:
         # A word that can branch ends on the flag that says whether it did
         branches = any(b.term[0] == "branch" for b in body.blocks)
         if any(b.term[0] == "jump" for b in body.blocks) and self.leaf.plan is not None:
-            raise jt.Refused("a jump after a publication")
+            raise jit_backend.Refused("a jump after a publication")
         merge = g.new_block([rop_primitives.VALUE for _ in outs]
                             + (["bool"] if branches else []))
         for b in body.blocks:
@@ -1097,7 +1097,7 @@ class TemplateBuilder:
                 args = [published[o] for o in outs]
                 if branches:
                     flag = g.value("bool")
-                    gb.ops.append(jt.TOp("const", [flag], [], int(term[0] == "branch")))
+                    gb.ops.append(jit_backend.TOp("const", [flag], [], int(term[0] == "branch")))
                     args.append(flag)
                 gb.term = ("jmp", merge.id, args)
             elif term[0] == "jump":
@@ -1140,12 +1140,12 @@ class TemplateBuilder:
             gb.term = ("br", args[0], self.exit_block("raise" if k == "raise_if" else "deopt"),
                        cont.id)
             return cont
-        if k == "prim" and op.attr not in jt.LOWERINGS:
-            raise jt.Refused(f"no lowering of {op.attr}")
-        gb.ops.append(jt.TOp(k, results, args, op.attr))
+        if k == "prim" and op.attr not in jit_backend.LOWERINGS:
+            raise jit_backend.Refused(f"no lowering of {op.attr}")
+        gb.ops.append(jit_backend.TOp(k, results, args, op.attr))
         return gb
 
-    def epilogue(self, merge: jt.TBlock, views: dict[str, int],
+    def epilogue(self, merge: jit_backend.TBlock, views: dict[str, int],
                  branches: bool = False) -> None:
         """The publication by home class: move the acquired owners, detach
         the spent temporaries (in operand order: a detach is a store of NULL,
@@ -1153,15 +1153,15 @@ class TemplateBuilder:
         then close in the declared retire order"""
         plan = self.leaf.plan
         if plan is None:
-            raise jt.Refused("an arm that publishes nothing")
+            raise jit_backend.Refused("an arm that publishes nothing")
         g = self.g
         order = list(self.homes)
         for name in self.leaf.acquired:
             # The owner moves out of a temporary; a local keeps its own, and
             # the arm takes a count of its own
             home = self.homes[name]
-            merge.ops.append(jt.TOp("detach", [], [], home.field, jt.temp_test(home)))
-            merge.ops.append(jt.TOp("take", [], [views[name]], None, jt.local_test(home)))
+            merge.ops.append(jit_backend.TOp("detach", [], [], home.field, jit_backend.temp_test(home)))
+            merge.ops.append(jit_backend.TOp("take", [], [views[name]], None, jit_backend.local_test(home)))
         owners: dict[str, int] = {}
         taken = sorted((s.home for s in plan.steps if s.op == "take"), key=order.index)
         for name in taken:
@@ -1172,35 +1172,35 @@ class TemplateBuilder:
                 v = views.get(name)
                 if v is None:
                     v = g.value(rop_primitives.VALUE)
-                    merge.ops.append(jt.TOp("slot_load", [v], [], home.field,
-                                            jt.temp_test(home)))
+                    merge.ops.append(jit_backend.TOp("slot_load", [v], [], home.field,
+                                            jit_backend.temp_test(home)))
                 owners[name] = v
-            merge.ops.append(jt.TOp("detach", [], [], home.field, jt.temp_test(home)))
+            merge.ops.append(jit_backend.TOp("detach", [], [], home.field, jit_backend.temp_test(home)))
         olds: dict[str, int] = {}
         stores = [s.home for s in plan.steps if s.op == "store"]
         for s in plan.steps:
             if s.op == "old":
                 dst = self.homes[s.home]
                 olds[s.home] = g.value(rop_primitives.VALUE)
-                merge.ops.append(jt.TOp("slot_load", [olds[s.home]], [], dst.field,
-                                        jt.local_test(dst)))
+                merge.ops.append(jit_backend.TOp("slot_load", [olds[s.home]], [], dst.field,
+                                        jit_backend.local_test(dst)))
             elif s.op == "store":
-                merge.ops.append(jt.TOp("slot_store", [], [merge.params[stores.index(s.home)]],
+                merge.ops.append(jit_backend.TOp("slot_store", [], [merge.params[stores.index(s.home)]],
                                         self.homes[s.home].field))
         for s in plan.steps:
             if s.op != "release":
                 continue
             home = self.homes[s.home]
             if s.kind is DebtKind.spent and s.home in owners:
-                merge.ops.append(jt.TOp("prim", [], [owners[s.home]], "PyValue_XCLOSE",
-                                        jt.temp_test(home)))
+                merge.ops.append(jit_backend.TOp("prim", [], [owners[s.home]], "PyValue_XCLOSE",
+                                        jit_backend.temp_test(home)))
             elif s.kind is DebtKind.old:
-                merge.ops.append(jt.TOp("prim", [], [olds[s.home]], "PyValue_XCLOSE",
-                                        jt.local_test(home)))
+                merge.ops.append(jit_backend.TOp("prim", [], [olds[s.home]], "PyValue_XCLOSE",
+                                        jit_backend.local_test(home)))
         merge.term = ("end", merge.params[-1] if branches else None)
 
 
-def entry_decl(program: Program, arm: Arm, leaf: ArmLeaf) -> "jt.FbEntry | None":
+def entry_decl(program: Program, arm: Arm, leaf: ArmLeaf) -> "jit_backend.FbEntry | None":
     "The feedback entry that the template reads, from the family's fb operand"
     if leaf.entry is None:
         return None
@@ -1209,17 +1209,17 @@ def entry_decl(program: Program, arm: Arm, leaf: ArmLeaf) -> "jt.FbEntry | None"
             continue
         slot = p.slots[0]
         if slot.word == 0:
-            return jt.FbEntry(leaf.entry, f"IR_{slot.name}(ir_word)")
+            return jit_backend.FbEntry(leaf.entry, f"IR_{slot.name}(ir_word)")
         # A field of an operand word, read when the template is emitted
-        return jt.FbEntry(leaf.entry,
+        return jit_backend.FbEntry(leaf.entry,
                           f"((uint32_t)(cx->words[cx->index + {slot.word}] >> "
                           f"{slot.offset - 64 * slot.word}) & {(1 << slot.width) - 1:#x})")
     raise Unsupported(f"{arm.name}: the feedback operand is not one field")
 
 
-def template_graph(program: Program, arm: Arm, leaf: ArmLeaf) -> jt.Graph:
+def template_graph(program: Program, arm: Arm, leaf: ArmLeaf) -> jit_backend.Graph:
     g = TemplateBuilder(program, arm, leaf).build()
-    jt.simplify(g)
+    jit_backend.simplify(g)
     return g
 
 
@@ -1228,4 +1228,4 @@ def template_of_arm(program: Program, arm: Arm, name: str,
     """The lines of the arm's `jit_template_NAME`"""
     leaf = leaf or leaf_of_arm(program, arm)
     g = template_graph(program, arm, leaf)
-    return jt.Emitter(name, g, entry_decl(program, arm, leaf)).emit()
+    return jit_backend.Emitter(name, g, entry_decl(program, arm, leaf)).emit()

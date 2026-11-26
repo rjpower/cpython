@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import sysconfig
 import unittest
 from pathlib import Path
 
@@ -34,6 +35,9 @@ def run(*argv: str) -> str:
 class InlineRowBinaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if sysconfig.get_config_var("Py_DEBUG"):
+            raise unittest.SkipTest(
+                "a Py_DEBUG build does not optimize, so it inlines no row")
         cls.symbols = inline_symbols()
         # (address, size, name) of each text symbol
         cls.text = run("nm", "-S", sys.executable)

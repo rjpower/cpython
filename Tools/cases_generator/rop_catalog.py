@@ -86,20 +86,24 @@ class Handle(enum.Enum):
     Stamp = "Stamp"
 
 
+@dataclass(frozen=True)
+class HomePart:
+    """One projection of a home group.  index: its declared type admits a
+    tagged index (a loop's cursor is "a tagged index or nothing"), so a store
+    to it is checked as a temporary."""
+    name: str
+    index: bool = False
+
+
 # Home groups: one home field naming a run of adjacent temporaries, which
 # the translator keeps for the life of the loop.  Projection i, `g.p`, is
 # the home at the field plus i.
-HOME_GROUPS = {
-    Handle.IterPair: ("receiver", "cursor"),
-    Handle.SendWindow: ("receiver", "cursor", "value"),
+HOME_GROUP_PARTS = {
+    Handle.IterPair: (HomePart("receiver"), HomePart("cursor", index=True)),
+    Handle.SendWindow: (HomePart("receiver"), HomePart("cursor", index=True),
+                        HomePart("value")),
 }
-
-# The projections whose declared type admits a tagged index (a loop's cursor
-# is "a tagged index or nothing"); a store to one is checked as a temporary
-INDEX_PARTS = frozenset({
-    (Handle.IterPair, "cursor"),
-    (Handle.SendWindow, "cursor"),
-})
+HOME_GROUPS = {h: tuple(p.name for p in ps) for h, ps in HOME_GROUP_PARTS.items()}
 
 
 class Wrap(enum.Enum):

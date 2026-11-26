@@ -1504,8 +1504,12 @@ class TestSpecializer(TestBase):
         binary_op_add_extend()
         # Float arithmetic takes an int operand.
         if int_producers:
-            for opname in ("Add.Float", "Binary.Float"):
-                self.assert_specialized(binary_op_add_extend, opname)
+            self.assert_specialized(binary_op_add_extend, "Add.Float")
+            # Binary.Float has an arm per operator
+            for op in ("NB_SUBTRACT", "NB_MULTIPLY", "NB_TRUE_DIVIDE", "NB_INPLACE_ADD",
+                       "NB_INPLACE_SUBTRACT", "NB_INPLACE_MULTIPLY",
+                       "NB_INPLACE_TRUE_DIVIDE"):
+                self.assert_specialized(binary_op_add_extend, f"Binary.Float_{op}")
         self.assert_no_opcode(binary_op_add_extend, "Binary.Extended")
 
         def binary_op_add_extend_sequences():

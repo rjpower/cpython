@@ -892,10 +892,13 @@ class ArmLowerer:
             members = self.program.member_sets.get(arm.name)
             if members is None:
                 return "ROP_HANDLER_" + arm.name.replace(".", "_")
-            # The member arm for this word's operand
-            if members.family != self.arm.family:
-                raise Unsupported(f"{self.arm.name}: candidate({arm.name}) names the "
-                                  f"member arms of another family")
+            # The member arm for this word's operand, which a word of another
+            # family that installs the arm (AppendText's Binary arms) holds too
+            mine = next((p.type for p in self.family.params if p.name == members.operand),
+                        None)
+            if mine != EnumType(members.enum):
+                raise Unsupported(f"{self.arm.name}: candidate({arm.name}) needs the "
+                                  f"operand {members.operand}:Enum<{members.enum}>")
             table = "_PyRop_Members_" + arm.name.replace(".", "_")
             return f"{table}[{self.operand_value(members.operand)}]"
         x = self.program.externs.get(e.callee)

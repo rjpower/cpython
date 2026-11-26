@@ -2410,7 +2410,7 @@
             }
             goto rop_Binary_Generic_adapt_before_use_binary2_TryText;
             rop_Binary_Generic_adapt_before_use_binary2_ChosenFloat:
-            adapt_before_use_binary2_cf = ROP_HANDLER_Binary_Float;
+            adapt_before_use_binary2_cf = _PyRop_Members_Binary_Float[(uint32_t)IR_D(ir_word)];
             ret3 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary2_cf);
             if (ret3 > 0) {
                 goto rop_Binary_Generic_adapt_before_use_binary2_Changed;
@@ -2561,7 +2561,7 @@
             }
             goto rop_AppendText_Generic_adapt_before_use_append2_TryText;
             rop_AppendText_Generic_adapt_before_use_append2_ChosenFloat:
-            adapt_before_use_append2_cf = ROP_HANDLER_Binary_Float;
+            adapt_before_use_append2_cf = _PyRop_Members_Binary_Float[(uint32_t)IR_D(ir_word)];
             ret3 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_append2_cf);
             if (ret3 > 0) {
                 goto rop_AppendText_Generic_adapt_before_use_append2_Changed;
@@ -10074,22 +10074,23 @@
             PROCESS_ERROR_AT(RAISE, 21, this_instr);
         }
 
-        TARGET(Binary_Float) {
-            // Binary.Float (shared)
-            int opcode = ROP_HANDLER_Binary_Float;
+        TARGET(Binary_Float_NB_INPLACE_ADD) {
+            // Binary.Float_NB_INPLACE_ADD (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_ADD;
             (void)opcode;
             _PyIRWord *const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 2;
-            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float);
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_ADD);
             PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
             PyValueBorrow l;
             PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
             PyValueBorrow r;
             double a;
             double b;
+            double v;
             PyValue ret1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
@@ -10101,12 +10102,13 @@
             }
             a = PyValue_NumberAsDouble(l);
             b = PyValue_NumberAsDouble(r);
-            if (!_PyRop_FloatOpAdmits((uint32_t)IR_D(ir_word), b)) {
+            v = _PyRop_FloatValue(NB_INPLACE_ADD, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_INPLACE_ADD, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = _PyRop_FloatBinary((uint32_t)IR_D(ir_word), a, b);
+            ret1 = PyValue_FromDouble(v);
             if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_Failed;
+                goto rop_Binary_Float_NB_INPLACE_ADD_Failed;
             }
             z = ret1;
             if (!(ir_word & IR_F_LOCAL_B)) {
@@ -10120,7 +10122,423 @@
             _PyValue_CheckHome(*home_dst);
             PyValue_XCLOSE(old_dst);
             DISPATCH();
-            rop_Binary_Float_Failed:
+            rop_Binary_Float_NB_INPLACE_ADD_Failed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+        }
+
+        TARGET(Binary_Float_NB_SUBTRACT) {
+            // Binary.Float_NB_SUBTRACT (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_SUBTRACT;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_SUBTRACT);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            double a;
+            double b;
+            double v;
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            v = _PyRop_FloatValue(NB_SUBTRACT, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_SUBTRACT, a, b, v)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = PyValue_FromDouble(v);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Binary_Float_NB_SUBTRACT_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Binary_Float_NB_SUBTRACT_Failed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+        }
+
+        TARGET(Binary_Float_NB_INPLACE_SUBTRACT) {
+            // Binary.Float_NB_INPLACE_SUBTRACT (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_SUBTRACT;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_SUBTRACT);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            double a;
+            double b;
+            double v;
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            v = _PyRop_FloatValue(NB_INPLACE_SUBTRACT, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_INPLACE_SUBTRACT, a, b, v)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = PyValue_FromDouble(v);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Binary_Float_NB_INPLACE_SUBTRACT_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Binary_Float_NB_INPLACE_SUBTRACT_Failed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+        }
+
+        TARGET(Binary_Float_NB_MULTIPLY) {
+            // Binary.Float_NB_MULTIPLY (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_MULTIPLY;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_MULTIPLY);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            double a;
+            double b;
+            double v;
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            v = _PyRop_FloatValue(NB_MULTIPLY, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_MULTIPLY, a, b, v)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = PyValue_FromDouble(v);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Binary_Float_NB_MULTIPLY_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Binary_Float_NB_MULTIPLY_Failed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+        }
+
+        TARGET(Binary_Float_NB_INPLACE_MULTIPLY) {
+            // Binary.Float_NB_INPLACE_MULTIPLY (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_MULTIPLY;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_MULTIPLY);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            double a;
+            double b;
+            double v;
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            v = _PyRop_FloatValue(NB_INPLACE_MULTIPLY, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_INPLACE_MULTIPLY, a, b, v)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = PyValue_FromDouble(v);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Binary_Float_NB_INPLACE_MULTIPLY_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Binary_Float_NB_INPLACE_MULTIPLY_Failed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+        }
+
+        TARGET(Binary_Float_NB_TRUE_DIVIDE) {
+            // Binary.Float_NB_TRUE_DIVIDE (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_TRUE_DIVIDE;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_TRUE_DIVIDE);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            double a;
+            double b;
+            double v;
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            v = _PyRop_FloatValue(NB_TRUE_DIVIDE, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_TRUE_DIVIDE, a, b, v)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = PyValue_FromDouble(v);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Binary_Float_NB_TRUE_DIVIDE_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Binary_Float_NB_TRUE_DIVIDE_Failed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+        }
+
+        TARGET(Binary_Float_NB_INPLACE_TRUE_DIVIDE) {
+            // Binary.Float_NB_INPLACE_TRUE_DIVIDE (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_TRUE_DIVIDE;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_TRUE_DIVIDE);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            double a;
+            double b;
+            double v;
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            v = _PyRop_FloatValue(NB_INPLACE_TRUE_DIVIDE, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_INPLACE_TRUE_DIVIDE, a, b, v)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = PyValue_FromDouble(v);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Failed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+        }
+
+        TARGET(Binary_Float_NB_POWER) {
+            // Binary.Float_NB_POWER (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_POWER;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_POWER);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            double a;
+            double b;
+            double v;
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            v = _PyRop_FloatValue(NB_POWER, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_POWER, a, b, v)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = PyValue_FromDouble(v);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Binary_Float_NB_POWER_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Binary_Float_NB_POWER_Failed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+        }
+
+        TARGET(Binary_Float_NB_INPLACE_POWER) {
+            // Binary.Float_NB_INPLACE_POWER (shared)
+            int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_POWER;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_POWER);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            double a;
+            double b;
+            double v;
+            PyValue ret1;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            a = PyValue_NumberAsDouble(l);
+            b = PyValue_NumberAsDouble(r);
+            v = _PyRop_FloatValue(NB_INPLACE_POWER, a, b);
+            if (!_PyRop_FloatOpAdmits(NB_INPLACE_POWER, a, b, v)) {
+                JUMP_TO_PREDICTED(Binary_Generic);
+            }
+            ret1 = PyValue_FromDouble(v);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Binary_Float_NB_INPLACE_POWER_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Binary_Float_NB_INPLACE_POWER_Failed:
             PROCESS_ERROR_AT(RAISE, 21, this_instr);
         }
 

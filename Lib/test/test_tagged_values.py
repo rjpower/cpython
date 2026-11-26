@@ -791,7 +791,8 @@ class InlineFloatTest(unittest.TestCase):
             return total, total < 1e300
         warm(f, 3)
         names = opnames(f)
-        for name in existing("Const.Pool", "Add.Float", "Binary.Float"):
+        for name in existing("Const.Pool", "Add.Float", "Binary.Float_NB_MULTIPLY",
+                             "Binary.Float_NB_SUBTRACT", "Binary.Float_NB_TRUE_DIVIDE"):
             self.assertIn(name, names)
         self.assertIn("Add.Float", handler_names(f))
         self.assertNotIn("Binary.Extended", names)
@@ -948,7 +949,7 @@ class InlineFloatTest(unittest.TestCase):
             1 / 0
         with self.assertRaises(ZeroDivisionError):
             1.0 / 0.0
-        self.assertIn("Binary.Float", opnames(div))
+        self.assertIn("Binary.Float_NB_TRUE_DIVIDE", opnames(div))
         self.assertEqual(div(1e308, 1e-308), math.inf)
 
     def test_float_subclass(self):

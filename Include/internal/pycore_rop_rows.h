@@ -412,8 +412,35 @@ _PyRop_IntBinary(uint32_t op, int64_t a, int64_t b)
     }
 }
 
+static inline double
+_PyRop_FloatValue(uint32_t op, double x, double y)
+{
+    switch (op) {
+        case NB_INPLACE_ADD:
+            return x + y;
+        case NB_MULTIPLY:
+        case NB_INPLACE_MULTIPLY:
+            return x * y;
+        case NB_SUBTRACT:
+        case NB_INPLACE_SUBTRACT:
+            return x - y;
+        case NB_TRUE_DIVIDE:
+        case NB_INPLACE_TRUE_DIVIDE:
+            return x / y;
+        case NB_POWER:
+        case NB_INPLACE_POWER:
+            return pow(x, y);
+        default:
+            return 0.0;
+    }
+}
+
+/* float_pow returns pow(x, y) itself for a positive finite base and a finite
+ * exponent unless the result overflows (OverflowError) or underflows to a
+ * nonzero subnormal, where errno decides; every other case is special-cased
+ * there or raises, and is the generic arm's. */
 static inline bool
-_PyRop_FloatOpAdmits(uint32_t op, double y)
+_PyRop_FloatOpAdmits(uint32_t op, double x, double y, double z)
 {
     switch (op) {
         case NB_INPLACE_ADD:
@@ -425,6 +452,10 @@ _PyRop_FloatOpAdmits(uint32_t op, double y)
         case NB_TRUE_DIVIDE:
         case NB_INPLACE_TRUE_DIVIDE:
             return y != 0.0;
+        case NB_POWER:
+        case NB_INPLACE_POWER:
+            return x > 0.0 && isfinite(x) && isfinite(y)
+                   && (z == 0.0 || isnormal(z));
         default:
             return false;
     }
@@ -434,28 +465,8 @@ static inline bool
 _PyRop_FloatBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
 {
     double x, y;
-    return PyValue_FloatOperandValues(a, b, &x, &y) && _PyRop_FloatOpAdmits(op, y);
-}
-
-static inline PyValue
-_PyRop_FloatBinary(uint32_t op, double x, double y)
-{
-    assert(_PyRop_FloatOpAdmits(op, y));
-    switch (op) {
-        case NB_INPLACE_ADD:
-            return PyValue_FromDouble(x + y);
-        case NB_MULTIPLY:
-        case NB_INPLACE_MULTIPLY:
-            return PyValue_FromDouble(x * y);
-        case NB_SUBTRACT:
-        case NB_INPLACE_SUBTRACT:
-            return PyValue_FromDouble(x - y);
-        case NB_TRUE_DIVIDE:
-        case NB_INPLACE_TRUE_DIVIDE:
-            return PyValue_FromDouble(x / y);
-        default:
-            Py_UNREACHABLE();
-    }
+    return PyValue_FloatOperandValues(a, b, &x, &y)
+           && _PyRop_FloatOpAdmits(op, x, y, _PyRop_FloatValue(op, x, y));
 }
 
 /* Text: only the in-place add of two exact strings reaches Binary; the

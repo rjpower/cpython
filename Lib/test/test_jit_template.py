@@ -1,6 +1,6 @@
 """The baseline JIT's inline templates: the primitive lowerings
 (Python/jit_lower.c) against their C definitions, and each template
-(Python/jit_templates.c.h) against its handler's function form on one word
+(Python/generated_rop_templates.c.h) against its handler's function form on one word
 of a frame."""
 
 import contextlib

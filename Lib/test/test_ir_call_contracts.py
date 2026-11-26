@@ -1,4 +1,4 @@
-"""The call, return and raise rows of pycore_ir_components.h, as the
+"""The call, return and raise rows of Python/register_ops, as the
 language shows them (G0c batch 6).
 
 Each test holds a claim that a declared uop relies on:

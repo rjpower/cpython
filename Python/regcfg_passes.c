@@ -76,9 +76,8 @@ for_each_region_backward(_PyRegCfg *cfg, int (*fn)(_PyRegCfg *, int, int))
  * between may change the local.  A pending load dies at a write to the
  * local, and at an op that may run Python code, which may rebind it
  * through frame.f_locals (_PyIR_MayRunPython()): a call, a generic
- * LOAD_GLOBAL or LOAD_ATTR, a binary op, anything whose family the
- * generator marks _PyIR_RUNS_CODE (Tools/cases_generator/ir_generator.py,
- * runs_code()), and a write that releases the old value of a local.  The
+ * LOAD_GLOBAL or LOAD_ATTR, a binary op, anything whose family
+ * declares _PyIR_RUNS_CODE, and a write that releases the old value of a local.  The
  * verifier checks the same rule (check_folded_load() in
  * Python/regcfg.c).  The load may sit
  * under constants, other locals, cells and the like.  A load also keeps its

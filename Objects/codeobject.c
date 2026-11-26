@@ -3294,7 +3294,7 @@ PyCode_GetFreevars(PyCodeObject *code)
 
 
 // We may want to move these macros to pycore_opcode_utils.h
-// and use them in Python/bytecodes.c.
+// and use them in the generated interpreter.
 #define LOAD_GLOBAL_NAME_INDEX(oparg) ((oparg)>>1)
 #define LOAD_ATTR_NAME_INDEX(oparg) ((oparg)>>1)
 

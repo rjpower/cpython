@@ -2,7 +2,7 @@
 
 _opcode.get_ir_contract() exports _PyIR_Formats (Include/internal/pycore_ir.h),
 which Tools/cases_generator/ir_metadata_generator.py writes from
-Python/bytecodes.c.  The compiler passes, the assembler, dis and the
+Tools/cases_generator/stack_ops.py and Python/register_ops.  The compiler passes, the assembler, dis and the
 instrumentation read it.  Each row must agree with the stack effects that the
 compiler uses, with the generator's analysis of the instruction, with the
 feedback layouts and with sys.monitoring.
@@ -49,7 +49,7 @@ FEEDBACK = {
 OPARGS = (0, 1, 2, 3, 7, 0x102)
 
 # Ops that no stack bytecode has as an opcode: the translator_only
-# instructions of Python/bytecodes.c
+# instructions of Tools/cases_generator/stack_ops.py
 TRANSLATOR_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")

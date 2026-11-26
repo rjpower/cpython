@@ -475,8 +475,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
  * backoff_counter_triggers() never reports, so nothing after a trigger
  * writes past a header there (asserted where a handler gets its entry,
  * IR_FB()).  Every specializing op tests and advances its
- * counter with these two functions, whose rows are in
- * pycore_ir_components.h. */
+ * counter with these two functions. */
 static inline int
 _PyFb_CounterTriggers(_PyFbHeader *fb)
 {
@@ -513,8 +512,7 @@ _PyFb_TickQuiet(_PyFbHeader *fb)
 
 /* Keep the site's counter from triggering while an instrumented twin runs the
  * word, so that the specializer does not overwrite the instrumentation.  A
- * function, not a macro, so its row (pycore_ir_components.h) is type checked;
- * the name is the one the generator's tables use. */
+ * function, not a macro, so that it is type checked. */
 static inline void
 PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
 {
@@ -542,7 +540,7 @@ PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
 // A callback that redirects the frame (a debugger's f_lineno jump, which
 // retires the temporaries the new word does not keep) makes the word leave
 // for the new word at once, without the rest of its handler: the redirect
-// exit (Tools/cases_generator/ir_contract.py).
+// exit (Python/register_ops).
 #define INSTRUMENTED_JUMP(src, dest, event) \
 do { \
     _PyInstr *_dest = (dest); \

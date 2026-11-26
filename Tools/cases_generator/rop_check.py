@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from rop_catalog import (HEAD_FLAG_ENUMS, CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
-                         EVIDENCE_REQUIRED, FEEDBACK_ROOTS, HOME_GROUPS, INDEX_BITS, LINEAR_HANDLES,
+                         EVIDENCE_REQUIRED, FEEDBACK_ROOTS, HOME_GROUP_PARTS, HOME_GROUPS, INDEX_BITS, HomePart, LINEAR_HANDLES,
                          TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
                          OPTIONAL, SELECT_DIMENSIONS, SELECT_FACTS, SLOT_ORDER,
@@ -91,11 +91,11 @@ def group_parts(t: Type | None) -> tuple[str, ...]:
     return HOME_GROUPS.get(t.handle, ()) if isinstance(t, HandleType) else ()
 
 
-def group_handle(t: Type | None) -> Handle | None:
-    """The handle of a home group type, or of Out<G>"""
+def group_part_decls(t: Type | None) -> tuple[HomePart, ...]:
+    """The declared projections of a home group type, or of Out<G>"""
     if is_out(t):
         t = t.arg
-    return t.handle if isinstance(t, HandleType) else None
+    return HOME_GROUP_PARTS.get(t.handle, ()) if isinstance(t, HandleType) else ()
 
 
 def is_out(t: Type | None) -> bool:

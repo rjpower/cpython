@@ -16,9 +16,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
-                         CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, INDEX_PARTS, Scalar, Schema, SchemaCtor,
+                         CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          PcRole, Slot, Wrap)
-from rop_check import GraphInfo, Program, expand_debts, expand_group, group_handle, group_parts, is_args
+from rop_check import GraphInfo, Program, expand_debts, expand_group, group_part_decls, group_parts, is_args
 from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
@@ -525,8 +525,8 @@ class ArmLowerer:
             for p in self.family.params for i, q in enumerate(group_parts(p.type))}
         # The projections whose declared type admits a tagged index
         self.index_parts: set[str] = {
-            f"{p.name}.{q}" for p in self.family.params for q in group_parts(p.type)
-            if (group_handle(p.type), q) in INDEX_PARTS}
+            f"{p.name}.{q.name}" for p in self.family.params
+            for q in group_part_decls(p.type) if q.index}
         self.points = points
         self.generic = generic
         self.prefix = "rop_" + arm.name.replace(".", "_")

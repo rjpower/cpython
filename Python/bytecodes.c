@@ -1102,42 +1102,17 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        family(STORE_ATTR, INLINE_CACHE_ENTRIES_STORE_ATTR) = {
-            STORE_ATTR_INSTANCE_VALUE,
-            STORE_ATTR_SLOT,
-            STORE_ATTR_WITH_HINT,
-            STORE_ATTR_SHAPE,
-            STORE_ATTR_SHAPE_ADD,
-        };
-
-        specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        /* A stack op only: its rule in Python/regcfg.c lowers it to the register
+         * instructions of AttrWrite (Python/register_ops/attrs.rop). */
+        tier1 inst(STORE_ATTR, (unused/4, v: consumed, owner: consumed --))
+            exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                if (!PyValue_IsNull(v)) {
-                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                    next_instr = this_instr;
-                    _Py_Specialize_StoreAttr(owner, next_instr, name);
-                    DISPATCH_SAME_OPARG();
-                }
-            }
-            OPCODE_DEFERRED_INC(STORE_ATTR);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        inline_ok op(_STORE_ATTR, (v: consumed, owner: consumed --))
-            effects(runs_python) exits(next, raise)
-        {
+            /* The name operand keeps dis and the name flag of the opcode */
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            int err = _PyValue_SetAttr(owner, name, v);
-            DECREF_INPUTS();
-            ERROR_IF(err);
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        macro(STORE_ATTR) = unused/1 + _SPECIALIZE_STORE_ATTR + unused/3 + _STORE_ATTR;
 
         tier1 inst(STORE_GLOBAL, (v: consumed nullable --))
             exits(abort)
@@ -1407,146 +1382,31 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(INSTRUMENTED_LOAD_SUPER_ATTR) =
-            unused/1 +
-            _LOAD_SUPER_ATTR +
-            _NULL_SLOT_CONDITIONAL;
-
-        family(LOAD_SUPER_ATTR, INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR) = {
-            LOAD_SUPER_ATTR_ATTR,
-            LOAD_SUPER_ATTR_METHOD,
-        };
-
-        specializing op(_SPECIALIZE_LOAD_SUPER_ATTR,
-                (global_super_st, class_st, unused -- global_super_st, class_st, unused))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        /* A stack op only: its rule in Python/regcfg.c lowers it to the register
+         * instructions of SuperAttr and SuperMethod (Python/register_ops/attrs.rop). */
+        tier1 inst(LOAD_SUPER_ATTR,
+                (unused/1, global_super: consumed, class_st: consumed, self_st: consumed
+                 -- attr: owned, self_or_null[oparg&1]: owned nullable))
+            exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            int load_method = oparg & 1;
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_LoadSuperAttr(global_super_st, class_st, next_instr, load_method);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(LOAD_SUPER_ATTR);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        tier1 op(_LOAD_SUPER_ATTR,
-                (global_super_st: consumed, class_st: consumed, self_st: consumed
-                 -- attr: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            // `super` and `__class__` can name numbers, which the call
-            // reports; both stay values
-            // we make no attempt to optimize here; specializations should
-            // handle any case whose performance we care about
-            PyValueBorrow arg = oparg & 2
-                ? PyValue_Borrow(class_st)
-                : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
-            if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                int err = _Py_call_instrumentation_2args(
-                        tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, global_super_st, arg);
-                if (err) {
-                    DECREF_INPUTS();
-                    ERROR_IF(true);
-                }
-            }
-            PyValue super = super_call(global_super_st, class_st, self_st, oparg & 2);
-            if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                if (PyValue_IsNull(super)) {
-                    _Py_call_instrumentation_exc2(
-                        tstate, PY_MONITORING_EVENT_C_RAISE,
-                        frame, this_instr, global_super_st, arg);
-                }
-                else {
-                    int err = _Py_call_instrumentation_2args(
-                        tstate, PY_MONITORING_EVENT_C_RETURN,
-                        frame, this_instr, global_super_st, arg);
-                    if (err < 0) {
-                        PyValue_CLEAR(super);
-                    }
-                }
-            }
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(super));
+            /* The name operand keeps dis and the name flag of the opcode */
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            attr = _PyValue_GetAttr(super, name);
-            PyValue_CLOSE(super);
-            ERROR_IF(PyValue_IsNull(attr));
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(LOAD_SUPER_ATTR) =
-            unused/1 + _SPECIALIZE_LOAD_SUPER_ATTR +
-            _LOAD_SUPER_ATTR +
-            _NULL_SLOT_CONDITIONAL;
-
-        inline_ok inst(LOAD_SUPER_ATTR_ATTR,
-                (unused/1, global_super_st: consumed, class_st: consumed, self_st: consumed
-                 -- attr_st: owned))
-            effects(runs_python) exits(next, miss, raise)
+        tier1 inst(INSTRUMENTED_LOAD_SUPER_ATTR,
+                (unused/1, global_super: consumed, class_st: consumed, self_st: consumed
+                 -- attr: owned, self_or_null[oparg&1]: owned nullable))
+            exits(abort)
         {
-            EXIT_IF(!PyValue_IsObject(global_super_st) || !PyValue_IsObject(class_st));
-            PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
-            PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-
-            assert(!(oparg & 1));
-            EXIT_IF(global_super != (PyObject *)&PySuper_Type);
-            EXIT_IF(!PyType_Check(class));
-            STAT_INC(LOAD_SUPER_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            _PyStatusValue found = _PySuper_LookupValue((PyTypeObject *)class, self_st, name, 0);
-            DECREF_INPUTS();
-            ERROR_IF(found.status < 0);
-            attr_st = found.value;
+            (void)name;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(LOAD_SUPER_ATTR_METHOD) =
-            unused/1 +
-            _GUARD_LOAD_SUPER_ATTR_METHOD +
-            _LOAD_SUPER_ATTR_METHOD;
-
-        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st: object, class_st: object, unused -- global_super_st: is(PySuper_Type), class_st: subtype(PyType_Type), unused))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
-            PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-            assert(oparg & 1);
-            EXIT_IF(global_super != (PyObject *)&PySuper_Type);
-            EXIT_IF(!PyType_Check(class));
-        }
-
-        op(_LOAD_SUPER_ATTR_METHOD,
-                (global_super_st: taken, class_st: taken object, self_st: taken
-                 -- attr: owned, self_or_null: moved(self_st) nullable))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-
-            STAT_INC(LOAD_SUPER_ATTR, hit);
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyTypeObject *cls = (PyTypeObject *)class;
-            // Only a type with the generic getattro can have a method
-            // returned unbound
-            _PyStatusValue found = _PySuper_LookupValue(cls, self_st, name,
-                PyValue_TYPE(self_st)->tp_getattro == PyObject_GenericGetAttr);
-            if (found.status < 0) {
-                ERROR_NO_POP();
-            }
-            if (found.status) {
-                self_or_null = self_st; // transfer ownership
-                DEAD(self_st);
-            } else {
-                PyValue_CLOSE(self_st);
-                self_or_null = PyValue_NULL;
-            }
-            DECREF_INPUTS();
-
-            attr = found.value;
-        }
         /* A stack op only: rule_load_attr (Python/regcfg.c) lowers it to
          * GetAttr or GetMethod (Python/register_ops/getattr.rop). */
         tier1 inst(LOAD_ATTR,
@@ -1560,52 +1420,12 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        leaf op(_GUARD_TYPE_VERSION,
-                (type_version/2, owner: object -- owner: type_version(type_version)))
-            effects(reads) exits(next, miss)
-        {
-            PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
-            assert(type_version != 0);
-            EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
-        }
-
-        op(_GUARD_TYPE_VERSION_LOCKED,
-                (type_version/2, owner: object -- owner: type_version(type_version)))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            assert(type_version != 0);
-            PyTypeObject *tp = Py_TYPE(owner_o);
-            if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                UNLOCK_OBJECT(owner_o);
-                EXIT_IF(true);
-            }
-        }
-
-        leaf op(_CHECK_MANAGED_OBJECT_HAS_VALUES, (owner: object -- owner: has_values))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
-            assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-            EXIT_IF(!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));
-        }
-
-
-
         /* The shape handlers (Py_SHAPES, see pycore_dict.h).  They follow a
          * type version guard, which proves that the owner has inline values
          * to read the shape from and lets descriptors added to the class
          * win.  The shape fields take no inline cache units.  Shapes exist
          * only in builds with the GIL, so the stores take no object lock and
          * need not check for a dict: an instance with a dict has no shape. */
-        leaf op(_GUARD_SHAPE, (shape/0, owner: object -- owner))
-            effects(reads) exits(next, miss)
-        {
-            EXIT_IF(_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape,
-                    "the owner's inline values have another shape");
-        }
-
         leaf op(_GUARD_SHAPE_READ,
                 (type_version/2, shape/0, owner: object
                  -- owner: shape(shape) type_version(type_version)))
@@ -1656,195 +1476,6 @@ dummy_func(
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             EXIT_IF(Py_TYPE(owner_o) != &PyType_Type);
         }
-
-
-
-
-
-
-
-        op(_GUARD_DORV_NO_DICT, (owner: object -- owner))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-
-            assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
-            assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-            if (_PyObject_GetManagedDict(owner_o) ||
-                    !FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid)) {
-                UNLOCK_OBJECT(owner_o);
-                EXIT_IF(true, "the owner has a dict, or its inline values are not valid");
-            }
-        }
-
-        inline_ok op(_STORE_ATTR_INSTANCE_VALUE,
-                (offset/1, value: consumed, owner: consumed object --))
-            effects(reads, writes, releases) exits(next, miss)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-
-            assert(_PyObject_GetManagedDict(owner_o) == NULL);
-            PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-#ifdef Py_SHAPES
-            /* This store does not grow the type's shapes.  An addition whose
-             * transition is missing goes to STORE_ATTR, which creates it, so
-             * that the instance keeps a shape. */
-            if (PyValue_IsNull(*value_ptr)) {
-                PyDictValues *values = _PyObject_InlineValues(owner_o);
-                if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
-                                               value_ptr - values->values)) {
-                    UNLOCK_OBJECT(owner_o);
-                    EXIT_IF(true, "the type's shape tree lacks the transition");
-                }
-            }
-#endif
-            STAT_INC(STORE_ATTR, hit);
-            PyValue item = TAKE(value);
-            PyValue old_value = _PyValueSlot_Exchange(value_ptr, item);
-            if (PyValue_IsNull(old_value)) {
-                PyDictValues *values = _PyObject_InlineValues(owner_o);
-                Py_ssize_t index = value_ptr - values->values;
-                _PyDictValues_AddToInsertionOrder(values, index);
-#ifdef Py_SHAPES
-                _PyDictValues_SetShape(values,
-                    _PyShape_FindTransition(Py_TYPE(owner_o), values->shape, index));
-#endif
-            }
-            UNLOCK_OBJECT(owner_o);
-            PyValue_XCLOSE(owner);
-            PyValue_XCLOSE(old_value);
-        }
-
-        op(_LOCK_OBJECT, (value: object -- value))
-            effects() exits(next, miss, deopt)
-        {
-            DEOPT_IF(!LOCK_OBJECT(PyValue_AsKnownObjectBorrow(value)));
-        }
-
-        macro(STORE_ATTR_INSTANCE_VALUE) =
-            unused/1 +
-            _LOCK_OBJECT +
-            _GUARD_TYPE_VERSION_LOCKED +
-            _GUARD_DORV_NO_DICT +
-            _STORE_ATTR_INSTANCE_VALUE;
-
-        leaf inline_ok op(_STORE_ATTR_SHAPE,
-                (offset/1, value: consumed, owner: consumed object --))
-            effects(reads, writes, releases) exits(next)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValue item = TAKE(value);
-            // The shape guard shows the slot filled
-            PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
-            STAT_INC(STORE_ATTR, hit);
-            PyValue_XCLOSE(owner);
-            PyValue_CLOSE(old_value);
-        }
-
-        macro(STORE_ATTR_SHAPE) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _GUARD_SHAPE +
-            _STORE_ATTR_SHAPE;
-
-        leaf inline_ok op(_STORE_ATTR_SHAPE_ADD,
-                (shape_to/0, offset/1, value: consumed, owner: consumed object --))
-            effects(reads, writes, releases) exits(next)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValue item = TAKE(value);
-            // The shape guard shows the attribute absent: the slot holds NULL
-            _PyValueSlot_Fill(value_ptr, item);
-            PyDictValues *values = _PyObject_InlineValues(owner_o);
-            _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
-            _PyDictValues_SetShape(values, (uint8_t)shape_to);
-            STAT_INC(STORE_ATTR, hit);
-            PyValue_XCLOSE(owner);
-        }
-
-        macro(STORE_ATTR_SHAPE_ADD) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _GUARD_SHAPE +
-            _STORE_ATTR_SHAPE_ADD;
-
-        inline_ok op(_STORE_ATTR_WITH_HINT,
-                (hint/1, value: consumed, owner: consumed object --))
-            effects(reads, writes, releases, runs_python) exits(next, deopt, raise)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-            PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
-            DEOPT_IF(dict == NULL, "the owner has no dict");
-            DEOPT_IF(!LOCK_OBJECT(dict), "the dict is locked by another thread");
-            assert(PyDict_CheckExact((PyObject *)dict));
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyDictKeysObject *dk = dict->ma_keys;
-            // Split keys are shared with other dicts, which append to them
-            // under the keys lock rather than this dict's lock.
-            if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries) ||
-                    dk->dk_kind == DICT_KEYS_GENERAL) {
-                UNLOCK_OBJECT(dict);
-                DEOPT_IF(true, "the hint is past the entries, or the keys are general");
-            }
-            PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dk) + hint;
-            if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
-                UNLOCK_OBJECT(dict);
-                DEOPT_IF(true, "the hinted entry names another key");
-            }
-            // A split table keeps its values, such as an object's inline
-            // values, apart from its keys.
-            PyValue *value_ptr = dict->ma_values == NULL ?
-                &ep->me_value : &dict->ma_values->values[hint];
-            if (PyValue_IsNull(*value_ptr)) {
-                UNLOCK_OBJECT(dict);
-                DEOPT_IF(true, "the hinted entry holds no value");
-            }
-            if (dict->_ma_watcher_tag & DICT_WATCHER_MASK) {
-                /* A watcher error's unraisable hook may reenter. Do not
-                 * retain a raw slot pointer across the provider call. */
-                UNLOCK_OBJECT(dict);
-                int err = _PyDict_SetValue(dict,
-                    PyValue_FromObjectBorrow(name), value);
-                DECREF_INPUTS();
-                ERROR_IF(err < 0);
-            }
-            else {
-                PyValue item = TAKE(value);
-                PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
-                UNLOCK_OBJECT(dict);
-                PyValue_XCLOSE(owner);
-                PyValue_XCLOSE(old_value);
-            }
-            STAT_INC(STORE_ATTR, hit);
-        }
-
-        macro(STORE_ATTR_WITH_HINT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _STORE_ATTR_WITH_HINT;
-
-        leaf op(_STORE_ATTR_SLOT, (index/1, value: consumed, owner: consumed object --))
-            effects(reads, writes, releases) exits(next, deopt)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-
-            DEOPT_IF(!LOCK_OBJECT(owner_o));
-            PyValue *addr = _PyObject_ValueSlot(owner_o, index);
-            STAT_INC(STORE_ATTR, hit);
-            PyValue item = TAKE(value);
-            PyValue old_value = _PyValueSlot_Exchange(addr, item);
-            UNLOCK_OBJECT(owner_o);
-            PyValue_XCLOSE(owner);
-            PyValue_XCLOSE(old_value);
-        }
-
-        macro(STORE_ATTR_SLOT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _STORE_ATTR_SLOT;
 
         /* A stack op only: COMPARE_OP is the Compare family (Python/register_ops/tests.rop). */
         tier1 inst(COMPARE_OP,
@@ -2626,39 +2257,16 @@ dummy_func(
             _CHECK_PEP_523 +
             _FOR_ITER_GEN_FRAME;
 
-        // A window: the method and self go to the canonical slots, which a
-        // folded input, a local, would not name
-        window op(_INSERT_NULL, (self: consumed -- method_and_self[2]: owned))
-            effects() exits(next)
+        /* A stack op only: rule_load_special (Python/regcfg.c) lowers it to
+         * SpecialLookup (Python/register_ops/attrs.rop). */
+        tier1 inst(LOAD_SPECIAL, (owner: consumed -- attr: owned, self_or_null: owned nullable))
+            exits(abort)
         {
-            IR_WRITE_OUTPUT(method_and_self, 1, self);
-            IR_WRITE_OUTPUT(method_and_self, 0, PyValue_NULL);
-            DEAD(self);
+            /* The oparg keeps dis and the special name of the opcode */
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        op(_LOAD_SPECIAL, (method_and_self[2] -- method_and_self[2]))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *name = _Py_SpecialMethods[oparg].name;
-            int err = IR_LOOKUP_SPECIAL(name, method_and_self);
-            if (err <= 0) {
-                if (err == 0) {
-                    // The messages name the owner's type, as %N
-                    PyTypeObject *owner_type = PyValue_TYPE(method_and_self[1]);
-                    const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner_type, oparg)
-                        ? _Py_SpecialMethods[oparg].error_suggestion
-                        : _Py_SpecialMethods[oparg].error;
-                    assert(!_PyErr_Occurred(tstate));
-                    assert(errfmt != NULL);
-                    _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner_type);
-                }
-                ERROR_NO_POP();
-            }
-        }
-
-        outlined macro(LOAD_SPECIAL) =
-            _INSERT_NULL +
-            _LOAD_SPECIAL;
 
         outlined inst(WITH_EXCEPT_START,
                 (exit_func, exit_self: nullable, lasti, unused,

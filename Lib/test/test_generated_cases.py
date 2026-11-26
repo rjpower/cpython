@@ -1216,16 +1216,6 @@ class TestIRCases(unittest.TestCase):
                 handler = self.handler(output.getvalue(), name)
                 self.assertIn("IR_SET_TEMP(window[", handler)
                 self.assertNotIn("IR_MOVE_TO_DST", handler)
-        for name in live_names(source, ("LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR")):
-            with self.subTest(name=name):
-                self.assertEqual(contracts[name].output_kind,
-                                 "_PyIR_OUTPUT_WINDOW_DST_FIRST")
-                handler = self.handler(output.getvalue(), name)
-                self.assertIn("IR_SET_TEMP(window[0], attr);", handler)
-                self.assertIn("IR_MOVE_TO_DST(ir_word, A, window[0]);", handler)
-                self.assertLess(handler.index("IR_MOVE_TO_DST("),
-                                handler.index("PyValue_XCLOSE(ir_old);"))
-                self.assertEqual(formats[name].dst_offset, 0)
         # A call reads its inputs from operand words and writes its result to
         # the destination register; it has no window.
         self.assertEqual(contracts["CALL"].output_kind,
@@ -3143,12 +3133,6 @@ class TestIRCases(unittest.TestCase):
         source = BYTECODES
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
-        for name in ("LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR",
-                     "LOAD_SUPER_ATTR_ATTR", "LOAD_SUPER_ATTR_METHOD"):
-            with self.subTest(handler=name):
-                self.assertTrue(ir_generator.normal_vacate_capability(
-                    analysis.instructions[name], formats[name]))
-
         # The capability explains the helper/frame use, not an opcode name.
         call = ("_Py_call_instrumentation_2args(tstate, "
                 "PY_MONITORING_EVENT_CALL, frame, this_instr, left, right);")
@@ -3338,7 +3322,6 @@ class TestIRCases(unittest.TestCase):
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); PyValue *alias = out; }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(&out[0]); }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); PyValue *alias = &(out[0]); }",
-                "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(name, pair); PyValue *alias = &((pair[0])); }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(&(oparg)); }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); (oparg) = 1; }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); int oparg; }",
@@ -3350,8 +3333,6 @@ class TestIRCases(unittest.TestCase):
                 "inst(OP, (-- out[2])) { if (flag) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } flag = 1; if (flag) { int vacant = PyValue_IsNull(out[0]); } }",
                 "inst(OP, (-- out[2])) { if (flag) {} else { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } int vacant = PyValue_IsNull(out[0]); }",
                 "inst(OP, (values[2] -- result)) { result = IR_BUILD_MAP(values); }",
-                "inst(OP, (pair[3] -- pair[3])) { int rc = IR_LOOKUP_SPECIAL(name, pair); }",
-                "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(frame, name, pair); }",
                 "inst(OP, (-- out[2])) {\n#if FEATURE\nIR_WRITE_OUTPUT(out, 0, PyValue_NULL);\n#endif\n}"):
             with self.subTest(source=source), self.assertRaises(SyntaxError):
                 check(source)

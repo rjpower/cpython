@@ -2103,10 +2103,27 @@ rule_call(_PyRegTr *t, const _PyRegOp *src)
         return stack_underflow(src);
     }
     int dst;
+    // The call that follows a special-method lookup (`with` and `async
+    // with`) does not poll when it returns: the body runs before a pending
+    // signal or collection does.  Source-only ops between them (an elided
+    // PUSH_NULL) do not count.
+    int after_lookup = 0;
+    for (int i = t->nops - 1; i >= t->block_op; i--) {
+        const _PyRegOp *prev = &t->ops[i];
+        if (prev->opcode == NOP && prev->nread == 0 && prev->nout == 0) {
+            continue;
+        }
+        after_lookup = prev->opcode == ROP_HANDLER_SpecialLookup_Generic;
+        break;
+    }
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Call_Generic,
                                   &t->stack[t->sp - nuses], nuses, &dst, 1,
-                                  NULL));
+                                  &op));
+    if (after_lookup) {
+        op->flags |= _PyReg_CALL_UNINTERRUPTED;
+    }
     t->sp -= nuses;
     return _PyRegTr_Push(t, dst);
 }
@@ -2345,6 +2362,77 @@ rule_setup_annotations(_PyRegTr *t, const _PyRegOp *src)
                          NULL, 0, NULL, 0, NULL);
 }
 
+/* STORE_ATTR (Python/register_ops/attrs.rop).  The word starts on
+ * AttrWrite.Generic with the owner and the value in the family's order.  The
+ * compiler writes `del o.x` as PUSH_NULL and the store: the elided
+ * PUSH_NULL's register holds NULL, which the arm's optional value reads as
+ * absent, so the same word deletes. */
+static int
+rule_store_attr(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int uses[2] = {t->stack[t->sp - 1], t->stack[t->sp - 2]};
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_AttrWrite_Generic,
+                                  uses, 2, NULL, 0, &op));
+    op->oparg = src->oparg;
+    return _PyRegTr_Pop(t, 2, NULL);
+}
+
+/* LOAD_SUPER_ATTR is SuperAttr (`super()`) or SuperAttrExplicit
+ * (`super(C, self)`): the loaded super, the class and the receiver in, the
+ * attribute out.  The oparg's bit 1 says the class was written, the rest is
+ * the name.  Its bit 0 asks for a method: the lookup binds, so the second
+ * output the call takes as its absent self is a PUSH_NULL after the result,
+ * as LOAD_GLOBAL pushes it. */
+static int
+rule_load_super_attr(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 3) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(
+        t, src,
+        (src->oparg & 2) ? ROP_HANDLER_SuperAttrExplicit_Generic
+                         : ROP_HANDLER_SuperAttr_Generic,
+        &t->stack[t->sp - 3], 3, &dst, 1, &op));
+    op->oparg = src->oparg >> 2;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 3, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, dst));
+    if (!(src->oparg & 1)) {
+        return SUCCESS;
+    }
+    _PyRegOp null = *src;
+    null.opcode = PUSH_NULL;
+    null.oparg = 0;
+    return _PyRegTr_Legacy(t, &null);
+}
+
+/* LOAD_SPECIAL: the method and its self, as the call that follows reads
+ * them */
+static int
+rule_load_special(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_SpecialLookup_Generic,
+                                  &t->stack[t->sp - 1], 1, defs, 2, &op));
+    op->oparg = src->oparg;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    return _PyRegTr_Push(t, defs[1]);
+}
+
 /* IMPORT_NAME: level and fromlist are the two uses; the oparg's low bits
  * say how the import may be lazy, and the rest is the name. */
 static int
@@ -2554,6 +2642,9 @@ static const _PyRegRule rules[256] = {
     [SETUP_ANNOTATIONS] = rule_setup_annotations,
     [IMPORT_NAME] = rule_import_name,
     [IMPORT_FROM] = rule_import_from,
+    [STORE_ATTR] = rule_store_attr,
+    [LOAD_SUPER_ATTR] = rule_load_super_attr,
+    [LOAD_SPECIAL] = rule_load_special,
     [BUILD_TUPLE] = rule_build,
     [BUILD_LIST] = rule_build,
     [BUILD_SET] = rule_build,

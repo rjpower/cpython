@@ -25,7 +25,7 @@ int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
 # Instances with inline values and no __dict__ get the shape handlers
 # under --with-shapes.
 LOAD_ATTR_INSTANCE = "GetAttr.Shape" if Py_SHAPES else "GetAttr.Instance"
-STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE" if Py_SHAPES else "STORE_ATTR_INSTANCE_VALUE"
+STORE_ATTR_INSTANCE = "AttrWrite.Shape" if Py_SHAPES else "AttrWrite.Instance"
 
 
 def have_dict_key_versions():
@@ -1148,7 +1148,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "STORE_ATTR_INSTANCE_VALUE"
+        opname = "AttrWrite.Instance"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1174,7 +1174,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "STORE_ATTR_WITH_HINT"
+        opname = "AttrWrite.Hint"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1200,7 +1200,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "STORE_ATTR_WITH_HINT"
+        opname = "AttrWrite.Hint"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1635,8 +1635,9 @@ class TestSpecializer(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             A()
 
-        self.assert_specialized(A.__init__, "LOAD_SUPER_ATTR_ATTR")
-        self.assert_specialized(A.__init__, "LOAD_SUPER_ATTR_METHOD")
+        # The method form is this family followed by the vacant self; the
+        # unbound-method arm (SuperMethod) is a later step
+        self.assert_specialized(A.__init__, "SuperAttr.Builtin")
         self.assert_no_opcode(A.__init__, "LOAD_SUPER_ATTR")
 
         # Temporarily replace super() with something else.
@@ -1657,9 +1658,8 @@ class TestSpecializer(TestBase):
         finally:
             globals()['super'] = real_super
 
-        # Ensure the specialized instructions are not present
-        self.assert_no_opcode(A.__init__, "LOAD_SUPER_ATTR_ATTR")
-        self.assert_no_opcode(A.__init__, "LOAD_SUPER_ATTR_METHOD")
+        # The arm stays installed and misses to Generic while super is
+        # replaced; the guard, not unspecialization, keeps A() correct.
 
     @cpython_only
     @requires_specialization
@@ -1791,13 +1791,16 @@ class TestSpecializer(TestBase):
 
         set_slot(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
-        self.assert_specialized(set_slot, "STORE_ATTR_SLOT")
+        self.assert_specialized(set_slot, "AttrWrite.Slot")
         self.assert_no_opcode(set_slot, "STORE_ATTR")
 
-        # Adding a property for 'x' should unspecialize it.
-        C.x = property(lambda self: None, lambda self, x: None)
+        # Adding a property for 'x' must make the stores reach its setter.
+        # The arm stays installed and misses to Generic until the site is
+        # nominated again, as the load arms do.
+        calls = []
+        C.x = property(lambda self: None, lambda self, x: calls.append(x))
         set_slot(_testinternalcapi.SPECIALIZATION_COOLDOWN)
-        self.assert_no_opcode(set_slot, "STORE_ATTR_SLOT")
+        self.assertEqual(len(calls), _testinternalcapi.SPECIALIZATION_COOLDOWN)
 
     @cpython_only
     @requires_specialization
@@ -1816,10 +1819,11 @@ class TestSpecializer(TestBase):
         self.assert_specialized(set_value, STORE_ATTR_INSTANCE)
         self.assert_no_opcode(set_value, "STORE_ATTR")
 
-        # Adding a property for 'x' should unspecialize it.
-        C.x = property(lambda self: None, lambda self, x: None)
+        # Adding a property for 'x' must make the stores reach its setter.
+        calls = []
+        C.x = property(lambda self: None, lambda self, x: calls.append(x))
         set_value(_testinternalcapi.SPECIALIZATION_COOLDOWN)
-        self.assert_no_opcode(set_value, STORE_ATTR_INSTANCE)
+        self.assertEqual(len(calls), _testinternalcapi.SPECIALIZATION_COOLDOWN)
 
     @cpython_only
     @requires_specialization
@@ -1838,13 +1842,14 @@ class TestSpecializer(TestBase):
 
         set_value(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
-        self.assert_specialized(set_value, "STORE_ATTR_WITH_HINT")
+        self.assert_specialized(set_value, "AttrWrite.Hint")
         self.assert_no_opcode(set_value, "STORE_ATTR")
 
-        # Adding a property for 'x' should unspecialize it.
-        C.x = property(lambda self: None, lambda self, x: None)
+        # Adding a property for 'x' must make the stores reach its setter.
+        calls = []
+        C.x = property(lambda self: None, lambda self, x: calls.append(x))
         set_value(_testinternalcapi.SPECIALIZATION_COOLDOWN)
-        self.assert_no_opcode(set_value, "STORE_ATTR_WITH_HINT")
+        self.assertEqual(len(calls), _testinternalcapi.SPECIALIZATION_COOLDOWN)
 
     @cpython_only
     @requires_specialization
@@ -1873,7 +1878,7 @@ class TestSpecializer(TestBase):
         self.assert_no_opcode(get_value, "LOAD_ATTR")
 
         set_value(n)
-        self.assert_specialized(set_value, "STORE_ATTR_WITH_HINT")
+        self.assert_specialized(set_value, "AttrWrite.Hint")
         self.assert_no_opcode(set_value, "STORE_ATTR")
         self.assertTrue(_testinternalcapi.has_inline_values(c))
         self.assertIs(vars(c), d)
@@ -2429,7 +2434,7 @@ class TestFeedback(TestBase):
         "GET_ITER": "UNARY", "SEND": "UNARY",
         "BINARY_OP": "BINARY", "COMPARE_OP": "COMPARE",
         "CONTAINS_OP": "CONTAINS", "STORE_SUBSCR": "BINARY",
-        "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",
+        "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "UNARY",
         "LOAD_GLOBAL": "GLOBAL",
         "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
         "POP_JUMP": "UNARY",

@@ -432,9 +432,6 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case ROP_HANDLER_GetAttr_NonDescriptorNoDict:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
-                case STORE_ATTR_SHAPE_ADD:
-                    row.payload.shape_to = ((_PyFbAttr *)h)->shape_to;
-                    break;
                 default:
                     break;
             }
@@ -672,6 +669,11 @@ typedef enum {
     ATTR_METHOD_WITH_VALUES,
     ATTR_METHOD_NO_DICT,
     ATTR_METHOD_LAZY_DICT,
+    ATTR_STORE_INSTANCE_VALUE,
+    ATTR_STORE_SLOT,
+    ATTR_STORE_HINT,
+    ATTR_STORE_SHAPE,
+    ATTR_STORE_SHAPE_ADD,
     ATTR_KIND_LIMIT,
 } attr_kind;
 
@@ -889,28 +891,6 @@ specialize_module_load_attr(
 
 /* Attribute specialization */
 
-Py_NO_INLINE void
-_Py_Specialize_LoadSuperAttr(PyValue global_super_st, PyValue cls_st, _PyInstr *instr, int load_method) {
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[LOAD_SUPER_ATTR] == INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR);
-    fb_begin(instr);
-    if (PyValue_IsInline(global_super_st) ||
-        PyValue_AsKnownObjectBorrow(global_super_st) != (PyObject *)&PySuper_Type)
-    {
-        SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_SHADOWED);
-        goto fail;
-    }
-    if (!PyType_FastSubclass(PyValue_TYPE(cls_st), Py_TPFLAGS_TYPE_SUBCLASS)) {
-        SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_BAD_CLASS);
-        goto fail;
-    }
-    uint8_t load_code = load_method ? LOAD_SUPER_ATTR_METHOD : LOAD_SUPER_ATTR_ATTR;
-    specialize(instr, load_code);
-    return;
-fail:
-    unspecialize(instr);
-}
-
 typedef enum {
     OVERRIDING, /* Is an overriding descriptor, and will remain so. */
     METHOD, /* Attribute has Py_TPFLAGS_METHOD_DESCRIPTOR set */
@@ -1072,8 +1052,9 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, uint8_t shape)
     _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
     for (int i = 0; i < FB_POLY_SIZE && poly->handler[i] != 0; i++) {
         int opcode = poly->handler[i];
-        if ((opcode == ROP_HANDLER_GetAttr_Shape || opcode == STORE_ATTR_SHAPE ||
-             opcode == STORE_ATTR_SHAPE_ADD) &&
+        if ((opcode == ROP_HANDLER_GetAttr_Shape ||
+             opcode == ROP_HANDLER_AttrWrite_Shape ||
+             opcode == ROP_HANDLER_AttrWrite_ShapeAdd) &&
             poly->type_version[i] == tp_version && poly->aux[i] != shape)
         {
             return true;
@@ -1099,7 +1080,7 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     }
     int opcode;
     if (_PyShape_HasSlot(type, shape, index)) {
-        opcode = base_op == LOAD_ATTR ? ATTR_KIND(ATTR_SHAPE) : STORE_ATTR_SHAPE;
+        opcode = ATTR_KIND(base_op == LOAD_ATTR ? ATTR_SHAPE : ATTR_STORE_SHAPE);
         if (base_op == LOAD_ATTR) {
             fb->read_kind = _Py_FB_READ_SHAPE;
         }
@@ -1113,7 +1094,7 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
             return 0;
         }
         fb->shape_to = shape_to;
-        opcode = STORE_ATTR_SHAPE_ADD;
+        opcode = ATTR_KIND(ATTR_STORE_SHAPE_ADD);
     }
     fb->shape = shape;
     return opcode;
@@ -1532,8 +1513,10 @@ attr_specialize(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name,
     }
 }
 
-Py_NO_INLINE void
-(_Py_Specialize_StoreAttr)(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
+/* Specialize the site of an AttrWrite word for the attribute name of
+ * owner_st, reporting the kind found in attr_collect. */
+static void
+attr_specialize_store(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
@@ -1608,7 +1591,7 @@ Py_NO_INLINE void
             assert(offset > 0);
             fb->index = (uint32_t)offset;
             fb->type_version = tp_version;
-            specialize(instr, STORE_ATTR_SLOT);
+            specialize(instr, ATTR_KIND(ATTR_STORE_SLOT));
             goto success;
         }
         case DUNDER_CLASS:
@@ -1638,8 +1621,8 @@ Py_NO_INLINE void
             goto fail;
         case ABSENT:
             if (specialize_dict_access(owner, instr, type, kind, name, tp_version,
-                                       STORE_ATTR, STORE_ATTR_INSTANCE_VALUE,
-                                       STORE_ATTR_WITH_HINT)) {
+                                       STORE_ATTR, ATTR_KIND(ATTR_STORE_INSTANCE_VALUE),
+                                       ATTR_KIND(ATTR_STORE_HINT))) {
                 goto success;
             }
     }
@@ -1658,37 +1641,60 @@ success:
  * words); -1 where the family has no such arm.  The last case of each row is
  * "none".  A nomination of a handler without an arm (a property, an
  * overridden __getattribute__, a getset in method position) is "none": the site stays generic. */
+typedef enum {
+    ATTR_FAMILY_GETATTR,
+    ATTR_FAMILY_GETMETHOD,
+    ATTR_FAMILY_SETATTR,
+} attr_family;
+
 typedef struct {
     int kind;
     int arm;
     int getattr_case;
     int getmethod_case;
+    int setattr_case;
 } attr_arm;
 
 static const attr_arm attr_arms[] = {
-    {ATTR_INSTANCE_VALUE, ROP_HANDLER_GetAttr_Instance, 0, -1},
-    {ATTR_SHAPE, ROP_HANDLER_GetAttr_Shape, 1, -1},
-    {ATTR_MODULE, ROP_HANDLER_GetAttr_Module, 2, -1},
-    {ATTR_WITH_HINT, ROP_HANDLER_GetAttr_Hint, 3, -1},
-    {ATTR_SLOT, ROP_HANDLER_GetAttr_ValueSlot, 4, -1},
-    {ATTR_SLOT_POINTER, ROP_HANDLER_GetAttr_PointerSlot, 5, -1},
-    {ATTR_CLASS, ROP_HANDLER_GetAttr_Class, 6, -1},
-    {ATTR_CLASS_WITH_METACLASS_CHECK, ROP_HANDLER_GetAttr_Class, 6, -1},
-    {ATTR_NONDESCRIPTOR_WITH_VALUES, ROP_HANDLER_GetAttr_NonDescriptorValues, 7, -1},
-    {ATTR_NONDESCRIPTOR_NO_DICT, ROP_HANDLER_GetAttr_NonDescriptorNoDict, 8, -1},
-    {ATTR_GETSET, ROP_HANDLER_GetAttr_GetSet, 9, -1},
-    {ATTR_METHOD_WITH_VALUES, ROP_HANDLER_GetMethod_MethodValues, -1, 0},
-    {ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1},
-    {ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2},
-    {ATTR_CLASSMETHOD, ROP_HANDLER_GetMethod_ClassMethod, -1, 3},
+    {ATTR_INSTANCE_VALUE, ROP_HANDLER_GetAttr_Instance, 0, -1, -1},
+    {ATTR_SHAPE, ROP_HANDLER_GetAttr_Shape, 1, -1, -1},
+    {ATTR_MODULE, ROP_HANDLER_GetAttr_Module, 2, -1, -1},
+    {ATTR_WITH_HINT, ROP_HANDLER_GetAttr_Hint, 3, -1, -1},
+    {ATTR_SLOT, ROP_HANDLER_GetAttr_ValueSlot, 4, -1, -1},
+    {ATTR_SLOT_POINTER, ROP_HANDLER_GetAttr_PointerSlot, 5, -1, -1},
+    {ATTR_CLASS, ROP_HANDLER_GetAttr_Class, 6, -1, -1},
+    {ATTR_CLASS_WITH_METACLASS_CHECK, ROP_HANDLER_GetAttr_Class, 6, -1, -1},
+    {ATTR_NONDESCRIPTOR_WITH_VALUES, ROP_HANDLER_GetAttr_NonDescriptorValues, 7, -1, -1},
+    {ATTR_NONDESCRIPTOR_NO_DICT, ROP_HANDLER_GetAttr_NonDescriptorNoDict, 8, -1, -1},
+    {ATTR_GETSET, ROP_HANDLER_GetAttr_GetSet, 9, -1, -1},
+    {ATTR_METHOD_WITH_VALUES, ROP_HANDLER_GetMethod_MethodValues, -1, 0, -1},
+    {ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1, -1},
+    {ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2, -1},
+    {ATTR_CLASSMETHOD, ROP_HANDLER_GetMethod_ClassMethod, -1, 3, -1},
+    {ATTR_STORE_INSTANCE_VALUE, ROP_HANDLER_AttrWrite_Instance, -1, -1, 0},
+    {ATTR_STORE_SHAPE, ROP_HANDLER_AttrWrite_Shape, -1, -1, 1},
+    {ATTR_STORE_SHAPE_ADD, ROP_HANDLER_AttrWrite_ShapeAdd, -1, -1, 2},
+    {ATTR_STORE_HINT, ROP_HANDLER_AttrWrite_Hint, -1, -1, 3},
+    {ATTR_STORE_SLOT, ROP_HANDLER_AttrWrite_Slot, -1, -1, 4},
 };
 
+static int
+attr_case_of(const attr_arm *a, attr_family family)
+{
+    switch (family) {
+        case ATTR_FAMILY_GETATTR: return a->getattr_case;
+        case ATTR_FAMILY_GETMETHOD: return a->getmethod_case;
+        case ATTR_FAMILY_SETATTR: return a->setattr_case;
+    }
+    Py_UNREACHABLE();
+}
+
 static const attr_arm *
-attr_arm_of(int kind, bool method)
+attr_arm_of(int kind, attr_family family)
 {
     for (size_t i = 0; i < Py_ARRAY_LENGTH(attr_arms); i++) {
         const attr_arm *a = &attr_arms[i];
-        if (a->kind == kind && (method ? a->getmethod_case : a->getattr_case) >= 0) {
+        if (a->kind == kind && attr_case_of(a, family) >= 0) {
             return a;
         }
     }
@@ -1707,7 +1713,7 @@ attr_restore_entry(_PyFbAttr *fb, const _PyFbAttr *before)
 
 static int
 attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
-              PyObject *name, bool method, _PyAttrRecipe *recipe)
+              PyObject *name, attr_family family, _PyAttrRecipe *recipe)
 {
     assert(attr_collect == NULL);
     attr_nomination nominated = {0};
@@ -1716,17 +1722,24 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
      * nothing must leave the entry as the site's arm expects it. */
     _PyFbAttr before = *fb;
     attr_collect = &nominated;
-    attr_specialize(owner, site, name, method);
+    if (family == ATTR_FAMILY_SETATTR) {
+        attr_specialize_store(owner, site, name);
+    }
+    else {
+        attr_specialize(owner, site, name, family == ATTR_FAMILY_GETMETHOD);
+    }
     attr_collect = NULL;
-    int none = method ? 4 : 10;
-    const attr_arm *chosen = attr_arm_of(nominated.kind, method);
+    // The last case of each row is "none"
+    int none = family == ATTR_FAMILY_GETATTR ? 10
+             : family == ATTR_FAMILY_GETMETHOD ? 4 : 5;
+    const attr_arm *chosen = attr_arm_of(nominated.kind, family);
     if (chosen == NULL) {
         attr_restore_entry((_PyFbAttr *)fb, &before);
         return none;
     }
     // The first poly observation saves what the entry described before
     fb_record(site, (_PyFbHeader *)fb, chosen->arm);
-    int kind = method ? chosen->getmethod_case : chosen->getattr_case;
+    int kind = attr_case_of(chosen, family);
     bool admitted;
     switch (chosen->arm) {
         case ROP_HANDLER_GetAttr_Instance:
@@ -1734,6 +1747,15 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
             break;
         case ROP_HANDLER_GetAttr_Shape:
             admitted = _PyAttr_AdmittedShape(fb, name, recipe);
+            break;
+        case ROP_HANDLER_AttrWrite_Instance:
+        case ROP_HANDLER_AttrWrite_Hint:
+        case ROP_HANDLER_AttrWrite_Slot:
+            admitted = _PyAttr_AdmittedInstanceSlot(fb, name, recipe);
+            break;
+        case ROP_HANDLER_AttrWrite_Shape:
+        case ROP_HANDLER_AttrWrite_ShapeAdd:
+            admitted = _PyAttr_AdmittedStoreShape(fb, name, recipe);
             break;
         case ROP_HANDLER_GetMethod_MethodValues:
             admitted = _PyAttr_AdmittedMethod(fb, name, recipe);
@@ -1753,14 +1775,21 @@ int
 _PyAttr_ClassifyGetAttr(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
                         PyObject *name, _PyAttrRecipe *recipe)
 {
-    return attr_classify(owner, site, fb, name, false, recipe);
+    return attr_classify(owner, site, fb, name, ATTR_FAMILY_GETATTR, recipe);
 }
 
 int
 _PyAttr_ClassifyGetMethod(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
                           PyObject *name, _PyAttrRecipe *recipe)
 {
-    return attr_classify(owner, site, fb, name, true, recipe);
+    return attr_classify(owner, site, fb, name, ATTR_FAMILY_GETMETHOD, recipe);
+}
+
+int
+_PyAttr_ClassifySetAttr(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
+                        PyObject *name, _PyAttrRecipe *recipe)
+{
+    return attr_classify(owner, site, fb, name, ATTR_FAMILY_SETATTR, recipe);
 }
 
 bool

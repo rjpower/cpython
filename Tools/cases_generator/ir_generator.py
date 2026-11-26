@@ -445,7 +445,7 @@ OPERAND_CALLS = {
 # operand.  A handler of the family reads them from its word, so
 # specialisation and instrumentation keep them by keeping the flags.
 CALL_ROLE_FLAGS = {
-    "CALL": ("IR_F_NO_SELF",),
+    "CALL": ("IR_F_NO_SELF", "IR_F_UNINTERRUPTED"),
     "CALL_KW": ("IR_F_NO_SELF",),
     "CALL_FUNCTION_EX": ("IR_F_NO_KW",),
 }
@@ -797,7 +797,6 @@ INPLACE_READERS = {
     # Python/specialize.c: they read types and values
     "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp",
-    "_Py_Specialize_StoreAttr",
 }
 
 
@@ -817,14 +816,10 @@ OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
 # (OBJECT_READERS_SEEN); that a name only reads is checked by review.
 # Uses inside assert() vanish from release builds and are not checked.
 OBJECT_READERS = {
-    # Statements
-    "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
     "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
     "PyUnicode_CheckExact",
-    "_PyObject_GetManagedDict", "_PyObject_InlineValues",
-    "_PyObject_Shape", "_PyObject_ValueSlot",
     # Operations that read their operands and count what they keep
     "PyErr_GivenExceptionMatches",
 
@@ -3482,7 +3477,6 @@ class IREmitter(Emitter):
         self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
         self._replacers["IR_BUILD_LIST"] = self.home_helper
-        self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
         for marker in ELEMENT_INTRINSICS:
             self._replacers[marker] = self.element_operation
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
@@ -3614,9 +3608,6 @@ class IREmitter(Emitter):
                 raise analysis_error("steal-success helper needs an unboxed terminal handoff", tkn)
             helper = IR_HELPER_CALLEES[tkn.text]
             expression = f"{helper}({local.name}, oparg)"
-        elif tkn.text == "IR_LOOKUP_SPECIAL":
-            expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
-                          f"&{local.name}[0], &{local.name}[1])")
         else:
             helper = {"IR_BUILD_STRING": "_Py_BuildString_ValueSteal",
                       "IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
@@ -7014,11 +7005,10 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR",
-                                   "STORE_ATTR_WITH_HINT", "LOAD_GLOBAL",
+                                   "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
-                                   "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
                                    "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
                                    "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr;\n")

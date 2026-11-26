@@ -594,9 +594,15 @@ call_role_flags(const _PyRegOp *op)
         return (op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0;
     }
     if (op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW) {
-        return (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
+        int flags = (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
+        if (op->opcode == ROP_HANDLER_Call_Generic &&
+            (op->flags & _PyReg_CALL_UNINTERRUPTED)) {
+            flags |= IR_F_UNINTERRUPTED;
+        }
+        return flags;
     }
-    assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)));
+    assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS |
+                          _PyReg_CALL_UNINTERRUPTED)));
     return 0;
 }
 

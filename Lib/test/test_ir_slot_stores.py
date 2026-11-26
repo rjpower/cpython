@@ -1,7 +1,7 @@
 """The stores into a heap slot release the value they displace exactly once.
 
-_STORE_ATTR_SLOT, _STORE_ATTR_INSTANCE_VALUE, _STORE_ATTR_SHAPE,
-_STORE_ATTR_SHAPE_ADD, _STORE_ATTR_WITH_HINT and _SetItem.ListIndex move
+_STORE_ATTR_SLOT, _AttrWrite.Instance, _AttrWrite.Shape,
+_AttrWrite.ShapeAdd, _AttrWrite.Hint and _SetItem.ListIndex move
 the stored value into the slot (pycore_object.h's _PyValueSlot_Exchange,
 _PyValueSlot_ExchangeFilled and _PyValueSlot_Fill) and close the value that
 the slot held.  Each case warms a store until its specialized handler runs,
@@ -88,20 +88,20 @@ def slot_case():
     targets = [Slotted(), Slotted()]
     def f(n):
         targets[n % 2].x = Value(n)
-    check_released({"STORE_ATTR_SLOT"}, f, targets)
+    check_released({"AttrWrite.Slot"}, f, targets)
     def g(target, value):
         target.x = value
-    check_held_elsewhere({"STORE_ATTR_SLOT"}, g, targets)
+    check_held_elsewhere({"AttrWrite.Slot"}, g, targets)
 
 
 def shape_case():
     targets = [Plain(), Plain()]
     def f(n):
         targets[n % 2].x = Value(n)
-    check_released({"STORE_ATTR_SHAPE"}, f, targets)
+    check_released({"AttrWrite.Shape"}, f, targets)
     def g(target, value):
         target.x = value
-    check_held_elsewhere({"STORE_ATTR_SHAPE"}, g, targets)
+    check_held_elsewhere({"AttrWrite.Shape"}, g, targets)
 
 
 def instance_value_case():
@@ -116,10 +116,10 @@ def instance_value_case():
         targets.append(o)
     def f(n):
         targets[n % 8].x = Value(n)
-    check_released({"STORE_ATTR_INSTANCE_VALUE"}, f, targets)
+    check_released({"AttrWrite.Instance"}, f, targets)
     def g(target, value):
         target.x = value
-    check_held_elsewhere({"STORE_ATTR_INSTANCE_VALUE"}, g, targets)
+    check_held_elsewhere({"AttrWrite.Instance"}, g, targets)
 
 
 def add_case():
@@ -133,7 +133,7 @@ def add_case():
     for n in range(WARM):
         f(n)
     gc.collect()
-    assert {"STORE_ATTR_SHAPE_ADD"} & handlers(f), sorted(handlers(f))
+    assert {"AttrWrite.ShapeAdd"} & handlers(f), sorted(handlers(f))
     assert sorted(Value.released) == [*range(WARM), *range(10_000, 10_000 + WARM)]
 
 
@@ -144,10 +144,10 @@ def hint_case():
         o.__dict__
     def f(n):
         targets[n % 2].x = Value(n)
-    check_released({"STORE_ATTR_WITH_HINT"}, f, targets)
+    check_released({"AttrWrite.Hint"}, f, targets)
     def g(target, value):
         target.x = value
-    check_held_elsewhere({"STORE_ATTR_WITH_HINT"}, g, targets)
+    check_held_elsewhere({"AttrWrite.Hint"}, g, targets)
 
 
 def list_case():

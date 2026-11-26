@@ -186,10 +186,10 @@ class SpecializationTests(unittest.TestCase):
             put(o, 1)
             C()
         self.assertIn("GetAttr.Shape", opnames(get))
-        self.assertIn("STORE_ATTR_SHAPE", opnames(put))
-        self.assertIn("STORE_ATTR_SHAPE_ADD", opnames(C.__init__))
+        self.assertIn("AttrWrite.Shape", opnames(put))
+        self.assertIn("AttrWrite.ShapeAdd", opnames(C.__init__))
         self.assertNotIn("GetAttr.Instance", opnames(get))
-        self.assertNotIn("STORE_ATTR_INSTANCE_VALUE", opnames(put))
+        self.assertNotIn("AttrWrite.Instance", opnames(put))
 
     def test_load_deopts_after_dict_materialisation(self):
         C = make_class()
@@ -233,7 +233,7 @@ class SpecializationTests(unittest.TestCase):
         objects = [C() for _ in range(THRESHOLD)]
         for o in objects:
             put(o, 0)
-        self.assertIn("STORE_ATTR_SHAPE", opnames(put))
+        self.assertIn("AttrWrite.Shape", opnames(put))
         o = objects[0]
         d = o.__dict__
         put(o, 5)
@@ -243,7 +243,7 @@ class SpecializationTests(unittest.TestCase):
         C = make_class()
         for _ in range(THRESHOLD):
             C()
-        self.assertIn("STORE_ATTR_SHAPE_ADD", opnames(C.__init__))
+        self.assertIn("AttrWrite.ShapeAdd", opnames(C.__init__))
         o = C.__new__(C)
         d = o.__dict__
         C.__init__(o)
@@ -307,8 +307,8 @@ class SpecializationTests(unittest.TestCase):
             mark(t)
         # Two shapes of one type: the sites check presence instead.
         self.assertIn("GetAttr.Instance", opnames(get))
-        self.assertIn("STORE_ATTR_INSTANCE_VALUE", opnames(mark))
-        self.assertIn("STORE_ATTR_INSTANCE_VALUE", opnames(Token.__init__))
+        self.assertIn("AttrWrite.Instance", opnames(mark))
+        self.assertIn("AttrWrite.Instance", opnames(Token.__init__))
         # Adding through the instance value handler keeps the shape.
         t = Token("name", "x")
         t.mark = True

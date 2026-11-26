@@ -33,8 +33,7 @@ with test_tools.imports_under_tool("cases_generator"):
 
 BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
 
-SLICE = ("_GUARD_TYPE_VERSION", "_CHECK_MANAGED_OBJECT_HAS_VALUES",
-         "_NULL_SLOT_CONDITIONAL")
+SLICE = ("_NULL_SLOT_CONDITIONAL",)
 
 
 def setUpModule():
@@ -4113,7 +4112,6 @@ class ObjectRowTests(unittest.TestCase):
         # The helpers read these arguments and never close them: the uops
         # close their inputs (DECREF_INPUTS) after the call
         self.assertEqual(table["value_import_level"].args[0].mode, "borrowed")
-        self.assertEqual(table["super_call"].args[2].mode, "borrowed")
         # A new reference, or NULL with an exception
         for name in ("_PyEval_ImportName", "_PyEval_LazyImportName",
                      "_PyEval_LazyImportFrom", "value_load_global", "_PyEval_LoadName"):

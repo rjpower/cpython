@@ -58,7 +58,6 @@ class ArmEntry:
     stub: str | None          # the stub function of a shared arm
     generic: str | None       # the stub function of its family's generic arm
     dotted: str = ""          # Add.Int
-    base: str = ""            # the first stack op of its family: BINARY_OP
     events: tuple[str, ...] = ()   # PY_MONITORING_EVENT_* names
     adaptive: bool = False    # the family adapts: its generic arm specializes
     is_generic: bool = False

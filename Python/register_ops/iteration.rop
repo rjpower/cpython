@@ -11,14 +11,14 @@
 enum IterMode(ORDINARY_ITER, DELEGATE_COROUTINE_OK, DELEGATE_NO_COROUTINE);
 
 family IterOpen(pair:Out<IterPair>, source:Src, fb:Fb<Iter>, mode:Enum<IterMode>)
-  exits(next, raise, miss, again) generic(Generic) ops(GET_ITER);
+  exits(next, raise, miss, again) generic(Generic);
 
 family ForIter(item:Dst, pair:IterPair, fb:Fb<Iter>, done:NearHead)
-  exits(next, branch, raise, miss, again, redirect) generic(Generic) ops(FOR_ITER)
+  exits(next, branch, raise, miss, again, redirect) generic(Generic)
   events(BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION) vacant(pair.cursor);
 
 family IterClose(pair:IterPair)
-  exits(next, raise, redirect) ops(POP_ITER)
+  exits(next, raise, redirect)
   events(BRANCH_RIGHT) vacant(pair.cursor);
 
 // The iterator and its cursor are published; the source is gone

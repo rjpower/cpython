@@ -23,7 +23,7 @@ enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION
                  INTRINSIC_GETATTR, INTRINSIC_SETATTR);
 
 family Function(dst:Dst, code:Src, fields:Span<Src>, present:U8)
-  exits(next, raise) ops(MAKE_FUNCTION, SET_FUNCTION_ATTRIBUTE);
+  exits(next, raise);
 
 point Function.Done(current, next_head, clear) keep() spent(code, fields) defs(dst);
 point Function.Failed(current, site, pending) keep() spent(code, fields) defs();
@@ -68,10 +68,10 @@ arm Function.Make split
 // and "intrinsic2"); the id operand says which one of the class runs.  The
 // unary intrinsics are the family Intrinsic, the binary ones IntrinsicPair.
 family Intrinsic(dst:Dst, id:Enum<IntrinsicId>, x:Src)
-  exits(next, raise) ops(CALL_INTRINSIC_1);
+  exits(next, raise);
 
 family IntrinsicPair(dst:Dst, id:Enum<IntrinsicId>, x:Src, y:Src)
-  exits(next, raise) ops(CALL_INTRINSIC_2);
+  exits(next, raise);
 
 point Intrinsic.Done(current, next_head, clear) keep() spent(x) defs(dst);
 point Intrinsic.Failed(current, site, pending) keep() spent(x) defs();

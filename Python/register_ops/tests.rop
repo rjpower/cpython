@@ -13,14 +13,14 @@ enum BranchTest(IDENTITY, CONTAINS, TEST_LT, TEST_LE, TEST_EQ, TEST_NE, TEST_GT,
 
 family Compare(dst:Dst, x:Src, y:Src, relation:Enum<Relation>,
                result:Enum<CompareResult>, fb:Fb<Compare>)
-  exits(next, raise, miss, again, redirect) generic(Generic) ops(COMPARE_OP);
+  exits(next, raise, miss, again, redirect) generic(Generic);
 
 family Identity(dst:Dst, x:Src, y:Src, sense:Bool)
-  exits(next) ops(IS_OP);
+  exits(next);
 
 // The item is tested against the container; sense inverts (not in)
 family Contains(dst:Dst, item:Src, container:Src, sense:Bool, fb:Fb<Contains>)
-  exits(next, raise, miss, again, redirect) generic(Generic) ops(CONTAINS_OP);
+  exits(next, raise, miss, again, redirect) generic(Generic);
 
 // A test and the jump on its result.  The branch is taken when the test's
 // answer is `sense`: the translator folds the inversion of `is not` and
@@ -28,7 +28,6 @@ family Contains(dst:Dst, item:Src, container:Src, sense:Bool, fb:Fb<Contains>)
 family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, sense:Bool,
                   target:NearHead, fb:Fb<Compare>)
   exits(next, branch, raise, miss, again, redirect) generic(Generic)
-  ops(POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE)
   events(BRANCH_LEFT, BRANCH_RIGHT);
 
 point Compare.Done(current, next_head, clear) keep() spent(y, x) defs(dst);

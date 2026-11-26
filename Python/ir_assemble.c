@@ -7,6 +7,7 @@
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
+#include "pycore_regcfg_metadata.h"  // _PyStack_Lowering
 #include "pycore_rop_metadata.h"    // ROP_OP_Call_Generic, ROP_FIRST_HANDLER
 #include "pycore_rop_rows.h"        // BRANCH_IF_FALSE
 #include "pycore_symtable.h"        // _Py_SourceLocation
@@ -626,8 +627,8 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     if (ROP_CFG_IS_ARM(opcode)) {
         return ROP_CFG_HANDLER(opcode);
     }
-    assert(_PyIR_OpcodeHandler[opcode] != _PyIR_NO_HANDLER);
-    return _PyIR_OpcodeHandler[opcode];
+    assert(_PyStack_Lowering[opcode].handler != _PyIR_NO_HANDLER);
+    return _PyStack_Lowering[opcode].handler;
 }
 
 /* END_ASYNC_FOR names its semantic SEND site for branch observation. */

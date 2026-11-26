@@ -490,11 +490,11 @@ LOC_NAMES = {Slot.A: "_PyIR_LOC_A", Slot.B: "_PyIR_LOC_B", Slot.C: "_PyIR_LOC_C"
              Slot.D: "_PyIR_LOC_D"}
 
 
-# The layout of an argument descriptor (Args) by the stack op that the
-# family's words stand for: CALL_KW's last operand is the constant tuple of
-# the names, CALL_FUNCTION_EX has no self operand
-ARGS_OPERANDS = {"CALL_KW": "_PyIR_OPERANDS_KW",
-                 "CALL_FUNCTION_EX": "_PyIR_OPERANDS_EX"}
+# The layout of an argument descriptor (Args) by family: a CallKw word's last
+# operand is the constant tuple of the names, a CallEx word has no self
+# operand
+ARGS_OPERANDS = {"CallKw": "_PyIR_OPERANDS_KW",
+                 "CallEx": "_PyIR_OPERANDS_EX"}
 
 
 def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
@@ -651,7 +651,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     return ir_arms.ArmFormat(
         flags=tuple(flags), effects=tuple(e for e in EFFECT_ORDER if e in effects),
         roles=tuple(roles), imm=imm, fb=fb, fb_schema=fb_schema,
-        operands=(ARGS_OPERANDS.get(fam.ops[0], "_PyIR_OPERANDS_CALL") if has_args else
+        operands=(ARGS_OPERANDS.get(fam.name, "_PyIR_OPERANDS_CALL") if has_args else
                   "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
         fixed_words=0 if has_args else enc.words,
         transfer=arm_transfer(exits, ninputs, arm.family, touches_homes),
@@ -836,7 +836,7 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
             c_name(name), p.numbers[name], region, declares_escape(arm),
             stub_name(name) if name in shared else None,
             stub_name(generic) if generic and generic in shared else None,
-            name, fam.ops[0],
+            name,
             () if arm.trailing else tuple(e.value for e in fam.events),
             "again" in fam.exits, is_generic(p.program, arm),
             arm_format(p.program, arm), twin_index.get(name), None, emitted,
@@ -948,14 +948,11 @@ def write_encodings(out: TextIO, p: Products) -> None:
         if not enc.placements:
             out.write("    {NULL},\n")
         out.write("};\n")
-        out.write(f"static const uint16_t _PyRop_Ops_{f}[] = {{"
-                  f"{', '.join(prog.families[f].ops) or '0'}}};\n")
     out.write(f"\nstatic const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {{\n")
     for f in families:
         enc = prog.encodings[f]
         out.write(f'    [ROP_FAMILY_{f}] = {{"{f}", {len(enc.placements)}, {enc.words}, '
-                  f'_PyRop_Operands_{f}, {len(prog.families[f].ops)}, '
-                  f'_PyRop_Ops_{f}}},\n')
+                  f'_PyRop_Operands_{f}}},\n')
     out.write("};\n\n")
 
 
@@ -1042,8 +1039,6 @@ typedef struct {
     uint8_t noperands;
     uint8_t words;           /* operand words after the head, vectors aside */
     const _PyRopOperand *operands;
-    uint8_t nops;            /* the stack ops that lower to the family; the */
-    const uint16_t *ops;     /* first is the base opcode of its arms' words */
 } _PyRopFamily;
 
 typedef struct {

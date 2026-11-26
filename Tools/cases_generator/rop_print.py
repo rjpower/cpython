@@ -163,8 +163,6 @@ def decl_lines(d: Decl) -> list[str]:
         tail = f"  exits{_names(d.exits)}"
         if d.generic:
             tail += f" generic({d.generic})"
-        if d.ops:
-            tail += f" ops{_names(d.ops)}"
         if d.events:
             tail += f" events{_names(tuple(e.value for e in d.events))}"
         if d.vacant:

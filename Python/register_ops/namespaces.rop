@@ -10,7 +10,7 @@
 // itself; BuildClass is the builtins' __build_class__.  Locals and
 // BuildClass read no name: their word's name field is 0.
 family NamespaceRead(dst:Dst, name:U16)
-  exits(next, raise) ops(LOAD_NAME, LOAD_LOCALS, LOAD_BUILD_CLASS);
+  exits(next, raise);
 
 point NamespaceRead.Failed(current, site, pending) keep() spent() defs();
 point NamespaceRead.Done(current, next_head, clear) keep() spent() defs(dst);
@@ -96,7 +96,7 @@ arm NamespaceRead.BuildClass shared select(build_class_scope)
 // always present, and an absent one would need a vacant register that no
 // translated operation provides.
 family NamespaceReadFrom(dst:Dst, mapping:Src, name:U16)
-  exits(next, raise) ops(LOAD_FROM_DICT_OR_GLOBALS);
+  exits(next, raise);
 
 point NamespaceReadFrom.Failed(current, site, pending) keep() spent(mapping) defs();
 point NamespaceReadFrom.Done(current, next_head, clear) keep() spent(mapping) defs(dst);
@@ -151,7 +151,7 @@ arm NamespaceReadFrom.Mapping shared
 // store).  Name is the locals (a mapping); Global is the globals dict.  A
 // missing name raises NameError.
 family NamespaceWrite(name:U16, value:Maybe<Src>)
-  exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
+  exits(next, raise);
 
 point NamespaceWrite.Failed(current, site, pending) keep() spent(value) defs();
 point NamespaceWrite.Done(current, next_head, clear) keep() spent(value) defs();
@@ -251,7 +251,7 @@ arm NamespaceWrite.Global shared select(global_scope)
 
 // SetupAnnotations: __annotations__ in the namespace, created when missing
 family SetupAnnotations()
-  exits(next, raise) ops(SETUP_ANNOTATIONS);
+  exits(next, raise);
 
 point SetupAnnotations.Failed(current, site, pending) keep() spent() defs();
 point SetupAnnotations.Done(current, next_head, clear) keep() spent() defs();
@@ -287,7 +287,7 @@ arm SetupAnnotations.Setup shared
 // The name is a name field (an index below 4096): the head has no room for a
 // wider one beside dst, level and fromlist.
 family Import(dst:Dst, level:Src, fromlist:Src, name:Name)
-  exits(next, raise) ops(IMPORT_NAME);
+  exits(next, raise);
 
 point Import.Failed(current, site, pending) keep() spent(level, fromlist) defs();
 point Import.Done(current, next_head, clear) keep() spent(level, fromlist) defs(dst);
@@ -363,7 +363,7 @@ arm Import.Lazy shared select(lazy_import)
 // in its home for the next read; FromLast is the last read, which spends it
 // (no retirement follows).
 family ImportFrom(dst:Dst, module:Src, name:U16)
-  exits(next, raise) ops(IMPORT_FROM);
+  exits(next, raise);
 
 point ImportFrom.Failed(current, site, pending) keep(module) spent() defs();
 point ImportFrom.Done(current, next_head, clear) keep(module) spent() defs(dst);

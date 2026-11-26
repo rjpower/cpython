@@ -19,18 +19,16 @@ import ir_arms
 from cwriter import CWriter
 from generators_common import ROOT, write_header
 from handler_table import first_arm, num_handlers
-from stack_ops import PSEUDOS, STACK_OPS
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
-STACK_NUMBERS = {op.name: op.opcode for op in STACK_OPS}
 
 # The role flags that a word of a call family may carry: a handler of the
 # family reads them from its word, so specialisation and instrumentation keep
 # them by keeping the flags.
 CALL_ROLE_FLAGS = {
-    "CALL": ("IR_F_NO_SELF", "IR_F_UNINTERRUPTED"),
-    "CALL_KW": ("IR_F_NO_SELF", "IR_F_KW"),
-    "CALL_FUNCTION_EX": ("IR_F_NO_KW", "IR_F_EX"),
+    "Call": ("IR_F_NO_SELF", "IR_F_UNINTERRUPTED"),
+    "CallKw": ("IR_F_NO_SELF", "IR_F_KW"),
+    "CallEx": ("IR_F_NO_KW", "IR_F_EX"),
 }
 
 # The row of the word kind that holds operands: no instruction, inert
@@ -120,7 +118,7 @@ def arm_row(arm: ir_arms.ArmEntry) -> str:
     events = bits([f"(1u << PY_MONITORING_EVENT_{e})" for e in arm.events])
     fixed = f".fixed_words = {fmt.fixed_words}, " if fmt.fixed_words else ""
     # An arm of a call family reads the call-role flags of its word
-    word_flags = bits(list(CALL_ROLE_FLAGS.get(arm.base, ())))
+    word_flags = bits(list(CALL_ROLE_FLAGS.get(arm.dotted.split(".")[0], ())))
     return (
         f"{{ .flags = {bits(list(fmt.flags))}, .effects = {bits(list(fmt.effects))}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
@@ -136,9 +134,6 @@ def generate_ir_metadata(
     filenames: list[str], outfile: TextIO, arms: Sequence[ir_arms.ArmEntry]
 ) -> None:
     n = num_handlers(arms)
-    for arm in arms:
-        if arm.base not in STACK_NUMBERS:
-            raise ValueError(f"{arm.dotted}: ops({arm.base}) is not a stack op")
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     with out.header_guard("Py_CORE_IR_METADATA_H"):
@@ -169,21 +164,6 @@ def generate_ir_metadata(
         for arm in arms:
             assert arm.format is not None
             out.emit(f"[{arm_id(arm)}] = {arm_row(arm)},  /* {arm.dotted} */\n")
-        out.emit("};\n")
-        out.emit("#endif\n\n")
-
-        none = "_PyIR_NO_HANDLER"
-        out.emit("/* The handler of a stack opcode, or _PyIR_NO_HANDLER */\n")
-        out.emit("PyAPI_DATA(const uint16_t) _PyIR_OpcodeHandler[256];\n")
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const uint16_t _PyIR_OpcodeHandler[256] = {\n")
-        for number in range(256):
-            # A displacing arm is the handler of its family's one op, the
-            # instrumented opcode that monitoring puts in a word
-            handler = next((arm_id(arm) for arm in arms
-                            if arm.displacing and STACK_NUMBERS.get(arm.base) == number),
-                           None)
-            out.emit(f"[{number}] = {none if handler is None else handler},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
 

@@ -404,9 +404,6 @@ class Family:
     name: str
     params: tuple[Param, ...]
     exits: tuple[str, ...]
-    # The public stack ops that lower to the family; the first is the base
-    # and event opcode of its arms' words
-    ops: tuple[str, ...] = ()
     # The events of the family's observed wrapper (its arms' twins)
     events: tuple[MonitoringEvent, ...] = ()
     span: SrcSpan = _span()

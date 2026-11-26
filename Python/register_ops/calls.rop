@@ -10,14 +10,14 @@ enum Interrupt(INTERRUPTIBLE, UNINTERRUPTED);
 // P4: positional calls, init cleanup, return
 
 family Call(dst:Dst, fn:Src, args:Args, fb:Fb<Call>, interrupt:Enum<Interrupt>)
-  exits(next, enter, raise, redirect, miss, again) generic(Generic) ops(CALL)
+  exits(next, enter, raise, redirect, miss, again) generic(Generic)
   events(CALL, C_RETURN, C_RAISE);
 
 family InitResult(value:Src)
-  exits(next, raise) ops(EXIT_INIT_CHECK);
+  exits(next, raise);
 
 family Return(value:Src)
-  exits(return, exit, raise, redirect) ops(RETURN_VALUE, INTERPRETER_EXIT)
+  exits(return, exit, raise, redirect)
   events(PY_RETURN);
 
 // The caller goes on here when the child returns: the child's value is dst
@@ -794,19 +794,19 @@ arm Return.External split select(entry_frame)
 // keyword names as its last operand (the elided LOAD_CONST); the arms share
 // Call's rows, which read the keywords from the word.
 family CallKw(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
-  exits(next, enter, raise, miss, again) generic(Generic) ops(CALL_KW)
+  exits(next, enter, raise, miss, again) generic(Generic)
   events(CALL, C_RETURN, C_RAISE);
 
 // `args` is the positional iterable or tuple and, unless the word says
 // otherwise, the kwargs dict.  The tuple that the call makes of the iterable
 // is an owner of the call, not a home.
 family CallEx(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
-  exits(next, enter, raise, miss, again) generic(Generic) ops(CALL_FUNCTION_EX)
+  exits(next, enter, raise, miss, again) generic(Generic)
   events(CALL, C_RETURN, C_RAISE);
 
 // The local's **kwargs dict, which the binding of a frame left pending
 family MaterializeKwargs(local:Local)
-  exits(next, raise) ops(LOAD_FAST);
+  exits(next, raise);
 
 point CallKw.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst);
 point CallKw.Done(current, next_head, clear) keep() spent(fn, args) defs(dst);

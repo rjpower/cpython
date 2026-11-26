@@ -7,7 +7,7 @@
 // RAISE_VARARGS: `args` holds the exception and the cause, or neither.  An
 // empty span is a bare `raise`.
 family Raise(args:Span<Src>)
-  exits(raise, unwind) ops(RAISE_VARARGS);
+  exits(raise, unwind);
 
 // An explicit raise raises with a traceback entry; a bare raise that finds a
 // handled exception goes to the unwinder with the RERAISE event fired
@@ -65,7 +65,7 @@ arm Raise.Throw split
 // entered the handler (the public origin of the exception); absent for
 // RERAISE 0.  The exception is spent.
 family Reraise(lasti:Maybe<Src>, exc:Src)
-  exits(unwind) ops(RERAISE);
+  exits(unwind);
 
 point Reraise.Raised(current, site, pending) keep(lasti) spent(exc) defs();
 point Reraise.Origin(current, saved_origin, pending) keep(lasti) spent(exc) defs();
@@ -135,7 +135,7 @@ arm Reraise.Origin split select(present)
 // none) and replaced by `exc`, which moves to `held`: the handler's exception
 // takes the next position, as the old op put it.
 family ExceptEnter(prev:Dst, held:Dst, exc:Src)
-  exits(next) ops(PUSH_EXC_INFO);
+  exits(next);
 
 point ExceptEnter.Done(current, next_head, handled) keep() spent(exc) defs(prev, held);
 
@@ -163,7 +163,7 @@ arm ExceptEnter.Install shared
 
 // POP_EXCEPT: the saved previous exception is the handled one again
 family ExceptLeave(saved:Src)
-  exits(next) ops(POP_EXCEPT);
+  exits(next);
 
 point ExceptLeave.Done(current, next_head, handled) keep() spent(saved) defs();
 
@@ -192,7 +192,7 @@ arm ExceptLeave.Restore shared
 // CHECK_EXC_MATCH: whether the exception matches the class or the tuple of
 // classes; the exception stays, the pattern is spent
 family ExceptMatch(dst:Dst, exc:Src, pattern:Src)
-  exits(next, raise) ops(CHECK_EXC_MATCH);
+  exits(next, raise);
 
 point ExceptMatch.Done(current, next_head, clear) keep(exc) spent(pattern) defs(dst);
 point ExceptMatch.Invalid(current, site, pending) keep(exc) spent(pattern) defs();
@@ -240,7 +240,7 @@ arm ExceptMatch.Match shared
 // exception) and `rest` the remainder.  Both operands are spent.  The
 // destinations are in the order the old op defined them: the rest, then the match.
 family ExceptGroupMatch(rest:Dst, match:Dst, exc:Src, pattern:Src)
-  exits(next, raise) ops(CHECK_EG_MATCH);
+  exits(next, raise);
 
 point ExceptGroupMatch.Done(current, next_head, handled) keep() spent(exc, pattern) defs(rest, match);
 point ExceptGroupMatch.Failed(current, site, pending) keep() spent(exc, pattern) defs();

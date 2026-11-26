@@ -86,7 +86,7 @@ typedef int (*_Py_initvaluefunc)(PyValueBorrow, const PyValue *,
 #define _Py_VALUE_KIND_ASSITEM _Py_assitemvaluefunc
 #define _Py_VALUE_KIND_CONTAINS _Py_containsvaluefunc
 #define _Py_VALUE_KIND_ITERNEXT _Py_iternextvaluefunc
-#define _Py_VALUE_KIND_SEND _Py_sendvaluefunc
+#define _Py_VALUE_KIND_ASYNCSEND _Py_sendvaluefunc
 #define _Py_VALUE_KIND_VECTORCALL _Py_vectorcallvaluefunc
 #define _Py_VALUE_KIND_CONCAT _Py_concatvaluefunc
 
@@ -122,7 +122,7 @@ typedef int (*_Py_initvaluefunc)(PyValueBorrow, const PyValue *,
     X(ass_subscript, as_mapping.mp_ass_subscript, ASSSUBSCRIPT, ASSSUBSCRIPT) \
     X(contains, as_sequence.sq_contains, CONTAINS, CONTAINS) \
     X(iternext, ht_type.tp_iternext, ITERNEXT, ITERNEXT) \
-    X(call, ht_type.tp_call, VECTORCALL, CALL) \
+    X(call, ht_type.tp_call, VECTORCALL, CALLABLE) \
     X(nb_power, as_number.nb_power, TERNARY, TERNARY) \
     X(nb_negative, as_number.nb_negative, UNARY, UNARY) \
     X(nb_positive, as_number.nb_positive, UNARY, UNARY) \
@@ -160,7 +160,7 @@ typedef int (*_Py_initvaluefunc)(PyValueBorrow, const PyValue *,
     X(descr_set, ht_type.tp_descr_set, DESCRSET, DESCRSET) \
     X(item, as_sequence.sq_item, ITEM, ITEM) \
     X(ass_item, as_sequence.sq_ass_item, ASSITEM, ASSITEM) \
-    X(send, as_async.am_send, SEND, NONE) \
+    X(send, as_async.am_send, ASYNCSEND, NONE) \
     X(sq_concat, as_sequence.sq_concat, CONCAT, CONCAT) \
     X(sq_inplace_concat, as_sequence.sq_inplace_concat, CONCAT, CONCAT) \
     X(new_, ht_type.tp_new, NEW, NONE) \

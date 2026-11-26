@@ -11,7 +11,7 @@
 // an interpolation's conversion is `flags >> 2` and its format flag bit 0,
 // as the compiler wrote them.  Every piece is spent on every outcome.
 family BuildText(dst:Dst, parts:Span<Src>, flags:U8)
-  exits(next, raise) ops(BUILD_STRING, BUILD_INTERPOLATION, BUILD_TEMPLATE);
+  exits(next, raise);
 
 point BuildText.Failed(current, site, pending) keep() spent(parts) defs();
 point BuildText.Done(current, next_head, clear) keep() spent(parts) defs(dst);
@@ -99,7 +99,7 @@ arm BuildText.Template shared select(template)
 // Convert: str(), repr() or ascii() of the value, which is spent
 
 family Convert(dst:Dst, value:Src, kind:Enum<ConvertKind>)
-  exits(next, raise, redirect) ops(CONVERT_VALUE);
+  exits(next, raise, redirect);
 
 point Convert.Failed(current, site, pending) keep() spent(value) defs();
 point Convert.Done(current, next_head, clear) keep() spent(value) defs(dst);
@@ -165,10 +165,10 @@ arm Convert.Text shared
 // itself, which the format row returns as the new owner.
 
 family Format(dst:Dst, value:Src)
-  exits(next, raise, redirect) ops(FORMAT_SIMPLE);
+  exits(next, raise, redirect);
 
 family FormatSpec(dst:Dst, value:Src, spec:Src)
-  exits(next, raise, redirect) ops(FORMAT_WITH_SPEC);
+  exits(next, raise, redirect);
 
 point Format.Failed(current, site, pending) keep() spent(value) defs();
 point Format.Done(current, next_head, clear) keep() spent(value) defs(dst);

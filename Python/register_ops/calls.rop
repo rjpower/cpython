@@ -890,6 +890,7 @@ extern helper plan_fits(t:Thread, f:Frame, fn:B, a:Args, fb:Fb<Call>) -> Bool
 extern helper push_plan(t:Thread, f:Frame, fn:Src, a:Args, fb:Fb<Call>)
   cases(entered(c:NewFrame), err(e:Err))
   effects(reads, writes, allocates, releases, raises)
+  feedback(read(entry.plan))
   spends(fn, a)
   requires(exact<function>(fn))
   c _PyRop_PushPlan as pointer_or_raised

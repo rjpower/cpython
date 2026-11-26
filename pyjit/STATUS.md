@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `ee63f5b25c4` (pushed) holds:
+`pyjit/rir90` at `cc66f6c8da6` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -52,20 +52,21 @@ interpreter hold no reference to the stack at step D, and tests check it.
   and special lookups (AW), numeric operators (BN), text, length and
   patterns (TP);
 - W2: keyword and expanded calls (KC), iteration (FI), exceptions (EX),
-  resume and polls (RS);
+  resume and polls (RS), send, yield, awaitables and async iteration (SY),
+  throw completion, async-for end and context exit (TC);
 - the known failures fixed once: settrace jumps refused by design and raw
   value bits gone (KF), tests that deletions cannot break, with STACK_ONLY
   derived (TS);
-- PS: stack opcode numbers pinned to upstream's table. Stubbing or deleting
-  an op leaves `opcode_ids.h` unchanged, so ports no longer bump the pyc
-  magic number (64451), and translator-only ops have no stack number.
+- PS: stack opcode numbers pinned to upstream's table, so ports no longer
+  bump the pyc magic number (64451); register handler ids dense and
+  independent of stack numbers (305 handlers, under the 512 limit), with
+  generated maps between the two spaces.
 
-Family arms are 98.7% of the IR words over Lib/ (55.5% at the freeze); 17
-inherited instructions remain, all in SY's and TC's scope (yield, send,
-awaitables, `WITH_EXCEPT_START`, `CLEANUP_THROW`, `END_ASYNC_FOR`). The last
-merge check shows no failure on release or assert, and the verifier reports
-no error over 109,655 code objects. Ports keep the old handlers' object
-locks and turn every old specialization into an arm.
+Six inherited handlers remain: NOP, LOAD_COMMON_CONSTANT, STORE_FAST,
+IR_JUMP, INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION. The last merge check
+passed the smoke set on release and assert, and the verifier reports no error
+over 109,625 code objects. Ports keep the old handlers' object locks and turn
+every old specialization into an arm.
 
 Interpreter first (user, 2026-11-25): port every op, reach test parity, then
 interpreter performance parity with golden87 (within 5% on the timed
@@ -73,12 +74,16 @@ geomean, JIT off); only then the JIT. Units run the tests their branch
 touches; root runs the smoke set at each merge and full suites at the wave
 join.
 
-Running: PS step 2 makes register handler ids dense and independent of stack
-opcode numbers. Today ids 0-255 are reserved one per stack number, so 185 of
-the 511 ids hold no handler and new arms no longer fit the 9-bit field (326
-real handlers). KC's restored call specializations and SY's Send port
-(restoring SEND_GEN, SEND_VIRTUAL and SEND_ASYNC_GEN as arms) merge after it;
-TC follows SY.
+Running:
+- LO ports the six. Four already have families. Line and instruction events
+  become displacing handlers, with a `dispatch` exit legal only in arms
+  declared `displacing`.
+- PS step 3 fixes the review's findings on handler/opcode mixing and adds an
+  assert build with permuted, gapped ids, so a mixed comparison fails in the
+  ordinary suites.
+- D plans the deletion of the stack-semantic generator.
+
+Then full suites and approximate timing.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

@@ -176,7 +176,7 @@ class ContractTests(unittest.TestCase):
                 self.assertIn(row.base, {*opcode._stack_opmap.values(),
                                          *(opcode._HANDLER_OP + h
                                            for h in opcode._ir_only_handlers)})
-                self.assertIn(row.shadow, {0, *opcode._stack_opmap.values()})
+                self.assertIn(row.shadow, {None, *opcode._stack_opmap.values()})
         for name in (*opcode._specialized_opmap, *opcode._ir_handlers):
             if (opcode._ir_handlers.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS
                     or name in TRANSLATOR_ONLY):
@@ -191,7 +191,8 @@ class ContractTests(unittest.TestCase):
         for h, row in ROWS.items():
             op = row.base
             if (op >= opcode.MIN_INSTRUMENTED_OPCODE
-                    or opcode.opname[row.shadow] in opcode._specialized_opmap):
+                    or (row.shadow is not None
+                        and opcode.opname[row.shadow] in opcode._specialized_opmap)):
                 continue
             for oparg in OPARGS:
                 if not _opcode.has_arg(op) and oparg:
@@ -786,7 +787,8 @@ class SourceScanTests(unittest.TestCase):
         for h, row in ROWS.items():
             name = opcode._all_opname[h]
             if name not in popped:
-                shadow = opcode.opname[row.shadow]
+                shadow = (None if row.shadow is None
+                          else opcode.opname[row.shadow])
                 name = shadow if shadow in popped else opcode.opname[row.base]
             for oparg in OPARGS:
                 counts = (extent(row.reads, oparg),

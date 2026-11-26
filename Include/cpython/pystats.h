@@ -201,7 +201,11 @@ typedef struct _rare_event_stats {
 } RareEventStats;
 
 typedef struct _stats {
+    /* Per handler: indexed by handler id */
     OpcodeStats opcode_stats[IR_NUM_HANDLERS];
+    /* Per instruction family: indexed by stack opcode, which is no handler id
+     * and has none at all for a stack-only family such as LOAD_ATTR */
+    SpecializationStats family_stats[256];
     CallStats call_stats;
     ObjectStats object_stats;
 #ifdef Py_GIL_DISABLED

@@ -408,7 +408,9 @@ enum {
 /* The translator's CFG holds stack opcodes below 256 in its ops, so an op
  * that names an arm is tagged: ROP_OP_<arm> is ROP_CFG_BASE plus the arm's
  * handler offset, and ROP_CFG_HANDLER() takes it back to the handler id */
-#define ROP_CFG_BASE 512
+#define ROP_CFG_BASE 1024
+static_assert(ROP_CFG_BASE >= IR_HANDLER_ONLY_BASE(IR_NUM_HANDLERS),
+              "CFG arm numbers overlap handler-only bases");
 #define ROP_CFG_IS_ARM(op) ((op) >= ROP_CFG_BASE)
 #define ROP_CFG_HANDLER(op) ((op) - ROP_CFG_BASE + ROP_FIRST_HANDLER)
 #define ROP_OP_Add_Int (ROP_CFG_BASE + 0)

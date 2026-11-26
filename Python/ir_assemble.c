@@ -1147,7 +1147,8 @@ layout(struct assembler *a, _PyRegCfg *cfg)
         int changed = 0;
         for (int i = 0; i < cfg->nops; i++) {
             _PyRegOp *op = &cfg->ops[i];
-            if (word <= _PyIR_MaxForward) {
+            // A deleted or elided op has no word, and no handler to ask
+            if (word <= _PyIR_MaxForward || op->nwords == 0) {
                 continue;
             }
             const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);

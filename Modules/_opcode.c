@@ -431,7 +431,7 @@ static PyStructSequence_Desc ir_contract_desc = {
 static PyObject *
 handler_or_none(int h)
 {
-    return h == 0 ? Py_NewRef(Py_None) : PyLong_FromLong(h);
+    return h == _PyIR_NO_HANDLER ? Py_NewRef(Py_None) : PyLong_FromLong(h);
 }
 
 static PyObject *
@@ -460,7 +460,8 @@ ir_contract_row(PyTypeObject *type, int h)
         Py_BuildValue("(ii)", fmt->reads.k, fmt->reads.form),
         Py_BuildValue("(ii)", fmt->writes.k, fmt->writes.form),
         Py_BuildValue("(ii)", fmt->through.k, fmt->through.form),
-        PyLong_FromLong(fmt->shadow),
+        fmt->shadow == _PyIR_NO_OPCODE ? Py_NewRef(Py_None)
+                                       : PyLong_FromLong(fmt->shadow),
         PyLong_FromLong(_PyIR_BaseOpcode(h)),
         handler_or_none(fmt->twin),
         PyLong_FromUnsignedLong(fmt->events),

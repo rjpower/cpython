@@ -111,7 +111,7 @@ _PyIR_BaseOpcode(int handler)
         return CACHE;
     }
     // The shadow of a handler is the stack opcode that it stands for
-    int shadow = _PyIR_Formats[handler].shadow;
+    int shadow = _PyIR_FormatOf(handler)->shadow;
     assert(shadow < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
     return _PyOpcode_Deopt[shadow];
 }
@@ -427,7 +427,7 @@ static int
 ordinary_handler_for(int handler, int opcode)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
+    if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != _PyIR_NO_HANDLER &&
         opcode >= MIN_INSTRUMENTED_OPCODE &&
         _PyIR_OpcodeBase[opcode] == _PyIR_HandlerBase[handler])
     {
@@ -440,8 +440,11 @@ ordinary_handler_for(int handler, int opcode)
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
-    // The handler that the stack op has
-    assert(_PyIR_OpcodeHandler[opcode] != _PyIR_NO_HANDLER);
+    // The handler that the stack op has; a relaxation jump (IR_JUMP), for
+    // one, is never instrumented and has no such handler
+    if (_PyIR_OpcodeHandler[opcode] == _PyIR_NO_HANDLER) {
+        Py_FatalError("instrumented opcode has no handler");
+    }
     return _PyIR_OpcodeHandler[opcode];
 }
 
@@ -490,7 +493,7 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
         tools_observe(co, i, handler))
     {
         int twin = _PyIR_FormatOf(handler)->twin;
-        if (twin != 0 && handler >= IR_NUM_OLD_HANDLERS) {
+        if (twin != _PyIR_NO_HANDLER && handler >= IR_NUM_OLD_HANDLERS) {
             return twin;
         }
     }

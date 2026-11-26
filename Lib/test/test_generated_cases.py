@@ -802,7 +802,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValueBorrow left;
@@ -1922,7 +1922,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -2227,7 +2227,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP);
+            INSTRUCTION_STATS(opcode);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
@@ -2266,7 +2266,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP_SPECIALIZED);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
@@ -2339,7 +2339,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_D(ir_word));
@@ -2425,7 +2425,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(IR_PASS);
+            INSTRUCTION_STATS(opcode);
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -2474,8 +2474,10 @@ class TestIRCases(unittest.TestCase):
         # The handler ids are dense and apart from the stack opcodes:
         # emitted in ir_handler_ids.h, with the arms after the old handlers.
         ids = ir_generator.handler_ids(analysis)
-        self.assertEqual(ir_generator.num_old_handlers(analysis), 4)
-        self.assertEqual(sorted(ids.values()), [0, 1, 2, 3])
+        self.assertEqual(ir_generator.num_old_handlers(analysis),
+                         ir_generator.id_base() + 4)
+        base = ir_generator.id_base()
+        self.assertEqual(sorted(ids.values()), list(range(base, base + 4)))
         self.assertGreater(ids["IR_BACON"], ids["LOAD"])
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
         # Only the twin runs Python itself; the format does, as the twin's.
@@ -2516,8 +2518,8 @@ class TestIRCases(unittest.TestCase):
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
-            ".through = { 0, _PyIR_EXT_FIXED }, .shadow = 0, "
-            ".twin = 0, .events = 0 },  /* IR_PASS */",
+            ".through = { 0, _PyIR_EXT_FIXED }, .shadow = _PyIR_NO_OPCODE, "
+            ".twin = _PyIR_NO_HANDLER, .events = 0 },  /* IR_PASS */",
             f'[{ids["IR_BACON"]}] = "IR_BACON",',
             f'[{ids["IR_PASS"]}] = "IR_PASS",',
         ]:
@@ -3254,9 +3256,11 @@ class TestIRCases(unittest.TestCase):
         }
     """
         analysis = self.analyze(input)
+        # A guard build (PYJIT_IR_ID_BASE) starts the ids above 0
+        base = ir_generator.id_base()
         self.assertEqual(ir_generator.handler_ids(analysis),
-                         {"GO": 0, "IR_BACON": 1, "IR_PASS": 2})
-        self.assertEqual(ir_generator.num_old_handlers(analysis), 3)
+                         {"GO": base, "IR_BACON": base + 1, "IR_PASS": base + 2})
+        self.assertEqual(ir_generator.num_old_handlers(analysis), base + 3)
 
 
 def generated_address_sites(text):

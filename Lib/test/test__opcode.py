@@ -116,29 +116,26 @@ class StackEffectTests(unittest.TestCase):
 
 
 class SpecializationStatsTests(unittest.TestCase):
+    def test_stack_bytecode_has_no_specialized_forms(self):
+        # Specialized forms are arms of the register families; stack
+        # bytecode is transport only.
+        self.assertEqual(dict(opcode._specializations), {})
+
     def test_specialization_stats(self):
         stat_names = ["success", "failure", "hit", "deferred", "miss", "deopt"]
-        specialized_opcodes = [
-            op.lower()
-            for op in opcode._specializations
-            if opcode._inline_cache_entries.get(op, 0)
-        ]
-        self.assertTrue(specialized_opcodes)
-        name = specialized_opcodes[0]
-
         stats = _opcode.get_specialization_stats()
-        if stats is not None:
-            self.assertIsInstance(stats, dict)
-            self.assertCountEqual(stats.keys(), specialized_opcodes)
-            self.assertCountEqual(
-                stats[name].keys(),
-                stat_names + ['failure_kinds'])
+        if stats is None:
+            self.skipTest("needs a build with Py_STATS")
+        self.assertIsInstance(stats, dict)
+        self.assertTrue(stats)
+        # Keyed by the stack op whose family specializes
+        for name, family in stats.items():
+            self.assertIn(name.upper(), opcode.opmap)
+            self.assertCountEqual(family.keys(), stat_names + ['failure_kinds'])
             for sn in stat_names:
-                self.assertIsInstance(stats[name][sn], int)
-            self.assertIsInstance(
-                stats[name]['failure_kinds'],
-                tuple)
-            for v in stats[name]['failure_kinds']:
+                self.assertIsInstance(family[sn], int)
+            self.assertIsInstance(family['failure_kinds'], tuple)
+            for v in family['failure_kinds']:
                 self.assertIsInstance(v, int)
 
 

@@ -1252,7 +1252,15 @@ NOT_RUN = {
                      "rop_transfer_run's synthetic caller cannot hold",
     "Send.CompleteObserved": "enters or steps a receiver in a generator frame, which "
                              "rop_transfer_run's synthetic caller cannot hold",
-    "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
+    # rir90 TC: test_rop_cleanup runs these
+    "CleanupThrow.Generic": "completes a throw into a delegate of a generator frame, "
+                            "which rop_transfer_run's synthetic caller cannot hold",
+    "EndAsyncFor.Generic": "END_ASYNC_FOR occurs in async code, which the probe cannot "
+                           "call as a function",
+    "EndAsyncFor.Observed": "END_ASYNC_FOR occurs in async code, which the probe cannot "
+                            "call as a function",
+    "WithExit.Generic": "deferred: no scenario yet (interpreter-first)",
+    "Return.Generator":"returns from a generator frame, which rop_transfer_run's "
                         "synthetic caller cannot hold",
     "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "
                           "cannot call as a function",

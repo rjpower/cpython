@@ -2357,7 +2357,7 @@ def write_templates(out, analysis, records) -> None:
     arm_templates = rop_generator.template_arm_names()
     out.write(f"const _PyJitTemplate _PyJit_Templates[{ir_arms.IR_LIMIT}] = {{\n")
     for name, i in sorted(made.items(), key=lambda x: x[1]):
-        out.write(f"    [{i}] = jit_template_{name},\n")
+        out.write(f"    [IR_H_{name}] = jit_template_{name},\n")
     for name in arm_templates:
         out.write(f"    [ROP_HANDLER_{name}] = jit_template_{name},\n")
     out.write("};\n")

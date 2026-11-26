@@ -665,6 +665,10 @@ def _same_bool(b, sense, hit):
     return (b.emit1("xorb", "bool", (b.leaf(hit),), f"!({_imm(b, sense)})"),)
 
 
+def _events_pending(b, thread):
+    return (b.prim1("_Py_EvalBreakerHasEvents"),)
+
+
 def _borrow_present(b, m):
     "_PyValue_BorrowPresent"
     return (b.emit1("lnot", "bool", (b.prim1("PyValue_IsNull", b.leaf(m)),)),)
@@ -951,6 +955,8 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     "_PyRop_BranchTaken": _branch_taken,
     "_PyRop_SameBool": _same_bool,
     "_PyValue_BorrowPresent": _borrow_present,
+    # The poll's flag test
+    "_PyRop_EventsPending": _events_pending,
     # Truth
     "_PyRop_ExactInt": _exact_int,
     "_PyRop_IntNonzero": _int_nonzero,
@@ -990,18 +996,12 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
 
 
 def _poll(b: LeafBuilder, args, edges) -> None:
-    """_PyRop_Poll: a load and a test of the eval breaker, and only when an
-    event is pending the call that handles it"""
+    """_PyRop_Poll: the call that handles the pending events.  The arm tests
+    the eval breaker before it (events_pending)."""
     if not b.raise_block(edges["err"].target):
         b.refuse("the error edge of poll is not a raise")
     b.helpers.append("_Py_HandlePending")
     b.effects |= set(rop_primitives.HELPERS["_Py_HandlePending"].effects)
-    events = b.prim1("_Py_EvalBreakerHasEvents")
-    here = b.cur
-    handle = b.new_block()
-    quiet = b.edge_block(edges["ok"].target)
-    here.term = ("br", events, handle.id, quiet)
-    b.cur = handle
     status = b.emit1("call", "i32", (), "_Py_HandlePending")
     failed = b.cmp("ne", status, b.const("i32", 0))
     b.emit("raise_if", (), (failed,))

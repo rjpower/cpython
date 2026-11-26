@@ -195,6 +195,16 @@ _PyRop_AnchorArg(const _PyRopAnchors *a, size_t i)
     return a->view[i];
 }
 
+/* The poll's fast path (truth.rop, events_pending): an event is pending for
+ * _Py_HandlePending(), by the one relaxed load and test of the eval breaker
+ * that check_periodics() makes first */
+static inline bool
+_PyRop_EventsPending(PyThreadState *tstate)
+{
+    return (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
+            & _PY_EVAL_EVENTS_MASK) != 0;
+}
+
 static inline bool
 _PyRop_RedirectPending(_PyInterpreterFrame *frame)
 {

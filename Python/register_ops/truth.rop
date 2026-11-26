@@ -1013,6 +1013,18 @@ arm BranchNone.Observed split observes
 point Jump.PollFailed(current, site, pending) keep() spent() defs();
 point Jump.EventFailed(current, site, pending) keep() spent() defs();
 
+// The flag test of _CHECK_PERIODIC: an arm polls only when it holds
+extern primitive events_pending(t:Thread) -> Bool
+  effects(reads)
+  c _PyRop_EventsPending as bool
+  evidence(
+    review: "TB. ceval_macros.h check_periodics: _Py_EvalBreakerHasEvents, the"
+            "relaxed load of the eval breaker and its _PY_EVAL_EVENTS_MASK test.",
+    contract: "One load of the thread's eval breaker: no memory, no failure, no"
+              "callback. False means check_periodics would do nothing.",
+    lowering: "rop_leaf ROW_LOWERINGS: _Py_EvalBreakerHasEvents",
+    test: "test_rop_truth");
+
 // _CHECK_PERIODIC: signals, the GC and other pending events
 extern helper poll(t:Thread, at:Site)
   cases(ok(), err(e:Err))
@@ -1088,6 +1100,8 @@ arm Jump.Poll inline select(interruptible, jit_off)
   exits(jump, raise)
 {
   entry():
+    branch events_pending(thread) -> Poll(), Go();
+  Poll():
     call poll(thread, site) {
       ok -> Go();
       err -> Failed();
@@ -1104,6 +1118,8 @@ arm Jump.Warm split select(interruptible, jit_on)
   exits(jump, raise, redirect)
 {
   entry():
+    branch events_pending(thread) -> Poll(), Go();
+  Poll():
     call poll(thread, site) {
       ok -> Go();
       err -> Failed();
@@ -1129,6 +1145,8 @@ arm Jump.Observed split observes
   entry():
     branch goes_back(site, target) -> Back(), Event();
   Back():
+    branch events_pending(thread) -> Poll(), Event();
+  Poll():
     call poll(thread, site) {
       ok -> Event();
       err -> PollFailed();

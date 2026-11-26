@@ -5615,6 +5615,11 @@ _PyIR_Rop_Stub_Resume_Poll(
     goto rop_Resume_Poll_Stale;
     rop_Resume_Poll_Current:
     if (_PyRop_ResumePolls((((uint32_t)IR_A(ir_word) >> 0) & 0x7))) {
+        goto rop_Resume_Poll_Due;
+    }
+    goto rop_Resume_Poll_Done;
+    rop_Resume_Poll_Due:
+    if (_PyRop_EventsPending(tstate)) {
         goto rop_Resume_Poll_Pending;
     }
     goto rop_Resume_Poll_Done;

@@ -85,7 +85,9 @@ arm Resume.Poll shared select(jit_off)
       err -> InstrumentFailed();
     }
   Current():
-    branch resume_polls(kind) -> Pending(), Done();
+    branch resume_polls(kind) -> Due(), Done();
+  Due():
+    branch events_pending(thread) -> Pending(), Done();
   Pending():
     call poll(thread, site) {
       ok -> Done();
@@ -116,7 +118,9 @@ arm Resume.Warm split select(jit_on)
       err -> InstrumentFailed();
     }
   Current():
-    branch resume_polls(kind) -> Pending(), Warm();
+    branch resume_polls(kind) -> Due(), Warm();
+  Due():
+    branch events_pending(thread) -> Pending(), Warm();
   Pending():
     call poll(thread, site) {
       ok -> Warm();
@@ -154,7 +158,9 @@ arm Resume.Observed split observes
       err -> InstrumentFailed();
     }
   Current():
-    branch resume_polls(kind) -> Pending(), Event();
+    branch resume_polls(kind) -> Due(), Event();
+  Due():
+    branch events_pending(thread) -> Pending(), Event();
   Pending():
     call poll(thread, site) {
       ok -> Event();

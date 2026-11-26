@@ -114,7 +114,7 @@ _PyIR_BaseOpcode(int handler)
         return CACHE;
     }
     // The shadow of a handler is the stack opcode that it stands for
-    int shadow = _PyIR_Formats[handler].shadow;
+    int shadow = _PyIR_FormatOf(handler)->shadow;
     assert(shadow < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
     return _PyOpcode_Deopt[shadow];
 }

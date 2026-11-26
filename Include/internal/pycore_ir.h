@@ -579,6 +579,7 @@ static inline int
 _PyFb_HasEntry(int opcode)
 {
     assert(opcode >= 0 && opcode < IR_NUM_HANDLERS);
+    assert(_PyIR_Formats[opcode].flags & _PyIR_VALID);
     return (_PyIR_Formats[opcode].effects & _PyIR_SPECIALIZES) != 0;
 }
 
@@ -987,6 +988,9 @@ static inline const _PyIRFormat *
 _PyIR_FormatOf(int handler)
 {
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);
+    // An empty row is no handler: a number of another space (a stack opcode,
+    // a CFG op) was taken for an id, as a guard build (PYJIT_IR_ID_BASE) finds
+    assert(_PyIR_Formats[handler].flags & _PyIR_VALID);
     return &_PyIR_Formats[handler];
 }
 
@@ -1004,8 +1008,7 @@ _PyIR_CanonicalFlagsValid(_PyIRWord word)
 static inline int
 _PyIR_HandlerHasOperands(int handler)
 {
-    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
-    return _PyIR_CALL_SHAPED(_PyIR_Formats[handler].operands);
+    return _PyIR_CALL_SHAPED(_PyIR_FormatOf(handler)->operands);
 }
 
 /* The words of the call whose head is word: the head and its operand words.
@@ -1027,7 +1030,7 @@ _PyIR_CallWordLength(_PyIRWord word)
 static inline int
 _PyIR_SpanElement(const _PyIRWord *head, int handler, int j)
 {
-    const _PyIRFormat *fmt = &_PyIR_Formats[handler];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     int nhead = 0;
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] == _PyIR_ROLE_ELEMENT) {
@@ -1046,7 +1049,7 @@ _PyIR_SpanElement(const _PyIRWord *head, int handler, int j)
 static inline int
 _PyIR_SpanWordLength(int handler, _PyIRWord word)
 {
-    const _PyIRFormat *fmt = &_PyIR_Formats[handler];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     int total = 0, nhead = 0;
     for (int f = 0; f < 4; f++) {
         int value = (int)((word >> (16 + 12 * f)) & IR_FIELD_MAX);
@@ -1113,7 +1116,7 @@ static inline int
 _PyIR_SpanBounds(const _PyIRWord *head, int handler, int k, int *first,
                  int *is_source)
 {
-    const _PyIRFormat *fmt = &_PyIR_Formats[handler];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     int seen = 0, before = 0, count = 0;
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] == _PyIR_ROLE_COUNT) {
@@ -1135,12 +1138,12 @@ static inline int
 _PyIR_WordLength(_PyIRWord word)
 {
     int handler = IR_HANDLER(word);
-    if (_PyIR_Formats[handler].operands == _PyIR_OPERANDS_SPANS) {
+    if (_PyIR_FormatOf(handler)->operands == _PyIR_OPERANDS_SPANS) {
         return _PyIR_SpanWordLength(handler, word);
     }
     if (!_PyIR_HandlerHasOperands(handler)) {
         // A register instruction arm may have fixed operand words
-        return 1 + _PyIR_Formats[handler].fixed_words;
+        return 1 + _PyIR_FormatOf(handler)->fixed_words;
     }
     return _PyIR_CallWordLength(word);
 }

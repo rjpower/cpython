@@ -39,19 +39,9 @@ EXCLUDED = {
     "Python/regcfg.c": "the translator",
     "Python/regcfg_passes.c": "the translator",
     "Include/internal/pycore_regcfg.h": "the translator",
-    "Include/internal/pycore_regcfg_passes.h": "the translator",
     "Include/internal/pycore_opcode_metadata.h": "the opcode schema",
     "Include/internal/pycore_opcode_utils.h": "the opcode schema",
-    "Include/internal/pycore_opcode_ids.h": "the opcode schema",
     "Include/opcode_ids.h": "the opcode schema",
-    "Include/internal/pycore_flowgraph.h": "the compiler",
-    "Include/internal/pycore_compile.h": "the compiler",
-    "Include/internal/pycore_instruction_sequence.h": "the compiler",
-    "Python/instruction_sequence.c": "the compiler",
-    "Python/symtable.c": "the compiler",
-    "Python/Python-ast.c": "the generated parser",
-    "Include/internal/pycore_ast.h": "the generated parser",
-    "Include/internal/pycore_ast_state.h": "the generated parser",
 }
 
 # Stack-shaped names that are no opcode: the tables and fields that map a
@@ -73,7 +63,42 @@ class Allowed:
     reason: str
 
 
-ALLOWED: tuple[Allowed, ...] = ()
+ALLOWED: tuple[Allowed, ...] = (
+    # The translator's row type and the tables it reads.  They move into the
+    # translator's own generated header with the second WF4 commit.
+    Allowed("Include/internal/pycore_ir.h", None, r"_PyStackFormat",
+            "the stack-op row type, which only the translator reads"),
+    Allowed("Include/internal/pycore_ir_metadata.h", None, r"_PyStack(?:Format|_Formats|_ArmFormats)",
+            "the translator's tables of stack-op and arm rows"),
+    Allowed("Include/internal/pycore_ir_metadata.h", None, r"_PyIR_OpcodeHandler",
+            "the translator's map from a stack op to its handler; the generated "
+            "table of stack_ops.py replaces it with item 6"),
+    Allowed("Include/internal/pycore_rop_metadata.h", None, r"_PyRop_Ops_\w+",
+            "the translator's table from a family to the stack ops that lower to it"),
+    Allowed("Python/register_ops/*.rop", None, r"\bops\(",
+            "the ops clause names the stack ops of a family; it moves to stack_ops.py"),
+    Allowed("Python/register_ops/*.rop", None, r"^(?!.*\bops\()",
+            "61 lines of review and contract prose that name the stack op an "
+            "arm replaced; the rewording is on the freeze list"),
+    Allowed("Python/register_ops/*.rop", None, r"\bevents\(",
+            "sys.monitoring event names: CALL and RERAISE are events as well as stack ops"),
+    # Names that collide with a stack op
+    Allowed("Include/internal/pycore_value_slots.h", None, r"VECTORCALL, CALL|\bSEND\b",
+            "slot kinds named CALL and SEND, which are no stack ops"),
+    Allowed("Python/instrumentation.c", ("get_tools_for_instruction",), r'"(?:CALL|RERAISE)"',
+            "the sys.monitoring event names, which collide with the stack ops"),
+    # Public co_code transport, which is stack bytecode by contract
+    Allowed("Objects/codeobject.c",
+            ("fixup_yield_from_getiter", "PyUnstable_Code_NewWithPosOnlyArgs",
+             "PyUnstable_Code_New", "code_oparg", "identify_unbound_names",
+             "code_returns_only_none", "code_richcompare", "code_hash"),
+            r".", "co_code validation and comparison read the stack bytecode that "
+                  "the public API takes and returns"),
+    Allowed("Python/instrumentation.c", ("event_offset",), r".",
+            "sys.monitoring offsets are co_code offsets, which cross CACHE entries"),
+    Allowed("Python/specialize.c", None, r"\b(?:EXIT_INIT_CHECK|RETURN_VALUE)\b",
+            "the static init-cleanup code object holds co_code_adaptive"),
+)
 
 
 def stack_names() -> set[str]:

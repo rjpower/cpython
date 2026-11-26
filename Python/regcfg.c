@@ -514,8 +514,9 @@ resolve_next_locations(_PyRegCfg *cfg)
  * only while it runs, the stack of value identities: the virtual register
  * at each stack position.  A rule pops and pushes identities and emits the
  * register ops that name them.  rules[] is indexed by opcode; an opcode
- * without a rule is an unported family, which _PyRegTr_Legacy() turns into
- * its old handler op with the operand conventions that handler expects.
+ * without a rule is one the translator never receives, which is an error.
+ * A rule emits its register ops with _PyRegTr_Stack() and then names the
+ * arm.
  *
  * At a block that is not continued, position k holds the block parameter
  * CANON(k), whose home is slot nlocalsplus + k (a bridge constraint until
@@ -1086,12 +1087,12 @@ collapse_unwound(_PyRegTr *t, const _PyRegOp *instr, int k)
     return 0;
 }
 
-/* The rule of an unported stack op: its old handler op.  It reads the top
- * nread identities, the popped ones on top; a register-style op's outputs
- * below its dst pass their inputs through, and a window's are its stack
- * positions from its base. */
+/* Emit one register op for a stack op, shaped by the stack op's format.  It
+ * reads the top nread identities, the popped ones on top; a register-style
+ * op's outputs below its dst pass their inputs through, and a window's are
+ * its stack positions from its base.  The caller names the arm. */
 int
-_PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
+_PyRegTr_Stack(_PyRegTr *t, const _PyRegOp *instr)
 {
     _PyRegCfg *cfg = t->cfg;
     const _PyStackFormat *fmt = _PyRegCfg_FormatOf(instr->opcode);
@@ -1642,7 +1643,7 @@ rule_load_global(_PyRegTr *t, const _PyRegOp *src)
     _PyRegOp null = *src;
     null.opcode = PUSH_NULL;
     null.oparg = 0;
-    return _PyRegTr_Legacy(t, &null);
+    return _PyRegTr_Stack(t, &null);
 }
 
 /* BINARY_OP.  The selector routes to a family; this is the one place that
@@ -1855,7 +1856,7 @@ rule_branch(_PyRegTr *t, const _PyRegOp *src)
             cfg_op = ROP_OP_BranchNone_Test, imm = 0;
             break;
     }
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == src->opcode);
     op->opcode = cfg_op;
@@ -1884,7 +1885,7 @@ rule_get_iter(_PyRegTr *t, const _PyRegOp *src)
             mode = ITER_DELEGATE_NO_COROUTINE;
             break;
     }
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == GET_ITER);
     op->opcode = ROP_OP_IterOpen_Generic;
@@ -1895,7 +1896,7 @@ rule_get_iter(_PyRegTr *t, const _PyRegOp *src)
 static int
 rule_for_iter(_PyRegTr *t, const _PyRegOp *src)
 {
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == FOR_ITER);
     op->opcode = ROP_OP_ForIter_Generic;
@@ -1905,7 +1906,7 @@ rule_for_iter(_PyRegTr *t, const _PyRegOp *src)
 static int
 rule_pop_iter(_PyRegTr *t, const _PyRegOp *src)
 {
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == POP_ITER);
     op->opcode = ROP_OP_IterClose_Retire;
@@ -1918,7 +1919,7 @@ rule_pop_iter(_PyRegTr *t, const _PyRegOp *src)
 static int
 rule_send(_PyRegTr *t, const _PyRegOp *src)
 {
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == SEND);
     op->opcode = ROP_OP_Send_Generic;
@@ -1932,7 +1933,7 @@ rule_send(_PyRegTr *t, const _PyRegOp *src)
 static int
 rule_cleanup_throw(_PyRegTr *t, const _PyRegOp *src)
 {
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == CLEANUP_THROW);
     op->opcode = ROP_OP_CleanupThrow_Generic;
@@ -1942,7 +1943,7 @@ rule_cleanup_throw(_PyRegTr *t, const _PyRegOp *src)
 static int
 rule_end_async_for(_PyRegTr *t, const _PyRegOp *src)
 {
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == END_ASYNC_FOR);
     op->opcode = ROP_OP_EndAsyncFor_Generic;
@@ -1979,7 +1980,7 @@ rule_jump(_PyRegTr *t, const _PyRegOp *src)
                   ? ROP_SELECT_JIT_ON : ROP_SELECT_JIT_OFF;
     int cfg_op = _PyRop_SelectJump(interrupt, jit);
     assert(cfg_op >= 0);
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == src->opcode);
     op->opcode = cfg_op;
@@ -1996,7 +1997,7 @@ rule_resume(_PyRegTr *t, const _PyRegOp *src)
                   ? ROP_SELECT_JIT_ON : ROP_SELECT_JIT_OFF;
     int cfg_op = _PyRop_SelectResume(jit);
     assert(cfg_op >= 0);
-    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    RETURN_IF_ERROR(_PyRegTr_Stack(t, src));
     _PyRegOp *op = &t->ops[t->nops - 1];
     assert(op->opcode == src->opcode);
     op->opcode = cfg_op;
@@ -3135,7 +3136,30 @@ rule_check_eg_match(_PyRegTr *t, const _PyRegOp *src)
 }
 
 /* The rules, by opcode.  NULL is the legacy rule. */
+/* A stack op that the translator never receives: the compiler does not emit
+ * it, or only code that is already lowered holds it */
+static int
+rule_refuse(_PyRegTr *t, const _PyRegOp *src)
+{
+    PyErr_Format(PyExc_SystemError, "the translator does not receive opcode %d",
+                 src->opcode);
+    return ERROR;
+}
+
 static const _PyRegRule rules[256] = {
+    /* Translator-internal ops: the op is emitted as the stack format shapes
+     * it, and a later pass elides or consumes it */
+    [END_FOR] = _PyRegTr_Stack,
+    [END_SEND] = _PyRegTr_Stack,
+    [PUSH_NULL] = _PyRegTr_Stack,
+    [RETURN_GENERATOR] = _PyRegTr_Stack,
+    /* Ops that only code which is already lowered, or instrumentation, holds */
+    [EXIT_INIT_CHECK] = rule_refuse,
+    [INTERPRETER_EXIT] = rule_refuse,
+    [JUMP_IF_FALSE_OR_POP] = rule_refuse,
+    [JUMP_IF_TRUE_OR_POP] = rule_refuse,
+    [INSTRUMENTED_LINE] = rule_refuse,
+    [INSTRUMENTED_INSTRUCTION] = rule_refuse,
     [BINARY_OP] = rule_binary_op,
     [UNARY_NEGATIVE] = rule_unary,
     [UNARY_INVERT] = rule_unary,
@@ -3261,9 +3285,9 @@ mark_maybe(_PyRegTr *t, int depth)
 static int
 translate_instr(_PyRegTr *t, const _PyRegOp *instr)
 {
-    _PyRegRule rule = rules[instr->opcode & 255];
-    if (rule == NULL || instr->opcode > 255) {
-        rule = _PyRegTr_Legacy;
+    _PyRegRule rule = instr->opcode > 255 ? NULL : rules[instr->opcode];
+    if (rule == NULL) {
+        rule = rule_refuse;
     }
     t->src_sp = t->sp;
     // The edges of instr: its handler's, and its jump's

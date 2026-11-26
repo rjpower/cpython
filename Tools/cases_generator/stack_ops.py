@@ -7,7 +7,7 @@ numbers (pinned below), cache units, deopt bases, flags, stack
 effects and the translator's format row (`StackFormat`).  It is data.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,6 @@ class StackOp:
     translator_only: bool = False   # a CFG number in the gap, in no co_code
     stack_only: bool = False        # a format for the CFG and no handler
     format: StackFormat | None = None
-    lowers_to: str | None = None    # the register family that the translator lowers it to
 
 
 @dataclass(frozen=True)
@@ -459,140 +458,6 @@ STACK_OPS = (
     StackOp('INSTRUMENTED_JUMP_IF_FALSE_OR_POP', 117, 1, None, ('ARG',), True, '1', '0', translator_only=True, stack_only=True, format=_f(('JUMPS', 'NO_FOLD', 'RUNS_CODE'), ('RUNS_PYTHON',), ('DST', 'SRC+0', 'IMM', 'IMM'), 'CD', 1, -1, 0, 'NONE', (0, 'FIXED'))),
     StackOp('INSTRUMENTED_JUMP_IF_TRUE_OR_POP', 118, 1, None, ('ARG',), True, '1', '0', translator_only=True, stack_only=True, format=_f(('JUMPS', 'NO_FOLD', 'RUNS_CODE'), ('RUNS_PYTHON',), ('DST', 'SRC+0', 'IMM', 'IMM'), 'CD', 1, -1, 0, 'NONE', (0, 'FIXED'))),
 )
-
-# The register family that each stack op lowers to (Python/register_ops), the
-# ops of a family together; the first op of a family is the one that stands for
-# it where a single name is wanted, as in a disassembly.  An
-# op that is absent has no family of its own: the translator folds it into
-# its neighbours or the compiler never leaves it in co_code.
-LOWERS_TO = {
-    "STORE_ATTR": "AttrWrite",
-    "LOAD_SUPER_ATTR": "SuperAttr",
-    "LOAD_SPECIAL": "SpecialLookup",
-    "CALL": "Call",
-    "EXIT_INIT_CHECK": "InitResult",
-    "RETURN_VALUE": "Return",
-    "INTERPRETER_EXIT": "Return",
-    "CALL_KW": "CallKw",
-    "CALL_FUNCTION_EX": "CallEx",
-    "MAKE_CELL": "CellMake",
-    "LOAD_DEREF": "CellRead",
-    "LOAD_FROM_DICT_OR_DEREF": "CellMapRead",
-    "STORE_DEREF": "CellStore",
-    "DELETE_DEREF": "CellDelete",
-    "CLEANUP_THROW": "CleanupThrow",
-    "END_ASYNC_FOR": "EndAsyncFor",
-    "WITH_EXCEPT_START": "WithExit",
-    "BUILD_TUPLE": "Build",
-    "BUILD_LIST": "Build",
-    "BUILD_SET": "Build",
-    "BUILD_MAP": "Build",
-    "LIST_APPEND": "AddElement",
-    "SET_ADD": "AddElement",
-    "MAP_ADD": "AddEntry",
-    "LIST_EXTEND": "UpdateContainer",
-    "SET_UPDATE": "UpdateContainer",
-    "DICT_UPDATE": "UpdateContainer",
-    "DICT_MERGE": "MergeKeywords",
-    "UNPACK_SEQUENCE": "Unpack",
-    "UNPACK_EX": "UnpackStar",
-    "RAISE_VARARGS": "Raise",
-    "RERAISE": "Reraise",
-    "PUSH_EXC_INFO": "ExceptEnter",
-    "POP_EXCEPT": "ExceptLeave",
-    "CHECK_EXC_MATCH": "ExceptMatch",
-    "CHECK_EG_MATCH": "ExceptGroupMatch",
-    "MAKE_FUNCTION": "Function",
-    "SET_FUNCTION_ATTRIBUTE": "Function",
-    "CALL_INTRINSIC_1": "Intrinsic",
-    "CALL_INTRINSIC_2": "IntrinsicPair",
-    "LOAD_ATTR": "GetAttr",
-    "STORE_SUBSCR": "SetItem",
-    "DELETE_SUBSCR": "DelItem",
-    "BINARY_SLICE": "SliceRead",
-    "STORE_SLICE": "SliceWrite",
-    "BUILD_SLICE": "BuildSlice",
-    "GET_ITER": "IterOpen",
-    "FOR_ITER": "ForIter",
-    "POP_ITER": "IterClose",
-    "INSTRUMENTED_LINE": "Line",
-    "INSTRUMENTED_INSTRUCTION": "Instruction",
-    "LOAD_GLOBAL": "GlobalRead",
-    "LOAD_NAME": "NamespaceRead",
-    "LOAD_LOCALS": "NamespaceRead",
-    "LOAD_BUILD_CLASS": "NamespaceRead",
-    "LOAD_FROM_DICT_OR_GLOBALS": "NamespaceReadFrom",
-    "STORE_NAME": "NamespaceWrite",
-    "STORE_GLOBAL": "NamespaceWrite",
-    "SETUP_ANNOTATIONS": "SetupAnnotations",
-    "IMPORT_NAME": "Import",
-    "IMPORT_FROM": "ImportFrom",
-    "BINARY_OP": "Binary",
-    "UNARY_NEGATIVE": "Unary",
-    "UNARY_INVERT": "Unary",
-    "GET_LEN": "Length",
-    "MATCH_MAPPING": "Pattern",
-    "MATCH_SEQUENCE": "Pattern",
-    "MATCH_CLASS": "PatternClass",
-    "MATCH_KEYS": "PatternKeys",
-    "RESUME": "Resume",
-    "GET_AWAITABLE": "Awaitable",
-    "GET_AITER": "AsyncIterOpen",
-    "GET_ANEXT": "AsyncIterNext",
-    "YIELD_VALUE": "Yield",
-    "SEND": "Send",
-    "COMPARE_OP": "Compare",
-    "IS_OP": "Identity",
-    "CONTAINS_OP": "Contains",
-    "BUILD_STRING": "BuildText",
-    "BUILD_INTERPOLATION": "BuildText",
-    "BUILD_TEMPLATE": "BuildText",
-    "CONVERT_VALUE": "Convert",
-    "FORMAT_SIMPLE": "Format",
-    "FORMAT_WITH_SPEC": "FormatSpec",
-    "LOAD_CONST": "Const",
-    "LOAD_SMALL_INT": "Const",
-    "LOAD_COMMON_CONSTANT": "Const",
-    "LOAD_FAST": "LocalRead",
-    "LOAD_FAST_CHECK": "LocalRead",
-    "LOAD_FAST_BORROW": "LocalRead",
-    "STORE_FAST": "LocalWrite",
-    "LOAD_FAST_AND_CLEAR": "SaveLocal",
-    "DELETE_FAST": "LocalDelete",
-    "SWAP": "Move",
-    "COPY": "Move",
-    "POP_TOP": "Move",
-    "TO_BOOL": "Truth",
-    "UNARY_NOT": "Truth",
-    "JUMP_FORWARD": "Jump",
-    "JUMP_BACKWARD": "Jump",
-    "JUMP_BACKWARD_NO_INTERRUPT": "Jump",
-    "POP_JUMP_IF_TRUE": "BranchTruth",
-    "POP_JUMP_IF_FALSE": "BranchTruth",
-    "JUMP_IF_TRUE_OR_POP": "BranchTruth",
-    "JUMP_IF_FALSE_OR_POP": "BranchTruth",
-    "POP_JUMP_IF_NONE": "BranchNone",
-    "POP_JUMP_IF_NOT_NONE": "BranchNone",
-    "MATERIALIZE_KWARGS": "MaterializeKwargs",
-}
-
-# Register families that no stack op names in LOWERS_TO: a translator rule
-# picks them, by an oparg or the surrounding words, for the stack op given
-# here (the first is the one a disassembler shows).  The generator checks that every family is in one table or the other.
-RULE_FAMILIES = {
-    "Add": (("BINARY_OP",), "BINARY_OP with the add operator"),
-    "SuperAttrExplicit": (("LOAD_SUPER_ATTR",), "LOAD_SUPER_ATTR with the explicit-arguments form"),
-    "SuperMethod": (("LOAD_SUPER_ATTR",), "LOAD_SUPER_ATTR with the method flag"),
-    "SuperMethodExplicit": (("LOAD_SUPER_ATTR",), "LOAD_SUPER_ATTR with the method flag and the explicit-arguments form"),
-    "GetMethod": (("LOAD_ATTR",), "LOAD_ATTR with the method flag"),
-    "GetItem": (("BINARY_OP",), "BINARY_OP with the subscript operator"),
-    "AppendText": (("BINARY_OP",), "BINARY_OP that appends text in place"),
-    "YieldFrom": (("YIELD_VALUE",), "YIELD_VALUE inside a yield from"),
-    "TestBranch": (("POP_JUMP_IF_TRUE", "POP_JUMP_IF_FALSE"), "a POP_JUMP_IF_* that follows a test the translator fuses"),
-}
-
-STACK_OPS = tuple(replace(op, lowers_to=LOWERS_TO.get(op.name)) for op in STACK_OPS)
-assert set(LOWERS_TO) <= {op.name for op in STACK_OPS}
 
 PSEUDOS = (
     Pseudo('LOAD_CLOSURE', PINNED_PSEUDOS['LOAD_CLOSURE'], ('ARG', 'LOCAL'), False, ('LOAD_FAST',), '0', '1'),

@@ -1428,8 +1428,8 @@ class TestSpecializer(TestBase):
         binary_op_int_wide_inline()
         if int_producers:
             self.assert_specialized(binary_op_int_wide_inline, "Add.Int")
-            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int")
-            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int")
+            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int_NB_SUBTRACT")
+            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int_NB_MULTIPLY")
 
         def binary_op_int_boxed():
             # Outside the inline int51 range, so the int is a box, which the
@@ -1445,8 +1445,8 @@ class TestSpecializer(TestBase):
 
         binary_op_int_boxed()
         self.assert_no_opcode(binary_op_int_boxed, "Add.Int")
-        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int")
-        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int")
+        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int_NB_SUBTRACT")
+        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int_NB_MULTIPLY")
 
         def binary_op_add_unicode():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1597,7 +1597,9 @@ class TestSpecializer(TestBase):
 
         binary_op_bitwise_extend()
         if int_producers:
-            for opname in ("Binary.Int",):
+            # The in-place forms share the rest arm
+            for opname in ("Binary.Int_NB_AND", "Binary.Int_NB_OR", "Binary.Int_NB_XOR",
+                           "Binary.Int"):
                 self.assert_specialized(binary_op_bitwise_extend, opname)
         self.assert_no_opcode(binary_op_bitwise_extend, "Binary.Extended")
 
@@ -1611,7 +1613,8 @@ class TestSpecializer(TestBase):
 
         binary_op_int_division_and_shifts()
         if int_producers:
-            for opname in ("Binary.Int",):
+            for opname in ("Binary.Int_NB_FLOOR_DIVIDE", "Binary.Int_NB_REMAINDER",
+                           "Binary.Int_NB_LSHIFT", "Binary.Int_NB_RSHIFT"):
                 self.assert_specialized(binary_op_int_division_and_shifts, opname)
 
     @cpython_only

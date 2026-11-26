@@ -207,6 +207,29 @@ class FloatPowerTests(unittest.TestCase):
                 self.assertIsNone(result[2])
 
 
+@support.cpython_only
+class IntMemberTests(unittest.TestCase):
+    """Binary.Int has an arm per operator of its hot set; the other operators
+    it admits share its rest arm, which reads the operator from the word"""
+
+    def test_each_operator_takes_its_arm(self):
+        if support.Py_GIL_DISABLED:
+            self.skipTest("the free-threaded build does not specialise the IR")
+        cases = {"-": "NB_SUBTRACT", "-=": "NB_INPLACE_SUBTRACT", "+=": "NB_INPLACE_ADD",
+                 "*": "NB_MULTIPLY", "*=": "NB_INPLACE_MULTIPLY", "//": "NB_FLOOR_DIVIDE",
+                 "%": "NB_REMAINDER", "&": "NB_AND", "|": "NB_OR", "^": "NB_XOR",
+                 "<<": "NB_LSHIFT", ">>": "NB_RSHIFT", "//=": None, "%=": None,
+                 "&=": None, "|=": None, "^=": None, "<<=": None, ">>=": None}
+        for op, member in cases.items():
+            with self.subTest(op=op):
+                function = site(op)
+                for _ in range(WARMUP):
+                    function(13, 3)
+                self.assertEqual(function(13, 3), eval(f"13 {op.rstrip('=')} 3"))
+                self.assertEqual(binary_arm(function),
+                                 f"Binary.Int_{member}" if member else "Binary.Int")
+
+
 class AppendTextTests(unittest.TestCase):
     def test_append_to_a_local(self):
         def append(s, t):

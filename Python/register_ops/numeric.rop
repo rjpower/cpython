@@ -193,7 +193,13 @@ macro adapt_before_use_binary(f:Fb<Binary>, x:Src, y:Src, op:Enum<Numeric>)
     exit run();
 }
 
-arm Binary.Int shared
+// One arm per operator of the hot set (`over(op: ...)`), the operator its
+// constant; the in-place floor divide, remainder, bitwise and shift forms are
+// rare, and share the rest arm, which reads the operator from the word
+arm Binary.Int shared over(op: NB_INPLACE_ADD, NB_SUBTRACT, NB_INPLACE_SUBTRACT,
+                           NB_MULTIPLY, NB_INPLACE_MULTIPLY, NB_FLOOR_DIVIDE,
+                           NB_REMAINDER, NB_AND, NB_OR, NB_XOR, NB_LSHIFT, NB_RSHIFT;
+                           rest)
   effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)

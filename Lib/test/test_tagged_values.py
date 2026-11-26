@@ -518,7 +518,8 @@ class InlineIntTest(unittest.TestCase):
         # 70000 and 3 live in hidden constant slots, so no instruction
         # loads them.
         for name in existing("Const.Small",
-                             "Add.Int", "Binary.Int", "ForIter.Range"):
+                             "Add.Int", "Binary.Int_NB_MULTIPLY",
+                             "Binary.Int_NB_SUBTRACT", "ForIter.Range"):
             self.assertIn(name, names)
         self.assertIn("Add.Int", opnames(add3))
 
@@ -1007,7 +1008,9 @@ class InlineIntOpsTest(unittest.TestCase):
 
     def test_quickened(self):
         names = opnames(int_ops) | opnames(shifts)
-        self.assertIn("Binary.Int", names)
+        for op in ("NB_FLOOR_DIVIDE", "NB_REMAINDER", "NB_AND", "NB_OR", "NB_XOR",
+                   "NB_LSHIFT", "NB_RSHIFT"):
+            self.assertIn(f"Binary.Int_{op}", names)
         def f(a, b):
             q = a // b
             m = a % b
@@ -1044,7 +1047,7 @@ class InlineIntOpsTest(unittest.TestCase):
                     int_ops(a, 0)
                 with self.assertRaises(ZeroDivisionError):
                     int_ops(a, make_inline(0))
-        self.assertIn("Binary.Int", opnames(int_ops))
+        self.assertIn("Binary.Int_NB_FLOOR_DIVIDE", opnames(int_ops))
 
     def test_shifts(self):
         ops = (operator.lshift, operator.rshift)

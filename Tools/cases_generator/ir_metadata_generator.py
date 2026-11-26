@@ -99,11 +99,35 @@ def base_opcode(name: str) -> int:
     return STACK_NUMBERS[name]
 
 
-def twin_by_tools(arm: ir_arms.ArmEntry) -> bool:
-    """Whether monitoring selects the arm's observed twin by handler: its
-    family declares events, but upstream's pinned table has no
-    INSTRUMENTED_ stack opcode of its base to rewrite the opcode to"""
-    return bool(arm.events) and f"INSTRUMENTED_{arm.base}" not in STACK_NAMES
+# The events that a word of an instrumented family can carry in tools[]
+# (sys.monitoring's grouped events); C_RETURN and C_RAISE are fired by CALL
+# and have no tools of their own
+LOCAL_EVENTS = ("PY_START", "PY_RESUME", "PY_RETURN", "PY_YIELD", "CALL", "JUMP",
+                "BRANCH_RIGHT", "STOP_ITERATION")
+
+
+def monitor_events(arm: ir_arms.ArmEntry) -> tuple[str | None, bool, bool]:
+    """The (primary event, has BRANCH_LEFT, has a separate STOP_ITERATION
+    slot) of an arm, derived from its family's events(...) by one rule:
+    BRANCH_LEFT is the left flag; the one local event that remains is the
+    primary.  The pair PY_START, PY_RESUME is one primary, whose event the
+    word's operand picks.  A STOP_ITERATION beside another primary has its own
+    slot (FOR_ITER's completion).  Any other combination is refused."""
+    left = "BRANCH_LEFT" in arm.events
+    rest = [e for e in arm.events if e in LOCAL_EVENTS]
+    stop = False
+    if len(rest) == 2 and rest[1] == "STOP_ITERATION" and rest[0] != rest[1]:
+        stop = True
+        rest = rest[:1]
+    elif rest == ["PY_START", "PY_RESUME"]:
+        rest = rest[:1]
+    if len(rest) > 1:
+        raise ValueError(f"{arm.dotted}: events({', '.join(arm.events)}) "
+                         "have more than one primary event")
+    if rest == [] and (left or stop):
+        raise ValueError(f"{arm.dotted}: events({', '.join(arm.events)}) "
+                         "have no primary event")
+    return (rest[0] if rest else None), left, stop
 
 
 def arm_flags(arm: ir_arms.ArmEntry) -> str:
@@ -116,10 +140,13 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
         parts.append("_PyIR_H_SPECIALIZED")
     if arm.observes is not None or arm.displacing:
         parts.append("_PyIR_H_INSTRUMENTED")
-    if twin_by_tools(arm):
-        parts.append("_PyIR_H_TWIN_BY_TOOLS")
     if arm.trailing:
         parts.append("_PyIR_H_TRAILING")
+    _, left, stop = monitor_events(arm)
+    if left:
+        parts.append("_PyIR_H_BRANCH_LEFT")
+    if stop:
+        parts.append("_PyIR_H_STOP_SLOT")
     parts.append("_PyIR_H_IR_ONLY")
     return " | ".join(parts)
 
@@ -211,8 +238,9 @@ def generate_ir_metadata(
                           ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
-                          ("SAVES_IP", 1024), ("JIT_EVENT", 2048),
-                          ("TWIN_BY_TOOLS", 4096), ("TRAILING", 8192)):
+                          ("SAVES_IP", 1024),
+                          ("TRAILING", 8192),
+                          ("BRANCH_LEFT", 16384), ("STOP_SLOT", 32768)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
         for table in ("_PyIR_HandlerFlags", "_PyIR_HandlerBase"):
@@ -277,6 +305,41 @@ def generate_ir_metadata(
             out.emit(f"[{number}] = {none if handler is None else handler},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
+
+        # The statistics of specialisation are kept per family (the dotted
+        # name's head) and, in opcode_stats, per arm.  IR_OPERANDS has the
+        # family of its own name.
+        families = sorted({"IR_OPERANDS"} | {arm.dotted.split(".")[0] for arm in arms})
+        out.emit("/* The families, in name order: the index of family_stats */\nenum {\n")
+        for number, family in enumerate(families):
+            out.emit(f"    IR_FAMILY_{family} = {number},\n")
+        out.emit(f"    IR_NUM_FAMILIES = {len(families)}\n}};\n")
+        out.emit('static_assert(IR_NUM_FAMILIES <= 256, "family_stats is sized 256");\n\n')
+        out.emit("PyAPI_DATA(const uint8_t) _PyIR_HandlerFamily[IR_NUM_HANDLERS];\n")
+        out.emit("PyAPI_DATA(const char *const) _PyIR_FamilyNames[IR_NUM_FAMILIES];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const uint8_t _PyIR_HandlerFamily[IR_NUM_HANDLERS] = {\n")
+        out.emit("[IR_H_IR_OPERANDS] = IR_FAMILY_IR_OPERANDS,\n")
+        for arm in arms:
+            out.emit(f"[{arm_id(arm)}] = IR_FAMILY_{arm.dotted.split('.')[0]}, /* {arm.dotted} */\n")
+        out.emit("};\n")
+        out.emit("const char *const _PyIR_FamilyNames[IR_NUM_FAMILIES] = {\n")
+        for family in families:
+            out.emit(f'[IR_FAMILY_{family}] = "{family}",\n')
+        out.emit("};\n#endif\n\n")
+
+        # The primary sys.monitoring event of a handler, or -1: the slot of
+        # tools[] that its word's tools live in.  PY_START stands for a
+        # Resume's pair, whose operand picks the event.
+        out.emit("PyAPI_DATA(const int8_t) _PyIR_PrimaryEvent[IR_NUM_HANDLERS];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const int8_t _PyIR_PrimaryEvent[IR_NUM_HANDLERS] = {\n")
+        primaries = {arm_id(arm): (monitor_events(arm)[0], arm.dotted) for arm in arms}
+        for handler in range(n):
+            primary, name = primaries.get(handler, (None, "no event"))
+            value = -1 if primary is None else "PY_MONITORING_EVENT_" + primary
+            out.emit(f"[{handler}] = {value}, /* {name} */\n")
+        out.emit("};\n#endif\n\n")
 
         out.emit("PyAPI_DATA(const char *const) _PyIR_OnlyNames[IR_NUM_HANDLERS];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")

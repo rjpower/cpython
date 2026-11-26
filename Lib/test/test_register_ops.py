@@ -9,6 +9,7 @@ from test import test_tools
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
+    import ir_metadata_generator
     import lexer
     import rop_check
     import rop_print
@@ -786,28 +787,44 @@ class DefinitionTests(unittest.TestCase):
                 with self.subTest(path=path.name, word=word):
                     self.assertNotRegex(text, rf"\b{word}\b")
 
-    def test_declared_events_have_an_instrumented_opcode_or_the_mark(self):
-        """Monitoring rewrites a stack opcode to its INSTRUMENTED_ form, so
-        a family that declares events needs one in upstream's pinned table;
-        without one its arms carry _PyIR_H_TWIN_BY_TOOLS and monitoring
-        selects their observed twin by handler."""
+    def test_monitor_events_follow_the_declared_events(self):
+        """The slots of a word's tools come from its family's events(...) by
+        one rule: BRANCH_LEFT is a flag, one local event is the primary, and
+        a STOP_ITERATION beside another primary has its own slot."""
+        from types import SimpleNamespace
+        monitor_events = ir_metadata_generator.monitor_events
+
+        def arm(*events):
+            return SimpleNamespace(events=events, dotted="Test.Arm")
+
+        self.assertEqual(monitor_events(arm()), (None, False, False))
+        self.assertEqual(monitor_events(arm("CALL", "C_RETURN", "C_RAISE")),
+                         ("CALL", False, False))
+        self.assertEqual(monitor_events(arm("BRANCH_LEFT", "BRANCH_RIGHT")),
+                         ("BRANCH_RIGHT", True, False))
+        self.assertEqual(monitor_events(arm("STOP_ITERATION", "BRANCH_LEFT")),
+                         ("STOP_ITERATION", True, False))
+        self.assertEqual(
+            monitor_events(arm("BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION")),
+            ("BRANCH_RIGHT", True, True))
+        self.assertEqual(monitor_events(arm("PY_START", "PY_RESUME")),
+                         ("PY_START", False, False))
+        with self.assertRaises(ValueError):
+            monitor_events(arm("CALL", "PY_RETURN"))
+        with self.assertRaises(ValueError):
+            monitor_events(arm("BRANCH_LEFT"))
+
+    def test_every_declared_family_has_a_primary_event(self):
         header = (ROP_DIR.parent.parent / "Include" / "internal"
                   / "pycore_ir_metadata.h").read_text()
-        marked = {
-            m.group(1).split(".")[0]
-            for m in re.finditer(
-                r"_PyIR_H_TWIN_BY_TOOLS[^\n]*/\* (\S+) \*/", header)}
-        expected = set()
         for path in rop_files():
             for decl in rop_syntax.parse(path.read_text(), path.name).decls:
                 if not isinstance(decl, rop_syntax.Family) or not decl.events:
                     continue
-                has_opcode = f"INSTRUMENTED_{decl.ops[0]}" in stack_ops.PINNED_OPCODES
                 with self.subTest(decl.name):
-                    self.assertEqual(decl.name in marked, not has_opcode)
-                if not has_opcode:
-                    expected.add(decl.name)
-        self.assertEqual(marked, expected)
+                    self.assertRegex(
+                        header,
+                        rf"\[\d+\] = PY_MONITORING_EVENT_\w+, /\* {decl.name}\.")
 
 
 if __name__ == "__main__":

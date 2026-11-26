@@ -438,14 +438,20 @@ class OpcodeStats:
         def kind_to_text(kind: int, opcode: str):
             if kind <= 8:
                 return pretty(self._defines[kind][0])
-            if opcode == "LOAD_SUPER_ATTR":
+            # The failure kinds are named for the stack instruction that the
+            # specializer's source calls its family by
+            if opcode.startswith("SuperAttr") or opcode.startswith("SuperMethod"):
                 opcode = "SUPER"
-            elif opcode.endswith("ATTR"):
+            elif opcode in ("GetAttr", "GetMethod", "AttrWrite"):
                 opcode = "ATTR"
-            elif opcode in ("FOR_ITER", "GET_ITER", "SEND"):
+            elif opcode in ("ForIter", "Send", "IterOpen"):
                 opcode = "ITER"
-            elif opcode.endswith("SUBSCR"):
+            elif opcode in ("GetItem", "SetItem"):
                 opcode = "SUBSCR"
+            elif opcode == "GlobalRead":
+                opcode = "LOAD_GLOBAL"
+            else:
+                opcode = opcode.upper()
             for name in self._defines[kind]:
                 if name.startswith(opcode):
                     return pretty(name[len(opcode) + 1 :])
@@ -918,8 +924,8 @@ def pre_succ_pairs_section() -> Section:
 def specialization_section() -> Section:
     def calc_specialization_table(opcode: str) -> RowCalculator:
         def calc(stats: Stats) -> Rows:
-            opcode_stats = stats.get_opcode_stats("opcode")
-            specialization_counts = opcode_stats.get_specialization_counts(opcode)
+            family_stats = stats.get_opcode_stats("family")
+            specialization_counts = family_stats.get_specialization_counts(opcode)
 
             return [
                 (
@@ -935,7 +941,7 @@ def specialization_section() -> Section:
     def calc_specialization_success_failure_table(name: str) -> RowCalculator:
         def calc(stats: Stats) -> Rows:
             values = stats.get_opcode_stats(
-                "opcode"
+                "family"
             ).get_specialization_success_failure(name)
             total = sum(values.values())
             if total:
@@ -950,9 +956,9 @@ def specialization_section() -> Section:
 
     def calc_specialization_failure_kind_table(name: str) -> RowCalculator:
         def calc(stats: Stats) -> Rows:
-            opcode_stats = stats.get_opcode_stats("opcode")
-            failures = opcode_stats.get_specialization_failure_kinds(name)
-            total = opcode_stats.get_specialization_failure_total(name)
+            family_stats = stats.get_opcode_stats("family")
+            failures = family_stats.get_specialization_failure_kinds(name)
+            total = family_stats.get_specialization_failure_total(name)
 
             return sorted(
                 [
@@ -967,10 +973,10 @@ def specialization_section() -> Section:
         return calc
 
     def iter_specialization_tables(base_stats: Stats, head_stats: Stats | None = None):
-        opcode_base_stats = base_stats.get_opcode_stats("opcode")
+        opcode_base_stats = base_stats.get_opcode_stats("family")
         names = opcode_base_stats.get_opcode_names()
         if head_stats is not None:
-            opcode_head_stats = head_stats.get_opcode_stats("opcode")
+            opcode_head_stats = head_stats.get_opcode_stats("family")
             names |= opcode_head_stats.get_opcode_names()
         else:
             opcode_head_stats = None

@@ -403,7 +403,7 @@ sys_trace_stop_iteration_func(
             int word = offset >= 0 && offset < Py_SIZE(code) * (int)sizeof(_Py_CODEUNIT)
                 ? _PyCode_OffsetWord(code, (int)offset) : -1;
             if (word >= 0 && word < _PyCode_IRSize(code) &&
-                _PyIR_BaseOpcode(_PyCode_InstrHandler(code, word)) == FOR_ITER)
+                (_PyIR_HandlerFlags[_PyCode_InstrHandler(code, word)] & _PyIR_H_STOP_SLOT))
             {
                 PyValue value = ((PyStopIterationObject *)exc)->value;
                 if (PyValue_IsNull(value) || PyValue_IsNone(value)) {

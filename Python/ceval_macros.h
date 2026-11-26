@@ -409,19 +409,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #define GETLOCAL(i)     (IR_SLOTS()[i])
 
 
-#ifdef Py_STATS
-#define UPDATE_MISS_STATS(INSTNAME)                              \
-    do {                                                         \
-        STAT_INC(opcode, miss);                                  \
-        FAMILY_STAT_INC((INSTNAME), miss);                       \
-        if (_PyFb_CounterTriggers(_PyIR_FbHeaderOf(frame, this_instr, opcode))) { \
-            FAMILY_STAT_INC((INSTNAME), deopt);                         \
-        }                                                        \
-    } while (0)
-#else
-#define UPDATE_MISS_STATS(INSTNAME) ((void)0)
-#endif
-
 
 // Try to lock an object in the free threading build, if it's not already
 // locked. Use with a DEOPT_IF() to deopt if the object is already locked.

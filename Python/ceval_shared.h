@@ -3312,6 +3312,161 @@ _PyRop_ListReceiver(_PyInterpreterFrame *frame, const _PyIRWord *head)
     return true;
 }
 
+/* The rows of the frame-pushing attribute arms (Python/register_ops/getattr.rop):
+ * the function is the recipe's class value, its version the recipe's aux word */
+extern PyObject *_PyAttr_FrameTarget(PyObject *owner, PyObject *name,
+                                     bool *getattribute);
+
+static inline bool
+_PyAttr_FrameReady(PyThreadState *tstate, _PyAttrRecipe r)
+{
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(
+        _PyValueGuarded_LoadObject(r.class_value));
+    return func->func_version == r.aux &&
+        _PyThreadState_HasStackSpace(
+            tstate, ((PyCodeObject *)func->func_code)->co_framesize);
+}
+
+/* Push the frame of func for the load at site: the owner moves from its
+ * home (a local is counted) into the first slot, and the name, when the
+ * function takes one, into the second */
+static inline _PyInterpreterFrame *
+_PyAttr_PushFunction(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     const _PyIRWord *site, PyValue *home, PyObject *func,
+                     PyObject *name)
+{
+    PyValue owner = *home;
+    if (site[0] & IR_F_LOCAL_B) {
+        owner = PyValue_DUP(owner);
+    }
+    else {
+        *home = PyValue_NULL;
+    }
+    _PyInterpreterFrame *pushed = _PyFrame_PushUnchecked(
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), frame);
+    pushed->base[0] = owner;
+    if (name != NULL) {
+        pushed->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(name));
+    }
+    return pushed;
+}
+
+static inline _PyInterpreterFrame *
+_PyAttr_PushProperty(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     const _PyIRWord *site, PyValue *owner, _PyAttrRecipe r)
+{
+    return _PyAttr_PushFunction(
+        tstate, frame, site, owner,
+        PyValue_AsKnownObjectBorrow(_PyValueGuarded_LoadObject(r.class_value)),
+        NULL);
+}
+
+static inline _PyInterpreterFrame *
+_PyAttr_PushGetattribute(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         const _PyIRWord *site, PyValue *owner, PyObject *name,
+                         _PyAttrRecipe r)
+{
+    return _PyAttr_PushFunction(
+        tstate, frame, site, owner,
+        PyValue_AsKnownObjectBorrow(_PyValueGuarded_LoadObject(r.class_value)),
+        name);
+}
+
+/* What the generic load runs in a frame of its own */
+static inline bool
+_PyAttr_FrameClaimable(PyThreadState *tstate, PyValueBorrow owner, PyObject *name)
+{
+    if (!PyValue_IsObject(owner) || IS_PEP523_HOOKED(tstate) ||
+        !_PyRop_RecursionBudget(tstate))
+    {
+        return false;
+    }
+    bool getattribute;
+    PyObject *func = _PyAttr_FrameTarget(PyValue_AsKnownObjectBorrow(owner), name,
+                                         &getattribute);
+    return func != NULL && _PyThreadState_HasStackSpace(
+        tstate, ((PyCodeObject *)((PyFunctionObject *)func)->func_code)->co_framesize);
+}
+
+static inline _PyInterpreterFrame *
+_PyAttr_PushFrame(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  const _PyIRWord *site, PyValue *owner, PyObject *name)
+{
+    bool getattribute;
+    PyObject *func = _PyAttr_FrameTarget(PyValue_AsKnownObjectBorrow(*owner), name,
+                                         &getattribute);
+    assert(func != NULL);
+    return _PyAttr_PushFunction(tstate, frame, site, owner, func,
+                                getattribute ? name : NULL);
+}
+
+/* The rows of GetItem.Getitem (Python/register_ops/items.rop): the cached
+ * __getitem__ of a heap type, with the version it was cached under */
+static inline PyFunctionObject *
+_PyRop_CachedGetItem(PyValueBorrow owner)
+{
+    if (!PyValue_IsObject(owner)) {
+        return NULL;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+    if (!(tp->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        return NULL;
+    }
+    PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
+    PyFunctionObject *getitem = (PyFunctionObject *)
+        FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
+    if (getitem == NULL ||
+        getitem->func_version !=
+            FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.getitem_version))
+    {
+        return NULL;
+    }
+    return getitem;
+}
+
+static inline bool
+_PyRop_GetItemFrameReady(PyThreadState *tstate, PyValueBorrow owner)
+{
+    PyFunctionObject *getitem = _PyRop_CachedGetItem(owner);
+    return getitem != NULL && _PyThreadState_HasStackSpace(
+        tstate, ((PyCodeObject *)getitem->func_code)->co_framesize);
+}
+
+static inline bool
+_PyRop_GetItemFrameClaimable(PyThreadState *tstate, PyValueBorrow owner)
+{
+    return !IS_PEP523_HOOKED(tstate) && _PyRop_RecursionBudget(tstate) &&
+        _PyRop_GetItemFrameReady(tstate, owner);
+}
+
+static inline _PyInterpreterFrame *
+_PyRop_PushGetItem(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   const _PyIRWord *site, PyValue *container, PyValue *sub)
+{
+    PyFunctionObject *getitem = _PyRop_CachedGetItem(PyValue_Borrow(*container));
+    assert(getitem != NULL);
+    _PyInterpreterFrame *pushed = _PyFrame_PushUnchecked(
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)getitem)), frame);
+    _PyIRWord word = site[0];
+    PyValue owner = *container;
+    if (word & IR_F_LOCAL_B) {
+        owner = PyValue_DUP(owner);
+    }
+    else {
+        *container = PyValue_NULL;
+    }
+    PyValue key = *sub;
+    if (word & IR_F_LOCAL_C) {
+        key = PyValue_DUP(key);
+    }
+    else {
+        *sub = PyValue_NULL;
+    }
+    pushed->base[0] = owner;
+    pushed->base[1] = key;
+    return pushed;
+}
+
 static inline PyValue
 _PyRop_CallType1(_PyInterpreterFrame *frame, const _PyIRWord *head)
 {

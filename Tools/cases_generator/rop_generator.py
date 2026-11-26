@@ -842,6 +842,11 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
         region = "none" if arm.region.name == "split" else arm.region.name
         emitted = name in p.lowered
         generic = p.generic.get(arm.family)
+        # A generic arm that is split (it can enter a frame) has no stub for a
+        # miss to run: the family's inline arms are unplanned too, and a miss
+        # of their compiled code runs their function form, which reaches it
+        if region == "inline" and generic and generic not in shared:
+            region = "none"
         entries.append(ir_arms.ArmEntry(
             c_name(name), p.numbers[name], region, declares_escape(arm),
             stub_name(name) if name in shared else None,

@@ -19,7 +19,7 @@ ROOT = Path(test_tools.basepath)
 SPECIALIZED = {
     "GetAttr": ["Instance", "Shape", "PolyShape", "Module", "Hint", "ValueSlot",
                 "PointerSlot", "Class", "NonDescriptorValues", "NonDescriptorNoDict",
-                "GetSet"],
+                "GetSet", "Property", "GetattributeOverridden"],
     "GetMethod": ["MethodValues", "PolyMethod", "NoDict", "LazyDict", "ClassMethod"],
 }
 
@@ -55,7 +55,10 @@ class DefinitionTests(unittest.TestCase):
         arms = program().arms
         for family in SPECIALIZED:
             generic = arms[f"{family}.Generic"]
-            self.assertEqual(generic.region.name, "shared")
+            # GetAttr's enters the frame of a property getter or of
+            # __getattribute__, so it completes in the evaluator, not in a stub
+            self.assertEqual(generic.region.name,
+                             "split" if family == "GetAttr" else "shared")
             self.assertLessEqual({"next", "raise", "again", "redirect"},
                                  set(generic.contract.exits))
 

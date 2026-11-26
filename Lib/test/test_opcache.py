@@ -871,7 +871,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).__getattribute__ = lambda self, name: None
 
-        opname = "GetAttr.Generic"
+        opname = "GetAttr.GetattributeOverridden"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1041,7 +1041,7 @@ class TestRacesDoNotCrash(TestBase):
                     pass
                 type(item).a = property(lambda self: None)
 
-        opname = "GetAttr.Generic"
+        opname = "GetAttr.Property"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization

@@ -634,6 +634,8 @@ typedef enum {
     ATTR_NONDESCRIPTOR_WITH_VALUES,
     ATTR_NONDESCRIPTOR_NO_DICT,
     ATTR_GETSET,
+    ATTR_PROPERTY,
+    ATTR_GETATTRIBUTE_OVERRIDDEN,
     ATTR_METHOD_WITH_VALUES,
     ATTR_METHOD_NO_DICT,
     ATTR_METHOD_LAZY_DICT,
@@ -1311,9 +1313,46 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             return -1;
         }
         case PROPERTY:
-            // A property pushes a frame: the site stays on the generic arm
-            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_PROPERTY);
-            return -1;
+        {
+            assert(Py_TYPE(descr) == &PyProperty_Type);
+            PyValue fget = ((_PyPropertyObject *)descr)->prop_get;
+            if (PyValue_IsNull(fget) || !PyValue_IsObject(fget)) {
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_EXPECTED_ERROR);
+                return -1;
+            }
+            PyObject *fget_obj = PyValue_AsKnownObjectBorrow(fget);
+            if (!Py_IS_TYPE(fget_obj, &PyFunction_Type)) {
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_PROPERTY_NOT_PY_FUNCTION);
+                return -1;
+            }
+            if (!function_check_args(fget_obj, 1, IR_FAMILY_GetAttr)) {
+                return -1;
+            }
+            if (method) {
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_METHOD);
+                return -1;
+            }
+            /* Don't specialize if PEP 523 is active */
+            if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OTHER);
+                return -1;
+            }
+            #ifdef Py_GIL_DISABLED
+            if (!_PyObject_HasDeferredRefcount(fget_obj)) {
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
+                return -1;
+            }
+            #endif
+            uint32_t func_version = function_get_version(fget_obj, IR_FAMILY_GetAttr);
+            if (func_version == 0) {
+                return -1;
+            }
+            fb->type_version = tp_version;
+            fb->func_version = func_version;
+            fb->class_value = _PyValueGuarded_FromBorrow(PyValue_FromObjectBorrow(fget_obj));
+            specialize(instr, ATTR_KIND(ATTR_PROPERTY));
+            return 0;
+        }
         case OBJECT_SLOT:
         case POINTER_SLOT:
         {
@@ -1366,9 +1405,36 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OVERRIDDEN);
             return -1;
         case GETATTRIBUTE_IS_PYTHON_FUNCTION:
-            // An overridden __getattribute__ pushes a frame, as a property does
-            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OVERRIDDEN);
-            return -1;
+        {
+            assert(Py_IS_TYPE(descr, &PyFunction_Type));
+            if (!function_check_args(descr, 2, IR_FAMILY_GetAttr)) {
+                return -1;
+            }
+            if (method) {
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_METHOD);
+                return -1;
+            }
+            uint32_t version = function_get_version(descr, IR_FAMILY_GetAttr);
+            if (version == 0) {
+                return -1;
+            }
+            /* Don't specialize if PEP 523 is active */
+            if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OTHER);
+                return -1;
+            }
+            #ifdef Py_GIL_DISABLED
+            if (!_PyObject_HasDeferredRefcount(descr)) {
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
+                return -1;
+            }
+            #endif
+            fb->func_version = version;
+            fb->class_value = _PyValueGuarded_FromBorrow(PyValue_FromObjectBorrow(descr));
+            fb->type_version = tp_version;
+            specialize(instr, ATTR_KIND(ATTR_GETATTRIBUTE_OVERRIDDEN));
+            return 0;
+        }
         case BUILTIN_CLASSMETHOD:
         case PYTHON_CLASSMETHOD:
         case NON_OVERRIDING:
@@ -1605,8 +1671,8 @@ success:
  * register families that replaces it and the position of that arm among the
  * cases of classify_getattr (GetAttr words) or classify_getmethod (GetMethod
  * words); -1 where the family has no such arm.  The last case of each row is
- * "none".  A nomination of a handler without an arm (a property, an
- * overridden __getattribute__, a getset in method position) is "none": the site stays generic. */
+ * "none".  A nomination of a handler without an arm (a getset in method
+ * position) is "none": the site stays generic. */
 typedef enum {
     ATTR_FAMILY_GETATTR,
     ATTR_FAMILY_GETMETHOD,
@@ -1633,6 +1699,8 @@ static const attr_arm attr_arms[] = {
     {ATTR_NONDESCRIPTOR_WITH_VALUES, ROP_HANDLER_GetAttr_NonDescriptorValues, 7, -1, -1},
     {ATTR_NONDESCRIPTOR_NO_DICT, ROP_HANDLER_GetAttr_NonDescriptorNoDict, 8, -1, -1},
     {ATTR_GETSET, ROP_HANDLER_GetAttr_GetSet, 9, -1, -1},
+    {ATTR_PROPERTY, ROP_HANDLER_GetAttr_Property, 10, -1, -1},
+    {ATTR_GETATTRIBUTE_OVERRIDDEN, ROP_HANDLER_GetAttr_GetattributeOverridden, 11, -1, -1},
     {ATTR_METHOD_WITH_VALUES, ROP_HANDLER_GetMethod_MethodValues, -1, 0, -1},
     {ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1, -1},
     {ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2, -1},
@@ -1696,7 +1764,7 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
     }
     attr_collect = NULL;
     // The last case of each row is "none"
-    int none = family == ATTR_FAMILY_GETATTR ? 10
+    int none = family == ATTR_FAMILY_GETATTR ? 12
              : family == ATTR_FAMILY_GETMETHOD ? 4 : 5;
     const attr_arm *chosen = attr_arm_of(nominated.kind, family);
     if (chosen == NULL) {
@@ -2211,6 +2279,54 @@ function_get_version(PyObject *o, int family)
     return version;
 }
 
+/* Whether func takes exactly argcount positional arguments, with a frame to
+ * push (function_check_args without the statistics) */
+static bool
+function_pushes_frame(PyObject *func, int argcount)
+{
+    PyFunctionObject *f = (PyFunctionObject *)func;
+    PyCodeObject *code = (PyCodeObject *)f->func_code;
+    return f->vectorcall == _PyFunction_Vectorcall &&
+        function_signature(code) == SIMPLE_SIGNATURE &&
+        code->co_argcount == argcount && prepare_function_for_inline(code);
+}
+
+/* The function that a load of name from owner runs in a frame of its own:
+ * a property's getter (getattribute false) or an overridden __getattribute__
+ * (true), as GetAttr.Property and GetAttr.GetattributeOverridden run it, or
+ * NULL.  The result is borrowed from the owner's type, and valid until Python
+ * runs. */
+PyObject *
+_PyAttr_FrameTarget(PyObject *owner, PyObject *name, bool *getattribute)
+{
+    if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
+        return NULL;
+    }
+    PyValue descr = PyValue_NULL;
+    unsigned int tp_version = 0;
+    DescriptorClassification kind =
+        analyze_descriptor_load(Py_TYPE(owner), name, &descr, &tp_version);
+    PyObject *target = NULL;
+    if (kind == PROPERTY) {
+        PyValue fget = ((_PyPropertyObject *)PyValue_AsKnownObjectBorrow(descr))->prop_get;
+        if (PyValue_IsObject(fget) &&
+            Py_IS_TYPE(PyValue_AsKnownObjectBorrow(fget), &PyFunction_Type) &&
+            function_pushes_frame(PyValue_AsKnownObjectBorrow(fget), 1))
+        {
+            target = PyValue_AsKnownObjectBorrow(fget);
+            *getattribute = false;
+        }
+    }
+    else if (kind == GETATTRIBUTE_IS_PYTHON_FUNCTION &&
+             function_pushes_frame(PyValue_AsKnownObjectBorrow(descr), 2))
+    {
+        target = PyValue_AsKnownObjectBorrow(descr);
+        *getattribute = true;
+    }
+    PyValue_XCLOSE(descr);
+    return target;
+}
+
 #ifdef Py_STATS
 static int
 store_subscr_fail_kind(PyObject *container, PyValueBorrow sub)
@@ -2500,7 +2616,7 @@ specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
  * the site's entry holding the operand type versions.  Every arm guards what
  * it relies on, so the entry records evidence and guards nothing. */
 enum { GETITEM_LIST_INDEX, GETITEM_TUPLE_INDEX, GETITEM_ASCII, GETITEM_UNICODE_CHAR,
-       GETITEM_DICT, GETITEM_LIST_SLICE, GETITEM_NONE };
+       GETITEM_DICT, GETITEM_LIST_SLICE, GETITEM_GETITEM, GETITEM_NONE };
 enum { SETITEM_LIST_INDEX, SETITEM_DICT, SETITEM_NONE };
 
 static bool
@@ -2515,6 +2631,37 @@ item_record(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
     fb->lhs_version = fb_type_version(PyValue_TYPE(v));
     fb->rhs_version = fb_type_version(PyValue_TYPE(k));
     return true;
+}
+
+/* The old specialize_subscr_getitem: a heap type whose __getitem__ is a
+ * simple Python function of two arguments, which the type caches under its
+ * version (PyType_Modified() invalidates it).  The lookup neither allocates
+ * nor runs code. */
+static bool
+item_getitem_cached(PyTypeObject *tp)
+{
+    if (!(tp->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return false;
+    }
+    PyValue descriptor = PyValue_NULL;
+    unsigned int tp_version = 0;
+    bool cached = false;
+    if (_PyType_TryLookupValueNoAlloc(tp, &_Py_ID(__getitem__), &descriptor,
+                                      &tp_version) == 1 &&
+        PyValue_IsObject(descriptor) &&
+        PyFunction_Check(PyValue_AsKnownObjectBorrow(descriptor)))
+    {
+        PyObject *getitem = PyValue_AsKnownObjectBorrow(descriptor);
+        PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem);
+        cached = function_signature(code) == SIMPLE_SIGNATURE &&
+            code->co_argcount == 2 && prepare_function_for_inline(code) &&
+            _PyType_CacheGetItemForSpecialization(
+                (PyHeapTypeObject *)tp, getitem, tp_version);
+    }
+    PyValue_XCLOSE(descriptor);
+    return cached;
 }
 
 int
@@ -2547,7 +2694,7 @@ _PyRop_ClassifyGetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
     {
         return GETITEM_DICT;
     }
-    return GETITEM_NONE;
+    return item_getitem_cached(tp) ? GETITEM_GETITEM : GETITEM_NONE;
 }
 
 int

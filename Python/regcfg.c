@@ -212,7 +212,7 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
     op->loc = loc;
     op->srcoff = srcoff;
     // The oparg names a word: the target, or for END_ASYNC_FOR the SEND
-    op->target = (_PyRegCfg_FormatOf(opcode, oparg)->flags
+    op->target = (_PyRegCfg_FormatOf(opcode)->flags
                   & (_PyIR_JUMPS | _PyIR_FORWARD)) ? target : -1;
     op->except = except;
     op->dst = -1;
@@ -224,29 +224,13 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
 }
 
 
-/* Formats */
-
-const _PyIRFormat *
-_PyRegCfg_FormatOf(int opcode, int oparg)
-{
-    if (ROP_CFG_IS_ARM(opcode)) {
-        return _PyIR_FormatOf(ROP_CFG_HANDLER(opcode));
-    }
-    // A stack op has a handler, or only a format for the CFG
-    int handler = _PyIR_OpcodeHandler[opcode];
-    if (handler != _PyIR_NO_HANDLER) {
-        return _PyIR_FormatOf(handler);
-    }
-    return &_PyIR_StackOnlyFormats[opcode];
-}
-
 /* Whether op jumps to its target.  END_ASYNC_FOR names the SEND of its
  * loop, for sys.monitoring, but does not go there (_PyIR_NAMES_TARGET). */
 static inline int
 op_jumps(const _PyRegOp *op)
 {
     return op->target >= 0
-           && !(_PyRegCfg_FormatOf(op->opcode, op->oparg)->flags & _PyIR_NAMES_TARGET);
+           && !(_PyRegCfg_FormatOf(op->opcode)->flags & _PyIR_NAMES_TARGET);
 }
 
 /* The stack depth at the entry of exception handler block h, without the
@@ -634,7 +618,7 @@ placeable(const _PyRegTr *t, int v, int k)
         return 1;
     }
     const _PyRegOp *op = &t->ops[t->def[f]];
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+    const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
     if (fmt->flags & _PyIR_WINDOW) {
         return op->nread == 0 && op->nout == 1;
     }
@@ -1052,7 +1036,7 @@ int
 _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
 {
     _PyRegCfg *cfg = t->cfg;
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(instr->opcode, instr->oparg);
+    const _PyStackFormat *fmt = _PyRegCfg_FormatOf(instr->opcode);
     int window = (fmt->flags & _PyIR_WINDOW) != 0;
     int popped = _PyOpcode_num_popped(instr->opcode, instr->oparg);
     int pushed = _PyOpcode_num_pushed(instr->opcode, instr->oparg);
@@ -1197,15 +1181,15 @@ static int read_local(_PyRegTr *t, const _PyRegOp *src, int local,
 static int
 may_change_local(const _PyRegCfg *cfg, const _PyRegOp *op, int x)
 {
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
-    int role = _PyIR_OpargRole(fmt);
+    const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+    int role = _PyStack_OpargRole(fmt);
     return _PyRegOp_WritesLocal(cfg, op, x)
         || (op->oparg == x
             && (op->opcode == ROP_OP_SaveLocal_Take
                 || role == _PyIR_ROLE_LOCAL_OUT
                 || role == _PyIR_ROLE_LOCAL_CLEAR
                 || role == _PyIR_ROLE_LOCAL_MOVE))
-        || _PyIR_MayRunPython(fmt, op->dst >= 0);
+        || _PyStack_MayRunPython(fmt, op->dst >= 0);
 }
 
 /* The local whose binding identity v still is when src runs: v was read
@@ -1363,7 +1347,7 @@ only_makes_value(const _PyRegCfg *cfg, const _PyRegOp *p)
         case ROP_OP_Move_Copy:
             break;
         default: {
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode, p->oparg);
+            const _PyStackFormat *fmt = _PyRegCfg_FormatOf(p->opcode);
             if (!(fmt->effects & _PyIR_PURE) ||
                 (fmt->effects & (_PyIR_RAISES | _PyIR_ESCAPES)))
             {
@@ -1519,7 +1503,7 @@ rule_pop_top(_PyRegTr *t, const _PyRegOp *src)
         dead = prod;
     }
     else if (prod != NULL &&
-             (_PyRegCfg_FormatOf(prod->opcode, prod->oparg)->flags
+             (_PyRegCfg_FormatOf(prod->opcode)->flags
               & _PyIR_DISCARDS))
     {
         prod->flags |= _PyReg_DISCARD;
@@ -3674,7 +3658,7 @@ void
 _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
                   _PyRegSlots *slots)
 {
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+    const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
     const int *in = _PyReg_IN(cfg, op);
     const int *out = _PyReg_OUT(cfg, op);
     int nl = cfg->nlocalsplus;
@@ -4125,7 +4109,7 @@ static int
 evict(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo, int hi)
 {
     int nl = cfg->nlocalsplus;
-    int move = _PyIR_IsMoveFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg));
+    int move = _PyStack_IsMove(_PyRegCfg_FormatOf(op->opcode));
     for (int s = lo; s < hi; s++) {
         int w = occ_at(o, s - nl);
         if (w < 0 || (!move && op_reads(cfg, op, w))) {
@@ -4229,7 +4213,7 @@ place_evicted(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo,
               int hi)
 {
     int nl = cfg->nlocalsplus;
-    int move = _PyIR_IsMoveFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg));
+    int move = _PyStack_IsMove(_PyRegCfg_FormatOf(op->opcode));
     for (int q = 0; q < op->nstage; q++) {
         int x = cfg->operands[op->stage + 2 * q + 1];
         if (!move && op_reads(cfg, op, x)) {
@@ -4276,7 +4260,7 @@ window_vacant(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
               int s, int n)
 {
     int nl = cfg->nlocalsplus;
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+    const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
     const int *in = _PyReg_IN(cfg, op);
     const int *out = _PyReg_OUT(cfg, op);
     // The op's other inputs stay where they are until it reads them
@@ -4310,7 +4294,7 @@ static int
 window_base(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int *base)
 {
     int nl = cfg->nlocalsplus;
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+    const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
     int nwin = op->nread - fmt->ninputs;
     int n = Py_MAX(nwin, op->nout);
     const int *in = _PyReg_IN(cfg, op);
@@ -4387,7 +4371,7 @@ reuse_slot(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
     // A window takes its inputs from consecutive slots at the top: a value
     // it reads stays there rather than be staged back
     const _PyRegOp *reader = &cfg->ops[take];
-    if (_PyRegCfg_FormatOf(reader->opcode, reader->oparg)->flags & _PyIR_WINDOW) {
+    if (_PyRegCfg_FormatOf(reader->opcode)->flags & _PyIR_WINDOW) {
         return -1;
     }
     int floor = 0;
@@ -4419,7 +4403,7 @@ any_temp_output(const _PyRegCfg *cfg, const _PyRegOp *op, int first)
         if (out[j] >= cfg->nlocalsplus) {
             return 1;
         }
-        if (!_PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg))) {
+        if (!_PyStack_IsDstSpan(_PyRegCfg_FormatOf(op->opcode))) {
             return 0;
         }
     }
@@ -4430,7 +4414,7 @@ static int
 compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
 {
     int nl = cfg->nlocalsplus;
-    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+    const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
     int *in = _PyReg_IN(cfg, op);
     int *out = _PyReg_OUT(cfg, op);
     int nin = op->nread + op->nimplicit;
@@ -4628,7 +4612,7 @@ reserve_folded(_PyRegCfg *cfg, occupancy *o, _PyRegOp *load)
     const _PyRegOp *reader = &cfg->ops[load->reader];
     // A call reads its operands from words: no result has to clear them
     if (_PyIR_CALL_SHAPED(
-            _PyRegCfg_FormatOf(reader->opcode, reader->oparg)->operands)) {
+            _PyRegCfg_FormatOf(reader->opcode)->operands)) {
         return SUCCESS;
     }
     const int *in = _PyReg_IN(cfg, reader);
@@ -4830,7 +4814,7 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         if (op->opcode == _PyReg_DEAD) {
             continue;
         }
-        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+        const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
         _PyRegSlots slots;
         _PyRegCfg_OpSlots(cfg, op, &slots);
         int high = -1;
@@ -4875,7 +4859,7 @@ verify_error(const char *after, const _PyRegOp *op, const char *what)
 /* A folded load's reader reads the local when it runs, not when the load
  * would have, so no live op in between may write the local or run Python
  * code, which may rebind it through frame.f_locals (G1).  "May run Python"
- * depends on the operands (_PyIR_MayRunPython()): a word whose dst names a
+ * depends on the operands (_PyStack_MayRunPython()): a word whose dst names a
  * local releases the local's old value, and that may run __del__.  Copy
  * propagation keeps this rule only because store elimination, which gives
  * words such a dst, runs after it; the check makes the order a checked
@@ -4904,8 +4888,8 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
         if (op->opcode == _PyReg_DEAD) {
             continue;
         }
-        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
-        int role = _PyIR_OpargRole(fmt);
+        const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+        int role = _PyStack_OpargRole(fmt);
         if (_PyRegOp_WritesLocal(cfg, op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
                                                 || role == _PyIR_ROLE_LOCAL_CLEAR
                                                 || role == _PyIR_ROLE_LOCAL_MOVE)))
@@ -4913,7 +4897,7 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
             return verify_error(after, op, "a write to the local of a folded "
                                 "load before its reader");
         }
-        if (_PyIR_MayRunPython(fmt, op->dst >= 0)) {
+        if (_PyStack_MayRunPython(fmt, op->dst >= 0)) {
             return verify_error(after, op, "code that may rebind the local "
                                 "of a folded load before its reader");
         }
@@ -5118,7 +5102,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
             if (op->opcode == _PyReg_DEAD) {
                 continue;
             }
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+            const _PyStackFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
             int *in = _PyReg_IN(cfg, op);
             int *out = _PyReg_OUT(cfg, op);
             // A value that nothing reads is not an error: a loop without an
@@ -5189,7 +5173,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                                    "its input's slot");
             }
             if (cfg->nconst) {
-                int role = _PyIR_OpargRole(fmt);
+                int role = _PyStack_OpargRole(fmt);
                 int written = op->dst;
                 if (role == _PyIR_ROLE_LOCAL_OUT
                     || role == _PyIR_ROLE_LOCAL_CLEAR
@@ -5381,7 +5365,7 @@ dump(const _PyRegCfg *cfg, const char *after)
                 dump_reg(cfg, cfg->operands[op->stage + 2 * q + 1]);
             }
             if (op->opcode != _PyReg_DEAD && op->nread == 0
-                && (_PyRegCfg_FormatOf(op->opcode, op->oparg)->flags
+                && (_PyRegCfg_FormatOf(op->opcode)->flags
                     & _PyIR_WINDOW))
             {
                 fprintf(stderr, " base %d", op->base);

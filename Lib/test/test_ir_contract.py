@@ -3,9 +3,8 @@
 _opcode.get_ir_contract() exports _PyIR_Formats (Include/internal/pycore_ir.h),
 which Tools/cases_generator/ir_metadata_generator.py writes from
 Tools/cases_generator/stack_ops.py and Python/register_ops.  The compiler passes, the assembler, dis and the
-instrumentation read it.  Each row must agree with the stack effects that the
-compiler uses, with the generator's analysis of the instruction, with the
-feedback layouts and with sys.monitoring.
+instrumentation read it.  Each row must agree with the word's encoding and
+homes, with the feedback layouts and with sys.monitoring.
 """
 
 from test.support import ir_dis as dis
@@ -53,22 +52,6 @@ OPARGS = (0, 1, 2, 3, 7, 0x102)
 TRANSLATOR_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
-
-
-def extent(e, oparg):
-    "The slot count of extent e for oparg (_PyIR_Extent())"
-    k, form = e
-    if form == _opcode.IR_EXT_FIXED:
-        return k
-    if form == _opcode.IR_EXT_OPARG:
-        return k + oparg
-    if form == _opcode.IR_EXT_OPARG2:
-        return k + 2 * oparg
-    if form == _opcode.IR_EXT_BIT0:
-        return k + (oparg & 1)
-    if form == _opcode.IR_EXT_BYTES:
-        return k + (oparg & 0xFF) + (oparg >> 8)
-    raise ValueError(f"no extent form {form}")
 
 
 def oparg_role(row):
@@ -163,14 +146,6 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(row.imm, _opcode.IR_LOC_D)
                 self.assertTrue(row.flags & _opcode.IR_FORWARD)
 
-    def test_no_result_publication_phase(self):
-        # A handler stores its result in its place in the upstream order,
-        # not in a phase before a retirement: no handler names one
-        for name, row in BY_NAME.items():
-            with self.subTest(handler=name):
-                self.assertEqual(row.result_phase,
-                                 _opcode.IR_RESULT_PHASE_NONE)
-
     def test_rows(self):
         self.assertEqual(len(CONTRACT), _opcode.IR_NUM_HANDLERS)
         named = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_handlers}
@@ -190,53 +165,38 @@ class ContractTests(unittest.TestCase):
                 continue
             self.assertIn(name, BY_NAME)
 
-    def test_stack_effects(self):
-        # The generic handler of an instruction and the
-        # handlers of its operations have its stack effect, which is what the
-        # compiler counts (_PyOpcode_num_popped() and _pushed()).  A
-        # specialisation has its own, for the opargs it specialises.
-        for h, row in ROWS.items():
-            op = row.base
-            if (op >= opcode.MIN_INSTRUMENTED_OPCODE
-                    or (row.shadow is not None
-                        and opcode.opname[row.shadow] in opcode._specialized_opmap)):
-                continue
-            for oparg in OPARGS:
-                if not _opcode.has_arg(op) and oparg:
-                    continue
-                try:
-                    expected = _opcode.stack_effect(
-                        op, oparg if _opcode.has_arg(op) else None)
-                except ValueError:
-                    continue
-                with self.subTest(handler=opcode._all_opname[h], oparg=oparg):
-                    reads = extent(row.reads, oparg)
-                    writes = extent(row.writes, oparg)
-                    through = extent(row.through, oparg)
-                    self.assertEqual(writes - reads, expected)
-                    self.assertLessEqual(through, min(reads, writes))
-
-    def test_window_and_fields(self):
-        for h, row in ROWS.items():
+    def test_fields(self):
+        # Inputs are numbered from 0 in field order; a BASE field names a
+        # home group; a feedback field is where fb says
+        homes = (_opcode.IR_HOME_PRESERVE, _opcode.IR_HOME_VACATE,
+                 _opcode.IR_HOME_DEFINE, _opcode.IR_HOME_UNKNOWN)
+        for h, row in enumerate(CONTRACT[_opcode.IR_FIRST_ARM:], _opcode.IR_FIRST_ARM):
             with self.subTest(handler=opcode._all_opname[h]):
                 roles = row.roles
                 inputs = [r - _opcode.IR_ROLE_IN0 for r in roles
                           if r >= _opcode.IR_ROLE_IN0]
-                self.assertEqual(sorted(inputs), list(range(row.ninputs)))
-                if row.flags & _opcode.IR_WINDOW:
-                    self.assertIn(_opcode.IR_ROLE_BASE, roles)
-                    # at most the sources read through fields of their own
-                    self.assertLessEqual(row.ninputs, 2)
-                self.assertEqual(row.borrow_mask >> row.ninputs, 0)
-                if row.flags & _opcode.IR_UNPACKS:
-                    # dst names a run of locals for the elements
-                    self.assertIn(_opcode.IR_ROLE_DST, roles)
-                    self.assertTrue(row.flags & _opcode.IR_WINDOW)
-                elif row.dst is None:
-                    self.assertNotIn(_opcode.IR_ROLE_DST, roles)
-                    self.assertFalse(row.flags & _opcode.IR_STORE_DST)
+                self.assertEqual(inputs, list(range(len(inputs))))
+                if _opcode.IR_ROLE_BASE in roles:
+                    self.assertGreater(row.group, 0)
                 self.assertEqual(_opcode.IR_ROLE_FB in roles,
                                  row.fb != _opcode.IR_LOC_NONE)
+                self.assertEqual(len(row.edges), 2)
+                for states in row.edges:
+                    self.assertEqual(len(states), 6)
+                    self.assertTrue(set(states) <= set(homes))
+
+    def test_edge_homes(self):
+        # ForIter(item, pair): the step defines the item and keeps the
+        # receiver; the exhaustion retires the receiver and the cursor (home
+        # 4, the pair's part 1).  Both edges publish before their callbacks.
+        row = CONTRACT[opcode._ir_handlers["ForIter.Generic"]]
+        self.assertEqual(row.group, 2)
+        step, done = row.edges
+        self.assertEqual(step[0], _opcode.IR_HOME_DEFINE)
+        self.assertEqual(step[1], _opcode.IR_HOME_PRESERVE)
+        self.assertEqual((done[1], done[4]),
+                         (_opcode.IR_HOME_VACATE, _opcode.IR_HOME_VACATE))
+        self.assertEqual(row.committed, 0b11)
 
     def test_slot_roles(self):
         expected = {

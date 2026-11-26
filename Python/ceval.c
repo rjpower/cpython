@@ -2952,10 +2952,9 @@ _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * `handler` with its feedback counter paused, so that the word does not
  * specialise over the instrumentation. */
 static inline void
-_PyRop_Displaced(_PyInterpreterFrame *frame, _PyInstr *site, int opcode,
+_PyRop_Displaced(_PyInterpreterFrame *frame, _PyInstr *site, int displaced,
                  int *handler)
 {
-    int displaced = _PyIR_OriginalHandler(frame, site, opcode);
     if (_PyFb_HasEntry(displaced)) {
         PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, site, displaced));
     }
@@ -2968,15 +2967,15 @@ static Py_NO_INLINE int
 _PyRop_LineEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  _PyInstr *site, _PyInstr *prev, int *handler)
 {
-    int opcode;
+    int displaced;
     if (tstate->tracing) {
         PyCodeObject *code = _PyFrame_GetCode(frame);
         int index = _PyFrame_InstrOffset(frame, site);
-        opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
+        displaced = _PyCode_LineDisplaced(code, index);
     }
     else {
-        opcode = _Py_call_instrumentation_line(tstate, frame, site, prev);
-        if (opcode < 0) {
+        displaced = _Py_call_instrumentation_line(tstate, frame, site, prev);
+        if (displaced < 0) {
             return -1;
         }
         if (frame->instr_ptr != site) {
@@ -2984,7 +2983,7 @@ _PyRop_LineEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
             return 1;
         }
     }
-    _PyRop_Displaced(frame, site, opcode, handler);
+    _PyRop_Displaced(frame, site, displaced, handler);
     return 0;
 }
 
@@ -2992,12 +2991,11 @@ static Py_NO_INLINE int
 _PyRop_InstructionEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         _PyInstr *site, int *handler)
 {
-    int opcode = _Py_call_instrumentation_instruction(tstate, frame, site);
-    if (opcode < 0) {
+    int displaced = _Py_call_instrumentation_instruction(tstate, frame, site);
+    if (displaced < 0) {
         return -1;
     }
-    assert(opcode > 0 && opcode < 256);
-    _PyRop_Displaced(frame, site, opcode, handler);
+    _PyRop_Displaced(frame, site, displaced, handler);
     return 0;
 }
 

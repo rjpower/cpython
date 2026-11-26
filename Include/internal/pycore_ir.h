@@ -935,24 +935,14 @@ PyAPI_FUNC(int) _PyIR_RealHandler(struct _PyInterpreterFrame *frame,
                                   const _PyIRWord *instr);
 
 /* The handler that the word at instr runs once a LINE or INSTRUCTION wrapper
- * has passed it on; the instrumented one if monitoring displaced it. */
+ * has passed it on; the observed one if monitoring displaced it. */
 PyAPI_FUNC(int) _PyIR_DispatchedHandler(struct _PyInterpreterFrame *frame,
                                           const _PyIRWord *instr);
 
-/* The handler that INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION at instr
- * goes on to, given the opcode that instrumentation returned for it: the
- * code object's handler where that opcode is the uninstrumented one,
- * otherwise opcode. */
-PyAPI_FUNC(int) _PyIR_OriginalHandler(struct _PyInterpreterFrame *frame,
-                                      const _PyIRWord *instr, int opcode);
-
-/* The handler that runs opcode, an instrumented opcode or the base opcode
- * of the word at index i of co, on that word. */
-PyAPI_FUNC(int) _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode);
-
-/* Whether the word at index i of co has a handler that monitoring selects
- * by tools, not by rewriting its opcode (_PyIR_H_TWIN_BY_TOOLS). */
-PyAPI_FUNC(int) _PyCode_TwinByTools(PyCodeObject *co, int i);
+/* The handler of the word at index i of co while monitoring runs it: the
+ * code object's handler, or when observed is true the observed twin that
+ * its family declares (events(...)).  Specialisation is not kept. */
+PyAPI_FUNC(int) _PyCode_HandlerFor(PyCodeObject *co, int i, int observed);
 
 /* Whether the word at index i of co is a jump that the assembler adds after
  * a relaxed FOR_ITER, SEND or conditional branch (_PyIR_H_TRAILING). */

@@ -64,6 +64,16 @@ class HandlerEntryReportTests(unittest.TestCase):
                          "family_entries_100_not_190")
         self.assertEqual(opcodes.get_entry_kind_counts(), (10, 90, 0))
 
+    def test_family_statistics_are_read_under_the_family_prefix(self):
+        report = stats.Stats(sample({
+            "family[GetAttr].specialization.success": 7,
+            "family[GetAttr].specialization.failure": 3,
+            "opcode[LOAD_ATTR].specialization.success": 100,
+        })).get_opcode_stats("family")
+        self.assertEqual(list(report.get_opcode_names()), ["GetAttr"])
+        self.assertEqual(report.get_specialization_success_failure("GetAttr"),
+                         {"success": 7, "failure": 3})
+
     def test_truth_hits_stay_at_recorded_key(self):
         opcodes = self.opcode_stats({
             "opcode[POP_JUMP_IF_FALSE].execution_count": 10,
@@ -102,14 +112,14 @@ class HandlerEntryReportTests(unittest.TestCase):
         self.assertFalse(opcodes.is_specializable("LOAD_ATTR_NOFB"))
 
     def test_events_whitelist_and_zero_entry_event_rendering(self):
-        data = sample({"opcode[TO_BOOL].specialization.hit": 90,
+        data = sample({"family[BranchTruth].specialization.hit": 90,
                        "opcode[TO_BOOL].boxes": 7})
-        opcodes = stats.Stats(data).get_opcode_stats("opcode")
-        self.assertEqual(opcodes.get_specialization_counts("TO_BOOL"),
+        families = stats.Stats(data).get_opcode_stats("family")
+        self.assertEqual(families.get_specialization_counts("BranchTruth"),
                          dict(hit=90, miss=0, deferred=0, deopt=0))
         out = io.StringIO()
         stats.output_markdown(out, stats.specialization_section(), stats.Stats(data))
-        self.assertIn("TO_BOOL", out.getvalue())
+        self.assertIn("BranchTruth", out.getvalue())
         self.assertIn(">90<", out.getvalue())
         self.assertNotIn("boxes", out.getvalue())
         self.assertNotIn("handler_flags", out.getvalue())

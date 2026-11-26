@@ -35,18 +35,18 @@
  */
 
 #if Py_STATS
-/* opcode is the stack opcode of the instruction family */
-#define SPECIALIZATION_FAIL(opcode, kind) \
+/* family is an IR_FAMILY_ number */
+#define SPECIALIZATION_FAIL(family, kind) \
 do { \
     PyStats *s = _PyStats_GET(); \
     if (s) { \
         int _kind = (kind); \
         assert(_kind < SPECIALIZATION_FAILURE_KINDS); \
-        s->family_stats[opcode].failure_kinds[_kind]++; \
+        s->family_stats[family].failure_kinds[_kind]++; \
     } \
 } while (0)
 #else
-#  define SPECIALIZATION_FAIL(opcode, kind) ((void)0)
+#  define SPECIALIZATION_FAIL(family, kind) ((void)0)
 #endif  // Py_STATS
 
 
@@ -237,14 +237,11 @@ current_frame(void)
     return _PyThreadState_GET()->current_frame;
 }
 
-/* The stack op that the word's handler stands for, whether it is an old
- * handler, an IR-only one or a register instruction arm: the index for the
- * tables that are sized for stack ops (_PyOpcode_Deopt, _PyOpcode_Caches,
- * the statistics) */
+/* The family of the word's handler: the index of the family statistics */
 static inline int
-instr_base_opcode(_PyInstr *instr)
+instr_family(_PyInstr *instr)
 {
-    return _PyIR_BaseOpcode(IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)));
+    return _PyIR_HandlerFamily[IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr))];
 }
 
 /* The opcode of the handler; for an IR-only handler, the instruction that
@@ -687,12 +684,12 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
         return;
     }
     if (!set_opcode(instr, handler)) {
-        FAMILY_STAT_INC(_PyIR_BaseOpcode(specialized_opcode), failure);
-        SPECIALIZATION_FAIL(_PyIR_BaseOpcode(specialized_opcode),
+        FAMILY_STAT_INC(_PyIR_HandlerFamily[handler], failure);
+        SPECIALIZATION_FAIL(_PyIR_HandlerFamily[handler],
                             SPEC_FAIL_OTHER);
         return;
     }
-    FAMILY_STAT_INC(_PyIR_BaseOpcode(specialized_opcode), success);
+    FAMILY_STAT_INC(_PyIR_HandlerFamily[handler], success);
     _PyFbHeader *h = instr_fb(instr);
     if (h == NULL) {
         // RESUME specialises without an entry
@@ -717,13 +714,13 @@ unspecialize(_PyInstr *instr)
         // The row reports the failure; the macro backs off
         return;
     }
-    FAMILY_STAT_INC(instr_base_opcode(instr), failure);
+    FAMILY_STAT_INC(instr_family(instr), failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
     int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
                                          _PyFrame_InstrOffset(frame, instr));
     if (!set_opcode(instr, generic)) {
-        SPECIALIZATION_FAIL(instr_base_opcode(instr), SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(instr_family(instr), SPEC_FAIL_OTHER);
         return;
     }
     _PyFbHeader *h = instr_fb(instr);
@@ -802,8 +799,8 @@ _PyRop_Install(_PyInstr *instr, _PyFbHeader *h, int handler)
 }
 
 static FunctionSignature function_signature(PyCodeObject *code);
-static bool function_check_args(PyObject *o, int expected_argcount, int opcode);
-static uint32_t function_get_version(PyObject *o, int opcode);
+static bool function_check_args(PyObject *o, int expected_argcount, int family);
+static uint32_t function_get_version(PyObject *o, int family);
 
 #ifdef Py_GIL_DISABLED
 static void
@@ -825,25 +822,25 @@ specialize_module_load_attr_lock_held(PyDictObject *dict, _PyInstr *instr, PyObj
 {
     _PyFbAttr *fb = instr_entry(instr);
     if (dict->ma_keys->dk_kind != DICT_KEYS_UNICODE) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_STRING);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_NON_STRING);
         return -1;
     }
     PyValue value = PyValue_NULL;
     Py_ssize_t index = _PyDict_LookupIndexAndOwnedValue(dict, name, &value);
     if (PyValue_IsObject(value) &&
         PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto fail;
     }
     assert(index != DKIX_ERROR);
     if (index == DKIX_EMPTY) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MODULE_ATTR_NOT_FOUND);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_MODULE_ATTR_NOT_FOUND);
         goto fail;
     }
     uint32_t keys_version = _PyDict_GetKeysVersionForCurrentState(
             _PyInterpreterState_GET(), dict);
     if (keys_version == 0) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OUT_OF_VERSIONS);
         goto fail;
     }
     fb->dict_version = keys_version;
@@ -864,7 +861,7 @@ specialize_module_load_attr(
     assert((Py_TYPE(owner)->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0);
     PyDictObject *dict = (PyDictObject *)m->md_dict;
     if (dict == NULL) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_NO_DICT);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_NO_DICT);
         return -1;
     }
     int result;
@@ -1056,7 +1053,7 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, uint8_t shape)
 static int
 specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
                         PyTypeObject *type, unsigned int tp_version,
-                        Py_ssize_t index, int base_op)
+                        Py_ssize_t index, int family)
 {
     PyDictValues *values = _PyObject_InlineValues(owner);
     uint8_t shape = values->shape;
@@ -1065,12 +1062,12 @@ specialize_shape_access(PyObject *owner, _PyInstr *instr, _PyFbAttr *fb,
     }
     int opcode;
     if (_PyShape_HasSlot(type, shape, index)) {
-        opcode = ATTR_KIND(base_op == LOAD_ATTR ? ATTR_SHAPE : ATTR_STORE_SHAPE);
-        if (base_op == LOAD_ATTR) {
+        opcode = ATTR_KIND(family == IR_FAMILY_GetAttr ? ATTR_SHAPE : ATTR_STORE_SHAPE);
+        if (family == IR_FAMILY_GetAttr) {
             fb->read_kind = _Py_FB_READ_SHAPE;
         }
     }
-    else if (base_op == LOAD_ATTR) {
+    else if (family == IR_FAMILY_GetAttr) {
         return 0;
     }
     else {
@@ -1090,7 +1087,7 @@ static int
 specialize_dict_access_inline(
     PyObject *owner, _PyInstr *instr, PyTypeObject *type,
     PyObject *name, unsigned int tp_version,
-    int base_op, int values_op)
+    int family, int values_op)
 {
     _PyFbAttr *fb = instr_entry(instr);
     PyDictKeysObject *keys = ((PyHeapTypeObject *)type)->ht_cached_keys;
@@ -1099,7 +1096,7 @@ specialize_dict_access_inline(
     Py_ssize_t index = _PyDictKeys_StringLookupSplit(keys, name);
     assert (index != DKIX_ERROR);
     if (index == DKIX_EMPTY) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NOT_IN_KEYS);
+        SPECIALIZATION_FAIL(family, SPEC_FAIL_ATTR_NOT_IN_KEYS);
         return 0;
     }
     assert(index >= 0);
@@ -1112,7 +1109,7 @@ specialize_dict_access_inline(
     fb->type_version = tp_version;
 #ifdef Py_SHAPES
     int shape_op = specialize_shape_access(owner, instr, fb, type, tp_version,
-                                           index, base_op);
+                                           index, family);
     if (shape_op != 0) {
         specialize(instr, shape_op);
         return 1;
@@ -1126,7 +1123,7 @@ static int
 specialize_dict_access_hint(
     PyDictObject *dict, _PyInstr *instr, PyTypeObject *type,
     PyObject *name, unsigned int tp_version,
-    int base_op, int hint_op)
+    int family, int hint_op)
 {
     _PyFbAttr *fb = instr_entry(instr);
 
@@ -1136,14 +1133,14 @@ specialize_dict_access_hint(
     // STORE_ATTR_WITH_HINT can write the values of a split table, such as a
     // materialized dict that shares the inline values; ATTR_KIND(ATTR_WITH_HINT)
     // reads combined tables only.
-    if (base_op == LOAD_ATTR && _PyDict_HasSplitTable(dict)) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_SPLIT_DICT);
+    if (family == IR_FAMILY_GetAttr && _PyDict_HasSplitTable(dict)) {
+        SPECIALIZATION_FAIL(family, SPEC_FAIL_ATTR_SPLIT_DICT);
         return 0;
     }
     /* The executing hint cannot use a general-key table. Declining here
      * also keeps metadata lookup native and nonescaping before cache writes. */
     if (dict->ma_keys->dk_kind == DICT_KEYS_GENERAL) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NON_STRING);
+        SPECIALIZATION_FAIL(family, SPEC_FAIL_ATTR_NON_STRING);
         return 0;
     }
     PyValue value = PyValue_NULL;
@@ -1154,7 +1151,7 @@ specialize_dict_access_hint(
     }
     PyValue_XCLOSE(value);
     if (index < 0) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NOT_IN_DICT);
+        SPECIALIZATION_FAIL(family, SPEC_FAIL_ATTR_NOT_IN_DICT);
         return 0;
     }
     fb->hint = (uint32_t)index;
@@ -1168,32 +1165,32 @@ static int
 specialize_dict_access(
     PyObject *owner, _PyInstr *instr, PyTypeObject *type,
     DescriptorClassification kind, PyObject *name, unsigned int tp_version,
-    int base_op, int values_op, int hint_op)
+    int family, int values_op, int hint_op)
 {
     assert(kind == NON_OVERRIDING || kind == NON_DESCRIPTOR || kind == ABSENT ||
         kind == BUILTIN_CLASSMETHOD || kind == PYTHON_CLASSMETHOD ||
         kind == METHOD || kind == INLINE_VALUE);
     // No descriptor, or non overriding.
     if ((type->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
+        SPECIALIZATION_FAIL(family, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
         return 0;
     }
     if (type->tp_flags & Py_TPFLAGS_INLINE_VALUES &&
         FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner)->valid) &&
-        !(base_op == STORE_ATTR && _PyObject_GetManagedDict(owner) != NULL))
+        !(family == IR_FAMILY_AttrWrite && _PyObject_GetManagedDict(owner) != NULL))
     {
         int res;
         Py_BEGIN_CRITICAL_SECTION(owner);
         PyDictObject *dict = _PyObject_GetManagedDict(owner);
         // A materialized dict shares the inline values, so loads can still
         // read them directly. Stores must go through the dict.
-        if (dict == NULL || base_op == LOAD_ATTR) {
+        if (dict == NULL || family == IR_FAMILY_GetAttr) {
             res = specialize_dict_access_inline(owner, instr, type, name,
-                                                tp_version, base_op, values_op);
+                                                tp_version, family, values_op);
         }
         else {
             // lost race and dict was created, fail specialization
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_OTHER);
             res = 0;
         }
         Py_END_CRITICAL_SECTION();
@@ -1202,14 +1199,14 @@ specialize_dict_access(
     else {
         PyDictObject *dict = _PyObject_GetManagedDict(owner);
         if (dict == NULL || !PyDict_CheckExact(dict)) {
-            SPECIALIZATION_FAIL(base_op, SPEC_FAIL_NO_DICT);
+            SPECIALIZATION_FAIL(family, SPEC_FAIL_NO_DICT);
             return 0;
         }
         int res;
         Py_BEGIN_CRITICAL_SECTION(dict);
         // materialized managed dict
         res = specialize_dict_access_hint(dict, instr, type, name,
-                                          tp_version, base_op, hint_op);
+                                          tp_version, family, hint_op);
         Py_END_CRITICAL_SECTION();
         return res;
     }
@@ -1298,7 +1295,7 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
     _PyFbAttr *fb = instr_entry(instr);
     PyTypeObject *type = Py_TYPE(owner);
     if (tp_version == 0) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OUT_OF_VERSIONS);
         return -1;
     }
     switch(kind) {
@@ -1306,7 +1303,7 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             if (specialize_value_getset(owner, instr, descr, tp_version)) {
                 return 0;
             }
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
             return -1;
         case METHOD:
         {
@@ -1324,12 +1321,12 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
                     return -1;
                 }
             }
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METHOD);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_METHOD);
             return -1;
         }
         case PROPERTY:
             // A property pushes a frame: the site stays on the generic arm
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_PROPERTY);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_PROPERTY);
             return -1;
         case OBJECT_SLOT:
         case POINTER_SLOT:
@@ -1338,19 +1335,19 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             struct PyMemberDef *dmem = member->d_member;
             Py_ssize_t offset = dmem->offset;
             if (!PyObject_TypeCheck(owner, member->d_common.d_type)) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_EXPECTED_ERROR);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_EXPECTED_ERROR);
                 return -1;
             }
             if (dmem->flags & _Py_AFTER_ITEMS) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS);
                 return -1;
             }
             if (dmem->flags & Py_AUDIT_READ) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_AUDITED_SLOT);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_AUDITED_SLOT);
                 return -1;
             }
             if (offset != (uint32_t)offset) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_RANGE);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OUT_OF_RANGE);
                 return -1;
             }
             assert(offset > 0);
@@ -1374,17 +1371,17 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             specialize(instr, ATTR_KIND(ATTR_SLOT_POINTER));
             return 0;
         case OTHER_SLOT:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
             return -1;
         case MUTABLE:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_MUTABLE_CLASS);
             return -1;
         case GETSET_OVERRIDDEN:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OVERRIDDEN);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OVERRIDDEN);
             return -1;
         case GETATTRIBUTE_IS_PYTHON_FUNCTION:
             // An overridden __getattribute__ pushes a frame, as a property does
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OVERRIDDEN);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OVERRIDDEN);
             return -1;
         case BUILTIN_CLASSMETHOD:
         case PYTHON_CLASSMETHOD:
@@ -1417,7 +1414,7 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
     Py_UNREACHABLE();
 try_instance:
     if (specialize_dict_access(owner, instr, type, kind, name, tp_version,
-                               LOAD_ATTR, ATTR_KIND(ATTR_INSTANCE_VALUE), ATTR_KIND(ATTR_WITH_HINT)))
+                               IR_FAMILY_GetAttr, ATTR_KIND(ATTR_INSTANCE_VALUE), ATTR_KIND(ATTR_WITH_HINT)))
     {
         return 0;
     }
@@ -1452,7 +1449,7 @@ attr_specialize(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name,
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[LOAD_ATTR] == INLINE_CACHE_ENTRIES_LOAD_ATTR);
     if (!PyValue_IsObject(owner_st)) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
@@ -1480,7 +1477,7 @@ attr_specialize(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name,
         // We *might* not really need this check, but we inherited it from
         // PyObject_GenericGetAttr and friends... and this way we still do the
         // right thing if someone forgets to call PyType_Ready(type):
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OTHER);
         fail = true;
     }
     else if (PyModule_CheckExact(owner)) {
@@ -1508,7 +1505,7 @@ attr_specialize_store(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
     PyValue descr = PyValue_NULL;
     _PyFbAttr *fb = NULL;
     if (!PyValue_IsObject(owner_st)) {
-        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
@@ -1527,11 +1524,11 @@ attr_specialize_store(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
         // We *might* not really need this check, but we inherited it from
         // PyObject_GenericSetAttr and friends... and this way we still do the
         // right thing if someone forgets to call PyType_Ready(type):
-        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_OTHER);
         goto fail;
     }
     if (PyModule_CheckExact(owner)) {
-        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OVERRIDDEN);
+        SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_OVERRIDDEN);
         goto fail;
     }
     unsigned int tp_version = 0;
@@ -1543,13 +1540,13 @@ attr_specialize_store(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
     assert(!PyValue_IsNull(descr) || kind == ABSENT || kind == GETSET_OVERRIDDEN);
     switch(kind) {
         case OVERRIDING:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
             goto fail;
         case METHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_METHOD);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_METHOD);
             goto fail;
         case PROPERTY:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_PROPERTY);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_PROPERTY);
             goto fail;
         case OBJECT_SLOT:
         {
@@ -1557,19 +1554,19 @@ attr_specialize_store(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
             struct PyMemberDef *dmem = member->d_member;
             Py_ssize_t offset = dmem->offset;
             if (!PyObject_TypeCheck(owner, member->d_common.d_type)) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_EXPECTED_ERROR);
+                SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_EXPECTED_ERROR);
                 goto fail;
             }
             if (dmem->flags & _Py_AFTER_ITEMS) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_SLOT_AFTER_ITEMS);
                 goto fail;
             }
             if (dmem->flags & Py_READONLY) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_READ_ONLY);
+                SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_READ_ONLY);
                 goto fail;
             }
             if (offset != (uint32_t)offset) {
-                SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OUT_OF_RANGE);
+                SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_OUT_OF_RANGE);
                 goto fail;
             }
             assert(dmem->type == _Py_T_VALUE_EX);
@@ -1582,31 +1579,31 @@ attr_specialize_store(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
         case DUNDER_CLASS:
         case POINTER_SLOT:
         case OTHER_SLOT:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
             goto fail;
         case MUTABLE:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_MUTABLE_CLASS);
             goto fail;
         case GETATTRIBUTE_IS_PYTHON_FUNCTION:
         case GETSET_OVERRIDDEN:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OVERRIDDEN);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_OVERRIDDEN);
             goto fail;
         case BUILTIN_CLASSMETHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_BUILTIN_CLASS_METHOD_OBJ);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_BUILTIN_CLASS_METHOD_OBJ);
             goto fail;
         case PYTHON_CLASSMETHOD:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
             goto fail;
         case NON_OVERRIDING:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_DESCRIPTOR);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_CLASS_ATTR_DESCRIPTOR);
             goto fail;
         case INLINE_VALUE:
         case NON_DESCRIPTOR:
-            SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
+            SPECIALIZATION_FAIL(IR_FAMILY_AttrWrite, SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
             goto fail;
         case ABSENT:
             if (specialize_dict_access(owner, instr, type, kind, name, tp_version,
-                                       STORE_ATTR, ATTR_KIND(ATTR_STORE_INSTANCE_VALUE),
+                                       IR_FAMILY_AttrWrite, ATTR_KIND(ATTR_STORE_INSTANCE_VALUE),
                                        ATTR_KIND(ATTR_STORE_HINT))) {
                 goto success;
             }
@@ -1836,7 +1833,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
     PyTypeObject *cls = (PyTypeObject *)owner;
     _PyFbAttr *fb = instr_entry(instr);
     if (_PyType_VALUE_SLOT(Py_TYPE(cls), getattro) != _Py_type_getattro_value) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METACLASS_OVERRIDDEN);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_METACLASS_OVERRIDDEN);
         return -1;
     }
     unsigned int meta_version = 0;
@@ -1856,7 +1853,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
         case ABSENT:
             break;
         default:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METACLASS_ATTRIBUTE);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_METACLASS_ATTRIBUTE);
             return -1;
     }
     PyValue descriptor = PyValue_NULL;
@@ -1865,7 +1862,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
     kind = analyze_descriptor_load(cls, name, &descriptor, &tp_version);
     PyObject *descr = PyValue_IsObject(descriptor) ? PyValue_AsKnownObjectBorrow(descriptor) : NULL;
     if (tp_version == 0) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OUT_OF_VERSIONS);
         PyValue_XCLOSE(descriptor);
         return -1;
     }
@@ -1873,7 +1870,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
     if ((Py_TYPE(cls)->tp_flags & Py_TPFLAGS_IMMUTABLETYPE) == 0) {
         metaclass_check = true;
         if (meta_version == 0) {
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OUT_OF_VERSIONS);
             PyValue_XCLOSE(descriptor);
             return -1;
         }
@@ -1885,12 +1882,12 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             // special case for enums which has Py_TYPE(descr) == cls
             // so guarding on type version is sufficient
             if (Py_TYPE(descr) != cls) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MUTABLE_CLASS);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_MUTABLE_CLASS);
                 PyValue_XCLOSE(descriptor);
                 return -1;
             }
             if (Py_TYPE(descr)->tp_descr_get || Py_TYPE(descr)->tp_descr_set) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_OVERRIDING_DESCRIPTOR);
                 PyValue_XCLOSE(descriptor);
                 return -1;
             }
@@ -1906,19 +1903,19 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             break;
         case PYTHON_CLASSMETHOD: {
 #ifdef Py_GIL_DISABLED
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OTHER);
             PyValue_XCLOSE(descriptor);
             return -1;
 #else
             if (!method || Py_TYPE(cls) != &PyType_Type) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
                 PyValue_XCLOSE(descriptor);
                 return -1;
             }
             assert(Py_IS_TYPE(descr, &PyClassMethod_Type));
             PyObject *target = _PyClassMethod_GetFunc(descr);
             if (target == NULL || !Py_IS_TYPE(target, &PyFunction_Type)) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_CLASS_METHOD_OBJ);
                 PyValue_XCLOSE(descriptor);
                 return -1;
             }
@@ -1928,12 +1925,12 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
         }
 #ifdef Py_STATS
         case ABSENT:
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_EXPECTED_ERROR);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_EXPECTED_ERROR);
             PyValue_XCLOSE(descriptor);
             return -1;
 #endif
         default:
-            SPECIALIZATION_FAIL(LOAD_ATTR, load_attr_fail_kind(kind));
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, load_attr_fail_kind(kind));
             PyValue_XCLOSE(descriptor);
             return -1;
     }
@@ -1967,7 +1964,7 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
     #ifdef Py_GIL_DISABLED
     if (PyValue_IsObject(descriptor) &&
         !_PyObject_HasDeferredRefcount(PyValue_AsKnownObjectBorrow(descriptor))) {
-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
+        SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
         return 0;
     }
     #endif
@@ -1980,7 +1977,7 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
                    ((PyHeapTypeObject *)owner_cls)->ht_cached_keys, name) < 0);
         #endif
         if (shared_keys_version == 0) {
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OUT_OF_VERSIONS);
             return 0;
         }
         opcode = is_method ? ATTR_KIND(ATTR_METHOD_WITH_VALUES) : ATTR_KIND(ATTR_NONDESCRIPTOR_WITH_VALUES);
@@ -1993,7 +1990,7 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
         else {
             dictoffset = owner_cls->tp_dictoffset;
             if (dictoffset < 0 || dictoffset > INT32_MAX) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_RANGE);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OUT_OF_RANGE);
                 return 0;
             }
         }
@@ -2004,7 +2001,7 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
             PyObject **addr = (PyObject **)((char *)owner + dictoffset);
             PyObject *dict = FT_ATOMIC_LOAD_PTR_ACQUIRE(*addr);
             if (dict) {
-                SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
+                SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_NOT_MANAGED_DICT);
                 return 0;
             }
             /* Feedback fields are unsigned, so we offset the dictoffset by
@@ -2014,7 +2011,7 @@ specialize_attr_loadclassattr(PyObject *owner, _PyInstr *instr,
             opcode = ATTR_KIND(ATTR_METHOD_LAZY_DICT);
         }
         else {
-            SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
+            SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_ATTR_CLASS_ATTR_SIMPLE);
             return 0;
         }
     }
@@ -2042,22 +2039,22 @@ global_classify_lock_held(PyObject *globals, PyObject *builtins, _PyFbGlobal *fb
     assert(PyUnicode_CheckExact(name));
     int result = GLOBAL_NONE;
     if (!PyDict_CheckExact(globals)) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
         goto done;
     }
     PyDictKeysObject * globals_keys = ((PyDictObject *)globals)->ma_keys;
     if (globals_keys->dk_kind != DICT_KEYS_UNICODE) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
         goto done;
     }
     Py_ssize_t index = _PyDict_LookupIndexAndOwnedValue((PyDictObject *)globals, name, &value);
     if (index == DKIX_ERROR) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_EXPECTED_ERROR);
         goto done;
     }
     if (PyValue_IsObject(value) &&
         PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto done;
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
@@ -2065,7 +2062,7 @@ global_classify_lock_held(PyObject *globals, PyObject *builtins, _PyFbGlobal *fb
         uint32_t keys_version = _PyDict_GetKeysVersionForCurrentState(
                 interp, (PyDictObject*) globals);
         if (keys_version == 0) {
-            SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
+            SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_OUT_OF_VERSIONS);
             goto done;
         }
         PyDict_Watch(MODULE_WATCHER_ID, globals);
@@ -2076,40 +2073,40 @@ global_classify_lock_held(PyObject *globals, PyObject *builtins, _PyFbGlobal *fb
         goto done;
     }
     if (!PyDict_CheckExact(builtins)) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_LOAD_GLOBAL_NON_DICT);
         goto done;
     }
     PyDictKeysObject * builtin_keys = ((PyDictObject *)builtins)->ma_keys;
     if (builtin_keys->dk_kind != DICT_KEYS_UNICODE) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_LOAD_GLOBAL_NON_STRING_OR_SPLIT);
         goto done;
     }
     assert(PyValue_IsNull(value));
     index = _PyDict_LookupIndexAndOwnedValue((PyDictObject *)builtins, name, &value);
     if (index == DKIX_ERROR) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_EXPECTED_ERROR);
         goto done;
     }
     if (PyValue_IsObject(value) &&
         PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto done;
     }
     if (index == DKIX_EMPTY) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_EXPECTED_ERROR);
         goto done;
     }
     uint32_t globals_version = _PyDict_GetKeysVersionForCurrentState(
             interp, (PyDictObject*) globals);
     if (globals_version == 0) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_OUT_OF_VERSIONS);
         goto done;
     }
     PyDict_Watch(MODULE_WATCHER_ID, globals);
     uint32_t builtins_version = _PyDict_GetKeysVersionForCurrentState(
             interp, (PyDictObject*) builtins);
     if (builtins_version == 0) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
+        SPECIALIZATION_FAIL(IR_FAMILY_GlobalRead, SPEC_FAIL_OUT_OF_VERSIONS);
         goto done;
     }
     PyDict_Watch(MODULE_WATCHER_ID, builtins);
@@ -2193,24 +2190,24 @@ prepare_function_for_inline(PyCodeObject *code)
 
 /* Returning false indicates a failure. */
 static bool
-function_check_args(PyObject *o, int expected_argcount, int opcode)
+function_check_args(PyObject *o, int expected_argcount, int family)
 {
     assert(Py_IS_TYPE(o, &PyFunction_Type));
     PyFunctionObject *func = (PyFunctionObject *)o;
     PyCodeObject *fcode = (PyCodeObject *)func->func_code;
     FunctionSignature signature = function_signature(fcode);
     if (signature != SIMPLE_SIGNATURE) {
-        SPECIALIZATION_FAIL(opcode, signature == GENERAL_SIGNATURE
+        SPECIALIZATION_FAIL(family, signature == GENERAL_SIGNATURE
                             ? SPEC_FAIL_CODE_COMPLEX_PARAMETERS
                             : SPEC_FAIL_CODE_NOT_OPTIMIZED);
         return false;
     }
     if (fcode->co_argcount != expected_argcount) {
-        SPECIALIZATION_FAIL(opcode, SPEC_FAIL_WRONG_NUMBER_ARGUMENTS);
+        SPECIALIZATION_FAIL(family, SPEC_FAIL_WRONG_NUMBER_ARGUMENTS);
         return false;
     }
     if (!prepare_function_for_inline(fcode)) {
-        SPECIALIZATION_FAIL(opcode, SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(family, SPEC_FAIL_OTHER);
         return false;
     }
     return true;
@@ -2218,13 +2215,13 @@ function_check_args(PyObject *o, int expected_argcount, int opcode)
 
 /* Returning 0 indicates a failure. */
 static uint32_t
-function_get_version(PyObject *o, int opcode)
+function_get_version(PyObject *o, int family)
 {
     assert(Py_IS_TYPE(o, &PyFunction_Type));
     PyFunctionObject *func = (PyFunctionObject *)o;
     uint32_t version = _PyFunction_GetVersionForCurrentState(func);
     if (!_PyFunction_IsVersionValid(version)) {
-        SPECIALIZATION_FAIL(opcode, SPEC_FAIL_OUT_OF_VERSIONS);
+        SPECIALIZATION_FAIL(family, SPEC_FAIL_OUT_OF_VERSIONS);
         return 0;
     }
     return version;
@@ -2306,13 +2303,13 @@ get_init_for_simple_managed_python_class(PyTypeObject *tp, unsigned int *tp_vers
 {
     assert(tp->tp_new == PyBaseObject_Type.tp_new);
     if (tp->tp_alloc != PyType_GenericAlloc) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OVERRIDDEN);
+        SPECIALIZATION_FAIL(IR_FAMILY_Call, SPEC_FAIL_OVERRIDDEN);
         return NULL;
     }
     unsigned long tp_flags = PyType_GetFlags(tp);
     if (!(tp_flags & Py_TPFLAGS_HEAPTYPE)) {
         /* Is this possible? */
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_EXPECTED_ERROR);
+        SPECIALIZATION_FAIL(IR_FAMILY_Call, SPEC_FAIL_EXPECTED_ERROR);
         return NULL;
     }
     (void)_PyType_GetVersionForCurrentState(_PyInterpreterState_GET(), tp);
@@ -2322,19 +2319,19 @@ get_init_for_simple_managed_python_class(PyTypeObject *tp, unsigned int *tp_vers
     *tp_version = version;
     if (PyValue_IsNull(init_value) || !PyValue_IsObject(init_value) ||
         !PyFunction_Check(PyValue_AsKnownObjectBorrow(init_value))) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_INIT_NOT_PYTHON);
+        SPECIALIZATION_FAIL(IR_FAMILY_Call, SPEC_FAIL_CALL_INIT_NOT_PYTHON);
         PyValue_XCLOSE(init_value);
         return NULL;
     }
     PyObject *init = PyValue_AsKnownObjectSteal(init_value);
     PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(init);
     if (function_signature(code) != SIMPLE_SIGNATURE) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_INIT_NOT_SIMPLE);
+        SPECIALIZATION_FAIL(IR_FAMILY_Call, SPEC_FAIL_CALL_INIT_NOT_SIMPLE);
         Py_DECREF(init);
         return NULL;
     }
     if (!prepare_function_for_inline(code)) {
-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(IR_FAMILY_Call, SPEC_FAIL_OTHER);
         Py_DECREF(init);
         return NULL;
     }

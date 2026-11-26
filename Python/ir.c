@@ -242,56 +242,6 @@ _PyCode_GenericHandler(PyCodeObject *co, int i)
     return _PyCode_InstrHandler(co, i);
 }
 
-static int
-ordinary_handler_for(int handler, int opcode)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    if (handler >= IR_FIRST_ARM && fmt->twin != _PyIR_NO_HANDLER &&
-        opcode >= MIN_INSTRUMENTED_OPCODE &&
-        _PyIR_OpcodeBase[opcode] == _PyIR_HandlerBase[handler])
-    {
-        // A register instruction arm of a family that has events: the
-        // instrumented form of its stack op runs the arm's observed
-        // wrapper.  The handlers' base, not the deopt table, takes an
-        // instrumented opcode to its stack op.
-        return fmt->twin;
-    }
-    if (_PyIR_BaseOpcode(handler) == opcode) {
-        return handler;
-    }
-    // The handler that the stack op has; a relaxation jump (IR_JUMP), for
-    // one, is never instrumented and has no such handler
-    if (_PyIR_OpcodeHandler[opcode] == _PyIR_NO_HANDLER) {
-        Py_FatalError("instrumented opcode has no handler");
-    }
-    return _PyIR_OpcodeHandler[opcode];
-}
-
-/* Whether a tool listens for an event that the handler at word i declares.
- * An instruction of a family that declares events but has no instrumented
- * stack opcode (_PyIR_H_TWIN_BY_TOOLS) is not rewritten by monitoring: its
- * word runs the observed twin of its handler while a tool listens. */
-static int
-tools_observe(PyCodeObject *co, int i, int handler)
-{
-    _PyCoMonitoringData *monitoring = co->_co_monitoring;
-    if (monitoring == NULL) {
-        return 0;
-    }
-    if (monitoring->tools != NULL) {
-        return monitoring->tools[i] != 0 ||
-               (monitoring->stop_tools != NULL && monitoring->stop_tools[i] != 0) ||
-               (monitoring->left_tools != NULL && monitoring->left_tools[i] != 0);
-    }
-    uint32_t events = _PyIR_FormatOf(handler)->events;
-    for (int event = 0; events != 0; event++, events >>= 1) {
-        if ((events & 1) && monitoring->active_monitors.tools[event] != 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 int
 _PyCode_IsTrailing(PyCodeObject *co, int i)
 {
@@ -299,24 +249,16 @@ _PyCode_IsTrailing(PyCodeObject *co, int i)
 }
 
 int
-_PyCode_TwinByTools(PyCodeObject *co, int i)
+_PyCode_HandlerFor(PyCodeObject *co, int i, int observed)
 {
-    return (_PyIR_HandlerFlags[_PyCode_InstrHandler(co, i)] & _PyIR_H_TWIN_BY_TOOLS) != 0;
-}
-
-int
-_PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
-{
-    int handler = ordinary_handler_for(_PyCode_InstrHandler(co, i), opcode);
-    if ((_PyIR_HandlerFlags[handler] & _PyIR_H_TWIN_BY_TOOLS) &&
-        tools_observe(co, i, handler))
-    {
-        int twin = _PyIR_FormatOf(handler)->twin;
-        if (twin != _PyIR_NO_HANDLER && handler >= IR_FIRST_ARM) {
-            return twin;
-        }
+    int handler = _PyCode_InstrHandler(co, i);
+    if (!observed) {
+        return handler;
     }
-    return handler;
+    // A handler whose family declares events has an observed twin
+    int twin = _PyIR_FormatOf(handler)->twin;
+    assert(twin != _PyIR_NO_HANDLER && handler >= IR_FIRST_ARM);
+    return twin;
 }
 
 int
@@ -331,34 +273,25 @@ _PyIR_RealHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
 }
 
 /* The handler that the word at instr runs once a LINE or INSTRUCTION
- * wrapper has passed it on: the monitoring tables hold the opcode that the
- * wrapper displaced, which may be an instrumented one. */
+ * wrapper has passed it on: the monitoring tables hold what the wrapper
+ * displaced, which may be the other wrapper over an observed word. */
 int
 _PyIR_DispatchedHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
 {
     int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    int opcode = _PyIR_EventOpcode(handler);
-    if (opcode != INSTRUMENTED_LINE && opcode != INSTRUMENTED_INSTRUCTION) {
+    if (handler != ROP_HANDLER_Line_Hook && handler != ROP_HANDLER_Instruction_Hook) {
         return _PyIR_RealHandler(frame, instr);
     }
     PyCodeObject *code = _PyFrame_GetCode(frame);
     int index = _PyFrame_InstrOffset(frame, instr);
-    _PyCoMonitoringData *monitoring = code->_co_monitoring;
-    /* LINE may displace INSTRUCTION, which displaces the opcode */
-    while (opcode == INSTRUMENTED_LINE || opcode == INSTRUMENTED_INSTRUCTION) {
-        opcode = opcode == INSTRUMENTED_LINE
-            ? _PyCode_GetOriginalOpcode(monitoring->lines, index)
-            : monitoring->per_instruction_opcodes[index];
+    // LINE may displace INSTRUCTION, which displaces the word's handler
+    if (handler == ROP_HANDLER_Line_Hook) {
+        handler = _PyCode_LineDisplaced(code, index);
     }
-    return _PyCode_HandlerFor(code, index, opcode);
-}
-
-int
-_PyIR_OriginalHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr,
-                      int opcode)
-{
-    return _PyCode_HandlerFor(_PyFrame_GetCode(frame),
-                              _PyFrame_InstrOffset(frame, instr), opcode);
+    if (handler == ROP_HANDLER_Instruction_Hook) {
+        handler = _PyCode_InstructionDisplaced(code, index);
+    }
+    return handler;
 }
 
 

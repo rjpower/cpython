@@ -103,10 +103,10 @@ static int
 add_stat_dict(
     PyStats *src,
     PyObject *res,
-    int opcode,
+    int family,
     const char *name) {
 
-    SpecializationStats *stats = &src->family_stats[opcode];
+    SpecializationStats *stats = &src->family_stats[family];
     PyObject *d = stats_to_dict(stats);
     if (d == NULL) {
         return -1;
@@ -128,24 +128,9 @@ _Py_GetSpecializationStats(void) {
         return NULL;
     }
     int err = 0;
-    err += add_stat_dict(src, stats, CONTAINS_OP, "contains_op");
-    err += add_stat_dict(src, stats, LOAD_SUPER_ATTR, "load_super_attr");
-    err += add_stat_dict(src, stats, LOAD_ATTR, "load_attr");
-    err += add_stat_dict(src, stats, LOAD_GLOBAL, "load_global");
-    err += add_stat_dict(src, stats, STORE_SUBSCR, "store_subscr");
-    err += add_stat_dict(src, stats, STORE_ATTR, "store_attr");
-    err += add_stat_dict(src, stats, POP_JUMP_IF_FALSE, "pop_jump_if_false");
-    err += add_stat_dict(src, stats, POP_JUMP_IF_TRUE, "pop_jump_if_true");
-    err += add_stat_dict(src, stats, GET_ITER, "get_iter");
-    err += add_stat_dict(src, stats, CALL_FUNCTION_EX, "call_function_ex");
-    err += add_stat_dict(src, stats, CALL, "call");
-    err += add_stat_dict(src, stats, CALL_KW, "call_kw");
-    err += add_stat_dict(src, stats, BINARY_OP, "binary_op");
-    err += add_stat_dict(src, stats, COMPARE_OP, "compare_op");
-    err += add_stat_dict(src, stats, UNPACK_SEQUENCE, "unpack_sequence");
-    err += add_stat_dict(src, stats, FOR_ITER, "for_iter");
-    err += add_stat_dict(src, stats, TO_BOOL, "to_bool");
-    err += add_stat_dict(src, stats, SEND, "send");
+    for (int i = 0; i < IR_NUM_FAMILIES; i++) {
+        err += add_stat_dict(src, stats, i, _PyIR_FamilyNames[i]);
+    }
     if (err < 0) {
         Py_DECREF(stats);
         return NULL;
@@ -199,7 +184,7 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
         for (int j = 0; j < SPECIALIZATION_FAILURE_KINDS; j++) {
             uint64_t val = stats[i].specialization.failure_kinds[j];
             if (val) {
-                fprintf(out, "    opcode[%s].specialization.failure_kinds[%d] : %"
+                fprintf(out, "    family[%s].specialization.failure_kinds[%d] : %"
                     PRIu64 "\n", name, j, val);
             }
         }
@@ -214,16 +199,16 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
 }
 #undef PRINT_STAT
 
-/* The families, which are keyed by stack opcode and print under its name */
+/* The families print under their names */
 static void
 print_family_stats(FILE *out, SpecializationStats *stats)
 {
 #define PRINT_FAMILY(i, field) \
     if (stats[i].field) { \
-        fprintf(out, "    opcode[%s].specialization." #field " : %" PRIu64 "\n", \
-                _PyOpcode_OpName[i], stats[i].field); \
+        fprintf(out, "    family[%s].specialization." #field " : %" PRIu64 "\n", \
+                _PyIR_FamilyNames[i], stats[i].field); \
     }
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < IR_NUM_FAMILIES; i++) {
         PRINT_FAMILY(i, success);
         PRINT_FAMILY(i, failure);
         PRINT_FAMILY(i, hit);
@@ -232,8 +217,8 @@ print_family_stats(FILE *out, SpecializationStats *stats)
         PRINT_FAMILY(i, deopt);
         for (int j = 0; j < SPECIALIZATION_FAILURE_KINDS; j++) {
             if (stats[i].failure_kinds[j]) {
-                fprintf(out, "    opcode[%s].specialization.failure_kinds[%d] : %"
-                        PRIu64 "\n", _PyOpcode_OpName[i], j, stats[i].failure_kinds[j]);
+                fprintf(out, "    family[%s].specialization.failure_kinds[%d] : %"
+                        PRIu64 "\n", _PyIR_FamilyNames[i], j, stats[i].failure_kinds[j]);
             }
         }
     }

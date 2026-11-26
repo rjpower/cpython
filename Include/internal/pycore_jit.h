@@ -145,22 +145,11 @@ _PyJit_HandlerMayChange(PyCodeObject *code, int i)
     return _PyFb_HasEntry(_PyCode_InstrHandler(code, i));
 }
 
-/* The handler that compiled code runs for the word w.  A handler that ends
- * in the JIT's warm-up event (RESUME_JIT, JUMP_BACKWARD_JIT) is its base
- * handler with an event that is nothing in a unit, so it compiles as the
- * base: the base's template, or the base's form. */
+/* The handler that compiled code runs for the word w: its own. */
 static inline int
 _PyJit_CompiledHandler(_PyIRWord w)
 {
-    int handler = IR_HANDLER(w);
-    if (!(_PyIR_HandlerFlags[handler] & _PyIR_H_JIT_EVENT)) {
-        return handler;
-    }
-    // The base is a stack opcode (or 512 + a handler with none); the handler
-    // that runs it must exist
-    int base = _PyIR_HandlerBase[handler];
-    assert(base < 256 && _PyIR_OpcodeHandler[base] != _PyIR_NO_HANDLER);
-    return _PyIR_OpcodeHandler[base];
+    return IR_HANDLER(w);
 }
 
 #ifdef _PY_JIT_SUPPORTED

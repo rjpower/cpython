@@ -3974,7 +3974,7 @@ class TestCallMarkers(unittest.TestCase):
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
         # A floor, not a count: ported families delete old handlers
-        self.assertGreater(len(handlers), 120)
+        self.assertGreater(len(handlers), 140)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))
@@ -4053,7 +4053,7 @@ class TestCallMarkers(unittest.TestCase):
         # generator emits.  No handler keeps a value record or a box area.
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
-        self.assertGreater(len(sites), 130)
+        self.assertGreater(len(sites), 150)
         for name, found in sites.items():
             self.assertEqual(found, [], name)
 

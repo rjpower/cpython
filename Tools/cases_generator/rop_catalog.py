@@ -79,8 +79,6 @@ class Handle(enum.Enum):
     Anchors = "Anchors"
     Err = "Err"
     Route = "Route"
-    # A handler id: the handler that a word runs (a displacing arm's dispatch)
-    Handler = "Handler"
     Claim = "Claim"
     Pin = "Pin"
     Stamp = "Stamp"
@@ -385,9 +383,6 @@ class ExitKind(enum.Enum):
     yield_ = "yield"
     exit = "exit"
     redirect = "redirect"
-    # The word goes on under another handler, with its own fields: only an arm
-    # declared `displacing` (the word that monitoring put in place of another)
-    dispatch = "dispatch"
 
 
 # The static evidence that selects an arm of a family without a miss
@@ -475,8 +470,6 @@ ENVIRONMENT = {
     "frame": Handle.Frame,
     "site": Handle.Site,
     "next_head": Handle.Head,
-    # The instruction pointer before the word saved it: a displacing arm's
-    "prev_head": Handle.Head,
 }
 
 # The C expression of each implicit name in every product.  The prologue of
@@ -488,7 +481,6 @@ ENVIRONMENT_C = {
     "frame": "frame",
     "site": "this_instr",
     "next_head": "next_instr",
-    "prev_head": "prev_instr",
 }
 
 # Types of which an owner, error or resource must be accounted for: `_`

@@ -11,12 +11,17 @@
 /* The throwflag of an evaluator that goes on at frame->instr_ptr, where the
  * other compilation left the frame (the switch word, IR_H_SWITCH) */
 #define IR_ENTER_SWITCH 2
+/* IR_COMPLETIONS(SITE): the completions of the consumer's word at SITE,
+ * which the observing evaluator takes from its family's observer where a
+ * tool observes the word */
 #if IR_OBSERVING
 #  define IR_OTHER_EVALUATOR _PyEval_EvalNormal
-#  define IR_COMPLETIONS _PyRop_ObservingCompletions
+#  define IR_COMPLETIONS(SITE) \
+    ((_PyFrame_Observed(frame, (SITE)) & _PyIR_OBSERVE_EVENTS) \
+        ? _PyRop_ObservingCompletions : _PyRop_Completions)
 #else
 #  define IR_OTHER_EVALUATOR _PyEval_EvalObserving
-#  define IR_COMPLETIONS _PyRop_Completions
+#  define IR_COMPLETIONS(SITE) _PyRop_Completions
 #endif
 /* The evaluator's switch where an error routine resumes frame at
  * next_instr: to the other evaluator if the frame goes on there */
@@ -326,13 +331,28 @@ do { \
 #endif
 
 
-/* Do interpreter dispatch accounting for tracing and instrumentation */
+/* Dispatch the word at next_instr.  The observing evaluator first tests
+ * what monitoring observes at the word (LABEL_observe_word,
+ * Python/ceval_evaluator.h); the normal one never reads it.  The switch
+ * word is no word of the code, and nothing observes it. */
+#if IR_OBSERVING
+#define DISPATCH() \
+    { \
+        NEXTOPARG(); \
+        PRE_DISPATCH_GOTO(); \
+        if (opcode != IR_H_SWITCH && _PyFrame_Observed(frame, next_instr)) { \
+            goto LABEL_observe_word; \
+        } \
+        DISPATCH_GOTO(); \
+    }
+#else
 #define DISPATCH() \
     { \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
     }
+#endif
 
 /* A monitoring callback redirected the frame (a debugger's f_lineno jump):
  * the word leaves for frame->instr_ptr, the redirect exit */
@@ -523,23 +543,6 @@ _PyFb_TickQuiet(_PyFbHeader *fb)
     }
     _PyFb_AdvanceCounter(fb);
     return true;
-}
-
-/* Keep the site's counter from triggering while an instrumented twin runs the
- * word, so that the specializer does not overwrite the instrumentation.  A
- * function, not a macro, so that it is type checked. */
-static inline void
-PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
-{
-    if (fb == NULL) {
-        return;
-    }
-#ifdef Py_GIL_DISABLED
-    if (backoff_counter_is_unreachable(fb->counter)) {
-        return;
-    }
-#endif
-    fb->counter = pause_backoff_counter(fb->counter);
 }
 
 #define UNBOUNDLOCAL_ERROR_MSG \

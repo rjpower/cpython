@@ -1,8 +1,11 @@
 /* The body of the evaluator, which Python/ceval.c compiles as ir_evaluate()
  * and Python/ceval_observing.c compiles again, with IR_OBSERVING set, as
  * _PyEval_EvalObserving(): the same handlers, labels and routines over the
- * dispatch table of each (Python/ir_targets.h).  The observing table sends
- * the words of the families that declare events to their observers.  A frame
+ * dispatch table of each (Python/ir_targets.h).  The observing evaluator
+ * tests, before each word, what monitoring observes there: the LINE and
+ * INSTRUCTION events, and whether the word runs its family's observer
+ * (LABEL_observe_word); its table sends every Resume word to Resume's
+ * observer, which keeps the frame in the right evaluator.  A frame
  * runs in the evaluator that its code's observed mark asks for; it moves
  * between the two at the switch word (IR_H_SWITCH, _PyEval_SwitchLoop()).
  *
@@ -67,6 +70,35 @@
         }
         goto LABEL_gen_dispatch;
     }
+
+#if IR_OBSERVING
+    /* Monitoring observes the word at next_instr (_PyFrame_Observed()): its
+     * LINE and INSTRUCTION events run first, then the word, under its
+     * family's observer where a tool listens to it (_PyIR_OBSERVE_EVENTS).
+     * The word is read again after the events: a callback may have run the
+     * code, which specialises the word, or changed what is observed. */
+    LABEL_observe_word:
+    {
+        int opcode;
+        uint8_t observed = _PyFrame_Observed(frame, next_instr);
+        if (observed & (_PyIR_OBSERVE_LINE | _PyIR_OBSERVE_INSTRUCTION)) {
+            int status = _PyEval_LocationEvents(tstate, frame, next_instr);
+            if (status < 0) {
+                PROCESS_ERROR_AT(RAISE, 0, frame->instr_ptr);
+            }
+            if (status > 0) {
+                IR_REDIRECT();
+            }
+            observed = _PyFrame_Observed(frame, next_instr);
+        }
+        NEXTOPARG();
+        if (observed & _PyIR_OBSERVE_EVENTS) {
+            opcode = _PyIR_ObservingHandler[opcode];
+        }
+        PRE_DISPATCH_GOTO();
+        DISPATCH_GOTO();
+    }
+#endif
 
     /* The other evaluator switched frame to this one: go on at its word */
     LABEL_switch_entry:

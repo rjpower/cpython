@@ -1597,7 +1597,7 @@ _PyRop_StopIterationEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                           _PyInstr *site, PyValueBorrow receiver,
                           PyValue value)
 {
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
     frame->return_pc = dest;
     int status = _PyIR_ObserveStopIteration(tstate, frame, site, dest,
@@ -1617,21 +1617,20 @@ _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return _PyRop_EdgeEvent(tstate, frame, site, true, PY_MONITORING_EVENT_JUMP);
 }
 
-/* A positive result is a callback that moved the frame: return_pc names the
- * word to run */
+/* LINE, then INSTRUCTION, as monitoring observes them at site; none while
+ * the thread traces.  The LINE event compares the word with the one that
+ * ran before it, which instr_ptr still names. */
 Py_NO_INLINE int
-_PyRop_LineEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                 _PyInstr *site, _PyInstr *prev, int *handler)
+_PyEval_LocationEvents(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       _PyInstr *site)
 {
-    int displaced;
+    _PyInstr *prev = frame->instr_ptr;
+    frame->instr_ptr = site;
     if (tstate->tracing) {
-        PyCodeObject *code = _PyFrame_GetCode(frame);
-        int index = _PyFrame_InstrOffset(frame, site);
-        displaced = _PyCode_LineDisplaced(code, index);
+        return 0;
     }
-    else {
-        displaced = _Py_call_instrumentation_line(tstate, frame, site, prev);
-        if (displaced < 0) {
+    if (_PyFrame_Observed(frame, site) & _PyIR_OBSERVE_LINE) {
+        if (_Py_call_instrumentation_line(tstate, frame, site, prev) < 0) {
             return -1;
         }
         if (frame->instr_ptr != site) {
@@ -1639,19 +1638,11 @@ _PyRop_LineEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
             return 1;
         }
     }
-    _PyRop_Displaced(frame, site, displaced, handler);
-    return 0;
-}
-
-Py_NO_INLINE int
-_PyRop_InstructionEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        _PyInstr *site, int *handler)
-{
-    int displaced = _Py_call_instrumentation_instruction(tstate, frame, site);
-    if (displaced < 0) {
-        return -1;
+    if (_PyFrame_Observed(frame, site) & _PyIR_OBSERVE_INSTRUCTION) {
+        if (_Py_call_instrumentation_instruction(tstate, frame, site) < 0) {
+            return -1;
+        }
     }
-    _PyRop_Displaced(frame, site, displaced, handler);
     return 0;
 }
 
@@ -1859,12 +1850,17 @@ _PyRop_ObserveIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return instrument_if_stale(tstate, frame, site, 1);
 }
 
-/* PY_START at a frame's start, PY_RESUME at any other resume point.  A
- * callback that moves the frame leaves the word to run in return_pc. */
+/* PY_START at a frame's start, PY_RESUME at any other resume point, where
+ * a tool listens (the observing evaluator runs every Resume word's observer
+ * for its switch).  A callback that moves the frame leaves the word to run
+ * in return_pc. */
 Py_NO_INLINE int
 _PyRop_ResumeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                    _PyInstr *site, uint32_t kind)
 {
+    if (!(_PyFrame_Observed(frame, site) & _PyIR_OBSERVE_EVENTS)) {
+        return 0;
+    }
     int err = _Py_call_instrumentation(
         tstate, kind == RESUME_AT_FUNC_START ? PY_MONITORING_EVENT_PY_START
                                              : PY_MONITORING_EVENT_PY_RESUME,
@@ -1886,11 +1882,7 @@ static int
 _PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  _PyInstr *site, bool taken, int event)
 {
-    // An instruction event may have made the word transparent: its target is
-    // in the format of the handler it wraps
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
-    // The wrapper's own length is one word; the fall-through continues past
-    // the fixed operand words of the word it wraps
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *dest = taken ? site + 1 + _PyIR_FormatDistance(fmt, *site)
                            : site + 1 + fmt->fixed_words;
     frame->return_pc = dest;
@@ -2404,7 +2396,7 @@ Py_NO_INLINE _PyStatusValue
 _PyRop_SendStopEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *site, PyValueBorrow receiver, PyValue value)
 {
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
     frame->instr_ptr = site;
     frame->return_pc = dest;
@@ -2429,7 +2421,7 @@ Py_NO_INLINE int
 _PyRop_SendExitEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *site)
 {
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
     frame->instr_ptr = site;
     frame->return_pc = dest;
@@ -7119,7 +7111,7 @@ _PyRop_EndAsyncForEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (tstate->tracing) {
         return 0;
     }
-    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
     _PyInstr *send = site + 1 + _PyIR_FormatDistance(fmt, *site);
     _PyInstr *dest = site + 1 + fmt->fixed_words;
     frame->return_pc = dest;

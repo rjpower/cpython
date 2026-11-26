@@ -100,8 +100,6 @@ ALLOWED: tuple[Allowed, ...] = (
 # Families that no translator rule emits: code that is not translated holds them
 NOT_TRANSLATED = {
     "InitResult": "the static init-cleanup code object holds it already lowered",
-    "Line": "instrumentation puts it over a word; no stack op lowers to it",
-    "Instruction": "instrumentation puts it over a word; no stack op lowers to it",
 }
 
 

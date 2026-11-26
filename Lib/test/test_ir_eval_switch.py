@@ -178,5 +178,71 @@ class EvalSwitchTests(unittest.TestCase):
             self.assertEqual(scope.lines, lines)
 
 
+def branchy(flag):
+    if flag:
+        result = 1
+    else:
+        result = 2
+    return result
+
+
+class DisableTests(unittest.TestCase):
+    """A code object whose every observed location returned DISABLE leaves
+    the observing evaluator: its observed mark clears, as coverage tools
+    expect from upstream's de-instrumentation."""
+
+    def setUp(self):
+        monitoring.use_tool_id(TOOL, "test_ir_eval_switch")
+        self.addCleanup(monitoring.free_tool_id, TOOL)
+        self.addCleanup(monitoring.set_events, TOOL, 0)
+        self.lines = []
+
+    def disable(self, code, line):
+        if code is branchy.__code__:
+            self.lines.append(line - code.co_firstlineno)
+        return monitoring.DISABLE
+
+    def test_mark_clears_when_no_location_holds_a_tool(self):
+        monitoring.register_callback(TOOL, E.LINE, self.disable)
+        self.addCleanup(monitoring.register_callback, TOOL, E.LINE, None)
+        code = branchy.__code__
+        monitoring.set_events(TOOL, E.LINE)
+        self.assertEqual(branchy(True), 1)
+        # The else branch still holds its tool
+        self.assertTrue(_testinternalcapi.code_is_observed(code))
+        self.assertEqual(branchy(False), 2)
+        self.assertFalse(_testinternalcapi.code_is_observed(code))
+        self.assertEqual(self.lines, [1, 2, 5, 4, 5])
+        # The function runs normally, with no events, from here on
+        self.assertEqual(branchy(True), 1)
+        self.assertEqual(branchy(False), 2)
+        self.assertEqual(len(self.lines), 5)
+        # restart_events() gives the locations their tools back
+        monitoring.restart_events()
+        self.assertEqual(branchy(True), 1)
+        self.assertTrue(_testinternalcapi.code_is_observed(code))
+        self.assertEqual(self.lines[5:], [1, 2, 5])
+
+    def test_mark_stays_while_another_event_has_tools(self):
+        monitoring.register_callback(TOOL, E.LINE, self.disable)
+        self.addCleanup(monitoring.register_callback, TOOL, E.LINE, None)
+        returns = []
+
+        def returned(code, offset, value):
+            if code is branchy.__code__:
+                returns.append(value)
+
+        monitoring.register_callback(TOOL, E.PY_RETURN, returned)
+        self.addCleanup(monitoring.register_callback, TOOL, E.PY_RETURN, None)
+        code = branchy.__code__
+        monitoring.set_events(TOOL, E.LINE | E.PY_RETURN)
+        self.assertEqual(branchy(True), 1)
+        self.assertEqual(branchy(False), 2)
+        self.assertTrue(_testinternalcapi.code_is_observed(code))
+        self.assertEqual(branchy(True), 1)
+        self.assertEqual(returns, [1, 2, 1])
+        self.assertEqual(self.lines, [1, 2, 5, 4, 5])
+
+
 if __name__ == "__main__":
     unittest.main()

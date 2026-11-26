@@ -267,7 +267,6 @@ enum {
                                     // words, in CD
 #define _PyIR_FORWARD       0x8     // the oparg is a signed distance in
                                     // words from the next word, in D
-#define _PyIR_TRANSPARENT   0x20    // runs another handler on the same fields
 #define _PyIR_RUNS_CODE     0x80    // a member may run Python code, which may
                                     // rebind a local through frame.f_locals
 #define _PyIR_JUMP_ALWAYS   0x100   // a jump with one successor, its target;
@@ -571,6 +570,11 @@ typedef struct _PyCodeExec {
     uint16_t const_first;
     uint16_t nconst;
     uint64_t call_plan_shape;
+    /* What monitoring observes at each word (_PyIR_OBSERVE_*), which the
+     * observing evaluator tests before it runs the word, or NULL while
+     * nothing is observed.  Owned by the copy; monitoring writes it
+     * (Python/instrumentation.c) and never rewrites a word. */
+    uint8_t *observe;
     /* The baseline JIT (Include/internal/pycore_jit.h): the newest unit
      * compiled from these words, valid or not, which chains the older ones;
      * the warm-up events since the last compile attempt; and the compiles. */
@@ -580,6 +584,14 @@ typedef struct _PyCodeExec {
     uint32_t first_traceable;   // word index of the entry RESUME
     uint32_t nfixed;        // slots below the temporaries, which IR_IS_LOCAL() reads
 } _PyCodeExec;
+
+/* The bits of _PyCodeExec.observe: the word's LINE and INSTRUCTION events
+ * run before it, and its family's observer runs it in place of its own arm
+ * (_PyIR_ObservingHandler): a tool listens there for an event of the
+ * family, or a source edge of LINE needs the branch's observer. */
+#define _PyIR_OBSERVE_LINE          1
+#define _PyIR_OBSERVE_INSTRUCTION   2
+#define _PyIR_OBSERVE_EVENTS        4
 
 /* The feedback table of a code object, which follows its words: per entry, a
  * word of the kind (4 bits), the field of the entry (12 bits, see
@@ -749,18 +761,6 @@ PyAPI_FUNC(int) _PyCode_InstrTarget(PyCodeObject *co, int i);
 PyAPI_FUNC(_PyFbHeader *) _PyIR_InstrFeedback(PyCodeObject *co,
                                               const _PyCodeExec *exec,
                                               const _PyIRWord *instr);
-
-/* The handler with the format of the word at instr, a word of frame's
- * executing copy: its handler field, or while INSTRUMENTED_LINE or
- * INSTRUMENTED_INSTRUCTION has displaced it, the code object's. */
-struct _PyInterpreterFrame;
-PyAPI_FUNC(int) _PyIR_RealHandler(struct _PyInterpreterFrame *frame,
-                                  const _PyIRWord *instr);
-
-/* The handler that the word at instr runs once a LINE or INSTRUCTION wrapper
- * has passed it on. */
-PyAPI_FUNC(int) _PyIR_DispatchedHandler(struct _PyInterpreterFrame *frame,
-                                          const _PyIRWord *instr);
 
 /* Whether the word at index i of co is a jump that the assembler adds after
  * a relaxed FOR_ITER, SEND or conditional branch (_PyIR_H_TRAILING). */

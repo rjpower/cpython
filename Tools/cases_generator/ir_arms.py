@@ -65,4 +65,6 @@ class ArmEntry:
     observer: str | None = None
     emitted: bool = True      # the interpreter has a case for it
     trailing: bool = False  # a jump of the assembler: not observed, keeps the IP
-    displacing: bool = False  # the word that monitoring puts over another
+    # The observer gates the family (`observes gates`): the observing
+    # evaluator's table sends every word of the family to it
+    observer_gates: bool = False

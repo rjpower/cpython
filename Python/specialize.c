@@ -293,14 +293,9 @@ set_opcode(_PyInstr *instr, int opcode)
 {
 #ifdef Py_GIL_DISABLED
     _PyIRWord old = _Py_atomic_load_uint64_relaxed(instr);
-    int handler = IR_HANDLER(old);
-    if (_PyIR_HandlerFlags[handler] & _PyIR_H_INSTRUMENTED) {
-        /* Lost race with instrumentation */
-        return 0;
-    }
     _PyIRWord new = (old & ~(_PyIRWord)IR_HANDLER_MASK) | (_PyIRWord)opcode;
     if (!_Py_atomic_compare_exchange_uint64(instr, &old, new)) {
-        /* Lost race with instrumentation */
+        /* Another thread rewrote the word */
         return 0;
     }
     return 1;
@@ -769,9 +764,7 @@ _PyRop_Install(_PyInstr *instr, _PyFbHeader *h, int handler)
      * attempt, so the site does not sample again at once */
     set_counter(h, adaptive_counter_cooldown());
     int current = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    /* An instrumented word (INSTRUMENTED_LINE runs the arm for its line
-     * event) keeps its handler: installing over it would drop the event. */
-    if (current == handler || (_PyIR_HandlerFlags[current] & _PyIR_H_INSTRUMENTED)) {
+    if (current == handler) {
         return 0;
     }
     if (!set_opcode(instr, handler)) {

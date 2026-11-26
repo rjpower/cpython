@@ -169,8 +169,9 @@ arm Resume.Warm split select(jit_on)
     exit raise(Resume.PollFailed, pe);
 }
 
-// The observer of the Resume arms, which the observing evaluator runs
-arm Resume.Observed split observes
+// The observer of the Resume arms, which the observing evaluator runs for every
+// Resume word (gates): it keeps the frame in the evaluator its code asks for
+arm Resume.Observed split observes gates
   effects(runs_python, polls, raises)
   feedback()
   exits(next, raise, redirect)

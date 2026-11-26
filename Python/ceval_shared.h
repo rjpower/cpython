@@ -1088,6 +1088,12 @@ _PyEval_SwitchesLoop(_PyInterpreterFrame *frame, int observing)
     if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
         return false;
     }
+    if (_PyFrame_Exec(frame) == &_PyIR_InitCleanupExec) {
+        /* The cleanup shim of __init__ has no RESUME of its own and returns
+         * to the frame that called the class: it goes on in that frame's
+         * evaluator */
+        frame = frame->previous;
+    }
     if (_PyCode_IsObserved(_PyFrame_GetCode(frame))) {
         return !observing;
     }
@@ -1569,27 +1575,14 @@ Py_NO_INLINE int
 _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  _PyInstr *site);
 
-/* The rows of Line.Hook and Instruction.Hook (Python/register_ops/monitoring.rop):
- * the event, then the handler that the word displaced, written through
- * `handler` with its feedback counter paused, so that the word does not
- * specialise over the instrumentation. */
-static inline void
-_PyRop_Displaced(_PyInterpreterFrame *frame, _PyInstr *site, int displaced,
-                 int *handler)
-{
-    if (_PyFb_HasEntry(displaced)) {
-        PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, site, displaced));
-    }
-    *handler = displaced;
-}
-
+/* The LINE and INSTRUCTION events of the word at site, which the observing
+ * evaluator runs before the word where they are observed
+ * (_PyIR_OBSERVE_LINE, _PyIR_OBSERVE_INSTRUCTION).  0 goes on to the word,
+ * 1 means a LINE callback moved the frame (return_pc names the word to run)
+ * and -1 that a callback raised. */
 Py_NO_INLINE int
-_PyRop_LineEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                 _PyInstr *site, _PyInstr *prev, int *handler);
-
-Py_NO_INLINE int
-_PyRop_InstructionEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        _PyInstr *site, int *handler);
+_PyEval_LocationEvents(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       _PyInstr *site);
 
 /* The poll of a word that is interruptible (the backedge Jump arms, Resume):
  * signals, the GC and other pending events, and a loop switch, after which

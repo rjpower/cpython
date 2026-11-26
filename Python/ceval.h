@@ -231,7 +231,7 @@ lltrace_instruction(_PyInterpreterFrame *frame,
      * for, with its oparg; then the handler and its fields, on a line
      * without a colon. */
     int offset = _PyFrame_InstrOffset(frame, next_instr);
-    int shown = _PyIR_RealHandler(frame, next_instr);
+    int shown = IR_HANDLER(*next_instr);
     printf("%d: %s\n", offset, _PyIR_HandlerName(shown));
     printf("    ir %s %u %u %u %u\n", name, a, b, c, d);
     fflush(stdout);

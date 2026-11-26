@@ -265,8 +265,8 @@ class ContractTests(unittest.TestCase):
         for row in CONTRACT:
             if row is not None:
                 family_events |= row.events
-        # LINE and INSTRUCTION are every word's: the displacing arms of the
-        # Line and Instruction families report them
+        # LINE and INSTRUCTION are every word's: the observing evaluator
+        # reports them before a word where monitoring observes them
         added = events.LINE | events.INSTRUCTION
         family_events |= added
 

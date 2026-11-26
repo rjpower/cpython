@@ -289,19 +289,10 @@ class WalkerTests(unittest.TestCase):
         events = (monitoring.events.INSTRUCTION | monitoring.events.LINE
                   | monitoring.events.CALL | monitoring.events.BRANCH)
         monitoring.set_local_events(tool, code, events)
-        instrumented = rows(code, True)
-        for k, (old, new) in enumerate(zip(before, instrumented)):
-            if old[0] == "IR_OPERANDS":
-                self.assertEqual(new, old)
-        heads = [new for old, new in zip(before, instrumented)
-                 if old[0] != "IR_OPERANDS"]
-        # The words that monitoring put in place of heads are the
-        # displacing arms
-        self.assertTrue(any(row[0] in ("Line.Hook", "Instruction.Hook")
-                            for row in heads))
-        (i, head, operands), = calls(code)
-        # A wrapper replaces the handler of the head and keeps its fields
-        self.assertEqual(instrumented[i][1:], before[i][1:])
+        # Monitoring observes the code in the observing evaluator and
+        # rewrites no word, the heads' as well as the operand words
+        self.assertTrue(_testinternalcapi.code_is_observed(code))
+        self.assertEqual(rows(code, True), before)
         monitoring.set_local_events(tool, code, 0)
         self.assertEqual(rows(code), before)
 

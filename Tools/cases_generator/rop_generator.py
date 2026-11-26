@@ -149,7 +149,7 @@ int opcode = {handler};
 (void)opcode;
 _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
-{prev}{save_ip}IR_HOLD_NEXT();
+{save_ip}IR_HOLD_NEXT();
 next_instr += {advance};
 INSTRUCTION_STATS({handler});"""
 
@@ -163,8 +163,6 @@ def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
         advance = low.spans
     lines += PROLOGUE.format(
         handler=handler(arm.name), advance=advance,
-        prev=("_PyIRWord *const prev_instr = frame->instr_ptr;\n(void)prev_instr;\n"
-              if arm.displacing else ""),
         save_ip="" if arm.trailing else "frame->instr_ptr = next_instr;\n").splitlines()
     lines += low.decls
     lines += low.body
@@ -422,10 +420,13 @@ def write_stub_plans(out: TextIO, p: Products) -> None:
 
 def target_name(i: int, by_arm: Mapping[int, ir_arms.ArmEntry], observing: bool) -> str:
     """The label that dispatch of handler id i goes to: in the observing
-    evaluator an arm of a family that declares events runs its observer"""
+    evaluator an arm of a family whose observer gates runs the observer.  An
+    observer that does not gate runs where the word's location is observed
+    (_PyIR_ObservingHandler, Python/ceval_evaluator.h)."""
     if i in by_arm:
         arm = by_arm[i]
-        return f"TARGET_{arm.observer if observing and arm.observer else arm.name}"
+        gated = observing and arm.observer and arm.observer_gates
+        return f"TARGET_{arm.observer if gated else arm.name}"
     if i == IR_OPERANDS_ID:
         return "TARGET_IR_OPERANDS"
     if i == IR_SWITCH_ID:
@@ -436,8 +437,8 @@ def target_name(i: int, by_arm: Mapping[int, ir_arms.ArmEntry], observing: bool)
 def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
     """The dispatch tables of the two compilations of the evaluator, local to
     each and holding the addresses of its labels: the normal one, and the
-    observing one (IR_OBSERVING), which sends the words of each family that
-    declares events to the family's observer.  Dispatch masks the word with
+    observing one (IR_OBSERVING), which sends the words of each family whose
+    observer gates to the observer.  Dispatch masks the word with
     IR_HANDLER_MASK, so a table covers every id the mask yields."""
     write_header(__file__, sources, out)
     by_arm = emitted_arm_ids(p)
@@ -661,9 +662,6 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         flags.append("_PyIR_VACANT_SPAN")
     if "_PyIR_RUNS_PYTHON" in effects:
         flags.append("_PyIR_RUNS_CODE")
-    if arm.displacing:
-        # It runs another handler on the same fields
-        flags.append("_PyIR_TRANSPARENT")
     if has_target:
         flags.append("_PyIR_FORWARD")
         if not exits & {"next", "branch"}:
@@ -841,10 +839,11 @@ def observer(program: Program, family: str) -> str | None:
 def observed_by(program: Program, name: str) -> str | None:
     """The arm that the observing evaluator runs for the words of arm
     `name`: its family's observer, or None for the arm itself (an arm of a
-    family without events, a trailing jump, a displacing arm, an arm of the
-    evaluator's entry frame, which runs no code, or the observer)."""
+    family without events, a trailing jump, an arm of the evaluator's entry
+    frame, which runs no code, or the observer).  The observer runs where
+    the word's location is observed, or for every word if it gates."""
     arm = program.arms[name]
-    if (not program.families[arm.family].events or arm.trailing or arm.displacing
+    if (not program.families[arm.family].events or arm.trailing
             or Select.entry_frame in arm.select):
         return None
     runs = observer(program, arm.family)
@@ -898,7 +897,8 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
             () if arm.trailing else tuple(e.value for e in fam.events),
             "again" in fam.exits, is_generic(p.program, arm),
             arm_format(p.program, arm), None if runs is None else c_name(runs),
-            emitted, arm.trailing, arm.displacing))
+            emitted, arm.trailing,
+            runs is not None and p.program.arms[runs].gates))
     return entries
 
 

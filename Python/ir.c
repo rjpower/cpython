@@ -219,38 +219,6 @@ _PyCode_IsTrailing(PyCodeObject *co, int i)
     return (_PyIR_HandlerFlags[_PyCode_InstrHandler(co, i)] & _PyIR_H_TRAILING) != 0;
 }
 
-int
-_PyIR_RealHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
-{
-    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    if (_PyIR_FormatOf(handler)->flags & _PyIR_TRANSPARENT) {
-        handler = _PyCode_InstrHandler(_PyFrame_GetCode(frame),
-                                       _PyFrame_InstrOffset(frame, instr));
-    }
-    return handler;
-}
-
-/* The handler that the word at instr runs once a LINE or INSTRUCTION
- * wrapper has passed it on: the monitoring tables hold what the wrapper
- * displaced, which may be the other wrapper. */
-int
-_PyIR_DispatchedHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
-{
-    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    if (handler != ROP_HANDLER_Line_Hook && handler != ROP_HANDLER_Instruction_Hook) {
-        return _PyIR_RealHandler(frame, instr);
-    }
-    PyCodeObject *code = _PyFrame_GetCode(frame);
-    int index = _PyFrame_InstrOffset(frame, instr);
-    // LINE may displace INSTRUCTION, which displaces the word's handler
-    if (handler == ROP_HANDLER_Line_Hook) {
-        handler = _PyCode_LineDisplaced(code, index);
-    }
-    if (handler == ROP_HANDLER_Instruction_Hook) {
-        handler = _PyCode_InstructionDisplaced(code, index);
-    }
-    return handler;
-}
 
 
 /* The executing copy */
@@ -472,6 +440,7 @@ _PyCode_ClearExec(PyCodeObject *co)
     if (exec != NULL) {
         co->_co_exec = NULL;
         _PyJit_FreeUnits(exec);
+        PyMem_Free(exec->observe);
         char *base = (char *)exec;
         if (co->_co_ir->nfeedback) {
             _PyFbBlock *block = _PyIR_FbBlock(exec->words);

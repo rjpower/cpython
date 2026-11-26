@@ -2321,13 +2321,6 @@ force_arm(PyObject *self, PyObject *args)
                              head, arm_name);
                 return NULL;
             }
-            if (IR_HANDLER(exec->words[i]) != generic &&
-                (_PyIR_FormatOf(IR_HANDLER(exec->words[i]))->flags
-                 & _PyIR_TRANSPARENT))
-            {
-                PyErr_SetString(PyExc_ValueError, "the word is instrumented");
-                return NULL;
-            }
             _PyJit_Retire(exec);
             _PyIR_SetHandler(&exec->words[i], arm->handler);
             Py_RETURN_NONE;

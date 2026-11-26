@@ -64,10 +64,10 @@ IR_HOT_ROUTINE(gen_return, PyValue gen_value, _PyInterpreterFrame *gen_dying,
         generator_control_generation(frame) != generation) {
         GEN_STEP_JUMP(GEN_REDIRECT_EFFECT, frame, frame->instr_ptr, value);
     }
-    int handler = _PyIR_DispatchedHandler(frame, site);
+    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*site));
     assert(handler >= ROP_FIRST_HANDLER &&
-           IR_COMPLETIONS[handler - ROP_FIRST_HANDLER] != NULL);
-    int status = IR_COMPLETIONS[handler - ROP_FIRST_HANDLER](
+           IR_COMPLETIONS(site)[handler - ROP_FIRST_HANDLER] != NULL);
+    int status = IR_COMPLETIONS(site)[handler - ROP_FIRST_HANDLER](
         tstate, frame, site, value);
     if (status & _PyIR_RAISED) {
         GEN_RAISED();

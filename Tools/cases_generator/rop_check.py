@@ -71,7 +71,6 @@ EXIT_PAYLOAD: dict[ExitKind, tuple[Type | None, ...]] = {
     ExitKind.yield_: (O,),
     ExitKind.exit: (O,),
     ExitKind.redirect: (T(Handle.Route),),
-    ExitKind.dispatch: (T(Handle.Handler),),
 }
 EXIT_NAMES = {e.value: e for e in ExitKind}
 
@@ -632,9 +631,9 @@ def over_enum(c: Checker, a: Arm) -> str | None:
     if a.over.rest and len(a.over.members) == len(enum.members):
         c.report(a.over.span, a.name, f"over({a.over.operand}): rest, but every member "
                  f"of {enum.name} is listed")
-    if a.observes or a.select or a.completion is not None or a.trailing or a.displacing:
+    if a.observes or a.select or a.completion is not None or a.trailing:
         c.report(a.over.span, a.name, "only an adaptive arm is stated over members: not "
-                 "an observed, selected, completion, trailing or displacing arm")
+                 "an observed, selected, completion or trailing arm")
         return None
     if fam.generic is not None and a.name == f"{fam.name}.{fam.generic}":
         c.report(a.over.span, a.name, "the generic arm reads the operand: it is not "
@@ -1052,14 +1051,8 @@ def check_arm(c: Checker, a: Arm) -> None:
         c.report(a.span, a.name, f"arm {a.name} does not name a family's arm "
                  "(Family.Arm)")
         return
-    if a.displacing and (a.observes or a.select or a.trailing or a.entry is not None
-                         or a.region is not Region.split):
-        c.report(a.span, a.name, "a displacing arm is split, and neither selected, "
-                 "observed, trailing nor adaptive")
-    if "dispatch" in a.contract.exits and not a.displacing:
-        c.report(a.contract.span, a.name, "only a displacing arm has the exit dispatch")
-    if a.displacing and "dispatch" not in a.contract.exits:
-        c.report(a.contract.span, a.name, "a displacing arm exits by dispatch")
+    if a.gates and not a.observes:
+        c.report(a.span, a.name, "only an observer (observes) gates its family")
     if a.trailing and (a.observes or a.select or a.entry is not None):
         c.report(a.span, a.name, "a trailing arm belongs to the instruction before "
                  "it: it is not selected, observed or adaptive, and fires no event")
@@ -1266,9 +1259,7 @@ def check_graph(c: Checker, definition: str, graph: Graph, operands: tuple[Param
                      "entry(v:O), the child's final value")
     elif first.label != ENTRY or first.params:
         c.report(first.span, definition, "the first block is entry()")
-    # The instruction pointer before the word is the displacing arm's alone
-    names = [n for n in ENVIRONMENT
-             if n != "prev_head" or (family is not None and c.arm(definition).displacing)]
+    names = list(ENVIRONMENT)
     types: dict[str, Type] = {n: ENVIRONMENT_TYPES[n] for n in names}
     defs: dict[str, tuple[str, int]] = {n: ("", OPERAND) for n in names}
     for p in operands + home_params(operands):

@@ -76,8 +76,10 @@ ir_frame_observed(_PyInterpreterFrame *frame)
            _PyCode_IsObserved(_PyFrame_GetCode(frame));
 }
 #define IR_FORMS(FRAME) (ir_frame_observed(FRAME) ? ir_observing_forms : ir_handler_forms)
-#define IR_COMPLETIONS \
-    (ir_frame_observed(frame) ? _PyRop_ObservingCompletions : _PyRop_Completions)
+#define IR_COMPLETIONS(SITE) \
+    ((ir_frame_observed(frame) && \
+      (_PyFrame_Observed(frame, (SITE)) & _PyIR_OBSERVE_EVENTS)) \
+        ? _PyRop_ObservingCompletions : _PyRop_Completions)
 #define IR_ERROR_SWITCH() ((void)0)
 #define DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
@@ -276,10 +278,26 @@ jit_raise_exit(PyThreadState *tstate, _PyInterpreterFrame *frame)
 const void *const _PyEval_JitRaiseExit = (const void *)jit_raise_exit;
 #endif
 
+/* The LINE or INSTRUCTION event before a word moved the frame (status 1) or
+ * raised (-1), as LABEL_observe_word (Python/ceval_evaluator.h) resolves it */
+static _PyIRTransfer
+ir_location_exit(PyThreadState *tstate, _PyInterpreterFrame *frame, int status)
+{
+    if (status < 0) {
+        PROCESS_ERROR_AT(RAISE, 0, frame->instr_ptr);
+    }
+    if (frame->pending_redirect) {
+        _PyFrame_CompleteRedirect(frame);
+    }
+    return (_PyIRTransfer){frame, frame->return_pc};
+}
+
 /* The function-form executor (-X ir_forms), a test of the forms: runs the
  * activation's frames by calling each word's function form, as compiled
  * code does, in place of ir_evaluate().  A form that returns no word has
- * raised, which the error routine resolves, or has ended the activation. */
+ * raised, which the error routine resolves, or has ended the activation.
+ * In observed code it first runs what monitoring observes at the word, as
+ * the observing evaluator does. */
 PyValue
 _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
@@ -302,7 +320,24 @@ _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int thro
         int opcode;
         NEXTOPARG();
         PRE_DISPATCH_GOTO();
-        t = IR_FORMS(frame)[opcode](tstate, frame, next_instr, ir_word);
+        if (opcode == IR_H_SWITCH || !ir_frame_observed(frame)) {
+            t = ir_handler_forms[opcode](tstate, frame, next_instr, ir_word);
+            continue;
+        }
+        uint8_t observed = _PyFrame_Observed(frame, next_instr);
+        if (observed & (_PyIR_OBSERVE_LINE | _PyIR_OBSERVE_INSTRUCTION)) {
+            int status = _PyEval_LocationEvents(tstate, frame, next_instr);
+            if (status != 0) {
+                t = ir_location_exit(tstate, frame, status);
+                continue;
+            }
+            observed = _PyFrame_Observed(frame, next_instr);
+            NEXTOPARG();
+        }
+        if (observed & _PyIR_OBSERVE_EVENTS) {
+            opcode = _PyIR_ObservingHandler[opcode];
+        }
+        t = ir_observing_forms[opcode](tstate, frame, next_instr, ir_word);
     }
 }
 #pragma pop_macro("DISPATCH")

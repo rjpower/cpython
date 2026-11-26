@@ -87,8 +87,6 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
             parts.append("_PyIR_H_SAVES_IP")
     if arm.adaptive and not arm.is_generic:
         parts.append("_PyIR_H_SPECIALIZED")
-    if arm.displacing:
-        parts.append("_PyIR_H_INSTRUMENTED")
     if arm.trailing:
         parts.append("_PyIR_H_TRAILING")
     _, left, stop = monitor_events(arm)
@@ -133,7 +131,7 @@ def generate_ir_metadata(
         out.emit("#ifndef Py_BUILD_CORE\n")
         out.emit('#  error "this header requires Py_BUILD_CORE define"\n')
         out.emit("#endif\n\n")
-        for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
+        for kind, bit in (("SPECIALIZED", 1),
                           ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
@@ -196,10 +194,11 @@ def generate_ir_metadata(
         out.emit("};\n#endif\n\n")
 
         # The handler that the observing evaluator runs for a word of each
-        # handler: its family's observer, or the handler itself.  The
-        # observing dispatch table (Python/ir_targets.h) and forms table are
-        # generated from the same declaration; test_ir_contract checks the
-        # rows.
+        # handler at a location that a tool observes (_PyIR_OBSERVE_EVENTS):
+        # its family's observer, or the handler itself.  The observing
+        # dispatch table (Python/ir_targets.h) and forms table send the words
+        # of a family whose observer gates to it everywhere; all come from the
+        # same declaration, and test_ir_contract checks the rows.
         out.emit("PyAPI_DATA(const uint16_t) _PyIR_ObservingHandler[IR_NUM_HANDLERS];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit("const uint16_t _PyIR_ObservingHandler[IR_NUM_HANDLERS] = {\n")

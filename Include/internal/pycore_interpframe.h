@@ -790,7 +790,7 @@ _PyStackChunk_EnsureFrameStorage(_PyStackChunk *chunk, PyObject **header,
 /* Push a frame header and nslots slots, the header onto the frame stack and
  * the slots onto the value stack.  Must be guarded by
  * _PyThreadState_HasStackSpace(), for nslots + FRAME_SPECIALS_SIZE. */
-static inline _PyInterpreterFrame *
+static Py_ALWAYS_INLINE _PyInterpreterFrame *
 _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
 {
     PyObject **header = tstate->datastack_limit - FRAME_SPECIALS_SIZE;

@@ -106,7 +106,7 @@ typedef struct {
 /* The sources of a span operand (at most four), for a call that reads them */
 PyAPI_FUNC(_PyRopSrcs) _PyRop_SrcsOfSpan(const _PyRopSpan *span);
 
-static inline _PyRopAnchors
+static Py_ALWAYS_INLINE _PyRopAnchors
 _PyRop_AnchorForSrcs(const _PyRopSrcs *s)
 {
     assert(s->n <= _PY_ROP_MAX_SRCS);

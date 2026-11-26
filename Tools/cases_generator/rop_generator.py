@@ -224,13 +224,13 @@ def write_layout_checks(out: TextIO) -> None:
                               f"does not share {first}'s storage\");\n")
 
 
-def write_inline_rows(out: TextIO, p: Products) -> None:
-    """The out-of-line copy of each row declared `inline`.  The interpreter
-    calls the row's own symbol, which is always inlined (the redeclaration
-    adds the attribute to the C body, defined once in the runtime); the
-    forms and stubs call this copy."""
-    out.write("/* Rows declared inline: always inlined into the interpreter, one\n"
-              " * out-of-line copy for the forms and stubs */\n")
+def write_inline_declarations(out: TextIO, p: Products, sources: list[str]) -> None:
+    """The declaration of each row declared `inline`: the redeclaration adds
+    the attribute to the C body, which is defined once in the runtime
+    (Python/ceval_shared.h).  Every translation unit that runs the arms
+    includes this file, so that each inlines the row."""
+    write_header(__file__, sources, out)
+    out.write("\n/* Rows declared inline: always inlined into every arm that calls them */\n")
     for x in inline_rows(p.program):
         assert x.c is not None
         try:
@@ -239,6 +239,16 @@ def write_inline_rows(out: TextIO, p: Products) -> None:
             raise GenerateError(str(e)) from e
         sep = "" if ret.endswith("*") else " "
         out.write(f"static Py_ALWAYS_INLINE {ret}{sep}{x.c.symbol}({', '.join(params)});\n")
+
+
+def write_inline_rows(out: TextIO, p: Products) -> None:
+    """The out-of-line copy of each row declared `inline`: the forms and
+    stubs call it, and the interpreter inlines the row itself."""
+    out.write("/* Rows declared inline: one out-of-line copy for the forms and stubs */\n")
+    for x in inline_rows(p.program):
+        assert x.c is not None
+        ret, params = row_signature(x)
+        sep = "" if ret.endswith("*") else " "
         formals = ", ".join(f"{t}{'' if t.endswith('*') else ' '}p{i}"
                             for i, t in enumerate(params))
         actuals = ", ".join(f"p{i}" for i in range(len(params)))
@@ -294,7 +304,7 @@ def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
 STUB_PREAMBLE = """\
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
- * Python/ceval.c includes this file after the function forms, whose
+ * Python/ceval_forms.c includes this file after the function forms, whose
  * bindings of the other macros the stubs share. */
 
 /* Whether closing V drops a last count, which runs its destructor: then
@@ -453,7 +463,7 @@ def write_completions(out: TextIO, p: Products) -> None:
         out.write("\n".join("    " + line if line else line for line in lines) + "\n}\n")
     out.write("\ntypedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,\n"
               "                                 _PyIRWord *, PyValue);\n\n"
-              "static const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS] = {\n")
+              "const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS] = {\n")
     for handler_name, arm in completion_table(p):
         out.write(f"    [{handler_name} - ROP_FIRST_HANDLER] = {completion_name(arm)},\n")
     out.write("};\n")
@@ -1127,6 +1137,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", help="the interpreter cases")
     parser.add_argument("--forms", help="the function forms")
     parser.add_argument("--stubs", help="the completion stubs")
+    parser.add_argument("--inline", help="the declarations of the inline rows")
     parser.add_argument("--targets", help="the dispatch table of the evaluator")
     parser.add_argument("--templates", help="the baseline templates")
     parser.add_argument("--lowerings", help="the baseline JIT's lowerings")
@@ -1144,7 +1155,8 @@ def main(argv: list[str] | None = None) -> int:
     products = lower_all(program, numbers)
     sources = [root_relative_path(str(s)) for s in paths]
     for option, writer in (("cases", write_cases), ("forms", write_forms),
-                           ("stubs", write_stubs), ("targets", write_targets),
+                           ("stubs", write_stubs), ("inline", write_inline_declarations),
+                           ("targets", write_targets),
                            ("templates", write_templates),
                            ("lowerings", write_lowerings),
                            ("metadata", write_metadata)):

@@ -85,6 +85,9 @@
     <ClCompile Include="..\Python\ceval.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Python\ceval_forms.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Objects\classobject.c">
       <Filter>Source Files</Filter>
     </ClCompile>

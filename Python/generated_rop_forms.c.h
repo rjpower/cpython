@@ -307,48 +307,33 @@ static _PyIRTransfer ir_run_Yield_Ordinary(PyThreadState *tstate, _PyInterpreter
     Py_FatalError("register instruction family " #FAMILY " has no generic arm")
 #endif
 
-/* Rows declared inline: always inlined into the interpreter, one
- * out-of-line copy for the forms and stubs */
-static Py_ALWAYS_INLINE bool _PyRop_FloatOperands(PyValueBorrow, PyValueBorrow);
+/* Rows declared inline: one out-of-line copy for the forms and stubs */
 static Py_NO_INLINE bool _PyRop_FloatOperands_Outlined(PyValueBorrow p0, PyValueBorrow p1)
 { return _PyRop_FloatOperands(p0, p1); }
-static Py_ALWAYS_INLINE PyValue _PyRop_AddFloats(double, double);
 static Py_NO_INLINE PyValue _PyRop_AddFloats_Outlined(double p0, double p1)
 { return _PyRop_AddFloats(p0, p1); }
-static Py_ALWAYS_INLINE bool _PyRop_ExactPositional(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);
 static Py_NO_INLINE bool _PyRop_ExactPositional_Outlined(_PyInterpreterFrame *p0, PyValueBorrow p1, const _PyIRWord *p2)
 { return _PyRop_ExactPositional(p0, p1, p2); }
-static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
 static Py_NO_INLINE _PyInterpreterFrame *_PyRop_PushExact_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1, PyValue *p2, const _PyIRWord *p3)
 { return _PyRop_PushExact(p0, p1, p2, p3); }
-static Py_ALWAYS_INLINE bool _PyRop_ExactPositionalBound(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);
 static Py_NO_INLINE bool _PyRop_ExactPositionalBound_Outlined(_PyInterpreterFrame *p0, PyValueBorrow p1, const _PyIRWord *p2)
 { return _PyRop_ExactPositionalBound(p0, p1, p2); }
-static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushBoundExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
 static Py_NO_INLINE _PyInterpreterFrame *_PyRop_PushBoundExact_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1, PyValue *p2, const _PyIRWord *p3)
 { return _PyRop_PushBoundExact(p0, p1, p2, p3); }
-static Py_ALWAYS_INLINE PyValue _PyRop_CallNative(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
 static Py_NO_INLINE PyValue _PyRop_CallNative_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1, PyValue *p2, const _PyIRWord *p3)
 { return _PyRop_CallNative(p0, p1, p2, p3); }
-static Py_ALWAYS_INLINE void _PyRop_RetireFrame(PyThreadState *, _PyInterpreterFrame *);
 static Py_NO_INLINE void _PyRop_RetireFrame_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1)
 { _PyRop_RetireFrame(p0, p1); }
-static Py_ALWAYS_INLINE void _PyRop_RetireFrameEmpty(PyThreadState *, _PyInterpreterFrame *);
 static Py_NO_INLINE void _PyRop_RetireFrameEmpty_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1)
 { _PyRop_RetireFrameEmpty(p0, p1); }
-static Py_ALWAYS_INLINE _PyInstr *_PyRop_Deliver(_PyInterpreterFrame *, PyValue);
 static Py_NO_INLINE _PyInstr *_PyRop_Deliver_Outlined(_PyInterpreterFrame *p0, PyValue p1)
 { return _PyRop_Deliver(p0, p1); }
-static Py_ALWAYS_INLINE bool _PyRop_PlanFits(PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *, const _PyFbCall *);
 static Py_NO_INLINE bool _PyRop_PlanFits_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1, PyValueBorrow p2, const _PyIRWord *p3, const _PyFbCall *p4)
 { return _PyRop_PlanFits(p0, p1, p2, p3, p4); }
-static Py_ALWAYS_INLINE bool _PyRop_NotPythonCallable(PyValueBorrow);
 static Py_NO_INLINE bool _PyRop_NotPythonCallable_Outlined(PyValueBorrow p0)
 { return _PyRop_NotPythonCallable(p0); }
-static Py_ALWAYS_INLINE bool _PyRop_PyCallableEx(PyValueBorrow);
 static Py_NO_INLINE bool _PyRop_PyCallableEx_Outlined(PyValueBorrow p0)
 { return _PyRop_PyCallableEx(p0); }
-static Py_ALWAYS_INLINE bool _PyRop_NotPyCallableEx(PyValueBorrow);
 static Py_NO_INLINE bool _PyRop_NotPyCallableEx_Outlined(PyValueBorrow p0)
 { return _PyRop_NotPyCallableEx(p0); }
 

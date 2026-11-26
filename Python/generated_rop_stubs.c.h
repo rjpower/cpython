@@ -7,7 +7,7 @@
 
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
- * Python/ceval.c includes this file after the function forms, whose
+ * Python/ceval_forms.c includes this file after the function forms, whose
  * bindings of the other macros the stubs share. */
 
 /* Whether closing V drops a last count, which runs its destructor: then
@@ -7835,7 +7835,7 @@ _PyRop_Complete_Send_CompleteObserved(
 typedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,
                                  _PyIRWord *, PyValue);
 
-static const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS] = {
+const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS] = {
     [ROP_HANDLER_Send_Generic - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,
     [ROP_HANDLER_Send_Generic_Observed - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_CompleteObserved,
     [ROP_HANDLER_Send_Gen - ROP_FIRST_HANDLER] = _PyRop_Complete_Send_Complete,

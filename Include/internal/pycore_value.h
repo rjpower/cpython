@@ -1038,7 +1038,7 @@ PyValue_CLOSE_SPECIALIZED(PyValue ref, destructor destruct)
  * owner), and each refusal is a call that spills the owners around it.  The
  * rare end, the deallocation, is the out-of-line _Py_Dealloc() of
  * Py_DECREF_MORTAL(). */
-static Py_ALWAYS_INLINE void
+static inline Py_ALWAYS_INLINE void
 PyValue_XCLOSE(PyValue ref)
 {
     if (PyValue_RefcountOnObject(ref)) {

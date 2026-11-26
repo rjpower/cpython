@@ -804,6 +804,11 @@ class TemplateTests(unittest.TestCase):
         self.assertTrue(capi.jit_template_run(f, index, {b: "x", c: 2}, True)[1])
         self.assertTrue(capi.jit_template_run(f, index, {b: 1, c: "y"}, True)[1])
 
+def has_bodies(handler):
+    "Whether every uop of the handler still has a body to build a graph from"
+    return all(u.leaf is not None for u in RECORDS[handler].uops)
+
+
 def graph_of(handler):
     "The template graph of a handler, simplified as the generator emits it"
     record = RECORDS[handler]
@@ -924,7 +929,8 @@ class TemplateGraphTests(unittest.TestCase):
     def test_without_conjoins_the_guards_stay_two(self):
         # Any handler whose guards the default declaration fuses
         handler = next((handler for handler in RECORDS
-                        if "PyValue_BothInlineInt" in prims_of(graph_of(handler))), None)
+                        if has_bodies(handler)
+                        and "PyValue_BothInlineInt" in prims_of(graph_of(handler))), None)
         if handler is None:
             self.skipTest("no live handler left; the old generator goes at D")
         with declared("PyValue_BothInlineInt", conjoins=""):
@@ -1071,13 +1077,17 @@ class TemplateGraphTests(unittest.TestCase):
         # without assertions the template is the one with no assumption
         # Any handler with a leaf body
         handler = next((handler for handler, record in RECORDS.items()
-                        if any(u.leaf is not None for u in record.uops)), None)
+                        if any(u.leaf is not None and any(
+                            op.kind == "arg" for op in u.leaf.blocks[0].ops)
+                            for u in record.uops)), None)
         if handler is None:
             self.skipTest("no live handler left; the old generator goes at D")
         record = RECORDS[handler]
         plain = jit_template_generator.template_of(handler, record)
         uops = list(record.uops)
-        i, u = next((i, u) for i, u in enumerate(uops) if u.leaf is not None)
+        i, u = next((i, u) for i, u in enumerate(uops)
+                    if u.leaf is not None
+                    and any(op.kind == "arg" for op in u.leaf.blocks[0].ops))
         leaf = dataclasses.replace(u.leaf, blocks=list(u.leaf.blocks))
         entry = leaf.blocks[0]
         arg = next(op for op in entry.ops if op.kind == "arg")

@@ -52,7 +52,7 @@ class GeneratorContractExportTests(unittest.TestCase):
     def test_metadata_only_operation_has_an_ordinary_identity(self):
         # Any operation that is neither a generator boundary nor a twin
         name = next((name for name in ("COMPARE_OP", "CONTAINS_OP", "IS_OP", "NOP")
-                     if name in HANDLERS), None)
+                     if name in HANDLERS and CONTRACTS[HANDLERS[name]] is not None), None)
         if name is None:
             self.skipTest("no live handler left; the old generator goes at D")
         handler = HANDLERS[name]

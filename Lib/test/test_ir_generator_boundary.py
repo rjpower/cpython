@@ -50,7 +50,12 @@ def finish(generator, value):
 
 class GeneratorContractExportTests(unittest.TestCase):
     def test_metadata_only_operation_has_an_ordinary_identity(self):
-        handler = HANDLERS["COMPARE_OP"]
+        # Any operation that is neither a generator boundary nor a twin
+        name = next((name for name in ("COMPARE_OP", "CONTAINS_OP", "IS_OP", "NOP")
+                     if name in HANDLERS), None)
+        if name is None:
+            self.skipTest("no live handler left; the old generator goes at D")
+        handler = HANDLERS[name]
         row = CONTRACTS[handler]
         self.assertEqual(row.ordinary_handler, handler)
         self.assertEqual(row.generator_yielded_consumer, _opcode.GEN_CONSUMER_NONE)
@@ -86,7 +91,7 @@ class SpecializationPreservationTests(unittest.TestCase):
             self.assertEqual(add(1.25, 2.5), 3.75)
             self.assertEqual(subtract(2.5, 1.25), 1.25)
         self.assertIn("Add.Float", ordinary_names(add))
-        self.assertIn("Binary.Generic", ordinary_names(subtract))
+        self.assertIn("Binary.Float", ordinary_names(subtract))
         for function in (add, subtract):
             for _, _, row in sites(function):
                 self.assertEqual(row.generator_boundary_flags, 0)

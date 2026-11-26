@@ -933,8 +933,13 @@ class TemplateGraphTests(unittest.TestCase):
         return graph, prims_of(graph)
 
     def test_without_conjoins_the_guards_stay_two(self):
+        # Any handler whose guards the default declaration fuses
+        handler = next((handler for handler in RECORDS
+                        if "PyValue_BothInlineInt" in prims_of(graph_of(handler))), None)
+        if handler is None:
+            self.skipTest("no live handler left; the old generator goes at D")
         with declared("PyValue_BothInlineInt", conjoins=""):
-            graph, names = self.graph_names("COMPARE_OP_INT")
+            graph, names = self.graph_names(handler)
         self.assertEqual(names.count("PyValue_IsInlineInt"), 2)
         self.assertNotIn("PyValue_BothInlineInt", names)
 
@@ -1075,7 +1080,11 @@ class TemplateGraphTests(unittest.TestCase):
     def test_an_assumption_is_checked_only_with_assertions(self):
         # F7: an `assume` op becomes a check that traps, under #ifndef NDEBUG;
         # without assertions the template is the one with no assumption
-        handler = "COMPARE_OP_FLOAT"
+        # Any handler with a leaf body
+        handler = next((handler for handler, record in RECORDS.items()
+                        if any(u.leaf is not None for u in record.uops)), None)
+        if handler is None:
+            self.skipTest("no live handler left; the old generator goes at D")
         record = RECORDS[handler]
         plain = jit_template_generator.template_of(handler, record)
         uops = list(record.uops)

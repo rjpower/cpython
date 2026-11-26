@@ -2923,6 +2923,23 @@ class RegCfgTest(unittest.TestCase):
         for _ in range(3):
             self.assertEqual(f(Suppress()), 1)
 
+    def test_a_cycle_of_moves_is_a_rotation(self):
+        # An edge that renames its stack values in a cycle gets a Rotate.Cycle
+        # word, which turns the owners in place
+        class Point:
+            __match_args__ = ("x", "y")
+            def __init__(self, x, y):
+                self.x, self.y = x, y
+        def f(w):
+            match w:
+                case (Point(x1, y1), Point(x2, y2) as p2):
+                    return (x1, y1, x2, y2, p2)
+            return None
+        words = [w[0] for w in get_ir(f.__code__)]
+        self.assertIn("Rotate.Cycle", words)
+        a, b = Point(1, 2), Point(3, 4)
+        self.assertEqual(f([a, b]), (1, 2, 3, 4, b))
+
     def test_slots_do_not_creep(self):
         # IMPORT_FROM; SWAP 2; POP_TOP leaves the survivor above the slot
         # it vacates; the next output reuses that slot

@@ -263,9 +263,10 @@ family Move(dsts:Span<Dst>, srcs:Span<Src>)
 point Move.Done(current, next_head, clear) keep() spent(srcs) defs(dsts);
 point Move.Copied(current, next_head, clear) keep(srcs) spent() defs(dsts);
 
-// Every source's owner goes to its destination as if all moved at once: a
-// destination is vacant or another pair's source.  A cycle turns through
-// one rooted local (_PyRop_ParallelMove).
+// Every source's owner goes to its destination.  The lowering orders the
+// pairs (_PyRegCfg resolution): a destination is vacant when its pair runs,
+// because the pair that reads it as a source has run before.  A cycle of
+// pairs is a Rotate word instead.
 arm Move.Transfer shared select(transfer)
   effects(reads, writes)
   feedback()
@@ -284,6 +285,34 @@ arm Move.Copy shared select(copy)
 {
   entry():
     publish [dsts[] = dup(srcs[])] retire [] at Move.Copied;
+    exit next();
+}
+
+// The owners of a cycle of homes turn one place: home i + 1 takes home i's
+// owner, and home 0 takes the last home's.  The lowering splits a parallel
+// move's cycles out of its Move word, so no solver runs here.
+family Rotate(homes:Span<Src>)
+  exits(next)
+  vacant(homes);
+
+point Rotate.Done(current, next_head, clear) keep(homes) spent() defs();
+
+extern helper rotate_homes(f:Frame, homes:Span<Src>) -> Unit
+  effects(reads, writes)
+  c _PyRop_RotateHomes as unit
+  evidence(
+    review: "ceval.c: _PyRop_RotateHomes.",
+    contract: "The last home's owner is held in a C local while the others move"
+              "up one place; every home is written. No count, no Python, no failure.");
+
+arm Rotate.Cycle shared
+  effects(reads, writes)
+  feedback()
+  exits(next)
+{
+  entry():
+    let _:Unit = rotate_homes(frame, homes);
+    publish [] retire [] at Rotate.Done;
     exit next();
 }
 

@@ -1180,6 +1180,7 @@ def cx():
 UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
               "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
+    "Rotate.Cycle": "the helper turns homes in place; test_ir runs a cycle",
     # Monitoring: a displacing arm runs another handler, which the evaluator
     # does not model; test_monitoring and test_sys_settrace run them
     "Line.Hook": "covered by test_monitoring and test_sys_settrace",

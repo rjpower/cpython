@@ -1888,7 +1888,10 @@ _PyRop_ImportFrom(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 
 void
-_PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s);
+_PyRop_MoveInOrder(const _PyRopSpan *d, const _PyRopSpan *s);
+
+void
+_PyRop_RotateHomes(_PyInterpreterFrame *frame, const _PyRopSpan *homes);
 
 void
 _PyRop_CloseSpan(const _PyRopSpan *s);

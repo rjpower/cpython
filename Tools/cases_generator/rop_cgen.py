@@ -1049,13 +1049,14 @@ class ArmLowerer:
         moved = {b.value.name for b in vectors if isinstance(b.value, Name)}
         owners: dict[str, str | None] = {}
         for b in vectors:
-            # A vector binding's runtime takes every source before it writes
-            # a destination, which are vacant (_PyFrame_ParallelMove)
+            # A vector binding's runtime moves the pairs in order: the
+            # lowering ordered them so that each destination is vacant
+            # (_PyRop_MoveInOrder)
             if isinstance(b.value, Call):
                 (source,) = b.value.args
                 self.emit(f"_PyRop_CopyHomes({self.span(b.target)}, {self.span(source.name)});")
             else:
-                self.emit(f"_PyRop_ParallelMove({self.span(b.target)}, "
+                self.emit(f"_PyRop_MoveInOrder({self.span(b.target)}, "
                           f"{self.span(b.value.name)});")
         for d in spent:
             if d.subject in moved:

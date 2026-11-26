@@ -2503,27 +2503,37 @@ _PyRop_ImportFrom(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return res;
 }
 
-/* The rows of the Move arms (Python/register_ops/values.rop).  The homes of
- * a span are decoded once; a set has at most IR_FIELD_MAX pairs. */
-static int
-span_slots(const _PyRopSpan *span, int32_t *slots)
+/* The rows of the Move and Rotate arms (Python/register_ops/values.rop).
+ * The lowering ordered the pairs of a Move: each destination is vacant when
+ * its pair runs, so a pair is a take and a write. */
+void
+_PyRop_MoveInOrder(const _PyRopSpan *d, const _PyRopSpan *s)
 {
-    for (int i = 0; i < span->count; i++) {
-        slots[i] = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+    assert(s->count >= d->count);
+    for (int i = 0; i < d->count; i++) {
+        int from = _PyIR_SpanElement(s->head, s->handler, s->first + i);
+        int to = _PyIR_SpanElement(d->head, d->handler, d->first + i);
+        PyValue value = _PyFrame_TakeHome(d->frame, &d->frame->base[from]);
+        assert(PyValue_IsNull(d->frame->base[to]));
+        _PyFrame_WriteHome(d->frame, &d->frame->base[to], value);
     }
-    return span->count;
 }
 
 void
-_PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s)
+_PyRop_RotateHomes(_PyInterpreterFrame *frame, const _PyRopSpan *homes)
 {
-    int32_t dst[IR_FIELD_MAX + 1], src[IR_FIELD_MAX + 1];
-    int n = span_slots(d, dst);
-    assert(s->count >= n);
-    for (int i = 0; i < n; i++) {
-        src[i] = _PyIR_SpanElement(s->head, s->handler, s->first + i);
+    int last = _PyIR_SpanElement(homes->head, homes->handler,
+                                 homes->first + homes->count - 1);
+    PyValue held = _PyFrame_TakeHome(frame, &frame->base[last]);
+    for (int i = homes->count - 1; i > 0; i--) {
+        int to = _PyIR_SpanElement(homes->head, homes->handler, homes->first + i);
+        int from = _PyIR_SpanElement(homes->head, homes->handler,
+                                     homes->first + i - 1);
+        _PyFrame_WriteHome(frame, &frame->base[to],
+                           _PyFrame_TakeHome(frame, &frame->base[from]));
     }
-    _PyFrame_ParallelMove(d->frame, n, src, dst, 1);
+    _PyFrame_WriteHome(frame, &frame->base[_PyIR_SpanElement(
+        homes->head, homes->handler, homes->first)], held);
 }
 
 void

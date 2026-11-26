@@ -397,6 +397,13 @@ _PyValue_FromIntScaled(int64_t s)
     return (PyValue){ ((uint64_t)s >> Py_INT_SHIFT) | Py_INT_BASE };
 }
 
+// The int64 value of a scaled int51 s: the inverse of the scaling.
+static inline int64_t
+_PyValue_UnscaleInt(int64_t s)
+{
+    return Py_ARITHMETIC_RIGHT_SHIFT(int64_t, s, Py_INT_SHIFT);
+}
+
 /* The sum of two scaled int51 words.  Returns false with the scaled sum in
  * *out when it fits 64 bits.  Returns true with the unscaled sum of the two
  * int51s in *out when it does not: that sum fits 64 bits and lies outside
@@ -406,8 +413,7 @@ _PyValue_AddCheckedScaled(int64_t a, int64_t b, int64_t *out)
 {
     int64_t sum;
     if (__builtin_add_overflow(a, b, &sum)) {
-        *out = Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, Py_INT_SHIFT)
-               + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, b, Py_INT_SHIFT);
+        *out = _PyValue_UnscaleInt(a) + _PyValue_UnscaleInt(b);
         return true;
     }
     *out = sum;
@@ -417,7 +423,7 @@ _PyValue_AddCheckedScaled(int64_t a, int64_t b, int64_t *out)
 static inline int64_t
 PyValue_InlineInt64(PyValueBorrow r)
 {
-    return Py_ARITHMETIC_RIGHT_SHIFT(int64_t, _PyValue_IntScaled(r), Py_INT_SHIFT);
+    return _PyValue_UnscaleInt(_PyValue_IntScaled(r));
 }
 #define PyValue_InlineInt64(V0) (PyValue_InlineInt64)(PyValue_Borrow(V0))
 

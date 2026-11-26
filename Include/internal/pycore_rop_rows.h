@@ -336,8 +336,8 @@ static inline PyValue
 _PyRop_IntBinary(uint32_t op, int64_t a, int64_t b)
 {
     assert(_PyRop_IntOpAdmits(op, b));
-    int64_t x = Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, Py_INT_SHIFT);
-    int64_t y = Py_ARITHMETIC_RIGHT_SHIFT(int64_t, b, Py_INT_SHIFT);
+    int64_t x = _PyValue_UnscaleInt(a);
+    int64_t y = _PyValue_UnscaleInt(b);
     switch (op) {
         case NB_INPLACE_ADD: {
             int64_t sum;

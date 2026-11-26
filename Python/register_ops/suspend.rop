@@ -1,0 +1,662 @@
+// 2C: await, async iteration, send and yield (suspension).
+
+enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
+
+// GET_AWAITABLE: the iterator that `await source` drives.  The origin says
+// which diagnostic a source that cannot be awaited gets.
+family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>)
+  exits(next, raise) ops(GET_AWAITABLE);
+
+point Awaitable.Done(current, next_head, clear) keep() spent(source) defs(dst);
+point Awaitable.Failed(current, site, pending) keep() spent(source) defs();
+
+// An exact coroutine that nobody awaits is its own awaitable: the source's
+// owner moves to dst
+extern helper awaitable_transfers(v:B) -> Bool
+  effects(reads)
+  c coro_awaitable_can_transfer as bool
+  evidence(
+    review: "ceval_macros.h coro_awaitable_can_transfer: the callback-free identity arm of"
+            "_PyEval_GetAwaitable.",
+    contract: "Reads the value and the coroutine's frame state; no memory, no failure.");
+
+// The iterator of an object that is not such a coroutine, by __await__
+extern helper get_awaitable(x:O, origin:Enum<AwaitOrigin>)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  c _PyRop_GetAwaitable as value_or_null
+  evidence(
+    review: "ceval.c _PyEval_GetAwaitable, as GET_AWAITABLE called it.",
+    contract: "x is consumed on both cases. The result is a new owner, or NULL with the"
+              "exception set. Callbacks: __await__ and what it reaches.");
+
+arm Awaitable.Await shared
+  effects(reads, allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    branch awaitable_transfers(use(source)) -> Transfer(), Protocol();
+  Transfer():
+    let v:O = acquire(source);
+    publish [dst = v] retire [old(dst)] at Awaitable.Done;
+    exit next();
+  Protocol():
+    let xo:O = acquire(source);
+    call get_awaitable(xo, origin) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at Awaitable.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(Awaitable.Failed, e);
+}
+
+// GET_AITER: the asynchronous iterator of the source, which is consumed
+family AsyncIterOpen(dst:Dst, source:Src)
+  exits(next, raise) ops(GET_AITER);
+
+point AsyncIterOpen.Done(current, next_head, clear) keep() spent(source) defs(dst);
+point AsyncIterOpen.Failed(current, site, pending) keep() spent(source) defs();
+
+extern helper get_aiter(t:Thread, x:O)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyEval_GetAIter as value_or_null
+  evidence(
+    review: "ceval.c _PyEval_GetAIter, as GET_AITER called it.",
+    contract: "x is consumed on both cases. The result is a new owner, or NULL with the"
+              "exception set. Callbacks: __aiter__.");
+
+arm AsyncIterOpen.Open shared
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    let xo:O = acquire(source);
+    call get_aiter(thread, xo) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at AsyncIterOpen.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(AsyncIterOpen.Failed, e);
+}
+
+// GET_ANEXT: the awaitable of the next item; the iterator stays where it is
+family AsyncIterNext(dst:Dst, aiter:Src)
+  exits(next, raise) ops(GET_ANEXT);
+
+point AsyncIterNext.Done(current, next_head, clear) keep(aiter) spent() defs(dst);
+point AsyncIterNext.Failed(current, site, pending) keep(aiter) spent() defs();
+
+extern helper get_anext(aiter:Src)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_GetANext as value_or_null
+  evidence(
+    review: "ceval.c _PyEval_GetANext, as GET_ANEXT called it.",
+    contract: "Reads the home, which holds an object that GET_AITER accepted, and holds a count of it across the call, which runs Python. Nothing is spent. The result is a new owner. Callbacks: __anext__.");
+
+arm AsyncIterNext.Next shared
+  effects(allocates, writes, runs_python, raises, releases on (dst))
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call get_anext(aiter) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    publish [dst = z] retire [old(dst)] at AsyncIterNext.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(AsyncIterNext.Failed, e);
+}
+
+// YIELD_VALUE: a generator suspends and its value goes to its consumer.  The
+// exit is a frame exit that the evaluator's macro performs (`exit yield`):
+// the generator records its own resume slot and head, as an `enter` records
+// the caller's.  A delegation (`yield from`, `await`) is its own family: it
+// suspends in the SUSPENDED_YIELD_FROM state.  A word that the legacy SEND
+// runs after is unchanged: the sent value goes to `resume`, the SEND's value
+// home.
+
+family Yield(value:Src, resume:Dst)
+  exits(yield, raise, redirect) ops(YIELD_VALUE) events(PY_YIELD);
+
+family YieldFrom(value:Src, resume:Dst)
+  exits(yield, raise, redirect) ops(YIELD_VALUE) events(PY_YIELD);
+
+// The generator goes on here when it is resumed: the value sent in is resume
+point Yield.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
+point YieldFrom.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
+// The PY_YIELD callback raised: the generator has not suspended, the value
+// stays in its home
+point Yield.EventFailed(current, site, pending) keep(value) spent() defs();
+point YieldFrom.EventFailed(current, site, pending) keep(value) spent() defs();
+
+// The PY_YIELD event of an observed yield, which fires before the generator
+// suspends.  A callback may raise, or move the frame, whose return_pc then
+// names the word to run.  The value stays in its home.
+extern helper yield_event(t:Thread, f:Frame, at:Site, v:Src)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  requires(instrumented(at))
+  c _PyRop_YieldEvent as int_redirect
+  evidence(
+    review: "ceval.c _PyRop_YieldEvent: bytecodes.c _YIELD_VALUE_EVENT, the"
+            "_Py_call_instrumentation_arg call and the instr_ptr redirect test.",
+    contract: "Reads the home and holds a count of its value across the call, which runs"
+              "Python. A callback may raise or move the frame. Nothing is spent.");
+
+arm Yield.Ordinary split
+  effects(reads, writes, releases, switches_frame)
+  feedback()
+  exits(yield)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    exit yield(v) resume Yield.Resumed;
+}
+
+arm YieldFrom.Delegated split
+  effects(reads, writes, releases, switches_frame)
+  feedback()
+  exits(yield)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    exit yield(v) resume YieldFrom.Resumed;
+}
+
+// The observed twin of every Yield arm: the PY_YIELD event, then the yield
+arm Yield.Observed split observes
+  effects(reads, writes, releases, raises, runs_python, switches_frame)
+  feedback()
+  exits(yield, raise, redirect)
+{
+  entry():
+    call yield_event(thread, frame, site, value) {
+      ok -> Go();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Yield.EventFailed, e);
+  Moved(r:Route):
+    exit redirect(r);
+  Go():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    exit yield(v) resume Yield.Resumed;
+}
+
+arm YieldFrom.Observed split observes
+  effects(reads, writes, releases, raises, runs_python, switches_frame)
+  feedback()
+  exits(yield, raise, redirect)
+{
+  entry():
+    call yield_event(thread, frame, site, value) {
+      ok -> Go();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(YieldFrom.EventFailed, e);
+  Moved(r:Route):
+    exit redirect(r);
+  Go():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    exit yield(v) resume YieldFrom.Resumed;
+}
+
+// SEND: the delegation step of `await` and `yield from`.  The operands are the
+// receiver, its cursor (a tagged index or nothing: the loop's IterPair) and
+// the value sent in; a step that yields leaves the yielded value where the
+// sent one was, for the YieldFrom word that follows.  The receiver's end is
+// the word's `done` exit with `completed` defined: the END_SEND that
+// followed it has no word.  A generator or coroutine receiver is entered in
+// place; when its frame returns, the completion arm runs in this frame.
+family Send(completed:Dst, send:SendWindow, fb:Fb<Iter>, done:NearHead)
+  exits(next, branch, enter, raise, redirect, miss, again) generic(Generic) ops(SEND)
+  events(STOP_ITERATION, BRANCH_LEFT);
+
+// The receiver, entered in place, has yielded: the sent value moved into its
+// frame, and the yielded value is the send's value
+point Send.Yielded(caller, next_head, clear)
+  keep(send.receiver, send.cursor) spent(send.value) defs(send.value);
+// A step that the evaluator ran: the cursor and the yielded value are the
+// send's, the sent value is gone
+point Send.Stepped(current, next_head, clear)
+  keep(send.receiver) spent(send.cursor, send.value) defs(send.cursor, send.value);
+// The operands are retired and the completion value is the word's
+point Send.Completed(current, next_head, clear) keep() spent(send) defs(completed);
+// The step raised: nothing is spent
+point Send.Failed(current, site, pending)
+  keep(send.receiver, send.cursor, send.value) spent() defs();
+// The sent value went to the generator that was to be entered, or the
+// generator returned: only the receiver and the cursor remain
+point Send.Closed(current, site, pending)
+  keep(send.receiver, send.cursor) spent(send.value) defs();
+// A callback moved the frame before the completion: the operands are retired
+point Send.Abandoned(current, site, pending) keep() spent(send) defs();
+// A callback of the completion raised after the operands were retired
+point Send.ExitEvent(current, site, pending) keep() spent(send) defs(completed);
+
+// Whether the receiver is a generator or coroutine that the evaluator can
+// enter in place: no PEP 523 hook, an exact type, a created generator that
+// accepts only None given None, and one that is created or suspended (a read
+// of its state; gen_claim claims it)
+extern helper claimable_generator(t:Thread, g:B, v:B) -> Bool
+  effects(reads)
+  c _PyRop_ClaimableGenerator as bool
+  evidence(
+    review: "ceval.c _PyRop_ClaimableGenerator: the guards of bytecodes.c _SEND, with"
+            "gen_may_claim and its relaxed load of the frame state.",
+    contract: "Reads the receiver's type and frame state and the sent value; no memory, no"
+              "failure. The answer can be stale: gen_claim decides.");
+
+// Claim the generator and link its frame under this one, with the value sent
+// as the value it resumes with.  Free-threaded, another thread can claim it
+// first: that is the generic send's ValueError and the value is closed.
+extern helper enter_generator(t:Thread, f:Frame, g:B, v:O)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, raises)
+  ensures(entered.generator_frame(c))
+  c _PyRop_EnterGenerator as pointer_or_raised
+  evidence(
+    review: "ceval.c _PyRop_EnterGenerator: IR_ENTER_GENERATOR's links, gen_claim (the"
+            "claim of gen_may_claim's guard, a compare-and-swap free-threaded) and"
+            "_PyFrame_SetResumeValue.",
+    contract: "The receiver is claimed (FRAME_EXECUTING) and its frame returned, whose"
+              "previous is f. The exception chain of the generator hangs off"
+              "tstate->exc_info. v is its resume value, or closed on err. The recursion"
+              "debit and the resume are the frame start's.");
+
+// The claim of the old generic _SEND: the guards of claimable_generator and
+// gen_try_set_executing.  A receiver that is not claimed, because it is of
+// another kind or another thread has it, is stepped, which waits for a
+// generator that is being read.
+extern helper claim_generator(t:Thread, g:B, v:B) -> Bool
+  effects(reads, writes)
+  c _PyRop_ClaimGenerator as bool
+  evidence(
+    review: "ceval.c _PyRop_ClaimGenerator: the condition of bytecodes.c _SEND that"
+            "entered a generator, gen_try_set_executing included.",
+    contract: "True: the receiver is claimed (FRAME_EXECUTING). False: nothing changed.");
+
+// Link the frame of a generator that claim_generator claimed
+extern helper enter_claimed(t:Thread, f:Frame, g:B, v:O) -> NewFrame
+  effects(reads, writes)
+  ensures(result.generator_frame(result))
+  c _PyRop_EnterClaimed as pointer
+  evidence(
+    review: "ceval.c _PyRop_EnterClaimed: the links of IR_ENTER_GENERATOR.",
+    contract: "The receiver's frame is returned, whose previous is f. The exception chain"
+              "of the generator hangs off tstate->exc_info. v is its resume value.");
+
+// What a Send arm is specialized on (specialize.c: the old _Py_Specialize_Send)
+extern helper generator_receiver(g:B) -> Bool
+  effects(reads)
+  c _PyRop_GeneratorReceiver as bool
+  evidence(
+    review: "ceval.c _PyRop_GeneratorReceiver: _Py_Specialize_Send's generator case.",
+    contract: "Reads the receiver's type and whether specialization is enabled.");
+
+extern helper has_iteritem(g:B) -> Bool
+  effects(reads)
+  c _PyRop_HasIterItem as bool
+  evidence(
+    review: "ceval.c _PyRop_HasIterItem: _Py_Specialize_Send's _tp_iteritem case.",
+    contract: "Reads the receiver's type.");
+
+extern helper is_asend(g:B) -> Bool
+  effects(reads)
+  c _PyRop_IsAsyncGenASend as bool
+  evidence(
+    review: "ceval.c _PyRop_IsAsyncGenASend: _Py_Specialize_Send's asend case.",
+    contract: "Reads the receiver's type.");
+
+extern helper cursor_present(c:B) -> Bool
+  effects()
+  c _PyRop_CursorPresent as bool
+  evidence(
+    review: "ceval.c _PyRop_CursorPresent: _GUARD_NOS_NOT_NULL.",
+    contract: "A comparison of the word.");
+
+// The step of an index-protocol receiver with a tagged cursor: the old
+// _SEND_VIRTUAL
+extern helper send_virtual(recv:B, cur:B)
+  cases(yielded(y:O, next:O), done(rv:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_SendVirtual as step_out
+  evidence(
+    review: "ceval.c _PyRop_SendVirtual: bytecodes.c _SEND_VIRTUAL.",
+    contract: "yielded: a new owner of the item and the next cursor; done: None; err: set."
+              "The receiver and the cursor are borrowed.");
+
+// One step of a receiver that the evaluator does not enter: the cursor's
+// next item, or what the receiver's send returns.  The sent value and the
+// receiver are borrowed; the cursor is read, not taken.
+extern helper send_step(t:Thread, f:Frame, recv:B, cur:B, sent:B)
+  cases(yielded(y:O, next:O), done(rv:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_SendStep as step_out
+  evidence(
+    review: "ceval.c _PyRop_SendStep: the cursor step and _PyValue_Send of bytecodes.c _SEND.",
+    contract: "yielded: a new owner of the yielded value and the next cursor, the receiver"
+              "and the sent value unchanged in their homes. done: a new owner of the"
+              "return value. err: the exception is set.");
+
+// The STOP_ITERATION event of a generator or coroutine receiver, before the
+// operands are retired.  The value is the word's completion value: it is given
+// back on ok and closed on the other cases.
+extern helper send_stop_event(t:Thread, f:Frame, at:Site, recv:B, val:O)
+  cases(ok(w:O), moved(mr:Route), err(e:Err))
+  effects(runs_python, raises, releases)
+  requires(instrumented(at))
+  c _PyRop_SendStopEvent as value_redirect
+  evidence(
+    review: "ceval.c _PyRop_SendStopEvent: instrumentation.c _PyIR_ObserveStopIteration,"
+            "phase 0 of the old complete_step_impl.",
+    contract: "The receiver is borrowed. The value is taken: returned on ok, closed on moved"
+              "and err. The callbacks run Python and may raise or move the frame. A"
+              "receiver of another kind reports nothing.");
+
+// The BRANCH_LEFT event and the line events of the exit, after the operands are
+// retired: phase 1 of the old complete_step_impl
+extern helper send_exit_event(t:Thread, f:Frame, at:Site)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  requires(instrumented(at))
+  c _PyRop_SendExitEvent as int_redirect
+  evidence(
+    review: "ceval.c _PyRop_SendExitEvent: instrumentation.c _PyIR_ObserveStep, phase 1.",
+    contract: "The operands are retired and the completion value is in its home. A callback may"
+              "raise or move the frame, whose return_pc then names the word to run.");
+
+// Adaptation evidence: the sampled receiver chooses the arm that the old
+// _Py_Specialize_Send chose: SEND_GEN, SEND_VIRTUAL or SEND_ASYNC_GEN
+macro adapt_before_use_send(f:Fb<Iter>, g:B, v:B, c:B)
+  cases(run(), changed(tk:Ticket<Iter>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    branch generator_receiver(g) -> PickGen(), TryVirtual();
+  TryVirtual():
+    branch has_iteritem(g) -> PickVirtual(), TryAsync();
+  TryAsync():
+    branch is_asend(g) -> PickAsync(), Backoff();
+  PickGen():
+    let c_gen:Candidate<Iter> = candidate(Send.Gen);
+    call install(site, f, c_gen) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickVirtual():
+    let c_virtual:Candidate<Iter> = candidate(Send.Virtual);
+    call install(site, f, c_virtual) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  PickAsync():
+    let c_async:Candidate<Iter> = candidate(Send.AsyncGen);
+    call install(site, f, c_async) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Backoff():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(tk:Ticket<Iter>):
+    exit changed(tk);
+  Run():
+    exit run();
+}
+
+arm Send.Generic split
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed), switches_frame)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, branch, enter, raise, redirect, again)
+{
+  entry():
+    call adapt_before_use_send(fb, use(send.receiver), use(send.value), use(send.cursor)) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Iter>):
+    exit again(tk);
+  Run():
+    let won:Bool = claim_generator(thread, use(send.receiver), use(send.value));
+    branch won -> Claim(), Step();
+  Claim():
+    let g:B = use(send.receiver);
+    let sent:O = acquire(send.value);
+    let c:NewFrame = enter_claimed(thread, frame, g, sent);
+    exit enter(c) resume Send.Yielded complete Send.Complete;
+  Step():
+    let a:Anchors = anchor_for_call([send.receiver, send.cursor, send.value]);
+    call send_step(thread, frame, arg(a, 0), arg(a, 1), arg(a, 2)) {
+      yielded -> Yielded();
+      done -> Done();
+      err -> Failed();
+    }
+  Yielded(y:O, nc:O):
+    call redirect_status(frame) {
+      running -> Stepped();
+      redirected -> YieldGone();
+    }
+  Stepped():
+    publish [send.cursor = nc, send.value = y] retire [roots(a), old(send.cursor), old(send.value)] at Send.Stepped;
+    exit next();
+  YieldGone(yr:Route):
+    let _:Unit = discard_result(y);
+    let _:Unit = discard_result(nc);
+    let yield_route:Route = retire_abandoned(a, yr);
+    exit redirect(yield_route);
+  Done(rv:O):
+    call redirect_status(frame) {
+      running -> Finished();
+      redirected -> DoneGone();
+    }
+  Finished():
+    publish [completed = rv] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    exit branch(done);
+  DoneGone(dr:Route):
+    let _:Unit = discard_result(rv);
+    let done_route:Route = retire_abandoned(a, dr);
+    exit redirect(done_route);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Failed, saved);
+}
+
+// SEND_GEN: a generator or coroutine that is created or suspended, entered
+// in place.  Free-threaded, another thread can claim it between the guard and
+// the claim: that is the ValueError of an executing generator.
+arm Send.Gen split
+  effects(reads, writes, raises, switches_frame)
+  feedback()
+  exits(enter, raise, miss)
+{
+  entry():
+    guard claimable_generator(thread, use(send.receiver), use(send.value)) else miss;
+    let g:B = use(send.receiver);
+    let sent:O = acquire(send.value);
+    call enter_generator(thread, frame, g, sent) {
+      entered -> Enter();
+      err -> EnterFailed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume Send.Yielded complete Send.Complete;
+  EnterFailed(ee:Err):
+    exit raise(Send.Closed, ee);
+}
+
+// SEND_VIRTUAL: None sent to an index-protocol receiver with a tagged cursor
+arm Send.Virtual split
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed))
+  feedback()
+  exits(next, branch, raise, miss)
+{
+  entry():
+    guard is_none(use(send.value)) else miss;
+    guard cursor_present(use(send.cursor)) else miss;
+    let a:Anchors = anchor_for_call([send.receiver, send.cursor]);
+    call send_virtual(arg(a, 0), arg(a, 1)) {
+      yielded -> Yielded();
+      done -> Done();
+      err -> Failed();
+    }
+  Yielded(y:O, nc:O):
+    publish [send.cursor = nc, send.value = y] retire [roots(a), old(send.cursor), old(send.value)] at Send.Stepped;
+    exit next();
+  Done(rv:O):
+    publish [completed = rv] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    exit branch(done);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Failed, saved);
+}
+
+// SEND_ASYNC_GEN: the awaitable of an asynchronous generator's asend
+arm Send.AsyncGen split
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed))
+  feedback()
+  exits(next, branch, raise, miss)
+{
+  entry():
+    guard is_asend(use(send.receiver)) else miss;
+    let a:Anchors = anchor_for_call([send.receiver, send.cursor, send.value]);
+    call send_step(thread, frame, arg(a, 0), arg(a, 1), arg(a, 2)) {
+      yielded -> Yielded();
+      done -> Done();
+      err -> Failed();
+    }
+  Yielded(y:O, nc:O):
+    publish [send.cursor = nc, send.value = y] retire [roots(a), old(send.cursor), old(send.value)] at Send.Stepped;
+    exit next();
+  Done(rv:O):
+    publish [completed = rv] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    exit branch(done);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Failed, saved);
+}
+
+// The completion of the generator that Send.Generic entered: its value is
+// the word's, and the operands it left is the receiver and the cursor
+arm Send.Complete completion(Send.Yielded) split
+  effects(writes, releases on (completed)) feedback() exits(branch)
+{
+  entry(v:O):
+    publish [completed = v] retire [spent(send.receiver), spent(send.cursor), old(completed)] at Send.Completed;
+    exit branch(done);
+}
+
+// The observed twin of Send.Generic: the STOP_ITERATION event before the
+// operands are retired at the end, BRANCH_LEFT and the line events after
+arm Send.Observed split observes
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed), switches_frame)
+  feedback()
+  exits(next, branch, enter, raise, redirect)
+{
+  entry():
+    let won:Bool = claim_generator(thread, use(send.receiver), use(send.value));
+    branch won -> Claim(), Step();
+  Claim():
+    let g:B = use(send.receiver);
+    let sent:O = acquire(send.value);
+    let c:NewFrame = enter_claimed(thread, frame, g, sent);
+    exit enter(c) resume Send.Yielded complete Send.Complete;
+  Step():
+    let a:Anchors = anchor_for_call([send.receiver, send.cursor, send.value]);
+    call send_step(thread, frame, arg(a, 0), arg(a, 1), arg(a, 2)) {
+      yielded -> Yielded();
+      done -> Done();
+      err -> Failed();
+    }
+  Yielded(y:O, nc:O):
+    publish [send.cursor = nc, send.value = y] retire [roots(a), old(send.cursor), old(send.value)] at Send.Stepped;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Failed, saved);
+  Done(rv:O):
+    call send_stop_event(thread, frame, site, arg(a, 0), rv) {
+      ok -> Commit();
+      moved -> Moved();
+      err -> StopFailed();
+    }
+  StopFailed(se:Err):
+    let sfail:Err = retire_failed_call(a, [], se);
+    exit raise(Send.Failed, sfail);
+  Moved(mr:Route):
+    publish [] retire [roots(a), spent(send)] at Send.Abandoned;
+    exit redirect(mr);
+  Commit(w:O):
+    publish [completed = w] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    call send_exit_event(thread, frame, site) {
+      ok -> Exit();
+      moved -> ExitMoved();
+      err -> ExitFailed();
+    }
+  Exit():
+    exit branch(done);
+  ExitMoved(xr:Route):
+    exit redirect(xr);
+  ExitFailed(xe:Err):
+    exit raise(Send.ExitEvent, xe);
+}
+
+arm Send.CompleteObserved completion(Send.Yielded) split observes
+  effects(reads, writes, releases on (completed), runs_python, raises) feedback()
+  exits(branch, raise, redirect)
+{
+  entry(v:O):
+    let a:Anchors = anchor_for_call([send.receiver]);
+    call send_stop_event(thread, frame, site, arg(a, 0), v) {
+      ok -> Commit();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Closed, saved);
+  Moved(mr:Route):
+    publish [] retire [roots(a)] at Send.Closed;
+    exit redirect(mr);
+  Commit(w:O):
+    publish [completed = w] retire [roots(a), spent(send.receiver), spent(send.cursor), old(completed)] at Send.Completed;
+    call send_exit_event(thread, frame, site) {
+      ok -> Exit();
+      moved -> ExitMoved();
+      err -> ExitFailed();
+    }
+  Exit():
+    exit branch(done);
+  ExitMoved(xr:Route):
+    exit redirect(xr);
+  ExitFailed(xe:Err):
+    exit raise(Send.ExitEvent, xe);
+}

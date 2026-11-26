@@ -2,38 +2,8 @@
 // from the leaf IR of Python/bytecodes.c.
 // Do not edit!
 //
-// 4 templates.  The handlers whose uops are all leaf but that
+// 3 templates.  The handlers whose uops are all leaf but that
 // keep the call of their form:
-
-static void
-jit_template_END_SEND(_PyJitWordCx *cx)
-{
-    _PyJitAsm *a = cx->a;
-    _PyIRWord ir_word = cx->word;
-    (void)ir_word;
-    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Bind(a, L0);
-    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))));
-    _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_D(ir_word))));
-    if (!(ir_word & IR_F_LOCAL_B)) {
-        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))), 0);
-    }
-    if (!(ir_word & IR_F_LOCAL_C)) {
-        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_C(ir_word))), 0);
-    }
-    if (!(ir_word & IR_F_LOCAL_D)) {
-        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_D(ir_word))), 0);
-    }
-    if ((ir_word & IR_F_LOCAL_D)) {
-        cx->live = 0x1; cx->live_xmm = 0x0;
-        _PyJitLower_PyValue_DUP(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RCX, _PyJitReg_RDX}, NULL);
-    }
-    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), _PyJitReg_RCX);
-    if (!(ir_word & IR_F_LOCAL_B)) {
-        cx->live = 0x0; cx->live_xmm = 0x0;
-        _PyJitLower_PyValue_CLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
-    }
-}
 
 static void
 jit_template_IR_JUMP(_PyJitWordCx *cx)
@@ -76,10 +46,9 @@ jit_template_STORE_FAST(_PyJitWordCx *cx)
 }
 
 const _PyJitTemplate _PyJit_Templates[512] = {
-    [2] = jit_template_END_SEND,
-    [6] = jit_template_NOP,
-    [19] = jit_template_STORE_FAST,
-    [30] = jit_template_IR_JUMP,
+    [3] = jit_template_NOP,
+    [13] = jit_template_STORE_FAST,
+    [17] = jit_template_IR_JUMP,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
     [ROP_HANDLER_GetAttr_Instance] = jit_template_GetAttr_Instance,
     [ROP_HANDLER_GetAttr_Shape] = jit_template_GetAttr_Shape,

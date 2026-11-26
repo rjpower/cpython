@@ -80,303 +80,6 @@ _PyCodeIR _PyIR_InitCleanupIR = {
 
 /* Decoding */
 
-const _PyIRGeneratorBoundary *
-_PyIR_GeneratorBoundaryOf(int handler)
-{
-    if (handler < 0 || handler >= IR_NUM_HANDLERS ||
-        !(_PyIR_HandlerFlags[handler] & _PyIR_H_DISPATCH))
-    {
-        return NULL;
-    }
-    const _PyIRGeneratorBoundary *boundary =
-        &_PyIR_GeneratorBoundaries[handler];
-    assert(boundary->handler == handler);
-    return boundary;
-}
-
-int
-_PyIR_GeneratorBoundaryHandler(int ordinary, int yielded_consumer,
-                              int completed_consumer, int resume_consumer)
-{
-    const _PyIRGeneratorBoundary *source = _PyIR_GeneratorBoundaryOf(ordinary);
-    if (source == NULL || source->ordinary != ordinary ||
-        (source->flags & _PyIR_GEN_BOUNDARY_PLACED) ||
-        yielded_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        yielded_consumer > _PyIR_GEN_CONSUMER_POP_TOP ||
-        completed_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        completed_consumer > _PyIR_GEN_CONSUMER_POP_TOP ||
-        resume_consumer < _PyIR_GEN_CONSUMER_NONE ||
-        resume_consumer > _PyIR_GEN_CONSUMER_POP_TOP ||
-        !(yielded_consumer || completed_consumer || resume_consumer))
-    {
-        return -1;
-    }
-    for (int handler = 0; handler < IR_NUM_HANDLERS; handler++) {
-        const _PyIRGeneratorBoundary *boundary =
-            _PyIR_GeneratorBoundaryOf(handler);
-        if (boundary != NULL && boundary->ordinary == ordinary &&
-            (boundary->flags & (_PyIR_GEN_BOUNDARY_PLACED |
-                                _PyIR_GEN_BOUNDARY_CLOSED)) ==
-                (_PyIR_GEN_BOUNDARY_PLACED | _PyIR_GEN_BOUNDARY_CLOSED) &&
-            boundary->yielded_consumer == yielded_consumer &&
-            boundary->completed_consumer == completed_consumer &&
-            boundary->resume_consumer == resume_consumer)
-        {
-            return handler;
-        }
-    }
-    return -1;
-}
-
-static int
-generator_ordinary(_PyIRWord word)
-{
-    const _PyIRGeneratorBoundary *boundary =
-        _PyIR_GeneratorBoundaryOf(IR_HANDLER(word));
-    return boundary == NULL ? -1 : boundary->ordinary;
-}
-
-/* Whether word is a store of the temporary home into a local: the
- * LocalWrite.Store arm, which names the local in A and the value in B */
-static int
-stores_home_to_local(_PyIRWord word, int home, int nl)
-{
-    return IR_HANDLER(word) == ROP_HANDLER_LocalWrite_Store &&
-        (int)IR_B(word) == home && (int)IR_A(word) < nl;
-}
-
-static int
-generator_is(_PyIRWord word, int ordinary)
-{
-    int handler = generator_ordinary(word);
-    return handler == ordinary ||
-        (_PyIR_FormatOf(ordinary)->twin != 0 &&
-         handler == _PyIR_FormatOf(ordinary)->twin);
-}
-
-/* This is the existing successful-edge retirement receipt, not an opcode
- * classification. It grants no physical NULL or owner fact. */
-static const _PyIROwnershipEvent *
-generator_completion(_PyIRWord word)
-{
-    int ordinary = generator_ordinary(word);
-    if (ordinary < 0) {
-        return NULL;
-    }
-    const _PyIRFormat *fmt = _PyIR_FormatOf(ordinary);
-    if (fmt->owner_events != 1 || fmt->roles[0] != _PyIR_ROLE_DST ||
-        fmt->roles[1] != _PyIR_ROLE_BASE)
-    {
-        return NULL;
-    }
-    const _PyIROwnershipEvent *event = _PyIR_OwnerPrograms + fmt->owner_program;
-    if (event->kind != _PyIR_OWNER_NORMAL_COMPLETION || event->dst != 1 ||
-        !(event->flags & _PyIR_COMPLETION_HAS_RESULT) ||
-        event->src != _PyIR_Extent(fmt->reads, 0))
-    {
-        return NULL;
-    }
-    return event;
-}
-
-static int
-generator_exit(_PyIRWord word, int pc)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(generator_ordinary(word));
-    return fmt->flags & _PyIR_FORWARD
-        ? pc + 1 + _PyIR_FormatDistance(fmt, word) : (int)IR_CD(word);
-}
-
-/* Resume STORE_LOCAL is an actual STORE_FAST consumer. Completion
- * STORE_LOCAL instead means an already folded local A, and skips no word. */
-static int
-generator_resume_shape(const _PyIRWord *words, int nwords, int nl, int pc,
-                       int *consumer)
-{
-    if (pc + 2 >= nwords ||
-        _PyIR_BaseOpcode(IR_HANDLER(words[pc + 1])) != RESUME) {
-        return _PyIR_GEN_CONSUMER_NONE;
-    }
-    int home = (int)IR_A(words[pc]);
-    _PyIRWord next = words[pc + 2];
-    if (stores_home_to_local(next, home, nl) && home >= nl &&
-        home != IR_NO_DST)
-    {
-        *consumer = pc + 2;
-        return _PyIR_GEN_CONSUMER_STORE_LOCAL;
-    }
-    // The yield-from loop's jump back, which never polls
-    if (IR_HANDLER(next) != ROP_HANDLER_Jump_Direct) {
-        return _PyIR_GEN_CONSUMER_NONE;
-    }
-    int target = pc + 3 + _PyIR_FormatDistance(_PyIR_FormatOf(IR_HANDLER(next)), next);
-    if (target < 0 || target >= pc + 2 || target >= nwords) {
-        return _PyIR_GEN_CONSUMER_NONE;
-    }
-    const _PyIROwnershipEvent *event = generator_completion(words[target]);
-    if (event == NULL || !(event->flags & _PyIR_COMPLETION_SEND_YIELDED) ||
-        event->src != 3 || event->extent != 2 ||
-        (int)IR_B(words[target]) + event->extent != home)
-    {
-        return _PyIR_GEN_CONSUMER_NONE;
-    }
-    *consumer = target;
-    return _PyIR_GEN_CONSUMER_SEND;
-}
-
-static int
-generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
-{
-    int target = generator_exit(words[pc], pc);
-    if (target < 0 || target >= nwords) {
-        return _PyIR_GEN_CONSUMER_NONE;
-    }
-    int home = (int)IR_A(words[pc]);
-    if (home == IR_NO_DST) {
-        return _PyIR_GEN_CONSUMER_DISCARD;
-    }
-    if (home < nl) {
-        return _PyIR_GEN_CONSUMER_STORE_LOCAL;
-    }
-    if (_PyIR_BaseOpcode(IR_HANDLER(words[target])) == RETURN_VALUE &&
-        (int)IR_A(words[target]) == home)
-    {
-        return _PyIR_GEN_CONSUMER_RETURN;
-    }
-    if (stores_home_to_local(words[target], home, nl))
-    {
-        return _PyIR_GEN_CONSUMER_STORE_FAST;
-    }
-    // The retirement of the home alone: Move.Retire with no destination
-    // and one source, one word
-    if (IR_HANDLER(words[target]) == ROP_SELECT_Move_retire &&
-        IR_A(words[target]) == 0 && IR_B(words[target]) == 1 &&
-        _PyIR_SpanElement(&words[target], ROP_SELECT_Move_retire, 0) == home)
-    {
-        return _PyIR_GEN_CONSUMER_POP_TOP;
-    }
-    /* A real SSA value may survive another call/await or feed an ordinary
-     * arithmetic provider. Its necessary scratch publication is retained.
-     * Common normal-transfer admission proves that A is absent or belongs
-     * to the actual retired window; this shape query grants no such fact. */
-    return _PyIR_GEN_CONSUMER_HOME;
-}
-
-int
-_PyIR_GeneratorBoundaryCandidate(const _PyIRWord *words, int nwords, int nl,
-                                int pc)
-{
-    if (pc < 0 || pc >= nwords || nl < 0 || nl > IR_MAX_SLOTS) {
-        return -1;
-    }
-    _PyIRWord word = words[pc];
-    int ordinary = generator_ordinary(word);
-    if (ordinary < 0) {
-        return -1;
-    }
-    int yielded = _PyIR_GEN_CONSUMER_NONE;
-    int completed = _PyIR_GEN_CONSUMER_NONE;
-    int resume = _PyIR_GEN_CONSUMER_NONE;
-    const _PyIROwnershipEvent *event = generator_completion(word);
-    if (event != NULL) {
-        completed = generator_completed_shape(words, nwords, nl, pc);
-        if (completed == _PyIR_GEN_CONSUMER_NONE) {
-            return -1;
-        }
-        if (event->flags & _PyIR_COMPLETION_SEND_YIELDED) {
-            if (pc + 1 >= nwords || event->src != 3 || event->extent != 2 ||
-                !generator_is(words[pc + 1], IR_H_YIELD_DELEGATED) ||
-                IR_D(words[pc + 1]) != IR_B(word) ||
-                IR_B(words[pc + 1]) != IR_B(word) + event->extent)
-            {
-                return -1;
-            }
-            int consumer;
-            if (generator_resume_shape(words, nwords, nl, pc + 1, &consumer) !=
-                    _PyIR_GEN_CONSUMER_SEND || consumer != pc)
-            {
-                return -1;
-            }
-            yielded = _PyIR_GEN_CONSUMER_DELEGATED;
-        }
-    }
-    else if (generator_is(word, IR_H_YIELD_VALUE) ||
-             generator_is(word, IR_H_YIELD_DELEGATED))
-    {
-        int consumer;
-        resume = generator_resume_shape(words, nwords, nl, pc, &consumer);
-        if (resume == _PyIR_GEN_CONSUMER_NONE ||
-            (generator_is(word, IR_H_YIELD_DELEGATED) &&
-             (resume != _PyIR_GEN_CONSUMER_SEND || consumer != pc - 1)) ||
-            (!generator_is(word, IR_H_YIELD_DELEGATED) &&
-             resume != _PyIR_GEN_CONSUMER_STORE_LOCAL))
-        {
-            return -1;
-        }
-    }
-    else {
-        return -1;
-    }
-    return _PyIR_GeneratorBoundaryHandler(ordinary, yielded, completed, resume);
-}
-
-int
-_PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords, int nl,
-                            int pc, int handler)
-{
-    if (_PyIR_GeneratorBoundaryCandidate(words, nwords, nl, pc) != handler) {
-        return 0;
-    }
-    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
-    if (boundary->yielded_consumer == _PyIR_GEN_CONSUMER_DELEGATED) {
-        const _PyIRGeneratorBoundary *next =
-            _PyIR_GeneratorBoundaryOf(IR_HANDLER(words[pc + 1]));
-        if (next == NULL || !(next->flags & _PyIR_GEN_BOUNDARY_CLOSED) ||
-            next->resume_consumer != _PyIR_GEN_CONSUMER_SEND)
-        {
-            return 0;
-        }
-    }
-    if (boundary->resume_consumer == _PyIR_GEN_CONSUMER_SEND) {
-        if (pc == 0) {
-            return 0;
-        }
-        const _PyIRGeneratorBoundary *source =
-            _PyIR_GeneratorBoundaryOf(IR_HANDLER(words[pc - 1]));
-        if (source == NULL || !(source->flags & _PyIR_GEN_BOUNDARY_CLOSED) ||
-            source->yielded_consumer != _PyIR_GEN_CONSUMER_DELEGATED)
-        {
-            return 0;
-        }
-    }
-    if (boundary->completed_consumer != _PyIR_GEN_CONSUMER_NONE) {
-        int target = generator_exit(words[pc], pc);
-        int send_found = boundary->yielded_consumer != _PyIR_GEN_CONSUMER_NONE;
-        /* END_SEND has both normal SEND and CLEANUP_THROW ingress. Select
-         * them together; a compatible window on one edge cannot certify a
-         * different edge's value or make a partial public cycle complete. */
-        for (int i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
-            const _PyIROwnershipEvent *event = generator_completion(words[i]);
-            if (event == NULL || generator_exit(words[i], i) != target) {
-                continue;
-            }
-            const _PyIRGeneratorBoundary *incoming =
-                _PyIR_GeneratorBoundaryOf(IR_HANDLER(words[i]));
-            if (incoming == NULL ||
-                !(incoming->flags & _PyIR_GEN_BOUNDARY_CLOSED) ||
-                incoming->completed_consumer != boundary->completed_consumer ||
-                IR_A(words[i]) != IR_A(words[pc]) ||
-                IR_B(words[i]) != IR_B(words[pc]))
-            {
-                return 0;
-            }
-            send_found |= incoming->yielded_consumer != _PyIR_GEN_CONSUMER_NONE;
-        }
-        return send_found;
-    }
-    return 1;
-}
-
 int
 _PyIR_EventOpcode(int handler)
 {
@@ -737,14 +440,6 @@ ordinary_handler_for(int handler, int opcode)
         // instrumented opcode to its stack op.
         return fmt->twin;
     }
-    if (handler == IR_H_YIELD_DELEGATED || handler == IR_H_INSTRUMENTED_YIELD_DELEGATED) {
-        if (opcode == YIELD_VALUE) {
-            return IR_H_YIELD_DELEGATED;
-        }
-        if (opcode == INSTRUMENTED_YIELD_VALUE) {
-            return IR_H_INSTRUMENTED_YIELD_DELEGATED;
-        }
-    }
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
@@ -753,27 +448,50 @@ ordinary_handler_for(int handler, int opcode)
     return _PyIR_OpcodeHandler[opcode];
 }
 
+/* Whether a tool listens for an event that the handler at word i declares.
+ * An instruction of a family that declares events but has no instrumented
+ * stack opcode (_PyIR_H_TWIN_BY_TOOLS) is not rewritten by monitoring: its
+ * word runs the observed twin of its handler while a tool listens. */
+static int
+tools_observe(PyCodeObject *co, int i, int handler)
+{
+    _PyCoMonitoringData *monitoring = co->_co_monitoring;
+    if (monitoring == NULL) {
+        return 0;
+    }
+    if (monitoring->tools != NULL) {
+        return monitoring->tools[i] != 0 ||
+               (monitoring->stop_tools != NULL && monitoring->stop_tools[i] != 0) ||
+               (monitoring->left_tools != NULL && monitoring->left_tools[i] != 0);
+    }
+    uint32_t events = _PyIR_FormatOf(handler)->events;
+    for (int event = 0; events != 0; event++, events >>= 1) {
+        if ((events & 1) && monitoring->active_monitors.tools[event] != 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int
+_PyCode_TwinByTools(PyCodeObject *co, int i)
+{
+    return (_PyIR_HandlerFlags[_PyCode_InstrHandler(co, i)] & _PyIR_H_TWIN_BY_TOOLS) != 0;
+}
+
 int
 _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
 {
-    int handler = _PyCode_InstrHandler(co, i);
-    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
-    int ordinary = boundary == NULL ? handler : boundary->ordinary;
-    int target = ordinary_handler_for(ordinary, opcode);
-    if (boundary == NULL || !(boundary->flags & _PyIR_GEN_BOUNDARY_PLACED) ||
-        (_PyIR_FormatOf(target)->flags & _PyIR_TRANSPARENT))
+    int handler = ordinary_handler_for(_PyCode_InstrHandler(co, i), opcode);
+    if ((_PyIR_HandlerFlags[handler] & _PyIR_H_TWIN_BY_TOOLS) &&
+        tools_observe(co, i, handler))
     {
-        /* LINE/INSTRUCTION keep their existing transparent identity. Their
-         * callback path must materialize before an ordinary source body. */
-        return target;
+        int twin = _PyIR_FormatOf(handler)->twin;
+        if (twin != 0 && handler >= IR_NUM_OLD_HANDLERS) {
+            return twin;
+        }
     }
-    int placed = _PyIR_GeneratorBoundaryHandler(
-        target, boundary->yielded_consumer, boundary->completed_consumer,
-        boundary->resume_consumer);
-    if (placed < 0) {
-        Py_FatalError("missing closed generator instrumentation target");
-    }
-    return placed;
+    return handler;
 }
 
 int
@@ -785,6 +503,29 @@ _PyIR_RealHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
                                        _PyFrame_InstrOffset(frame, instr));
     }
     return handler;
+}
+
+/* The handler that the word at instr runs once a LINE or INSTRUCTION
+ * wrapper has passed it on: the monitoring tables hold the opcode that the
+ * wrapper displaced, which may be an instrumented one. */
+int
+_PyIR_DispatchedHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr)
+{
+    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
+    int opcode = _PyIR_EventOpcode(handler);
+    if (opcode != INSTRUMENTED_LINE && opcode != INSTRUMENTED_INSTRUCTION) {
+        return _PyIR_RealHandler(frame, instr);
+    }
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    int index = _PyFrame_InstrOffset(frame, instr);
+    _PyCoMonitoringData *monitoring = code->_co_monitoring;
+    /* LINE may displace INSTRUCTION, which displaces the opcode */
+    while (opcode == INSTRUMENTED_LINE || opcode == INSTRUMENTED_INSTRUCTION) {
+        opcode = opcode == INSTRUMENTED_LINE
+            ? _PyCode_GetOriginalOpcode(monitoring->lines, index)
+            : monitoring->per_instruction_opcodes[index];
+    }
+    return _PyCode_HandlerFor(code, index, opcode);
 }
 
 int
@@ -1158,23 +899,22 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
     PyCodeObject *co = frame->f_executable;
     _PyIRWord word = _PyCode_IRWords(co)[continuation - 1];
     int handler = IR_HANDLER(word);
-    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
-    if (boundary == NULL) {
+    if (handler != ROP_HANDLER_YieldFrom_Delegated &&
+        handler != ROP_HANDLER_YieldFrom_Delegated_Observed &&
+        handler != ROP_HANDLER_YieldFrom_Observed)
+    {
         return -1;
     }
-    handler = boundary->ordinary;
-    if (handler != IR_H_YIELD_DELEGATED && handler != IR_H_INSTRUMENTED_YIELD_DELEGATED) {
-        return -1;
-    }
-    int dst = (int)IR_A(word), outgoing = (int)IR_B(word), receiver = (int)IR_D(word);
+    // The word's value (A) and the sent value (B) are the value home of the
+    // SEND's window, which the receiver precedes by the cursor
+    int outgoing = (int)IR_A(word), dst = (int)IR_B(word);
     if (dst == IR_NO_DST) {
         dst = _PyFrame_DiscardSlotForCodeObject(co);
     }
-    if (dst != frame->return_slot ||
-        outgoing < _PyCode_IRFixed(co) || outgoing >= _PyFrame_NumSlotsForCodeObject(co) ||
+    int receiver = dst - 2;
+    if (dst != frame->return_slot || outgoing != dst ||
         receiver < _PyCode_IRFixed(co) ||
-        receiver >= _PyFrame_NumSlotsForCodeObject(co) ||
-        receiver == dst || receiver == outgoing)
+        dst >= _PyFrame_NumSlotsForCodeObject(co))
     {
         return -1;
     }

@@ -11,6 +11,7 @@
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long_value.h"    // _PyValue_IntAsVoidPtr()
 #include "pycore_pyvalue.h"       // PyValue_IsObject()
+#include "pycore_rop_metadata.h"  // ROP_HANDLER_YieldFrom_Delegated
 #include "pycore_structseq.h"    // PyStructSequence_GET_VALUE()
 #include "pycore_value.h"         // PyValue
 
@@ -413,18 +414,16 @@ get_awaited_coro_address(
         return -1;
     }
     int handler = IR_HANDLER(word);
-    const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
-    if (boundary != NULL) {
-        handler = boundary->ordinary;
-    }
-    int receiver = (int)IR_D(word);
-    if ((handler != IR_H_YIELD_DELEGATED && handler != IR_H_INSTRUMENTED_YIELD_DELEGATED) ||
-        IR_A(word) != return_slot ||
-        IR_B(word) < (uint32_t)locals ||
+    // A delegated yield: the value and the sent value share the home of the
+    // SEND's window, whose receiver is two homes below
+    int receiver = (int)IR_B(word) - 2;
+    if ((handler != ROP_HANDLER_YieldFrom_Delegated &&
+         handler != ROP_HANDLER_YieldFrom_Delegated_Observed &&
+         handler != ROP_HANDLER_YieldFrom_Observed) ||
+        IR_B(word) != return_slot ||
+        IR_A(word) != IR_B(word) ||
         IR_B(word) >= (uint32_t)slots ||
-        receiver < locals || receiver >= slots ||
-        receiver == return_slot ||
-        receiver == (int)IR_B(word))
+        receiver < locals)
     {
         PyErr_SetString(PyExc_RuntimeError, "Awaited return slot or receiver does not match delegated yield");
         return -1;

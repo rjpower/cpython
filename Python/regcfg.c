@@ -232,9 +232,6 @@ _PyRegCfg_FormatOf(int opcode, int oparg)
     if (ROP_CFG_IS_ARM(opcode)) {
         return _PyIR_FormatOf(ROP_CFG_HANDLER(opcode));
     }
-    if (opcode == YIELD_VALUE && oparg == 1) {
-        return _PyIR_FormatOf(IR_H_YIELD_DELEGATED);
-    }
     // A stack op has a handler, or only a format for the CFG
     int handler = _PyIR_OpcodeHandler[opcode];
     if (handler != _PyIR_NO_HANDLER) {
@@ -1059,13 +1056,6 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     int window = (fmt->flags & _PyIR_WINDOW) != 0;
     int popped = _PyOpcode_num_popped(instr->opcode, instr->oparg);
     int pushed = _PyOpcode_num_pushed(instr->opcode, instr->oparg);
-    if (instr->opcode == YIELD_VALUE && instr->oparg == 1) {
-        /* The frontend leaves receiver/cursor below its one-value yield.
-         * Canonical delegated IR retains both as explicit logical uses;
-         * allocation must see their identities before assigning homes. */
-        popped = 3;
-        pushed = 3;
-    }
     // Every handler finds its parameters before the op can raise: renamed
     // while the region keeps stack order, else by the edge's recipe
     if (instr->except >= 0 && !t->permuted) {
@@ -1880,6 +1870,19 @@ rule_pop_iter(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* SEND: the Send family (Python/register_ops/suspend.rop).  The window of
+ * the stack op is the family's window, and the END_SEND that follows is the
+ * word's completion, which gets no word (lower_completions). */
+static int
+rule_send(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == SEND);
+    op->opcode = ROP_OP_Send_Generic;
+    return SUCCESS;
+}
+
 /* The jumps: the Jump family (Python/register_ops/truth.rop).  A backedge
  * that polls is the arm that the baseline JIT's setting selects: the one
  * that is also its warm-up event while the JIT is on. */
@@ -2356,6 +2359,77 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
                                   nuses, &dst, 1, &op));
     op->oparg = id;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, nuses, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* Await and asynchronous iteration (Python/register_ops/suspend.rop) */
+
+/* GET_AWAITABLE: the iterator of the source, with the source's origin */
+static int
+rule_get_awaitable(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_Awaitable_Await,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    op->oparg = src->oparg;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* GET_AITER: the asynchronous iterator replaces its source */
+static int
+rule_get_aiter(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_AsyncIterOpen_Open,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* GET_ANEXT: the awaitable of the next item goes above the iterator, which
+ * stays */
+static int
+rule_get_anext(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_OP_AsyncIterNext_Next,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* YIELD_VALUE: the value goes out and the value sent in takes its place.  A
+ * delegated yield (oparg 1) leaves the receiver and cursor of its SEND below
+ * the value, where they stay. */
+static int
+rule_yield_value(_PyRegTr *t, const _PyRegOp *src)
+{
+    int delegated = src->oparg == 1;
+    if (t->sp < (delegated ? 3 : 1)) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src,
+                                  delegated ? ROP_OP_YieldFrom_Delegated
+                                            : ROP_OP_Yield_Ordinary,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
     return _PyRegTr_Push(t, dst);
 }
 
@@ -2993,6 +3067,7 @@ static const _PyRegRule rules[256] = {
     [GET_ITER] = rule_get_iter,
     [FOR_ITER] = rule_for_iter,
     [POP_ITER] = rule_pop_iter,
+    [SEND] = rule_send,
     [RESUME] = rule_resume,
     [JUMP_FORWARD] = rule_jump,
     [JUMP_BACKWARD] = rule_jump,
@@ -3021,6 +3096,7 @@ static const _PyRegRule rules[256] = {
     [NOP] = rule_nop,
     [POP_TOP] = rule_pop_top,
     [RETURN_VALUE] = rule_return_value,
+    [YIELD_VALUE] = rule_yield_value,
     [STORE_FAST] = rule_store_fast,
     [STORE_FAST_LOAD_FAST] = rule_store_fast_load_fast,
     [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,
@@ -3033,6 +3109,9 @@ static const _PyRegRule rules[256] = {
     [BUILD_SLICE] = rule_build_slice,
     [MAKE_FUNCTION] = rule_make_function,
     [SET_FUNCTION_ATTRIBUTE] = rule_set_function_attribute,
+    [GET_AWAITABLE] = rule_get_awaitable,
+    [GET_AITER] = rule_get_aiter,
+    [GET_ANEXT] = rule_get_anext,
     [CALL_INTRINSIC_1] = rule_call_intrinsic,
     [CALL_INTRINSIC_2] = rule_call_intrinsic,
     [LOAD_NAME] = rule_load_name,

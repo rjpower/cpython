@@ -119,8 +119,8 @@ class SemanticCompletionTests(unittest.TestCase):
         self.assertEqual(released, ['released', 'released'])
         self.assertNotIn('Move.Retire', code_names(gen))
         recipients = [i.dst for i in dis.get_instructions(gen)
-                      if i.opname in ('RETURN_GENERATOR', 'YIELD_VALUE')]
-        self.assertEqual(recipients, [None, None])
+                      if i.opname == 'YIELD_VALUE']
+        self.assertEqual(recipients, [None])
 
     def test_completion_events_disable_independently(self):
         events = sys.monitoring.events

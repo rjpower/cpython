@@ -39,8 +39,6 @@ from ir_generator import (
     call_role_flags,
     compute_formats,
     operand_metadata,
-    generator_boundaries,
-    generator_boundary_source_closed,
     handler_contracts,
     handler_ids,
     handler_instructions,
@@ -59,11 +57,6 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP."""
-    name = name.split("_XFER_", 1)[0]
-    if name == "YIELD_DELEGATED":
-        return "YIELD_VALUE"
-    if name == "INSTRUMENTED_YIELD_DELEGATED":
-        return "INSTRUMENTED_YIELD_VALUE"
     # An IR-only member of a real family (LOAD_ATTR_GETSET) stands for the
     # family head, as the specialisations that have an opcode stand for
     # themselves
@@ -93,11 +86,11 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
     numbers = stack_numbers(analysis)
     dispatch = ids
     insts = handler_instructions(analysis)
-    boundaries = generator_boundaries(analysis)
+
     bases = {}
     flags = {}
     for name in [*ids, *(name for name in numbers if name not in ids)]:
-        ordinary = boundaries[name].base if name in boundaries else name
+        ordinary = name
         inst = insts.get(name) or stack_ops_of(analysis).get(ordinary)
         base = inst.family.name if inst is not None and inst.family else ordinary
         if ordinary.startswith("INSTRUMENTED_") and base == ordinary:
@@ -116,8 +109,7 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
             parts.append("_PyIR_H_SPECIALIZED")
         if ordinary.startswith("INSTRUMENTED_"):
             parts.append("_PyIR_H_INSTRUMENTED")
-        if (name in analysis.ir_only or name in EXECUTION_VARIANTS
-                or name in boundaries):
+        if name in analysis.ir_only or name in EXECUTION_VARIANTS:
             parts.append("_PyIR_H_IR_ONLY")
         if name.endswith("_NOFB"):
             parts.append("_PyIR_H_NOFB")
@@ -227,7 +219,14 @@ def arm_base_ids(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry],
     return result
 
 
-def arm_flags(arm: ir_arms.ArmEntry) -> str:
+def twin_by_tools(analysis: Analysis, arm: ir_arms.ArmEntry) -> bool:
+    """Whether monitoring selects the arm's observed twin by handler: its
+    family declares events, but upstream's pinned table has no
+    INSTRUMENTED_ stack opcode of its base to rewrite the opcode to"""
+    return bool(arm.events) and f"INSTRUMENTED_{arm.base}" not in analysis.opmap
+
+
+def arm_flags(analysis: Analysis, arm: ir_arms.ArmEntry) -> str:
     parts = ["_PyIR_H_METADATA"]
     if arm.emitted:
         parts += ["_PyIR_H_DISPATCH", "_PyIR_H_SAVES_IP"]
@@ -235,6 +234,8 @@ def arm_flags(arm: ir_arms.ArmEntry) -> str:
         parts.append("_PyIR_H_SPECIALIZED")
     if arm.observes is not None:
         parts.append("_PyIR_H_INSTRUMENTED")
+    if twin_by_tools(analysis, arm):
+        parts.append("_PyIR_H_TWIN_BY_TOOLS")
     parts.append("_PyIR_H_IR_ONLY")
     return " | ".join(parts)
 
@@ -359,7 +360,8 @@ def generate_ir_metadata(
                           ("IR_ONLY", 8), ("NOFB", 16),
                           ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
-                          ("SAVES_IP", 1024), ("JIT_EVENT", 2048)):
+                          ("SAVES_IP", 1024), ("JIT_EVENT", 2048),
+                          ("TWIN_BY_TOOLS", 4096)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
         for ctype, table, values in (
@@ -373,31 +375,10 @@ def generate_ir_metadata(
             for name in sorted(fact_ids, key=fact_ids.get):
                 out.emit(f"[{fact_ids[name]}] = {values[name]}, /* {name} */\n")
             for arm in arms:
-                value = (arm_flags(arm) if table == "_PyIR_HandlerFlags"
+                value = (arm_flags(analysis, arm) if table == "_PyIR_HandlerFlags"
                          else str(base_ids[arm.base]))
                 out.emit(f"[{arm_id(analysis, arm)}] = {value}, /* {arm.dotted} */\n")
             out.emit("};\n#endif\n\n")
-        boundaries = generator_boundaries(analysis)
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const _PyIRGeneratorBoundary _PyIR_GeneratorBoundaries[IR_NUM_HANDLERS] = {\n")
-        for name in sorted(fact_ids, key=fact_ids.get):
-            boundary = boundaries.get(name)
-            if boundary is None:
-                out.emit(f"[{fact_ids[name]}] = {{ {fact_ids[name]}, {fact_ids[name]}, 0, 0, 0, 0 }},\n")
-            else:
-                flags = "_PyIR_GEN_BOUNDARY_PLACED"
-                if generator_boundary_source_closed(boundary, analysis, formats):
-                    flags += " | _PyIR_GEN_BOUNDARY_CLOSED"
-                if boundary.base.startswith("INSTRUMENTED_"):
-                    flags += " | _PyIR_GEN_BOUNDARY_OBSERVER"
-                out.emit(f"[{fact_ids[name]}] = {{ {fact_ids[boundary.base]}, {fact_ids[name]}, "
-                         f"_PyIR_GEN_CONSUMER_{boundary.yielded}, "
-                         f"_PyIR_GEN_CONSUMER_{boundary.completed}, "
-                         f"_PyIR_GEN_CONSUMER_{boundary.resume}, {flags} }},\n")
-        for arm in arms:
-            i = arm_id(analysis, arm)
-            out.emit(f"[{i}] = {{ {i}, {i}, 0, 0, 0, 0 }},  /* {arm.dotted} */\n")
-        out.emit("};\n#endif\n\n")
         layouts = sorted({(fmt.group, fmt.fb_layout) for fmt in formats.values()
                           if fmt.fb_layout is not None})
         if layouts:

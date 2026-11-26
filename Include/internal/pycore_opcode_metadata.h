@@ -290,12 +290,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 1;
         case SEND:
             return 3;
-        case SEND_ASYNC_GEN:
-            return 3;
-        case SEND_GEN:
-            return 3;
-        case SEND_VIRTUAL:
-            return 3;
         case SETUP_ANNOTATIONS:
             return 0;
         case SETUP_CLEANUP:
@@ -613,12 +607,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 0;
         case SEND:
             return 3;
-        case SEND_ASYNC_GEN:
-            return 3;
-        case SEND_GEN:
-            return 2;
-        case SEND_VIRTUAL:
-            return 3;
         case SETUP_ANNOTATIONS:
             return 0;
         case SETUP_CLEANUP:
@@ -780,15 +768,15 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [DICT_UPDATE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [END_ASYNC_FOR] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [END_FOR] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG | HAS_NO_SAVE_IP_FLAG },
-    [END_SEND] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG },
+    [END_SEND] = { true, INSTR_FMT_IX, 0 },
     [EXIT_INIT_CHECK] = { true, INSTR_FMT_IX, 0 },
     [EXTENDED_ARG] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [FORMAT_SIMPLE] = { true, INSTR_FMT_IX, 0 },
     [FORMAT_WITH_SPEC] = { true, INSTR_FMT_IX, 0 },
     [FOR_ITER] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [GET_AITER] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [GET_ANEXT] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
-    [GET_AWAITABLE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [GET_AITER] = { true, INSTR_FMT_IX, 0 },
+    [GET_ANEXT] = { true, INSTR_FMT_IX, 0 },
+    [GET_AWAITABLE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [GET_ITER] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [GET_LEN] = { true, INSTR_FMT_IX, 0 },
     [IMPORT_FROM] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_NAME_FLAG },
@@ -798,7 +786,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [INSTRUMENTED_CALL_KW] = { true, INSTR_FMT_IBC00, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
     [INSTRUMENTED_END_ASYNC_FOR] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [INSTRUMENTED_END_FOR] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_NO_SAVE_IP_FLAG },
-    [INSTRUMENTED_END_SEND] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
+    [INSTRUMENTED_END_SEND] = { true, INSTR_FMT_IX, 0 },
     [INSTRUMENTED_FOR_ITER] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INSTRUMENTED_INSTRUCTION] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [INSTRUMENTED_JUMP_BACKWARD] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
@@ -814,7 +802,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [INSTRUMENTED_POP_JUMP_IF_TRUE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [INSTRUMENTED_RESUME] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
     [INSTRUMENTED_RETURN_VALUE] = { true, INSTR_FMT_IX, 0 },
-    [INSTRUMENTED_YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
+    [INSTRUMENTED_YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [INTERPRETER_EXIT] = { true, INSTR_FMT_IX, 0 },
     [IS_OP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [JUMP_BACKWARD] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EVAL_BREAK_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
@@ -868,10 +856,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [RESUME] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
     [RETURN_GENERATOR] = { true, INSTR_FMT_IX, 0 },
     [RETURN_VALUE] = { true, INSTR_FMT_IX, 0 },
-    [SEND] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [SEND_ASYNC_GEN] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [SEND_GEN] = { true, INSTR_FMT_IXC, HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [SEND_VIRTUAL] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
+    [SEND] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ESCAPES_FLAG },
     [SETUP_ANNOTATIONS] = { true, INSTR_FMT_IX, 0 },
     [SET_ADD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [SET_FUNCTION_ATTRIBUTE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
@@ -893,7 +878,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [UNPACK_EX] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [UNPACK_SEQUENCE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [WITH_EXCEPT_START] = { true, INSTR_FMT_IB, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
+    [YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [ANNOTATIONS_PLACEHOLDER] = { true, -1, HAS_PURE_FLAG },
     [JUMP] = { true, -1, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_EVAL_BREAK_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [JUMP_IF_FALSE] = { true, -1, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
@@ -908,7 +893,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
 };
 #endif
 
-#define MAX_UOP_PER_EXPANSION 3
+#define MAX_UOP_PER_EXPANSION 2
 struct opcode_macro_expansion {
     int nuops;
     struct { int16_t uop; int8_t size; int8_t offset; } uops[MAX_UOP_PER_EXPANSION];
@@ -919,11 +904,7 @@ extern const struct opcode_macro_expansion _PyOpcode_macro_expansion[256];
 const struct opcode_macro_expansion
 _PyOpcode_macro_expansion[256] = {
     [END_FOR] = { .nuops = 1, .uops = { { _END_FOR, OPARG_SIMPLE, 0 } } },
-    [END_SEND] = { .nuops = 1, .uops = { { _END_SEND, OPARG_SIMPLE, 0 } } },
     [FOR_ITER] = { .nuops = 1, .uops = { { _FOR_ITER, OPARG_REPLACED, 1 } } },
-    [GET_AITER] = { .nuops = 1, .uops = { { _GET_AITER, OPARG_SIMPLE, 0 } } },
-    [GET_ANEXT] = { .nuops = 1, .uops = { { _GET_ANEXT, OPARG_SIMPLE, 0 } } },
-    [GET_AWAITABLE] = { .nuops = 1, .uops = { { _GET_AWAITABLE, OPARG_SIMPLE, 0 } } },
     [GET_ITER] = { .nuops = 1, .uops = { { _GET_ITER, OPARG_SIMPLE, 1 } } },
     [JUMP_BACKWARD] = { .nuops = 2, .uops = { { _CHECK_PERIODIC, OPARG_SIMPLE, 1 }, { _JUMP_BACKWARD_NO_INTERRUPT, OPARG_SIMPLE, 1 } } },
     [JUMP_BACKWARD_NO_INTERRUPT] = { .nuops = 1, .uops = { { _JUMP_BACKWARD_NO_INTERRUPT, OPARG_SIMPLE, 0 } } },
@@ -938,14 +919,10 @@ _PyOpcode_macro_expansion[256] = {
     [POP_JUMP_IF_NOT_NONE] = { .nuops = 1, .uops = { { _POP_JUMP_IF_NOT_NONE, OPARG_SIMPLE, 1 } } },
     [POP_JUMP_IF_TRUE] = { .nuops = 1, .uops = { { _POP_JUMP_IF_TRUE, OPARG_SIMPLE, 1 } } },
     [PUSH_NULL] = { .nuops = 1, .uops = { { _PUSH_NULL, OPARG_SIMPLE, 0 } } },
-    [RETURN_GENERATOR] = { .nuops = 1, .uops = { { _RETURN_GENERATOR, OPARG_SIMPLE, 0 } } },
-    [SEND_ASYNC_GEN] = { .nuops = 2, .uops = { { _GUARD_3OS_ASYNC_GEN_ASEND, OPARG_SIMPLE, 1 }, { _SEND_ASYNC_GEN, OPARG_REPLACED, 1 } } },
-    [SEND_VIRTUAL] = { .nuops = 3, .uops = { { _GUARD_TOS_IS_NONE, OPARG_SIMPLE, 1 }, { _GUARD_NOS_NOT_NULL, OPARG_SIMPLE, 1 }, { _SEND_VIRTUAL, OPARG_REPLACED, 1 } } },
     [STORE_FAST] = { .nuops = 2, .uops = { { _SWAP_FAST, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 } } },
     [TO_BOOL] = { .nuops = 1, .uops = { { _TO_BOOL, OPARG_SIMPLE, 3 } } },
     [UNARY_NOT] = { .nuops = 1, .uops = { { _UNARY_NOT, OPARG_SIMPLE, 0 } } },
     [WITH_EXCEPT_START] = { .nuops = 1, .uops = { { _WITH_EXCEPT_START, OPARG_SIMPLE, 0 } } },
-    [YIELD_VALUE] = { .nuops = 2, .uops = { { _MAKE_HEAP_SAFE, OPARG_SIMPLE, 0 }, { _YIELD_VALUE, OPARG_SIMPLE, 0 } } },
 };
 #endif // NEED_OPCODE_METADATA
 
@@ -1079,9 +1056,6 @@ const char *_PyOpcode_OpName[267] = {
     [RETURN_GENERATOR] = "RETURN_GENERATOR",
     [RETURN_VALUE] = "RETURN_VALUE",
     [SEND] = "SEND",
-    [SEND_ASYNC_GEN] = "SEND_ASYNC_GEN",
-    [SEND_GEN] = "SEND_GEN",
-    [SEND_VIRTUAL] = "SEND_VIRTUAL",
     [SETUP_ANNOTATIONS] = "SETUP_ANNOTATIONS",
     [SETUP_CLEANUP] = "SETUP_CLEANUP",
     [SETUP_FINALLY] = "SETUP_FINALLY",
@@ -1117,6 +1091,7 @@ const uint8_t _PyOpcode_Caches[256] = {
     [RESUME] = 1,
     [TO_BOOL] = 3,
     [STORE_SUBSCR] = 1,
+    [SEND] = 1,
     [UNPACK_SEQUENCE] = 1,
     [STORE_ATTR] = 4,
     [LOAD_GLOBAL] = 4,
@@ -1132,7 +1107,6 @@ const uint8_t _PyOpcode_Caches[256] = {
     [CALL_KW] = 3,
     [CALL_FUNCTION_EX] = 1,
     [BINARY_OP] = 5,
-    [SEND] = 1,
     [JUMP_BACKWARD] = 1,
     [GET_ITER] = 1,
     [FOR_ITER] = 1,
@@ -1238,6 +1212,9 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [199] = 199,
     [200] = 200,
     [201] = 201,
+    [202] = 202,
+    [203] = 203,
+    [204] = 204,
     [205] = 205,
     [206] = 206,
     [207] = 207,
@@ -1390,9 +1367,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [RETURN_GENERATOR] = RETURN_GENERATOR,
     [RETURN_VALUE] = RETURN_VALUE,
     [SEND] = SEND,
-    [SEND_ASYNC_GEN] = SEND,
-    [SEND_GEN] = SEND,
-    [SEND_VIRTUAL] = SEND,
     [SETUP_ANNOTATIONS] = SETUP_ANNOTATIONS,
     [SET_ADD] = SET_ADD,
     [SET_FUNCTION_ATTRIBUTE] = SET_FUNCTION_ATTRIBUTE,
@@ -1500,6 +1474,9 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 199: \
     case 200: \
     case 201: \
+    case 202: \
+    case 203: \
+    case 204: \
     case 205: \
     case 206: \
     case 207: \

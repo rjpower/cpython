@@ -1216,6 +1216,20 @@ NOT_RUN = {
     "SuperMethodExplicit.Builtin": "installed only by adaptation; as AttrWrite.Instance",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
+    "Awaitable.Await": "its source is an awaitable of a native coroutine type, whose "
+                       "frame the probe cannot hold",
+    "AsyncIterOpen.Open": "GET_AITER occurs in async code, which the probe cannot call "
+                          "as a function",
+    "AsyncIterNext.Next": "GET_ANEXT occurs in async code, which the probe cannot call "
+                          "as a function",
+    "Yield.Ordinary": "suspends a generator frame, which rop_transfer_run's synthetic "
+                      "caller cannot hold",
+    "Yield.Observed": "suspends a generator frame, which rop_transfer_run's synthetic "
+                      "caller cannot hold",
+    "YieldFrom.Delegated": "suspends a generator frame, which rop_transfer_run's "
+                           "synthetic caller cannot hold",
+    "YieldFrom.Observed": "suspends a generator frame, which rop_transfer_run's "
+                          "synthetic caller cannot hold",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "
                         "synthetic caller cannot hold",
     "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "

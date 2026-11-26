@@ -2,9 +2,6 @@
 // and observation".  Arms come with their batches.  Observation is a
 // generated wrapper bound to a family and arm, not a family.
 
-enum AsyncIterMode(AITER, ANEXT);
-enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
-enum YieldMode(ORDINARY_YIELD, DELEGATED_YIELD);
 // A call word's poll: a flag of the word, set by the translator on the call
 // that follows a special-method lookup, which `with` relies on to enter the
 // body without a pending signal or collection running first.
@@ -196,6 +193,23 @@ extern helper push_init(t:Thread, f:Frame, fn:Src, a:Args)
               "anything moves; the cache was counted first.  The child is current"
               "on return: its previous frame is the cleanup frame.");
 
+// The generator that a call of a generator function creates, with no frame of
+// the thread: the operands fill the generator's frame, and the code's prologue
+// that the first send does not run (cells, a generator expression's iterator)
+// runs here.  On failure the operands left in their homes are closed with the
+// exception set aside.
+extern helper new_generator(t:Thread, f:Frame, fn:Src, a:Args)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, writes, allocates, releases, raises)
+  spends(fn, a)
+  requires(exact<function>(fn))
+  c _PyRop_NewGenerator as value_or_null
+  evidence(
+    review: "P4. ceval.c: call_new_generator, the old CALL_PY_GENERATOR's"
+            "_CALL_PY_GENERATOR; the operands the call did not move are closed.",
+    contract: "Moves the function and the operands into the new object's frame; the"
+              "result is a new owner.  A prologue's iter() may run Python.");
+
 // Any callable
 
 // A Python function, or a bound method of one with no self operand, whose
@@ -317,15 +331,15 @@ extern helper generator_frame(f:Frame) -> Bool
 // Adaptation evidence (specialize.c): the call specializer in collecting
 // mode fills the site's entry and answers with the arm the call stands for
 extern helper classify_call(at:Site, f:Fb<Call>, fn:B, a:Args)
-  cases(exact(), bound_exact(), init(), other())
+  cases(exact(), bound_exact(), init(), generator(), other())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
   c _PyRop_ClassifyCall as case_index
   evidence(
     review: "P4. specialize.c: the old _Py_Specialize_Call's handler choice"
             "collected (as attr_classify): CALL_PY_EXACT_ARGS,"
-            "CALL_BOUND_METHOD_EXACT_ARGS and CALL_ALLOC_AND_ENTER_INIT are the"
-            "first three cases, anything else is other.",
+            "CALL_BOUND_METHOD_EXACT_ARGS, CALL_ALLOC_AND_ENTER_INIT and"
+            "CALL_PY_GENERATOR are the first four cases, anything else is other.",
     contract: "Writes the site's entry (func_version, type_version, the type's init"
               "cache) and sets no handler.  No Python runs.");
 
@@ -344,6 +358,7 @@ macro adapt_before_use_call(f:Fb<Call>, fn:Src, a:Args)
       exact -> Exact();
       bound_exact -> Bound();
       init -> Init();
+      generator -> Generator();
       other -> Other();
     }
   Exact():
@@ -363,6 +378,13 @@ macro adapt_before_use_call(f:Fb<Call>, fn:Src, a:Args)
   Init():
     let ci:Candidate<Call> = candidate(Call.Init);
     call install(site, f, ci) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Generator():
+    let cg:Candidate<Call> = candidate(Call.Generator);
+    call install(site, f, cg) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();
@@ -521,6 +543,26 @@ arm Call.Init split
     }
   Enter(c:NewFrame):
     exit enter(c) resume Call.Returned;
+  Failed(e:Err):
+    exit raise(Call.Failed, e);
+}
+
+arm Call.Generator split
+  effects(runs_python, allocates, raises, releases on (dst))
+  feedback(read(entry.func_version))
+  exits(next, raise, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard function_version(use(fn), fb) else miss;
+    guard exact_positional(frame, use(fn), args) else miss;
+    call new_generator(thread, frame, fn, args) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at Call.Done;
+    exit next();
   Failed(e:Err):
     exit raise(Call.Failed, e);
 }
@@ -1532,19 +1574,7 @@ arm CallEx.Observed split observes
 
 // 2C: async iteration, await, send, yield
 
-family AsyncIter(dst:Dst, source:Src, mode:Enum<AsyncIterMode>)
-  exits(next, raise) ops(GET_AITER, GET_ANEXT);
-
-family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>)
-  exits(next, raise) ops(GET_AWAITABLE);
-
-// A folded consumer can also return or yield
-family Send(yielded:Dst, completed:Dst, pair:IterPair, sent:Src, done:NearHead,
-            fb:Fb<Send>)
-  exits(next, branch, enter, return, yield, raise, redirect, miss, again) ops(SEND);
-
-family Yield(value:Src, resume:Dst, route:NearHead, mode:Enum<YieldMode>)
-  exits(yield, raise, redirect) ops(YIELD_VALUE);
+// Send is in suspend.rop
 
 // 2E: throw completion, async-for termination, exceptional context exit
 

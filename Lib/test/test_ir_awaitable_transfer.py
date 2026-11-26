@@ -40,7 +40,7 @@ class AwaitableTransferTests(unittest.TestCase):
                 with self.subTest(scratch=scratch, code=code):
                     call = types.FunctionType(code, globals())
                     row = next(row for row in _testinternalcapi.get_ir(code)
-                               if row[0] == "GET_AWAITABLE")
+                               if row[0] == "Awaitable.Await")
                     nbindings = len(_testinternalcapi.get_co_localskinds(code))
                     if scratch:
                         self.assertGreaterEqual(row[2], nbindings)

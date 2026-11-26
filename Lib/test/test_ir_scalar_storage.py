@@ -157,7 +157,7 @@ class ScalarStorageTests(unittest.TestCase):
                                           formats[name], emitter, out)
             return tuple(cp for cp in emitter.error_checkpoint_sites.values() if cp.id)
 
-        retained = emitted("GET_ANEXT")
+        retained = emitted("UNARY_INVERT")
         self.assertEqual([checkpoint.id for checkpoint in retained], [1])
         self.assertFalse(any(event.kind == "_PyIR_OWNER_STORAGE_VACATE"
                              for checkpoint in retained for event in checkpoint.actions))
@@ -173,20 +173,6 @@ class ScalarStorageTests(unittest.TestCase):
 
         with mock.patch.object(ir_generator.IRStack, "take_field", missing_receipt):
             self.assertFalse(emitted("UNARY_NOT"))
-
-    def test_instrumented_yield_error_copies_only_the_live_stack(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-        with self.subTest():
-            stream = io.StringIO()
-            out = cwriter.CWriter(stream, 0, False)
-            emitter = ir_generator.IREmitter(out, analysis, formats)
-            name = "INSTRUMENTED_YIELD_VALUE"
-            emitter.handler_format = formats[name]
-            ir_generator.generate_handler(name, analysis.instructions[name],
-                                          formats[name], emitter, out)
-            self.assertIn("PROCESS_ERROR_AT(RAISE, 0, this_instr)", stream.getvalue())
 
 
 if __name__ == "__main__":

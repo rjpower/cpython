@@ -93,17 +93,18 @@
         gen_transfer = ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
         goto LABEL_gen_stepped; \
     } while (0)
-#define GEN_STEP_EFFECT(REMAINING, IP, V) \
+/* The error that a completion arm reported in the activation: unwind it */
+#define GEN_RAISED() \
     do { \
-        gen_transfer = ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), _PyValue_ToTransferWord(V), \
-                                              (REMAINING)); \
-        goto LABEL_gen_stepped; \
+        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
+        process_error_origin = ir_exit->exit_next; \
+        process_error_entry = ir_exit->exit_entry; \
+        goto LABEL_process_error; \
     } while (0)
 
 /* The generator transfers.  The plain send, yield and return of a delegation
- * chain run in the VM routines gen_resume, gen_yield, gen_return and
- * gen_complete (Python/ceval_routines.h): a handler passes the routine its
- * operands, here in the locals of ir_evaluate() that the routine's label
+ * chain run in the VM routine gen_return (Python/ceval_routines.h): a
+ * handler passes the routine its operands, here in the locals of ir_evaluate() that the routine's label
  * reads.  A transfer that is not plain, because a callback, a hook or a
  * pending redirect must observe it, runs the steps of
  * Python/ceval_generator.h (rule 13): functions that take the value that
@@ -124,22 +125,6 @@
 #define IR_GEN_JUMP(NAME, F, IP, V) \
     IR_STEP_DONE(ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)))
 
-/* The yielded value V passes up from the SEND at SITE, whose YIELD follows
- * it, through every delegating frame above. */
-#define IR_GEN_YIELD_AT(SITE, V) \
-    do { \
-        gen_value = (V); \
-        next_instr = (SITE); \
-        goto LABEL_gen_yield; \
-    } while (0)
-/* The SEND or CLEANUP_THROW at SITE completes with V, whose word has a
- * native completed outcome. */
-#define IR_GEN_COMPLETE_AT(SITE, V) \
-    do { \
-        gen_value = (V); \
-        next_instr = (SITE); \
-        goto LABEL_gen_complete; \
-    } while (0)
 /* The generator frame DYING has returned V and been unlinked and debited;
  * frame is its resumer.  EMPTY: the return is the certified
  * RETURN_VALUE_EMPTY, so that only the locals of DYING own values. */
@@ -149,13 +134,6 @@
         gen_dying = (DYING); \
         gen_empty = (EMPTY); \
         goto LABEL_gen_return; \
-    } while (0)
-/* The generator that frame has just entered resumes with V, and follows the
- * chain of delegating frames that the words of the frame describe. */
-#define IR_GEN_RESUME(V) \
-    do { \
-        gen_value = (V); \
-        goto LABEL_gen_resume; \
     } while (0)
 
 /* The frame transfers of the register instructions (Python/register_ops),
@@ -187,22 +165,37 @@
         IR_GEN_RETURN((V), (DYING), 0); \
     } while (0)
 
-/* The forms of these that do not depend on the binding */
-#define IR_GEN_YIELD(V) IR_GEN_YIELD_AT(this_instr, (V))
-/* Likewise V from the frame that a delegating YIELD has just suspended, if
- * its resumer is a SEND with a native yielded outcome.  A leaf YIELD does not
- * test: its resumer is a FOR_ITER_GEN or the C entry as often as a SEND, and
- * the YIELD that follows a SEND carries a value up the chain from there. */
-#define IR_TRY_NATIVE_YIELD(V) \
+/* ROP_YIELD: `exit yield(V) resume P` of a Yield word, ROP_YIELD_FROM of a
+ * YieldFrom word (a delegation, which suspends in the state that a throw into
+ * it must forward).  The generator suspends and V goes to its consumer's
+ * return slot, as the consumer's frame, which the generator's return_slot
+ * and its next word record for the resumption: SLOT is the home that the
+ * value sent in takes when it resumes, P's definition. */
+#define ROP_SUSPEND(V, SLOT, STATE) \
     do { \
-        if (generator_site_kind(frame, frame->instr_ptr, \
-                                generator_yielded_targets) && \
-            !frame->pending_redirect) { \
-            assert(_PyValue_IsHome(V)); \
-            IR_GEN_YIELD_AT(frame->instr_ptr, (V)); \
-        } \
+        PyValue rop_yielded = (V); \
+        assert(frame->owner != FRAME_OWNED_BY_INTERPRETER); \
+        frame->instr_ptr = this_instr + 1; \
+        PyGenObject *rop_gen = _PyGen_GetGeneratorFromFrame(frame); \
+        DTRACE_FUNCTION_RETURN(); \
+        tstate->exc_info = rop_gen->gi_exc_state.previous_item; \
+        rop_gen->gi_exc_state.previous_item = NULL; \
+        _Py_LeaveRecursiveCallPy(tstate); \
+        _PyInterpreterFrame *rop_suspended = frame; \
+        rop_suspended->return_slot = (uint16_t)(SLOT); \
+        _PyThreadState_UpdateLastProfiledFrame(tstate, rop_suspended, \
+                                               rop_suspended->previous); \
+        frame = tstate->current_frame = rop_suspended->previous; \
+        rop_suspended->previous = NULL; \
+        ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD; \
+        FT_ATOMIC_STORE_INT8_RELEASE(rop_gen->gi_frame_state, (STATE)); \
+        next_instr = frame->return_pc; \
+        LLTRACE_RESUME_FRAME(); \
+        IR_STORE_RETURN(rop_yielded); \
+        DISPATCH(); \
     } while (0)
-#define IR_GEN_COMPLETE(V) IR_GEN_COMPLETE_AT(this_instr, (V))
+#define ROP_YIELD(V, SLOT) ROP_SUSPEND((V), (SLOT), FRAME_SUSPENDED)
+#define ROP_YIELD_FROM(V, SLOT) ROP_SUSPEND((V), (SLOT), FRAME_SUSPENDED_YIELD_FROM)
 
 /* A call that the function forms make in place of a jump, which must not
  * grow the C stack: a chain of deoptimisations or frame entries stays one

@@ -307,22 +307,6 @@ instr_entry(_PyInstr *instr)
 static inline int
 set_opcode(_PyInstr *instr, int opcode)
 {
-    int previous = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    const _PyIRGeneratorBoundary *boundary =
-        _PyIR_GeneratorBoundaryOf(previous);
-    if (boundary != NULL && (boundary->flags & _PyIR_GEN_BOUNDARY_PLACED)) {
-        const _PyIRGeneratorBoundary *target = _PyIR_GeneratorBoundaryOf(opcode);
-        assert(target != NULL);
-        int placed = _PyIR_GeneratorBoundaryHandler(
-            target->ordinary, boundary->yielded_consumer,
-            boundary->completed_consumer, boundary->resume_consumer);
-        /* CLOSED is a cold source-family invariant. Never turn a supported
-         * specialization into a placement-induced failure/backoff. */
-        if (placed < 0) {
-            Py_FatalError("missing closed generator specialization target");
-        }
-        opcode = placed;
-    }
 #ifdef Py_GIL_DISABLED
     _PyIRWord old = _Py_atomic_load_uint64_relaxed(instr);
     int handler = IR_HANDLER(old);
@@ -2606,18 +2590,22 @@ _PyRop_ClassifySetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
  * the arm that a call of fn at site stands for, as the index of its case
  * (exact, bound_exact, init, other), with the site's entry filled for that
  * arm: a simple Python function, a bound method of one, or a heap class whose
- * __init__ is one; every other callable is "other", which runs in
+ * __init__ is one, or a generator function that takes exactly these
+ * arguments; every other callable is "other", which runs in
  * Call.Generic. */
-enum { CALL_CASE_EXACT, CALL_CASE_BOUND_EXACT, CALL_CASE_INIT, CALL_CASE_OTHER };
+enum { CALL_CASE_EXACT, CALL_CASE_BOUND_EXACT, CALL_CASE_INIT,
+       CALL_CASE_GENERATOR, CALL_CASE_OTHER };
 
 static bool
-call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs)
+call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs,
+                       bool generator)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) ||
         func->vectorcall != _PyFunction_Vectorcall ||
         function_signature(code) != SIMPLE_SIGNATURE ||
-        code->co_argcount != nargs || code_creates_generator(code) ||
+        code->co_argcount != nargs ||
+        code_creates_generator(code) != generator ||
         !prepare_function_exec(code))
     {
         return false;
@@ -2667,8 +2655,12 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
     PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
     fb->callable_type_version = fb_type_version(Py_TYPE(callable));
     if (PyFunction_Check(callable)) {
-        return call_classify_function(fb, (PyFunctionObject *)callable, nargs)
-            ? CALL_CASE_EXACT : CALL_CASE_OTHER;
+        PyFunctionObject *func = (PyFunctionObject *)callable;
+        if (call_classify_function(fb, func, nargs, false)) {
+            return CALL_CASE_EXACT;
+        }
+        return call_classify_function(fb, func, nargs, true)
+            ? CALL_CASE_GENERATOR : CALL_CASE_OTHER;
     }
     if (self_present) {
         return CALL_CASE_OTHER;
@@ -2676,7 +2668,7 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
     if (PyMethod_Check(callable)) {
         PyObject *func = ((PyMethodObject *)callable)->im_func;
         return PyFunction_Check(func) &&
-            call_classify_function(fb, (PyFunctionObject *)func, nargs + 1)
+            call_classify_function(fb, (PyFunctionObject *)func, nargs + 1, false)
             ? CALL_CASE_BOUND_EXACT : CALL_CASE_OTHER;
     }
     if (PyType_Check(callable)) {
@@ -2964,38 +2956,6 @@ int
     return SPEC_FAIL_OTHER;
 }
 #endif   // Py_STATS
-
-Py_NO_INLINE void
-_Py_Specialize_Send(PyValue receiver_st, _PyInstr *instr)
-{
-    PyObject *receiver = PyValue_AsKnownObjectBorrow(receiver_st);
-
-    assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[SEND] == INLINE_CACHE_ENTRIES_SEND);
-    PyTypeObject *tp = Py_TYPE(receiver);
-    fb_begin_unary(instr, tp);
-    if (tp == &PyGen_Type || tp == &PyCoro_Type) {
-        /* Don't specialize if PEP 523 is active */
-        if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
-            SPECIALIZATION_FAIL(SEND, SPEC_FAIL_OTHER);
-            goto failure;
-        }
-        specialize(instr, IR_H_SEND_GEN);
-        return;
-    }
-    if (tp->_tp_iteritem != NULL) {
-        specialize(instr, IR_H_SEND_VIRTUAL);
-        return;
-    }
-    if (tp == &_PyAsyncGenASend_Type) {
-        specialize(instr, IR_H_SEND_ASYNC_GEN);
-        return;
-    }
-    SPECIALIZATION_FAIL(SEND,
-                        _PySpecialization_ClassifyIterator(receiver));
-failure:
-    unspecialize(instr);
-}
 
 static int
 check_type_always_true(PyTypeObject *ty)

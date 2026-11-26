@@ -61,7 +61,7 @@ class TestGeneratorCreation(unittest.TestCase):
             return gen(a, b)
         call = reset_code(call)
         warm(call, 1, 2)
-        self.assertIn("Call.Generic", handlers(call))
+        self.assertIn("Call.Generator", handlers(call))
         g = call(3, 4)
         self.assertEqual(sys._getframe().f_code.co_name, self.id().split(".")[-1])
         self.assertIsNone(g.gi_frame.f_back)

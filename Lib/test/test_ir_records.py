@@ -135,28 +135,9 @@ class HandlerRecordTests(unittest.TestCase):
     def test_jumps_to_the_same_word(self):
         def transfers(handler):
             return {(t.kind, t.target) for u in records[handler].uops for t in u.transfers}
-        # A specializer that rewrote the word runs it again
-        self.assertIn((ir_records.JUMP, "self"), transfers("SEND"))
         # The monitor runs the word with the handler that it chose
         if "INSTRUMENTED_INSTRUCTION" in records:
             self.assertIn((ir_records.JUMP, "self:handler"), transfers("INSTRUMENTED_INSTRUCTION"))
-
-    def test_native_send_yields(self):
-        # A send to a native iterator that suspends yields from the outer
-        # frame where the handler would fall through; a send to a generator
-        # always enters its frame
-        present(["SEND_GEN_XFER_DISCARD"], records)
-        for consumer in ("DISCARD", "STORE_LOCAL", "RETURN", "HOME"):
-            for handler in ("SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"):
-                last = records[f"{handler}_XFER_{consumer}"].uops[-1].transfers[-1]
-                self.assertEqual((last.kind, last.target), (ir_records.YIELD, "delegated"))
-            uops = records[f"SEND_GEN_XFER_{consumer}"].uops
-            kinds = [t.kind for u in uops for t in u.transfers]
-            self.assertNotIn(ir_records.YIELD, kinds)
-            # The last uop enters, and nothing runs after it in this frame
-            last = {t.kind for t in uops[-1].transfers}
-            self.assertIn(ir_records.ENTER_FRAME, last)
-            self.assertNotIn(ir_records.NEXT, last)
 
 
 # The stand-in of the base handler OP: a function that reads its argument

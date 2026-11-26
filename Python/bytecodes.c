@@ -317,57 +317,24 @@ dummy_func(
                 PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_FALLTHROUGH);
         }
 
-        inst(END_SEND,
+        /* A stack op only: the END_SEND of a SEND has no word; the completion of the
+         * Send family is its end (Python/register_ops/suspend.rop). */
+        tier1 inst(END_SEND,
                 (receiver: consumed, index_or_null: closed, value: consumed
                  -- val: moved(value)))
-            effects(releases) exits(next)
+            exits(abort)
         {
-            val = TAKE(value);
-            (void)index_or_null;
-            DEAD(index_or_null);
-            PyValue_CLOSE(receiver);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         tier1 inst(INSTRUMENTED_END_SEND,
-                (receiver: consumed assumed(object) by compiler_send_loop,
-                 index_or_null: closed, value: consumed -- val: moved(value)))
-            effects(runs_python) exits(next, raise, redirect)
+                (receiver: consumed, index_or_null: closed, value: consumed
+                 -- val: moved(value)))
+            exits(abort)
         {
-            PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
-            // Taken before the monitoring call, which can run code
-            PyValue held = TAKE(value);
-            int stops = PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o);
-            (void)index_or_null;
-            DEAD(index_or_null);
-            PyValue_CLOSE(receiver);
-            if (stops) {
-                int err = monitor_stop_iteration(tstate, frame, this_instr, held);
-                if (err) {
-                    PyValue_CLOSE(held);
-                    ERROR_NO_POP();
-                }
-            }
-            // The end of an `async for`'s send loop is its left branch. The
-            // tools of other sends are none, and the call returns at once.
-            if (!tstate->tracing) {
-                _PyIRObserverResult jump = _Py_call_instrumentation_jump(
-                    this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
-                    this_instr, next_instr);
-                if (jump.status < 0) {
-                    PyValue_CLOSE(held);
-                    ERROR_NO_POP();
-                }
-                if (jump.status > 0) {
-                    // An observer moved the frame: the word leaves for its
-                    // choice, and the sent value is no longer the word's
-                    PyValue_CLOSE(held);
-                    DISPATCH_REDIRECT();
-                }
-                // Unredirected, the call returns the destination it was
-                // given (instrumentation.c), so the word goes on to next
-                assert(jump.next == next_instr);
-            }
-            val = held;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         tier1 inst(UNARY_NEGATIVE, (value: consumed -- res: owned))
@@ -585,342 +552,70 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(GET_AITER, (obj: consumed -- iter: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: GET_AITER is the AsyncIterOpen family (Python/register_ops/suspend.rop). */
+        tier1 inst(GET_AITER, (obj: consumed -- iter: owned))
+            exits(abort)
         {
-            PyValue iterator = _PyEval_GetAIter(tstate, obj);
-            DEAD(obj);
-            ERROR_IF(PyValue_IsNull(iterator));
-            iter = iterator;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(GET_ANEXT,
-                (aiter: assumed(object) by GET_AITER -- aiter, awaitable: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: GET_ANEXT is the AsyncIterNext family (Python/register_ops/suspend.rop). */
+        tier1 inst(GET_ANEXT, (aiter: assumed(object) by GET_AITER -- aiter, awaitable: owned))
+            exits(abort)
         {
-            // GET_AITER accepted it: it has __anext__
-            PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
-            if (awaitable_o == NULL) {
-                ERROR_NO_POP();
-            }
-            awaitable = PyValue_FromObjectSteal(awaitable_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(GET_AWAITABLE, (iterable: consumed -- iter: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: GET_AWAITABLE is the Awaitable family (Python/register_ops/suspend.rop). */
+        tier1 inst(GET_AWAITABLE, (iterable: consumed -- iter: owned))
+            exits(abort)
         {
-            if (coro_awaitable_can_transfer(iterable)) {
-                iter = TAKE(iterable);
-            }
-            else {
-                PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
-                PyValue_CLOSE(iterable);
-                ERROR_IF(iter_o == NULL);
-                iter = PyValue_FromObjectSteal(iter_o);
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        family(SEND, INLINE_CACHE_ENTRIES_SEND) = {
-            SEND_GEN,
-            SEND_VIRTUAL,
-            SEND_ASYNC_GEN,
-        };
-
-        /* The generator-boundary variants SEND*_XFER_<consumer>, which
-         * fuse the send with the word that consumes its result: the last
-         * uop's fall-through is the delegated yield, and its completion
-         * (its branch) runs the consumer's arm of the completion routine
-         * (Python/ceval_routines.h), which returns from this frame for
-         * RETURN and continues at the send's exit for the others. */
-        boundary(SEND) at(last) yields(delegated) completion(send) completes(
-            RETURN: exits(return, raise),
-            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
-
-        specializing op(_SPECIALIZE_SEND,
-                (receiver: assumed(object) by compiler_send_loop, unused, unused
-                 -- receiver, unused, unused))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_Send(receiver, next_instr);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(SEND);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        // The cursor goes by value, as in _FOR_ITER: a tagged index steps an
-        // index-protocol iterator, NULL sends to a generator or any other
-        // iterator object.  The compiler's send loop pushes the cursor
-        // slot as NULL (await, PUSH_NULL) or as GET_ITER's cursor, a
-        // tagged index or NULL (yield from).
-        tier1 window op(_SEND,
-                (receiver: assumed(object) by compiler_send_loop,
+        /* A stack op only: SEND is the Send family (Python/register_ops/suspend.rop). */
+        tier1 inst(SEND,
+                (unused/1,
+                 receiver: assumed(object) by compiler_send_loop,
                  index: consumed assumed(encoding(tagged_index|null)) by compiler_send_loop,
                  v: taken
                  -- receiver, next_index: inline encoding(tagged_index|null) replaces(index),
                  retval: owned))
-            effects(runs_python, switches_frame) exits(next, branch, enter, raise)
+            effects(releases) exits(next, jump)
         {
-            // GET_AWAITABLE and GET_YIELD_FROM_ITER returned an iterator object
-            PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
-            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-            if (!IS_PEP523_HOOKED(tstate) &&
-                (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
-                !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
-                gen_try_set_executing((PyGenObject *)receiver_o))
-            {
-                PyGenObject *gen = (PyGenObject *)receiver_o;
-                IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
-            }
-            if (!PyValue_IsNull(index) && PyValue_IsNone(v)) {
-                // v is None: it is dead before the cursor, which lies below it
-                DEAD(v);
-                PyValue cursor = TAKE(index);
-                _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(receiver), cursor);
-                PyValue item = step.value;
-                int found = step.status;
-                if (found <= 0) {
-                    if (found < 0) {
-                        ERROR_NO_POP();
-                    }
-                    PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
-                    IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
-                }
-                next_index = step.cursor;
-                retval = item;
-            }
-            else {
-                _PyStatusValue sent = _PyValue_Send(receiver_o, v);
-                if (sent.status == PYGEN_ERROR) {
-                    ERROR_NO_POP();
-                }
-                if (sent.status == PYGEN_RETURN) {
-                    PyValue completed = sent.value;
-                    IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
-                }
-                PyValue_CLOSE(v);
-                next_index = index;
-                DEAD(index);
-                retval = sent.value;
-            }
-        }
-
-        macro(SEND) = unused/1 + _SPECIALIZE_SEND + _SEND;
-
-        inline_ok op(_SEND_GEN_FRAME,
-                (receiver, null: nullable, v: taken -- receiver, null))
-            effects(runs_python, switches_frame) exits(miss, enter, raise)
-        {
-            EXIT_IF(!PyValue_IsObject(receiver), "a number is no generator");
-            PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
-            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type,
-                    "the receiver is not a generator or a coroutine");
-            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
-                    "a created generator accepts only None");
-            EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
-            STAT_INC(SEND, hit);
-            if (!gen_claim(tstate, gen)) {
-                ERROR_NO_POP();
-            }
-            IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
-        }
-
-        macro(SEND_GEN) =
-            unused/1 +
-            _CHECK_PEP_523 +
-            _SEND_GEN_FRAME;
-
-        /* SEND_GEN enters the generator's frame: the delegated yield and
-         * the consumer's arm run when that frame yields or returns to this
-         * word (Python/ceval_routines.h), not in this word's uops */
-        boundary(SEND_GEN) at(enter) yields(delegated) completion(send) completes(
-            RETURN: exits(return, raise),
-            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
-
-        op(_GUARD_TOS_IS_NONE, (val -- val: is(PyValue_None)))
-            effects() exits(next, miss)
-        {
-            EXIT_IF(!PyValue_IsNone(val));
-        }
-
-
-        op(_GUARD_NOS_NOT_NULL, (nos, unused -- nos, unused))
-            effects() exits(next, miss)
-        {
-            EXIT_IF(PyValue_IsNull(nos));
-        }
-
-        // The cursor goes by value, as in _FOR_ITER_VIRTUAL.  `none` is
-        // released on a raise and its home is kept: it is dead first.
-        replaced op(_SEND_VIRTUAL,
-                (iter: assumed(object) by GET_ITER, index: consumed,
-                 none: consumed is(PyValue_None)
-                 -- iter, next_index: inline replaces(index), next: owned))
-            effects(runs_python) exits(next, branch, raise)
-        {
-            // SEND specialized on an iterator object with _tp_iteritem
-            DEAD(none);
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            Py_ssize_t position = PyValue_UntagIndex(index);
-            PyValue spent = TAKE(index);
-            _PyValue_DropCursor(spent);
-            _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-            _PyValueIndexPair item = iteritem(iter_o, position);
-            if (PyValue_IsNull(item.value)) {
-                if (item.index < 0) {
-                    ERROR_NO_POP();
-                }
-                PyValue completed = PyValue_None;
-                IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
-            }
-            next = item.value;
-            next_index = PyValue_TagIndex(item.index);
-        }
-
-        macro(SEND_VIRTUAL) =
-            unused/1 +
-            _GUARD_TOS_IS_NONE +
-            _GUARD_NOS_NOT_NULL +
-            _SEND_VIRTUAL;
-
-        op(_GUARD_3OS_ASYNC_GEN_ASEND,
-                (iter: object, null_or_index, value
-                 -- iter: exact(PyAsyncGenASend_Type), null_or_index, value))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(!PyAsyncGenASend_CheckExact(iter_o));
-        }
-
-        replaced op(_SEND_ASYNC_GEN,
-                (iter: taken exact(PyAsyncGenASend_Type), null_in: taken nullable, v: taken
-                 -- asend: moved(iter), null_out: moved(null_in) nullable, retval: owned))
-            effects(runs_python) exits(next, branch, raise)
-        {
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            assert(PyAsyncGenASend_CheckExact(iter_o));
-            _PyStatusValue sent = _PyValue_Send(iter_o, v);
-            PySendResult what = (PySendResult)sent.status;
-            if (what == PYGEN_ERROR) {
-                ERROR_NO_POP();
-            }
-            if (what == PYGEN_RETURN) {
-                PyValue completed = sent.value;
-                IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
-            }
+            JUMPBY(oparg);
             PyValue_CLOSE(v);
-            asend = iter;
-            DEAD(iter);
-            null_out = null_in;
-            DEAD(null_in);
-            retval = sent.value;
+            next_index = index;
+            DEAD(index);
+            retval = PyValue_None;
         }
 
-        macro(SEND_ASYNC_GEN) =
-            unused/1 +
-            _GUARD_3OS_ASYNC_GEN_ASEND +
-            _SEND_ASYNC_GEN;
-
-        window op(_YIELD_VALUE, (retval: consumed -- value: moved(retval)))
-            effects(reads, writes, switches_frame) exits(yield)
+        /* Stack ops only: YIELD_VALUE and its instrumented form are the Yield
+         * and YieldFrom families (Python/register_ops/suspend.rop). */
+        tier1 inst(YIELD_VALUE, (retval: consumed -- value: owned))
+            exits(abort)
         {
-            // NOTE: It's important that YIELD_VALUE never raises an exception!
-            // The compiler treats any exception raised here as a failed close()
-            // or throw() call.
-            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-            frame->instr_ptr++;
-            PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
-            assert(FRAME_SUSPENDED_YIELD_FROM == FRAME_SUSPENDED + 1);
-            assert(oparg == 0 || oparg == 1);
-            PyValue temp = retval;
-            DEAD(retval);
-            SAVE_STACK();
-            DTRACE_FUNCTION_RETURN();
-            tstate->exc_info = gen->gi_exc_state.previous_item;
-            gen->gi_exc_state.previous_item = NULL;
-            _Py_LeaveRecursiveCallPy(tstate);
-            _PyInterpreterFrame *gen_frame = frame;
-            // The value sent in when the generator resumes takes the slot
-            // of the value it yields
-            gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
-            _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
-            frame = tstate->current_frame = frame->previous;
-            gen_frame->previous = NULL;
-            ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
-            FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
-            #ifdef Py_DEBUG
-            if (frame->f_executable != NULL) {
-                Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
-                assert(i >= 0 && i <= INT_MAX);
-                int opcode = _PyIR_BaseOpcode(
-                    _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
-                assert(opcode == SEND || opcode == FOR_ITER);
-            }
-            #endif
-            RELOAD_STACK();
-            next_instr = frame->return_pc;
-            value = temp;
-            LLTRACE_RESUME_FRAME();
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(YIELD_VALUE) =
-            _MAKE_HEAP_SAFE +
-            _YIELD_VALUE;
-
-        /* The variants *_XFER_<consumer> of the yields: the consumer that
-         * resumes the generator (a SEND, or the store of the sent value)
-         * runs fused with the resume.  They add no exit. */
-        boundary(YIELD_VALUE) at(last) resumes(SEND, STORE_LOCAL);
-
-        tier1 op(_YIELD_VALUE_EVENT, (val -- val))
-            effects(runs_python) exits(next, raise, redirect)
+        /* The observed form of YIELD_VALUE is the Observed arm of the Yield and
+         * YieldFrom families.  It is a macro, as it was, so that the instrumented
+         * opcodes keep their numbers. */
+        tier1 op(_YIELD_VALUE_OBSERVED, (retval: consumed -- value: owned))
+            exits(abort)
         {
-            int err = _Py_call_instrumentation_arg(
-                    tstate, PY_MONITORING_EVENT_PY_YIELD,
-                    frame, this_instr, val);
-            if (err) {
-                RELOAD_STACK();
-                ERROR_NO_POP();
-            }
-            if (frame->instr_ptr != this_instr) {
-                RELOAD_STACK();
-                DISPATCH_REDIRECT();
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(INSTRUMENTED_YIELD_VALUE) =
-            _YIELD_VALUE_EVENT +
-            _MAKE_HEAP_SAFE +
-            _YIELD_VALUE;
-
-        boundary(INSTRUMENTED_YIELD_VALUE) at(last) resumes(SEND, STORE_LOCAL);
-
-        // Contract (G0d1): retval moves into the caller's home through
-        // IR_SUSPEND_DELEGATED (ARGS(consumed); its row's effects; EXITS(yield));
-        // the outputs keep the homes of the inputs (`value` the home of retval).
-        ir_only no_fold op(_YIELD_DELEGATED,
-            (receiver, unused_cursor, retval: consumed
-             -- receiver, unused_cursor, value: moved(retval)))
-            effects(reads, writes, runs_python, switches_frame) exits(yield)
-        {
-            IR_METADATA_PASSTHROUGH(1);
-            PyValue outgoing = TAKE(retval);
-            IR_SUSPEND_DELEGATED(outgoing);
-        }
-
-        macro(YIELD_DELEGATED) = _YIELD_DELEGATED;
-
-        boundary(YIELD_DELEGATED) at(last) resumes(SEND, STORE_LOCAL);
-
-        macro(INSTRUMENTED_YIELD_DELEGATED) =
-            _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
-
-        boundary(INSTRUMENTED_YIELD_DELEGATED) at(last) resumes(SEND, STORE_LOCAL);
+        macro(INSTRUMENTED_YIELD_VALUE) = _YIELD_VALUE_OBSERVED;
 
         /* A stack op only: POP_EXCEPT is the ExceptLeave family. */
         tier1 inst(POP_EXCEPT, (exc_value: consumed assumed(object) by PUSH_EXC_INFO -- ))
@@ -1001,12 +696,6 @@ dummy_func(
             // the instruction after this one continues there.
             IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT);
         }
-
-        /* As SEND's variants, for a throw into the delegated generator
-         * that ended it: no delegated yield */
-        boundary(CLEANUP_THROW) at(last) completion(throw) completes(
-            RETURN: exits(return, raise),
-            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 
         pure inst(LOAD_COMMON_CONSTANT, ( -- value: owned))
             effects(reads) exits(next)
@@ -1935,15 +1624,14 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        // The marker at the start of a generator's code: nothing executes it,
-        // because a call creates the object (_PyGen_NewCall()) with its frame
-        // past this word.  The word stays for the first send's resume point,
-        // f_lasti and monitoring.
-        window inst(RETURN_GENERATOR, (-- res: inline null))
-            effects() exits(next)
+        /* A stack op only: the marker at the start of a generator's code.  A
+         * call creates the generator (_PyGen_NewCall()) with its frame at the
+         * entry RESUME, and the assembler emits no word for the marker. */
+        tier1 inst(RETURN_GENERATOR, (-- res: owned))
+            exits(abort)
         {
-            IR_GENERATOR_MARKER();
-            res = PyValue_NULL;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: BUILD_SLICE is the BuildSlice family (Python/register_ops/items.rop). */

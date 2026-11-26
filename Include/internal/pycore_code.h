@@ -194,7 +194,6 @@ extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 /* Specialization functions, these are exported only for other re-generated
  * interpreters to call */
 
-PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
 
 /* See InternalDocs/exception_handling.md for details.
  */

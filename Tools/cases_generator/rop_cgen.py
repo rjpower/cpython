@@ -1161,7 +1161,8 @@ class ArmLowerer:
         elif t.kind == "enter":
             self.emit(f"ROP_ENTER({self.expr(t.args[0])}, {self.resume_slot(t)});")
         elif t.kind == "yield":
-            self.emit(f"ROP_YIELD({self.expr(t.args[0])}, {self.resume_slot(t)});")
+            macro = "ROP_YIELD_FROM" if self.arm.family in DELEGATING_FAMILIES else "ROP_YIELD"
+            self.emit(f"{macro}({self.expr(t.args[0])}, {self.resume_slot(t)});")
         elif t.kind == "return":
             caller, head = (self.expr(a) for a in t.args)
             self.emit(f"ROP_RETURN({caller}, {head});")
@@ -1179,6 +1180,10 @@ class ArmLowerer:
             raise Unsupported(f"{self.arm.name}: a resume point with no definition")
         (dst,) = defs
         return self.home_index(dst)
+
+
+# The families whose yield suspends in the delegating state
+DELEGATING_FAMILIES = frozenset({"YieldFrom"})
 
 
 def cname(operand: str) -> str:

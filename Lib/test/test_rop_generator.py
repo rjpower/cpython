@@ -470,8 +470,7 @@ class ArmRowTests(unittest.TestCase):
         self.assertEqual(total, old + len(entries))
         for entry in entries:
             handler = old + entry.index
-            for table in ("_PyIR_HandlerFlags", "_PyIR_HandlerBase",
-                          "_PyIR_GeneratorBoundaries"):
+            for table in ("_PyIR_HandlerFlags", "_PyIR_HandlerBase"):
                 with self.subTest(arm=entry.dotted, table=table):
                     section = header[header.index(f"{table}[IR_NUM_HANDLERS] = {{"):]
                     section = section[:section.index("};")]

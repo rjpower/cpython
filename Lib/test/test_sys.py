@@ -1889,9 +1889,9 @@ class SizeofTest(unittest.TestCase):
             check(bar, size('PP'))
         # generator
         def get_gen(): yield 1
-        # the slots: a constant slot (the yielded 1), the discard slot and one
-        # temporary
-        check(get_gen(), size('6P4c' + INTERPRETER_FRAME + 'PPP'))
+        # the slots: constant slots (the yielded 1 and the returned None), the
+        # discard slot and one temporary
+        check(get_gen(), size('6P4c' + INTERPRETER_FRAME + 'PPPP'))
         # iterator
         check(iter('abc'), size('lP'))
         # callable-iterator

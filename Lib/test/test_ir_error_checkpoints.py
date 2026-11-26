@@ -221,51 +221,6 @@ class ErrorCheckpointTests(unittest.TestCase):
             monitor.free_tool_id(tool)
         self.assertEqual(observations, [[]])
 
-    def test_source_and_actual_flush_receipts_are_both_required(self):
-        from pathlib import Path
-        from test import test_tools
-        test_tools.skip_if_missing("cases_generator")
-        with test_tools.imports_under_tool("cases_generator"):
-            import analyzer
-            import ir_error_effects
-            import ir_generator
-
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-
-        def checkpoints():
-            return ir_generator.handler_contracts(analysis, formats)["GET_ANEXT"].error_checkpoints
-
-        self.assertTrue(checkpoints())
-        # An absence-only callback effect is not a readability contract.
-        helper = ir_error_effects.HELPERS["_PyEval_GetANext"]
-        with mock.patch.dict(ir_error_effects.HELPERS, {"_PyEval_GetANext":
-                ir_error_effects.HelperEffect(helper.inputs, helper.result,
-                    ir_error_effects.HomeEffect.PRESERVES_SCRATCH_ABSENCE,
-                    helper.may_fail, helper.callback)}):
-            self.assertFalse(checkpoints())
-        with mock.patch.object(ir_generator.IREmitter, "operand_error_flush", lambda *args: None):
-            self.assertFalse(checkpoints())
-        original = ir_generator.IRStack.flush
-
-        def writing_flush(stack, *args, **kwargs):
-            result = original(stack, *args, **kwargs)
-            # A write without its matching action receipt is uncovered.
-            stack.home_writes += 1
-            return result
-
-        with mock.patch.object(ir_generator.IRStack, "flush", writing_flush):
-            self.assertFalse(checkpoints())
-        part = analysis.instructions["GET_ANEXT"].parts[-1]
-        original_nullable = part.stack.inputs[0].nullable
-        part.stack.inputs[0].nullable = True
-        try:
-            # An annotation does not by itself prove NULL-safe source use.
-            self.assertFalse(checkpoints())
-        finally:
-            part.stack.inputs[0].nullable = original_nullable
-
 
 if __name__ == "__main__":
     unittest.main()

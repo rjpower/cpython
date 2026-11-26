@@ -1779,21 +1779,15 @@
         ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): the generator's expansion `_PyIR_OriginalHandler(frame, this_instr, op)` \
      * (ir.c:795): `_PyCode_HandlerFor`, which reads the code object's words (never \
-     * rewritten: pycore_ir.h:841) and the handler format tables, and calls \
-     * _PyIR_GeneratorBoundaryHandler (a table lookup; Py_FatalError on a missing \
-     * entry, not a raise).  No object read, no write, no raise. */ \
+     * rewritten: pycore_ir.h:841) and the handler format tables.  No object \
+     * read, no write, no raise. */ \
     MACRO(ORIGINAL_HANDLER, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): pycore_ir.h:581: `opcode in range && (_PyIR_Formats[opcode].effects & \
      * _PyIR_SPECIALIZES)`, a read of the static const format table.  That table is not \
      * heap state (nothing rewrites it), so the row reads nothing: `reads` is removed. */ \
     HELPER(_PyFb_HasEntry, int, (int), \
-        ARGS(scalar), SCALAR, EFFECTS()) \
-    /* Evidence (G0c8): as the block above. Reads the receiver's type and \
-     * its _tp_iteritem slot; no lookup and no lowering. 
-     * The receiver is taken as an object without a test (PyValue_AsKnownObjectBorrow; the send loop's receiver is always one): the row requires `object`. */ \
-    HELPER(_Py_Specialize_Send, void, (PyValue, _PyInstr *), \
-        ARGS(borrowed object, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
+        ARGS(scalar), SCALAR, EFFECTS())
 
 /* The evaluator's labels (bytecodes.c label(...)): the routines behind them */
 #define _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \
@@ -2789,15 +2783,6 @@
      * local C struct that is neither heap nor a home; no failure, no \
      * callback.  Per-form macros cannot be one function */ \
     MACRO(IR_REPORT_EDGE, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
-    /* ir_generator.py generator_marker: emits Py_UNREACHABLE() after the \
-     * ownership event GENERATOR_MARKER.  No word executes \
-     * RETURN_GENERATOR: a call creates the generator in \
-     * _PyGen_NewCall (Objects/genobject.c) with its frame past this word. \
-     * No callee, no effect, no exit. */ \
-    MACRO(IR_GENERATOR_MARKER, ARGS(), NONE, EFFECTS(), EXITS()) \
-    /* Evidence (G0c8): ir_generator.py:3626: a marker that emits no code; it is accepted \
-     * only when the word's metadata-only passthrough is certified (argument 1). */ \
-    MACRO(IR_METADATA_PASSTHROUGH, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): ir_generator.py:4198: emits `call_state |= CALL_EFFECTS`, a write of the \
      * call handler's register local (the `call_state` STATE row, which the uop names in \
      * its state(...) clause).  No heap access. */ \
@@ -2990,9 +2975,8 @@
           EXITS(branch(committed), raise(committed))) \
     /* IR_MARKER_EFFECTS: escapes, error, terminal; TRANSFER_TOKENS (BRANCH, \
      * RAISE).  Arguments are the kind, the completion value and the \
-     * oparg.  The completion helper (_PyEval_CompleteForIter, \
-     * _PyEval_CompleteSend) owns the value on every exit, so the value is \
-     * consumed (G0a4).  Reviewed G0c5: complete_step_impl (ceval.c) \
+     * oparg.  The completion helper (_PyEval_CompleteForIter) owns the \
+     * value on every exit, so the value is consumed (G0a4).  Reviewed G0c5: complete_step_impl (ceval.c) \
      * reads the window homes and, on a FOR_ITER completion, retires them \
      * (window[0] and window[1] are cleared and closed: the iterator and \
      * its cursor), publishes nothing else, and returns the step's next \
@@ -3017,27 +3001,15 @@
           EFFECTS(reads, writes, raises, releases, runs_python, \
                   switches_frame, retires_frame), EXITS(raise, exit), \
           CALLS(_PyEval_ProcessError)) \
-    /* Evidence (G0c batch 6; ir_generator.return_to_caller, \
-     * finish_generator_return, Python/ceval_routines.h gen_return, \
-     * Python/ceval.c _PyEval_CompleteGeneratorReturn).  Each macro \
-     * consumes the value on both exits.  IR_RETURN_TO_CALLER: a generator's \
-     * return completes the resumer's step (_PyEval_CompleteGeneratorReturn: \
-     * the value is published to the resumer, or closed with the step's \
-     * error, and the resumer's closes may run Python), any other return \
-     * stores it in the caller's return slot (IR_STORE_RETURN); then it \
-     * dispatches in the caller (return) or processes the step's error \
-     * (raise).  IR_FINISH_GENERATOR_RETURN{,_EMPTY}: an unconditional \
+    /* Evidence (G0c batch 6; ir_generator.finish_generator_return, \
+     * Python/ceval_routines.h gen_return).  Each macro consumes the value \
+     * on both exits.  IR_FINISH_GENERATOR_RETURN{,_EMPTY}: an unconditional \
      * transfer of the value to gen_return, which retires the dying \
      * generator frame and completes the resumer's step.  Its code ends the \
      * uop's path, as IR_GEN_RETURN is a goto (interpreter) or a tail call \
-     * (function form), so the value is not the uop's afterwards; the seed \
-     * said `borrowed` and left the value to the frame clear that follows, \
-     * which only the non-generator path reaches.  Failure: the step's \
-     * error is raised, with the value closed.  TRANSFER_TOKENS (RETURN, \
-     * RAISE). */ \
-    MACRO(IR_RETURN_TO_CALLER, ARGS(consumed, scalar), NONE, \
-          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
-          EXITS(return, raise)) \
+     * (function form), so the value is not the uop's afterwards.  Failure: \
+     * the step's error is raised, with the value closed.  TRANSFER_TOKENS \
+     * (RETURN, RAISE). */ \
     MACRO(IR_FINISH_GENERATOR_RETURN, ARGS(consumed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python, switches_frame, retires_frame), \
           EXITS(return, raise)) \
@@ -3048,28 +3020,6 @@
     MACRO(IR_FINISH_GENERATOR_RETURN_EMPTY, ARGS(consumed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python, switches_frame, retires_frame), \
           EXITS(return, raise)) \
-    /* ir_generator.py enter_generator: stores the sent value's slot into \
-     * the resumed frame (frame->return_slot, return_pc, previous, the \
-     * generator's exc_info), makes the generator's frame current, then \
-     * either enters the recursion count (_Py_EnterRecursivePy, which can \
-     * fail with RecursionError: the sent value is closed, \
-     * PROCESS_ERROR_AT) or, in the generator boundary form, jumps through \
-     * IR_GEN_RESUME.  The new frame runs Python, so runs_python and \
-     * switches_frame; the sent value moves into the resumed frame, which \
-     * the walk cannot say, so the uop declares it taken.  Exits: enter (the \
-     * transfer), raise (the failed entry). */ \
-    MACRO(IR_ENTER_GENERATOR, ARGS(object, scalar), NONE, \
-          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
-          EXITS(enter, raise)) \
-    /* IR_MARKER_EFFECTS escapes, terminal, frame (no error); \
-     * TRANSFER_TOKENS (YIELD) */ \
-    /* Evidence (G0c8): ir_generator.py:3634: suspends the frame for a delegated yield: stores \
-     * instr_ptr, detaches the generator's exception state (writes), leaves the recursion \
-     * count, switches to the previous frame, and stores the value to the caller's slot \
-     * (IR_STORE_RETURN, which may enter the unit: IR_JIT_RESUME runs Python).  It \
-     * consumes the yielded value into the caller's home and exits by `yield`. */ \
-    MACRO(IR_SUSPEND_DELEGATED, ARGS(consumed), NONE, \
-          EFFECTS(reads, writes, runs_python, switches_frame), EXITS(yield)) \
     /* ir_generator.try_dict_first_probe: _PyDict_TryGetFirstProbeValue \
      * (Objects/dictobject.c) reads an exact dict's first probe slot for an \
      * inline int key and returns a new reference to the value only on an \

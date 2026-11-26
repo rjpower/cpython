@@ -140,7 +140,7 @@ class ContractTests(unittest.TestCase):
                          {_opcode.IR_F_NO_SELF})
 
     def test_generator_completion_operand_layout(self):
-        families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER']}
+        families = {opcode.opmap['FOR_ITER']}
         # Exported base uses BaseOpcode, which retains instrumented IDs.
         # Include their positively declared canonical-family twin links.
         twins = {row.twin for row in ROWS.values()
@@ -158,8 +158,6 @@ class ContractTests(unittest.TestCase):
                                              _opcode.IR_ROLE_IMM))
                 self.assertEqual(row.imm, _opcode.IR_LOC_D)
                 self.assertTrue(row.flags & _opcode.IR_FORWARD)
-        if not selected:
-            self.skipTest("no live handler left; the old generator goes at D")
 
     def test_no_result_publication_phase(self):
         # A handler stores its result in its place in the upstream order,
@@ -213,34 +211,13 @@ class ContractTests(unittest.TestCase):
                     self.assertEqual(writes - reads, expected)
                     self.assertLessEqual(through, min(reads, writes))
 
-    def test_through(self):
-        # The deepest inputs that keep their slot and their value: not an
-        # input that the body assigns or whose address it passes on
-        # (null_or_index of FOR_ITER and SEND), nor one that it replaces
-        # with its result
-        expected = {
-            "SEND": 1, "SEND_VIRTUAL": 1, "SEND_GEN": 2,
-        }
-        for name in present(*expected):
-            count = expected[name]
-            for oparg in (2, 3, 7):
-                with self.subTest(name=name, oparg=oparg):
-                    self.assertEqual(extent(BY_NAME[name].through, oparg),
-                                     count)
-
     def test_window_and_fields(self):
         for h, row in ROWS.items():
             with self.subTest(handler=opcode._all_opname[h]):
                 roles = row.roles
                 inputs = [r - _opcode.IR_ROLE_IN0 for r in roles
                           if r >= _opcode.IR_ROLE_IN0]
-                if opcode._all_opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
-                    self.assertEqual(row.ninputs, 3)
-                    self.assertEqual(sorted(inputs), [0, 2])
-                    self.assertEqual(roles[2], _opcode.IR_ROLE_NONE)
-                    self.assertEqual(row.borrow_mask, 0)
-                else:
-                    self.assertEqual(sorted(inputs), list(range(row.ninputs)))
+                self.assertEqual(sorted(inputs), list(range(row.ninputs)))
                 if row.flags & _opcode.IR_WINDOW:
                     self.assertIn(_opcode.IR_ROLE_BASE, roles)
                     # at most the sources read through fields of their own
@@ -472,7 +449,7 @@ class ContractTests(unittest.TestCase):
                     self.assertNotIn(name, opcode._specialized_opmap)
                     self.assertFalse(name.startswith("INSTRUMENTED_"))
                     self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
-        suspends = {opcode._all_opname[row.ordinary_handler] for row in ROWS.values()
+        suspends = {opcode._all_opname[h] for h, row in ROWS.items()
                     if row.effects & _opcode.IR_SUSPENDS}
         # A send to a native iterator that suspends yields its value from
         # the outer frame, which the record states as a YIELD transfer
@@ -819,13 +796,6 @@ class SourceScanTests(unittest.TestCase):
                           extent(row.writes, oparg))
                 expected = (eval(popped[name], {"oparg": oparg}),
                             eval(pushed[name], {"oparg": oparg}))
-                if opcode._all_opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
-                    # Frontend YIELD_VALUE1 is normalized to three logical
-                    # inputs/outputs before allocation. Its cursor dependency
-                    # remains in SSA without a physical input field.
-                    self.assertEqual(expected, (1, 1))
-                    self.assertEqual(extent(row.through, oparg), 2)
-                    expected = (3, 3)
                 if min(expected) < 0:
                     continue
                 with self.subTest(handler=opcode._all_opname[h], oparg=oparg):

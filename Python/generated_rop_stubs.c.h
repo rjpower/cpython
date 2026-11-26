@@ -80,7 +80,6 @@ _PyIR_Rop_Stub_Add_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Add_Generic);
     PyValueBorrow a_view0;
@@ -237,7 +236,6 @@ _PyIR_Rop_Stub_AttrWrite_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_AttrWrite_Generic);
     PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
@@ -439,7 +437,6 @@ _PyIR_Rop_Stub_SuperAttr_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_SuperAttr_Generic);
     _PyRopSpan span1;
@@ -505,7 +502,6 @@ _PyIR_Rop_Stub_SuperAttrExplicit_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_SuperAttrExplicit_Generic);
     _PyRopSpan span1;
@@ -571,7 +567,6 @@ _PyIR_Rop_Stub_SuperMethod_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_SuperMethod_Generic);
     _PyRopSpan span1;
@@ -650,7 +645,6 @@ _PyIR_Rop_Stub_SuperMethodExplicit_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2 + (IR_C(ir_word) + 3) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_SuperMethodExplicit_Generic);
     _PyRopSpan span1;
@@ -729,7 +723,6 @@ _PyIR_Rop_Stub_Unpack_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Unpack_Generic);
     size_t adapt_before_use_unpack1_n;
@@ -814,7 +807,6 @@ _PyIR_Rop_Stub_GetMethod_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_GetMethod_Generic);
     PyValueBorrow a_view0;
@@ -1022,7 +1014,6 @@ _PyIR_Rop_Stub_SetItem_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_SetItem_Generic);
     PyValueBorrow a_view0;
@@ -1140,7 +1131,6 @@ _PyIR_Rop_Stub_IterOpen_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_IterOpen_Generic);
     PyValueBorrow a_view0;
@@ -1284,7 +1274,6 @@ _PyIR_Rop_Stub_GlobalRead_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_GlobalRead_Generic);
     PyValue ret1;
@@ -1380,7 +1369,6 @@ _PyIR_Rop_Stub_Binary_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Generic);
     PyValueBorrow a_view0;
@@ -1538,7 +1526,6 @@ _PyIR_Rop_Stub_AppendText_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_AppendText_Generic);
     PyValueBorrow a_view0;
@@ -1696,7 +1683,6 @@ _PyIR_Rop_Stub_Compare_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Generic);
     PyValueBorrow a_view0;
@@ -1884,7 +1870,6 @@ _PyIR_Rop_Stub_Contains_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Contains_Generic);
     PyValueBorrow a_view0;
@@ -2022,7 +2007,6 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Generic);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -2320,7 +2304,6 @@ _PyIR_Rop_Stub_Truth_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Truth_Generic);
     PyValueBorrow a_view0;
@@ -2533,7 +2516,6 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_BranchTruth_Generic);
     PyValueBorrow a_view0;
@@ -2764,7 +2746,6 @@ _PyIR_Rop_Stub_Add_Float(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Add_Float);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -2818,7 +2799,6 @@ _PyIR_Rop_Stub_Add_Text(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Add_Text);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -2872,7 +2852,6 @@ _PyIR_Rop_Stub_Add_Extended(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Add_Extended);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -2960,7 +2939,6 @@ _PyIR_Rop_Stub_SpecialLookup_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_SpecialLookup_Generic);
     PyValueBorrow a_view0;
@@ -3063,7 +3041,6 @@ _PyIR_Rop_Stub_CellMake_Wrap(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_CellMake_Wrap);
     PyValue *const home_local = &IR_SLOT(IR_A(ir_word));
@@ -3099,7 +3076,6 @@ _PyIR_Rop_Stub_CellMapRead_Lookup(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_CellMapRead_Lookup);
     PyValueBorrow a_view0;
@@ -3164,7 +3140,6 @@ _PyIR_Rop_Stub_CellDelete_Unbind(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_CellDelete_Unbind);
     PyValue *const home_cell = &IR_SLOT(IR_A(ir_word));
@@ -3195,7 +3170,6 @@ _PyIR_Rop_Stub_WithExit_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_WithExit_Generic);
     PyValue *const home_self = &IR_SLOT(IR_C(ir_word));
@@ -3292,7 +3266,6 @@ _PyIR_Rop_Stub_Build_Tuple(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Build_Tuple);
     _PyRopSpan span1;
@@ -3330,7 +3303,6 @@ _PyIR_Rop_Stub_Build_List(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Build_List);
     _PyRopSpan span1;
@@ -3368,7 +3340,6 @@ _PyIR_Rop_Stub_Build_Set(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Build_Set);
     _PyRopSpan span1;
@@ -3406,7 +3377,6 @@ _PyIR_Rop_Stub_Build_Map(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Build_Map);
     _PyRopSpan span1;
@@ -3444,7 +3414,6 @@ _PyIR_Rop_Stub_AddElement_Append(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_AddElement_Append);
     PyValue *const home_item = &IR_SLOT(IR_B(ir_word));
@@ -3476,7 +3445,6 @@ _PyIR_Rop_Stub_AddElement_Add(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_AddElement_Add);
     PyValue *const home_item = &IR_SLOT(IR_B(ir_word));
@@ -3508,7 +3476,6 @@ _PyIR_Rop_Stub_AddEntry_Put(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_AddEntry_Put);
     PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
@@ -3543,7 +3510,6 @@ _PyIR_Rop_Stub_UpdateContainer_Extend(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_UpdateContainer_Extend);
     PyValue *const home_container = &IR_SLOT(IR_A(ir_word));
@@ -3578,7 +3544,6 @@ _PyIR_Rop_Stub_UpdateContainer_Union(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_UpdateContainer_Union);
     PyValue *const home_container = &IR_SLOT(IR_A(ir_word));
@@ -3613,7 +3578,6 @@ _PyIR_Rop_Stub_UpdateContainer_Overlay(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_UpdateContainer_Overlay);
     PyValue *const home_container = &IR_SLOT(IR_A(ir_word));
@@ -3648,7 +3612,6 @@ _PyIR_Rop_Stub_MergeKeywords_Merge(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_MergeKeywords_Merge);
     PyValue *const home_fn = &IR_SLOT(IR_A(ir_word));
@@ -3684,7 +3647,6 @@ _PyIR_Rop_Stub_Unpack_Tuple(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Unpack_Tuple);
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
@@ -3721,7 +3683,6 @@ _PyIR_Rop_Stub_Unpack_List(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Unpack_List);
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
@@ -3767,7 +3728,6 @@ _PyIR_Rop_Stub_UnpackStar_Iterable(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_A(ir_word) + 3) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_UnpackStar_Iterable);
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
@@ -3808,7 +3768,6 @@ _PyIR_Rop_Stub_ExceptEnter_Install(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_ExceptEnter_Install);
     PyValue *const home_exc = &IR_SLOT(IR_C(ir_word));
@@ -3845,7 +3804,6 @@ _PyIR_Rop_Stub_ExceptLeave_Restore(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_ExceptLeave_Restore);
     PyValue *const home_saved = &IR_SLOT(IR_A(ir_word));
@@ -3870,7 +3828,6 @@ _PyIR_Rop_Stub_ExceptMatch_Match(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_ExceptMatch_Match);
     PyValue *const home_pattern = &IR_SLOT(IR_C(ir_word));
@@ -3916,7 +3873,6 @@ _PyIR_Rop_Stub_DelItem_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_DelItem_Generic);
     PyValueBorrow a_view0;
@@ -3981,7 +3937,6 @@ _PyIR_Rop_Stub_SliceRead_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_SliceRead_Generic);
     PyValueBorrow a_view0;
@@ -4073,7 +4028,6 @@ _PyIR_Rop_Stub_SliceWrite_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_SliceWrite_Generic);
     PyValueBorrow a_view0;
@@ -4160,7 +4114,6 @@ _PyIR_Rop_Stub_BuildSlice_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_BuildSlice_Generic);
     _PyRopSpan span1;
@@ -4198,7 +4151,6 @@ _PyIR_Rop_Stub_GetItem_ListSlice(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_GetItem_ListSlice);
     PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
@@ -4289,7 +4241,6 @@ _PyIR_Rop_Stub_NamespaceRead_Name(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceRead_Name);
     PyValue ret1;
@@ -4325,7 +4276,6 @@ _PyIR_Rop_Stub_NamespaceRead_Locals(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceRead_Locals);
     PyValue ret1;
@@ -4360,7 +4310,6 @@ _PyIR_Rop_Stub_NamespaceRead_BuildClass(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceRead_BuildClass);
     PyValue ret1;
@@ -4396,7 +4345,6 @@ _PyIR_Rop_Stub_NamespaceReadFrom_Mapping(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceReadFrom_Mapping);
     PyValueBorrow a_view0;
@@ -4461,7 +4409,6 @@ _PyIR_Rop_Stub_NamespaceWrite_Name(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceWrite_Name);
     PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
@@ -4507,7 +4454,6 @@ _PyIR_Rop_Stub_NamespaceWrite_Global(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_NamespaceWrite_Global);
     PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
@@ -4553,7 +4499,6 @@ _PyIR_Rop_Stub_SetupAnnotations_Setup(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_SetupAnnotations_Setup);
     int ret1;
@@ -4581,7 +4526,6 @@ _PyIR_Rop_Stub_Import_Eager(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Import_Eager);
     PyValue *const home_level = &IR_SLOT(IR_B(ir_word));
@@ -4623,7 +4567,6 @@ _PyIR_Rop_Stub_Import_Policy(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Import_Policy);
     PyValue *const home_level = &IR_SLOT(IR_B(ir_word));
@@ -4665,7 +4608,6 @@ _PyIR_Rop_Stub_Import_Lazy(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Import_Lazy);
     PyValue *const home_level = &IR_SLOT(IR_B(ir_word));
@@ -4707,7 +4649,6 @@ _PyIR_Rop_Stub_ImportFrom_From(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_ImportFrom_From);
     PyValue *const home_module = &IR_SLOT(IR_B(ir_word));
@@ -4746,7 +4687,6 @@ _PyIR_Rop_Stub_ImportFrom_FromLast(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_ImportFrom_FromLast);
     PyValue *const home_module = &IR_SLOT(IR_B(ir_word));
@@ -4785,7 +4725,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_INPLACE_ADD(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_INPLACE_ADD);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -4842,7 +4781,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_SUBTRACT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_SUBTRACT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -4899,7 +4837,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_INPLACE_SUBTRACT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_INPLACE_SUBTRACT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -4956,7 +4893,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_MULTIPLY(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_MULTIPLY);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5013,7 +4949,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_INPLACE_MULTIPLY(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_INPLACE_MULTIPLY);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5070,7 +5005,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_FLOOR_DIVIDE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_FLOOR_DIVIDE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5127,7 +5061,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_REMAINDER(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_REMAINDER);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5184,7 +5117,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_AND(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_AND);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5241,7 +5173,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_OR(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_OR);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5298,7 +5229,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_XOR(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_XOR);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5355,7 +5285,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_LSHIFT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_LSHIFT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5412,7 +5341,6 @@ _PyIR_Rop_Stub_Binary_Int_NB_RSHIFT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int_NB_RSHIFT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5469,7 +5397,6 @@ _PyIR_Rop_Stub_Binary_Int(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Int);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5526,7 +5453,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_INPLACE_ADD(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_ADD);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5585,7 +5511,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_SUBTRACT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_SUBTRACT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5644,7 +5569,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_INPLACE_SUBTRACT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_SUBTRACT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5703,7 +5627,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_MULTIPLY(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_MULTIPLY);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5762,7 +5685,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_INPLACE_MULTIPLY(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_MULTIPLY);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5821,7 +5743,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_TRUE_DIVIDE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_TRUE_DIVIDE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5880,7 +5801,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_INPLACE_TRUE_DIVIDE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_TRUE_DIVIDE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5939,7 +5859,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_POWER(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_POWER);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -5998,7 +5917,6 @@ _PyIR_Rop_Stub_Binary_Float_NB_INPLACE_POWER(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Float_NB_INPLACE_POWER);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6057,7 +5975,6 @@ _PyIR_Rop_Stub_Binary_Text(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Text);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6111,7 +6028,6 @@ _PyIR_Rop_Stub_Binary_Extended(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Binary_Extended);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6199,7 +6115,6 @@ _PyIR_Rop_Stub_Unary_Generic(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Unary_Generic);
     PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
@@ -6238,7 +6153,6 @@ _PyIR_Rop_Stub_AppendText_Text(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_AppendText_Text);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6299,7 +6213,6 @@ _PyIR_Rop_Stub_Length_Size(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Length_Size);
     PyValueBorrow a_view0;
@@ -6364,7 +6277,6 @@ _PyIR_Rop_Stub_PatternClass_Match(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_PatternClass_Match);
     _PyRopSpan span1;
@@ -6428,7 +6340,6 @@ _PyIR_Rop_Stub_PatternKeys_Match(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_PatternKeys_Match);
     PyValueBorrow a_view0;
@@ -6499,7 +6410,6 @@ _PyIR_Rop_Stub_Resume_Poll(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Resume_Poll);
     int ret1;
@@ -6560,7 +6470,6 @@ _PyIR_Rop_Stub_Awaitable_Await(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Awaitable_Await);
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
@@ -6612,7 +6521,6 @@ _PyIR_Rop_Stub_AsyncIterOpen_Open(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_AsyncIterOpen_Open);
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
@@ -6651,7 +6559,6 @@ _PyIR_Rop_Stub_AsyncIterNext_Next(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_AsyncIterNext_Next);
     PyValue *const home_aiter = &IR_SLOT(IR_B(ir_word));
@@ -6688,7 +6595,6 @@ _PyIR_Rop_Stub_Compare_Int_LT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_LT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6731,7 +6637,6 @@ _PyIR_Rop_Stub_Compare_Int_LE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_LE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6774,7 +6679,6 @@ _PyIR_Rop_Stub_Compare_Int_EQ(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_EQ);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6817,7 +6721,6 @@ _PyIR_Rop_Stub_Compare_Int_NE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_NE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6860,7 +6763,6 @@ _PyIR_Rop_Stub_Compare_Int_GT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_GT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6903,7 +6805,6 @@ _PyIR_Rop_Stub_Compare_Int_GE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Int_GE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6946,7 +6847,6 @@ _PyIR_Rop_Stub_Compare_Float_LT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_LT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -6989,7 +6889,6 @@ _PyIR_Rop_Stub_Compare_Float_LE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_LE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -7032,7 +6931,6 @@ _PyIR_Rop_Stub_Compare_Float_EQ(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_EQ);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -7075,7 +6973,6 @@ _PyIR_Rop_Stub_Compare_Float_NE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_NE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -7118,7 +7015,6 @@ _PyIR_Rop_Stub_Compare_Float_GT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_GT);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -7161,7 +7057,6 @@ _PyIR_Rop_Stub_Compare_Float_GE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Float_GE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -7204,7 +7099,6 @@ _PyIR_Rop_Stub_Compare_Str_EQ(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Str_EQ);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -7251,7 +7145,6 @@ _PyIR_Rop_Stub_Compare_Str_NE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Compare_Str_NE);
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
@@ -7298,7 +7191,6 @@ _PyIR_Rop_Stub_Contains_Set(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Contains_Set);
     PyValue *const home_container = &IR_SLOT(IR_C(ir_word));
@@ -7394,7 +7286,6 @@ _PyIR_Rop_Stub_Contains_Dict(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_Contains_Dict);
     PyValue *const home_container = &IR_SLOT(IR_C(ir_word));
@@ -7490,7 +7381,6 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_LT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Int_TEST_LT);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7540,7 +7430,6 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_LE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Int_TEST_LE);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7590,7 +7479,6 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_EQ(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Int_TEST_EQ);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7640,7 +7528,6 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_NE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Int_TEST_NE);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7690,7 +7577,6 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_GT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Int_TEST_GT);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7740,7 +7626,6 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_GE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Int_TEST_GE);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7790,7 +7675,6 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_LT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Float_TEST_LT);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7840,7 +7724,6 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_LE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Float_TEST_LE);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7890,7 +7773,6 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_EQ(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Float_TEST_EQ);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7940,7 +7822,6 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_NE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Float_TEST_NE);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -7990,7 +7871,6 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_GT(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Float_TEST_GT);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -8040,7 +7920,6 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_GE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Float_TEST_GE);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -8090,7 +7969,6 @@ _PyIR_Rop_Stub_TestBranch_Str_TEST_EQ(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Str_TEST_EQ);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -8146,7 +8024,6 @@ _PyIR_Rop_Stub_TestBranch_Str_TEST_NE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Str_TEST_NE);
     PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
@@ -8202,7 +8079,6 @@ _PyIR_Rop_Stub_TestBranch_Set(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Set);
     PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
@@ -8309,7 +8185,6 @@ _PyIR_Rop_Stub_TestBranch_Dict(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Dict);
     PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
@@ -8416,7 +8291,6 @@ _PyIR_Rop_Stub_TestBranch_Sequence(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 2;
     INSTRUCTION_STATS(ROP_HANDLER_TestBranch_Sequence);
     PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
@@ -8523,7 +8397,6 @@ _PyIR_Rop_Stub_BuildText_Join(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 2) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_BuildText_Join);
     _PyRopSpan span1;
@@ -8561,7 +8434,6 @@ _PyIR_Rop_Stub_BuildText_Interpolation(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 2) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_BuildText_Interpolation);
     _PyRopSpan span1;
@@ -8599,7 +8471,6 @@ _PyIR_Rop_Stub_BuildText_Template(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_B(ir_word) + 2) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_BuildText_Template);
     _PyRopSpan span1;
@@ -8637,7 +8508,6 @@ _PyIR_Rop_Stub_Convert_Text(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Convert_Text);
     PyValueBorrow a_view0;
@@ -8707,7 +8577,6 @@ _PyIR_Rop_Stub_Format_Simple(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Format_Simple);
     PyValueBorrow a_view0;
@@ -8777,7 +8646,6 @@ _PyIR_Rop_Stub_FormatSpec_Value(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_FormatSpec_Value);
     PyValueBorrow a_view0;
@@ -8858,7 +8726,6 @@ _PyIR_Rop_Stub_Truth_Slot(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Truth_Slot);
     PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
@@ -8948,7 +8815,6 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_FALSE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_FALSE);
     PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
@@ -9044,7 +8910,6 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_TRUE(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_TRUE);
     PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
@@ -9140,7 +9005,6 @@ _PyIR_Rop_Stub_LocalRead_Checked(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_LocalRead_Checked);
     PyValue *const home_local = &IR_SLOT(IR_B(ir_word));
@@ -9179,7 +9043,6 @@ _PyIR_Rop_Stub_LocalWrite_Restore(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_LocalWrite_Restore);
     PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
@@ -9208,7 +9071,6 @@ _PyIR_Rop_Stub_SaveLocal_Take(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_SaveLocal_Take);
     PyValue *const home_local = &IR_SLOT(IR_B(ir_word));
@@ -9237,7 +9099,6 @@ _PyIR_Rop_Stub_LocalDelete_Checked(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_LocalDelete_Checked);
     PyValue *const home_local = &IR_SLOT(IR_A(ir_word));
@@ -9272,7 +9133,6 @@ _PyIR_Rop_Stub_Move_Transfer(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_A(ir_word) + IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Move_Transfer);
     _PyRopSpan span1;
@@ -9297,7 +9157,6 @@ _PyIR_Rop_Stub_Move_Copy(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_A(ir_word) + IR_B(ir_word) + 1) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Move_Copy);
     _PyRopSpan span1;
@@ -9322,7 +9181,6 @@ _PyIR_Rop_Stub_Rotate_Cycle(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_A(ir_word) + 0) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Rotate_Cycle);
     _PyRopSpan span1;
@@ -9345,7 +9203,6 @@ _PyIR_Rop_Stub_Retire_Close(
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
     next_instr += 1 + (IR_A(ir_word) + 0) / IR_OPERANDS_PER_WORD;
     INSTRUCTION_STATS(ROP_HANDLER_Retire_Close);
     _PyRopSpan span1;

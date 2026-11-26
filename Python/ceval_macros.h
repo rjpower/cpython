@@ -1,37 +1,23 @@
 // Macros and other things needed by ceval.c and the generated arms
 
-/* The compilation of the evaluator body (Python/ceval_evaluator.h): 0 for
- * ir_evaluate() in Python/ceval.c, 1 for the observing evaluator in
+/* The compilation of the evaluator (Python/ceval_evaluator.h): 0 for the
+ * normal one in Python/ceval.c, 1 for the observing evaluator in
  * Python/ceval_observing.c.  The function forms (Python/ceval_forms.c) are
  * compiled once, with 0, and their executor picks a word's form by the
  * observed mark of its code. */
 #ifndef IR_OBSERVING
 #  define IR_OBSERVING 0
 #endif
-/* The throwflag of an evaluator that goes on at frame->instr_ptr, where the
- * other compilation left the frame (the switch word, IR_H_SWITCH) */
-#define IR_ENTER_SWITCH 2
 /* IR_COMPLETIONS(SITE): the completions of the consumer's word at SITE,
  * which the observing evaluator takes from its family's observer where a
  * tool observes the word */
 #if IR_OBSERVING
-#  define IR_OTHER_EVALUATOR _PyEval_EvalNormal
 #  define IR_COMPLETIONS(SITE) \
     ((_PyFrame_Observed(frame, (SITE)) & _PyIR_OBSERVE_EVENTS) \
         ? _PyRop_ObservingCompletions : _PyRop_Completions)
 #else
-#  define IR_OTHER_EVALUATOR _PyEval_EvalObserving
 #  define IR_COMPLETIONS(SITE) _PyRop_Completions
 #endif
-/* The evaluator's switch where an error routine resumes frame at
- * next_instr: to the other evaluator if the frame goes on there */
-#define IR_ERROR_SWITCH() \
-    do { \
-        if (_PyEval_SwitchesLoop(frame, IR_OBSERVING)) { \
-            frame->return_pc = next_instr; \
-            Py_MUSTTAIL return IR_OTHER_EVALUATOR(tstate, frame, IR_ENTER_SWITCH); \
-        } \
-    } while (0)
 
 /* Use macros rather than inline functions, to make it as clear as possible
  * to the C compiler that the tracing check is a simple test then branch.
@@ -68,12 +54,13 @@
 #define INSTRUCTION_STATS(op) ((void)0)
 #endif
 
-/* The interpreter is one function, ir_evaluate() (Python/ceval.c), with a
- * label for each handler and each shared label, and dispatch is a computed
- * goto through opcode_targets (Python/ir_targets.h).  GCC and Clang keep the
- * interpreter's state in registers for the whole activation, so a handler
- * that makes a call on a cold path costs nothing on its fast path
- * (pyjit/design/proposals/handlers81.md, section 3).  The state is:
+/* The interpreter is a set of functions, one per handler, label and VM
+ * routine, of one type (Python/ceval_tail.h), and dispatch is a guaranteed
+ * tail call through the table of the evaluator's compilation
+ * (Python/ceval_evaluator.h).  The interpreter's state is the functions'
+ * parameters, which the calling convention keeps in registers, so a handler
+ * that makes a call on a cold path costs nothing on its fast path.  The
+ * state is:
  *
  *   frame       the executing frame, tstate->current_frame; a handler that
  *               switches frames assigns it before it dispatches;
@@ -83,63 +70,45 @@
  *               which the handler decodes its fields, IR_A(ir_word) and so
  *               on (Include/internal/pycore_ir.h).
  *
- * These are locals of ir_evaluate(), and none has its address taken: that
- * would put it in memory in every handler and add a stack-protector canary.
- * A handler never reloads one after a call that cannot change it.  Helpers
- * take values and return a value, a status or a {frame, next} pair; none
- * jumps into the evaluator.
+ * None has its address taken: that would put it in memory in every handler
+ * and add a stack-protector canary.  A handler never reloads one after a
+ * call that cannot change it.  Helpers take values and return a value, a
+ * status or a {frame, next} pair; none jumps into the interpreter.
  *
  * A handler that runs another on the same word, as a specialisation that
- * deoptimises to its family head does, jumps to it with ir_word unchanged,
- * so the other handler finds the same fields.
+ * deoptimises to its family head does, tail-calls it with ir_word
+ * unchanged, so the other handler finds the same fields.
  *
  * Every handler also has a function form, ir_run_X(tstate, frame,
  * next_instr, ir_word), which returns a _PyIRTransfer (tiers87, C2).  The
  * bodies leave only through the transfer macros below, which this file binds
- * for the evaluator and Python/ceval.c binds for the function forms; the
- * evaluator's shared paths are the VM routines of Python/ceval_routines.h,
- * bound the same way. */
-#if !defined(__GNUC__) && !defined(__clang__)
-#   error "The interpreter needs a C compiler with computed gotos."
-#endif
+ * for the evaluator and Python/ceval_forms.c binds for the function forms;
+ * the evaluator's shared paths are the VM routines of
+ * Python/ceval_routines.h, bound the same way. */
 
-#define TARGET(op) TARGET_##op:
-#define LABEL(name) LABEL_##name:
-
-/* A label that the inline helpers of its code are to be inlined into: GCC
- * estimates the target of a plain goto as unlikely and optimises the code
- * for size, which outlines them. */
-#define HOT_LABEL(name) LABEL_##name: __attribute__((hot));
+#define TARGET(op) IR_TAIL_FN(op)
 
 /* The evaluator's binding of the VM routines (Python/ceval_routines.h): a
- * routine is a label, its operands are locals of ir_evaluate() of the same
- * names, and its exits share the dispatch blocks gen_dispatch and
- * gen_stepped, so that the evaluator has one dispatch for them.  The plain
- * generator transfers are hot labels (HOT_LABEL); the error routine is not,
- * since the profile estimate that a hot label gives every error path that
- * reaches it would optimise the handlers' fast paths for size. */
-#define IR_ROUTINE(NAME, ...) LABEL_##NAME:
-#define IR_HOT_ROUTINE(NAME, ...) HOT_LABEL(NAME)
-#define GEN_DISPATCH() goto LABEL_gen_dispatch
+ * routine is a function of the interpreter, and its operands
+ * (IR_ROUTINE_OPERAND), and the error routine's origin and entry, travel in
+ * the activation, as for the function forms. */
+#define IR_ROUTINE(NAME) IR_TAIL_FN(NAME)
+#define IR_ROUTINE_OPERAND(NAME) (IR_ACTIVATION()->NAME)
+#define GEN_DISPATCH() \
+    do { \
+        int opcode; \
+        DISPATCH(); \
+    } while (0)
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
-    do { \
-        gen_transfer = _PyEval_ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
-        goto LABEL_gen_stepped; \
-    } while (0)
+    IR_STEP_DONE(_PyEval_ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)))
 /* The error that a completion arm reported in the activation: unwind it */
-#define GEN_RAISED() \
-    do { \
-        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
-        process_error_origin = ir_exit->exit_next; \
-        process_error_entry = ir_exit->exit_entry; \
-        goto LABEL_process_error; \
-    } while (0)
+#define GEN_RAISED() JUMP_TO_LABEL(process_error)
 
 /* The generator transfers.  The plain send, yield and return of a delegation
  * chain run in the VM routine gen_return (Python/ceval_routines.h): a
- * handler passes the routine its operands, here in the locals of ir_evaluate() that the routine's label
- * reads.  A transfer that is not plain, because a callback, a hook or a
- * pending redirect must observe it, runs the steps of
+ * handler passes the routine its operands, in the activation.  A transfer
+ * that is not plain, because a callback, a hook or a pending redirect must
+ * observe it, runs the steps of
  * Python/ceval_generator.h (rule 13): functions that take the value that
  * they transfer as the word of their call, and return the frame and next
  * word to run.  A handler calls one with IR_GEN_JUMP() by name and runs what
@@ -150,7 +119,7 @@
         frame = ir_t.frame; \
         next_instr = ir_t.next; \
         if (next_instr == NULL) { \
-            goto LABEL_outlined_exit; \
+            JUMP_TO_LABEL(process_error); \
         } \
         int opcode; \
         DISPATCH(); \
@@ -163,10 +132,11 @@
  * RETURN_VALUE_EMPTY, so that only the locals of DYING own values. */
 #define IR_GEN_RETURN(V, DYING, EMPTY) \
     do { \
-        gen_value = (V); \
-        gen_dying = (DYING); \
-        gen_empty = (EMPTY); \
-        goto LABEL_gen_return; \
+        _PyEvalActivation *ir_gen = IR_ACTIVATION(); \
+        ir_gen->gen_value = (V); \
+        ir_gen->gen_dying = (DYING); \
+        ir_gen->gen_empty = (EMPTY); \
+        JUMP_TO_LABEL(gen_return); \
     } while (0)
 
 /* The frame transfers of the register instructions (Python/register_ops),
@@ -235,17 +205,6 @@
  * C frame deep. */
 #define Py_MUSTTAIL __attribute__((musttail))
 
-/* Every IR word is one word, so every handler's entry computes the same
- * next_instr + 1.  Left alone, RTL partial redundancy elimination hoists that
- * addition into the dispatch blocks, where it is a sixth value live across
- * the dispatch (frame, tstate, next_instr, ir_word and next_instr + 1), more
- * than the callee-saved registers hold.  The empty asm changes next_instr in
- * a way that the optimiser cannot see through, so the advance stays in the
- * handler.  The structural alternative, where DISPATCH advances and a handler
- * uses next_instr - 1 (8957f9fc4dd, reverted by 2052561d888), clears the
- * hoist too but costs one more instruction per dispatched word: it measured
- * about 1% more instructions on every kernel than this form (29c4c49c650). */
-#define IR_HOLD_NEXT() __asm__("" : "+r"(next_instr))
 /* A planned arm's uop that may reenter Python: the whole-word completion
  * stub's ESCAPED bit (Python/generated_rop_stubs.c.h); nothing elsewhere */
 #define IR_STUB_ESCAPE() ((void)0)
@@ -267,26 +226,30 @@
         next_instr = (TARGET); \
         DISPATCH(); \
     } while (0)
-#define DISPATCH_GOTO() goto *opcode_targets[opcode]
-/* An error leaves the handler for the shared label process_error, which
- * unwinds by the exception table and either dispatches at the handler found
- * or leaves the evaluator. */
+#define DISPATCH_GOTO() \
+    do { \
+        Py_MUSTTAIL return ir_tail_table[opcode](tstate, frame, next_instr, ir_word); \
+    } while (0)
+/* An error leaves the handler for the routine process_error, which unwinds
+ * by the exception table and either dispatches at the handler found or ends
+ * the activation. */
 #define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
     do { \
-        process_error_origin = (origin); \
-        process_error_entry = _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
-        goto LABEL_process_error; \
+        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
+        ir_exit->exit_next = (origin); \
+        ir_exit->exit_entry = \
+            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
+        JUMP_TO_LABEL(process_error); \
     } while (0)
 /* The activation ends with the value V (INTERPRETER_EXIT, or an error that no
  * handler catches) */
 #define IR_EXIT(V) return (V)
-#define JUMP_TO_LABEL(name) goto LABEL_##name
+#define JUMP_TO_LABEL(name) IR_TAIL_GOTO(name)
 /* A specialisation deoptimises to its family head, which runs the word
  * again from its start. */
 #define JUMP_TO_PREDICTED(name) \
     do { \
-        next_instr = this_instr; \
-        goto TARGET_##name; \
+        Py_MUSTTAIL return IR_TAIL_ID(name)(tstate, frame, this_instr, ir_word); \
     } while (0)
 
 /* The activation of the evaluation loop that runs the handler
@@ -332,7 +295,7 @@ do { \
 
 
 /* Dispatch the word at next_instr.  The observing evaluator first tests
- * what monitoring observes at the word (LABEL_observe_word,
+ * what monitoring observes at the word (observe_word,
  * Python/ceval_evaluator.h); the normal one never reads it.  The switch
  * word is no word of the code, and nothing observes it. */
 #if IR_OBSERVING
@@ -341,7 +304,7 @@ do { \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
         if (opcode != IR_H_SWITCH && _PyFrame_Observed(frame, next_instr)) { \
-            goto LABEL_observe_word; \
+            JUMP_TO_LABEL(observe_word); \
         } \
         DISPATCH_GOTO(); \
     }
@@ -372,17 +335,7 @@ do { \
 /* The handler of an outlined instruction (Python/register_ops, rule 4): its body is the function FN, which returns the frame and next word
  * to run, or no word for an exit that the activation describes.  The handler
  * assigns the state and dispatches, as a helper of rule 13 requires. */
-#define IR_RUN_OUTLINED(FN) \
-    do { \
-        _PyIRTransfer ir_transfer = FN(tstate, frame, next_instr, ir_word); \
-        frame = ir_transfer.frame; \
-        next_instr = ir_transfer.next; \
-        if (next_instr == NULL) { \
-            goto LABEL_outlined_exit; \
-        } \
-        int opcode; \
-        DISPATCH(); \
-    } while (0)
+#define IR_RUN_OUTLINED(FN) IR_STEP_DONE(FN(tstate, frame, next_instr, ir_word))
 
 /* A conditional jump of an outlined handler reports whether it jumped, which
  * its instrumented twin needs for its event and cannot tell from the word it
@@ -394,15 +347,8 @@ do { \
  * runs in a cold function, _PyEval_ir_event_edge(), which returns the word to run or
  * no word for an error that the activation describes. */
 #define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
-    do { \
-        _PyIRTransfer ir_t = _PyEval_ir_event_edge(tstate, frame, this_instr, \
-                                           (SOURCE), (NEXT), (EVENT), (EDGE)); \
-        next_instr = ir_t.next; \
-        if (next_instr == NULL) { \
-            goto LABEL_outlined_exit; \
-        } \
-        DISPATCH(); \
-    } while (0)
+    IR_STEP_DONE(_PyEval_ir_event_edge(tstate, frame, this_instr, \
+                                       (SOURCE), (NEXT), (EVENT), (EDGE)))
 
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \

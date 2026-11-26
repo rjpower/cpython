@@ -1,8 +1,8 @@
 """Interpreter C of register instruction arms (F2).
 
 `lower_arm` turns one checked arm graph into the statements of a handler
-body.  The same text is the computed-goto case of ceval.c's `ir_evaluate`
-and the body of the arm's function form: the transfer macros (`DISPATCH`,
+body.  The same text is the arm's function in the tail-calling interpreter
+(Python/ceval_evaluator.h) and the body of the arm's function form: the transfer macros (`DISPATCH`,
 `PROCESS_ERROR_AT`, `JUMP_TO_PREDICTED`) differ, the statements do not.
 
 Operands are decoded from the family's derived encoding, a call lowers

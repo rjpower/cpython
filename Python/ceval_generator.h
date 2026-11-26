@@ -1,10 +1,10 @@
 /* The generator transfer steps (rule 13), for the transfers that are not
  * plain: a callback, a hook, a monitor or a pending redirect must observe
- * them.  The plain transfers run in the evaluator, in the labels of
- * Python/ceval_generator_labels.h.  A step takes the value that it transfers
+ * them.  The plain transfers run in the evaluator, in the VM routine
+ * gen_return (Python/ceval_routines.h).  A step takes the value that it transfers
  * as the word of its call, and returns the frame and next word to run, or no
- * word for an exit that the activation describes (Python/ceval.c,
- * outlined_exit).  The evaluator calls a step and dispatches its result: no
+ * word for an exit that the activation describes (the error routine,
+ * process_error).  The evaluator calls a step and dispatches its result: no
  * step jumps into the evaluator.  The steps call one another to continue a
  * transfer.
  *

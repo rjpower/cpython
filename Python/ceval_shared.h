@@ -1070,11 +1070,9 @@ _PyRop_Polls(uint32_t interrupt)
  * word that the frame goes on at.  The redirections happen where a frame
  * starts or resumes (RESUME), at a poll after a monitoring change, and for
  * the frames already on a stack, during the stop-the-world change
- * (_PyEval_RedirectFrames()). */
-PyValue _PyEval_EvalNormal(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                           int throwflag);
-PyValue _PyEval_EvalObserving(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                              int throwflag);
+ * (_PyEval_RedirectFrames()).  Each evaluator's entry
+ * (_PyEval_EnterNormal(), _PyEval_EnterObserving()) is declared with the
+ * interpreter's functions (Python/ceval_tail.h). */
 extern _PyInstr _PyEval_SwitchWord;
 
 /* Whether frame, which runs in the evaluator that observing names, goes on

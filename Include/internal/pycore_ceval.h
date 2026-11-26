@@ -82,6 +82,13 @@ typedef struct _PyEvalActivation {
     uint32_t exit_entry;
     _PyInstr *exit_next;
     PyValue exit_value;
+    /* The operands of the VM routine gen_return (Python/ceval_routines.h)
+     * when a function enters it, which every function of the interpreter
+     * enters with one type: written by the transfer and read at once.  The
+     * error routine's operands are exit_next and exit_entry. */
+    PyValue gen_value;
+    _PyInterpreterFrame *gen_dying;
+    int gen_empty;
     /* Whether the outlined conditional jump that ran last jumped
      * (IR_REPORT_EDGE()), for the event of its instrumented twin. */
     int edge;

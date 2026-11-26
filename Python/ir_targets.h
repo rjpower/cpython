@@ -3,1036 +3,1036 @@
 //   Python/register_ops/add.rop, Python/register_ops/attrs.rop, Python/register_ops/calls.rop, Python/register_ops/cells.rop, Python/register_ops/cleanup.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/displays.rop, Python/register_ops/exceptions.rop, Python/register_ops/functions.rop, Python/register_ops/getattr.rop, Python/register_ops/items.rop, Python/register_ops/iteration.rop, Python/register_ops/names.rop, Python/register_ops/namespaces.rop, Python/register_ops/numeric.rop, Python/register_ops/patterns.rop, Python/register_ops/resume.rop, Python/register_ops/suspend.rop, Python/register_ops/tests.rop, Python/register_ops/text.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 
-#if IR_OBSERVING
-static void *const opcode_targets[512] = {
-[0] = &&TARGET_IR_OPERANDS,
-[1] = &&TARGET_Add_Int,
-[2] = &&TARGET_Add_Float,
-[3] = &&TARGET_Add_Text,
-[4] = &&TARGET_Add_Extended,
-[5] = &&TARGET_Add_Generic,
-[6] = &&TARGET_AttrWrite_Generic,
-[7] = &&TARGET_AttrWrite_Instance,
-[8] = &&TARGET_AttrWrite_Shape,
-[9] = &&TARGET_AttrWrite_ShapeAdd,
-[10] = &&TARGET_AttrWrite_Hint,
-[11] = &&TARGET_AttrWrite_Slot,
-[12] = &&TARGET_SuperAttr_Generic,
-[13] = &&TARGET_SuperAttr_Builtin,
-[14] = &&TARGET_SuperAttr_Observed,
-[15] = &&TARGET_SuperAttrExplicit_Generic,
-[16] = &&TARGET_SuperAttrExplicit_Builtin,
-[17] = &&TARGET_SuperAttrExplicit_Observed,
-[18] = &&TARGET_SuperMethod_Generic,
-[19] = &&TARGET_SuperMethod_Builtin,
-[20] = &&TARGET_SuperMethod_Observed,
-[21] = &&TARGET_SuperMethodExplicit_Generic,
-[22] = &&TARGET_SuperMethodExplicit_Builtin,
-[23] = &&TARGET_SuperMethodExplicit_Observed,
-[24] = &&TARGET_SpecialLookup_Generic,
-[25] = &&TARGET_Call_Exact,
-[26] = &&TARGET_Call_BoundExact,
-[27] = &&TARGET_Call_Init,
-[28] = &&TARGET_Call_Generator,
-[29] = &&TARGET_Call_Generic,
-[30] = &&TARGET_InitResult_Check,
-[31] = &&TARGET_Call_Observed,
-[32] = &&TARGET_Return_Ordinary,
-[33] = &&TARGET_Return_Empty,
-[34] = &&TARGET_Return_Generator,
-[35] = &&TARGET_Return_Observed,
-[36] = &&TARGET_Return_External,
-[37] = &&TARGET_MaterializeKwargs_Pending,
-[38] = &&TARGET_CallKw_Plan,
-[39] = &&TARGET_Call_PyGeneral,
-[40] = &&TARGET_Call_PlanGenerator,
-[41] = &&TARGET_Call_BoundGeneral,
-[42] = &&TARGET_Call_Type1,
-[43] = &&TARGET_Call_Str1,
-[44] = &&TARGET_Call_Tuple1,
-[45] = &&TARGET_Call_BuiltinClass,
-[46] = &&TARGET_Call_BuiltinO,
-[47] = &&TARGET_Call_BuiltinFast,
-[48] = &&TARGET_Call_BuiltinFastKeywords,
-[49] = &&TARGET_Call_Len,
-[50] = &&TARGET_Call_Isinstance,
-[51] = &&TARGET_Call_ListAppend,
-[52] = &&TARGET_Call_DescriptorO,
-[53] = &&TARGET_Call_DescriptorFast,
-[54] = &&TARGET_Call_DescriptorFastKeywords,
-[55] = &&TARGET_Call_DescriptorNoargs,
-[56] = &&TARGET_CallKw_Generator,
-[57] = &&TARGET_CallKw_BoundMethod,
-[58] = &&TARGET_CallKw_NonPy,
-[59] = &&TARGET_CallKw_Generic,
-[60] = &&TARGET_CallKw_Observed,
-[61] = &&TARGET_CallEx_Generic,
-[62] = &&TARGET_CallEx_Py,
-[63] = &&TARGET_CallEx_NonPy,
-[64] = &&TARGET_CallEx_Observed,
-[65] = &&TARGET_CellMake_Wrap,
-[66] = &&TARGET_CellRead_Get,
-[67] = &&TARGET_CellMapRead_Lookup,
-[68] = &&TARGET_CellStore_Set,
-[69] = &&TARGET_CellDelete_Unbind,
-[70] = &&TARGET_CleanupThrow_Generic,
-[71] = &&TARGET_EndAsyncFor_Generic,
-[72] = &&TARGET_EndAsyncFor_Observed,
-[73] = &&TARGET_WithExit_Generic,
-[74] = &&TARGET_Build_Tuple,
-[75] = &&TARGET_Build_List,
-[76] = &&TARGET_Build_Set,
-[77] = &&TARGET_Build_Map,
-[78] = &&TARGET_AddElement_Append,
-[79] = &&TARGET_AddElement_Add,
-[80] = &&TARGET_AddEntry_Put,
-[81] = &&TARGET_UpdateContainer_Extend,
-[82] = &&TARGET_UpdateContainer_Union,
-[83] = &&TARGET_UpdateContainer_Overlay,
-[84] = &&TARGET_MergeKeywords_Merge,
-[85] = &&TARGET_Unpack_Generic,
-[86] = &&TARGET_Unpack_Tuple,
-[87] = &&TARGET_Unpack_List,
-[88] = &&TARGET_UnpackStar_Iterable,
-[89] = &&TARGET_Raise_Throw,
-[90] = &&TARGET_Reraise_Plain,
-[91] = &&TARGET_Reraise_Origin,
-[92] = &&TARGET_ExceptEnter_Install,
-[93] = &&TARGET_ExceptLeave_Restore,
-[94] = &&TARGET_ExceptMatch_Match,
-[95] = &&TARGET_ExceptGroupMatch_Split,
-[96] = &&TARGET_Function_Make,
-[97] = &&TARGET_Intrinsic_Unary,
-[98] = &&TARGET_Intrinsic_ImportStar,
-[99] = &&TARGET_Intrinsic_StopIteration,
-[100] = &&TARGET_IntrinsicPair_Binary,
-[101] = &&TARGET_IntrinsicPair_Attr,
-[102] = &&TARGET_GetAttr_Instance,
-[103] = &&TARGET_GetAttr_GetSet,
-[104] = &&TARGET_GetAttr_Property,
-[105] = &&TARGET_GetAttr_GetattributeOverridden,
-[106] = &&TARGET_GetAttr_Generic,
-[107] = &&TARGET_GetAttr_Shape,
-[108] = &&TARGET_GetAttr_PolyShape,
-[109] = &&TARGET_GetAttr_Module,
-[110] = &&TARGET_GetAttr_Hint,
-[111] = &&TARGET_GetAttr_ValueSlot,
-[112] = &&TARGET_GetAttr_PointerSlot,
-[113] = &&TARGET_GetAttr_Class,
-[114] = &&TARGET_GetAttr_NonDescriptorValues,
-[115] = &&TARGET_GetAttr_NonDescriptorNoDict,
-[116] = &&TARGET_GetMethod_MethodValues,
-[117] = &&TARGET_GetMethod_Generic,
-[118] = &&TARGET_GetMethod_PolyMethod,
-[119] = &&TARGET_GetMethod_NoDict,
-[120] = &&TARGET_GetMethod_LazyDict,
-[121] = &&TARGET_GetMethod_ClassMethod,
-[122] = &&TARGET_GetItem_Getitem,
-[123] = &&TARGET_GetItem_Generic,
-[124] = &&TARGET_SetItem_Generic,
-[125] = &&TARGET_DelItem_Generic,
-[126] = &&TARGET_SliceRead_Generic,
-[127] = &&TARGET_SliceWrite_Generic,
-[128] = &&TARGET_BuildSlice_Generic,
-[129] = &&TARGET_GetItem_ListIndex,
-[130] = &&TARGET_GetItem_TupleIndex,
-[131] = &&TARGET_GetItem_Ascii,
-[132] = &&TARGET_GetItem_UnicodeAsciiChar,
-[133] = &&TARGET_GetItem_ListSlice,
-[134] = &&TARGET_GetItem_Dict,
-[135] = &&TARGET_SetItem_ListIndex,
-[136] = &&TARGET_SetItem_Dict,
-[137] = &&TARGET_IterOpen_Generic,
-[138] = &&TARGET_ForIter_Generic,
-[139] = &&TARGET_IterOpen_Self,
-[140] = &&TARGET_IterOpen_Indexed,
-[141] = &&TARGET_IterOpen_GenMethod,
-[142] = &&TARGET_ForIter_List,
-[143] = &&TARGET_ForIter_Tuple,
-[144] = &&TARGET_ForIter_Range,
-[145] = &&TARGET_ForIter_Indexed,
-[146] = &&TARGET_ForIter_Gen,
-[147] = &&TARGET_ForIter_Slot,
-[148] = &&TARGET_ForIter_Observed,
-[149] = &&TARGET_IterClose_Retire,
-[150] = &&TARGET_IterClose_Observed,
-[151] = &&TARGET_GlobalRead_Generic,
-[152] = &&TARGET_GlobalRead_Module,
-[153] = &&TARGET_GlobalRead_Builtin,
-[154] = &&TARGET_NamespaceRead_Name,
-[155] = &&TARGET_NamespaceRead_Locals,
-[156] = &&TARGET_NamespaceRead_BuildClass,
-[157] = &&TARGET_NamespaceReadFrom_Mapping,
-[158] = &&TARGET_NamespaceWrite_Name,
-[159] = &&TARGET_NamespaceWrite_Global,
-[160] = &&TARGET_SetupAnnotations_Setup,
-[161] = &&TARGET_Import_Eager,
-[162] = &&TARGET_Import_Policy,
-[163] = &&TARGET_Import_Lazy,
-[164] = &&TARGET_ImportFrom_From,
-[165] = &&TARGET_ImportFrom_FromLast,
-[166] = &&TARGET_Binary_Int_NB_INPLACE_ADD,
-[167] = &&TARGET_Binary_Int_NB_SUBTRACT,
-[168] = &&TARGET_Binary_Int_NB_INPLACE_SUBTRACT,
-[169] = &&TARGET_Binary_Int_NB_MULTIPLY,
-[170] = &&TARGET_Binary_Int_NB_INPLACE_MULTIPLY,
-[171] = &&TARGET_Binary_Int_NB_FLOOR_DIVIDE,
-[172] = &&TARGET_Binary_Int_NB_REMAINDER,
-[173] = &&TARGET_Binary_Int_NB_AND,
-[174] = &&TARGET_Binary_Int_NB_OR,
-[175] = &&TARGET_Binary_Int_NB_XOR,
-[176] = &&TARGET_Binary_Int_NB_LSHIFT,
-[177] = &&TARGET_Binary_Int_NB_RSHIFT,
-[178] = &&TARGET_Binary_Int,
-[179] = &&TARGET_Binary_Float_NB_INPLACE_ADD,
-[180] = &&TARGET_Binary_Float_NB_SUBTRACT,
-[181] = &&TARGET_Binary_Float_NB_INPLACE_SUBTRACT,
-[182] = &&TARGET_Binary_Float_NB_MULTIPLY,
-[183] = &&TARGET_Binary_Float_NB_INPLACE_MULTIPLY,
-[184] = &&TARGET_Binary_Float_NB_TRUE_DIVIDE,
-[185] = &&TARGET_Binary_Float_NB_INPLACE_TRUE_DIVIDE,
-[186] = &&TARGET_Binary_Float_NB_POWER,
-[187] = &&TARGET_Binary_Float_NB_INPLACE_POWER,
-[188] = &&TARGET_Binary_Text,
-[189] = &&TARGET_Binary_Extended,
-[190] = &&TARGET_Binary_Generic,
-[191] = &&TARGET_Unary_Generic,
-[192] = &&TARGET_AppendText_Text,
-[193] = &&TARGET_AppendText_Generic,
-[194] = &&TARGET_Length_Size,
-[195] = &&TARGET_Pattern_Flag,
-[196] = &&TARGET_PatternClass_Match,
-[197] = &&TARGET_PatternKeys_Match,
-[198] = &&TARGET_Resume_Observed,
-[199] = &&TARGET_Resume_Observed,
-[200] = &&TARGET_Resume_Observed,
-[201] = &&TARGET_Awaitable_Await,
-[202] = &&TARGET_AsyncIterOpen_Open,
-[203] = &&TARGET_AsyncIterNext_Next,
-[204] = &&TARGET_Yield_Ordinary,
-[205] = &&TARGET_YieldFrom_Delegated,
-[206] = &&TARGET_Yield_Observed,
-[207] = &&TARGET_YieldFrom_Observed,
-[208] = &&TARGET_Send_Generic,
-[209] = &&TARGET_Send_Gen,
-[210] = &&TARGET_Send_Virtual,
-[211] = &&TARGET_Send_AsyncGen,
-[212] = &&TARGET_Send_Observed,
-[213] = &&TARGET_Compare_Int_LT,
-[214] = &&TARGET_Compare_Int_LE,
-[215] = &&TARGET_Compare_Int_EQ,
-[216] = &&TARGET_Compare_Int_NE,
-[217] = &&TARGET_Compare_Int_GT,
-[218] = &&TARGET_Compare_Int_GE,
-[219] = &&TARGET_Compare_Float_LT,
-[220] = &&TARGET_Compare_Float_LE,
-[221] = &&TARGET_Compare_Float_EQ,
-[222] = &&TARGET_Compare_Float_NE,
-[223] = &&TARGET_Compare_Float_GT,
-[224] = &&TARGET_Compare_Float_GE,
-[225] = &&TARGET_Compare_Str_EQ,
-[226] = &&TARGET_Compare_Str_NE,
-[227] = &&TARGET_Compare_Generic,
-[228] = &&TARGET_Identity_Test,
-[229] = &&TARGET_Contains_Set,
-[230] = &&TARGET_Contains_Dict,
-[231] = &&TARGET_Contains_Generic,
-[232] = &&TARGET_TestBranch_Identity,
-[233] = &&TARGET_TestBranch_Int_TEST_LT,
-[234] = &&TARGET_TestBranch_Int_TEST_LE,
-[235] = &&TARGET_TestBranch_Int_TEST_EQ,
-[236] = &&TARGET_TestBranch_Int_TEST_NE,
-[237] = &&TARGET_TestBranch_Int_TEST_GT,
-[238] = &&TARGET_TestBranch_Int_TEST_GE,
-[239] = &&TARGET_TestBranch_Float_TEST_LT,
-[240] = &&TARGET_TestBranch_Float_TEST_LE,
-[241] = &&TARGET_TestBranch_Float_TEST_EQ,
-[242] = &&TARGET_TestBranch_Float_TEST_NE,
-[243] = &&TARGET_TestBranch_Float_TEST_GT,
-[244] = &&TARGET_TestBranch_Float_TEST_GE,
-[245] = &&TARGET_TestBranch_Str_TEST_EQ,
-[246] = &&TARGET_TestBranch_Str_TEST_NE,
-[247] = &&TARGET_TestBranch_Set,
-[248] = &&TARGET_TestBranch_Dict,
-[249] = &&TARGET_TestBranch_Sequence,
-[250] = &&TARGET_TestBranch_Generic,
-[251] = &&TARGET_TestBranch_Observed,
-[252] = &&TARGET_BuildText_Join,
-[253] = &&TARGET_BuildText_Interpolation,
-[254] = &&TARGET_BuildText_Template,
-[255] = &&TARGET_Convert_Text,
-[256] = &&TARGET_Format_Simple,
-[257] = &&TARGET_FormatSpec_Value,
-[258] = &&TARGET_Truth_Bool,
-[259] = &&TARGET_Truth_Int,
-[260] = &&TARGET_Truth_List,
-[261] = &&TARGET_Truth_None,
-[262] = &&TARGET_Truth_Str,
-[263] = &&TARGET_Truth_Plain,
-[264] = &&TARGET_Truth_Slot,
-[265] = &&TARGET_Truth_Generic,
-[266] = &&TARGET_BranchTruth_Bool_BRANCH_IF_FALSE,
-[267] = &&TARGET_BranchTruth_Bool_BRANCH_IF_TRUE,
-[268] = &&TARGET_BranchTruth_Int_BRANCH_IF_FALSE,
-[269] = &&TARGET_BranchTruth_Int_BRANCH_IF_TRUE,
-[270] = &&TARGET_BranchTruth_List_BRANCH_IF_FALSE,
-[271] = &&TARGET_BranchTruth_List_BRANCH_IF_TRUE,
-[272] = &&TARGET_BranchTruth_None_BRANCH_IF_FALSE,
-[273] = &&TARGET_BranchTruth_None_BRANCH_IF_TRUE,
-[274] = &&TARGET_BranchTruth_Str_BRANCH_IF_FALSE,
-[275] = &&TARGET_BranchTruth_Str_BRANCH_IF_TRUE,
-[276] = &&TARGET_BranchTruth_Plain_BRANCH_IF_FALSE,
-[277] = &&TARGET_BranchTruth_Plain_BRANCH_IF_TRUE,
-[278] = &&TARGET_BranchTruth_Slot_BRANCH_IF_FALSE,
-[279] = &&TARGET_BranchTruth_Slot_BRANCH_IF_TRUE,
-[280] = &&TARGET_BranchTruth_Generic,
-[281] = &&TARGET_BranchNone_Test,
-[282] = &&TARGET_BranchTruth_Observed,
-[283] = &&TARGET_BranchNone_Observed,
-[284] = &&TARGET_Jump_Direct,
-[285] = &&TARGET_Jump_Trailing,
-[286] = &&TARGET_Jump_Poll,
-[287] = &&TARGET_Jump_Warm,
-[288] = &&TARGET_Jump_Observed,
-[289] = &&TARGET_Const_Pool,
-[290] = &&TARGET_Const_Small,
-[291] = &&TARGET_Const_Common,
-[292] = &&TARGET_LocalRead_Bound,
-[293] = &&TARGET_LocalRead_Checked,
-[294] = &&TARGET_LocalWrite_Store,
-[295] = &&TARGET_LocalWrite_Restore,
-[296] = &&TARGET_SaveLocal_Take,
-[297] = &&TARGET_LocalDelete_Checked,
-[298] = &&TARGET_Move_Transfer,
-[299] = &&TARGET_Move_Copy,
-[300] = &&TARGET_Rotate_Cycle,
-[301] = &&TARGET_Retire_Close,
-[302] = &&TARGET_UNKNOWN_OPCODE,
-[303] = &&TARGET_UNKNOWN_OPCODE,
-[304] = &&TARGET_UNKNOWN_OPCODE,
-[305] = &&TARGET_UNKNOWN_OPCODE,
-[306] = &&TARGET_UNKNOWN_OPCODE,
-[307] = &&TARGET_UNKNOWN_OPCODE,
-[308] = &&TARGET_UNKNOWN_OPCODE,
-[309] = &&TARGET_UNKNOWN_OPCODE,
-[310] = &&TARGET_UNKNOWN_OPCODE,
-[311] = &&TARGET_UNKNOWN_OPCODE,
-[312] = &&TARGET_UNKNOWN_OPCODE,
-[313] = &&TARGET_UNKNOWN_OPCODE,
-[314] = &&TARGET_UNKNOWN_OPCODE,
-[315] = &&TARGET_UNKNOWN_OPCODE,
-[316] = &&TARGET_UNKNOWN_OPCODE,
-[317] = &&TARGET_UNKNOWN_OPCODE,
-[318] = &&TARGET_UNKNOWN_OPCODE,
-[319] = &&TARGET_UNKNOWN_OPCODE,
-[320] = &&TARGET_UNKNOWN_OPCODE,
-[321] = &&TARGET_UNKNOWN_OPCODE,
-[322] = &&TARGET_UNKNOWN_OPCODE,
-[323] = &&TARGET_UNKNOWN_OPCODE,
-[324] = &&TARGET_UNKNOWN_OPCODE,
-[325] = &&TARGET_UNKNOWN_OPCODE,
-[326] = &&TARGET_UNKNOWN_OPCODE,
-[327] = &&TARGET_UNKNOWN_OPCODE,
-[328] = &&TARGET_UNKNOWN_OPCODE,
-[329] = &&TARGET_UNKNOWN_OPCODE,
-[330] = &&TARGET_UNKNOWN_OPCODE,
-[331] = &&TARGET_UNKNOWN_OPCODE,
-[332] = &&TARGET_UNKNOWN_OPCODE,
-[333] = &&TARGET_UNKNOWN_OPCODE,
-[334] = &&TARGET_UNKNOWN_OPCODE,
-[335] = &&TARGET_UNKNOWN_OPCODE,
-[336] = &&TARGET_UNKNOWN_OPCODE,
-[337] = &&TARGET_UNKNOWN_OPCODE,
-[338] = &&TARGET_UNKNOWN_OPCODE,
-[339] = &&TARGET_UNKNOWN_OPCODE,
-[340] = &&TARGET_UNKNOWN_OPCODE,
-[341] = &&TARGET_UNKNOWN_OPCODE,
-[342] = &&TARGET_UNKNOWN_OPCODE,
-[343] = &&TARGET_UNKNOWN_OPCODE,
-[344] = &&TARGET_UNKNOWN_OPCODE,
-[345] = &&TARGET_UNKNOWN_OPCODE,
-[346] = &&TARGET_UNKNOWN_OPCODE,
-[347] = &&TARGET_UNKNOWN_OPCODE,
-[348] = &&TARGET_UNKNOWN_OPCODE,
-[349] = &&TARGET_UNKNOWN_OPCODE,
-[350] = &&TARGET_UNKNOWN_OPCODE,
-[351] = &&TARGET_UNKNOWN_OPCODE,
-[352] = &&TARGET_UNKNOWN_OPCODE,
-[353] = &&TARGET_UNKNOWN_OPCODE,
-[354] = &&TARGET_UNKNOWN_OPCODE,
-[355] = &&TARGET_UNKNOWN_OPCODE,
-[356] = &&TARGET_UNKNOWN_OPCODE,
-[357] = &&TARGET_UNKNOWN_OPCODE,
-[358] = &&TARGET_UNKNOWN_OPCODE,
-[359] = &&TARGET_UNKNOWN_OPCODE,
-[360] = &&TARGET_UNKNOWN_OPCODE,
-[361] = &&TARGET_UNKNOWN_OPCODE,
-[362] = &&TARGET_UNKNOWN_OPCODE,
-[363] = &&TARGET_UNKNOWN_OPCODE,
-[364] = &&TARGET_UNKNOWN_OPCODE,
-[365] = &&TARGET_UNKNOWN_OPCODE,
-[366] = &&TARGET_UNKNOWN_OPCODE,
-[367] = &&TARGET_UNKNOWN_OPCODE,
-[368] = &&TARGET_UNKNOWN_OPCODE,
-[369] = &&TARGET_UNKNOWN_OPCODE,
-[370] = &&TARGET_UNKNOWN_OPCODE,
-[371] = &&TARGET_UNKNOWN_OPCODE,
-[372] = &&TARGET_UNKNOWN_OPCODE,
-[373] = &&TARGET_UNKNOWN_OPCODE,
-[374] = &&TARGET_UNKNOWN_OPCODE,
-[375] = &&TARGET_UNKNOWN_OPCODE,
-[376] = &&TARGET_UNKNOWN_OPCODE,
-[377] = &&TARGET_UNKNOWN_OPCODE,
-[378] = &&TARGET_UNKNOWN_OPCODE,
-[379] = &&TARGET_UNKNOWN_OPCODE,
-[380] = &&TARGET_UNKNOWN_OPCODE,
-[381] = &&TARGET_UNKNOWN_OPCODE,
-[382] = &&TARGET_UNKNOWN_OPCODE,
-[383] = &&TARGET_UNKNOWN_OPCODE,
-[384] = &&TARGET_UNKNOWN_OPCODE,
-[385] = &&TARGET_UNKNOWN_OPCODE,
-[386] = &&TARGET_UNKNOWN_OPCODE,
-[387] = &&TARGET_UNKNOWN_OPCODE,
-[388] = &&TARGET_UNKNOWN_OPCODE,
-[389] = &&TARGET_UNKNOWN_OPCODE,
-[390] = &&TARGET_UNKNOWN_OPCODE,
-[391] = &&TARGET_UNKNOWN_OPCODE,
-[392] = &&TARGET_UNKNOWN_OPCODE,
-[393] = &&TARGET_UNKNOWN_OPCODE,
-[394] = &&TARGET_UNKNOWN_OPCODE,
-[395] = &&TARGET_UNKNOWN_OPCODE,
-[396] = &&TARGET_UNKNOWN_OPCODE,
-[397] = &&TARGET_UNKNOWN_OPCODE,
-[398] = &&TARGET_UNKNOWN_OPCODE,
-[399] = &&TARGET_UNKNOWN_OPCODE,
-[400] = &&TARGET_UNKNOWN_OPCODE,
-[401] = &&TARGET_UNKNOWN_OPCODE,
-[402] = &&TARGET_UNKNOWN_OPCODE,
-[403] = &&TARGET_UNKNOWN_OPCODE,
-[404] = &&TARGET_UNKNOWN_OPCODE,
-[405] = &&TARGET_UNKNOWN_OPCODE,
-[406] = &&TARGET_UNKNOWN_OPCODE,
-[407] = &&TARGET_UNKNOWN_OPCODE,
-[408] = &&TARGET_UNKNOWN_OPCODE,
-[409] = &&TARGET_UNKNOWN_OPCODE,
-[410] = &&TARGET_UNKNOWN_OPCODE,
-[411] = &&TARGET_UNKNOWN_OPCODE,
-[412] = &&TARGET_UNKNOWN_OPCODE,
-[413] = &&TARGET_UNKNOWN_OPCODE,
-[414] = &&TARGET_UNKNOWN_OPCODE,
-[415] = &&TARGET_UNKNOWN_OPCODE,
-[416] = &&TARGET_UNKNOWN_OPCODE,
-[417] = &&TARGET_UNKNOWN_OPCODE,
-[418] = &&TARGET_UNKNOWN_OPCODE,
-[419] = &&TARGET_UNKNOWN_OPCODE,
-[420] = &&TARGET_UNKNOWN_OPCODE,
-[421] = &&TARGET_UNKNOWN_OPCODE,
-[422] = &&TARGET_UNKNOWN_OPCODE,
-[423] = &&TARGET_UNKNOWN_OPCODE,
-[424] = &&TARGET_UNKNOWN_OPCODE,
-[425] = &&TARGET_UNKNOWN_OPCODE,
-[426] = &&TARGET_UNKNOWN_OPCODE,
-[427] = &&TARGET_UNKNOWN_OPCODE,
-[428] = &&TARGET_UNKNOWN_OPCODE,
-[429] = &&TARGET_UNKNOWN_OPCODE,
-[430] = &&TARGET_UNKNOWN_OPCODE,
-[431] = &&TARGET_UNKNOWN_OPCODE,
-[432] = &&TARGET_UNKNOWN_OPCODE,
-[433] = &&TARGET_UNKNOWN_OPCODE,
-[434] = &&TARGET_UNKNOWN_OPCODE,
-[435] = &&TARGET_UNKNOWN_OPCODE,
-[436] = &&TARGET_UNKNOWN_OPCODE,
-[437] = &&TARGET_UNKNOWN_OPCODE,
-[438] = &&TARGET_UNKNOWN_OPCODE,
-[439] = &&TARGET_UNKNOWN_OPCODE,
-[440] = &&TARGET_UNKNOWN_OPCODE,
-[441] = &&TARGET_UNKNOWN_OPCODE,
-[442] = &&TARGET_UNKNOWN_OPCODE,
-[443] = &&TARGET_UNKNOWN_OPCODE,
-[444] = &&TARGET_UNKNOWN_OPCODE,
-[445] = &&TARGET_UNKNOWN_OPCODE,
-[446] = &&TARGET_UNKNOWN_OPCODE,
-[447] = &&TARGET_UNKNOWN_OPCODE,
-[448] = &&TARGET_UNKNOWN_OPCODE,
-[449] = &&TARGET_UNKNOWN_OPCODE,
-[450] = &&TARGET_UNKNOWN_OPCODE,
-[451] = &&TARGET_UNKNOWN_OPCODE,
-[452] = &&TARGET_UNKNOWN_OPCODE,
-[453] = &&TARGET_UNKNOWN_OPCODE,
-[454] = &&TARGET_UNKNOWN_OPCODE,
-[455] = &&TARGET_UNKNOWN_OPCODE,
-[456] = &&TARGET_UNKNOWN_OPCODE,
-[457] = &&TARGET_UNKNOWN_OPCODE,
-[458] = &&TARGET_UNKNOWN_OPCODE,
-[459] = &&TARGET_UNKNOWN_OPCODE,
-[460] = &&TARGET_UNKNOWN_OPCODE,
-[461] = &&TARGET_UNKNOWN_OPCODE,
-[462] = &&TARGET_UNKNOWN_OPCODE,
-[463] = &&TARGET_UNKNOWN_OPCODE,
-[464] = &&TARGET_UNKNOWN_OPCODE,
-[465] = &&TARGET_UNKNOWN_OPCODE,
-[466] = &&TARGET_UNKNOWN_OPCODE,
-[467] = &&TARGET_UNKNOWN_OPCODE,
-[468] = &&TARGET_UNKNOWN_OPCODE,
-[469] = &&TARGET_UNKNOWN_OPCODE,
-[470] = &&TARGET_UNKNOWN_OPCODE,
-[471] = &&TARGET_UNKNOWN_OPCODE,
-[472] = &&TARGET_UNKNOWN_OPCODE,
-[473] = &&TARGET_UNKNOWN_OPCODE,
-[474] = &&TARGET_UNKNOWN_OPCODE,
-[475] = &&TARGET_UNKNOWN_OPCODE,
-[476] = &&TARGET_UNKNOWN_OPCODE,
-[477] = &&TARGET_UNKNOWN_OPCODE,
-[478] = &&TARGET_UNKNOWN_OPCODE,
-[479] = &&TARGET_UNKNOWN_OPCODE,
-[480] = &&TARGET_UNKNOWN_OPCODE,
-[481] = &&TARGET_UNKNOWN_OPCODE,
-[482] = &&TARGET_UNKNOWN_OPCODE,
-[483] = &&TARGET_UNKNOWN_OPCODE,
-[484] = &&TARGET_UNKNOWN_OPCODE,
-[485] = &&TARGET_UNKNOWN_OPCODE,
-[486] = &&TARGET_UNKNOWN_OPCODE,
-[487] = &&TARGET_UNKNOWN_OPCODE,
-[488] = &&TARGET_UNKNOWN_OPCODE,
-[489] = &&TARGET_UNKNOWN_OPCODE,
-[490] = &&TARGET_UNKNOWN_OPCODE,
-[491] = &&TARGET_UNKNOWN_OPCODE,
-[492] = &&TARGET_UNKNOWN_OPCODE,
-[493] = &&TARGET_UNKNOWN_OPCODE,
-[494] = &&TARGET_UNKNOWN_OPCODE,
-[495] = &&TARGET_UNKNOWN_OPCODE,
-[496] = &&TARGET_UNKNOWN_OPCODE,
-[497] = &&TARGET_UNKNOWN_OPCODE,
-[498] = &&TARGET_UNKNOWN_OPCODE,
-[499] = &&TARGET_UNKNOWN_OPCODE,
-[500] = &&TARGET_UNKNOWN_OPCODE,
-[501] = &&TARGET_UNKNOWN_OPCODE,
-[502] = &&TARGET_UNKNOWN_OPCODE,
-[503] = &&TARGET_UNKNOWN_OPCODE,
-[504] = &&TARGET_UNKNOWN_OPCODE,
-[505] = &&TARGET_UNKNOWN_OPCODE,
-[506] = &&TARGET_UNKNOWN_OPCODE,
-[507] = &&TARGET_UNKNOWN_OPCODE,
-[508] = &&TARGET_UNKNOWN_OPCODE,
-[509] = &&TARGET_UNKNOWN_OPCODE,
-[510] = &&TARGET_UNKNOWN_OPCODE,
-[511] = &&LABEL_switch_loop,
-};
-#else
-static void *const opcode_targets[512] = {
-[0] = &&TARGET_IR_OPERANDS,
-[1] = &&TARGET_Add_Int,
-[2] = &&TARGET_Add_Float,
-[3] = &&TARGET_Add_Text,
-[4] = &&TARGET_Add_Extended,
-[5] = &&TARGET_Add_Generic,
-[6] = &&TARGET_AttrWrite_Generic,
-[7] = &&TARGET_AttrWrite_Instance,
-[8] = &&TARGET_AttrWrite_Shape,
-[9] = &&TARGET_AttrWrite_ShapeAdd,
-[10] = &&TARGET_AttrWrite_Hint,
-[11] = &&TARGET_AttrWrite_Slot,
-[12] = &&TARGET_SuperAttr_Generic,
-[13] = &&TARGET_SuperAttr_Builtin,
-[14] = &&TARGET_SuperAttr_Observed,
-[15] = &&TARGET_SuperAttrExplicit_Generic,
-[16] = &&TARGET_SuperAttrExplicit_Builtin,
-[17] = &&TARGET_SuperAttrExplicit_Observed,
-[18] = &&TARGET_SuperMethod_Generic,
-[19] = &&TARGET_SuperMethod_Builtin,
-[20] = &&TARGET_SuperMethod_Observed,
-[21] = &&TARGET_SuperMethodExplicit_Generic,
-[22] = &&TARGET_SuperMethodExplicit_Builtin,
-[23] = &&TARGET_SuperMethodExplicit_Observed,
-[24] = &&TARGET_SpecialLookup_Generic,
-[25] = &&TARGET_Call_Exact,
-[26] = &&TARGET_Call_BoundExact,
-[27] = &&TARGET_Call_Init,
-[28] = &&TARGET_Call_Generator,
-[29] = &&TARGET_Call_Generic,
-[30] = &&TARGET_InitResult_Check,
-[31] = &&TARGET_Call_Observed,
-[32] = &&TARGET_Return_Ordinary,
-[33] = &&TARGET_Return_Empty,
-[34] = &&TARGET_Return_Generator,
-[35] = &&TARGET_Return_Observed,
-[36] = &&TARGET_Return_External,
-[37] = &&TARGET_MaterializeKwargs_Pending,
-[38] = &&TARGET_CallKw_Plan,
-[39] = &&TARGET_Call_PyGeneral,
-[40] = &&TARGET_Call_PlanGenerator,
-[41] = &&TARGET_Call_BoundGeneral,
-[42] = &&TARGET_Call_Type1,
-[43] = &&TARGET_Call_Str1,
-[44] = &&TARGET_Call_Tuple1,
-[45] = &&TARGET_Call_BuiltinClass,
-[46] = &&TARGET_Call_BuiltinO,
-[47] = &&TARGET_Call_BuiltinFast,
-[48] = &&TARGET_Call_BuiltinFastKeywords,
-[49] = &&TARGET_Call_Len,
-[50] = &&TARGET_Call_Isinstance,
-[51] = &&TARGET_Call_ListAppend,
-[52] = &&TARGET_Call_DescriptorO,
-[53] = &&TARGET_Call_DescriptorFast,
-[54] = &&TARGET_Call_DescriptorFastKeywords,
-[55] = &&TARGET_Call_DescriptorNoargs,
-[56] = &&TARGET_CallKw_Generator,
-[57] = &&TARGET_CallKw_BoundMethod,
-[58] = &&TARGET_CallKw_NonPy,
-[59] = &&TARGET_CallKw_Generic,
-[60] = &&TARGET_CallKw_Observed,
-[61] = &&TARGET_CallEx_Generic,
-[62] = &&TARGET_CallEx_Py,
-[63] = &&TARGET_CallEx_NonPy,
-[64] = &&TARGET_CallEx_Observed,
-[65] = &&TARGET_CellMake_Wrap,
-[66] = &&TARGET_CellRead_Get,
-[67] = &&TARGET_CellMapRead_Lookup,
-[68] = &&TARGET_CellStore_Set,
-[69] = &&TARGET_CellDelete_Unbind,
-[70] = &&TARGET_CleanupThrow_Generic,
-[71] = &&TARGET_EndAsyncFor_Generic,
-[72] = &&TARGET_EndAsyncFor_Observed,
-[73] = &&TARGET_WithExit_Generic,
-[74] = &&TARGET_Build_Tuple,
-[75] = &&TARGET_Build_List,
-[76] = &&TARGET_Build_Set,
-[77] = &&TARGET_Build_Map,
-[78] = &&TARGET_AddElement_Append,
-[79] = &&TARGET_AddElement_Add,
-[80] = &&TARGET_AddEntry_Put,
-[81] = &&TARGET_UpdateContainer_Extend,
-[82] = &&TARGET_UpdateContainer_Union,
-[83] = &&TARGET_UpdateContainer_Overlay,
-[84] = &&TARGET_MergeKeywords_Merge,
-[85] = &&TARGET_Unpack_Generic,
-[86] = &&TARGET_Unpack_Tuple,
-[87] = &&TARGET_Unpack_List,
-[88] = &&TARGET_UnpackStar_Iterable,
-[89] = &&TARGET_Raise_Throw,
-[90] = &&TARGET_Reraise_Plain,
-[91] = &&TARGET_Reraise_Origin,
-[92] = &&TARGET_ExceptEnter_Install,
-[93] = &&TARGET_ExceptLeave_Restore,
-[94] = &&TARGET_ExceptMatch_Match,
-[95] = &&TARGET_ExceptGroupMatch_Split,
-[96] = &&TARGET_Function_Make,
-[97] = &&TARGET_Intrinsic_Unary,
-[98] = &&TARGET_Intrinsic_ImportStar,
-[99] = &&TARGET_Intrinsic_StopIteration,
-[100] = &&TARGET_IntrinsicPair_Binary,
-[101] = &&TARGET_IntrinsicPair_Attr,
-[102] = &&TARGET_GetAttr_Instance,
-[103] = &&TARGET_GetAttr_GetSet,
-[104] = &&TARGET_GetAttr_Property,
-[105] = &&TARGET_GetAttr_GetattributeOverridden,
-[106] = &&TARGET_GetAttr_Generic,
-[107] = &&TARGET_GetAttr_Shape,
-[108] = &&TARGET_GetAttr_PolyShape,
-[109] = &&TARGET_GetAttr_Module,
-[110] = &&TARGET_GetAttr_Hint,
-[111] = &&TARGET_GetAttr_ValueSlot,
-[112] = &&TARGET_GetAttr_PointerSlot,
-[113] = &&TARGET_GetAttr_Class,
-[114] = &&TARGET_GetAttr_NonDescriptorValues,
-[115] = &&TARGET_GetAttr_NonDescriptorNoDict,
-[116] = &&TARGET_GetMethod_MethodValues,
-[117] = &&TARGET_GetMethod_Generic,
-[118] = &&TARGET_GetMethod_PolyMethod,
-[119] = &&TARGET_GetMethod_NoDict,
-[120] = &&TARGET_GetMethod_LazyDict,
-[121] = &&TARGET_GetMethod_ClassMethod,
-[122] = &&TARGET_GetItem_Getitem,
-[123] = &&TARGET_GetItem_Generic,
-[124] = &&TARGET_SetItem_Generic,
-[125] = &&TARGET_DelItem_Generic,
-[126] = &&TARGET_SliceRead_Generic,
-[127] = &&TARGET_SliceWrite_Generic,
-[128] = &&TARGET_BuildSlice_Generic,
-[129] = &&TARGET_GetItem_ListIndex,
-[130] = &&TARGET_GetItem_TupleIndex,
-[131] = &&TARGET_GetItem_Ascii,
-[132] = &&TARGET_GetItem_UnicodeAsciiChar,
-[133] = &&TARGET_GetItem_ListSlice,
-[134] = &&TARGET_GetItem_Dict,
-[135] = &&TARGET_SetItem_ListIndex,
-[136] = &&TARGET_SetItem_Dict,
-[137] = &&TARGET_IterOpen_Generic,
-[138] = &&TARGET_ForIter_Generic,
-[139] = &&TARGET_IterOpen_Self,
-[140] = &&TARGET_IterOpen_Indexed,
-[141] = &&TARGET_IterOpen_GenMethod,
-[142] = &&TARGET_ForIter_List,
-[143] = &&TARGET_ForIter_Tuple,
-[144] = &&TARGET_ForIter_Range,
-[145] = &&TARGET_ForIter_Indexed,
-[146] = &&TARGET_ForIter_Gen,
-[147] = &&TARGET_ForIter_Slot,
-[148] = &&TARGET_ForIter_Observed,
-[149] = &&TARGET_IterClose_Retire,
-[150] = &&TARGET_IterClose_Observed,
-[151] = &&TARGET_GlobalRead_Generic,
-[152] = &&TARGET_GlobalRead_Module,
-[153] = &&TARGET_GlobalRead_Builtin,
-[154] = &&TARGET_NamespaceRead_Name,
-[155] = &&TARGET_NamespaceRead_Locals,
-[156] = &&TARGET_NamespaceRead_BuildClass,
-[157] = &&TARGET_NamespaceReadFrom_Mapping,
-[158] = &&TARGET_NamespaceWrite_Name,
-[159] = &&TARGET_NamespaceWrite_Global,
-[160] = &&TARGET_SetupAnnotations_Setup,
-[161] = &&TARGET_Import_Eager,
-[162] = &&TARGET_Import_Policy,
-[163] = &&TARGET_Import_Lazy,
-[164] = &&TARGET_ImportFrom_From,
-[165] = &&TARGET_ImportFrom_FromLast,
-[166] = &&TARGET_Binary_Int_NB_INPLACE_ADD,
-[167] = &&TARGET_Binary_Int_NB_SUBTRACT,
-[168] = &&TARGET_Binary_Int_NB_INPLACE_SUBTRACT,
-[169] = &&TARGET_Binary_Int_NB_MULTIPLY,
-[170] = &&TARGET_Binary_Int_NB_INPLACE_MULTIPLY,
-[171] = &&TARGET_Binary_Int_NB_FLOOR_DIVIDE,
-[172] = &&TARGET_Binary_Int_NB_REMAINDER,
-[173] = &&TARGET_Binary_Int_NB_AND,
-[174] = &&TARGET_Binary_Int_NB_OR,
-[175] = &&TARGET_Binary_Int_NB_XOR,
-[176] = &&TARGET_Binary_Int_NB_LSHIFT,
-[177] = &&TARGET_Binary_Int_NB_RSHIFT,
-[178] = &&TARGET_Binary_Int,
-[179] = &&TARGET_Binary_Float_NB_INPLACE_ADD,
-[180] = &&TARGET_Binary_Float_NB_SUBTRACT,
-[181] = &&TARGET_Binary_Float_NB_INPLACE_SUBTRACT,
-[182] = &&TARGET_Binary_Float_NB_MULTIPLY,
-[183] = &&TARGET_Binary_Float_NB_INPLACE_MULTIPLY,
-[184] = &&TARGET_Binary_Float_NB_TRUE_DIVIDE,
-[185] = &&TARGET_Binary_Float_NB_INPLACE_TRUE_DIVIDE,
-[186] = &&TARGET_Binary_Float_NB_POWER,
-[187] = &&TARGET_Binary_Float_NB_INPLACE_POWER,
-[188] = &&TARGET_Binary_Text,
-[189] = &&TARGET_Binary_Extended,
-[190] = &&TARGET_Binary_Generic,
-[191] = &&TARGET_Unary_Generic,
-[192] = &&TARGET_AppendText_Text,
-[193] = &&TARGET_AppendText_Generic,
-[194] = &&TARGET_Length_Size,
-[195] = &&TARGET_Pattern_Flag,
-[196] = &&TARGET_PatternClass_Match,
-[197] = &&TARGET_PatternKeys_Match,
-[198] = &&TARGET_Resume_Poll,
-[199] = &&TARGET_Resume_Warm,
-[200] = &&TARGET_Resume_Observed,
-[201] = &&TARGET_Awaitable_Await,
-[202] = &&TARGET_AsyncIterOpen_Open,
-[203] = &&TARGET_AsyncIterNext_Next,
-[204] = &&TARGET_Yield_Ordinary,
-[205] = &&TARGET_YieldFrom_Delegated,
-[206] = &&TARGET_Yield_Observed,
-[207] = &&TARGET_YieldFrom_Observed,
-[208] = &&TARGET_Send_Generic,
-[209] = &&TARGET_Send_Gen,
-[210] = &&TARGET_Send_Virtual,
-[211] = &&TARGET_Send_AsyncGen,
-[212] = &&TARGET_Send_Observed,
-[213] = &&TARGET_Compare_Int_LT,
-[214] = &&TARGET_Compare_Int_LE,
-[215] = &&TARGET_Compare_Int_EQ,
-[216] = &&TARGET_Compare_Int_NE,
-[217] = &&TARGET_Compare_Int_GT,
-[218] = &&TARGET_Compare_Int_GE,
-[219] = &&TARGET_Compare_Float_LT,
-[220] = &&TARGET_Compare_Float_LE,
-[221] = &&TARGET_Compare_Float_EQ,
-[222] = &&TARGET_Compare_Float_NE,
-[223] = &&TARGET_Compare_Float_GT,
-[224] = &&TARGET_Compare_Float_GE,
-[225] = &&TARGET_Compare_Str_EQ,
-[226] = &&TARGET_Compare_Str_NE,
-[227] = &&TARGET_Compare_Generic,
-[228] = &&TARGET_Identity_Test,
-[229] = &&TARGET_Contains_Set,
-[230] = &&TARGET_Contains_Dict,
-[231] = &&TARGET_Contains_Generic,
-[232] = &&TARGET_TestBranch_Identity,
-[233] = &&TARGET_TestBranch_Int_TEST_LT,
-[234] = &&TARGET_TestBranch_Int_TEST_LE,
-[235] = &&TARGET_TestBranch_Int_TEST_EQ,
-[236] = &&TARGET_TestBranch_Int_TEST_NE,
-[237] = &&TARGET_TestBranch_Int_TEST_GT,
-[238] = &&TARGET_TestBranch_Int_TEST_GE,
-[239] = &&TARGET_TestBranch_Float_TEST_LT,
-[240] = &&TARGET_TestBranch_Float_TEST_LE,
-[241] = &&TARGET_TestBranch_Float_TEST_EQ,
-[242] = &&TARGET_TestBranch_Float_TEST_NE,
-[243] = &&TARGET_TestBranch_Float_TEST_GT,
-[244] = &&TARGET_TestBranch_Float_TEST_GE,
-[245] = &&TARGET_TestBranch_Str_TEST_EQ,
-[246] = &&TARGET_TestBranch_Str_TEST_NE,
-[247] = &&TARGET_TestBranch_Set,
-[248] = &&TARGET_TestBranch_Dict,
-[249] = &&TARGET_TestBranch_Sequence,
-[250] = &&TARGET_TestBranch_Generic,
-[251] = &&TARGET_TestBranch_Observed,
-[252] = &&TARGET_BuildText_Join,
-[253] = &&TARGET_BuildText_Interpolation,
-[254] = &&TARGET_BuildText_Template,
-[255] = &&TARGET_Convert_Text,
-[256] = &&TARGET_Format_Simple,
-[257] = &&TARGET_FormatSpec_Value,
-[258] = &&TARGET_Truth_Bool,
-[259] = &&TARGET_Truth_Int,
-[260] = &&TARGET_Truth_List,
-[261] = &&TARGET_Truth_None,
-[262] = &&TARGET_Truth_Str,
-[263] = &&TARGET_Truth_Plain,
-[264] = &&TARGET_Truth_Slot,
-[265] = &&TARGET_Truth_Generic,
-[266] = &&TARGET_BranchTruth_Bool_BRANCH_IF_FALSE,
-[267] = &&TARGET_BranchTruth_Bool_BRANCH_IF_TRUE,
-[268] = &&TARGET_BranchTruth_Int_BRANCH_IF_FALSE,
-[269] = &&TARGET_BranchTruth_Int_BRANCH_IF_TRUE,
-[270] = &&TARGET_BranchTruth_List_BRANCH_IF_FALSE,
-[271] = &&TARGET_BranchTruth_List_BRANCH_IF_TRUE,
-[272] = &&TARGET_BranchTruth_None_BRANCH_IF_FALSE,
-[273] = &&TARGET_BranchTruth_None_BRANCH_IF_TRUE,
-[274] = &&TARGET_BranchTruth_Str_BRANCH_IF_FALSE,
-[275] = &&TARGET_BranchTruth_Str_BRANCH_IF_TRUE,
-[276] = &&TARGET_BranchTruth_Plain_BRANCH_IF_FALSE,
-[277] = &&TARGET_BranchTruth_Plain_BRANCH_IF_TRUE,
-[278] = &&TARGET_BranchTruth_Slot_BRANCH_IF_FALSE,
-[279] = &&TARGET_BranchTruth_Slot_BRANCH_IF_TRUE,
-[280] = &&TARGET_BranchTruth_Generic,
-[281] = &&TARGET_BranchNone_Test,
-[282] = &&TARGET_BranchTruth_Observed,
-[283] = &&TARGET_BranchNone_Observed,
-[284] = &&TARGET_Jump_Direct,
-[285] = &&TARGET_Jump_Trailing,
-[286] = &&TARGET_Jump_Poll,
-[287] = &&TARGET_Jump_Warm,
-[288] = &&TARGET_Jump_Observed,
-[289] = &&TARGET_Const_Pool,
-[290] = &&TARGET_Const_Small,
-[291] = &&TARGET_Const_Common,
-[292] = &&TARGET_LocalRead_Bound,
-[293] = &&TARGET_LocalRead_Checked,
-[294] = &&TARGET_LocalWrite_Store,
-[295] = &&TARGET_LocalWrite_Restore,
-[296] = &&TARGET_SaveLocal_Take,
-[297] = &&TARGET_LocalDelete_Checked,
-[298] = &&TARGET_Move_Transfer,
-[299] = &&TARGET_Move_Copy,
-[300] = &&TARGET_Rotate_Cycle,
-[301] = &&TARGET_Retire_Close,
-[302] = &&TARGET_UNKNOWN_OPCODE,
-[303] = &&TARGET_UNKNOWN_OPCODE,
-[304] = &&TARGET_UNKNOWN_OPCODE,
-[305] = &&TARGET_UNKNOWN_OPCODE,
-[306] = &&TARGET_UNKNOWN_OPCODE,
-[307] = &&TARGET_UNKNOWN_OPCODE,
-[308] = &&TARGET_UNKNOWN_OPCODE,
-[309] = &&TARGET_UNKNOWN_OPCODE,
-[310] = &&TARGET_UNKNOWN_OPCODE,
-[311] = &&TARGET_UNKNOWN_OPCODE,
-[312] = &&TARGET_UNKNOWN_OPCODE,
-[313] = &&TARGET_UNKNOWN_OPCODE,
-[314] = &&TARGET_UNKNOWN_OPCODE,
-[315] = &&TARGET_UNKNOWN_OPCODE,
-[316] = &&TARGET_UNKNOWN_OPCODE,
-[317] = &&TARGET_UNKNOWN_OPCODE,
-[318] = &&TARGET_UNKNOWN_OPCODE,
-[319] = &&TARGET_UNKNOWN_OPCODE,
-[320] = &&TARGET_UNKNOWN_OPCODE,
-[321] = &&TARGET_UNKNOWN_OPCODE,
-[322] = &&TARGET_UNKNOWN_OPCODE,
-[323] = &&TARGET_UNKNOWN_OPCODE,
-[324] = &&TARGET_UNKNOWN_OPCODE,
-[325] = &&TARGET_UNKNOWN_OPCODE,
-[326] = &&TARGET_UNKNOWN_OPCODE,
-[327] = &&TARGET_UNKNOWN_OPCODE,
-[328] = &&TARGET_UNKNOWN_OPCODE,
-[329] = &&TARGET_UNKNOWN_OPCODE,
-[330] = &&TARGET_UNKNOWN_OPCODE,
-[331] = &&TARGET_UNKNOWN_OPCODE,
-[332] = &&TARGET_UNKNOWN_OPCODE,
-[333] = &&TARGET_UNKNOWN_OPCODE,
-[334] = &&TARGET_UNKNOWN_OPCODE,
-[335] = &&TARGET_UNKNOWN_OPCODE,
-[336] = &&TARGET_UNKNOWN_OPCODE,
-[337] = &&TARGET_UNKNOWN_OPCODE,
-[338] = &&TARGET_UNKNOWN_OPCODE,
-[339] = &&TARGET_UNKNOWN_OPCODE,
-[340] = &&TARGET_UNKNOWN_OPCODE,
-[341] = &&TARGET_UNKNOWN_OPCODE,
-[342] = &&TARGET_UNKNOWN_OPCODE,
-[343] = &&TARGET_UNKNOWN_OPCODE,
-[344] = &&TARGET_UNKNOWN_OPCODE,
-[345] = &&TARGET_UNKNOWN_OPCODE,
-[346] = &&TARGET_UNKNOWN_OPCODE,
-[347] = &&TARGET_UNKNOWN_OPCODE,
-[348] = &&TARGET_UNKNOWN_OPCODE,
-[349] = &&TARGET_UNKNOWN_OPCODE,
-[350] = &&TARGET_UNKNOWN_OPCODE,
-[351] = &&TARGET_UNKNOWN_OPCODE,
-[352] = &&TARGET_UNKNOWN_OPCODE,
-[353] = &&TARGET_UNKNOWN_OPCODE,
-[354] = &&TARGET_UNKNOWN_OPCODE,
-[355] = &&TARGET_UNKNOWN_OPCODE,
-[356] = &&TARGET_UNKNOWN_OPCODE,
-[357] = &&TARGET_UNKNOWN_OPCODE,
-[358] = &&TARGET_UNKNOWN_OPCODE,
-[359] = &&TARGET_UNKNOWN_OPCODE,
-[360] = &&TARGET_UNKNOWN_OPCODE,
-[361] = &&TARGET_UNKNOWN_OPCODE,
-[362] = &&TARGET_UNKNOWN_OPCODE,
-[363] = &&TARGET_UNKNOWN_OPCODE,
-[364] = &&TARGET_UNKNOWN_OPCODE,
-[365] = &&TARGET_UNKNOWN_OPCODE,
-[366] = &&TARGET_UNKNOWN_OPCODE,
-[367] = &&TARGET_UNKNOWN_OPCODE,
-[368] = &&TARGET_UNKNOWN_OPCODE,
-[369] = &&TARGET_UNKNOWN_OPCODE,
-[370] = &&TARGET_UNKNOWN_OPCODE,
-[371] = &&TARGET_UNKNOWN_OPCODE,
-[372] = &&TARGET_UNKNOWN_OPCODE,
-[373] = &&TARGET_UNKNOWN_OPCODE,
-[374] = &&TARGET_UNKNOWN_OPCODE,
-[375] = &&TARGET_UNKNOWN_OPCODE,
-[376] = &&TARGET_UNKNOWN_OPCODE,
-[377] = &&TARGET_UNKNOWN_OPCODE,
-[378] = &&TARGET_UNKNOWN_OPCODE,
-[379] = &&TARGET_UNKNOWN_OPCODE,
-[380] = &&TARGET_UNKNOWN_OPCODE,
-[381] = &&TARGET_UNKNOWN_OPCODE,
-[382] = &&TARGET_UNKNOWN_OPCODE,
-[383] = &&TARGET_UNKNOWN_OPCODE,
-[384] = &&TARGET_UNKNOWN_OPCODE,
-[385] = &&TARGET_UNKNOWN_OPCODE,
-[386] = &&TARGET_UNKNOWN_OPCODE,
-[387] = &&TARGET_UNKNOWN_OPCODE,
-[388] = &&TARGET_UNKNOWN_OPCODE,
-[389] = &&TARGET_UNKNOWN_OPCODE,
-[390] = &&TARGET_UNKNOWN_OPCODE,
-[391] = &&TARGET_UNKNOWN_OPCODE,
-[392] = &&TARGET_UNKNOWN_OPCODE,
-[393] = &&TARGET_UNKNOWN_OPCODE,
-[394] = &&TARGET_UNKNOWN_OPCODE,
-[395] = &&TARGET_UNKNOWN_OPCODE,
-[396] = &&TARGET_UNKNOWN_OPCODE,
-[397] = &&TARGET_UNKNOWN_OPCODE,
-[398] = &&TARGET_UNKNOWN_OPCODE,
-[399] = &&TARGET_UNKNOWN_OPCODE,
-[400] = &&TARGET_UNKNOWN_OPCODE,
-[401] = &&TARGET_UNKNOWN_OPCODE,
-[402] = &&TARGET_UNKNOWN_OPCODE,
-[403] = &&TARGET_UNKNOWN_OPCODE,
-[404] = &&TARGET_UNKNOWN_OPCODE,
-[405] = &&TARGET_UNKNOWN_OPCODE,
-[406] = &&TARGET_UNKNOWN_OPCODE,
-[407] = &&TARGET_UNKNOWN_OPCODE,
-[408] = &&TARGET_UNKNOWN_OPCODE,
-[409] = &&TARGET_UNKNOWN_OPCODE,
-[410] = &&TARGET_UNKNOWN_OPCODE,
-[411] = &&TARGET_UNKNOWN_OPCODE,
-[412] = &&TARGET_UNKNOWN_OPCODE,
-[413] = &&TARGET_UNKNOWN_OPCODE,
-[414] = &&TARGET_UNKNOWN_OPCODE,
-[415] = &&TARGET_UNKNOWN_OPCODE,
-[416] = &&TARGET_UNKNOWN_OPCODE,
-[417] = &&TARGET_UNKNOWN_OPCODE,
-[418] = &&TARGET_UNKNOWN_OPCODE,
-[419] = &&TARGET_UNKNOWN_OPCODE,
-[420] = &&TARGET_UNKNOWN_OPCODE,
-[421] = &&TARGET_UNKNOWN_OPCODE,
-[422] = &&TARGET_UNKNOWN_OPCODE,
-[423] = &&TARGET_UNKNOWN_OPCODE,
-[424] = &&TARGET_UNKNOWN_OPCODE,
-[425] = &&TARGET_UNKNOWN_OPCODE,
-[426] = &&TARGET_UNKNOWN_OPCODE,
-[427] = &&TARGET_UNKNOWN_OPCODE,
-[428] = &&TARGET_UNKNOWN_OPCODE,
-[429] = &&TARGET_UNKNOWN_OPCODE,
-[430] = &&TARGET_UNKNOWN_OPCODE,
-[431] = &&TARGET_UNKNOWN_OPCODE,
-[432] = &&TARGET_UNKNOWN_OPCODE,
-[433] = &&TARGET_UNKNOWN_OPCODE,
-[434] = &&TARGET_UNKNOWN_OPCODE,
-[435] = &&TARGET_UNKNOWN_OPCODE,
-[436] = &&TARGET_UNKNOWN_OPCODE,
-[437] = &&TARGET_UNKNOWN_OPCODE,
-[438] = &&TARGET_UNKNOWN_OPCODE,
-[439] = &&TARGET_UNKNOWN_OPCODE,
-[440] = &&TARGET_UNKNOWN_OPCODE,
-[441] = &&TARGET_UNKNOWN_OPCODE,
-[442] = &&TARGET_UNKNOWN_OPCODE,
-[443] = &&TARGET_UNKNOWN_OPCODE,
-[444] = &&TARGET_UNKNOWN_OPCODE,
-[445] = &&TARGET_UNKNOWN_OPCODE,
-[446] = &&TARGET_UNKNOWN_OPCODE,
-[447] = &&TARGET_UNKNOWN_OPCODE,
-[448] = &&TARGET_UNKNOWN_OPCODE,
-[449] = &&TARGET_UNKNOWN_OPCODE,
-[450] = &&TARGET_UNKNOWN_OPCODE,
-[451] = &&TARGET_UNKNOWN_OPCODE,
-[452] = &&TARGET_UNKNOWN_OPCODE,
-[453] = &&TARGET_UNKNOWN_OPCODE,
-[454] = &&TARGET_UNKNOWN_OPCODE,
-[455] = &&TARGET_UNKNOWN_OPCODE,
-[456] = &&TARGET_UNKNOWN_OPCODE,
-[457] = &&TARGET_UNKNOWN_OPCODE,
-[458] = &&TARGET_UNKNOWN_OPCODE,
-[459] = &&TARGET_UNKNOWN_OPCODE,
-[460] = &&TARGET_UNKNOWN_OPCODE,
-[461] = &&TARGET_UNKNOWN_OPCODE,
-[462] = &&TARGET_UNKNOWN_OPCODE,
-[463] = &&TARGET_UNKNOWN_OPCODE,
-[464] = &&TARGET_UNKNOWN_OPCODE,
-[465] = &&TARGET_UNKNOWN_OPCODE,
-[466] = &&TARGET_UNKNOWN_OPCODE,
-[467] = &&TARGET_UNKNOWN_OPCODE,
-[468] = &&TARGET_UNKNOWN_OPCODE,
-[469] = &&TARGET_UNKNOWN_OPCODE,
-[470] = &&TARGET_UNKNOWN_OPCODE,
-[471] = &&TARGET_UNKNOWN_OPCODE,
-[472] = &&TARGET_UNKNOWN_OPCODE,
-[473] = &&TARGET_UNKNOWN_OPCODE,
-[474] = &&TARGET_UNKNOWN_OPCODE,
-[475] = &&TARGET_UNKNOWN_OPCODE,
-[476] = &&TARGET_UNKNOWN_OPCODE,
-[477] = &&TARGET_UNKNOWN_OPCODE,
-[478] = &&TARGET_UNKNOWN_OPCODE,
-[479] = &&TARGET_UNKNOWN_OPCODE,
-[480] = &&TARGET_UNKNOWN_OPCODE,
-[481] = &&TARGET_UNKNOWN_OPCODE,
-[482] = &&TARGET_UNKNOWN_OPCODE,
-[483] = &&TARGET_UNKNOWN_OPCODE,
-[484] = &&TARGET_UNKNOWN_OPCODE,
-[485] = &&TARGET_UNKNOWN_OPCODE,
-[486] = &&TARGET_UNKNOWN_OPCODE,
-[487] = &&TARGET_UNKNOWN_OPCODE,
-[488] = &&TARGET_UNKNOWN_OPCODE,
-[489] = &&TARGET_UNKNOWN_OPCODE,
-[490] = &&TARGET_UNKNOWN_OPCODE,
-[491] = &&TARGET_UNKNOWN_OPCODE,
-[492] = &&TARGET_UNKNOWN_OPCODE,
-[493] = &&TARGET_UNKNOWN_OPCODE,
-[494] = &&TARGET_UNKNOWN_OPCODE,
-[495] = &&TARGET_UNKNOWN_OPCODE,
-[496] = &&TARGET_UNKNOWN_OPCODE,
-[497] = &&TARGET_UNKNOWN_OPCODE,
-[498] = &&TARGET_UNKNOWN_OPCODE,
-[499] = &&TARGET_UNKNOWN_OPCODE,
-[500] = &&TARGET_UNKNOWN_OPCODE,
-[501] = &&TARGET_UNKNOWN_OPCODE,
-[502] = &&TARGET_UNKNOWN_OPCODE,
-[503] = &&TARGET_UNKNOWN_OPCODE,
-[504] = &&TARGET_UNKNOWN_OPCODE,
-[505] = &&TARGET_UNKNOWN_OPCODE,
-[506] = &&TARGET_UNKNOWN_OPCODE,
-[507] = &&TARGET_UNKNOWN_OPCODE,
-[508] = &&TARGET_UNKNOWN_OPCODE,
-[509] = &&TARGET_UNKNOWN_OPCODE,
-[510] = &&TARGET_UNKNOWN_OPCODE,
-[511] = &&LABEL_switch_loop,
-};
-#endif
-static_assert(Py_ARRAY_LENGTH(opcode_targets) == IR_HANDLER_MASK + 1,
+#define IR_TARGETS_COUNT 512
+static_assert(IR_TARGETS_COUNT == IR_HANDLER_MASK + 1,
               "dispatch covers every id that IR_HANDLER yields");
+
+#define IR_TARGETS(X) \
+    X(0, operand_words) \
+    X(1, Add_Int) \
+    X(2, Add_Float) \
+    X(3, Add_Text) \
+    X(4, Add_Extended) \
+    X(5, Add_Generic) \
+    X(6, AttrWrite_Generic) \
+    X(7, AttrWrite_Instance) \
+    X(8, AttrWrite_Shape) \
+    X(9, AttrWrite_ShapeAdd) \
+    X(10, AttrWrite_Hint) \
+    X(11, AttrWrite_Slot) \
+    X(12, SuperAttr_Generic) \
+    X(13, SuperAttr_Builtin) \
+    X(14, SuperAttr_Observed) \
+    X(15, SuperAttrExplicit_Generic) \
+    X(16, SuperAttrExplicit_Builtin) \
+    X(17, SuperAttrExplicit_Observed) \
+    X(18, SuperMethod_Generic) \
+    X(19, SuperMethod_Builtin) \
+    X(20, SuperMethod_Observed) \
+    X(21, SuperMethodExplicit_Generic) \
+    X(22, SuperMethodExplicit_Builtin) \
+    X(23, SuperMethodExplicit_Observed) \
+    X(24, SpecialLookup_Generic) \
+    X(25, Call_Exact) \
+    X(26, Call_BoundExact) \
+    X(27, Call_Init) \
+    X(28, Call_Generator) \
+    X(29, Call_Generic) \
+    X(30, InitResult_Check) \
+    X(31, Call_Observed) \
+    X(32, Return_Ordinary) \
+    X(33, Return_Empty) \
+    X(34, Return_Generator) \
+    X(35, Return_Observed) \
+    X(36, Return_External) \
+    X(37, MaterializeKwargs_Pending) \
+    X(38, CallKw_Plan) \
+    X(39, Call_PyGeneral) \
+    X(40, Call_PlanGenerator) \
+    X(41, Call_BoundGeneral) \
+    X(42, Call_Type1) \
+    X(43, Call_Str1) \
+    X(44, Call_Tuple1) \
+    X(45, Call_BuiltinClass) \
+    X(46, Call_BuiltinO) \
+    X(47, Call_BuiltinFast) \
+    X(48, Call_BuiltinFastKeywords) \
+    X(49, Call_Len) \
+    X(50, Call_Isinstance) \
+    X(51, Call_ListAppend) \
+    X(52, Call_DescriptorO) \
+    X(53, Call_DescriptorFast) \
+    X(54, Call_DescriptorFastKeywords) \
+    X(55, Call_DescriptorNoargs) \
+    X(56, CallKw_Generator) \
+    X(57, CallKw_BoundMethod) \
+    X(58, CallKw_NonPy) \
+    X(59, CallKw_Generic) \
+    X(60, CallKw_Observed) \
+    X(61, CallEx_Generic) \
+    X(62, CallEx_Py) \
+    X(63, CallEx_NonPy) \
+    X(64, CallEx_Observed) \
+    X(65, CellMake_Wrap) \
+    X(66, CellRead_Get) \
+    X(67, CellMapRead_Lookup) \
+    X(68, CellStore_Set) \
+    X(69, CellDelete_Unbind) \
+    X(70, CleanupThrow_Generic) \
+    X(71, EndAsyncFor_Generic) \
+    X(72, EndAsyncFor_Observed) \
+    X(73, WithExit_Generic) \
+    X(74, Build_Tuple) \
+    X(75, Build_List) \
+    X(76, Build_Set) \
+    X(77, Build_Map) \
+    X(78, AddElement_Append) \
+    X(79, AddElement_Add) \
+    X(80, AddEntry_Put) \
+    X(81, UpdateContainer_Extend) \
+    X(82, UpdateContainer_Union) \
+    X(83, UpdateContainer_Overlay) \
+    X(84, MergeKeywords_Merge) \
+    X(85, Unpack_Generic) \
+    X(86, Unpack_Tuple) \
+    X(87, Unpack_List) \
+    X(88, UnpackStar_Iterable) \
+    X(89, Raise_Throw) \
+    X(90, Reraise_Plain) \
+    X(91, Reraise_Origin) \
+    X(92, ExceptEnter_Install) \
+    X(93, ExceptLeave_Restore) \
+    X(94, ExceptMatch_Match) \
+    X(95, ExceptGroupMatch_Split) \
+    X(96, Function_Make) \
+    X(97, Intrinsic_Unary) \
+    X(98, Intrinsic_ImportStar) \
+    X(99, Intrinsic_StopIteration) \
+    X(100, IntrinsicPair_Binary) \
+    X(101, IntrinsicPair_Attr) \
+    X(102, GetAttr_Instance) \
+    X(103, GetAttr_GetSet) \
+    X(104, GetAttr_Property) \
+    X(105, GetAttr_GetattributeOverridden) \
+    X(106, GetAttr_Generic) \
+    X(107, GetAttr_Shape) \
+    X(108, GetAttr_PolyShape) \
+    X(109, GetAttr_Module) \
+    X(110, GetAttr_Hint) \
+    X(111, GetAttr_ValueSlot) \
+    X(112, GetAttr_PointerSlot) \
+    X(113, GetAttr_Class) \
+    X(114, GetAttr_NonDescriptorValues) \
+    X(115, GetAttr_NonDescriptorNoDict) \
+    X(116, GetMethod_MethodValues) \
+    X(117, GetMethod_Generic) \
+    X(118, GetMethod_PolyMethod) \
+    X(119, GetMethod_NoDict) \
+    X(120, GetMethod_LazyDict) \
+    X(121, GetMethod_ClassMethod) \
+    X(122, GetItem_Getitem) \
+    X(123, GetItem_Generic) \
+    X(124, SetItem_Generic) \
+    X(125, DelItem_Generic) \
+    X(126, SliceRead_Generic) \
+    X(127, SliceWrite_Generic) \
+    X(128, BuildSlice_Generic) \
+    X(129, GetItem_ListIndex) \
+    X(130, GetItem_TupleIndex) \
+    X(131, GetItem_Ascii) \
+    X(132, GetItem_UnicodeAsciiChar) \
+    X(133, GetItem_ListSlice) \
+    X(134, GetItem_Dict) \
+    X(135, SetItem_ListIndex) \
+    X(136, SetItem_Dict) \
+    X(137, IterOpen_Generic) \
+    X(138, ForIter_Generic) \
+    X(139, IterOpen_Self) \
+    X(140, IterOpen_Indexed) \
+    X(141, IterOpen_GenMethod) \
+    X(142, ForIter_List) \
+    X(143, ForIter_Tuple) \
+    X(144, ForIter_Range) \
+    X(145, ForIter_Indexed) \
+    X(146, ForIter_Gen) \
+    X(147, ForIter_Slot) \
+    X(148, ForIter_Observed) \
+    X(149, IterClose_Retire) \
+    X(150, IterClose_Observed) \
+    X(151, GlobalRead_Generic) \
+    X(152, GlobalRead_Module) \
+    X(153, GlobalRead_Builtin) \
+    X(154, NamespaceRead_Name) \
+    X(155, NamespaceRead_Locals) \
+    X(156, NamespaceRead_BuildClass) \
+    X(157, NamespaceReadFrom_Mapping) \
+    X(158, NamespaceWrite_Name) \
+    X(159, NamespaceWrite_Global) \
+    X(160, SetupAnnotations_Setup) \
+    X(161, Import_Eager) \
+    X(162, Import_Policy) \
+    X(163, Import_Lazy) \
+    X(164, ImportFrom_From) \
+    X(165, ImportFrom_FromLast) \
+    X(166, Binary_Int_NB_INPLACE_ADD) \
+    X(167, Binary_Int_NB_SUBTRACT) \
+    X(168, Binary_Int_NB_INPLACE_SUBTRACT) \
+    X(169, Binary_Int_NB_MULTIPLY) \
+    X(170, Binary_Int_NB_INPLACE_MULTIPLY) \
+    X(171, Binary_Int_NB_FLOOR_DIVIDE) \
+    X(172, Binary_Int_NB_REMAINDER) \
+    X(173, Binary_Int_NB_AND) \
+    X(174, Binary_Int_NB_OR) \
+    X(175, Binary_Int_NB_XOR) \
+    X(176, Binary_Int_NB_LSHIFT) \
+    X(177, Binary_Int_NB_RSHIFT) \
+    X(178, Binary_Int) \
+    X(179, Binary_Float_NB_INPLACE_ADD) \
+    X(180, Binary_Float_NB_SUBTRACT) \
+    X(181, Binary_Float_NB_INPLACE_SUBTRACT) \
+    X(182, Binary_Float_NB_MULTIPLY) \
+    X(183, Binary_Float_NB_INPLACE_MULTIPLY) \
+    X(184, Binary_Float_NB_TRUE_DIVIDE) \
+    X(185, Binary_Float_NB_INPLACE_TRUE_DIVIDE) \
+    X(186, Binary_Float_NB_POWER) \
+    X(187, Binary_Float_NB_INPLACE_POWER) \
+    X(188, Binary_Text) \
+    X(189, Binary_Extended) \
+    X(190, Binary_Generic) \
+    X(191, Unary_Generic) \
+    X(192, AppendText_Text) \
+    X(193, AppendText_Generic) \
+    X(194, Length_Size) \
+    X(195, Pattern_Flag) \
+    X(196, PatternClass_Match) \
+    X(197, PatternKeys_Match) \
+    X(198, Resume_Poll) \
+    X(199, Resume_Warm) \
+    X(200, Resume_Observed) \
+    X(201, Awaitable_Await) \
+    X(202, AsyncIterOpen_Open) \
+    X(203, AsyncIterNext_Next) \
+    X(204, Yield_Ordinary) \
+    X(205, YieldFrom_Delegated) \
+    X(206, Yield_Observed) \
+    X(207, YieldFrom_Observed) \
+    X(208, Send_Generic) \
+    X(209, Send_Gen) \
+    X(210, Send_Virtual) \
+    X(211, Send_AsyncGen) \
+    X(212, Send_Observed) \
+    X(213, Compare_Int_LT) \
+    X(214, Compare_Int_LE) \
+    X(215, Compare_Int_EQ) \
+    X(216, Compare_Int_NE) \
+    X(217, Compare_Int_GT) \
+    X(218, Compare_Int_GE) \
+    X(219, Compare_Float_LT) \
+    X(220, Compare_Float_LE) \
+    X(221, Compare_Float_EQ) \
+    X(222, Compare_Float_NE) \
+    X(223, Compare_Float_GT) \
+    X(224, Compare_Float_GE) \
+    X(225, Compare_Str_EQ) \
+    X(226, Compare_Str_NE) \
+    X(227, Compare_Generic) \
+    X(228, Identity_Test) \
+    X(229, Contains_Set) \
+    X(230, Contains_Dict) \
+    X(231, Contains_Generic) \
+    X(232, TestBranch_Identity) \
+    X(233, TestBranch_Int_TEST_LT) \
+    X(234, TestBranch_Int_TEST_LE) \
+    X(235, TestBranch_Int_TEST_EQ) \
+    X(236, TestBranch_Int_TEST_NE) \
+    X(237, TestBranch_Int_TEST_GT) \
+    X(238, TestBranch_Int_TEST_GE) \
+    X(239, TestBranch_Float_TEST_LT) \
+    X(240, TestBranch_Float_TEST_LE) \
+    X(241, TestBranch_Float_TEST_EQ) \
+    X(242, TestBranch_Float_TEST_NE) \
+    X(243, TestBranch_Float_TEST_GT) \
+    X(244, TestBranch_Float_TEST_GE) \
+    X(245, TestBranch_Str_TEST_EQ) \
+    X(246, TestBranch_Str_TEST_NE) \
+    X(247, TestBranch_Set) \
+    X(248, TestBranch_Dict) \
+    X(249, TestBranch_Sequence) \
+    X(250, TestBranch_Generic) \
+    X(251, TestBranch_Observed) \
+    X(252, BuildText_Join) \
+    X(253, BuildText_Interpolation) \
+    X(254, BuildText_Template) \
+    X(255, Convert_Text) \
+    X(256, Format_Simple) \
+    X(257, FormatSpec_Value) \
+    X(258, Truth_Bool) \
+    X(259, Truth_Int) \
+    X(260, Truth_List) \
+    X(261, Truth_None) \
+    X(262, Truth_Str) \
+    X(263, Truth_Plain) \
+    X(264, Truth_Slot) \
+    X(265, Truth_Generic) \
+    X(266, BranchTruth_Bool_BRANCH_IF_FALSE) \
+    X(267, BranchTruth_Bool_BRANCH_IF_TRUE) \
+    X(268, BranchTruth_Int_BRANCH_IF_FALSE) \
+    X(269, BranchTruth_Int_BRANCH_IF_TRUE) \
+    X(270, BranchTruth_List_BRANCH_IF_FALSE) \
+    X(271, BranchTruth_List_BRANCH_IF_TRUE) \
+    X(272, BranchTruth_None_BRANCH_IF_FALSE) \
+    X(273, BranchTruth_None_BRANCH_IF_TRUE) \
+    X(274, BranchTruth_Str_BRANCH_IF_FALSE) \
+    X(275, BranchTruth_Str_BRANCH_IF_TRUE) \
+    X(276, BranchTruth_Plain_BRANCH_IF_FALSE) \
+    X(277, BranchTruth_Plain_BRANCH_IF_TRUE) \
+    X(278, BranchTruth_Slot_BRANCH_IF_FALSE) \
+    X(279, BranchTruth_Slot_BRANCH_IF_TRUE) \
+    X(280, BranchTruth_Generic) \
+    X(281, BranchNone_Test) \
+    X(282, BranchTruth_Observed) \
+    X(283, BranchNone_Observed) \
+    X(284, Jump_Direct) \
+    X(285, Jump_Trailing) \
+    X(286, Jump_Poll) \
+    X(287, Jump_Warm) \
+    X(288, Jump_Observed) \
+    X(289, Const_Pool) \
+    X(290, Const_Small) \
+    X(291, Const_Common) \
+    X(292, LocalRead_Bound) \
+    X(293, LocalRead_Checked) \
+    X(294, LocalWrite_Store) \
+    X(295, LocalWrite_Restore) \
+    X(296, SaveLocal_Take) \
+    X(297, LocalDelete_Checked) \
+    X(298, Move_Transfer) \
+    X(299, Move_Copy) \
+    X(300, Rotate_Cycle) \
+    X(301, Retire_Close) \
+    X(302, UNKNOWN_OPCODE) \
+    X(303, UNKNOWN_OPCODE) \
+    X(304, UNKNOWN_OPCODE) \
+    X(305, UNKNOWN_OPCODE) \
+    X(306, UNKNOWN_OPCODE) \
+    X(307, UNKNOWN_OPCODE) \
+    X(308, UNKNOWN_OPCODE) \
+    X(309, UNKNOWN_OPCODE) \
+    X(310, UNKNOWN_OPCODE) \
+    X(311, UNKNOWN_OPCODE) \
+    X(312, UNKNOWN_OPCODE) \
+    X(313, UNKNOWN_OPCODE) \
+    X(314, UNKNOWN_OPCODE) \
+    X(315, UNKNOWN_OPCODE) \
+    X(316, UNKNOWN_OPCODE) \
+    X(317, UNKNOWN_OPCODE) \
+    X(318, UNKNOWN_OPCODE) \
+    X(319, UNKNOWN_OPCODE) \
+    X(320, UNKNOWN_OPCODE) \
+    X(321, UNKNOWN_OPCODE) \
+    X(322, UNKNOWN_OPCODE) \
+    X(323, UNKNOWN_OPCODE) \
+    X(324, UNKNOWN_OPCODE) \
+    X(325, UNKNOWN_OPCODE) \
+    X(326, UNKNOWN_OPCODE) \
+    X(327, UNKNOWN_OPCODE) \
+    X(328, UNKNOWN_OPCODE) \
+    X(329, UNKNOWN_OPCODE) \
+    X(330, UNKNOWN_OPCODE) \
+    X(331, UNKNOWN_OPCODE) \
+    X(332, UNKNOWN_OPCODE) \
+    X(333, UNKNOWN_OPCODE) \
+    X(334, UNKNOWN_OPCODE) \
+    X(335, UNKNOWN_OPCODE) \
+    X(336, UNKNOWN_OPCODE) \
+    X(337, UNKNOWN_OPCODE) \
+    X(338, UNKNOWN_OPCODE) \
+    X(339, UNKNOWN_OPCODE) \
+    X(340, UNKNOWN_OPCODE) \
+    X(341, UNKNOWN_OPCODE) \
+    X(342, UNKNOWN_OPCODE) \
+    X(343, UNKNOWN_OPCODE) \
+    X(344, UNKNOWN_OPCODE) \
+    X(345, UNKNOWN_OPCODE) \
+    X(346, UNKNOWN_OPCODE) \
+    X(347, UNKNOWN_OPCODE) \
+    X(348, UNKNOWN_OPCODE) \
+    X(349, UNKNOWN_OPCODE) \
+    X(350, UNKNOWN_OPCODE) \
+    X(351, UNKNOWN_OPCODE) \
+    X(352, UNKNOWN_OPCODE) \
+    X(353, UNKNOWN_OPCODE) \
+    X(354, UNKNOWN_OPCODE) \
+    X(355, UNKNOWN_OPCODE) \
+    X(356, UNKNOWN_OPCODE) \
+    X(357, UNKNOWN_OPCODE) \
+    X(358, UNKNOWN_OPCODE) \
+    X(359, UNKNOWN_OPCODE) \
+    X(360, UNKNOWN_OPCODE) \
+    X(361, UNKNOWN_OPCODE) \
+    X(362, UNKNOWN_OPCODE) \
+    X(363, UNKNOWN_OPCODE) \
+    X(364, UNKNOWN_OPCODE) \
+    X(365, UNKNOWN_OPCODE) \
+    X(366, UNKNOWN_OPCODE) \
+    X(367, UNKNOWN_OPCODE) \
+    X(368, UNKNOWN_OPCODE) \
+    X(369, UNKNOWN_OPCODE) \
+    X(370, UNKNOWN_OPCODE) \
+    X(371, UNKNOWN_OPCODE) \
+    X(372, UNKNOWN_OPCODE) \
+    X(373, UNKNOWN_OPCODE) \
+    X(374, UNKNOWN_OPCODE) \
+    X(375, UNKNOWN_OPCODE) \
+    X(376, UNKNOWN_OPCODE) \
+    X(377, UNKNOWN_OPCODE) \
+    X(378, UNKNOWN_OPCODE) \
+    X(379, UNKNOWN_OPCODE) \
+    X(380, UNKNOWN_OPCODE) \
+    X(381, UNKNOWN_OPCODE) \
+    X(382, UNKNOWN_OPCODE) \
+    X(383, UNKNOWN_OPCODE) \
+    X(384, UNKNOWN_OPCODE) \
+    X(385, UNKNOWN_OPCODE) \
+    X(386, UNKNOWN_OPCODE) \
+    X(387, UNKNOWN_OPCODE) \
+    X(388, UNKNOWN_OPCODE) \
+    X(389, UNKNOWN_OPCODE) \
+    X(390, UNKNOWN_OPCODE) \
+    X(391, UNKNOWN_OPCODE) \
+    X(392, UNKNOWN_OPCODE) \
+    X(393, UNKNOWN_OPCODE) \
+    X(394, UNKNOWN_OPCODE) \
+    X(395, UNKNOWN_OPCODE) \
+    X(396, UNKNOWN_OPCODE) \
+    X(397, UNKNOWN_OPCODE) \
+    X(398, UNKNOWN_OPCODE) \
+    X(399, UNKNOWN_OPCODE) \
+    X(400, UNKNOWN_OPCODE) \
+    X(401, UNKNOWN_OPCODE) \
+    X(402, UNKNOWN_OPCODE) \
+    X(403, UNKNOWN_OPCODE) \
+    X(404, UNKNOWN_OPCODE) \
+    X(405, UNKNOWN_OPCODE) \
+    X(406, UNKNOWN_OPCODE) \
+    X(407, UNKNOWN_OPCODE) \
+    X(408, UNKNOWN_OPCODE) \
+    X(409, UNKNOWN_OPCODE) \
+    X(410, UNKNOWN_OPCODE) \
+    X(411, UNKNOWN_OPCODE) \
+    X(412, UNKNOWN_OPCODE) \
+    X(413, UNKNOWN_OPCODE) \
+    X(414, UNKNOWN_OPCODE) \
+    X(415, UNKNOWN_OPCODE) \
+    X(416, UNKNOWN_OPCODE) \
+    X(417, UNKNOWN_OPCODE) \
+    X(418, UNKNOWN_OPCODE) \
+    X(419, UNKNOWN_OPCODE) \
+    X(420, UNKNOWN_OPCODE) \
+    X(421, UNKNOWN_OPCODE) \
+    X(422, UNKNOWN_OPCODE) \
+    X(423, UNKNOWN_OPCODE) \
+    X(424, UNKNOWN_OPCODE) \
+    X(425, UNKNOWN_OPCODE) \
+    X(426, UNKNOWN_OPCODE) \
+    X(427, UNKNOWN_OPCODE) \
+    X(428, UNKNOWN_OPCODE) \
+    X(429, UNKNOWN_OPCODE) \
+    X(430, UNKNOWN_OPCODE) \
+    X(431, UNKNOWN_OPCODE) \
+    X(432, UNKNOWN_OPCODE) \
+    X(433, UNKNOWN_OPCODE) \
+    X(434, UNKNOWN_OPCODE) \
+    X(435, UNKNOWN_OPCODE) \
+    X(436, UNKNOWN_OPCODE) \
+    X(437, UNKNOWN_OPCODE) \
+    X(438, UNKNOWN_OPCODE) \
+    X(439, UNKNOWN_OPCODE) \
+    X(440, UNKNOWN_OPCODE) \
+    X(441, UNKNOWN_OPCODE) \
+    X(442, UNKNOWN_OPCODE) \
+    X(443, UNKNOWN_OPCODE) \
+    X(444, UNKNOWN_OPCODE) \
+    X(445, UNKNOWN_OPCODE) \
+    X(446, UNKNOWN_OPCODE) \
+    X(447, UNKNOWN_OPCODE) \
+    X(448, UNKNOWN_OPCODE) \
+    X(449, UNKNOWN_OPCODE) \
+    X(450, UNKNOWN_OPCODE) \
+    X(451, UNKNOWN_OPCODE) \
+    X(452, UNKNOWN_OPCODE) \
+    X(453, UNKNOWN_OPCODE) \
+    X(454, UNKNOWN_OPCODE) \
+    X(455, UNKNOWN_OPCODE) \
+    X(456, UNKNOWN_OPCODE) \
+    X(457, UNKNOWN_OPCODE) \
+    X(458, UNKNOWN_OPCODE) \
+    X(459, UNKNOWN_OPCODE) \
+    X(460, UNKNOWN_OPCODE) \
+    X(461, UNKNOWN_OPCODE) \
+    X(462, UNKNOWN_OPCODE) \
+    X(463, UNKNOWN_OPCODE) \
+    X(464, UNKNOWN_OPCODE) \
+    X(465, UNKNOWN_OPCODE) \
+    X(466, UNKNOWN_OPCODE) \
+    X(467, UNKNOWN_OPCODE) \
+    X(468, UNKNOWN_OPCODE) \
+    X(469, UNKNOWN_OPCODE) \
+    X(470, UNKNOWN_OPCODE) \
+    X(471, UNKNOWN_OPCODE) \
+    X(472, UNKNOWN_OPCODE) \
+    X(473, UNKNOWN_OPCODE) \
+    X(474, UNKNOWN_OPCODE) \
+    X(475, UNKNOWN_OPCODE) \
+    X(476, UNKNOWN_OPCODE) \
+    X(477, UNKNOWN_OPCODE) \
+    X(478, UNKNOWN_OPCODE) \
+    X(479, UNKNOWN_OPCODE) \
+    X(480, UNKNOWN_OPCODE) \
+    X(481, UNKNOWN_OPCODE) \
+    X(482, UNKNOWN_OPCODE) \
+    X(483, UNKNOWN_OPCODE) \
+    X(484, UNKNOWN_OPCODE) \
+    X(485, UNKNOWN_OPCODE) \
+    X(486, UNKNOWN_OPCODE) \
+    X(487, UNKNOWN_OPCODE) \
+    X(488, UNKNOWN_OPCODE) \
+    X(489, UNKNOWN_OPCODE) \
+    X(490, UNKNOWN_OPCODE) \
+    X(491, UNKNOWN_OPCODE) \
+    X(492, UNKNOWN_OPCODE) \
+    X(493, UNKNOWN_OPCODE) \
+    X(494, UNKNOWN_OPCODE) \
+    X(495, UNKNOWN_OPCODE) \
+    X(496, UNKNOWN_OPCODE) \
+    X(497, UNKNOWN_OPCODE) \
+    X(498, UNKNOWN_OPCODE) \
+    X(499, UNKNOWN_OPCODE) \
+    X(500, UNKNOWN_OPCODE) \
+    X(501, UNKNOWN_OPCODE) \
+    X(502, UNKNOWN_OPCODE) \
+    X(503, UNKNOWN_OPCODE) \
+    X(504, UNKNOWN_OPCODE) \
+    X(505, UNKNOWN_OPCODE) \
+    X(506, UNKNOWN_OPCODE) \
+    X(507, UNKNOWN_OPCODE) \
+    X(508, UNKNOWN_OPCODE) \
+    X(509, UNKNOWN_OPCODE) \
+    X(510, UNKNOWN_OPCODE) \
+    X(511, switch_loop) \
+
+
+#define IR_OBSERVING_TARGETS(X) \
+    X(0, operand_words) \
+    X(1, Add_Int) \
+    X(2, Add_Float) \
+    X(3, Add_Text) \
+    X(4, Add_Extended) \
+    X(5, Add_Generic) \
+    X(6, AttrWrite_Generic) \
+    X(7, AttrWrite_Instance) \
+    X(8, AttrWrite_Shape) \
+    X(9, AttrWrite_ShapeAdd) \
+    X(10, AttrWrite_Hint) \
+    X(11, AttrWrite_Slot) \
+    X(12, SuperAttr_Generic) \
+    X(13, SuperAttr_Builtin) \
+    X(14, SuperAttr_Observed) \
+    X(15, SuperAttrExplicit_Generic) \
+    X(16, SuperAttrExplicit_Builtin) \
+    X(17, SuperAttrExplicit_Observed) \
+    X(18, SuperMethod_Generic) \
+    X(19, SuperMethod_Builtin) \
+    X(20, SuperMethod_Observed) \
+    X(21, SuperMethodExplicit_Generic) \
+    X(22, SuperMethodExplicit_Builtin) \
+    X(23, SuperMethodExplicit_Observed) \
+    X(24, SpecialLookup_Generic) \
+    X(25, Call_Exact) \
+    X(26, Call_BoundExact) \
+    X(27, Call_Init) \
+    X(28, Call_Generator) \
+    X(29, Call_Generic) \
+    X(30, InitResult_Check) \
+    X(31, Call_Observed) \
+    X(32, Return_Ordinary) \
+    X(33, Return_Empty) \
+    X(34, Return_Generator) \
+    X(35, Return_Observed) \
+    X(36, Return_External) \
+    X(37, MaterializeKwargs_Pending) \
+    X(38, CallKw_Plan) \
+    X(39, Call_PyGeneral) \
+    X(40, Call_PlanGenerator) \
+    X(41, Call_BoundGeneral) \
+    X(42, Call_Type1) \
+    X(43, Call_Str1) \
+    X(44, Call_Tuple1) \
+    X(45, Call_BuiltinClass) \
+    X(46, Call_BuiltinO) \
+    X(47, Call_BuiltinFast) \
+    X(48, Call_BuiltinFastKeywords) \
+    X(49, Call_Len) \
+    X(50, Call_Isinstance) \
+    X(51, Call_ListAppend) \
+    X(52, Call_DescriptorO) \
+    X(53, Call_DescriptorFast) \
+    X(54, Call_DescriptorFastKeywords) \
+    X(55, Call_DescriptorNoargs) \
+    X(56, CallKw_Generator) \
+    X(57, CallKw_BoundMethod) \
+    X(58, CallKw_NonPy) \
+    X(59, CallKw_Generic) \
+    X(60, CallKw_Observed) \
+    X(61, CallEx_Generic) \
+    X(62, CallEx_Py) \
+    X(63, CallEx_NonPy) \
+    X(64, CallEx_Observed) \
+    X(65, CellMake_Wrap) \
+    X(66, CellRead_Get) \
+    X(67, CellMapRead_Lookup) \
+    X(68, CellStore_Set) \
+    X(69, CellDelete_Unbind) \
+    X(70, CleanupThrow_Generic) \
+    X(71, EndAsyncFor_Generic) \
+    X(72, EndAsyncFor_Observed) \
+    X(73, WithExit_Generic) \
+    X(74, Build_Tuple) \
+    X(75, Build_List) \
+    X(76, Build_Set) \
+    X(77, Build_Map) \
+    X(78, AddElement_Append) \
+    X(79, AddElement_Add) \
+    X(80, AddEntry_Put) \
+    X(81, UpdateContainer_Extend) \
+    X(82, UpdateContainer_Union) \
+    X(83, UpdateContainer_Overlay) \
+    X(84, MergeKeywords_Merge) \
+    X(85, Unpack_Generic) \
+    X(86, Unpack_Tuple) \
+    X(87, Unpack_List) \
+    X(88, UnpackStar_Iterable) \
+    X(89, Raise_Throw) \
+    X(90, Reraise_Plain) \
+    X(91, Reraise_Origin) \
+    X(92, ExceptEnter_Install) \
+    X(93, ExceptLeave_Restore) \
+    X(94, ExceptMatch_Match) \
+    X(95, ExceptGroupMatch_Split) \
+    X(96, Function_Make) \
+    X(97, Intrinsic_Unary) \
+    X(98, Intrinsic_ImportStar) \
+    X(99, Intrinsic_StopIteration) \
+    X(100, IntrinsicPair_Binary) \
+    X(101, IntrinsicPair_Attr) \
+    X(102, GetAttr_Instance) \
+    X(103, GetAttr_GetSet) \
+    X(104, GetAttr_Property) \
+    X(105, GetAttr_GetattributeOverridden) \
+    X(106, GetAttr_Generic) \
+    X(107, GetAttr_Shape) \
+    X(108, GetAttr_PolyShape) \
+    X(109, GetAttr_Module) \
+    X(110, GetAttr_Hint) \
+    X(111, GetAttr_ValueSlot) \
+    X(112, GetAttr_PointerSlot) \
+    X(113, GetAttr_Class) \
+    X(114, GetAttr_NonDescriptorValues) \
+    X(115, GetAttr_NonDescriptorNoDict) \
+    X(116, GetMethod_MethodValues) \
+    X(117, GetMethod_Generic) \
+    X(118, GetMethod_PolyMethod) \
+    X(119, GetMethod_NoDict) \
+    X(120, GetMethod_LazyDict) \
+    X(121, GetMethod_ClassMethod) \
+    X(122, GetItem_Getitem) \
+    X(123, GetItem_Generic) \
+    X(124, SetItem_Generic) \
+    X(125, DelItem_Generic) \
+    X(126, SliceRead_Generic) \
+    X(127, SliceWrite_Generic) \
+    X(128, BuildSlice_Generic) \
+    X(129, GetItem_ListIndex) \
+    X(130, GetItem_TupleIndex) \
+    X(131, GetItem_Ascii) \
+    X(132, GetItem_UnicodeAsciiChar) \
+    X(133, GetItem_ListSlice) \
+    X(134, GetItem_Dict) \
+    X(135, SetItem_ListIndex) \
+    X(136, SetItem_Dict) \
+    X(137, IterOpen_Generic) \
+    X(138, ForIter_Generic) \
+    X(139, IterOpen_Self) \
+    X(140, IterOpen_Indexed) \
+    X(141, IterOpen_GenMethod) \
+    X(142, ForIter_List) \
+    X(143, ForIter_Tuple) \
+    X(144, ForIter_Range) \
+    X(145, ForIter_Indexed) \
+    X(146, ForIter_Gen) \
+    X(147, ForIter_Slot) \
+    X(148, ForIter_Observed) \
+    X(149, IterClose_Retire) \
+    X(150, IterClose_Observed) \
+    X(151, GlobalRead_Generic) \
+    X(152, GlobalRead_Module) \
+    X(153, GlobalRead_Builtin) \
+    X(154, NamespaceRead_Name) \
+    X(155, NamespaceRead_Locals) \
+    X(156, NamespaceRead_BuildClass) \
+    X(157, NamespaceReadFrom_Mapping) \
+    X(158, NamespaceWrite_Name) \
+    X(159, NamespaceWrite_Global) \
+    X(160, SetupAnnotations_Setup) \
+    X(161, Import_Eager) \
+    X(162, Import_Policy) \
+    X(163, Import_Lazy) \
+    X(164, ImportFrom_From) \
+    X(165, ImportFrom_FromLast) \
+    X(166, Binary_Int_NB_INPLACE_ADD) \
+    X(167, Binary_Int_NB_SUBTRACT) \
+    X(168, Binary_Int_NB_INPLACE_SUBTRACT) \
+    X(169, Binary_Int_NB_MULTIPLY) \
+    X(170, Binary_Int_NB_INPLACE_MULTIPLY) \
+    X(171, Binary_Int_NB_FLOOR_DIVIDE) \
+    X(172, Binary_Int_NB_REMAINDER) \
+    X(173, Binary_Int_NB_AND) \
+    X(174, Binary_Int_NB_OR) \
+    X(175, Binary_Int_NB_XOR) \
+    X(176, Binary_Int_NB_LSHIFT) \
+    X(177, Binary_Int_NB_RSHIFT) \
+    X(178, Binary_Int) \
+    X(179, Binary_Float_NB_INPLACE_ADD) \
+    X(180, Binary_Float_NB_SUBTRACT) \
+    X(181, Binary_Float_NB_INPLACE_SUBTRACT) \
+    X(182, Binary_Float_NB_MULTIPLY) \
+    X(183, Binary_Float_NB_INPLACE_MULTIPLY) \
+    X(184, Binary_Float_NB_TRUE_DIVIDE) \
+    X(185, Binary_Float_NB_INPLACE_TRUE_DIVIDE) \
+    X(186, Binary_Float_NB_POWER) \
+    X(187, Binary_Float_NB_INPLACE_POWER) \
+    X(188, Binary_Text) \
+    X(189, Binary_Extended) \
+    X(190, Binary_Generic) \
+    X(191, Unary_Generic) \
+    X(192, AppendText_Text) \
+    X(193, AppendText_Generic) \
+    X(194, Length_Size) \
+    X(195, Pattern_Flag) \
+    X(196, PatternClass_Match) \
+    X(197, PatternKeys_Match) \
+    X(198, Resume_Observed) \
+    X(199, Resume_Observed) \
+    X(200, Resume_Observed) \
+    X(201, Awaitable_Await) \
+    X(202, AsyncIterOpen_Open) \
+    X(203, AsyncIterNext_Next) \
+    X(204, Yield_Ordinary) \
+    X(205, YieldFrom_Delegated) \
+    X(206, Yield_Observed) \
+    X(207, YieldFrom_Observed) \
+    X(208, Send_Generic) \
+    X(209, Send_Gen) \
+    X(210, Send_Virtual) \
+    X(211, Send_AsyncGen) \
+    X(212, Send_Observed) \
+    X(213, Compare_Int_LT) \
+    X(214, Compare_Int_LE) \
+    X(215, Compare_Int_EQ) \
+    X(216, Compare_Int_NE) \
+    X(217, Compare_Int_GT) \
+    X(218, Compare_Int_GE) \
+    X(219, Compare_Float_LT) \
+    X(220, Compare_Float_LE) \
+    X(221, Compare_Float_EQ) \
+    X(222, Compare_Float_NE) \
+    X(223, Compare_Float_GT) \
+    X(224, Compare_Float_GE) \
+    X(225, Compare_Str_EQ) \
+    X(226, Compare_Str_NE) \
+    X(227, Compare_Generic) \
+    X(228, Identity_Test) \
+    X(229, Contains_Set) \
+    X(230, Contains_Dict) \
+    X(231, Contains_Generic) \
+    X(232, TestBranch_Identity) \
+    X(233, TestBranch_Int_TEST_LT) \
+    X(234, TestBranch_Int_TEST_LE) \
+    X(235, TestBranch_Int_TEST_EQ) \
+    X(236, TestBranch_Int_TEST_NE) \
+    X(237, TestBranch_Int_TEST_GT) \
+    X(238, TestBranch_Int_TEST_GE) \
+    X(239, TestBranch_Float_TEST_LT) \
+    X(240, TestBranch_Float_TEST_LE) \
+    X(241, TestBranch_Float_TEST_EQ) \
+    X(242, TestBranch_Float_TEST_NE) \
+    X(243, TestBranch_Float_TEST_GT) \
+    X(244, TestBranch_Float_TEST_GE) \
+    X(245, TestBranch_Str_TEST_EQ) \
+    X(246, TestBranch_Str_TEST_NE) \
+    X(247, TestBranch_Set) \
+    X(248, TestBranch_Dict) \
+    X(249, TestBranch_Sequence) \
+    X(250, TestBranch_Generic) \
+    X(251, TestBranch_Observed) \
+    X(252, BuildText_Join) \
+    X(253, BuildText_Interpolation) \
+    X(254, BuildText_Template) \
+    X(255, Convert_Text) \
+    X(256, Format_Simple) \
+    X(257, FormatSpec_Value) \
+    X(258, Truth_Bool) \
+    X(259, Truth_Int) \
+    X(260, Truth_List) \
+    X(261, Truth_None) \
+    X(262, Truth_Str) \
+    X(263, Truth_Plain) \
+    X(264, Truth_Slot) \
+    X(265, Truth_Generic) \
+    X(266, BranchTruth_Bool_BRANCH_IF_FALSE) \
+    X(267, BranchTruth_Bool_BRANCH_IF_TRUE) \
+    X(268, BranchTruth_Int_BRANCH_IF_FALSE) \
+    X(269, BranchTruth_Int_BRANCH_IF_TRUE) \
+    X(270, BranchTruth_List_BRANCH_IF_FALSE) \
+    X(271, BranchTruth_List_BRANCH_IF_TRUE) \
+    X(272, BranchTruth_None_BRANCH_IF_FALSE) \
+    X(273, BranchTruth_None_BRANCH_IF_TRUE) \
+    X(274, BranchTruth_Str_BRANCH_IF_FALSE) \
+    X(275, BranchTruth_Str_BRANCH_IF_TRUE) \
+    X(276, BranchTruth_Plain_BRANCH_IF_FALSE) \
+    X(277, BranchTruth_Plain_BRANCH_IF_TRUE) \
+    X(278, BranchTruth_Slot_BRANCH_IF_FALSE) \
+    X(279, BranchTruth_Slot_BRANCH_IF_TRUE) \
+    X(280, BranchTruth_Generic) \
+    X(281, BranchNone_Test) \
+    X(282, BranchTruth_Observed) \
+    X(283, BranchNone_Observed) \
+    X(284, Jump_Direct) \
+    X(285, Jump_Trailing) \
+    X(286, Jump_Poll) \
+    X(287, Jump_Warm) \
+    X(288, Jump_Observed) \
+    X(289, Const_Pool) \
+    X(290, Const_Small) \
+    X(291, Const_Common) \
+    X(292, LocalRead_Bound) \
+    X(293, LocalRead_Checked) \
+    X(294, LocalWrite_Store) \
+    X(295, LocalWrite_Restore) \
+    X(296, SaveLocal_Take) \
+    X(297, LocalDelete_Checked) \
+    X(298, Move_Transfer) \
+    X(299, Move_Copy) \
+    X(300, Rotate_Cycle) \
+    X(301, Retire_Close) \
+    X(302, UNKNOWN_OPCODE) \
+    X(303, UNKNOWN_OPCODE) \
+    X(304, UNKNOWN_OPCODE) \
+    X(305, UNKNOWN_OPCODE) \
+    X(306, UNKNOWN_OPCODE) \
+    X(307, UNKNOWN_OPCODE) \
+    X(308, UNKNOWN_OPCODE) \
+    X(309, UNKNOWN_OPCODE) \
+    X(310, UNKNOWN_OPCODE) \
+    X(311, UNKNOWN_OPCODE) \
+    X(312, UNKNOWN_OPCODE) \
+    X(313, UNKNOWN_OPCODE) \
+    X(314, UNKNOWN_OPCODE) \
+    X(315, UNKNOWN_OPCODE) \
+    X(316, UNKNOWN_OPCODE) \
+    X(317, UNKNOWN_OPCODE) \
+    X(318, UNKNOWN_OPCODE) \
+    X(319, UNKNOWN_OPCODE) \
+    X(320, UNKNOWN_OPCODE) \
+    X(321, UNKNOWN_OPCODE) \
+    X(322, UNKNOWN_OPCODE) \
+    X(323, UNKNOWN_OPCODE) \
+    X(324, UNKNOWN_OPCODE) \
+    X(325, UNKNOWN_OPCODE) \
+    X(326, UNKNOWN_OPCODE) \
+    X(327, UNKNOWN_OPCODE) \
+    X(328, UNKNOWN_OPCODE) \
+    X(329, UNKNOWN_OPCODE) \
+    X(330, UNKNOWN_OPCODE) \
+    X(331, UNKNOWN_OPCODE) \
+    X(332, UNKNOWN_OPCODE) \
+    X(333, UNKNOWN_OPCODE) \
+    X(334, UNKNOWN_OPCODE) \
+    X(335, UNKNOWN_OPCODE) \
+    X(336, UNKNOWN_OPCODE) \
+    X(337, UNKNOWN_OPCODE) \
+    X(338, UNKNOWN_OPCODE) \
+    X(339, UNKNOWN_OPCODE) \
+    X(340, UNKNOWN_OPCODE) \
+    X(341, UNKNOWN_OPCODE) \
+    X(342, UNKNOWN_OPCODE) \
+    X(343, UNKNOWN_OPCODE) \
+    X(344, UNKNOWN_OPCODE) \
+    X(345, UNKNOWN_OPCODE) \
+    X(346, UNKNOWN_OPCODE) \
+    X(347, UNKNOWN_OPCODE) \
+    X(348, UNKNOWN_OPCODE) \
+    X(349, UNKNOWN_OPCODE) \
+    X(350, UNKNOWN_OPCODE) \
+    X(351, UNKNOWN_OPCODE) \
+    X(352, UNKNOWN_OPCODE) \
+    X(353, UNKNOWN_OPCODE) \
+    X(354, UNKNOWN_OPCODE) \
+    X(355, UNKNOWN_OPCODE) \
+    X(356, UNKNOWN_OPCODE) \
+    X(357, UNKNOWN_OPCODE) \
+    X(358, UNKNOWN_OPCODE) \
+    X(359, UNKNOWN_OPCODE) \
+    X(360, UNKNOWN_OPCODE) \
+    X(361, UNKNOWN_OPCODE) \
+    X(362, UNKNOWN_OPCODE) \
+    X(363, UNKNOWN_OPCODE) \
+    X(364, UNKNOWN_OPCODE) \
+    X(365, UNKNOWN_OPCODE) \
+    X(366, UNKNOWN_OPCODE) \
+    X(367, UNKNOWN_OPCODE) \
+    X(368, UNKNOWN_OPCODE) \
+    X(369, UNKNOWN_OPCODE) \
+    X(370, UNKNOWN_OPCODE) \
+    X(371, UNKNOWN_OPCODE) \
+    X(372, UNKNOWN_OPCODE) \
+    X(373, UNKNOWN_OPCODE) \
+    X(374, UNKNOWN_OPCODE) \
+    X(375, UNKNOWN_OPCODE) \
+    X(376, UNKNOWN_OPCODE) \
+    X(377, UNKNOWN_OPCODE) \
+    X(378, UNKNOWN_OPCODE) \
+    X(379, UNKNOWN_OPCODE) \
+    X(380, UNKNOWN_OPCODE) \
+    X(381, UNKNOWN_OPCODE) \
+    X(382, UNKNOWN_OPCODE) \
+    X(383, UNKNOWN_OPCODE) \
+    X(384, UNKNOWN_OPCODE) \
+    X(385, UNKNOWN_OPCODE) \
+    X(386, UNKNOWN_OPCODE) \
+    X(387, UNKNOWN_OPCODE) \
+    X(388, UNKNOWN_OPCODE) \
+    X(389, UNKNOWN_OPCODE) \
+    X(390, UNKNOWN_OPCODE) \
+    X(391, UNKNOWN_OPCODE) \
+    X(392, UNKNOWN_OPCODE) \
+    X(393, UNKNOWN_OPCODE) \
+    X(394, UNKNOWN_OPCODE) \
+    X(395, UNKNOWN_OPCODE) \
+    X(396, UNKNOWN_OPCODE) \
+    X(397, UNKNOWN_OPCODE) \
+    X(398, UNKNOWN_OPCODE) \
+    X(399, UNKNOWN_OPCODE) \
+    X(400, UNKNOWN_OPCODE) \
+    X(401, UNKNOWN_OPCODE) \
+    X(402, UNKNOWN_OPCODE) \
+    X(403, UNKNOWN_OPCODE) \
+    X(404, UNKNOWN_OPCODE) \
+    X(405, UNKNOWN_OPCODE) \
+    X(406, UNKNOWN_OPCODE) \
+    X(407, UNKNOWN_OPCODE) \
+    X(408, UNKNOWN_OPCODE) \
+    X(409, UNKNOWN_OPCODE) \
+    X(410, UNKNOWN_OPCODE) \
+    X(411, UNKNOWN_OPCODE) \
+    X(412, UNKNOWN_OPCODE) \
+    X(413, UNKNOWN_OPCODE) \
+    X(414, UNKNOWN_OPCODE) \
+    X(415, UNKNOWN_OPCODE) \
+    X(416, UNKNOWN_OPCODE) \
+    X(417, UNKNOWN_OPCODE) \
+    X(418, UNKNOWN_OPCODE) \
+    X(419, UNKNOWN_OPCODE) \
+    X(420, UNKNOWN_OPCODE) \
+    X(421, UNKNOWN_OPCODE) \
+    X(422, UNKNOWN_OPCODE) \
+    X(423, UNKNOWN_OPCODE) \
+    X(424, UNKNOWN_OPCODE) \
+    X(425, UNKNOWN_OPCODE) \
+    X(426, UNKNOWN_OPCODE) \
+    X(427, UNKNOWN_OPCODE) \
+    X(428, UNKNOWN_OPCODE) \
+    X(429, UNKNOWN_OPCODE) \
+    X(430, UNKNOWN_OPCODE) \
+    X(431, UNKNOWN_OPCODE) \
+    X(432, UNKNOWN_OPCODE) \
+    X(433, UNKNOWN_OPCODE) \
+    X(434, UNKNOWN_OPCODE) \
+    X(435, UNKNOWN_OPCODE) \
+    X(436, UNKNOWN_OPCODE) \
+    X(437, UNKNOWN_OPCODE) \
+    X(438, UNKNOWN_OPCODE) \
+    X(439, UNKNOWN_OPCODE) \
+    X(440, UNKNOWN_OPCODE) \
+    X(441, UNKNOWN_OPCODE) \
+    X(442, UNKNOWN_OPCODE) \
+    X(443, UNKNOWN_OPCODE) \
+    X(444, UNKNOWN_OPCODE) \
+    X(445, UNKNOWN_OPCODE) \
+    X(446, UNKNOWN_OPCODE) \
+    X(447, UNKNOWN_OPCODE) \
+    X(448, UNKNOWN_OPCODE) \
+    X(449, UNKNOWN_OPCODE) \
+    X(450, UNKNOWN_OPCODE) \
+    X(451, UNKNOWN_OPCODE) \
+    X(452, UNKNOWN_OPCODE) \
+    X(453, UNKNOWN_OPCODE) \
+    X(454, UNKNOWN_OPCODE) \
+    X(455, UNKNOWN_OPCODE) \
+    X(456, UNKNOWN_OPCODE) \
+    X(457, UNKNOWN_OPCODE) \
+    X(458, UNKNOWN_OPCODE) \
+    X(459, UNKNOWN_OPCODE) \
+    X(460, UNKNOWN_OPCODE) \
+    X(461, UNKNOWN_OPCODE) \
+    X(462, UNKNOWN_OPCODE) \
+    X(463, UNKNOWN_OPCODE) \
+    X(464, UNKNOWN_OPCODE) \
+    X(465, UNKNOWN_OPCODE) \
+    X(466, UNKNOWN_OPCODE) \
+    X(467, UNKNOWN_OPCODE) \
+    X(468, UNKNOWN_OPCODE) \
+    X(469, UNKNOWN_OPCODE) \
+    X(470, UNKNOWN_OPCODE) \
+    X(471, UNKNOWN_OPCODE) \
+    X(472, UNKNOWN_OPCODE) \
+    X(473, UNKNOWN_OPCODE) \
+    X(474, UNKNOWN_OPCODE) \
+    X(475, UNKNOWN_OPCODE) \
+    X(476, UNKNOWN_OPCODE) \
+    X(477, UNKNOWN_OPCODE) \
+    X(478, UNKNOWN_OPCODE) \
+    X(479, UNKNOWN_OPCODE) \
+    X(480, UNKNOWN_OPCODE) \
+    X(481, UNKNOWN_OPCODE) \
+    X(482, UNKNOWN_OPCODE) \
+    X(483, UNKNOWN_OPCODE) \
+    X(484, UNKNOWN_OPCODE) \
+    X(485, UNKNOWN_OPCODE) \
+    X(486, UNKNOWN_OPCODE) \
+    X(487, UNKNOWN_OPCODE) \
+    X(488, UNKNOWN_OPCODE) \
+    X(489, UNKNOWN_OPCODE) \
+    X(490, UNKNOWN_OPCODE) \
+    X(491, UNKNOWN_OPCODE) \
+    X(492, UNKNOWN_OPCODE) \
+    X(493, UNKNOWN_OPCODE) \
+    X(494, UNKNOWN_OPCODE) \
+    X(495, UNKNOWN_OPCODE) \
+    X(496, UNKNOWN_OPCODE) \
+    X(497, UNKNOWN_OPCODE) \
+    X(498, UNKNOWN_OPCODE) \
+    X(499, UNKNOWN_OPCODE) \
+    X(500, UNKNOWN_OPCODE) \
+    X(501, UNKNOWN_OPCODE) \
+    X(502, UNKNOWN_OPCODE) \
+    X(503, UNKNOWN_OPCODE) \
+    X(504, UNKNOWN_OPCODE) \
+    X(505, UNKNOWN_OPCODE) \
+    X(506, UNKNOWN_OPCODE) \
+    X(507, UNKNOWN_OPCODE) \
+    X(508, UNKNOWN_OPCODE) \
+    X(509, UNKNOWN_OPCODE) \
+    X(510, UNKNOWN_OPCODE) \
+    X(511, switch_loop) \
+

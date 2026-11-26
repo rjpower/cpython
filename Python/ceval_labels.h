@@ -1,10 +1,11 @@
 /* The labels and non-arm handlers of the interpreter, each written once.
  *
- * Python/ceval.c includes this file twice, as it includes the generated
- * handlers: with IR_FUNCTION_FORMS defined, for the function form of each
- * (ir_run_<handler> or ir_<label>), and in ir_evaluate(), for its TARGET or
- * LABEL.  The macros below open and close the two shapes, so the body is one
- * text for both. */
+ * Python/ceval_forms.c includes this file with IR_FUNCTION_FORMS defined,
+ * for the function form of each (ir_run_<handler> or ir_<label>), and
+ * Python/ceval_evaluator.h as it includes the generated handlers, for the
+ * tail-calling interpreter's function of each (IR_TAIL_FN,
+ * Python/ceval_tail.h).  The macros below open and close the shapes, so the
+ * body is one text for both. */
 
 #ifdef IR_FUNCTION_FORMS
 #  define IR_HANDLER_BEGIN(name) \
@@ -14,17 +15,16 @@
 #  define IR_ENTRY_BEGIN(name) \
     static Py_NO_INLINE _PyIRTransfer \
     ir_##name(PyThreadState *tstate, _PyInterpreterFrame *frame, \
-              _PyInstr *next_instr) {
-#  define IR_END }
+              _PyInstr *next_instr, _PyIRWord ir_word) {
 #else
-#  define IR_HANDLER_BEGIN(name) TARGET_##name: {
-#  define IR_ENTRY_BEGIN(name) LABEL_##name: {
-#  define IR_END }
+#  define IR_HANDLER_BEGIN(name) IR_TAIL_FN(name) {
+#  define IR_ENTRY_BEGIN(name) IR_TAIL_FN(name) {
 #endif
+#define IR_END }
 
 /* The word kind that holds operands: its id is inert, so a word that is
  * zeroed or reached by a jump into operand words aborts. */
-IR_HANDLER_BEGIN(IR_OPERANDS)
+IR_HANDLER_BEGIN(operand_words)
     Py_FatalError("Executing operand words.");
 IR_END
 
@@ -62,25 +62,6 @@ IR_END
 IR_ENTRY_BEGIN(throw_error)
     PROCESS_ERROR_AT(THROW, 0, next_instr - 1);
 IR_END
-
-#ifndef IR_FUNCTION_FORMS
-/* The exits that only the evaluator reaches by label */
-IR_ENTRY_BEGIN(error)
-    PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
-IR_END
-
-IR_ENTRY_BEGIN(exception_unwind)
-    PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
-IR_END
-
-IR_ENTRY_BEGIN(exit_unwind)
-    PROCESS_ERROR_AT(EXIT, 0, frame->instr_ptr);
-IR_END
-
-IR_ENTRY_BEGIN(exit_unwind_notrace)
-    PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
-IR_END
-#endif
 
 #undef IR_HANDLER_BEGIN
 #undef IR_ENTRY_BEGIN

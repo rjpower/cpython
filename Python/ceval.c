@@ -2721,7 +2721,10 @@ rop_close_items(PyValue *vals, int n)
     }
 }
 
-PyValue
+/* The span builders hold their items in a variable-length array: an arm
+ * that inlined one would allocate on its C frame and could not tail-call
+ * (Python/ceval_tail.h), so none is inlined. */
+Py_NO_INLINE PyValue
 _PyRop_BuildTuple(const _PyRopSpan *items)
 {
     int n = items->count;
@@ -2735,7 +2738,7 @@ _PyRop_BuildTuple(const _PyRopSpan *items)
     return PyValue_FromObjectSteal(tup);
 }
 
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_BuildList(const _PyRopSpan *items)
 {
     int n = items->count;
@@ -2749,7 +2752,7 @@ _PyRop_BuildList(const _PyRopSpan *items)
     return PyValue_FromObjectSteal(list);
 }
 
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_BuildSet(const _PyRopSpan *items)
 {
     int n = items->count;
@@ -2773,7 +2776,7 @@ _PyRop_BuildSet(const _PyRopSpan *items)
     return PyValue_FromObjectSteal(set);
 }
 
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_BuildMap(const _PyRopSpan *items)
 {
     int n = items->count;
@@ -2790,7 +2793,7 @@ _PyRop_BuildMap(const _PyRopSpan *items)
 
 /* The rows of BuildText (Python/register_ops/text.rop).  Every piece is
  * spent on every outcome. */
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_JoinText(const _PyRopSpan *parts)
 {
     int n = parts->count;
@@ -2808,7 +2811,7 @@ _PyRop_JoinText(const _PyRopSpan *parts)
     return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
 }
 
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_BuildInterpolation(const _PyRopSpan *parts, int flags)
 {
     int n = parts->count;
@@ -3364,17 +3367,22 @@ jit_resume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next)
 #endif
 
 
-/* The evaluator: every handler and label of the interpreter in one
- * function, which dispatches by computed goto (Python/ceval_macros.h).  Its
- * locals are the interpreter's state and are never address-taken; the
- * activation record and the entry frame, whose addresses are taken, are in
- * the caller, _PyEval_EvalFrameLoop().  It runs the frame to its end: the
- * value that INTERPRETER_EXIT takes, or NULL with an exception set.
- * start_frame takes the word from frame. */
+/* The normal evaluator (Python/ceval_evaluator.h): a function per handler,
+ * label and routine, which dispatch by guaranteed tail call */
+#include "ceval_evaluator.h"
+
+/* The driver: runs the frame to its end, the value that INTERPRETER_EXIT
+ * takes, or NULL with an exception set.  The functions return only when the
+ * activation ends.  The activation record and the entry frame, whose
+ * addresses are taken, are in the caller, _PyEval_EvalFrameLoop(). */
 static Py_NO_INLINE PyValue
 ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
-#include "ceval_evaluator.h"
+    _PyInstr *next_instr = frame->instr_ptr;
+    if (throwflag) {
+        return ir_tail_throw_error(tstate, frame, next_instr, 0);
+    }
+    return ir_tail_start_frame(tstate, frame, next_instr, 0);
 }
 
 #ifdef _PY_JIT_SUPPORTED
@@ -3394,13 +3402,6 @@ _PyEval_JitResume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *n
     return jit_resume(tstate, frame, next);
 }
 #endif
-
-/* The normal evaluator, which the observing one switches to */
-PyValue
-_PyEval_EvalNormal(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
-{
-    Py_MUSTTAIL return ir_evaluate(tstate, frame, throwflag);
-}
 
 void
 _PyEval_RecordSourceError(PyThreadState *tstate, _PyInterpreterFrame *frame,
@@ -6924,7 +6925,7 @@ Py_NO_INLINE PyValue
 /* The function over the code, and the attributes of `present`: bit k is
  * the compiler's flag 1 << k, and the span holds the attributes in the order
  * of their bits.  The code and every attribute are spent on both outcomes. */
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
                     const _PyRopSpan *fields, uint32_t present)
 {

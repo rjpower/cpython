@@ -2,7 +2,7 @@
 
 From the checked `Program` of Python/register_ops/*.rop:
 
-- the interpreter cases (one computed-goto case per arm),
+- the interpreter cases (one tail-calling function per arm),
 - the function forms, with the same signature and completion contract as
   the old `ir_run_*` forms,
 - the completion stubs of the shared arms, with the plan table of the arms,
@@ -149,8 +149,7 @@ int opcode = {handler};
 (void)opcode;
 _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
-{save_ip}IR_HOLD_NEXT();
-next_instr += {advance};
+{save_ip}next_instr += {advance};
 INSTRUCTION_STATS({handler});"""
 
 
@@ -268,7 +267,7 @@ def emitted_arm_ids(p: Products) -> dict[int, ir_arms.ArmEntry]:
 
 def write_form_table(out: TextIO, p: Products) -> None:
     """The function form of every handler id, as the target tables have
-    their labels: ir_handler_forms[IR_HANDLER(word)] runs the word, and
+    their functions: ir_handler_forms[IR_HANDLER(word)] runs the word, and
     ir_observing_forms runs it as the observing evaluator does.
     Python/ceval.c defines the forms of the operand words, of the switch
     word and of the unknown ids."""
@@ -276,10 +275,7 @@ def write_form_table(out: TextIO, p: Products) -> None:
     for table, observing in (("ir_handler_forms", False), ("ir_observing_forms", True)):
         out.write(f"\nstatic const _PyIRForm {table}[{ir_arms.IR_LIMIT}] = {{\n")
         for i in range(ir_arms.IR_LIMIT):
-            name = target_name(i, by_arm, observing)
-            name = "ir_run_switch_loop" if name == "LABEL_switch_loop" else (
-                "ir_run_" + name.removeprefix("TARGET_"))
-            out.write(f"    [{i}] = {name},\n")
+            out.write(f"    [{i}] = ir_run_{target_name(i, by_arm, observing)},\n")
         out.write("};\n")
 
 
@@ -419,38 +415,38 @@ def write_stub_plans(out: TextIO, p: Products) -> None:
 
 
 def target_name(i: int, by_arm: Mapping[int, ir_arms.ArmEntry], observing: bool) -> str:
-    """The label that dispatch of handler id i goes to: in the observing
-    evaluator an arm of a family whose observer gates runs the observer.  An
-    observer that does not gate runs where the word's location is observed
-    (_PyIR_ObservingHandler, Python/ceval_evaluator.h)."""
+    """The function that dispatch of handler id i tail-calls: in the
+    observing table an arm of a family whose observer gates runs the
+    observer.  An observer that does not gate runs where the word's location
+    is observed (_PyIR_ObservingHandler, Python/ceval_evaluator.h)."""
     if i in by_arm:
         arm = by_arm[i]
         gated = observing and arm.observer and arm.observer_gates
-        return f"TARGET_{arm.observer if gated else arm.name}"
+        return arm.observer if gated else arm.name
     if i == IR_OPERANDS_ID:
-        return "TARGET_IR_OPERANDS"
+        return "operand_words"
     if i == IR_SWITCH_ID:
-        return "LABEL_switch_loop"
-    return "TARGET_UNKNOWN_OPCODE"
+        return "switch_loop"
+    return "UNKNOWN_OPCODE"
 
 
 def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
-    """The dispatch tables of the two compilations of the evaluator, local to
-    each and holding the addresses of its labels: the normal one, and the
+    """The dispatch targets of the two tables of the tail-calling
+    interpreter (Python/ceval_evaluator.h), X(ID, NAME) for every handler
+    id: IR_TARGETS(X), the normal table, and IR_OBSERVING_TARGETS(X), the
     observing one (IR_OBSERVING), which sends the words of each family whose
     observer gates to the observer.  Dispatch masks the word with
     IR_HANDLER_MASK, so a table covers every id the mask yields."""
     write_header(__file__, sources, out)
     by_arm = emitted_arm_ids(p)
-    for observing in (True, False):
-        out.write("\n#if IR_OBSERVING\n" if observing else "#else\n")
-        out.write(f"static void *const opcode_targets[{ir_arms.IR_LIMIT}] = {{\n")
-        for i in range(ir_arms.IR_LIMIT):
-            out.write(f"[{i}] = &&{target_name(i, by_arm, observing)},\n")
-        out.write("};\n")
-    out.write("#endif\n")
-    out.write("static_assert(Py_ARRAY_LENGTH(opcode_targets) == IR_HANDLER_MASK + 1,\n"
+    out.write(f"\n#define IR_TARGETS_COUNT {ir_arms.IR_LIMIT}\n")
+    out.write("static_assert(IR_TARGETS_COUNT == IR_HANDLER_MASK + 1,\n"
               '              "dispatch covers every id that IR_HANDLER yields");\n')
+    for macro, observing in (("IR_TARGETS", False), ("IR_OBSERVING_TARGETS", True)):
+        out.write(f"\n#define {macro}(X) \\\n")
+        for i in range(ir_arms.IR_LIMIT):
+            out.write(f"    X({i}, {target_name(i, by_arm, observing)}) \\\n")
+        out.write("\n")
 
 
 def completion_name(arm: str) -> str:

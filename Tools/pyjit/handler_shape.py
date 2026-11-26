@@ -301,8 +301,8 @@ def read_names(spec):
     opcode-ids:FILE  `#define NAME 123` lines (Include/opcode_ids.h).
     macro:FILE       the `#define HANDLERS(X) X(A) X(B) ...` list, in order.
     labels:FILE      `[N] = &&L_NAME` initialisers of the probe's table.
-    ir-targets:FILE  `[N] = &&TARGET_NAME` initialisers of `opcode_targets`
-                     in Python/ir_targets.h (the generator tables are skipped).
+    ir-targets:FILE  the `X(N, NAME)` entries of `IR_TARGETS(X)` in
+                     Python/ir_targets.h.
     """
     kind, _, path = spec.partition(':')
     text = open(path).read()
@@ -321,8 +321,8 @@ def read_names(spec):
         for num, name in re.findall(r'\[(\d+)\]\s*=\s*&&L_(\w+)', text):
             names[int(num)] = name
     elif kind == 'ir-targets':
-        body = text.split('opcode_targets[')[1].split('};')[0]
-        for num, name in re.findall(r'\[(\d+)\]\s*=\s*&&TARGET_(\w+)', body):
+        body = text.split('#define IR_TARGETS(X)')[1]
+        for num, name in re.findall(r'X\((\d+), (\w+)\)', body):
             names.setdefault(int(num), name)
     else:
         sys.exit(f'unknown --names kind {kind!r}')

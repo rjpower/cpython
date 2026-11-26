@@ -8,8 +8,11 @@
 /* The function forms (tiers87, C2).  Every handler's body is also a function
  * of its own, ir_run_X(tstate, frame, next_instr, ir_word), and every VM
  * routine (Python/ceval_routines.h) and DSL label is a function ir_NAME; each
- * returns a _PyIRTransfer.  The evaluator's stub of an outlined handler calls
- * its form (IR_RUN_OUTLINED()); the function-form executor,
+ * returns a _PyIRTransfer.  All have one type, (tstate, frame, next_instr,
+ * ir_word), because a tail call needs caller and callee of one type (clang
+ * refuses any other): a routine reads its operands from the activation, and
+ * an entry does not read ir_word.  The evaluator's stub of an outlined
+ * handler calls its form (IR_RUN_OUTLINED()); the function-form executor,
  * ir_execute_forms(), calls them all, as compiled code will.  Here the
  * transfer macros are returns: the next word is returned; a deoptimisation,
  * a frame entry, a VM routine and a handler run on the same word are tail
@@ -31,8 +34,6 @@
 #undef JUMP_TO_PREDICTED
 #pragma push_macro("IR_OBSERVE_EDGE")
 #undef IR_OBSERVE_EDGE
-#pragma push_macro("IR_HOLD_NEXT")
-#undef IR_HOLD_NEXT
 #pragma push_macro("IR_STEP_DONE")
 #undef IR_STEP_DONE
 #pragma push_macro("IR_REPORT_EDGE")
@@ -41,8 +42,8 @@
 #undef IR_GEN_RETURN
 #pragma push_macro("IR_ROUTINE")
 #undef IR_ROUTINE
-#pragma push_macro("IR_HOT_ROUTINE")
-#undef IR_HOT_ROUTINE
+#pragma push_macro("IR_ROUTINE_OPERAND")
+#undef IR_ROUTINE_OPERAND
 #pragma push_macro("GEN_DISPATCH")
 #undef GEN_DISPATCH
 #pragma push_macro("GEN_STEP_JUMP")
@@ -94,7 +95,7 @@ ir_frame_observed(_PyInterpreterFrame *frame)
                (NEW_FRAME)->previous->previous == frame); \
         frame = tstate->current_frame = (NEW_FRAME); \
         CALL_STAT_INC(inlined_py_calls); \
-        Py_MUSTTAIL return ir_start_frame(tstate, frame, next_instr); \
+        Py_MUSTTAIL return ir_start_frame(tstate, frame, next_instr, ir_word); \
     } while (0)
 #define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
     do { \
@@ -116,21 +117,23 @@ ir_frame_observed(_PyInterpreterFrame *frame)
     do { \
         Py_MUSTTAIL return ir_run_##name(tstate, frame, this_instr, ir_word); \
     } while (0)
-#define IR_HOLD_NEXT() ((void)0)
 #define IR_STEP_DONE(STEP) return (STEP)
 #define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
 #define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
     return _PyEval_ir_event_edge(tstate, frame, this_instr, (SOURCE), (NEXT), (EVENT), (EDGE))
 #define IR_GEN_RETURN(V, DYING, EMPTY) \
     do { \
-        Py_MUSTTAIL return ir_gen_return(tstate, frame, next_instr, (V), \
-                                         (DYING), (EMPTY)); \
+        _PyEvalActivation *ir_gen = IR_ACTIVATION(); \
+        ir_gen->gen_value = (V); \
+        ir_gen->gen_dying = (DYING); \
+        ir_gen->gen_empty = (EMPTY); \
+        Py_MUSTTAIL return ir_gen_return(tstate, frame, next_instr, ir_word); \
     } while (0)
-#define IR_ROUTINE(NAME, ...) \
+#define IR_ROUTINE(NAME) \
     static Py_NO_INLINE _PyIRTransfer \
     ir_##NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, \
-              _PyInstr *next_instr, __VA_ARGS__)
-#define IR_HOT_ROUTINE IR_ROUTINE
+              _PyInstr *next_instr, _PyIRWord ir_word)
+#define IR_ROUTINE_OPERAND(NAME) (IR_ACTIVATION()->NAME)
 #define GEN_DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
@@ -232,14 +235,14 @@ ir_event_end_for(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * table is generated below with the register instruction arms */
 #include "ceval_routines.h"
 
-static _PyIRTransfer ir_run_IR_OPERANDS(PyThreadState *, _PyInterpreterFrame *,
+static _PyIRTransfer ir_run_operand_words(PyThreadState *, _PyInterpreterFrame *,
                                         _PyInstr *, _PyIRWord);
 static _PyIRTransfer ir_run_UNKNOWN_OPCODE(PyThreadState *, _PyInterpreterFrame *,
                                            _PyInstr *, _PyIRWord);
 static _PyIRTransfer ir_start_frame(PyThreadState *, _PyInterpreterFrame *,
-                                    _PyInstr *);
+                                    _PyInstr *, _PyIRWord);
 static _PyIRTransfer ir_throw_error(PyThreadState *, _PyInterpreterFrame *,
-                                    _PyInstr *);
+                                    _PyInstr *, _PyIRWord);
 static _PyIRTransfer
 ir_run_switch_loop(PyThreadState *tstate, _PyInterpreterFrame *frame,
                    _PyInstr *next_instr, _PyIRWord ir_word)
@@ -279,7 +282,7 @@ const void *const _PyEval_JitRaiseExit = (const void *)jit_raise_exit;
 #endif
 
 /* The LINE or INSTRUCTION event before a word moved the frame (status 1) or
- * raised (-1), as LABEL_observe_word (Python/ceval_evaluator.h) resolves it */
+ * raised (-1), as observe_word (Python/ceval_evaluator.h) resolves it */
 static _PyIRTransfer
 ir_location_exit(PyThreadState *tstate, _PyInterpreterFrame *frame, int status)
 {
@@ -302,16 +305,16 @@ PyValue
 _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _PyEvalActivation *activation = IR_ACTIVATION();
-    _PyIRTransfer t = throwflag ? ir_throw_error(tstate, frame, frame->instr_ptr)
-                                : ir_start_frame(tstate, frame, frame->instr_ptr);
+    _PyIRTransfer t = throwflag ? ir_throw_error(tstate, frame, frame->instr_ptr, 0)
+                                : ir_start_frame(tstate, frame, frame->instr_ptr, 0);
     for (;;) {
         if (t.next == NULL) {
             if (activation->exit_kind == _PyIR_EXIT_VALUE) {
                 return activation->exit_value;
             }
             assert(activation->exit_kind == _PyIR_EXIT_RAISE);
-            t = ir_process_error(tstate, t.frame, NULL, activation->exit_next,
-                                 activation->exit_entry);
+            /* The activation holds the routine's operands */
+            t = ir_process_error(tstate, t.frame, NULL, 0);
             continue;
         }
         frame = t.frame;
@@ -348,12 +351,11 @@ _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int thro
 #pragma pop_macro("IR_EXIT")
 #pragma pop_macro("JUMP_TO_PREDICTED")
 #pragma pop_macro("IR_OBSERVE_EDGE")
-#pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
 #pragma pop_macro("IR_REPORT_EDGE")
 #pragma pop_macro("IR_GEN_RETURN")
 #pragma pop_macro("IR_ROUTINE")
-#pragma pop_macro("IR_HOT_ROUTINE")
+#pragma pop_macro("IR_ROUTINE_OPERAND")
 #pragma pop_macro("GEN_DISPATCH")
 #pragma pop_macro("GEN_STEP_JUMP")
 #pragma pop_macro("GEN_RAISED")

@@ -83,7 +83,7 @@ extern "C" {
 #define IR_H_YIELD_VALUE_XFER_STORE_LOCAL          70
 
 #define IR_NUM_OLD_HANDLERS                     71
-#define IR_NUM_HANDLERS                        326
+#define IR_NUM_HANDLERS                        336
 
 /* What _PyIR_HandlerBase holds for a handler that is no stack op: a number
  * past every stack opcode and pseudo-instruction */

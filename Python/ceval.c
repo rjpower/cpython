@@ -2634,7 +2634,8 @@ static _PyInterpreterFrame *_PyRop_PushPythonEx(PyThreadState *tstate,
                                                 _PyInterpreterFrame *frame,
                                                 PyValue *fn, PyValue fo,
                                                 PyValue ko, PyValue tup,
-                                                _PyInstr *head);
+                                                _PyInstr *head,
+                                                const _PyFbCall *fb);
 static PyValue _PyRop_CallNativeEx(PyThreadState *tstate,
                                    _PyInterpreterFrame *frame, PyValue fo,
                                    PyValue ko, PyValue tup, _PyInstr *head);
@@ -2674,6 +2675,12 @@ static _PyInterpreterFrame *_PyRop_PushPlan(PyThreadState *tstate,
                                             _PyInterpreterFrame *frame,
                                             PyValue *fn, _PyInstr *head,
                                             const _PyFbCall *fb);
+static PyValue _PyRop_PlanGenerator(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, PyValue *fn,
+                                    _PyInstr *head, const _PyFbCall *fb);
+static bool _PyRop_NotPythonCallable(PyValueBorrow fn);
+static bool _PyRop_PyCallableEx(PyValueBorrow fn);
+static bool _PyRop_NotPyCallableEx(PyValueBorrow fn);
 static bool _PyRop_KwargsPending(_PyInterpreterFrame *frame, PyValue *local);
 static PyValue _PyRop_NewKwargs(_PyInterpreterFrame *frame, PyValue *local);
 
@@ -7713,7 +7720,9 @@ _PyRop_PlanFits(PyThreadState *tstate, _PyInterpreterFrame *frame,
         !!(bits & _Py_CALL_BIND_SKIP)) {
         return false;
     }
-    if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+    /* A generator's frame lives in its object, not in the arena */
+    if (!(bits & _Py_CALL_BIND_GENERATOR) &&
+        !_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
         return false;
     }
     int argcount = code->co_argcount;
@@ -7761,6 +7770,63 @@ _PyRop_PushPlan(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     assert(pushed.child != NULL);
     return pushed.child;
+}
+
+/* The generator that CallKw.Generator makes: call_bind_core's generator
+ * branch publishes it into the destination, and this takes it back as an
+ * owner for the arm to publish.  A failure after the publication (the release
+ * of the operands) closes it and leaves the destination empty. */
+static Py_NO_INLINE PyValue
+_PyRop_PlanGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     PyValue *fn, _PyInstr *head, const _PyFbCall *fb)
+{
+    assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
+    PyValue *dst = &_PyFrame_Slots(frame)[IR_A(head[0])];
+    PyValue before = *dst;
+    _PyCallResult made = call_bind_positional(tstate, frame, head, *fn,
+                                              PyValue_NULL, &fb->plan);
+    /* plan_fits proved every test of the binding: it does not decline */
+    assert(made.status <= 0 && made.child == NULL);
+    PyValue generator = PyValue_NULL;
+    if ((*dst).bits != before.bits) {
+        generator = *dst;
+        *dst = PyValue_NULL;
+    }
+    if (made.status < 0) {
+        PyValue_XCLOSE(generator);
+        if (PyValue_IsNull(generator)) {
+            rop_call_retire_operands(frame, head);
+        }
+        return PyValue_NULL;
+    }
+    return generator;
+}
+
+static inline bool
+_PyRop_NotPythonCallable(PyValueBorrow fn)
+{
+    if (!PyValue_IsObject(fn)) {
+        return true;
+    }
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    return !PyFunction_Check(callable) && Py_TYPE(callable) != &PyMethod_Type;
+}
+
+static inline bool
+_PyRop_PyCallableEx(PyValueBorrow fn)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyObject *func = PyValue_AsKnownObjectBorrow(fn);
+    return PyFunction_Check(func) &&
+        ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall;
+}
+
+static inline bool
+_PyRop_NotPyCallableEx(PyValueBorrow fn)
+{
+    return !_PyRop_PyCallableEx(fn);
 }
 
 /* The rows of Call.Observed: the events of call_run with CALL_INSTRUMENTED */
@@ -7943,7 +8009,8 @@ _PyRop_CallNativeObservedEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 static _PyInterpreterFrame *
 rop_push_python_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                   PyValue callable, PyValue ko, PyValue tup, _PyInstr *head)
+                   PyValue callable, PyValue ko, PyValue tup, _PyInstr *head,
+                   const _PyFbCall *fb)
 {
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*head);
     PyObject *callargs = rop_ex_callargs(tup);
@@ -7969,9 +8036,20 @@ rop_push_python_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
             &items);
         dict_items = &items;
     }
+    /* The site's plan holds for the code and the arity it was made for, and
+     * for a call without items of a dict.  A site past the limit of the
+     * feedback vector shares entry 0, a header alone. */
     _PyBindPlan plan;
     const _PyBindPlan *planned = &plan;
-    if (!plannable ||
+    if (dict_items == NULL && fb->h.kind == FB_CALL &&
+        fb->func_version == callee_code->co_version &&
+        fb->plan.positional == count &&
+        !!(fb->plan.flags & _Py_CALL_BIND_LEAD) == lead &&
+        (fb->plan.flags & _Py_CALL_BIND_VALID))
+    {
+        planned = &fb->plan;
+    }
+    else if (!plannable ||
         !(dict_items != NULL
           ? _PyBindPlan_Init(&plan, callee_code, count, 0, lead, items.dests,
                              items.count)
@@ -8046,10 +8124,10 @@ rop_push_python_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static _PyInterpreterFrame *
 _PyRop_PushPythonEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     PyValue *fn, PyValue fo, PyValue ko, PyValue tup,
-                    _PyInstr *head)
+                    _PyInstr *head, const _PyFbCall *fb)
 {
     _PyInterpreterFrame *child =
-        rop_push_python_ex(tstate, frame, fo, ko, tup, head);
+        rop_push_python_ex(tstate, frame, fo, ko, tup, head, fb);
     PyValue_XCLOSE(ko);
     PyValue_XCLOSE(fo);
     return child;

@@ -935,6 +935,8 @@ int _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
                         const _PyIRWord *head);
 int _PyRop_ClassifyCallKw(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
                           const _PyIRWord *head);
+int _PyRop_ClassifyCallEx(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
+                          const _PyIRWord *head);
 
 #ifdef __cplusplus
 }

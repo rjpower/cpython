@@ -1,7 +1,7 @@
 """The life of a generator: creation, resume and yield, and finish.
 
 A generator, coroutine or async generator is created in one routine
-(_PyGen_NewCall), resumed by FOR_ITER_GEN, SEND_GEN or the C entry, yields to
+(_PyGen_NewCall), resumed by a ForIter or Send arm or the C entry, yields to
 whichever resumed it, and is cleared and freed without the finalizer protocol
 once its frame is finished.
 """

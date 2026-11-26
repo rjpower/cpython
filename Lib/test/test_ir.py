@@ -34,14 +34,6 @@ def handlers(func):
     return [word[0] for word in get_ir(func.__code__, True)]
 
 
-def ordinary_handlers(func):
-    contracts = _opcode.get_ir_contract()
-    # The word flags after a handler's name stay with the ordinary handler
-    return [opcode.opname[contracts[opcode.opname.index(handler)].ordinary_handler]
-            + plus + flags
-            for handler, plus, flags in (name.partition("+") for name in handlers(func))]
-
-
 def nlocalsplus(func):
     "The slots before the first temporary: locals, constants and the discard slot"
     return IRCode(func.__code__).nfixed
@@ -501,7 +493,7 @@ class AssemblerTest(unittest.TestCase):
     @unittest.skip("ForIter.Generator returns with the generator arms (SY)")
     def test_yield_to_each_kind_of_resumer(self):
         # A yield returns past the instruction that resumed the generator:
-        # FOR_ITER_GEN, SEND_GEN or the trampoline of a C-level next().  One
+        # FOR_ITER_GEN, a send or the trampoline of a C-level next().  One
         # generator alternates between all three.
         def counter():
             n = 0
@@ -524,7 +516,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(g, delegate(g), rounds),
                          list(range(1, 3 * rounds + 1)))
         self.assertIn("FOR_ITER_GEN", handlers(f))
-        self.assertIn("SEND_GEN", ordinary_handlers(delegate))
+        self.assertIn("Send.Generic", handlers(delegate))
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
     def test_compare_and_branch(self):
@@ -1386,13 +1378,13 @@ class RelaxationTest(unittest.TestCase):
         """
         namespace = relaxed_compile(source)
         for name in ("outer", "co"):
-            _, jumps = self.relaxed(namespace[name], "SEND")
+            _, jumps = self.relaxed(namespace[name], "Send.Generic")
             self.assertEqual(jumps, ["IR_JUMP"] * 2)
         expected = [1, 5, "done", "stop", "a", "b"]
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(namespace["run"](), expected)
         if SPECIALIZES:
-            self.assertIn("SEND_GEN", ordinary_handlers(namespace["outer"]))
+            self.assertIn("Send.Generic", handlers(namespace["outer"]))
 
     def test_events_of_a_relaxed_loop(self):
         # Relaxation preserves the semantic branch pairs. Its actual jump

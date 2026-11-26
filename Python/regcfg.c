@@ -1854,6 +1854,19 @@ rule_pop_iter(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* SEND: the Send family (Python/register_ops/suspend.rop).  The window of
+ * the stack op is the family's window, and the END_SEND that follows is the
+ * word's completion, which gets no word (lower_completions). */
+static int
+rule_send(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == SEND);
+    op->opcode = ROP_HANDLER_Send_Generic;
+    return SUCCESS;
+}
+
 /* The jumps: the Jump family (Python/register_ops/truth.rop).  A backedge
  * that polls is the arm that the baseline JIT's setting selects: the one
  * that is also its warm-up event while the JIT is on. */
@@ -2547,6 +2560,7 @@ static const _PyRegRule rules[256] = {
     [GET_ITER] = rule_get_iter,
     [FOR_ITER] = rule_for_iter,
     [POP_ITER] = rule_pop_iter,
+    [SEND] = rule_send,
     [JUMP_FORWARD] = rule_jump,
     [JUMP_BACKWARD] = rule_jump,
     [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,

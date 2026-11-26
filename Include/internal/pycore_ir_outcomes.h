@@ -1019,7 +1019,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
         case SEND:
         case CLEANUP_THROW:
             /* A completion that discards its value retires the whole window
-             * (gen_complete): the receiver, the cursor, the sent value and,
+             * (the Send completions): the receiver, the cursor, the sent value and,
              * for a throw, the exception. */
             if (edge == 1 && base >= 0 && (fmt->flags & _PyIR_DISCARDS) &&
                 fmt->roles[1] == _PyIR_ROLE_BASE)

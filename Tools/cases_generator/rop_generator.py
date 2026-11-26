@@ -434,6 +434,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     through = 0
     pair_writes = 0
     window = False
+    send_window = False
     has_target = has_args = has_span = False
     target = "_PyIR_LOC_NONE"
     for slot in enc.elements:
@@ -465,6 +466,13 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                 writes += 1
             elif kind in ("CELL", "FREE"):
                 role = "_PyIR_ROLE_CELL"
+            elif kind == "SENDWINDOW":
+                # SEND's shape: the window (receiver, cursor, sent value) is
+                # read and rewritten in place, the yielded value goes two
+                # homes above its base, and the receiver passes through
+                role = "_PyIR_ROLE_BASE"
+                window = True
+                send_window = True
             elif kind == "ITERPAIR":
                 pair = pl.operand
                 if pair in defined:
@@ -526,7 +534,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         # FOR_ITER's shape: the pair is read and rewritten in place, the
         # item goes two homes above it, and the receiver passes through
         flags.append("_PyIR_WINDOW")
-        reads, through = 2, 1
+        reads, through = (3, 1) if send_window else (2, 1)
         writes = 3
     if writes:
         # A result that nothing reads goes to the frame's discard slot
@@ -545,7 +553,8 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
         0 if has_args else enc.words, writes + pair_writes, arm_transfer(exits, ninputs, arm.family), target,
-        ("_PyIR_OBSERVER_FOR_BODY" if window else
+        ("_PyIR_OBSERVER_NONE" if send_window else
+         "_PyIR_OBSERVER_FOR_BODY" if window else
          "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE"),
         # A loop step's item is the body's input; its exhaustion completes
         "_PyIR_OBSERVER_COMPLETION" if window else None,

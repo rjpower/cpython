@@ -365,6 +365,9 @@ assemble_pcmap(struct assembler *a, _PyRegCfg *cfg)
  * emits, before any specialization chooses another */
 #define IS_FOR_ITER(op) ((op)->opcode == ROP_HANDLER_ForIter_Generic)
 
+/* The delegation word of await and yield from */
+#define IS_SEND(op) ((op)->opcode == ROP_HANDLER_Send_Generic)
+
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
 int _PyIR_MaxForward = IR_MAX_FORWARD;
 
@@ -639,7 +642,7 @@ jump_target(_PyRegCfg *cfg, _PyRegOp *op)
     _PyRegBlock *b = &cfg->blocks[op->target];
     if (op->opcode == END_ASYNC_FOR) {
         _PyRegOp *send = &cfg->ops[b->start];
-        assert(send->opcode == SEND);
+        assert(IS_SEND(send));
         return send->word;
     }
     return b->word;
@@ -834,7 +837,7 @@ lower_completions(_PyRegCfg *cfg)
 {
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
-        if (IS_FOR_ITER(op) || op->opcode == SEND) {
+        if (IS_FOR_ITER(op) || IS_SEND(op)) {
             int target = next_frontend_op(cfg, cfg->blocks[op->target].start, 0);
             int expected = IS_FOR_ITER(op) ? END_FOR : END_SEND;
             if (target < 0 || cfg->ops[target].opcode != expected || op->nout != 3) {
@@ -937,7 +940,7 @@ lower_completions(_PyRegCfg *cfg)
         }
         _PyRegSlots slots;
         _PyRegCfg_OpSlots(cfg, op, &slots);
-        int count = IS_FOR_ITER(op) ? 2 : op->opcode == SEND ? 3 : 4;
+        int count = IS_FOR_ITER(op) ? 2 : IS_SEND(op) ? 3 : 4;
         int limit = cfg->nlocalsplus + cfg->ntemps;
         if (slots.base < cfg->nlocalsplus || slots.base > limit - count) {
             return completion_error(cfg, op, "physical completion window is outside frame");
@@ -1159,7 +1162,7 @@ layout(struct assembler *a, _PyRegCfg *cfg)
                 }
                 continue;
             }
-            if ((!IS_FOR_ITER(op) && op->opcode != SEND) || op->nwords > 1) {
+            if ((!IS_FOR_ITER(op) && !IS_SEND(op)) || op->nwords > 1) {
                 continue;
             }
             int distance = jump_target(cfg, op) - (op->word + 1);
@@ -1183,7 +1186,7 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
     const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
     _PyRegSlots slots;
     _PyRegCfg_OpSlots(cfg, op, &slots);
-    if ((op->opcode == SEND || op->opcode == CLEANUP_THROW) && op->completion) {
+    if ((IS_SEND(op) || op->opcode == CLEANUP_THROW) && op->completion) {
         _PyRegSlots completed;
         _PyRegCfg_OpSlots(cfg, &cfg->ops[op->completion - 1], &completed);
         slots.out[0] = completed.out[0];
@@ -1295,47 +1298,6 @@ jump_word(int target)
     return IR_WORD(IR_JUMP, 0, 0, target & IR_FIELD_MAX, target >> 12);
 }
 
-/* Word entries keep their original homed IO. Only a private native outcome
- * consumes a payload, so initial None and debugger/native materialization
- * remain ordinary ingress. Use the same bounded physical-edge predicates as
- * public admission, after logical completion lowering and allocation. */
-static void
-place_generator_boundaries(_PyIRWord *words, int nwords, int nlocalsplus)
-{
-#ifdef Py_GIL_DISABLED
-    return;
-#else
-    // An arm's operand words are not instructions: step over them
-    for (int pc = 0; pc < nwords; pc += _PyIR_WordLength(words[pc])) {
-        int handler = _PyIR_GeneratorBoundaryCandidate(
-            words, nwords, nlocalsplus, pc);
-        if (handler >= 0) {
-            words[pc] = (words[pc] & ~(_PyIRWord)IR_HANDLER_MASK) | (_PyIRWord)handler;
-        }
-    }
-    /* Only removals follow nomination. A missing throw/join/loop sibling
-     * therefore removes its connected shapes and cannot oscillate. */
-    int changed;
-    do {
-        changed = 0;
-        for (int pc = 0; pc < nwords; pc += _PyIR_WordLength(words[pc])) {
-            int handler = IR_HANDLER(words[pc]);
-            const _PyIRGeneratorBoundary *boundary =
-                _PyIR_GeneratorBoundaryOf(handler);
-            if (boundary == NULL ||
-                !(boundary->flags & _PyIR_GEN_BOUNDARY_PLACED) ||
-                _PyIR_CheckGeneratorBoundary(words, nwords, nlocalsplus,
-                                            pc, handler))
-            {
-                continue;
-            }
-            words[pc] = (words[pc] & ~(_PyIRWord)IR_HANDLER_MASK) | boundary->ordinary;
-            changed = 1;
-        }
-    } while (changed);
-#endif
-}
-
 /* The words and the feedback table, in a->a_words and a->a_fbinit */
 static int
 assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
@@ -1397,14 +1359,13 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                     words[w + 2] = jump_word(exit);
                 }
                 else {
-                    assert(op->opcode == SEND);
+                    assert(IS_SEND(op));
                     words[w + 1] = jump_word(w + RELAXED_SEND_WORDS);
                     words[w + 2] = jump_word(exit);
                 }
             }
         }
     }
-    place_generator_boundaries(words, a->a_nwords, nfixed);
     return SUCCESS;
 }
 

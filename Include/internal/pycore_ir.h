@@ -80,51 +80,6 @@ extern "C" {
  * The target, rather than a runtime tag, defines the payload's meaning. */
 typedef uint64_t _PyIRPayload;
 
-typedef enum {
-    _PyIR_GEN_CONSUMER_NONE,
-    _PyIR_GEN_CONSUMER_DELEGATED,
-    _PyIR_GEN_CONSUMER_RETURN,
-    _PyIR_GEN_CONSUMER_STORE_LOCAL,
-    _PyIR_GEN_CONSUMER_DISCARD,
-    _PyIR_GEN_CONSUMER_SEND,
-    _PyIR_GEN_CONSUMER_HOME,
-    _PyIR_GEN_CONSUMER_STORE_FAST,
-    _PyIR_GEN_CONSUMER_POP_TOP,
-} _PyIRGeneratorConsumer;
-
-enum {
-    _PyIR_GEN_BOUNDARY_PLACED = 1,
-    _PyIR_GEN_BOUNDARY_CLOSED = 2,
-    _PyIR_GEN_BOUNDARY_OBSERVER = 4,
-};
-
-/* Cold shape identity. Geometry and ownership still come from the source
- * format and logical edges; these flags grant neither owner nor error facts. */
-typedef struct {
-    uint16_t ordinary;
-    uint16_t handler;
-    uint8_t yielded_consumer;
-    uint8_t completed_consumer;
-    uint8_t resume_consumer;
-    uint8_t flags;
-} _PyIRGeneratorBoundary;
-static_assert(sizeof(_PyIRGeneratorBoundary) == 8,
-              "generator boundary encoding must remain fixed");
-
-extern const _PyIRGeneratorBoundary _PyIR_GeneratorBoundaries[];
-/* Invalid handler returns NULL; an ordinary handler has a NONE shape. */
-PyAPI_FUNC(const _PyIRGeneratorBoundary *) _PyIR_GeneratorBoundaryOf(int handler);
-/* Cold placement selection: -1 means that complete source closure is absent. */
-extern int _PyIR_GeneratorBoundaryHandler(int ordinary, int yielded_consumer,
-                                        int completed_consumer,
-                                        int resume_consumer);
-/* Cold checked-image geometry. Neither query grants ownership/value facts.
- * Candidate nominates one complete source shape; Check also requires its
- * connected source words to carry compatible placements. */
-extern int _PyIR_GeneratorBoundaryCandidate(const _PyIRWord *words, int nwords,
-                                           int nlocalsplus, int pc);
-extern int _PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords,
-                                      int nlocalsplus, int pc, int handler);
 /* A target in a 12-bit field is a signed distance in words from the next
  * word, -2048 to 2047.  FOR_ITER and SEND reach at most IR_MAX_FORWARD, the
  * non-negative half (2^11 - 1), and the assembler relaxes a loop whose exit
@@ -961,6 +916,11 @@ PyAPI_FUNC(_PyFbHeader *) _PyIR_InstrFeedback(PyCodeObject *co,
 struct _PyInterpreterFrame;
 PyAPI_FUNC(int) _PyIR_RealHandler(struct _PyInterpreterFrame *frame,
                                   const _PyIRWord *instr);
+
+/* The handler that the word at instr runs once a LINE or INSTRUCTION wrapper
+ * has passed it on; the instrumented one if monitoring displaced it. */
+PyAPI_FUNC(int) _PyIR_DispatchedHandler(struct _PyInterpreterFrame *frame,
+                                          const _PyIRWord *instr);
 
 /* The handler that INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION at instr
  * goes on to, given the opcode that instrumentation returned for it: the

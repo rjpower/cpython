@@ -451,14 +451,9 @@ PyAPI_FUNC(int) _PyIR_ObserveStopIteration(
     PyValueBorrow, PyValueBorrow);
 PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteForIter(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, _PyInstr *, PyValue);
-PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteSend(
-    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, int,
-    _PyInstr *, PyValue);
 PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteSendThrow(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, int,
     _PyInstr *, PyValue);
-PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteGeneratorReturn(
-    PyThreadState *, _PyInterpreterFrame *, PyValue);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,

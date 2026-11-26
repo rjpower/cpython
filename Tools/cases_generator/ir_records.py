@@ -213,7 +213,6 @@ class OperationRecord:
     operation: str | None       # a BINARY_OP operation handler: NB_*
     oparg: str                  # the IMMEDIATE operand's detail, or ""
     call: CallShape | None
-    generator_boundary: object  # ir_generator.GeneratorBoundary, if closed
     deopt: str                  # where a failed guard goes, see deopt_target()
     inputs: tuple[StackItem, ...]   # the instruction's stack inputs, bottom first
     # What it leaves on the stack, bottom first (ValueWalk.outputs)
@@ -263,7 +262,6 @@ TRANSFER_TOKENS: dict[str, tuple[str, ...]] = {
     "IR_OBSERVE_COMMITTED_BRANCH": (BRANCH, RAISE),
     "IR_COMPLETE_STEP": (BRANCH, RAISE),
     "IR_PROCESS_ERROR": (RAISE,),
-    "IR_RETURN_TO_CALLER": (RETURN, RAISE),
     "IR_FINISH_GENERATOR_RETURN": (RETURN, RAISE),
     "IR_FINISH_GENERATOR_RETURN_EMPTY": (RETURN, RAISE),
     "IR_ENTER_GENERATOR": (ENTER_FRAME, RAISE),

@@ -396,15 +396,12 @@ class VerifierTests(unittest.TestCase):
     def test_replacements_are_declared(self):
         # F16's cursor: each uop that advances it declares the entry that
         # its next_index takes over, and only those replace an input (the
-        # FOR_ITER family, its jumps, INSTRUMENTED_FOR_ITER and the SEND
-        # family's cursor)
+        # FOR_ITER, INSTRUMENTED_FOR_ITER and the SEND stubs' cursor)
         replaced = {(name, j) for name, uop in analysis.uops.items()
                     for j in range(len(uop.stack.outputs))
                     if ir_records.replaced_input(uop, j) is not None}
         self.assertEqual(replaced, {(name, 1) for name in (
-            "_FOR_ITER", "_FOR_ITER_VIRTUAL", "_ITER_NEXT_LIST", "_ITER_NEXT_TUPLE",
-            "_ITER_JUMP_LIST", "_ITER_JUMP_TUPLE", "INSTRUMENTED_FOR_ITER",
-            "_SEND", "_SEND_VIRTUAL")})
+            "_FOR_ITER", "INSTRUMENTED_FOR_ITER", "SEND", "INSTRUMENTED_SEND")})
         for name, _ in replaced:
             output = analysis.uops[name].stack.outputs[1]
             self.assertEqual((output.name, output.replaces), ("next_index", "index"))
@@ -2121,7 +2118,7 @@ class VerifierTests(unittest.TestCase):
                      r"spam is no kind of word")
 
     def test_a_frame_switch_is_at_its_token(self):
-        # _SEND_GEN_FRAME: the guards before IR_ENTER_GENERATOR restart the
+        # Send.Generic's claim: the guards before IR_ENTER_GENERATOR restart the
         # word; the switch is where the row that names it is called
         self.verify("""
             op(_OP, (receiver: object, null: nullable, v: taken -- receiver, null, gen_frame: owned))
@@ -4325,165 +4322,6 @@ class ObjectRowTests(unittest.TestCase):
         self.assertEqual([r() for r in refs], [None, None])
 
 
-SEND_CLAUSE = """        boundary(SEND) at(last) yields(delegated) completion(send) completes(
-            RETURN: exits(return, raise),
-            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
-SEND_GEN_CLAUSE = SEND_CLAUSE.replace("boundary(SEND) at(last)",
-                                      "boundary(SEND_GEN) at(enter)")
-CLEANUP_CLAUSE = """        boundary(CLEANUP_THROW) at(last) completion(throw) completes(
-            RETURN: exits(return, raise),
-            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
-
-
-def expand_variant(analysis, formats, name):
-    "Generate the generator-boundary variant name to no output; its emitter"
-    insts = ir_generator.handler_instructions(analysis)
-    out = ir_generator.CWriter.null()
-    emitter = ir_generator.IREmitter(out, analysis, formats)
-    emitter.handler_format = formats[name]
-    emitter.allowed_error_checkpoints = None
-    ir_generator.generate_handler(name, insts[name], formats[name], emitter, out)
-    return emitter
-
-
-def expand_variants(analysis):
-    "Generate each generator-boundary variant to no output"
-    formats = ir_generator.compute_formats(analysis)
-    for name in ir_generator.generator_boundaries(analysis):
-        expand_variant(analysis, formats, name)
-
-
-class BoundaryTests(unittest.TestCase):
-    """The generator-boundary variants (*_XFER_*): their records come from
-    the boundary(...) clauses, and their expansions are checked against
-    them (g3/design.md section 7)"""
-
-    def test_variants_come_from_the_clauses(self):
-        boundaries = ir_generator.generator_boundaries(analysis)
-        sources = {b.base for b in boundaries.values()}
-        self.assertEqual(sources, {
-            "SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN", "CLEANUP_THROW"})
-        self.assertEqual(len(boundaries), 5 * 6)
-        self.assertEqual(boundaries["SEND_GEN_XFER_RETURN"].at, "enter")
-        self.assertEqual(boundaries["SEND_VIRTUAL_XFER_RETURN"].exits, ("return", "raise"))
-        self.assertEqual(boundaries["CLEANUP_THROW_XFER_HOME"].yielded, "NONE")
-
-    def test_records_take_the_declared_exits(self):
-        def kinds(name):
-            return [t.kind for t in records[name].uops[-1].transfers]
-        for source in ("SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"):
-            with self.subTest(source=source):
-                returning, storing = kinds(f"{source}_XFER_RETURN"), kinds(f"{source}_XFER_POP_TOP")
-                self.assertEqual(returning[-1], "YIELD")
-                self.assertIn("RETURN", returning)
-                self.assertNotIn("BRANCH", returning)
-                self.assertEqual(storing[-1], "YIELD")
-                self.assertIn("BRANCH", storing)
-                self.assertNotIn("RETURN", storing)
-        self.assertIn("RETURN", kinds("CLEANUP_THROW_XFER_RETURN"))
-        self.assertNotIn("YIELD", kinds("CLEANUP_THROW_XFER_RETURN"))
-        # SEND_GEN yields and completes in the frame it enters
-        self.assertEqual(kinds("SEND_GEN_XFER_RETURN"), kinds("SEND_GEN"))
-
-    def test_expansions_agree_with_the_clauses(self):
-        with cases.handle_stderr():
-            expand_variants(analysis)
-
-    def refuses(self, changes, message):
-        text = BYTECODES.read_text()
-        for old, new in changes:
-            self.assertEqual(text.count(old), 1, old)
-            text = text.replace(old, new)
-        fd, filename = tempfile.mkstemp(suffix=".c")
-        os.close(fd)
-        self.addCleanup(os.remove, filename)
-        with open(filename, "w") as f:
-            f.write(text)
-        with self.assertRaisesRegex(SyntaxError, message), cases.handle_stderr():
-            expand_variants(cases.analyzer.analyze_files([filename]))
-
-    def test_expansion_reaches_an_omitted_return(self):
-        # The RETURN arm of the completion routine returns from the frame
-        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("RETURN: exits(return, raise)",
-                                                        "RETURN: exits(branch, raise)")),
-                      (SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(
-                          "RETURN: exits(return, raise)", "RETURN: exits(branch, raise)"))],
-                     r"SEND_\w*XFER_RETURN: its expansion reaches \['return'\], "
-                     r"which its boundary\(\.\.\.\) clause omits")
-        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(
-                          "RETURN: exits(return, raise)", "RETURN: exits(raise)"))],
-                     r"CLEANUP_THROW_XFER_RETURN: its expansion reaches \['return'\]")
-
-    def test_expansion_reaches_an_omitted_yield(self):
-        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace(" yields(delegated)", "")),
-                      (SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(" yields(delegated)", ""))],
-                     r"SEND_\w*XFER_\w+: its expansion reaches `yield`, which its "
-                     r"boundary\(\.\.\.\) clause omits")
-
-    def test_clause_declares_an_unreached_exit(self):
-        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(
-                          "POP_TOP: exits(branch, raise)", "POP_TOP: exits(branch, return, raise)"))],
-                     r"CLEANUP_THROW_XFER_\w+: its boundary\(\.\.\.\) clause declares "
-                     r"\['return'\], which its expansion never reaches")
-        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace("at(last)",
-                                                              "at(last) yields(delegated)"))],
-                     r"_CLEANUP_THROW: a delegated yield needs the departing uop's fall-through")
-
-    def test_departure_is_declared(self):
-        # No default: a clause states where its variants depart
-        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(" at(last)", ""))],
-                     r"boundary\(CLEANUP_THROW\) needs at\(last\) or at\(enter\)")
-        # SEND_GEN's last uop only enters
-        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("at(enter)", "at(last)"))],
-                     r"_SEND_GEN_FRAME: a delegated yield needs the departing uop's fall-through")
-        # A native send yields and completes in its own uops
-        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("at(last)", "at(enter)"))],
-                     r"SEND\w*_XFER_\w+: departs at\(enter\), and its expansion reaches")
-
-    def test_completion_is_declared(self):
-        # completion(...) names the completion step's kind; GEN_THROWING in
-        # the completed table comes from completion(throw)
-        boundaries = ir_generator.generator_boundaries(analysis)
-        self.assertEqual(boundaries["CLEANUP_THROW_XFER_POP_TOP"].completion, "throw")
-        self.assertEqual(boundaries["SEND_GEN_XFER_POP_TOP"].completion, "send")
-        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace("completion(throw)",
-                                                              "completion(send)"))],
-                     r"CLEANUP_THROW_XFER_\w+: completes with _PY_IR_SEND_THROW, and its "
-                     r"boundary\(\.\.\.\) clause declares completion\(send\)")
-        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(" completion(throw)", ""))],
-                     r"boundary\(CLEANUP_THROW\): completes\(\.\.\.\) and "
-                     r"completion\(send\) or completion\(throw\) go together")
-
-    def test_completion_transfers_are_completion_sites(self):
-        # The departing uop's branches (returns, in a RETURN variant) are the
-        # completions that the body lowers; any other branch is refused
-        formats = ir_generator.compute_formats(analysis)
-        with cases.handle_stderr():
-            for name in ("SEND_VIRTUAL_XFER_POP_TOP", "SEND_VIRTUAL_XFER_RETURN"):
-                emitter = expand_variant(analysis, formats, name)
-                record = records[name]
-                boundary = record.generator_boundary
-                completions = emitter.boundary_completions
-                self.assertTrue(completions)
-                ir_generator.check_boundary_expansion(
-                    name, boundary, record, emitter.boundary_reached, completions,
-                    record.instruction.where)
-                with self.subTest(name=name), self.assertRaisesRegex(
-                        SyntaxError, rf"{name}: _SEND_VIRTUAL's (branch|return) at line "
-                                     r"\d+ is no generator completion"):
-                    ir_generator.check_boundary_expansion(
-                        name, boundary, record, emitter.boundary_reached, completions[1:],
-                        record.instruction.where)
-
-    def test_member_clause_differs_only_in_departure(self):
-        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("HOME, ", ""))],
-                     r"boundary\(SEND_GEN\) may differ from its family's "
-                     r"boundary\(SEND\) only in at\(\.\.\.\)")
-        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(" yields(delegated)", ""))],
-                     r"boundary\(SEND_GEN\) may differ")
-
-
-
 class PinTests(unittest.TestCase):
     """The execution pin (g3/design.md section 2): every arm that departs
     its frame by a return or a yield pins the frame's code once, after its
@@ -4506,8 +4344,7 @@ class PinTests(unittest.TestCase):
 
     def departs(self, name):
         "Whether a handler that runs name's body declares return or yield"
-        return any(self.declares_departure(n) for n in self.handlers
-                   if ir_generator.generator_word_entry(n, analysis) == name)
+        return self.declares_departure(name)
 
     def form(self, name):
         return next(f for f in self.forms
@@ -4520,15 +4357,14 @@ class PinTests(unittest.TestCase):
             if m is None or m.group(1) not in self.handlers:
                 continue
             name = m.group(1)
-            if (ir_generator.generator_word_entry(name, analysis) != name
-                    or name in ir_generator.EDGE_TWINS or name in ir_generator.EVENT_TWINS):
+            if name in ir_generator.EDGE_TWINS or name in ir_generator.EVENT_TWINS:
                 # A twin calls its base's form, which pins
                 continue
             named += 1
             with self.subTest(name=name):
                 self.assertEqual(text.count("IR_PIN_DEPARTING();"),
                                  1 if self.departs(name) else 0)
-        self.assertGreater(named, 130)
+        self.assertGreater(named, 100)
         # The stubs are the same text with the stub bindings
         for function, text in self.stubs.items():
             name = function.removeprefix("_PyIR_Stub_")
@@ -4536,39 +4372,8 @@ class PinTests(unittest.TestCase):
                 with self.subTest(stub=name):
                     self.assertEqual(text.count("IR_PIN_DEPARTING();"),
                                      1 if self.departs(name) else 0)
-        for name in ("SEND_VIRTUAL_XFER_DISCARD",):
-            self.assertTrue(self.departs(name), name)
-        for name in ("CALL_KW_PY", "SEND_GEN_XFER_DISCARD", "LOAD_FAST"):
+        for name in ("CALL_KW_PY",):
             self.assertFalse(self.departs(name), name)
-
-    def test_the_pin_follows_the_last_guard(self):
-        # The guarded variants share their family's body, whose RETURN
-        # consumer completes through GEN_COMPLETE_RETURN
-        for name, guards, body, first in (
-                ("SEND_VIRTUAL_XFER_RETURN",
-                 ("_GUARD_TOS_IS_NONE", "_GUARD_NOS_NOT_NULL"), "_SEND_VIRTUAL",
-                 "PyObject *iter_o"),
-                ("SEND_VIRTUAL_XFER_STORE_LOCAL",
-                 ("_GUARD_TOS_IS_NONE", "_GUARD_NOS_NOT_NULL"), "_SEND_VIRTUAL",
-                 "PyObject *iter_o"),
-                ("SEND_ASYNC_GEN_XFER_RETURN",
-                 ("_GUARD_3OS_ASYNC_GEN_ASEND",), "_SEND_ASYNC_GEN",
-                 "PyObject *iter_o"),
-                ("SEND_ASYNC_GEN_XFER_POP_TOP",
-                 ("_GUARD_3OS_ASYNC_GEN_ASEND",), "_SEND_ASYNC_GEN",
-                 "PyObject *iter_o")):
-            with self.subTest(name=name):
-                self.assertTrue(self.declares_departure(name))
-                entry = ir_generator.generator_word_entry(name, analysis)
-                text = self.form(entry)
-                pin = text.index("IR_PIN_DEPARTING();")
-                for guard in guards:
-                    self.assertLess(text.index(f"// {guard}\n"), pin)
-                start = text.index(f"// {body}\n")
-                self.assertLess(start, pin)
-                self.assertLess(pin, text.index(first, start))
-                self.assertEqual(ir_generator.pin_point(entry, self.handlers[entry],
-                                                        analysis), len(guards))
 
 
 if __name__ == "__main__":

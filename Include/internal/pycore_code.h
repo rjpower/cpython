@@ -208,7 +208,6 @@ PyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyValueBorrow lhs, PyValueBorrow rhs, _
     (_Py_Specialize_BinaryOp)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2, V3, V4)
 PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(PyValue seq, _PyInstr *instr,
                                           int oparg);
-PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(PyValue func_st, PyValue args_st, _PyInstr *instr);
 
 /* See InternalDocs/exception_handling.md for details.

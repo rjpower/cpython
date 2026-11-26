@@ -2,7 +2,7 @@
 // from the leaf IR of Python/bytecodes.c.
 // Do not edit!
 //
-// 21 templates.  The handlers whose uops are all leaf but that
+// 20 templates.  The handlers whose uops are all leaf but that
 // keep the call of their form:
 
 static void
@@ -600,36 +600,6 @@ jit_template_BINARY_OP_XOR_INT(_PyJitWordCx *cx)
 }
 
 static void
-jit_template_END_SEND(_PyJitWordCx *cx)
-{
-    _PyJitAsm *a = cx->a;
-    _PyIRWord ir_word = cx->word;
-    (void)ir_word;
-    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Bind(a, L0);
-    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))));
-    _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_D(ir_word))));
-    if (!(ir_word & IR_F_LOCAL_B)) {
-        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))), 0);
-    }
-    if (!(ir_word & IR_F_LOCAL_C)) {
-        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_C(ir_word))), 0);
-    }
-    if (!(ir_word & IR_F_LOCAL_D)) {
-        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_D(ir_word))), 0);
-    }
-    if ((ir_word & IR_F_LOCAL_D)) {
-        cx->live = 0x1; cx->live_xmm = 0x0;
-        _PyJitLower_PyValue_DUP(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RCX, _PyJitReg_RDX}, NULL);
-    }
-    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), _PyJitReg_RCX);
-    if (!(ir_word & IR_F_LOCAL_B)) {
-        cx->live = 0x0; cx->live_xmm = 0x0;
-        _PyJitLower_PyValue_CLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
-    }
-}
-
-static void
 jit_template_IR_JUMP(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
@@ -863,7 +833,6 @@ jit_template_STORE_FAST(_PyJitWordCx *cx)
 }
 
 const _PyJitTemplate _PyJit_Templates[512] = {
-    [10] = jit_template_END_SEND,
     [25] = jit_template_NOP,
     [111] = jit_template_STORE_FAST,
     [120] = jit_template_IR_JUMP,
@@ -881,9 +850,9 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [142] = jit_template_BINARY_OP_SUBTRACT_INT,
     [143] = jit_template_BINARY_OP_TRUEDIV_FLOAT,
     [144] = jit_template_BINARY_OP_XOR_INT,
-    [156] = jit_template_STORE_ATTR_SHAPE,
-    [157] = jit_template_STORE_ATTR_SHAPE_ADD,
-    [158] = jit_template_STORE_ATTR_SLOT,
+    [153] = jit_template_STORE_ATTR_SHAPE,
+    [154] = jit_template_STORE_ATTR_SHAPE_ADD,
+    [155] = jit_template_STORE_ATTR_SLOT,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
     [ROP_HANDLER_GetAttr_Instance] = jit_template_GetAttr_Instance,
     [ROP_HANDLER_GetAttr_Shape] = jit_template_GetAttr_Shape,

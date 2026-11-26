@@ -2622,6 +2622,19 @@ call_new_generator(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return PyValue_FromObjectSteal((PyObject *)gen);
 }
 
+static Py_NO_INLINE PyValue
+_PyRop_NewGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValue *fn, const _PyIRWord *head)
+{
+    assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
+    PyValue generator = call_new_generator(tstate, frame, head, head[0], *fn,
+                                           rop_call_self_state(frame, head));
+    if (PyValue_IsNull(generator)) {
+        rop_call_retire_operands(frame, head);
+    }
+    return generator;
+}
+
 static inline Py_ALWAYS_INLINE int
 call_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          _PyInstr *current)
@@ -2953,6 +2966,128 @@ _PyRop_GetANext(PyValue *aiter_home)
         return PyValue_NULL;
     }
     return PyValue_FromObjectSteal(awaitable_o);
+}
+
+/* The rows of Send (Python/register_ops/suspend.rop) */
+
+/* Whether the receiver can be entered in place.  The guards of the old
+ * _SEND: a generator or coroutine of the exact types, a created one given
+ * None only, and the relaxed load of its frame state that gen_may_claim
+ * makes.  The answer can be stale on the free-threaded build: the claim in
+ * _PyRop_EnterGenerator decides. */
+static inline bool
+_PyRop_ClaimableGenerator(PyThreadState *tstate, PyValueBorrow receiver,
+                          PyValueBorrow sent)
+{
+    if (IS_PEP523_HOOKED(tstate) || !PyValue_IsObject(receiver)) {
+        return false;
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
+    if (Py_TYPE(object) != &PyGen_Type && Py_TYPE(object) != &PyCoro_Type) {
+        return false;
+    }
+    PyGenObject *gen = (PyGenObject *)object;
+    if (FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED &&
+        !PyValue_IsNone(sent)) {
+        return false;
+    }
+    return gen_may_claim(gen);
+}
+
+/* Claim the generator and link its frame under frame, which returns it: the
+ * links of the old IR_ENTER_GENERATOR.  The recursion debit and the first
+ * word are the frame start's. */
+static Py_NO_INLINE _PyInterpreterFrame *
+_PyRop_EnterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      PyValueBorrow receiver, PyValue sent)
+{
+    PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+    if (!gen_claim(tstate, gen)) {
+        PyObject *error = PyErr_GetRaisedException();
+        PyValue_XCLOSE(sent);
+        PyErr_SetRaisedException(error);
+        return NULL;
+    }
+    _PyInterpreterFrame *resumed = &gen->gi_iframe;
+    resumed->previous = frame;
+    gen->gi_exc_state.previous_item = tstate->exc_info;
+    tstate->exc_info = &gen->gi_exc_state;
+    _PyFrame_SetResumeValue(resumed, sent);
+    return resumed;
+}
+
+/* One step of a receiver that is not entered: the cursor's next item for a
+ * None sent to an index-protocol receiver, else what the receiver's send
+ * returns.  1 yielded (the next cursor in *next), 0 returned, -1 raised. */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_SendStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                PyValueBorrow receiver, PyValueBorrow cursor,
+                PyValueBorrow sent, PyValue *next)
+{
+    if (!PyValue_IsNull(cursor) && PyValue_IsNone(sent)) {
+        return _PyRop_ForIterStep(tstate, frame, receiver, cursor, next);
+    }
+    _PyStatusValue result = (_PyValue_Send)(PyValue_AsKnownObjectBorrow(receiver), sent);
+    switch (result.status) {
+    case PYGEN_ERROR:
+        return (_PyStatusValue){-1, PyValue_NULL};
+    case PYGEN_RETURN:
+        return (_PyStatusValue){0, result.value};
+    default:
+        // The cursor is a tagged index or nothing: it stays as it is
+        *next = PyValue_IsNull(cursor) ? PyValue_NULL
+                                       : PyValue_TagIndex(PyValue_UntagIndex(cursor));
+        return (_PyStatusValue){1, result.value};
+    }
+}
+
+/* The STOP_ITERATION event of Send.Observed's completions, before the window
+ * is retired.  The value is given back (0), or closed (1 moved the frame, -1
+ * raised). */
+static Py_NO_INLINE _PyStatusValue
+_PyRop_SendStopEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *site, PyValueBorrow receiver, PyValue value)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
+    frame->instr_ptr = site;
+    frame->return_pc = dest;
+    int status = _PyIR_ObserveStopIteration(tstate, frame, site, dest,
+                                            receiver, PyValue_Borrow(value));
+    if (status == 0) {
+        return (_PyStatusValue){0, value};
+    }
+    PyObject *error = status < 0 ? PyErr_GetRaisedException() : NULL;
+    PyValue_XCLOSE(value);
+    if (status < 0) {
+        PyErr_SetRaisedException(error);
+        return (_PyStatusValue){-1, PyValue_NULL};
+    }
+    frame->return_pc = frame->instr_ptr;
+    return (_PyStatusValue){1, PyValue_NULL};
+}
+
+/* BRANCH_LEFT and the line events of the exit, once the window is retired:
+ * the second phase of the old complete_step_impl */
+static Py_NO_INLINE int
+_PyRop_SendExitEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *site)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    _PyInstr *dest = site + 1 + _PyIR_FormatDistance(fmt, *site);
+    frame->instr_ptr = site;
+    frame->return_pc = dest;
+    _PyIRStepResult observed = _PyIR_ObserveStep(
+        tstate, frame, site, dest, PyValue_Borrow(PyValue_None), _PY_IR_SEND, 1);
+    if (observed.status < 0) {
+        return -1;
+    }
+    frame->instr_ptr = observed.next;
+    if (observed.status == _PY_IR_STEP_REDIRECT) {
+        frame->return_pc = frame->instr_ptr;
+        return 1;
+    }
+    return 0;
 }
 
 _PyStatusValue
@@ -3612,91 +3747,6 @@ generator_control_generation(_PyInterpreterFrame *frame)
     return frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation;
 }
 
-/* The generator that has just completed (or an awaited coroutine) is closed
- * by its last owner, which frees it without running code if it is plain. */
-static inline bool
-gen_try_close_completed(PyValue receiver)
-{
-    return PyValue_RefcountOnObject(receiver) &&
-        _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(receiver));
-}
-
-/* Close one input of a completed send. */
-static inline bool
-gen_close_input(PyValue input, bool receiver)
-{
-    return (receiver && gen_try_close_completed(input)) ||
-        _PyValue_TryXCloseNoReentry(input);
-}
-
-/* The kind that a generator table gives a word's handler (the enums of
- * Python/ceval_generator.h), or 0 for none.  Ordinary outcomes need one
- * dispatch-table-shaped lookup.  A transparent monitor keeps the same word
- * fields but resolves its source only here, on the actual observation path. */
-static Py_NO_INLINE uint8_t
-generator_transparent_site_kind(_PyInterpreterFrame *frame, _PyInstr *site,
-                                const uint8_t *table)
-{
-    return table[_PyIR_RealHandler(frame, site)];
-}
-
-static inline uint8_t
-generator_site_kind(_PyInterpreterFrame *frame, _PyInstr *site,
-                    const uint8_t *table)
-{
-    /* The word of an interpreter entry frame is the trampoline's, which no
-     * table names and no monitor wraps. */
-    int handler = IR_HANDLER(*site);
-    uint8_t kind = table[handler];
-    if (kind == 0 && (_PyIR_Formats[handler].flags & _PyIR_TRANSPARENT)) {
-        return generator_transparent_site_kind(frame, site, table);
-    }
-    return kind;
-}
-
-/* The two halves of the plain-transfer test, which contain no effect.  A
- * monitored or redirected transfer publishes its homes before running the
- * ordinary source's callback boundary.  The thread's half cannot change
- * while a transfer runs no callback, so a transfer that is a chain of
- * levels tests it once and each level tests the frame's half. */
-static inline bool
-generator_thread_is_plain(PyThreadState *tstate)
-{
-#ifdef Py_GIL_DISABLED
-    return false;
-#else
-    if (IS_PEP523_HOOKED(tstate)) {
-        return false;
-    }
-#ifdef WITH_DTRACE
-    if (PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED()) {
-        return false;
-    }
-#endif
-    return true;
-#endif
-}
-
-static inline bool
-generator_frame_is_plain(_PyInterpreterFrame *frame)
-{
-    if (frame->pending_redirect || _PyFrame_GetCode(frame)->_co_monitoring != NULL) {
-        return false;
-    }
-#ifdef Py_DEBUG
-    if (frame->lltrace >= 5) {
-        return false;
-    }
-#endif
-    return true;
-}
-
-static inline bool
-generator_transfer_is_plain(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    return generator_thread_is_plain(tstate) && generator_frame_is_plain(frame);
-}
-
 /* The caller holds value in C, which is an external reference to the cyclic
  * collector. Every frame write precedes the first close. */
 static inline void
@@ -3707,47 +3757,6 @@ generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyFrame_CompleteRedirect(frame);
     }
     _PyFrame_PublishReturnSlot(frame, value);
-}
-
-/* The publication of GEN_COMPLETE_EFFECT, out of line: the detached owners
- * are an array, which would be the handler's. Detaches the remaining
- * owners, writes result to the destination, observes the completed step,
- * and closes everything detached. Returns the exception that observation
- * raised, or NULL. */
-static Py_NO_INLINE PyObject *
-generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                           _PyInstr *site, _PyInstr *exit, int base,
-                           int remaining_count, int destination,
-                           bool throwing, PyValue result)
-{
-    /* Detach every remaining owner before an overlapping A publication. */
-    PyValue detached[5];
-    int ndetached = 0;
-    for (int k = remaining_count; k-- > 0;) {
-        detached[ndetached++] = frame->base[base + k];
-        frame->base[base + k] = PyValue_NULL;
-    }
-    // The releasing write: a local's or the discard slot's old value closes
-    // with the detached owners
-    PyValue displaced = frame->base[destination];
-    assert(destination < (int)_PyFrame_Exec(frame)->nfixed ||
-           destination == _PyFrame_DiscardSlot(frame) ||
-           PyValue_IsNull(displaced));
-    frame->base[destination] = result;
-    _PyValue_CheckHome(result);
-    detached[ndetached++] = displaced;
-    frame->return_pc = exit;
-    _PyIRStepResult post = {.next = exit, .status = _PY_IR_STEP_EXIT};
-    if (_PyFrame_GetCode(frame)->_co_monitoring != NULL) {
-        post = _PyIR_ObserveStep(tstate, frame, site, exit,
-            PyValue_Borrow(PyValue_None), throwing ? _PY_IR_SEND_THROW : _PY_IR_SEND, 1);
-    }
-    if (post.status >= 0) { frame->instr_ptr = post.next; }
-    PyObject *error = post.status < 0 ? PyErr_GetRaisedException() : NULL;
-    for (int k = 0; k < ndetached; k++) {
-        PyValue_XCLOSE(detached[k]);
-    }
-    return error;
 }
 
 /* The function forms (tiers87, C2).  Every handler's body is also a function
@@ -3784,14 +3793,8 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef IR_STEP_DONE
 #pragma push_macro("IR_REPORT_EDGE")
 #undef IR_REPORT_EDGE
-#pragma push_macro("IR_GEN_YIELD_AT")
-#undef IR_GEN_YIELD_AT
-#pragma push_macro("IR_GEN_COMPLETE_AT")
-#undef IR_GEN_COMPLETE_AT
 #pragma push_macro("IR_GEN_RETURN")
 #undef IR_GEN_RETURN
-#pragma push_macro("IR_GEN_RESUME")
-#undef IR_GEN_RESUME
 #pragma push_macro("IR_ROUTINE")
 #undef IR_ROUTINE
 #pragma push_macro("IR_HOT_ROUTINE")
@@ -3800,8 +3803,8 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef GEN_DISPATCH
 #pragma push_macro("GEN_STEP_JUMP")
 #undef GEN_STEP_JUMP
-#pragma push_macro("GEN_STEP_EFFECT")
-#undef GEN_STEP_EFFECT
+#pragma push_macro("GEN_RAISED")
+#undef GEN_RAISED
 #pragma push_macro("IR_JIT_EVENT")
 #undef IR_JIT_EVENT
 #pragma push_macro("IR_JIT_EVENT_AT")
@@ -3858,22 +3861,10 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
 #define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
     return ir_event_edge(tstate, frame, this_instr, (SOURCE), (NEXT), (EVENT), (EDGE))
-#define IR_GEN_YIELD_AT(SITE, V) \
-    do { \
-        Py_MUSTTAIL return ir_gen_yield(tstate, frame, (SITE), (V)); \
-    } while (0)
-#define IR_GEN_COMPLETE_AT(SITE, V) \
-    do { \
-        Py_MUSTTAIL return ir_gen_complete(tstate, frame, (SITE), (V)); \
-    } while (0)
 #define IR_GEN_RETURN(V, DYING, EMPTY) \
     do { \
         Py_MUSTTAIL return ir_gen_return(tstate, frame, next_instr, (V), \
                                          (DYING), (EMPTY)); \
-    } while (0)
-#define IR_GEN_RESUME(V) \
-    do { \
-        Py_MUSTTAIL return ir_gen_resume(tstate, frame, next_instr, (V)); \
     } while (0)
 #define IR_ROUTINE(NAME, ...) \
     static Py_NO_INLINE _PyIRTransfer \
@@ -3885,11 +3876,9 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
     do { \
         Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), (V).bits); \
     } while (0)
-#define GEN_STEP_EFFECT(REMAINING, IP, V) \
-    do { \
-        Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
-                                                  (REMAINING)); \
-    } while (0)
+/* The error that a completion arm reported in the activation, for the
+ * caller to resolve */
+#define GEN_RAISED() return (_PyIRTransfer){frame, NULL}
 /* Compiled code runs the forms: it is in its unit already, and leaves it
  * at every frame switch for the driver, which finds the next frame's unit
  * itself.  So a return store tests only a pending redirect, not the
@@ -4207,9 +4196,11 @@ _PyRop_SliceFromParts(const _PyRopSpan *parts)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
-/* The routines call one another: gen_return completes a send, and a send
- * whose consumer is a return returns. */
-IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
+/* gen_return runs the completion of the word that entered the generator; the
+ * table is generated below with the register instruction arms */
+typedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,
+                                _PyIRWord *, PyValue);
+static const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS];
 #include "ceval_routines.h"
 
 #define IR_FUNCTION_FORMS
@@ -4379,15 +4370,12 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
 #pragma pop_macro("IR_REPORT_EDGE")
-#pragma pop_macro("IR_GEN_YIELD_AT")
-#pragma pop_macro("IR_GEN_COMPLETE_AT")
 #pragma pop_macro("IR_GEN_RETURN")
-#pragma pop_macro("IR_GEN_RESUME")
 #pragma pop_macro("IR_ROUTINE")
 #pragma pop_macro("IR_HOT_ROUTINE")
 #pragma pop_macro("GEN_DISPATCH")
 #pragma pop_macro("GEN_STEP_JUMP")
-#pragma pop_macro("GEN_STEP_EFFECT")
+#pragma pop_macro("GEN_RAISED")
 #pragma pop_macro("IR_JIT_EVENT_AT")
 #pragma pop_macro("IR_JIT_EVENT")
 #pragma pop_macro("IR_JIT_RESUME")
@@ -5442,47 +5430,12 @@ _PyEval_CompleteForIter(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 _PyIRStepResult
-_PyEval_CompleteSend(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     _PyInstr *site, int base, int destination,
-                     _PyInstr *exit, PyValue value)
-{
-    return complete_step_impl(tstate, frame, site, base, destination, exit,
-                              value, _PY_IR_SEND);
-}
-
-_PyIRStepResult
 _PyEval_CompleteSendThrow(PyThreadState *tstate, _PyInterpreterFrame *frame,
                           _PyInstr *site, int base, int destination,
                           _PyInstr *exit, PyValue value)
 {
     return complete_step_impl(tstate, frame, site, base, destination, exit,
                               value, _PY_IR_SEND_THROW);
-}
-
-_PyIRStepResult
-_PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
-                                _PyInterpreterFrame *frame, PyValue value)
-{
-    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-        _PyFrame_SetReturnValue(frame, value);
-        return (_PyIRStepResult){frame->return_pc, _PY_IR_STEP_EXIT};
-    }
-    _PyInstr *site = frame->instr_ptr;
-    PyCodeObject *code = _PyFrame_GetCode(frame);
-    int offset = (int)_PyFrame_InstrOffset(frame, site);
-    assert(offset >= 0 && offset < _PyCode_IRSize(code));
-    /* SEND/FOR completion uses the immutable A/B/signed-D layout, including
-     * when the executing site has a transparent instrumentation wrapper. */
-    _PyIRWord word = _PyCode_IRWords(code)[offset];
-    int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
-    assert(opcode == SEND || opcode == FOR_ITER);
-    _PyInstr *exit = frame->return_pc + IR_DS(word);
-    if (opcode == SEND) {
-        return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
-                                  exit, value, _PY_IR_SEND);
-    }
-    return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
-                              exit, value, _PY_IR_FOR_ITER);
 }
 
 static PyValue

@@ -42,7 +42,6 @@ FEEDBACK = {
     "UNPACK_SEQUENCE": ("UNARY", 24),
     "FOR_ITER": ("UNARY", 24),
     "GET_ITER": ("UNARY", 24),
-    "SEND": ("UNARY", 24),
     "BINARY_OP": ("BINARY", 32),
     "STORE_ATTR": ("ATTR", 48),
     "LOAD_SUPER_ATTR": ("ATTR", 48),
@@ -143,7 +142,7 @@ class ContractTests(unittest.TestCase):
                          {_opcode.IR_F_NO_SELF})
 
     def test_generator_completion_operand_layout(self):
-        families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER']}
+        families = {opcode.opmap['FOR_ITER']}
         # Exported base uses BaseOpcode, which retains instrumented IDs.
         # Include their positively declared canonical-family twin links.
         twins = {row.twin for row in ROWS.values()
@@ -161,7 +160,6 @@ class ContractTests(unittest.TestCase):
                                              _opcode.IR_ROLE_IMM))
                 self.assertEqual(row.imm, _opcode.IR_LOC_D)
                 self.assertTrue(row.flags & _opcode.IR_FORWARD)
-        self.assertTrue({'SEND', 'SEND_GEN'} <= selected)
 
     def test_no_result_publication_phase(self):
         # A handler stores its result in its place in the upstream order,
@@ -214,27 +212,13 @@ class ContractTests(unittest.TestCase):
                     self.assertEqual(writes - reads, expected)
                     self.assertLessEqual(through, min(reads, writes))
 
-    def test_through(self):
-        # The deepest inputs that keep their slot and their value: not an
-        # input that the body assigns or whose address it passes on
-        # (null_or_index of FOR_ITER and SEND), nor one that it replaces
-        # with its result
-        expected = {
-            "SEND": 1, "SEND_VIRTUAL": 1, "SEND_GEN": 2,
-        }
-        for name, count in expected.items():
-            for oparg in (2, 3, 7):
-                with self.subTest(name=name, oparg=oparg):
-                    self.assertEqual(extent(BY_NAME[name].through, oparg),
-                                     count)
-
     def test_window_and_fields(self):
         for h, row in ROWS.items():
             with self.subTest(handler=opcode.opname[h]):
                 roles = row.roles
                 inputs = [r - _opcode.IR_ROLE_IN0 for r in roles
                           if r >= _opcode.IR_ROLE_IN0]
-                if opcode.opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                if opcode.opname[h] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
                     self.assertEqual(row.ninputs, 3)
                     self.assertEqual(sorted(inputs), [0, 2])
                     self.assertEqual(roles[2], _opcode.IR_ROLE_NONE)
@@ -376,8 +360,6 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_CALL_KW": {"CALL", "C_RETURN", "C_RAISE"},
             "INSTRUMENTED_LINE": {"LINE"},
             "INSTRUMENTED_INSTRUCTION": {"INSTRUCTION"},
-            "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
-            "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_RESUME": {"PY_START", "PY_RESUME"},
         }
         for name, names in expected.items():
@@ -466,13 +448,7 @@ class ContractTests(unittest.TestCase):
                     self.assertNotIn(name, opcode._specialized_opmap)
                     self.assertFalse(name.startswith("INSTRUMENTED_"))
                     self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
-        suspends = {opcode.opname[row.ordinary_handler] for row in ROWS.values()
-                    if row.effects & _opcode.IR_SUSPENDS}
-        # A send to a native iterator that suspends yields its value from
-        # the outer frame, which the record states as a YIELD transfer
-        self.assertEqual(suspends, {
-                                    "SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"})
-        for name in ("CALL_KW_PY", "SEND", "SEND_GEN"):
+        for name in ("CALL_KW_PY",):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
                             name)
         for name in ("LOAD_COMMON_CONSTANT",):
@@ -771,8 +747,7 @@ class SourceScanTests(unittest.TestCase):
             if name in ops or name in macros:
                 result[h] = _scan_stack(ops, macros, name)
         names = {opcode.opname[h] for h in result}
-        self.assertLessEqual({"SEND"}, names)
-        self.assertGreater(len(result), 90)
+        self.assertGreater(len(result), 80)
         return result
 
     def test_through(self):
@@ -807,7 +782,7 @@ class SourceScanTests(unittest.TestCase):
                           extent(row.writes, oparg))
                 expected = (eval(popped[name], {"oparg": oparg}),
                             eval(pushed[name], {"oparg": oparg}))
-                if opcode.opname[row.ordinary_handler] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
+                if opcode.opname[h] in {"YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"}:
                     # Frontend YIELD_VALUE1 is normalized to three logical
                     # inputs/outputs before allocation. Its cursor dependency
                     # remains in SSA without a physical input field.

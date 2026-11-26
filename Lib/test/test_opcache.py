@@ -1711,79 +1711,6 @@ class TestSpecializer(TestBase):
 
     @cpython_only
     @requires_specialization
-    def test_send_with(self):
-        def run_async(coro):
-            while True:
-                try:
-                    coro.send(None)
-                except StopIteration:
-                    break
-
-        class CM:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                pass
-
-        async def send_with():
-            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-                async with CM():
-                    x = 1
-
-        run_async(send_with())
-        # Note there are still unspecialized "SEND" opcodes in the
-        # cleanup paths of the 'with' statement.
-        self.assert_specialized(send_with, "SEND_GEN")
-
-    @cpython_only
-    @requires_specialization
-    def test_send_yield_from(self):
-        def g():
-            yield None
-
-        def send_yield_from():
-            yield from g()
-
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-            list(send_yield_from())
-
-        self.assert_specialized(send_yield_from, "SEND_GEN")
-        self.assert_no_opcode(send_yield_from, "SEND")
-
-    @cpython_only
-    @requires_specialization
-    def test_send_yield_from_iter(self):
-        L = list(range(100))
-        def send_yield_from():
-            yield from L
-
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-            list(send_yield_from())
-
-        self.assert_specialized(send_yield_from, "SEND_VIRTUAL")
-        self.assert_no_opcode(send_yield_from, "SEND")
-
-    @cpython_only
-    @requires_specialization
-    def test_send_async_for(self):
-        async def g():
-            yield None
-
-        async def send_for():
-            async for _ in g():
-                break
-
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-            try:
-                send_for().send(None)
-            except StopIteration:
-                pass
-        self.assert_specialized(send_for, "SEND_ASYNC_GEN")
-        self.assert_no_opcode(send_for, "SEND")
-
-    @cpython_only
-    @requires_specialization
     def test_store_attr_slot(self):
         class C:
             __slots__ = ['x']
@@ -2432,7 +2359,7 @@ class TestFeedback(TestBase):
     KINDS = {
         "RESUME": "COUNTER", "JUMP_BACKWARD": "COUNTER",
         "TO_BOOL": "UNARY", "UNPACK_SEQUENCE": "UNARY", "FOR_ITER": "UNARY",
-        "GET_ITER": "UNARY", "SEND": "UNARY",
+        "GET_ITER": "UNARY",
         "BINARY_OP": "BINARY", "COMPARE_OP": "COMPARE",
         "CONTAINS_OP": "CONTAINS", "STORE_SUBSCR": "BINARY",
         "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",

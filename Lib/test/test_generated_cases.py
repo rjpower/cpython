@@ -334,177 +334,6 @@ class TestIRCases(unittest.TestCase):
         end = output.find("TARGET(", start + 1)
         return output[start:end if end >= 0 else len(output)]
 
-    def test_generator_boundary_source_closure(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-
-        def checked(text):
-            Path(self.temp_input_filename).write_text(text)
-            analysis = analyzer.analyze_files([self.temp_input_filename])
-            formats = ir_generator.compute_formats(analysis)
-            return analysis, formats, ir_generator.generator_boundaries(analysis)
-
-        analysis, formats, rows = checked(source)
-        self.assertEqual(len(rows), 30)
-        for name, row in rows.items():
-            with self.subTest(name=name):
-                self.assertTrue(ir_generator.generator_boundary_source_closed(
-                    row, analysis, formats))
-                instruction = ir_generator.handler_instructions(analysis)[name]
-                ordinary = ir_generator.all_instructions(analysis)[row.base]
-                self.assertEqual(ir_generator.monitoring_events(name, instruction),
-                                 ir_generator.monitoring_events(row.base, ordinary))
-        for before, after in (
-            # A call that no row declares is refused by the verifier of the
-            # uop's declaration; the closure holds the declaration to what a
-            # SEND may do
-            ("effects(runs_python, switches_frame) exits(next, branch, enter, raise)",
-             "effects(runs_python, switches_frame, polls) exits(next, branch, enter, raise)"),
-        ):
-            with self.subTest(mutation=before):
-                self.assertIn(before, source)
-                analysis, formats, rows = checked(source.replace(before, after, 1))
-                self.assertFalse(any(ir_generator.generator_boundary_source_closed(
-                    row, analysis, formats) for row in rows.values()))
-
-    def test_generator_boundary_placement_cohorts_and_entry(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        rows = ir_generator.generator_boundaries(analysis)
-        for cohort in ir_generator.redispatch_cohorts(analysis, formats):
-            shapes = {(rows[name].yielded, rows[name].completed, rows[name].resume)
-                      if name in rows else None for name in cohort}
-            self.assertEqual(len(shapes), 1)
-        for row in rows.values():
-            entries = {ir_generator.generator_word_entry(name, analysis)
-                       for name, other in rows.items() if other.base == row.base}
-            self.assertEqual(len(entries), 1)
-        instructions = ir_generator.handler_instructions(analysis)
-        output = io.StringIO()
-        out = CWriter(output, 0, False)
-        emitter = ir_generator.IREmitter(out, analysis, formats)
-        name = "SEND_GEN_XFER_DISCARD"
-        ir_generator.generate_handler(name, instructions[name], formats[name],
-                                      emitter, out)
-        body = output.getvalue()
-        self.assertIn("IR_GEN_JUMP(GEN_ENTRY_EFFECT", body)
-        self.assertNotIn("_Py_EnterRecursivePy(tstate)", body)
-        self.assertEqual(body.count("--tstate->py_recursion_remaining;"), 1)
-        # The handler enters the resume path, which reads the resumed
-        # frame's boundary shape from the resume table
-        self.assertIn("IR_GEN_RESUME(ir_resume_input);", body)
-        self.assertNotIn("generator_resume_targets[", body)
-        self.assertTrue(any(event.kind == "_PyIR_OWNER_NATIVE_WINDOW_OUT"
-                            for event in emitter.ownership_events))
-
-    def test_generator_native_result_preserves_virtual_cursor(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        instructions = ir_generator.handler_instructions(analysis)
-        output = io.StringIO()
-        out = CWriter(output, 0, False)
-        emitter = ir_generator.IREmitter(out, analysis, formats)
-        name = "SEND_VIRTUAL_XFER_DISCARD"
-        ir_generator.generate_handler(name, instructions[name], formats[name],
-                                      emitter, out)
-        body = output.getvalue()
-        update = body.index("next_index = PyValue_TagIndex(item.index);")
-        publish = body.index("IR_SET_TEMP(window[1], next_index);", update)
-        clear = body.index("window[2] = PyValue_NULL;", publish)
-        transfer = body.index("IR_GEN_YIELD(next);", clear)
-        self.assertLess(update, publish)
-        self.assertLess(publish, clear)
-        self.assertLess(clear, transfer)
-        self.assertNotIn("IR_SET_TEMP(window[2], next);", body)
-        self.assertNotIn("IR_MOVE_TO_DST", body)
-
-    def test_generator_provider_result_precedes_sent_input_effect(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        instructions = ir_generator.handler_instructions(analysis)
-        for name in ("SEND_XFER_DISCARD", "SEND_ASYNC_GEN_XFER_DISCARD"):
-            with self.subTest(name=name):
-                output = io.StringIO()
-                out = CWriter(output, 0, False)
-                emitter = ir_generator.IREmitter(out, analysis, formats)
-                ir_generator.generate_handler(name, instructions[name], formats[name],
-                                              emitter, out)
-                body = output.getvalue()
-                provider = body.index("_PyValue_Send(")
-                attempt = body.index("if (!_PyValue_TryXCloseNoReentry(v))", provider)
-                effect = body.index("IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT", attempt)
-                clear = body.index("window[2] = PyValue_NULL;", effect)
-                self.assertLess(provider, attempt)
-                self.assertLess(attempt, effect)
-                self.assertLess(effect, clear)
-                self.assertNotIn("PyValue_CLOSE(v);", body)
-                self.assertIn("this_instr, sent.value);", body)
-
-    def test_generator_completion_resolves_actual_source(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        instructions = ir_generator.handler_instructions(analysis)
-        for name in ("SEND_XFER_DISCARD", "SEND_VIRTUAL_XFER_DISCARD",
-                     "SEND_ASYNC_GEN_XFER_DISCARD", "CLEANUP_THROW_XFER_DISCARD"):
-            with self.subTest(name=name):
-                output = io.StringIO()
-                out = CWriter(output, 0, False)
-                emitter = ir_generator.IREmitter(out, analysis, formats)
-                ir_generator.generate_handler(name, instructions[name], formats[name],
-                                              emitter, out)
-                body = output.getvalue()
-                # The handler hands the completion value, a home, to the
-                # completion path with its own word as the source
-                guard = body.index("assert(_PyValue_IsHome(ir_completed));")
-                tail = body.index("IR_GEN_COMPLETE(ir_completed);", guard)
-                self.assertLess(guard, tail)
-                self.assertNotIn("generator_completed_targets", body)
-                self.assertNotIn("generator_site_kind(", body)
-        # The path resolves the consumer from the word at the source, which
-        # looks through a monitor's wrapper, and never from the handler
-        labels = generator_labels_source()
-        complete = labels[labels.index("IR_HOT_ROUTINE(gen_complete,"):]
-        resolve = complete.index("generator_site_kind(frame, next_instr, "
-                                 "generator_completed_targets)")
-        guard = complete.index("assert(kind != 0);", resolve)
-        self.assertLess(resolve, guard)
-        self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", labels)
-
-    def test_generator_explicit_completion_consumer_targets(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        rows = ir_generator.generator_boundaries(analysis)
-        ids = ir_generator.handler_ids(analysis)
-        output = io.StringIO()
-        ir_generator.generate_ir_targets([self.temp_input_filename], analysis, output)
-        targets = output.getvalue().split("generator_completed_targets", 1)[1].split("};", 1)[0]
-        for name, row in rows.items():
-            if row.completed not in {"STORE_FAST", "POP_TOP"}:
-                continue
-            kind = f"GEN_COMPLETE_{row.completed}"
-            if row.base == "CLEANUP_THROW":
-                kind = f"GEN_THROWING | {kind}"
-            self.assertIn(f"[{ids[name]}] = {kind},", targets)
-            self.assertIn(f"case GEN_COMPLETE_{row.completed}:",
-                          generator_labels_source())
-            self.assertEqual(ir_generator.generator_word_entry(name, analysis),
-                             ir_generator.generator_word_entry(
-                                 f"{row.base}_XFER_DISCARD", analysis))
-
     def test_inline_input_read_as_object_needs_an_assert(self):
         # No handler boxes an inline value (handlers81, H3): a uop that reads
         # an input as an object, outside a guard, declares the `object` fact
@@ -817,57 +646,6 @@ class TestIRCases(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, 'used after transfer: cursor'):
             paths(helper, 'PyValue_Borrow(iter), cursor); steal(cursor);')
 
-    def test_completion_result_local_does_not_capture_held_value(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        self.assertIn("PyValue completed =", source)
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-
-        def emitted(name):
-            output = io.StringIO()
-            out = CWriter(output, 0, False)
-            emitter = ir_generator.IREmitter(out, analysis, formats)
-            instruction = ir_generator.all_instructions(analysis)[name]
-            ir_generator.generate_handler(name, instruction,
-                                          formats[name], emitter, out)
-            return output.getvalue()
-
-        entries = {
-            "SEND": "Send", "SEND_VIRTUAL": "Send",
-            "SEND_ASYNC_GEN": "Send", "CLEANUP_THROW": "SendThrow",
-        }
-        for name, entry in entries.items():
-            with self.subTest(name=name):
-                handler = emitted(name)
-                self.assertIn("PyValue completed =", handler)
-                self.assertIn("_PyIRStepResult ir_step_result =", handler)
-                self.assertNotIn("&completed", handler)
-                self.assertNotIn("_PyEval_CompleteStep(", handler)
-                self.assertNotIn("_PyIRStepResult completed =", handler)
-                target = ("_PyFrame_InstrAt(frame, oparg)"
-                          if name == "CLEANUP_THROW" else "next_instr + oparg")
-                recipient = "" if entry == "ForIter" else "IR_A(ir_word), "
-                self.assertIn(
-                    f"_PyEval_Complete{entry}(tstate, frame, this_instr, "
-                    f"IR_B(ir_word), {recipient}{target}, completed);", handler)
-                if name == "CLEANUP_THROW":
-                    self.assertNotIn("assert(!IR_IS_LOCAL(dst)", handler)
-        for name in ("SEND_GEN",):
-            handler = emitted(name)
-            self.assertNotIn("PyValue new_frame;", handler)
-            self.assertNotIn("_PyEval_CompleteForIter(", handler)
-            self.assertNotIn("_PyEval_CompleteSend(", handler)
-
-        marker = "IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);"
-        Path(self.temp_input_filename).write_text(source.replace(
-            marker, "IR_COMPLETE_STEP(unknown_kind, completed, oparg);", 1))
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        with self.assertRaisesRegex(SyntaxError, "unsupported completion kind"):
-            emitted("FOR_ITER")
-
     def test_alias_output_meets_no_fresh_owner(self):
         # An output declared moved(x) is x itself on every path. A result
         # that takes the input on one arm and holds a new owner on another
@@ -901,79 +679,6 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(fmt.store_dst)
         self.assertFalse(fmt.no_fold)
         self.assertIn("IR_STORE_DST(ir_word, A, result);", handler)
-
-    @unittest.skip("FOR_ITER_GEN returns with the generator arms (rir90 FI, after SY)")
-    def test_generator_entry_recipient_uses_actual_terminal(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        formats = ir_generator.compute_formats(analysis)
-        for name, kind in (("SEND_GEN", "_PY_IR_SEND"),):
-            instruction = analysis.instructions[name]
-            recipe = ir_generator.generator_entry_recipe(instruction)
-            self.assertIsNotNone(recipe)
-            self.assertEqual(recipe.kind, kind)
-            with self.subTest(name=name):
-                output = io.StringIO()
-                out = CWriter(output, 0, False)
-                emitter = ir_generator.IREmitter(out, analysis, formats)
-                ir_generator.generate_handler(name, instruction, formats[name],
-                                              emitter, out)
-                handler = output.getvalue()
-                self.assertNotIn("if (IR_IS_LOCAL_FIELD(ir_word, A)", handler)
-                self.assertIn("frame->return_slot =", handler)
-                self.assertIn(f"{kind} == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word)",
-                              handler)
-                self.assertLess(handler.index("frame->return_slot ="),
-                                handler.index("frame = tstate->current_frame = ir_resumed_frame;"))
-                self.assertIn("_PyFrame_SetResumeValue(frame, ir_resume_input)", handler)
-                self.assertNotIn("_PyValue_Publish", handler)
-        instruction = analysis.instructions["FOR_ITER_GEN"]
-        recipe = ir_generator.generator_entry_recipe(instruction)
-        self.assertEqual(ir_generator.store_mode(
-            instruction, ir_generator.external_io(instruction)[1]), ir_generator.STORE_RETURN)
-        self.assertIsNone(ir_generator.generator_entry_recipe(analysis.instructions["SEND"]))
-        terminal = "IR_ENTER_GENERATOR(gen, _PY_IR_FOR_ITER);"
-        changes = (
-            (terminal, "IR_ENTER_GENERATOR(gen, _PY_IR_SEND);"),
-            (terminal, terminal + " STAT_INC(FOR_ITER, hit);"),
-            (terminal, "if (flag) { " + terminal + " }"),
-            (terminal, terminal + terminal),
-            (terminal, "opaque(); " + terminal),
-            (terminal, "frame->return_slot = 0; " + terminal),
-        )
-        # Use the real parsed body text so token spacing cannot hide a suffix.
-        original = source[source.index("op(_FOR_ITER_GEN_FRAME"):
-                          source.index("macro(FOR_ITER_GEN)")]
-        original = original[original.index("{"):original.rindex("}") + 1]
-        for old, new in changes:
-            with self.subTest(change=new):
-                changed = source.replace(original, original.replace(old, new), 1)
-                Path(self.temp_input_filename).write_text(changed)
-                mutated = analyzer.analyze_files([self.temp_input_filename])
-                self.assertIsNone(ir_generator.generator_entry_recipe(
-                    mutated.instructions["FOR_ITER_GEN"]))
-        renamed = re.sub(r"\bgen\b", "child", original)
-        Path(self.temp_input_filename).write_text(source.replace(original, renamed, 1))
-        mutated = analyzer.analyze_files([self.temp_input_filename])
-        self.assertEqual(ir_generator.generator_entry_recipe(
-            mutated.instructions["FOR_ITER_GEN"]).generator, "child")
-        with mock.patch.object(recipe.part.stack.outputs[0], "name", "changed"):
-            self.assertIsNone(ir_generator.generator_entry_recipe(instruction))
-        guard = next(part for part in instruction.parts
-                     if isinstance(part, analyzer.Uop) and part is not recipe.part)
-        for prefix in ("frame->return_slot = 0;", "opaque();",
-                       "next_instr = this_instr;", "PyValue *alias = slots;"):
-            with self.subTest(prefix=prefix):
-                parsed = ir_generator.Parser(
-                    "{" + prefix + " DEOPT_IF(IS_PEP523_HOOKED(tstate));}",
-                    "<entry prefix>").block()
-                with mock.patch.object(guard, "body", parsed):
-                    self.assertIsNone(ir_generator.generator_entry_recipe(instruction))
-        # Guard-only inspection must not grant an ordinary error-route summary.
-        guard_instruction = ir_generator.replace(instruction, parts=[guard])
-        self.assertIsNone(ir_generator.analyze_error_effects(guard_instruction))
 
     def test_the_guarded_call_prefix_is_declared(self):
         # The binding plan relies on the callable's declared facts and on
@@ -1036,40 +741,6 @@ class TestIRCases(unittest.TestCase):
             with self.assertRaisesRegex(SyntaxError, "unclassified window output"):
                 ir_generator.handler_output_kind(
                     analysis.instructions["PUSH_EXC_INFO"], formats["PUSH_EXC_INFO"])
-
-    def test_generator_resume_commits_before_input_disposal(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-        Path(self.temp_input_filename).write_text(source)
-        analysis = analyzer.analyze_files([self.temp_input_filename])
-        for name in ("FOR_ITER", "SEND"):
-            self.assertTrue(analysis.instructions[name].properties.jumps)
-            self.assertTrue(analysis.instructions[name].properties.error_without_pop)
-        # The stack instruction falls through; the IR word's jump exit is
-        # declared by IR_EXIT
-        self.assertFalse(analysis.instructions["CLEANUP_THROW"].properties.jumps)
-        throw_format = ir_generator.compute_formats(analysis)["CLEANUP_THROW"]
-        self.assertTrue(throw_format.jump_always)
-        self.assertFalse(throw_format.names_target)
-        self.assertEqual(throw_format.imm, ir_generator.LOC_CD)
-        self.assertTrue(analysis.instructions["RETURN_VALUE"].properties.always_exits)
-        output = io.StringIO()
-        ir_generator.generate_ir(
-            [self.temp_input_filename], analysis, output, False)
-        for name in ("SEND", "SEND_GEN"):
-            with self.subTest(name=name):
-                handler = self.handler(output.getvalue(), name)
-                self.assertEqual(handler.count("_Py_EnterRecursivePy(tstate)"), 1)
-                self.assertNotIn("py_recursion_remaining--", handler)
-                entered = handler.index("frame = tstate->current_frame = ir_resumed_frame;")
-                consumed = handler.index("_PyFrame_SetResumeValue(frame, ir_resume_input);")
-                self.assertLess(entered, consumed)
-                if name != "FOR_ITER_GEN":
-                    detached = handler.index("IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;")
-                    self.assertLess(detached, entered)
-        handler = self.handler(output.getvalue(), "CLEANUP_THROW")
-        self.assertIn("_PyFrame_InstrAt(frame, oparg)", handler)
-        self.assertNotIn("next_instr + oparg", handler)
 
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
@@ -3408,7 +3079,7 @@ class TestIRCases(unittest.TestCase):
             "LOAD_COMMON_CONSTANT": "FRESH",
             "STORE_FAST": "LOCAL_STORE",
             "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE",
-            "CALL_KW": "UNKNOWN", "SEND": "UNKNOWN",
+            "CALL_KW": "UNKNOWN",
         }
         for name, kind in expected.items():
             with self.subTest(handler=name):
@@ -3758,7 +3429,7 @@ class TestCallMarkers(unittest.TestCase):
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
         # A floor, not a count: ported families delete old handlers
-        self.assertGreater(len(handlers), 120)
+        self.assertGreater(len(handlers), 100)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))
@@ -3767,16 +3438,6 @@ class TestCallMarkers(unittest.TestCase):
             self.assertIn(f"\nir_{name}(\n", forms)
         self.assertIsNone(re.search(
             r"\bgoto\b|\bLABEL_\w+|\blastopcode\b", forms))
-
-    def test_send_completion_events_without_instrumented_twin(self):
-        output = io.StringIO()
-        ir_metadata_generator.generate_ir_metadata(
-            [str(ir_generator.DEFAULT_INPUT)], self.analysis, output)
-        row = next(line for line in output.getvalue().splitlines()
-                   if line.lstrip().startswith("[SEND] = "))
-        self.assertIn(".twin = 0", row)
-        self.assertIn("(1u << PY_MONITORING_EVENT_BRANCH_LEFT)", row)
-        self.assertIn("(1u << PY_MONITORING_EVENT_STOP_ITERATION)", row)
 
     def test_real_callout_and_transfer_properties(self):
         for name in ("_MAYBE_EXPAND_METHOD_KW", "_MONITOR_CALL_KW",
@@ -3837,27 +3498,9 @@ class TestCallMarkers(unittest.TestCase):
         # generator emits.  No handler keeps a value record or a box area.
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
-        self.assertGreater(len(sites), 130)
+        self.assertGreater(len(sites), 100)
         for name, found in sites.items():
             self.assertEqual(found, [], name)
-
-    def test_forward_distance_is_signed(self):
-        # A forward distance has 12 bits and a sign (register-ir-v2 section
-        # 4.3).  _PyCode_InstrOparg, dis and the generated handlers decode
-        # the same value, so a handler never reads the field as unsigned.
-        _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
-        bodies = dict(re.findall(
-            r"TARGET\((\w+)\) \{(.*?)(?=\n        TARGET\()", rest, re.S))
-        checked = 0
-        for name, body in bodies.items():
-            if name.startswith(("FOR_ITER", "SEND", "INSTRUMENTED_FOR_ITER",
-                                "INSTRUMENTED_SEND")):
-                with self.subTest(handler=name):
-                    self.assertNotIn("(int)IR_D(ir_word)", body)
-                    if "int oparg" in body:
-                        self.assertIn("int oparg = IR_DS(ir_word);", body)
-                        checked += 1
-        self.assertGreater(checked, 5)
 
     def test_generated_address_sites(self):
         # The check of the generated output sees an address in a

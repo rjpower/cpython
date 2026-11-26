@@ -126,8 +126,7 @@ class HandlerRecordTests(unittest.TestCase):
         # so the generator's guards precede it (contract87 TR)
         self.assertNotHasAttr(ir_records, "GUARD_ORDER_EXCEPTIONS")
         instructions = ir_generator.handler_instructions(analysis)
-        for name in ("SEND_GEN", "CALL_KW_BOUND_METHOD",
-                     "CALL_KW_PY", "CALL_EX_PY"):
+        for name in ("CALL_KW_BOUND_METHOD", "CALL_KW_PY", "CALL_EX_PY"):
             with self.subTest(handler=name):
                 parts = [p for p in instructions[name].parts
                          if isinstance(p, cases.analyzer.Uop)]
@@ -154,22 +153,6 @@ class HandlerRecordTests(unittest.TestCase):
         self.assertIn((ir_records.JUMP, "self"), transfers("UNPACK_SEQUENCE"))
         # The monitor runs the word with the handler that it chose
         self.assertIn((ir_records.JUMP, "self:handler"), transfers("INSTRUMENTED_INSTRUCTION"))
-
-    def test_native_send_yields(self):
-        # A send to a native iterator that suspends yields from the outer
-        # frame where the handler would fall through; a send to a generator
-        # always enters its frame
-        for consumer in ("DISCARD", "STORE_LOCAL", "RETURN", "HOME"):
-            for handler in ("SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"):
-                last = records[f"{handler}_XFER_{consumer}"].uops[-1].transfers[-1]
-                self.assertEqual((last.kind, last.target), (ir_records.YIELD, "delegated"))
-            uops = records[f"SEND_GEN_XFER_{consumer}"].uops
-            kinds = [t.kind for u in uops for t in u.transfers]
-            self.assertNotIn(ir_records.YIELD, kinds)
-            # The last uop enters, and nothing runs after it in this frame
-            last = {t.kind for t in uops[-1].transfers}
-            self.assertIn(ir_records.ENTER_FRAME, last)
-            self.assertNotIn(ir_records.NEXT, last)
 
 
 # The stand-in of the base handler OP: a function that reads its argument

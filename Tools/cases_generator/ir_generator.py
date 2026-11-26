@@ -86,8 +86,6 @@ from ir_records import (
     uop_record_effects, passed_through, record_through,
     site_tokens, uop_transfers, walk_values,
 )
-# The exits of the generator-boundary variants (boundary_departure())
-from ir_records import BRANCH, RAISE, RETURN
 # The jumps that a stub binds (check_stub_arm())
 from ir_records import JUMP, TRANSFER_TOKENS
 from ir_read_effects import (
@@ -198,218 +196,8 @@ class ExecutionVariant:
 EXECUTION_VARIANTS: dict[str, ExecutionVariant] = {}
 
 
-@dataclass(frozen=True)
-class GeneratorBoundary:
-    base: str
-    # Where the variant departs (analyzer.Boundary.at), as its clause states
-    at: str
-    # The completion its consumer completes (analyzer.Boundary.completion)
-    completion: str
-    yielded: str = "NONE"
-    completed: str = "NONE"
-    resume: str = "NONE"
-    # The exits that the boundary(...) clause declares for the completion
-    # of the variant (completed is not NONE)
-    exits: tuple[str, ...] = ()
-
-
-# The arms of the generator completion routine (gen_complete,
-# Python/ceval_routines.h), by the consumer that a completing variant
-# fuses, with the exits each arm takes: RETURN returns from the frame in
-# turn, the others continue at the source's exit (its branch target).
-# Each may raise.  A variant's boundary(...) clause declares these exits;
-# the generator checks the clause against the arm (check_boundary_expansion()).
-GENERATOR_COMPLETIONS = {
-    "STORE_LOCAL": ("GEN_COMPLETE_STORE", ("branch", "raise")),
-    "RETURN": ("GEN_COMPLETE_RETURN", ("return", "raise")),
-    "DISCARD": ("GEN_COMPLETE_DISCARD", ("branch", "raise")),
-    "HOME": ("GEN_COMPLETE_HOME", ("branch", "raise")),
-    "STORE_FAST": ("GEN_COMPLETE_STORE_FAST", ("branch", "raise")),
-    "POP_TOP": ("GEN_COMPLETE_POP_TOP", ("branch", "raise")),
-}
-
-# The completion step that a variant's completion(...) names: the kind of
-# its departing uop's IR_COMPLETE_STEP.  A throw's completion continues at
-# the word's exit (GEN_THROWING in the completed table).
-GENERATOR_COMPLETION_KINDS = {"send": "_PY_IR_SEND", "throw": "_PY_IR_SEND_THROW"}
-
-
-def generator_boundaries(analysis: Analysis) -> dict[str, GeneratorBoundary]:
-    """The generator-boundary variants SOURCE_XFER_CONSUMER, one per consumer
-    that the boundary(...) clause of the source, or of its family's head,
-    declares (Python/bytecodes.c).  A member's own clause replaces its
-    family's and may differ from it only in at(...)."""
-    result = {}
-    for name, inst in all_instructions(analysis).items():
-        clause = analysis.boundaries.get(name)
-        family = (analysis.boundaries.get(inst.family.name)
-                  if inst.family is not None and inst.family.name != name else None)
-        if clause is None:
-            clause = family
-        elif family is not None and (
-                (clause.yields, clause.completion, clause.completes, clause.resumes) !=
-                (family.yields, family.completion, family.completes, family.resumes)):
-            raise analysis_error(f"boundary({name}) may differ from its family's "
-                                 f"boundary({family.source}) only in at(...)", clause.where)
-        if clause is None:
-            continue
-        if bool(clause.completes) == bool(clause.resumes):
-            raise analysis_error(f"boundary({clause.source}) declares either "
-                                 "completes(...) or resumes(...)", clause.where)
-        if clause.yields != "NONE" and not clause.completes:
-            raise analysis_error(f"boundary({clause.source}): a delegated yield "
-                                 "needs completes(...)", clause.where)
-        for consumer, exits in clause.completes.items():
-            if consumer not in GENERATOR_COMPLETIONS:
-                raise analysis_error(f"boundary({clause.source}): {consumer} has no "
-                                     "arm in the completion routine", clause.where)
-            result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
-                name, clause.at, clause.completion, clause.yields, consumer, exits=exits)
-    return result
-
-
-def boundary_departure(uop: UopRecord, boundary: GeneratorBoundary,
-                       where: Token) -> UopRecord:
-    """The departing (last) uop of a generator-boundary variant, with the
-    exits its boundary(...) clause declares: a delegated yield takes the
-    place of its fall-through, and a completion that returns takes the
-    place of its branches, which run the consumer.  That every branch is a
-    completion is checked against the lowered completions, not assumed
-    (check_boundary_expansion()).  A variant that departs at(enter) yields
-    and completes in the frame that it enters, and its uop keeps its
-    exits."""
-    transfers = uop.transfers
-    if boundary.at == "enter":
-        if not any(t.kind == ENTER_FRAME for t in transfers):
-            raise analysis_error(f"{uop.name}: at(enter) needs the departing "
-                                 "uop's enter", where)
-        return uop
-    if boundary.yielded == "DELEGATED":
-        if not transfers or transfers[-1] != Transfer(NEXT):
-            raise analysis_error(f"{uop.name}: a delegated yield needs the "
-                                 "departing uop's fall-through", where)
-        transfers = transfers[:-1] + (Transfer(YIELD, None, "delegated"),)
-    if boundary.completed != "NONE":
-        if not any(t.kind == BRANCH for t in transfers):
-            raise analysis_error(f"{uop.name}: a completion needs the departing "
-                                 "uop's branch", where)
-        if "return" in boundary.exits and "branch" not in boundary.exits:
-            transfers = tuple(replace(t, kind=RETURN) if t.kind == BRANCH else t
-                              for t in transfers)
-    return replace(uop, transfers=transfers)
-
-
-# The exit of each transfer kind that a variant's expansion may reach
-BOUNDARY_EXIT_KINDS = {"yield": YIELD, "return": RETURN, "branch": BRANCH,
-                       "raise": RAISE, "enter": ENTER_FRAME}
-
-
-def check_boundary_expansion(name: str, boundary: GeneratorBoundary,
-                             record: OperationRecord, reached: set[str],
-                             completions: list[tuple[Token, str]],
-                             where: Token) -> None:
-    """VT1 and VT3 over the expansion of a generator-boundary variant: the
-    exits that its emitted body reaches (reached: IR_GEN_YIELD, the yield
-    effect, IR_GEN_RESUME, and IR_GEN_COMPLETE as "complete"), with the
-    completion arm of its consumer for "complete", are each an exit of
-    its record, and each exit that its boundary(...) clause adds is
-    reached.  Lowering grants nothing.  A variant that departs at(enter)
-    reaches its enter and nothing that the clause adds.
-
-    completions are the generator completions that the body lowers, each
-    IR_COMPLETE_STEP's token and kind.  Each is of the kind that the
-    clause's completion(...) names, and the departing uop's completion
-    transfers (boundary_departure()) are exactly at these sites: a branch
-    of any other kind is refused, not taken for a completion."""
-    if boundary.at == "enter":
-        if reached != {"enter"}:
-            raise analysis_error(f"{name}: departs at(enter), and its expansion "
-                                 f"reaches {sorted(reached)}", where)
-    exits = set(reached - {"complete"})
-    if "complete" in reached:
-        if boundary.completed == "NONE":
-            raise analysis_error(f"{name}: its expansion completes, and its "
-                                 "boundary(...) clause declares no completes(...)", where)
-        exits.update(GENERATOR_COMPLETIONS[boundary.completed][1])
-        omitted = set(GENERATOR_COMPLETIONS[boundary.completed][1]) - set(boundary.exits)
-        if omitted:
-            raise analysis_error(f"{name}: its expansion reaches {sorted(omitted)}, "
-                                 "which its boundary(...) clause omits", where)
-    for tkn, kind in completions:
-        if kind != GENERATOR_COMPLETION_KINDS.get(boundary.completion):
-            raise analysis_error(f"{name}: completes with {kind}, and its boundary(...) "
-                                 f"clause declares completion({boundary.completion})", tkn)
-    if boundary.at == "last" and boundary.completed != "NONE":
-        sites = {id(tkn) for tkn, _ in completions}
-        for t in record.uops[-1].transfers:
-            if t.kind in (BRANCH, RETURN) and (t.site is None or id(t.site) not in sites):
-                line = t.site.line if t.site is not None else "?"
-                raise analysis_error(f"{name}: {record.uops[-1].name}'s {t.kind.lower()} "
-                                     f"at line {line} is no generator completion", where)
-    kinds = {t.kind for uop in record.uops for t in uop.transfers}
-    for exit in sorted(exits):
-        if BOUNDARY_EXIT_KINDS[exit] not in kinds:
-            raise analysis_error(f"{name}: its expansion reaches `{exit}`, which "
-                                 "its boundary(...) clause omits", where)
-    declared = set(boundary.exits) if boundary.at == "last" else set()
-    if boundary.yielded != "NONE" and boundary.at == "last":
-        declared.add("yield")
-    unreached = declared - exits
-    if unreached:
-        raise analysis_error(f"{name}: its boundary(...) clause declares "
-                             f"{sorted(unreached)}, which its expansion never reaches", where)
-
-
-def generator_word_entry(name: str, analysis: Analysis) -> str:
-    """Shape identities share a WORD body without an adapter tail hop."""
-    boundaries = generator_boundaries(analysis)
-    boundary = boundaries.get(name)
-    if boundary is None:
-        return name
-    if boundary.resume != "NONE":
-        return boundary.base
-    return min(key for key, row in boundaries.items() if row.base == boundary.base)
-
-
-def generator_boundary_source_closed(boundary: GeneratorBoundary,
-                                     analysis: Analysis,
-                                     formats: dict[str, "IRFormat"]) -> bool:
-    """Only complete audited sources may publish an executable shape."""
-    insts = all_instructions(analysis)
-    resume = insts.get("RESUME")
-    # The yield-from loop's jump is a Jump word (Jump.Direct), whose source
-    # the family's rows hold; no handler of the stack op remains to audit.
-    if resume is None or normal_transfer_kind(
-            resume, formats["RESUME"]) != "_PyIR_TRANSFER_PRESERVE":
-        return False
-    # A new family member without the same source contract closes no shape;
-    # eligibility is never recovered by declining its specialization later.
-    send_members = [inst for name, inst in insts.items()
-                    if name == "SEND" or inst.family is not None and
-                    inst.family.name == "SEND"]
-    if not send_members or any(send_source_contract(inst, formats[inst.name]) is None
-                               for inst in send_members):
-        return False
-    inst = insts[boundary.base]
-    fmt = formats[boundary.base]
-    if boundary.resume != "NONE":
-        return (canonical_frame_transfer_input(inst) or abrupt_suspend_contract(inst, fmt)
-                or metadata_only_passthroughs(inst) == frozenset({1}))
-    # A native send's source, or a completion's: the structure of the
-    # source, not its clause, decides (check_boundary_expansion() then
-    # holds the clause to what the source reaches)
-    if send_source_contract(inst, fmt) is not None:
-        return True
-    # The existing typed completion marker owns its canonical argument and
-    # checks the complete four-input retirement window.
-    return (fmt.window and fmt.field_of(ROLE_DST) == "A" and
-            fmt.field_of(ROLE_BASE) == "B" and len(external_io(inst)[0]) == 4 and
-            sum(token.text == "IR_COMPLETE_STEP" for token in uop_token_list(inst)) == 1)
-
-
 def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
     """Intersect only bodies selectable with the same physical entry."""
-    boundaries = generator_boundaries(analysis)
     # A family's baseline(...) arm is compiled code's, never a word's
     # handler: no word redispatches to it
     baselines = {family.baseline for family in analysis.families.values()}
@@ -417,10 +205,7 @@ def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
     for name in handler_instructions(analysis):
         if name in baselines:
             continue
-        boundary = boundaries.get(name)
-        shape = None if boundary is None else (
-            boundary.yielded, boundary.completed, boundary.resume)
-        groups.setdefault((formats[name].group, shape), []).append(name)
+        groups.setdefault(formats[name].group, []).append(name)
     return groups.values()
 
 
@@ -463,7 +248,6 @@ def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
 
 
 def canonical_handler(name: str) -> str:
-    name = name.split("_XFER_", 1)[0]
     variant = EXECUTION_VARIANTS.get(name)
     return variant.base if variant is not None else name
 
@@ -845,7 +629,6 @@ OBJECT_READERS = {
     "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
     "Py_TYPE",
-    "PyCoro_CheckExact", "PyGen_Check",
     "PyUnicode_CheckExact",
     "_PyObject_GetManagedDict", "_PyObject_InlineValues",
     "_PyObject_Shape", "_PyObject_ValueSlot",
@@ -1278,7 +1061,8 @@ STACK_ONLY = ("RETURN_GENERATOR", "CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
               "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER",
               "INSTRUMENTED_FOR_ITER", "INSTRUMENTED_END_FOR",
-              "INSTRUMENTED_POP_ITER")
+              "INSTRUMENTED_POP_ITER", "SEND", "INSTRUMENTED_SEND", "END_SEND",
+              "INSTRUMENTED_END_SEND")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -1292,8 +1076,7 @@ IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
 def ir_only_handler_names(analysis: Analysis) -> list[str]:
     "The IR-only handlers, in the order that numbers them"
     return (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-            + list(execution_variants(analysis))
-            + sorted(generator_boundaries(analysis)))
+            + list(execution_variants(analysis)))
 
 
 def ir_only_numbers(analysis: Analysis, names: list[str]) -> list[int]:
@@ -1347,8 +1130,6 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
     for name, variant in execution_variants(analysis).items():
         if variant.base in result:
             result[name] = result[variant.base]
-    for name, boundary in generator_boundaries(analysis).items():
-        result[name] = result[boundary.base]
     return result
 
 
@@ -1973,7 +1754,7 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
                 nulls.discard(texts[0])
         if not markers:
             exits = texts and texts[0] in {
-                "ERROR_NO_POP", "IR_COMPLETE_STEP", "IR_RETURN_TO_CALLER", "DISPATCH",
+                "ERROR_NO_POP", "IR_COMPLETE_STEP", "DISPATCH",
                 "DISPATCH_REDIRECT"}
             if exits and deferred:
                 raise analysis_error("deferred owner exits before terminal observer", tokens[0])
@@ -2435,8 +2216,6 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
                 or set(variant.local_fields) & set(variant.temp_fields)):
             raise ValueError(f"invalid operand modes for {name}")
         formats[name] = fmt
-    for name, boundary in generator_boundaries(analysis).items():
-        formats[name] = formats[boundary.base]
     return formats
 
 
@@ -3463,11 +3242,6 @@ class IREmitter(Emitter):
         self.error_uncovered = True
         self.error_finalized = False
         self.error_local_dst = False
-        self.generator_boundary = None
-        # The exits that a generator-boundary variant's body reaches, and
-        # the completions it lowers (IR_COMPLETE_STEP's token and kind)
-        self.boundary_reached: set[str] = set()
-        self.boundary_completions: list[tuple[Token, str]] = []
         self.send_source_parts = None
         self.error_redispatch_origin = None
         self.error_checkpoint_sites = {}
@@ -3506,7 +3280,6 @@ class IREmitter(Emitter):
         for marker in committed_markers():
             self._replacers[marker] = self.observe_committed_branch
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
-        self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
         self._replacers["IR_FINISH_GENERATOR_RETURN"] = self.finish_generator_return
         self._replacers["IR_FINISH_GENERATOR_RETURN_EMPTY"] = self.finish_generator_return
         self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
@@ -4977,24 +4750,6 @@ class IREmitter(Emitter):
                         ) -> tuple[bool, Token | None, Storage]:
         """A statement that kills an input, as DEAD(), a close or a steal,
         gives up its slot"""
-        if (self.generator_boundary is not None and
-                self.send_source_parts is not None and
-                uop is self.send_source_parts[-1] and
-                _statement_text(stmt) == ["PyValue_CLOSE", "(", "v", ")", ";"]):
-            # The complete source contract proves sent.value is the owned
-            # successful provider result and that all other state is homed.
-            # A failed Try leaves v intact for the rooted effect entry.
-            self.emit("if (!_PyValue_TryXCloseNoReentry(v)) {\n")
-            self.emit("assert(_PyValue_IsHome(sent.value));\n")
-            self.emit("IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, "
-                      "this_instr, sent.value);\n")
-            self.emit("}\n")
-            self.boundary_reached.add("yield")
-            self.emit("window[2] = PyValue_NULL;\n")
-            self.value_kill(next(token for token in stmt.contents if token.text == "v"),
-                            storage, False)
-            storage.stack.home_node = None
-            return True, None, storage
         if not any(token.text in {"IR_GUARD_SHAPE_READ", "IR_DUP_SHAPE_READ"}
                    for token in stmt.contents):
             storage.stack.shape_read_binding = None
@@ -5550,17 +5305,6 @@ class IREmitter(Emitter):
         self.emit("{\n")
         target = (f"_PyFrame_InstrAt(frame, {distance})" if kind == "_PY_IR_SEND_THROW"
                   else f"next_instr + {distance}")
-        if self.generator_boundary is not None and kind in {"_PY_IR_SEND", "_PY_IR_SEND_THROW"}:
-            self.emit(f"PyValue ir_completed = {value};\n")
-            self.emit("assert(_PyValue_IsHome(ir_completed));\n")
-            self.emit("IR_GEN_COMPLETE(ir_completed);\n")
-            self.emit("}\n")
-            self.boundary_reached.add("complete")
-            self.boundary_completions.append((tkn, kind))
-            self.abrupt_operand_sources.add(id(tkn))
-            self.error_terminal_sources.add(id(tkn))
-            self.error_finalized = True
-            return False
         recipient = "" if kind == "_PY_IR_FOR_ITER" else f"{dst}, "
         self.emit(f"_PyIRStepResult ir_step_result = {entries[kind]}(tstate, frame, this_instr, {base}, {recipient}{target}, {value});\n")
         self.emit("next_instr = ir_step_result.next;\n")
@@ -5597,23 +5341,6 @@ class IREmitter(Emitter):
             raise analysis_error("generator return needs canonical source transfer", tkn)
         empty = 1 if tkn.text.endswith("_EMPTY") else 0
         self.emit(f"IR_GEN_RETURN({value}, {dying}, {empty});\n")
-        return False
-
-    def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
-        """Terminal transfer; the retired child has no fictitious output."""
-        value, generator_return = self.macro_args(tkn, tkn_iter, 2)
-        self.emit(f"assert(_PyValue_IsHome({value}));\n")
-        self.emit(f"if ({generator_return}) {{\n")
-        self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
-        self.emit("next_instr = ir_step_result.next;\n")
-        self.emit("if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
-        self.emit("}\n")
-        self.emit("else {\n")
-        self.emit("next_instr = frame->return_pc;\n")
-        self.emit(f"IR_STORE_RETURN({value});\n")
-        self.emit("}\n")
-        self.emit("LLTRACE_RESUME_FRAME();\n")
-        self.emit("DISPATCH();\n")
         return False
 
     def enter_generator(self, tkn, tkn_iter, uop, storage, inst):
@@ -5653,25 +5380,16 @@ class IREmitter(Emitter):
         self.emit(f"{gen}->gi_exc_state.previous_item = tstate->exc_info;\n")
         self.emit(f"tstate->exc_info = &{gen}->gi_exc_state;\n")
         self.emit("frame = tstate->current_frame = ir_resumed_frame;\n")
-        if self.generator_boundary is not None:
-            self.emit("if (tstate->py_recursion_remaining <= 1) {\n")
-            self.emit("IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, "
-                      "frame->instr_ptr, ir_resume_input);\n")
-            self.emit("}\n")
-            self.emit("--tstate->py_recursion_remaining;\n")
-            self.emit("IR_GEN_RESUME(ir_resume_input);\n")
-            self.boundary_reached.add("enter")
-        else:
-            self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
-            self.emit("PyValue_XCLOSE(ir_resume_input);\n")
-            self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
-            self.emit("}\n")
-            self.emit("_PyFrame_SetResumeValue(frame, ir_resume_input);\n")
-            self.emit("LOAD_IP(0);\n")
-            self.emit("IR_SKIP_RESUME();\n")
-            self.emit("DTRACE_FUNCTION_ENTRY();\n")
-            self.emit("LLTRACE_RESUME_FRAME();\n")
-            self.emit("DISPATCH();\n")
+        self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
+        self.emit("PyValue_XCLOSE(ir_resume_input);\n")
+        self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
+        self.emit("}\n")
+        self.emit("_PyFrame_SetResumeValue(frame, ir_resume_input);\n")
+        self.emit("LOAD_IP(0);\n")
+        self.emit("IR_SKIP_RESUME();\n")
+        self.emit("DTRACE_FUNCTION_ENTRY();\n")
+        self.emit("LLTRACE_RESUME_FRAME();\n")
+        self.emit("DISPATCH();\n")
         self.emit("}\n")
         # The entered heap frame cannot overlap the parent's values. Its
         # failed entry/return retires the child before error re-enters parent.
@@ -5836,31 +5554,15 @@ def reads_fb_arg(inst: Instruction, fmt: IRFormat, operation: str | None) -> boo
             and operation is None)
 
 
-def closed_generator_boundary(name: str, analysis: Analysis,
-                              formats: dict[str, IRFormat]) -> GeneratorBoundary | None:
-    "The generator boundary shape of handler name, if its source is closed"
-    boundary = generator_boundaries(analysis).get(name)
-    if boundary is not None and not generator_boundary_source_closed(
-            boundary, analysis, formats):
-        return None
-    return boundary
-
-
-def deopt_target(inst: Instruction, boundary: GeneratorBoundary | None,
-                 analysis: Analysis) -> str:
+def deopt_target(inst: Instruction, analysis: Analysis) -> str:
     """Where a failed guard of inst goes: the handler of the operation that
-    the entry records for BINARY_OP, the generic shape of a generator
-    boundary, or the family head; "" if inst has no family"""
+    the entry records for BINARY_OP, or the family head; "" if inst has no
+    family"""
     if inst.family is None:
         return ""
     family = inst.family.name
     if family == BINARY_OP_FAMILY:
         return "BINARY_OP_BY_ENTRY"
-    if boundary is not None:
-        head = f"{family}_XFER_{boundary.completed}"
-        if head not in generator_boundaries(analysis):
-            return "GENERATOR_SHAPE()"
-        return f"GENERATOR_SHAPE({generator_word_entry(head, analysis)})"
     if inst.name in analysis.ir_only:
         return f"IR_ONLY_HEAD({family})"
     return f"FAMILY_HEAD({family})"
@@ -6025,9 +5727,8 @@ def implicit_object_guards(walk, index: int, uop: Uop, known: set[int]) -> list[
 def build_record(name: str, inst: Instruction, fmt: IRFormat,
                  analysis: Analysis, formats: dict[str, IRFormat]) -> OperationRecord:
     "The record of handler name, which runs inst in a word of format fmt"
-    boundary = closed_generator_boundary(name, analysis, formats)
     operation = None
-    if name != inst.name and name not in EXECUTION_VARIANTS and boundary is None:
+    if name != inst.name and name not in EXECUTION_VARIANTS:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     oparg = oparg_source(inst, fmt, operation)
     walk = walk_values(inst)
@@ -6047,7 +5748,7 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
                          temp_fields=variant.temp_fields)
     schema = (feedback_schema(fmt.group, fmt.fb_layout)
               if fmt.fb_layout is not None else None)
-    deopt = deopt_target(inst, boundary, analysis)
+    deopt = deopt_target(inst, analysis)
     uops = []
     known: set[int] = set()
     for index, (part, inputs, outs) in enumerate(walk.uops):
@@ -6069,8 +5770,6 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
                               transfers + uop_transfers(part, deopt), uop_record_effects(part),
                               ir_contract.record_results(part, outs),
                               "pure" in part.annotations, leaf))
-    if boundary is not None:
-        uops[-1] = boundary_departure(uops[-1], boundary, inst.where)
     results = []
     for j, (value, external, item, _) in enumerate(walk.outputs):
         if external >= 0 and walk.values[value].external >= 0:
@@ -6093,7 +5792,7 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
         uses_feedback=fmt.fb != LOC_NONE and (
             uses_feedback(inst) or reads_fb_arg(inst, fmt, operation)),
         operation=operation, oparg=oparg, call=call,
-        generator_boundary=boundary, deopt=deopt,
+        deopt=deopt,
         inputs=tuple(walk.inputs), outputs=tuple(walk.outputs),
         polls=(any(part.properties.eval_breaker for part, _, _ in walk.uops)
                or polls_at_end(name, inst)),
@@ -6117,8 +5816,6 @@ def build_records(analysis: Analysis,
             record = replace(record, form=f"EVENT_TWIN({EVENT_TWINS[name][1]})")
         elif name in shared:
             record = replace(record, form="SHARED_BODY(binary_op)")
-        elif generator_word_entry(name, analysis) != name:
-            record = replace(record, form=f"SHARED_BODY({generator_word_entry(name, analysis)})")
         check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
         ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
         fmt = formats[name]
@@ -6812,14 +6509,6 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
     emitter.execution_variant = EXECUTION_VARIANTS.get(name)
-    boundary = generator_boundaries(emitter.analysis).get(name)
-    if boundary is not None:
-        if fmt.group == "SEND" and send_source_contract(inst, fmt) is None:
-            raise analysis_error("generator boundary needs the complete SEND source contract", inst.where)
-        if boundary.resume != "NONE" and not (
-                canonical_frame_transfer_input(inst) or abrupt_suspend_contract(inst, fmt)
-                or metadata_only_passthroughs(inst) == frozenset({1})):
-            raise analysis_error("generator boundary needs checked yield transport", inst.where)
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     if any(token.text in ELEMENT_INTRINSICS
            for part in parts for token in part.body.tokens()):
@@ -6860,39 +6549,23 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         raise analysis_error(f"{name}: departs its frame, and the emitter printed no "
                              "IR_PIN_DEPARTING() before its departing uop", inst.where)
     emitter.pin_at = None
-    if record.generator_boundary is not None:
-        check_boundary_expansion(name, record.generator_boundary, record,
-                                 emitter.boundary_reached,
-                                 emitter.boundary_completions, inst.where)
     check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
     ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
 
 
-def arm_departs(inst: Instruction, boundary: GeneratorBoundary | None) -> bool:
+def arm_departs(inst: Instruction) -> bool:
     """Whether the arm departs its frame by a return or a yield: one of its
-    uops declares the exit, or its boundary(...) clause does (a delegated
-    yield, or a consumer whose completion returns).  A variant that departs
-    at(enter) leaves through the frame that it enters, whose arms pin."""
-    if any(ir_contract.declared_contract(part).exits & ir_contract.DEPARTING_EXITS
-           for part in inst.parts if isinstance(part, Uop)):
-        return True
-    if boundary is None or boundary.at == "enter":
-        return False
-    return boundary.yielded != "NONE" or "return" in boundary.exits
+    uops declares the exit"""
+    return any(ir_contract.declared_contract(part).exits & ir_contract.DEPARTING_EXITS
+               for part in inst.parts if isinstance(part, Uop))
 
 
 def pin_point(name: str, inst: Instruction, analysis: Analysis) -> int | None:
     """The uop of handler `name` before whose body the arm pins the code of
     the frame it departs (IR_PIN_DEPARTING(), g3/design.md section 2): the
     uop after its last guard, the last uop that declares miss or deopt.
-    None if no arm that runs this body departs; a body that generator-
-    boundary variants share (generator_word_entry()) pins if one of them
-    departs.  VT4 keeps every guard before the departing uop."""
-    boundaries = generator_boundaries(analysis)
-    insts = all_instructions(analysis)
-    sharing = {name} | {n for n in boundaries if generator_word_entry(n, analysis) == name}
-    if not any(arm_departs(insts[n] if n in insts else inst, boundaries.get(n))
-               for n in sharing):
+    None if the arm does not depart.  VT4 keeps every guard before the departing uop."""
+    if not arm_departs(inst):
         return None
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     guards = [i for i, part in enumerate(parts)
@@ -7009,9 +6682,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                             if site.site is not None}
     emitter.uop_index = 0
     emitter.pinned = False
-    emitter.generator_boundary = record.generator_boundary
-    emitter.boundary_reached = set()
-    emitter.boundary_completions = []
     emitter.pending_owner = None
     emitter.close_count = 0
     emitter.shape_read_guards = 0
@@ -7198,29 +6868,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
              not stack.shape_read_complete)):
         raise analysis_error("polymorphic shape execution needs one dominating checked read", inst.where)
     out.start_line()
-    if (reachable and emitter.generator_boundary is not None
-            and emitter.send_source_parts is not None):
-        # The fall-through of a native send is the inner generator's
-        # suspension: the variant yields its value (a delegated yield)
-        if not fmt.window or fmt.dst_offset != 2:
-            raise analysis_error("native yielded outcome requires checked source window", inst.where)
-        outputs = external_io(inst)[1]
-        result = outputs[-1].item.name
-        # The payload replaces only the result home. Cursor and other through
-        # outputs still need their source-ordered final publications.
-        assert isinstance(stack, IRStack)
-        stack.final = True
-        stack.flush(out, native_result=stack.layout.base +
-                    PointerOffset(fmt.dst_offset, (), ()))
-        out.emit(f"assert(_PyValue_IsHome({result}));\n")
-        out.emit("window[2] = PyValue_NULL;\n")
-        out.emit(f"IR_GEN_YIELD({result});\n")
-        emitter.boundary_reached.add("yield")
-        stack.home_node = None
-        emitter.native_window_out = True
-        emitter.ownership_events.append(OwnershipEvent(
-            "_PyIR_OWNER_NATIVE_WINDOW_OUT", flags=1, src=3, dst=0, extent=2))
-        reachable = False
     if reachable:
         assert isinstance(stack, IRStack)
         emitter.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, out))
@@ -7308,13 +6955,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                 src=result_offset or 0))
     if not emitter.normal_completion_uncovered:
         completions = emitter.normal_completions
-        if emitter.generator_boundary is not None:
-            completions = {replace(event, kind="_PyIR_OWNER_NATIVE_WINDOW_OUT",
-                                  flags=1, extent=0) for event in completions}
-            if emitter.send_yielded_published and not emitter.native_window_out:
-                completions.add(OwnershipEvent(
-                    "_PyIR_OWNER_NATIVE_WINDOW_OUT", flags=1, src=3, dst=0, extent=2))
-        elif emitter.send_yielded_published:
+        if emitter.send_yielded_published:
             completions = {replace(event, flags=event.flags | 2, extent=2)
                            for event in completions}
         emitter.ownership_events.extend(sorted(completions,
@@ -7667,9 +7308,8 @@ STUB_BINDINGS = {
     "IR_CLOSE_WINDOW(W, N)": "_PyIR_STUB_CLOSE_WINDOW((W), (N))",
 }
 STUB_UNBOUND = ("DISPATCH_GOTO", "DISPATCH_INLINED", "IR_EXIT", "IR_OBSERVE_EDGE",
-                "IR_STEP_DONE", "IR_REPORT_EDGE", "IR_GEN_YIELD_AT",
-                "IR_GEN_COMPLETE_AT", "IR_GEN_RETURN", "IR_GEN_RESUME",
-                "GEN_DISPATCH", "GEN_STEP_JUMP", "GEN_STEP_EFFECT", "IR_STORE_RETURN")
+                "IR_STEP_DONE", "IR_REPORT_EDGE", "IR_GEN_RETURN",
+                "GEN_DISPATCH", "GEN_STEP_JUMP", "IR_STORE_RETURN")
 
 
 def macro_name(binding: str) -> str:
@@ -7794,8 +7434,6 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                     if inst.family is not None} | set(analysis.families)
     plans = stub_plans(analysis)
     for name, inst in sorted(handler_instructions(analysis).items()):
-        if generator_word_entry(name, analysis) != name:
-            continue
         plan = plans.get(name)
         # The shared arms' stubs, and each family's generic (its head's)
         stub = (plan is not None and stubs is not None
@@ -7955,7 +7593,7 @@ def form_table(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ()) -> str
         if i in by_arm:
             lines.append(f"    [{i}] = ir_run_{by_arm[i].name},\n")
             continue
-        name = generator_word_entry(by_index.get(i, "UNKNOWN_OPCODE"), analysis)
+        name = by_index.get(i, "UNKNOWN_OPCODE")
         lines.append(f"    [{i}] = ir_run_{name},\n")
     lines.append("};\n")
     return "".join(lines)
@@ -7964,7 +7602,7 @@ def form_table(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ()) -> str
 def form_declarations(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry] = ()) -> str:
     "Every form, declared before the forms, which call one another"
     ids = handler_ids(analysis)
-    names = sorted({generator_word_entry(name, analysis) for name in ids}
+    names = sorted(set(ids)
                    | {"UNKNOWN_OPCODE"} | {arm.name for arm in arms if arm.emitted})
     lines = [f"static _PyIRTransfer ir_run_{name}({FORM_PARAMETERS}, _PyIRWord ir_word);\n"
              for name in names]
@@ -9167,39 +8805,14 @@ def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO,
                         arms: Sequence[ir_arms.ArmEntry] = ()) -> None:
-    """The tables of the evaluator.  Python/ceval_generator.h includes this
-    file at file scope with IR_GEN_TABLES defined, for the generator transfer
-    tables, which give the kind of transfer that a word's handler makes (the
-    enums of that file).
-    ir_evaluate() includes it at its start without, for the dispatch table,
-    which is local to it and has the addresses of its labels."""
+    """The tables of the evaluator.  ir_evaluate() includes this file at its
+    start, for the dispatch table, which is local to it and has the addresses
+    of its labels."""
     ids = handler_ids(analysis)
     formats = compute_formats(analysis)
     n = num_old_handlers(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
-    boundaries = generator_boundaries(analysis)
-    out.emit("#ifdef IR_GEN_TABLES\n")
-    for column in ("Yielded", "Completed"):
-        out.emit(f"static const uint8_t generator_{column.lower()}_targets[{n}] = {{\n")
-        for name, boundary in sorted(boundaries.items()):
-            if not generator_boundary_source_closed(boundary, analysis, formats):
-                continue
-            target = None
-            if column == "Yielded" and boundary.yielded == "DELEGATED":
-                target = "1"
-            elif column == "Completed" and boundary.completed != "NONE":
-                target = ("GEN_THROWING | " if boundary.completion == "throw" else ""
-                          ) + GENERATOR_COMPLETIONS[boundary.completed][0]
-            if target is not None:
-                out.emit(f"[{ids[name]}] = {target},\n")
-        if column == "Completed":
-            # A generator that ends a FOR loop completes it with one outcome
-            for name in ("FOR_ITER", "FOR_ITER_GEN"):
-                if name in ids:
-                    out.emit(f"[{ids[name]}] = GEN_COMPLETE_FOR_ITER,\n")
-        out.emit("};\n")
-    out.emit("#else\n")
     # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every
     # id the mask yields; ids past n are UNKNOWN_OPCODE.
     by_index = {i: name for name, i in ids.items()}
@@ -9209,12 +8822,11 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
         if i in by_arm:
             out.emit(f"[{i}] = &&TARGET_{by_arm[i].name},\n")
             continue
-        name = generator_word_entry(by_index.get(i, "UNKNOWN_OPCODE"), analysis)
+        name = by_index.get(i, "UNKNOWN_OPCODE")
         out.emit(f"[{i}] = &&TARGET_{name},\n")
     out.emit("};\n")
     out.emit(f"static_assert(Py_ARRAY_LENGTH(opcode_targets) == IR_HANDLER_MASK + 1,\n")
     out.emit('              "dispatch covers every id that IR_HANDLER yields");\n')
-    out.emit("#endif\n")
 
 
 def generate_ir_from_files(filenames: list[str], outfilename: str,

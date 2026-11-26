@@ -363,28 +363,6 @@ class Family:
 
 
 @dataclass
-class Boundary:
-    """The declared generator-boundary variants of an instruction, or of
-    each member of the family it heads (parsing.Boundary): where the
-    variants depart; the consumers that a completion may run, each with
-    its variant's declared exits; a delegated yield, which every variant
-    takes; the consumers a resume may run"""
-    source: str
-    # Where the variants depart: "last", in the last uop (a native send),
-    # or "enter", through the generator frame that the last uop enters,
-    # which yields or returns to the word later
-    at: str
-    yields: str                             # "NONE" or "DELEGATED"
-    # The completion that the variants' consumers complete: "send", a send
-    # that ended its generator, or "throw", a throw into it that did
-    # (IR_COMPLETE_STEP's _PY_IR_SEND or _PY_IR_SEND_THROW); "" if none
-    completion: str
-    completes: dict[str, tuple[str, ...]]
-    resumes: tuple[str, ...]
-    where: lexer.Token
-
-
-@dataclass
 class Analysis:
     instructions: dict[str, Instruction]
     uops: dict[str, Uop]
@@ -400,8 +378,6 @@ class Analysis:
     # The numbers below 256 that no stack opcode holds, in order: the holes
     # that deleted specializations leave.  IR-only handlers take them first.
     free_ids: list[int]
-    # The declared generator-boundary clauses, by source
-    boundaries: dict[str, Boundary] = field(default_factory=dict)
 
 
 def analysis_error(message: str, tkn: lexer.Token) -> SyntaxError:
@@ -616,7 +592,6 @@ IR_MARKER_EFFECTS = {
     "IR_OBSERVE_COMMITTED_BRANCH": frozenset(("escapes", "error", "sync", "pc")),
     "IR_COMPLETE_STEP": frozenset(("escapes", "error", "sync", "pc", "terminal")),
     "IR_PROCESS_ERROR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
-    "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_FINISH_GENERATOR_RETURN": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_FINISH_GENERATOR_RETURN_EMPTY": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
@@ -1193,42 +1168,6 @@ def add_family(
     families[family.name] = family
 
 
-def add_boundary(
-    pboundary: parser.Boundary,
-    instructions: dict[str, Instruction],
-    boundaries: dict[str, Boundary],
-) -> None:
-    where = pboundary.first_token
-    if pboundary.source not in instructions:
-        raise analysis_error(f"boundary({pboundary.source}): no such instruction", where)
-    if pboundary.source in boundaries:
-        raise analysis_error(f"A second boundary({pboundary.source})", where)
-    if pboundary.at not in ("last", "enter"):
-        raise analysis_error(f"boundary({pboundary.source}) needs at(last) "
-                             "or at(enter)", where)
-    if pboundary.yields not in (None, "delegated"):
-        raise analysis_error(f"boundary({pboundary.source}): yields({pboundary.yields}) "
-                             "is not a yield; the one kind is `delegated`", where)
-    if bool(pboundary.completes) != (pboundary.completion is not None):
-        raise analysis_error(f"boundary({pboundary.source}): completes(...) and "
-                             "completion(send) or completion(throw) go together", where)
-    if pboundary.completion not in (None, "send", "throw"):
-        raise analysis_error(f"boundary({pboundary.source}): completion"
-                             f"({pboundary.completion}) is not send or throw", where)
-    completes: dict[str, tuple[str, ...]] = {}
-    for consumers, exits in pboundary.completes:
-        for consumer in consumers:
-            if consumer in completes:
-                raise analysis_error(f"boundary({pboundary.source}) completes "
-                                     f"{consumer} twice", where)
-            completes[consumer] = tuple(exits)
-    if len(set(pboundary.resumes)) != len(pboundary.resumes):
-        raise analysis_error(f"boundary({pboundary.source}) resumes a consumer twice", where)
-    boundaries[pboundary.source] = Boundary(
-        pboundary.source, pboundary.at, "DELEGATED" if pboundary.yields else "NONE",
-        pboundary.completion or "", completes, tuple(pboundary.resumes), where)
-
-
 def add_pseudo(
     pseudo: parser.Pseudo,
     instructions: dict[str, Instruction],
@@ -1371,7 +1310,6 @@ def analyze_forest(
     instructions: dict[str, Instruction] = {}
     uops: dict[str, Uop] = {}
     families: dict[str, Family] = {}
-    boundaries: dict[str, Boundary] = {}
     pseudos: dict[str, PseudoInstruction] = {}
     labels: dict[str, Label] = {}
     for node in forest:
@@ -1386,8 +1324,6 @@ def analyze_forest(
                 pass
             case parser.Family():
                 pass
-            case parser.Boundary():
-                pass
             case parser.Pseudo():
                 pass
             case parser.LabelDef():
@@ -1401,8 +1337,6 @@ def analyze_forest(
         match node:
             case parser.Family():
                 add_family(node, instructions, families)
-            case parser.Boundary():
-                add_boundary(node, instructions, boundaries)
             case parser.Pseudo():
                 add_pseudo(node, instructions, pseudos)
             case parser.LabelDef():
@@ -1441,7 +1375,7 @@ def analyze_forest(
     free_ids = [number for number in range(256) if number not in held]
     return Analysis(
         instructions, uops, families, pseudos, labels, opmap, first_arg,
-        min_instrumented, ir_only, free_ids, boundaries
+        min_instrumented, ir_only, free_ids
     )
 
 

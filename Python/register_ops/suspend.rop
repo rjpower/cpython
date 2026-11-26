@@ -1,5 +1,4 @@
-// 2C: await, async iteration and yield (suspension).  Send comes with its
-// completion arms in a later step.
+// 2C: await, async iteration, send and yield (suspension).
 
 enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
 
@@ -220,4 +219,231 @@ arm YieldFrom.Observed split observes
     let _:Unit = pin_departing();
     let v:O = acquire(value);
     exit yield(v) resume YieldFrom.Resumed;
+}
+
+// SEND: the delegation step of `await` and `yield from`.  The operands are the
+// receiver, its cursor (a tagged index or nothing: the loop's IterPair) and
+// the value sent in; a step that yields leaves the yielded value where the
+// sent one was, for the YieldFrom word that follows.  The receiver's end is
+// the word's `done` exit with `completed` defined: the END_SEND that
+// followed it has no word.  A generator or coroutine receiver is entered in
+// place; when its frame returns, the completion arm runs in this frame.
+family Send(completed:Dst, send:SendWindow, done:NearHead)
+  exits(next, branch, enter, raise, redirect) ops(SEND)
+  events(STOP_ITERATION, BRANCH_LEFT);
+
+// The receiver, entered in place, has yielded: the sent value moved into its
+// frame, and the yielded value is the send's value
+point Send.Yielded(caller, next_head, clear)
+  keep(send.receiver, send.cursor) spent(send.value) defs(send.value);
+// A step that the evaluator ran: the cursor and the yielded value are the
+// send's, the sent value is gone
+point Send.Stepped(current, next_head, clear)
+  keep(send.receiver) spent(send.cursor, send.value) defs(send.cursor, send.value);
+// The operands are retired and the completion value is the word's
+point Send.Completed(current, next_head, clear) keep() spent(send) defs(completed);
+// The step raised: nothing is spent
+point Send.Failed(current, site, pending)
+  keep(send.receiver, send.cursor, send.value) spent() defs();
+// The sent value went to the generator that was to be entered, or the
+// generator returned: only the receiver and the cursor remain
+point Send.Closed(current, site, pending)
+  keep(send.receiver, send.cursor) spent(send.value) defs();
+// A callback of the completion raised after the operands were retired
+point Send.ExitEvent(current, site, pending) keep() spent(send) defs(completed);
+
+// Whether the receiver is a generator or coroutine that the evaluator can
+// enter in place: no PEP 523 hook, an exact type, a created generator that
+// accepts only None given None, and one that is created or suspended (a read
+// of its state; gen_claim claims it)
+extern helper claimable_generator(t:Thread, g:B, v:B) -> Bool
+  effects(reads)
+  c _PyRop_ClaimableGenerator as bool
+  evidence(
+    review: "ceval.c _PyRop_ClaimableGenerator: the guards of bytecodes.c _SEND, with"
+            "gen_may_claim and its relaxed load of the frame state.",
+    contract: "Reads the receiver's type and frame state and the sent value; no memory, no"
+              "failure. The answer can be stale: gen_claim decides.");
+
+// Claim the generator and link its frame under this one, with the value sent
+// as the value it resumes with.  Free-threaded, another thread can claim it
+// first: that is the generic send's ValueError and the value is closed.
+extern helper enter_generator(t:Thread, f:Frame, g:B, v:O)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, raises)
+  ensures(entered.generator_frame(c))
+  c _PyRop_EnterGenerator as pointer_or_raised
+  evidence(
+    review: "ceval.c _PyRop_EnterGenerator: IR_ENTER_GENERATOR's links, gen_claim (the"
+            "claim of gen_may_claim's guard, a compare-and-swap free-threaded) and"
+            "_PyFrame_SetResumeValue.",
+    contract: "The receiver is claimed (FRAME_EXECUTING) and its frame returned, whose"
+              "previous is f. The exception chain of the generator hangs off"
+              "tstate->exc_info. v is its resume value, or closed on err. The recursion"
+              "debit and the resume are the frame start's.");
+
+// One step of a receiver that the evaluator does not enter: the cursor's
+// next item, or what the receiver's send returns.  The sent value and the
+// receiver are borrowed; the cursor is read, not taken.
+extern helper send_step(t:Thread, f:Frame, recv:B, cur:B, sent:B)
+  cases(yielded(y:O, next:O), done(rv:O), err(e:Err))
+  effects(allocates, runs_python, raises)
+  c _PyRop_SendStep as step_out
+  evidence(
+    review: "ceval.c _PyRop_SendStep: the cursor step and _PyValue_Send of bytecodes.c _SEND.",
+    contract: "yielded: a new owner of the yielded value and the next cursor, the receiver"
+              "and the sent value unchanged in their homes. done: a new owner of the"
+              "return value. err: the exception is set.");
+
+// The STOP_ITERATION event of a generator or coroutine receiver, before the
+// operands are retired.  The value is the word's completion value: it is given
+// back on ok and closed on the other cases.
+extern helper send_stop_event(t:Thread, f:Frame, at:Site, recv:B, val:O)
+  cases(ok(w:O), moved(mr:Route), err(e:Err))
+  effects(runs_python, raises, releases)
+  requires(instrumented(at))
+  c _PyRop_SendStopEvent as value_redirect
+  evidence(
+    review: "ceval.c _PyRop_SendStopEvent: instrumentation.c _PyIR_ObserveStopIteration,"
+            "phase 0 of the old complete_step_impl.",
+    contract: "The receiver is borrowed. The value is taken: returned on ok, closed on moved"
+              "and err. The callbacks run Python and may raise or move the frame. A"
+              "receiver of another kind reports nothing.");
+
+// The BRANCH_LEFT event and the line events of the exit, after the operands are
+// retired: phase 1 of the old complete_step_impl
+extern helper send_exit_event(t:Thread, f:Frame, at:Site)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  requires(instrumented(at))
+  c _PyRop_SendExitEvent as int_redirect
+  evidence(
+    review: "ceval.c _PyRop_SendExitEvent: instrumentation.c _PyIR_ObserveStep, phase 1.",
+    contract: "The operands are retired and the completion value is in its home. A callback may"
+              "raise or move the frame, whose return_pc then names the word to run.");
+
+arm Send.Generic split
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed), switches_frame)
+  feedback()
+  exits(next, branch, enter, raise)
+{
+  entry():
+    branch claimable_generator(thread, use(send.receiver), use(send.value)) -> Claim(), Step();
+  Claim():
+    let g:B = use(send.receiver);
+    let sent:O = acquire(send.value);
+    call enter_generator(thread, frame, g, sent) {
+      entered -> Enter();
+      err -> EnterFailed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume Send.Yielded complete Send.Complete;
+  EnterFailed(ee:Err):
+    exit raise(Send.Closed, ee);
+  Step():
+    let a:Anchors = anchor_for_call([send.receiver, send.cursor, send.value]);
+    call send_step(thread, frame, arg(a, 0), arg(a, 1), arg(a, 2)) {
+      yielded -> Yielded();
+      done -> Done();
+      err -> Failed();
+    }
+  Yielded(y:O, nc:O):
+    publish [send.cursor = nc, send.value = y] retire [roots(a), old(send.cursor), old(send.value)] at Send.Stepped;
+    exit next();
+  Done(rv:O):
+    publish [completed = rv] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    exit branch(done);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Failed, saved);
+}
+
+// The completion of the generator that Send.Generic entered: its value is
+// the word's, and the operands it left is the receiver and the cursor
+arm Send.Complete completion(Send.Yielded) split
+  effects(writes, releases on (completed)) feedback() exits(branch)
+{
+  entry(v:O):
+    publish [completed = v] retire [spent(send.receiver), spent(send.cursor), old(completed)] at Send.Completed;
+    exit branch(done);
+}
+
+// The observed twin of Send.Generic: the STOP_ITERATION event before the
+// operands are retired at the end, BRANCH_LEFT and the line events after
+arm Send.Observed split observes
+  effects(reads, writes, allocates, runs_python, raises, releases on (completed), switches_frame)
+  feedback()
+  exits(next, branch, enter, raise, redirect)
+{
+  entry():
+    branch claimable_generator(thread, use(send.receiver), use(send.value)) -> Claim(), Step();
+  Claim():
+    let g:B = use(send.receiver);
+    let sent:O = acquire(send.value);
+    call enter_generator(thread, frame, g, sent) {
+      entered -> Enter();
+      err -> EnterFailed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume Send.Yielded complete Send.Complete;
+  EnterFailed(ee:Err):
+    exit raise(Send.Closed, ee);
+  Step():
+    let a:Anchors = anchor_for_call([send.receiver, send.cursor, send.value]);
+    call send_step(thread, frame, arg(a, 0), arg(a, 1), arg(a, 2)) {
+      yielded -> Yielded();
+      done -> Done();
+      err -> Failed();
+    }
+  Yielded(y:O, nc:O):
+    publish [send.cursor = nc, send.value = y] retire [roots(a), old(send.cursor), old(send.value)] at Send.Stepped;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Failed, saved);
+  Done(rv:O):
+    publish [completed = rv] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    call send_exit_event(thread, frame, site) {
+      ok -> Exit();
+      moved -> ExitMoved();
+      err -> ExitFailed();
+    }
+  Exit():
+    exit branch(done);
+  ExitMoved(xr:Route):
+    exit redirect(xr);
+  ExitFailed(xe:Err):
+    exit raise(Send.ExitEvent, xe);
+}
+
+arm Send.CompleteObserved completion(Send.Yielded) split observes
+  effects(reads, writes, releases on (completed), runs_python, raises) feedback()
+  exits(branch, raise, redirect)
+{
+  entry(v:O):
+    let a:Anchors = anchor_for_call([send.receiver]);
+    call send_stop_event(thread, frame, site, arg(a, 0), v) {
+      ok -> Commit();
+      moved -> Moved();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(Send.Closed, saved);
+  Moved(mr:Route):
+    publish [] retire [roots(a)] at Send.Closed;
+    exit redirect(mr);
+  Commit(w:O):
+    publish [completed = w] retire [roots(a), spent(send.receiver), spent(send.cursor), old(completed)] at Send.Completed;
+    call send_exit_event(thread, frame, site) {
+      ok -> Exit();
+      moved -> ExitMoved();
+      err -> ExitFailed();
+    }
+  Exit():
+    exit branch(done);
+  ExitMoved(xr:Route):
+    exit redirect(xr);
+  ExitFailed(xe:Err):
+    exit raise(Send.ExitEvent, xe);
 }

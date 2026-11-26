@@ -415,26 +415,6 @@ leaf_probe__CHECK_FUNCTION_VERSION_KW(_PyInterpreterFrame *frame, PyValue *stack
 }
 
 static int
-leaf_probe__END_SEND(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue receiver, index_or_null, value, val;
-    value = stack_pointer[-1];
-    index_or_null = stack_pointer[-2];
-    receiver = stack_pointer[-3];
-    val =      value ;
-    (void)index_or_null;
-    stack_pointer[-3] = val;
-    stack_pointer += -2;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    PyValue_CLOSE(receiver);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__GUARD_NOS_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -443,21 +423,6 @@ leaf_probe__GUARD_NOS_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, in
     PyValue left;
     left = stack_pointer[-2];
     if (!PyValue_IsInlineInt(left)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_NOS_NOT_NULL(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue nos;
-    nos = stack_pointer[-2];
-    if (PyValue_IsNull(nos)) {
         return LEAF_PROBE_EXIT;
     }
     result->stack_pointer = stack_pointer;
@@ -505,21 +470,6 @@ leaf_probe__GUARD_TOS_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, in
     PyValue value;
     value = stack_pointer[-1];
     if (!PyValue_IsInlineInt(value)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_TOS_IS_NONE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue val;
-    val = stack_pointer[-1];
-    if (!PyValue_IsNone(val)) {
         return LEAF_PROBE_EXIT;
     }
     result->stack_pointer = stack_pointer;
@@ -825,13 +775,10 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_BINARY_OP_TRUEDIV_FLOAT", leaf_probe__BINARY_OP_TRUEDIV_FLOAT, 2},
     {"_BINARY_OP_XOR_INT", leaf_probe__BINARY_OP_XOR_INT, 2},
     {"_CHECK_FUNCTION_VERSION_KW", leaf_probe__CHECK_FUNCTION_VERSION_KW, 3},
-    {"_END_SEND", leaf_probe__END_SEND, 3},
     {"_GUARD_NOS_INT", leaf_probe__GUARD_NOS_INT, 2},
-    {"_GUARD_NOS_NOT_NULL", leaf_probe__GUARD_NOS_NOT_NULL, 2},
     {"_GUARD_NOS_UNICODE", leaf_probe__GUARD_NOS_UNICODE, 2},
     {"_GUARD_SHAPE", leaf_probe__GUARD_SHAPE, 1},
     {"_GUARD_TOS_INT", leaf_probe__GUARD_TOS_INT, 1},
-    {"_GUARD_TOS_IS_NONE", leaf_probe__GUARD_TOS_IS_NONE, 1},
     {"_GUARD_TOS_LIST", leaf_probe__GUARD_TOS_LIST, 1},
     {"_GUARD_TOS_TUPLE", leaf_probe__GUARD_TOS_TUPLE, 1},
     {"_GUARD_TOS_UNICODE", leaf_probe__GUARD_TOS_UNICODE, 1},

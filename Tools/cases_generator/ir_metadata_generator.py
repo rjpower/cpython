@@ -43,8 +43,6 @@ from ir_generator import (
     call_role_flags,
     compute_formats,
     operand_metadata,
-    generator_boundaries,
-    generator_boundary_source_closed,
     handler_contracts,
     handler_ids,
     handler_instructions,
@@ -63,7 +61,6 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
     of a BINARY_OP operation BINARY_OP."""
-    name = name.split("_XFER_", 1)[0]
     if name in binary_op_handlers(analysis):
         return BINARY_OP_FAMILY
     # An IR-only member of a real family (LOAD_ATTR_GETSET) stands for the
@@ -84,11 +81,10 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
     dispatch = handler_ids(analysis)
     insts = handler_instructions(analysis)
     binary = set(binary_op_handlers(analysis))
-    boundaries = generator_boundaries(analysis)
     bases = {}
     flags = {}
     for name in ids:
-        ordinary = boundaries[name].base if name in boundaries else name
+        ordinary = name
         inst = insts.get(name) or analysis.instructions.get(ordinary)
         base = inst.family.name if inst is not None and inst.family else ordinary
         if ordinary.startswith("INSTRUMENTED_") and base == ordinary:
@@ -107,8 +103,7 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
             parts.append("_PyIR_H_INSTRUMENTED")
         if name in binary:
             parts.append("_PyIR_H_BINARY_OP")
-        if (name in analysis.ir_only or name in EXECUTION_VARIANTS
-                or name in boundaries):
+        if name in analysis.ir_only or name in EXECUTION_VARIANTS:
             parts.append("_PyIR_H_IR_ONLY")
         if name.endswith("_NOFB"):
             parts.append("_PyIR_H_NOFB")
@@ -371,27 +366,6 @@ def generate_ir_metadata(
                          else str(base_ids[arm.base]))
                 out.emit(f"[{arm_id(analysis, arm)}] = {value}, /* {arm.dotted} */\n")
             out.emit("};\n#endif\n\n")
-        boundaries = generator_boundaries(analysis)
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const _PyIRGeneratorBoundary _PyIR_GeneratorBoundaries[IR_NUM_HANDLERS] = {\n")
-        for name in sorted(fact_ids, key=fact_ids.get):
-            boundary = boundaries.get(name)
-            if boundary is None:
-                out.emit(f"[{fact_ids[name]}] = {{ {fact_ids[name]}, {fact_ids[name]}, 0, 0, 0, 0 }},\n")
-            else:
-                flags = "_PyIR_GEN_BOUNDARY_PLACED"
-                if generator_boundary_source_closed(boundary, analysis, formats):
-                    flags += " | _PyIR_GEN_BOUNDARY_CLOSED"
-                if boundary.base.startswith("INSTRUMENTED_"):
-                    flags += " | _PyIR_GEN_BOUNDARY_OBSERVER"
-                out.emit(f"[{fact_ids[name]}] = {{ {fact_ids[boundary.base]}, {fact_ids[name]}, "
-                         f"_PyIR_GEN_CONSUMER_{boundary.yielded}, "
-                         f"_PyIR_GEN_CONSUMER_{boundary.completed}, "
-                         f"_PyIR_GEN_CONSUMER_{boundary.resume}, {flags} }},\n")
-        for arm in arms:
-            i = arm_id(analysis, arm)
-            out.emit(f"[{i}] = {{ {i}, {i}, 0, 0, 0, 0 }},  /* {arm.dotted} */\n")
-        out.emit("};\n#endif\n\n")
         ops = binary_op_handlers(analysis)
         if ops:
             out.emit("/* The handler of BINARY_OP operation OP is "

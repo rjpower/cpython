@@ -12,11 +12,11 @@
 /* The arms' handler ids follow the old handlers, in definition order; the
  * observed wrappers of the arms of families that declare events follow them */
 #define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
-#define ROP_NUM_HANDLERS 181
+#define ROP_NUM_HANDLERS 186
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 79
-#define ROP_NUM_ARMS 149
+#define ROP_NUM_ARMS 152
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
               "the handler count is the old handlers, the arms and their wrappers");
 
@@ -112,179 +112,184 @@ enum {
 #define ROP_HANDLER_Call_Exact (ROP_FIRST_HANDLER + 5)
 #define ROP_HANDLER_Call_BoundExact (ROP_FIRST_HANDLER + 6)
 #define ROP_HANDLER_Call_Init (ROP_FIRST_HANDLER + 7)
-#define ROP_HANDLER_Call_Generic (ROP_FIRST_HANDLER + 8)
-#define ROP_HANDLER_InitResult_Check (ROP_FIRST_HANDLER + 9)
-#define ROP_HANDLER_Call_Observed (ROP_FIRST_HANDLER + 10)
-#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 11)
-#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 12)
-#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 13)
-#define ROP_HANDLER_Return_Observed (ROP_FIRST_HANDLER + 14)
-#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 15)
-#define ROP_HANDLER_CellMake_Wrap (ROP_FIRST_HANDLER + 16)
-#define ROP_HANDLER_CellRead_Get (ROP_FIRST_HANDLER + 17)
-#define ROP_HANDLER_CellMapRead_Lookup (ROP_FIRST_HANDLER + 18)
-#define ROP_HANDLER_CellStore_Set (ROP_FIRST_HANDLER + 19)
-#define ROP_HANDLER_CellDelete_Unbind (ROP_FIRST_HANDLER + 20)
-#define ROP_HANDLER_Build_Tuple (ROP_FIRST_HANDLER + 21)
-#define ROP_HANDLER_Build_List (ROP_FIRST_HANDLER + 22)
-#define ROP_HANDLER_Build_Set (ROP_FIRST_HANDLER + 23)
-#define ROP_HANDLER_Build_Map (ROP_FIRST_HANDLER + 24)
-#define ROP_HANDLER_AddElement_Append (ROP_FIRST_HANDLER + 25)
-#define ROP_HANDLER_AddElement_Add (ROP_FIRST_HANDLER + 26)
-#define ROP_HANDLER_AddEntry_Put (ROP_FIRST_HANDLER + 27)
-#define ROP_HANDLER_UpdateContainer_Extend (ROP_FIRST_HANDLER + 28)
-#define ROP_HANDLER_UpdateContainer_Union (ROP_FIRST_HANDLER + 29)
-#define ROP_HANDLER_UpdateContainer_Overlay (ROP_FIRST_HANDLER + 30)
-#define ROP_HANDLER_MergeKeywords_Merge (ROP_FIRST_HANDLER + 31)
-#define ROP_HANDLER_Function_Make (ROP_FIRST_HANDLER + 32)
-#define ROP_HANDLER_Intrinsic_Unary (ROP_FIRST_HANDLER + 33)
-#define ROP_HANDLER_Intrinsic_ImportStar (ROP_FIRST_HANDLER + 34)
-#define ROP_HANDLER_Intrinsic_StopIteration (ROP_FIRST_HANDLER + 35)
-#define ROP_HANDLER_IntrinsicPair_Binary (ROP_FIRST_HANDLER + 36)
-#define ROP_HANDLER_IntrinsicPair_Attr (ROP_FIRST_HANDLER + 37)
-#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 38)
-#define ROP_HANDLER_GetAttr_GetSet (ROP_FIRST_HANDLER + 39)
-#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 40)
-#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 41)
-#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 42)
-#define ROP_HANDLER_GetAttr_Module (ROP_FIRST_HANDLER + 43)
-#define ROP_HANDLER_GetAttr_Hint (ROP_FIRST_HANDLER + 44)
-#define ROP_HANDLER_GetAttr_ValueSlot (ROP_FIRST_HANDLER + 45)
-#define ROP_HANDLER_GetAttr_PointerSlot (ROP_FIRST_HANDLER + 46)
-#define ROP_HANDLER_GetAttr_Class (ROP_FIRST_HANDLER + 47)
-#define ROP_HANDLER_GetAttr_NonDescriptorValues (ROP_FIRST_HANDLER + 48)
-#define ROP_HANDLER_GetAttr_NonDescriptorNoDict (ROP_FIRST_HANDLER + 49)
-#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 50)
-#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 51)
-#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 52)
-#define ROP_HANDLER_GetMethod_NoDict (ROP_FIRST_HANDLER + 53)
-#define ROP_HANDLER_GetMethod_LazyDict (ROP_FIRST_HANDLER + 54)
-#define ROP_HANDLER_GetMethod_ClassMethod (ROP_FIRST_HANDLER + 55)
-#define ROP_HANDLER_GetItem_Generic (ROP_FIRST_HANDLER + 56)
-#define ROP_HANDLER_SetItem_Generic (ROP_FIRST_HANDLER + 57)
-#define ROP_HANDLER_DelItem_Generic (ROP_FIRST_HANDLER + 58)
-#define ROP_HANDLER_SliceRead_Generic (ROP_FIRST_HANDLER + 59)
-#define ROP_HANDLER_SliceWrite_Generic (ROP_FIRST_HANDLER + 60)
-#define ROP_HANDLER_BuildSlice_Generic (ROP_FIRST_HANDLER + 61)
-#define ROP_HANDLER_GetItem_ListIndex (ROP_FIRST_HANDLER + 62)
-#define ROP_HANDLER_GetItem_TupleIndex (ROP_FIRST_HANDLER + 63)
-#define ROP_HANDLER_GetItem_Ascii (ROP_FIRST_HANDLER + 64)
-#define ROP_HANDLER_GetItem_UnicodeAsciiChar (ROP_FIRST_HANDLER + 65)
-#define ROP_HANDLER_GetItem_ListSlice (ROP_FIRST_HANDLER + 66)
-#define ROP_HANDLER_GetItem_Dict (ROP_FIRST_HANDLER + 67)
-#define ROP_HANDLER_SetItem_ListIndex (ROP_FIRST_HANDLER + 68)
-#define ROP_HANDLER_SetItem_Dict (ROP_FIRST_HANDLER + 69)
-#define ROP_HANDLER_IterOpen_Generic (ROP_FIRST_HANDLER + 70)
-#define ROP_HANDLER_ForIter_Generic (ROP_FIRST_HANDLER + 71)
-#define ROP_HANDLER_ForIter_Observed (ROP_FIRST_HANDLER + 72)
-#define ROP_HANDLER_IterClose_Retire (ROP_FIRST_HANDLER + 73)
-#define ROP_HANDLER_IterClose_Observed (ROP_FIRST_HANDLER + 74)
-#define ROP_HANDLER_GlobalRead_Generic (ROP_FIRST_HANDLER + 75)
-#define ROP_HANDLER_GlobalRead_Module (ROP_FIRST_HANDLER + 76)
-#define ROP_HANDLER_GlobalRead_Builtin (ROP_FIRST_HANDLER + 77)
-#define ROP_HANDLER_NamespaceRead_Name (ROP_FIRST_HANDLER + 78)
-#define ROP_HANDLER_NamespaceRead_Locals (ROP_FIRST_HANDLER + 79)
-#define ROP_HANDLER_NamespaceRead_BuildClass (ROP_FIRST_HANDLER + 80)
-#define ROP_HANDLER_NamespaceReadFrom_Mapping (ROP_FIRST_HANDLER + 81)
-#define ROP_HANDLER_NamespaceWrite_Name (ROP_FIRST_HANDLER + 82)
-#define ROP_HANDLER_NamespaceWrite_Global (ROP_FIRST_HANDLER + 83)
-#define ROP_HANDLER_SetupAnnotations_Setup (ROP_FIRST_HANDLER + 84)
-#define ROP_HANDLER_Import_Eager (ROP_FIRST_HANDLER + 85)
-#define ROP_HANDLER_Import_Policy (ROP_FIRST_HANDLER + 86)
-#define ROP_HANDLER_Import_Lazy (ROP_FIRST_HANDLER + 87)
-#define ROP_HANDLER_ImportFrom_From (ROP_FIRST_HANDLER + 88)
-#define ROP_HANDLER_ImportFrom_FromLast (ROP_FIRST_HANDLER + 89)
-#define ROP_HANDLER_Awaitable_Await (ROP_FIRST_HANDLER + 90)
-#define ROP_HANDLER_AsyncIterOpen_Open (ROP_FIRST_HANDLER + 91)
-#define ROP_HANDLER_AsyncIterNext_Next (ROP_FIRST_HANDLER + 92)
-#define ROP_HANDLER_Yield_Ordinary (ROP_FIRST_HANDLER + 93)
-#define ROP_HANDLER_YieldFrom_Delegated (ROP_FIRST_HANDLER + 94)
-#define ROP_HANDLER_Yield_Observed (ROP_FIRST_HANDLER + 95)
-#define ROP_HANDLER_YieldFrom_Observed (ROP_FIRST_HANDLER + 96)
-#define ROP_HANDLER_Compare_Int (ROP_FIRST_HANDLER + 97)
-#define ROP_HANDLER_Compare_Float (ROP_FIRST_HANDLER + 98)
-#define ROP_HANDLER_Compare_Str (ROP_FIRST_HANDLER + 99)
-#define ROP_HANDLER_Compare_Generic (ROP_FIRST_HANDLER + 100)
-#define ROP_HANDLER_Identity_Test (ROP_FIRST_HANDLER + 101)
-#define ROP_HANDLER_Contains_Set (ROP_FIRST_HANDLER + 102)
-#define ROP_HANDLER_Contains_Dict (ROP_FIRST_HANDLER + 103)
-#define ROP_HANDLER_Contains_Generic (ROP_FIRST_HANDLER + 104)
-#define ROP_HANDLER_TestBranch_Identity (ROP_FIRST_HANDLER + 105)
-#define ROP_HANDLER_TestBranch_Int (ROP_FIRST_HANDLER + 106)
-#define ROP_HANDLER_TestBranch_Float (ROP_FIRST_HANDLER + 107)
-#define ROP_HANDLER_TestBranch_Str (ROP_FIRST_HANDLER + 108)
-#define ROP_HANDLER_TestBranch_Set (ROP_FIRST_HANDLER + 109)
-#define ROP_HANDLER_TestBranch_Dict (ROP_FIRST_HANDLER + 110)
-#define ROP_HANDLER_TestBranch_Sequence (ROP_FIRST_HANDLER + 111)
-#define ROP_HANDLER_TestBranch_Generic (ROP_FIRST_HANDLER + 112)
-#define ROP_HANDLER_TestBranch_Observed (ROP_FIRST_HANDLER + 113)
-#define ROP_HANDLER_Truth_Bool (ROP_FIRST_HANDLER + 114)
-#define ROP_HANDLER_Truth_Int (ROP_FIRST_HANDLER + 115)
-#define ROP_HANDLER_Truth_List (ROP_FIRST_HANDLER + 116)
-#define ROP_HANDLER_Truth_None (ROP_FIRST_HANDLER + 117)
-#define ROP_HANDLER_Truth_Str (ROP_FIRST_HANDLER + 118)
-#define ROP_HANDLER_Truth_Plain (ROP_FIRST_HANDLER + 119)
-#define ROP_HANDLER_Truth_Slot (ROP_FIRST_HANDLER + 120)
-#define ROP_HANDLER_Truth_Generic (ROP_FIRST_HANDLER + 121)
-#define ROP_HANDLER_BranchTruth_Bool (ROP_FIRST_HANDLER + 122)
-#define ROP_HANDLER_BranchTruth_Int (ROP_FIRST_HANDLER + 123)
-#define ROP_HANDLER_BranchTruth_List (ROP_FIRST_HANDLER + 124)
-#define ROP_HANDLER_BranchTruth_None (ROP_FIRST_HANDLER + 125)
-#define ROP_HANDLER_BranchTruth_Str (ROP_FIRST_HANDLER + 126)
-#define ROP_HANDLER_BranchTruth_Plain (ROP_FIRST_HANDLER + 127)
-#define ROP_HANDLER_BranchTruth_Slot (ROP_FIRST_HANDLER + 128)
-#define ROP_HANDLER_BranchTruth_Generic (ROP_FIRST_HANDLER + 129)
-#define ROP_HANDLER_BranchNone_Test (ROP_FIRST_HANDLER + 130)
-#define ROP_HANDLER_BranchTruth_Observed (ROP_FIRST_HANDLER + 131)
-#define ROP_HANDLER_BranchNone_Observed (ROP_FIRST_HANDLER + 132)
-#define ROP_HANDLER_Jump_Direct (ROP_FIRST_HANDLER + 133)
-#define ROP_HANDLER_Jump_Poll (ROP_FIRST_HANDLER + 134)
-#define ROP_HANDLER_Jump_Warm (ROP_FIRST_HANDLER + 135)
-#define ROP_HANDLER_Jump_Observed (ROP_FIRST_HANDLER + 136)
-#define ROP_HANDLER_Const_Pool (ROP_FIRST_HANDLER + 137)
-#define ROP_HANDLER_Const_Small (ROP_FIRST_HANDLER + 138)
-#define ROP_HANDLER_Const_Common (ROP_FIRST_HANDLER + 139)
-#define ROP_HANDLER_LocalRead_Bound (ROP_FIRST_HANDLER + 140)
-#define ROP_HANDLER_LocalRead_Checked (ROP_FIRST_HANDLER + 141)
-#define ROP_HANDLER_LocalWrite_Store (ROP_FIRST_HANDLER + 142)
-#define ROP_HANDLER_LocalWrite_Restore (ROP_FIRST_HANDLER + 143)
-#define ROP_HANDLER_SaveLocal_Take (ROP_FIRST_HANDLER + 144)
-#define ROP_HANDLER_LocalDelete_Checked (ROP_FIRST_HANDLER + 145)
-#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 146)
-#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 147)
-#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 148)
-#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 149)
-#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 150)
-#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 151)
-#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 152)
-#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 153)
-#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 154)
-#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 155)
-#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 156)
-#define ROP_HANDLER_ForIter_Generic_Observed (ROP_FIRST_HANDLER + 157)
-#define ROP_HANDLER_IterClose_Retire_Observed (ROP_FIRST_HANDLER + 158)
-#define ROP_HANDLER_Yield_Ordinary_Observed (ROP_FIRST_HANDLER + 159)
-#define ROP_HANDLER_YieldFrom_Delegated_Observed (ROP_FIRST_HANDLER + 160)
-#define ROP_HANDLER_TestBranch_Identity_Observed (ROP_FIRST_HANDLER + 161)
-#define ROP_HANDLER_TestBranch_Int_Observed (ROP_FIRST_HANDLER + 162)
-#define ROP_HANDLER_TestBranch_Float_Observed (ROP_FIRST_HANDLER + 163)
-#define ROP_HANDLER_TestBranch_Str_Observed (ROP_FIRST_HANDLER + 164)
-#define ROP_HANDLER_TestBranch_Set_Observed (ROP_FIRST_HANDLER + 165)
-#define ROP_HANDLER_TestBranch_Dict_Observed (ROP_FIRST_HANDLER + 166)
-#define ROP_HANDLER_TestBranch_Sequence_Observed (ROP_FIRST_HANDLER + 167)
-#define ROP_HANDLER_TestBranch_Generic_Observed (ROP_FIRST_HANDLER + 168)
-#define ROP_HANDLER_BranchTruth_Bool_Observed (ROP_FIRST_HANDLER + 169)
-#define ROP_HANDLER_BranchTruth_Int_Observed (ROP_FIRST_HANDLER + 170)
-#define ROP_HANDLER_BranchTruth_List_Observed (ROP_FIRST_HANDLER + 171)
-#define ROP_HANDLER_BranchTruth_None_Observed (ROP_FIRST_HANDLER + 172)
-#define ROP_HANDLER_BranchTruth_Str_Observed (ROP_FIRST_HANDLER + 173)
-#define ROP_HANDLER_BranchTruth_Plain_Observed (ROP_FIRST_HANDLER + 174)
-#define ROP_HANDLER_BranchTruth_Slot_Observed (ROP_FIRST_HANDLER + 175)
-#define ROP_HANDLER_BranchTruth_Generic_Observed (ROP_FIRST_HANDLER + 176)
-#define ROP_HANDLER_BranchNone_Test_Observed (ROP_FIRST_HANDLER + 177)
-#define ROP_HANDLER_Jump_Direct_Observed (ROP_FIRST_HANDLER + 178)
-#define ROP_HANDLER_Jump_Poll_Observed (ROP_FIRST_HANDLER + 179)
-#define ROP_HANDLER_Jump_Warm_Observed (ROP_FIRST_HANDLER + 180)
+#define ROP_HANDLER_Call_Generator (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_Call_Generic (ROP_FIRST_HANDLER + 9)
+#define ROP_HANDLER_InitResult_Check (ROP_FIRST_HANDLER + 10)
+#define ROP_HANDLER_Call_Observed (ROP_FIRST_HANDLER + 11)
+#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 12)
+#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 13)
+#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 14)
+#define ROP_HANDLER_Return_Observed (ROP_FIRST_HANDLER + 15)
+#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 16)
+#define ROP_HANDLER_CellMake_Wrap (ROP_FIRST_HANDLER + 17)
+#define ROP_HANDLER_CellRead_Get (ROP_FIRST_HANDLER + 18)
+#define ROP_HANDLER_CellMapRead_Lookup (ROP_FIRST_HANDLER + 19)
+#define ROP_HANDLER_CellStore_Set (ROP_FIRST_HANDLER + 20)
+#define ROP_HANDLER_CellDelete_Unbind (ROP_FIRST_HANDLER + 21)
+#define ROP_HANDLER_Build_Tuple (ROP_FIRST_HANDLER + 22)
+#define ROP_HANDLER_Build_List (ROP_FIRST_HANDLER + 23)
+#define ROP_HANDLER_Build_Set (ROP_FIRST_HANDLER + 24)
+#define ROP_HANDLER_Build_Map (ROP_FIRST_HANDLER + 25)
+#define ROP_HANDLER_AddElement_Append (ROP_FIRST_HANDLER + 26)
+#define ROP_HANDLER_AddElement_Add (ROP_FIRST_HANDLER + 27)
+#define ROP_HANDLER_AddEntry_Put (ROP_FIRST_HANDLER + 28)
+#define ROP_HANDLER_UpdateContainer_Extend (ROP_FIRST_HANDLER + 29)
+#define ROP_HANDLER_UpdateContainer_Union (ROP_FIRST_HANDLER + 30)
+#define ROP_HANDLER_UpdateContainer_Overlay (ROP_FIRST_HANDLER + 31)
+#define ROP_HANDLER_MergeKeywords_Merge (ROP_FIRST_HANDLER + 32)
+#define ROP_HANDLER_Function_Make (ROP_FIRST_HANDLER + 33)
+#define ROP_HANDLER_Intrinsic_Unary (ROP_FIRST_HANDLER + 34)
+#define ROP_HANDLER_Intrinsic_ImportStar (ROP_FIRST_HANDLER + 35)
+#define ROP_HANDLER_Intrinsic_StopIteration (ROP_FIRST_HANDLER + 36)
+#define ROP_HANDLER_IntrinsicPair_Binary (ROP_FIRST_HANDLER + 37)
+#define ROP_HANDLER_IntrinsicPair_Attr (ROP_FIRST_HANDLER + 38)
+#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 39)
+#define ROP_HANDLER_GetAttr_GetSet (ROP_FIRST_HANDLER + 40)
+#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 41)
+#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 42)
+#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 43)
+#define ROP_HANDLER_GetAttr_Module (ROP_FIRST_HANDLER + 44)
+#define ROP_HANDLER_GetAttr_Hint (ROP_FIRST_HANDLER + 45)
+#define ROP_HANDLER_GetAttr_ValueSlot (ROP_FIRST_HANDLER + 46)
+#define ROP_HANDLER_GetAttr_PointerSlot (ROP_FIRST_HANDLER + 47)
+#define ROP_HANDLER_GetAttr_Class (ROP_FIRST_HANDLER + 48)
+#define ROP_HANDLER_GetAttr_NonDescriptorValues (ROP_FIRST_HANDLER + 49)
+#define ROP_HANDLER_GetAttr_NonDescriptorNoDict (ROP_FIRST_HANDLER + 50)
+#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 51)
+#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 52)
+#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 53)
+#define ROP_HANDLER_GetMethod_NoDict (ROP_FIRST_HANDLER + 54)
+#define ROP_HANDLER_GetMethod_LazyDict (ROP_FIRST_HANDLER + 55)
+#define ROP_HANDLER_GetMethod_ClassMethod (ROP_FIRST_HANDLER + 56)
+#define ROP_HANDLER_GetItem_Generic (ROP_FIRST_HANDLER + 57)
+#define ROP_HANDLER_SetItem_Generic (ROP_FIRST_HANDLER + 58)
+#define ROP_HANDLER_DelItem_Generic (ROP_FIRST_HANDLER + 59)
+#define ROP_HANDLER_SliceRead_Generic (ROP_FIRST_HANDLER + 60)
+#define ROP_HANDLER_SliceWrite_Generic (ROP_FIRST_HANDLER + 61)
+#define ROP_HANDLER_BuildSlice_Generic (ROP_FIRST_HANDLER + 62)
+#define ROP_HANDLER_GetItem_ListIndex (ROP_FIRST_HANDLER + 63)
+#define ROP_HANDLER_GetItem_TupleIndex (ROP_FIRST_HANDLER + 64)
+#define ROP_HANDLER_GetItem_Ascii (ROP_FIRST_HANDLER + 65)
+#define ROP_HANDLER_GetItem_UnicodeAsciiChar (ROP_FIRST_HANDLER + 66)
+#define ROP_HANDLER_GetItem_ListSlice (ROP_FIRST_HANDLER + 67)
+#define ROP_HANDLER_GetItem_Dict (ROP_FIRST_HANDLER + 68)
+#define ROP_HANDLER_SetItem_ListIndex (ROP_FIRST_HANDLER + 69)
+#define ROP_HANDLER_SetItem_Dict (ROP_FIRST_HANDLER + 70)
+#define ROP_HANDLER_IterOpen_Generic (ROP_FIRST_HANDLER + 71)
+#define ROP_HANDLER_ForIter_Generic (ROP_FIRST_HANDLER + 72)
+#define ROP_HANDLER_ForIter_Observed (ROP_FIRST_HANDLER + 73)
+#define ROP_HANDLER_IterClose_Retire (ROP_FIRST_HANDLER + 74)
+#define ROP_HANDLER_IterClose_Observed (ROP_FIRST_HANDLER + 75)
+#define ROP_HANDLER_GlobalRead_Generic (ROP_FIRST_HANDLER + 76)
+#define ROP_HANDLER_GlobalRead_Module (ROP_FIRST_HANDLER + 77)
+#define ROP_HANDLER_GlobalRead_Builtin (ROP_FIRST_HANDLER + 78)
+#define ROP_HANDLER_NamespaceRead_Name (ROP_FIRST_HANDLER + 79)
+#define ROP_HANDLER_NamespaceRead_Locals (ROP_FIRST_HANDLER + 80)
+#define ROP_HANDLER_NamespaceRead_BuildClass (ROP_FIRST_HANDLER + 81)
+#define ROP_HANDLER_NamespaceReadFrom_Mapping (ROP_FIRST_HANDLER + 82)
+#define ROP_HANDLER_NamespaceWrite_Name (ROP_FIRST_HANDLER + 83)
+#define ROP_HANDLER_NamespaceWrite_Global (ROP_FIRST_HANDLER + 84)
+#define ROP_HANDLER_SetupAnnotations_Setup (ROP_FIRST_HANDLER + 85)
+#define ROP_HANDLER_Import_Eager (ROP_FIRST_HANDLER + 86)
+#define ROP_HANDLER_Import_Policy (ROP_FIRST_HANDLER + 87)
+#define ROP_HANDLER_Import_Lazy (ROP_FIRST_HANDLER + 88)
+#define ROP_HANDLER_ImportFrom_From (ROP_FIRST_HANDLER + 89)
+#define ROP_HANDLER_ImportFrom_FromLast (ROP_FIRST_HANDLER + 90)
+#define ROP_HANDLER_Awaitable_Await (ROP_FIRST_HANDLER + 91)
+#define ROP_HANDLER_AsyncIterOpen_Open (ROP_FIRST_HANDLER + 92)
+#define ROP_HANDLER_AsyncIterNext_Next (ROP_FIRST_HANDLER + 93)
+#define ROP_HANDLER_Yield_Ordinary (ROP_FIRST_HANDLER + 94)
+#define ROP_HANDLER_YieldFrom_Delegated (ROP_FIRST_HANDLER + 95)
+#define ROP_HANDLER_Yield_Observed (ROP_FIRST_HANDLER + 96)
+#define ROP_HANDLER_YieldFrom_Observed (ROP_FIRST_HANDLER + 97)
+#define ROP_HANDLER_Send_Generic (ROP_FIRST_HANDLER + 98)
+#define ROP_HANDLER_Send_Observed (ROP_FIRST_HANDLER + 99)
+#define ROP_HANDLER_Compare_Int (ROP_FIRST_HANDLER + 100)
+#define ROP_HANDLER_Compare_Float (ROP_FIRST_HANDLER + 101)
+#define ROP_HANDLER_Compare_Str (ROP_FIRST_HANDLER + 102)
+#define ROP_HANDLER_Compare_Generic (ROP_FIRST_HANDLER + 103)
+#define ROP_HANDLER_Identity_Test (ROP_FIRST_HANDLER + 104)
+#define ROP_HANDLER_Contains_Set (ROP_FIRST_HANDLER + 105)
+#define ROP_HANDLER_Contains_Dict (ROP_FIRST_HANDLER + 106)
+#define ROP_HANDLER_Contains_Generic (ROP_FIRST_HANDLER + 107)
+#define ROP_HANDLER_TestBranch_Identity (ROP_FIRST_HANDLER + 108)
+#define ROP_HANDLER_TestBranch_Int (ROP_FIRST_HANDLER + 109)
+#define ROP_HANDLER_TestBranch_Float (ROP_FIRST_HANDLER + 110)
+#define ROP_HANDLER_TestBranch_Str (ROP_FIRST_HANDLER + 111)
+#define ROP_HANDLER_TestBranch_Set (ROP_FIRST_HANDLER + 112)
+#define ROP_HANDLER_TestBranch_Dict (ROP_FIRST_HANDLER + 113)
+#define ROP_HANDLER_TestBranch_Sequence (ROP_FIRST_HANDLER + 114)
+#define ROP_HANDLER_TestBranch_Generic (ROP_FIRST_HANDLER + 115)
+#define ROP_HANDLER_TestBranch_Observed (ROP_FIRST_HANDLER + 116)
+#define ROP_HANDLER_Truth_Bool (ROP_FIRST_HANDLER + 117)
+#define ROP_HANDLER_Truth_Int (ROP_FIRST_HANDLER + 118)
+#define ROP_HANDLER_Truth_List (ROP_FIRST_HANDLER + 119)
+#define ROP_HANDLER_Truth_None (ROP_FIRST_HANDLER + 120)
+#define ROP_HANDLER_Truth_Str (ROP_FIRST_HANDLER + 121)
+#define ROP_HANDLER_Truth_Plain (ROP_FIRST_HANDLER + 122)
+#define ROP_HANDLER_Truth_Slot (ROP_FIRST_HANDLER + 123)
+#define ROP_HANDLER_Truth_Generic (ROP_FIRST_HANDLER + 124)
+#define ROP_HANDLER_BranchTruth_Bool (ROP_FIRST_HANDLER + 125)
+#define ROP_HANDLER_BranchTruth_Int (ROP_FIRST_HANDLER + 126)
+#define ROP_HANDLER_BranchTruth_List (ROP_FIRST_HANDLER + 127)
+#define ROP_HANDLER_BranchTruth_None (ROP_FIRST_HANDLER + 128)
+#define ROP_HANDLER_BranchTruth_Str (ROP_FIRST_HANDLER + 129)
+#define ROP_HANDLER_BranchTruth_Plain (ROP_FIRST_HANDLER + 130)
+#define ROP_HANDLER_BranchTruth_Slot (ROP_FIRST_HANDLER + 131)
+#define ROP_HANDLER_BranchTruth_Generic (ROP_FIRST_HANDLER + 132)
+#define ROP_HANDLER_BranchNone_Test (ROP_FIRST_HANDLER + 133)
+#define ROP_HANDLER_BranchTruth_Observed (ROP_FIRST_HANDLER + 134)
+#define ROP_HANDLER_BranchNone_Observed (ROP_FIRST_HANDLER + 135)
+#define ROP_HANDLER_Jump_Direct (ROP_FIRST_HANDLER + 136)
+#define ROP_HANDLER_Jump_Poll (ROP_FIRST_HANDLER + 137)
+#define ROP_HANDLER_Jump_Warm (ROP_FIRST_HANDLER + 138)
+#define ROP_HANDLER_Jump_Observed (ROP_FIRST_HANDLER + 139)
+#define ROP_HANDLER_Const_Pool (ROP_FIRST_HANDLER + 140)
+#define ROP_HANDLER_Const_Small (ROP_FIRST_HANDLER + 141)
+#define ROP_HANDLER_Const_Common (ROP_FIRST_HANDLER + 142)
+#define ROP_HANDLER_LocalRead_Bound (ROP_FIRST_HANDLER + 143)
+#define ROP_HANDLER_LocalRead_Checked (ROP_FIRST_HANDLER + 144)
+#define ROP_HANDLER_LocalWrite_Store (ROP_FIRST_HANDLER + 145)
+#define ROP_HANDLER_LocalWrite_Restore (ROP_FIRST_HANDLER + 146)
+#define ROP_HANDLER_SaveLocal_Take (ROP_FIRST_HANDLER + 147)
+#define ROP_HANDLER_LocalDelete_Checked (ROP_FIRST_HANDLER + 148)
+#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 149)
+#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 150)
+#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 151)
+#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 152)
+#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 153)
+#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 154)
+#define ROP_HANDLER_Call_Generator_Observed (ROP_FIRST_HANDLER + 155)
+#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 156)
+#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 157)
+#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 158)
+#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 159)
+#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 160)
+#define ROP_HANDLER_ForIter_Generic_Observed (ROP_FIRST_HANDLER + 161)
+#define ROP_HANDLER_IterClose_Retire_Observed (ROP_FIRST_HANDLER + 162)
+#define ROP_HANDLER_Yield_Ordinary_Observed (ROP_FIRST_HANDLER + 163)
+#define ROP_HANDLER_YieldFrom_Delegated_Observed (ROP_FIRST_HANDLER + 164)
+#define ROP_HANDLER_Send_Generic_Observed (ROP_FIRST_HANDLER + 165)
+#define ROP_HANDLER_TestBranch_Identity_Observed (ROP_FIRST_HANDLER + 166)
+#define ROP_HANDLER_TestBranch_Int_Observed (ROP_FIRST_HANDLER + 167)
+#define ROP_HANDLER_TestBranch_Float_Observed (ROP_FIRST_HANDLER + 168)
+#define ROP_HANDLER_TestBranch_Str_Observed (ROP_FIRST_HANDLER + 169)
+#define ROP_HANDLER_TestBranch_Set_Observed (ROP_FIRST_HANDLER + 170)
+#define ROP_HANDLER_TestBranch_Dict_Observed (ROP_FIRST_HANDLER + 171)
+#define ROP_HANDLER_TestBranch_Sequence_Observed (ROP_FIRST_HANDLER + 172)
+#define ROP_HANDLER_TestBranch_Generic_Observed (ROP_FIRST_HANDLER + 173)
+#define ROP_HANDLER_BranchTruth_Bool_Observed (ROP_FIRST_HANDLER + 174)
+#define ROP_HANDLER_BranchTruth_Int_Observed (ROP_FIRST_HANDLER + 175)
+#define ROP_HANDLER_BranchTruth_List_Observed (ROP_FIRST_HANDLER + 176)
+#define ROP_HANDLER_BranchTruth_None_Observed (ROP_FIRST_HANDLER + 177)
+#define ROP_HANDLER_BranchTruth_Str_Observed (ROP_FIRST_HANDLER + 178)
+#define ROP_HANDLER_BranchTruth_Plain_Observed (ROP_FIRST_HANDLER + 179)
+#define ROP_HANDLER_BranchTruth_Slot_Observed (ROP_FIRST_HANDLER + 180)
+#define ROP_HANDLER_BranchTruth_Generic_Observed (ROP_FIRST_HANDLER + 181)
+#define ROP_HANDLER_BranchNone_Test_Observed (ROP_FIRST_HANDLER + 182)
+#define ROP_HANDLER_Jump_Direct_Observed (ROP_FIRST_HANDLER + 183)
+#define ROP_HANDLER_Jump_Poll_Observed (ROP_FIRST_HANDLER + 184)
+#define ROP_HANDLER_Jump_Warm_Observed (ROP_FIRST_HANDLER + 185)
 
 /* The arm of a statically selected family that each selection admits
  * (its `select`): ROP_SELECT_<Family>_<member>... */
@@ -433,26 +438,32 @@ enum {
 #define ROP_POINT_Return_Delivered 100
 #define ROP_POINT_Return_EventFailed 101
 #define ROP_POINT_SaveLocal_Done 102
-#define ROP_POINT_SetItem_Done 103
-#define ROP_POINT_SetItem_Failed 104
-#define ROP_POINT_SetupAnnotations_Done 105
-#define ROP_POINT_SetupAnnotations_Failed 106
-#define ROP_POINT_SliceRead_Done 107
-#define ROP_POINT_SliceRead_Failed 108
-#define ROP_POINT_SliceWrite_Done 109
-#define ROP_POINT_SliceWrite_Failed 110
-#define ROP_POINT_TestBranch_Event 111
-#define ROP_POINT_TestBranch_Failed 112
-#define ROP_POINT_TestBranch_Fell 113
-#define ROP_POINT_TestBranch_Jumped 114
-#define ROP_POINT_Truth_Done 115
-#define ROP_POINT_Truth_Failed 116
-#define ROP_POINT_UpdateContainer_Done 117
-#define ROP_POINT_UpdateContainer_Failed 118
-#define ROP_POINT_Yield_EventFailed 119
-#define ROP_POINT_Yield_Resumed 120
-#define ROP_POINT_YieldFrom_EventFailed 121
-#define ROP_POINT_YieldFrom_Resumed 122
+#define ROP_POINT_Send_Closed 103
+#define ROP_POINT_Send_Completed 104
+#define ROP_POINT_Send_ExitEvent 105
+#define ROP_POINT_Send_Failed 106
+#define ROP_POINT_Send_Stepped 107
+#define ROP_POINT_Send_Yielded 108
+#define ROP_POINT_SetItem_Done 109
+#define ROP_POINT_SetItem_Failed 110
+#define ROP_POINT_SetupAnnotations_Done 111
+#define ROP_POINT_SetupAnnotations_Failed 112
+#define ROP_POINT_SliceRead_Done 113
+#define ROP_POINT_SliceRead_Failed 114
+#define ROP_POINT_SliceWrite_Done 115
+#define ROP_POINT_SliceWrite_Failed 116
+#define ROP_POINT_TestBranch_Event 117
+#define ROP_POINT_TestBranch_Failed 118
+#define ROP_POINT_TestBranch_Fell 119
+#define ROP_POINT_TestBranch_Jumped 120
+#define ROP_POINT_Truth_Done 121
+#define ROP_POINT_Truth_Failed 122
+#define ROP_POINT_UpdateContainer_Done 123
+#define ROP_POINT_UpdateContainer_Failed 124
+#define ROP_POINT_Yield_EventFailed 125
+#define ROP_POINT_Yield_Resumed 126
+#define ROP_POINT_YieldFrom_EventFailed 127
+#define ROP_POINT_YieldFrom_Resumed 128
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -879,12 +890,9 @@ static const _PyRopOperand _PyRop_Operands_SaveLocal[] = {
 };
 static const uint16_t _PyRop_Ops_SaveLocal[] = {LOAD_FAST_AND_CLEAR};
 static const _PyRopOperand _PyRop_Operands_Send[] = {
-    {"yielded", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
-    {"completed", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 28, IR_F_LOCAL_B},  /* Dst */
-    {"pair", ROP_FIELD_HOME, ROP_ROLE_ITERPAIR, 0, 12, 40, IR_F_LOCAL_C},  /* IterPair */
-    {"sent", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 52, IR_F_LOCAL_D},  /* Src */
-    {"done", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 64, 0},  /* NearHead */
-    {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 80, 0},  /* Fb<Send> */
+    {"completed", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
+    {"send", ROP_FIELD_HOME, ROP_ROLE_SENDWINDOW, 0, 12, 28, IR_F_LOCAL_B},  /* SendWindow */
+    {"done", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 40, 0},  /* NearHead */
 };
 static const uint16_t _PyRop_Ops_Send[] = {SEND};
 static const _PyRopOperand _PyRop_Operands_SetItem[] = {
@@ -1051,7 +1059,7 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
     [ROP_FAMILY_Resume] = {"Resume", 1, 0, _PyRop_Operands_Resume, 1, _PyRop_Ops_Resume},
     [ROP_FAMILY_Return] = {"Return", 1, 0, _PyRop_Operands_Return, 2, _PyRop_Ops_Return},
     [ROP_FAMILY_SaveLocal] = {"SaveLocal", 2, 0, _PyRop_Operands_SaveLocal, 1, _PyRop_Ops_SaveLocal},
-    [ROP_FAMILY_Send] = {"Send", 6, 1, _PyRop_Operands_Send, 1, _PyRop_Ops_Send},
+    [ROP_FAMILY_Send] = {"Send", 3, 0, _PyRop_Operands_Send, 1, _PyRop_Ops_Send},
     [ROP_FAMILY_SetItem] = {"SetItem", 4, 0, _PyRop_Operands_SetItem, 1, _PyRop_Ops_SetItem},
     [ROP_FAMILY_SetupAnnotations] = {"SetupAnnotations", 0, 0, _PyRop_Operands_SetupAnnotations, 1, _PyRop_Ops_SetupAnnotations},
     [ROP_FAMILY_SliceRead] = {"SliceRead", 4, 0, _PyRop_Operands_SliceRead, 1, _PyRop_Ops_SliceRead},
@@ -1077,6 +1085,7 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Call.Exact", ROP_HANDLER_Call_Exact, ROP_FAMILY_Call, 1},
     {"Call.BoundExact", ROP_HANDLER_Call_BoundExact, ROP_FAMILY_Call, 1},
     {"Call.Init", ROP_HANDLER_Call_Init, ROP_FAMILY_Call, 1},
+    {"Call.Generator", ROP_HANDLER_Call_Generator, ROP_FAMILY_Call, 1},
     {"Call.Generic", ROP_HANDLER_Call_Generic, ROP_FAMILY_Call, 1},
     {"InitResult.Check", ROP_HANDLER_InitResult_Check, ROP_FAMILY_InitResult, 1},
     {"Call.Observed", ROP_HANDLER_Call_Observed, ROP_FAMILY_Call, 1},
@@ -1166,6 +1175,8 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"YieldFrom.Delegated", ROP_HANDLER_YieldFrom_Delegated, ROP_FAMILY_YieldFrom, 1},
     {"Yield.Observed", ROP_HANDLER_Yield_Observed, ROP_FAMILY_Yield, 1},
     {"YieldFrom.Observed", ROP_HANDLER_YieldFrom_Observed, ROP_FAMILY_YieldFrom, 1},
+    {"Send.Generic", ROP_HANDLER_Send_Generic, ROP_FAMILY_Send, 1},
+    {"Send.Observed", ROP_HANDLER_Send_Observed, ROP_FAMILY_Send, 1},
     {"Compare.Int", ROP_HANDLER_Compare_Int, ROP_FAMILY_Compare, 1},
     {"Compare.Float", ROP_HANDLER_Compare_Float, ROP_FAMILY_Compare, 1},
     {"Compare.Str", ROP_HANDLER_Compare_Str, ROP_FAMILY_Compare, 1},
@@ -1220,7 +1231,7 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Move.Copy", ROP_HANDLER_Move_Copy, ROP_FAMILY_Move, 1},
 };
 
-static const _PyRopPoint _PyRop_Points[122] = {
+static const _PyRopPoint _PyRop_Points[128] = {
     {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0},
     {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0)},
     {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0},
@@ -1323,26 +1334,32 @@ static const _PyRopPoint _PyRop_Points[122] = {
     {"Return.Delivered", ROP_FAMILY_Return, 100, 1, 3, 0, 0, (1 << 0), 0},
     {"Return.EventFailed", ROP_FAMILY_Return, 101, 0, 0, 1, 0, (1 << 0), 0},
     {"SaveLocal.Done", ROP_FAMILY_SaveLocal, 102, 0, 1, 0, 0, (1 << 1), (1 << 0)},
-    {"SetItem.Done", ROP_FAMILY_SetItem, 103, 0, 1, 0, 0, (1 << 1) | (1 << 0) | (1 << 2), 0},
-    {"SetItem.Failed", ROP_FAMILY_SetItem, 104, 0, 0, 1, 0, (1 << 1) | (1 << 0) | (1 << 2), 0},
-    {"SetupAnnotations.Done", ROP_FAMILY_SetupAnnotations, 105, 0, 1, 0, 0, 0, 0},
-    {"SetupAnnotations.Failed", ROP_FAMILY_SetupAnnotations, 106, 0, 0, 1, 0, 0, 0},
-    {"SliceRead.Done", ROP_FAMILY_SliceRead, 107, 0, 1, 0, 0, (1 << 3) | (1 << 2) | (1 << 1), (1 << 0)},
-    {"SliceRead.Failed", ROP_FAMILY_SliceRead, 108, 0, 0, 1, 0, (1 << 3) | (1 << 2) | (1 << 1), 0},
-    {"SliceWrite.Done", ROP_FAMILY_SliceWrite, 109, 0, 1, 0, 0, (1 << 2) | (1 << 1) | (1 << 0) | (1 << 3), 0},
-    {"SliceWrite.Failed", ROP_FAMILY_SliceWrite, 110, 0, 0, 1, 0, (1 << 2) | (1 << 1) | (1 << 0) | (1 << 3), 0},
-    {"TestBranch.Event", ROP_FAMILY_TestBranch, 111, 0, 0, 1, 0, (1 << 1) | (1 << 0), 0},
-    {"TestBranch.Failed", ROP_FAMILY_TestBranch, 112, 0, 0, 1, 0, (1 << 1) | (1 << 0), 0},
-    {"TestBranch.Fell", ROP_FAMILY_TestBranch, 113, 0, 1, 0, 0, (1 << 1) | (1 << 0), 0},
-    {"TestBranch.Jumped", ROP_FAMILY_TestBranch, 114, 0, 2, 0, 0, (1 << 1) | (1 << 0), 0},
-    {"Truth.Done", ROP_FAMILY_Truth, 115, 0, 1, 0, 0, (1 << 1), (1 << 0)},
-    {"Truth.Failed", ROP_FAMILY_Truth, 116, 0, 0, 1, 0, (1 << 1), 0},
-    {"UpdateContainer.Done", ROP_FAMILY_UpdateContainer, 117, 0, 1, 0, (1 << 0), (1 << 1), 0},
-    {"UpdateContainer.Failed", ROP_FAMILY_UpdateContainer, 118, 0, 0, 1, (1 << 0) | (1 << 1), 0, 0},
-    {"Yield.EventFailed", ROP_FAMILY_Yield, 119, 0, 0, 1, (1 << 0), 0, 0},
-    {"Yield.Resumed", ROP_FAMILY_Yield, 120, 0, 1, 0, 0, (1 << 0), (1 << 1)},
-    {"YieldFrom.EventFailed", ROP_FAMILY_YieldFrom, 121, 0, 0, 1, (1 << 0), 0, 0},
-    {"YieldFrom.Resumed", ROP_FAMILY_YieldFrom, 122, 0, 1, 0, 0, (1 << 0), (1 << 1)},
+    {"Send.Closed", ROP_FAMILY_Send, 103, 0, 0, 1, (1 << 1), (1 << 1), 0},
+    {"Send.Completed", ROP_FAMILY_Send, 104, 0, 1, 0, 0, (1 << 1), (1 << 0)},
+    {"Send.ExitEvent", ROP_FAMILY_Send, 105, 0, 0, 1, 0, (1 << 1), (1 << 0)},
+    {"Send.Failed", ROP_FAMILY_Send, 106, 0, 0, 1, (1 << 1), 0, 0},
+    {"Send.Stepped", ROP_FAMILY_Send, 107, 0, 1, 0, (1 << 1), (1 << 1), (1 << 1)},
+    {"Send.Yielded", ROP_FAMILY_Send, 108, 1, 1, 0, (1 << 1), (1 << 1), (1 << 1)},
+    {"SetItem.Done", ROP_FAMILY_SetItem, 109, 0, 1, 0, 0, (1 << 1) | (1 << 0) | (1 << 2), 0},
+    {"SetItem.Failed", ROP_FAMILY_SetItem, 110, 0, 0, 1, 0, (1 << 1) | (1 << 0) | (1 << 2), 0},
+    {"SetupAnnotations.Done", ROP_FAMILY_SetupAnnotations, 111, 0, 1, 0, 0, 0, 0},
+    {"SetupAnnotations.Failed", ROP_FAMILY_SetupAnnotations, 112, 0, 0, 1, 0, 0, 0},
+    {"SliceRead.Done", ROP_FAMILY_SliceRead, 113, 0, 1, 0, 0, (1 << 3) | (1 << 2) | (1 << 1), (1 << 0)},
+    {"SliceRead.Failed", ROP_FAMILY_SliceRead, 114, 0, 0, 1, 0, (1 << 3) | (1 << 2) | (1 << 1), 0},
+    {"SliceWrite.Done", ROP_FAMILY_SliceWrite, 115, 0, 1, 0, 0, (1 << 2) | (1 << 1) | (1 << 0) | (1 << 3), 0},
+    {"SliceWrite.Failed", ROP_FAMILY_SliceWrite, 116, 0, 0, 1, 0, (1 << 2) | (1 << 1) | (1 << 0) | (1 << 3), 0},
+    {"TestBranch.Event", ROP_FAMILY_TestBranch, 117, 0, 0, 1, 0, (1 << 1) | (1 << 0), 0},
+    {"TestBranch.Failed", ROP_FAMILY_TestBranch, 118, 0, 0, 1, 0, (1 << 1) | (1 << 0), 0},
+    {"TestBranch.Fell", ROP_FAMILY_TestBranch, 119, 0, 1, 0, 0, (1 << 1) | (1 << 0), 0},
+    {"TestBranch.Jumped", ROP_FAMILY_TestBranch, 120, 0, 2, 0, 0, (1 << 1) | (1 << 0), 0},
+    {"Truth.Done", ROP_FAMILY_Truth, 121, 0, 1, 0, 0, (1 << 1), (1 << 0)},
+    {"Truth.Failed", ROP_FAMILY_Truth, 122, 0, 0, 1, 0, (1 << 1), 0},
+    {"UpdateContainer.Done", ROP_FAMILY_UpdateContainer, 123, 0, 1, 0, (1 << 0), (1 << 1), 0},
+    {"UpdateContainer.Failed", ROP_FAMILY_UpdateContainer, 124, 0, 0, 1, (1 << 0) | (1 << 1), 0, 0},
+    {"Yield.EventFailed", ROP_FAMILY_Yield, 125, 0, 0, 1, (1 << 0), 0, 0},
+    {"Yield.Resumed", ROP_FAMILY_Yield, 126, 0, 1, 0, 0, (1 << 0), (1 << 1)},
+    {"YieldFrom.EventFailed", ROP_FAMILY_YieldFrom, 127, 0, 0, 1, (1 << 0), 0, 0},
+    {"YieldFrom.Resumed", ROP_FAMILY_YieldFrom, 128, 0, 1, 0, 0, (1 << 0), (1 << 1)},
 };
 
 /* Static selection (rop_catalog.Select): the members of each dimension */

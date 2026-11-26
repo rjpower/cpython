@@ -1814,9 +1814,8 @@
         ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): the generator's expansion `_PyIR_OriginalHandler(frame, this_instr, op)` \
      * (ir.c:795): `_PyCode_HandlerFor`, which reads the code object's words (never \
-     * rewritten: pycore_ir.h:841) and the handler format tables, and calls \
-     * _PyIR_GeneratorBoundaryHandler (a table lookup; Py_FatalError on a missing \
-     * entry, not a raise).  No object read, no write, no raise. */ \
+     * rewritten: pycore_ir.h:841) and the handler format tables.  No object \
+     * read, no write, no raise. */ \
     MACRO(ORIGINAL_HANDLER, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): pycore_ir.h:581: `opcode in range && (_PyIR_Formats[opcode].effects & \
@@ -1838,11 +1837,6 @@
      * no lowering. */ \
     HELPER(_Py_Specialize_LoadSuperAttr, void, (PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the receiver's type and \
-     * its _tp_iteritem slot; no lookup and no lowering. 
-     * The receiver is taken as an object without a test (PyValue_AsKnownObjectBorrow; the send loop's receiver is always one): the row requires `object`. */ \
-    HELPER(_Py_Specialize_Send, void, (PyValue, _PyInstr *), \
-        ARGS(borrowed object, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. The instance, slot and dict- \
      * hint paths read shapes and keys (specialize_dict_access), as for loads. */ \
     HELPER(_Py_Specialize_StoreAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
@@ -3081,27 +3075,15 @@
           EFFECTS(reads, writes, raises, releases, runs_python, \
                   switches_frame, retires_frame), EXITS(raise, exit), \
           CALLS(_PyEval_ProcessError)) \
-    /* Evidence (G0c batch 6; ir_generator.return_to_caller, \
-     * finish_generator_return, Python/ceval_routines.h gen_return, \
-     * Python/ceval.c _PyEval_CompleteGeneratorReturn).  Each macro \
-     * consumes the value on both exits.  IR_RETURN_TO_CALLER: a generator's \
-     * return completes the resumer's step (_PyEval_CompleteGeneratorReturn: \
-     * the value is published to the resumer, or closed with the step's \
-     * error, and the resumer's closes may run Python), any other return \
-     * stores it in the caller's return slot (IR_STORE_RETURN); then it \
-     * dispatches in the caller (return) or processes the step's error \
-     * (raise).  IR_FINISH_GENERATOR_RETURN{,_EMPTY}: an unconditional \
+    /* Evidence (G0c batch 6; ir_generator.finish_generator_return, \
+     * Python/ceval_routines.h gen_return).  Each macro consumes the value \
+     * on both exits.  IR_FINISH_GENERATOR_RETURN{,_EMPTY}: an unconditional \
      * transfer of the value to gen_return, which retires the dying \
      * generator frame and completes the resumer's step.  Its code ends the \
      * uop's path, as IR_GEN_RETURN is a goto (interpreter) or a tail call \
-     * (function form), so the value is not the uop's afterwards; the seed \
-     * said `borrowed` and left the value to the frame clear that follows, \
-     * which only the non-generator path reaches.  Failure: the step's \
-     * error is raised, with the value closed.  TRANSFER_TOKENS (RETURN, \
-     * RAISE). */ \
-    MACRO(IR_RETURN_TO_CALLER, ARGS(consumed, scalar), NONE, \
-          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
-          EXITS(return, raise)) \
+     * (function form), so the value is not the uop's afterwards.  Failure: \
+     * the step's error is raised, with the value closed.  TRANSFER_TOKENS \
+     * (RETURN, RAISE). */ \
     MACRO(IR_FINISH_GENERATOR_RETURN, ARGS(consumed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python, switches_frame, retires_frame), \
           EXITS(return, raise)) \

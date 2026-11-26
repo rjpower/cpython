@@ -154,18 +154,16 @@ extern "C" {
 #define CALL_KW_PY                             149
 #define LOAD_SUPER_ATTR_ATTR                   150
 #define LOAD_SUPER_ATTR_METHOD                 151
-#define SEND_ASYNC_GEN                         152
-#define SEND_GEN                               153
-#define SEND_VIRTUAL                           154
-#define STORE_ATTR_INSTANCE_VALUE              155
-#define STORE_ATTR_SHAPE                       156
-#define STORE_ATTR_SHAPE_ADD                   157
-#define STORE_ATTR_SLOT                        158
-#define STORE_ATTR_WITH_HINT                   159
-#define UNPACK_SEQUENCE_LIST                   160
-#define UNPACK_SEQUENCE_TUPLE                  161
-#define INSTRUMENTED_END_FOR                   234
-#define INSTRUMENTED_POP_ITER                  235
+#define STORE_ATTR_INSTANCE_VALUE              152
+#define STORE_ATTR_SHAPE                       153
+#define STORE_ATTR_SHAPE_ADD                   154
+#define STORE_ATTR_SLOT                        155
+#define STORE_ATTR_WITH_HINT                   156
+#define UNPACK_SEQUENCE_LIST                   157
+#define UNPACK_SEQUENCE_TUPLE                  158
+#define INSTRUMENTED_END_FOR                   233
+#define INSTRUMENTED_POP_ITER                  234
+#define INSTRUMENTED_SEND                      235
 #define INSTRUMENTED_END_SEND                  236
 #define INSTRUMENTED_RETURN_VALUE              237
 #define INSTRUMENTED_JUMP_IF_FALSE_OR_POP      238
@@ -200,9 +198,9 @@ extern "C" {
 
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
-#define MIN_INSTRUMENTED_OPCODE                234
+#define MIN_INSTRUMENTED_OPCODE                233
 #define IR_NUM_OLD_HANDLERS                    256
-#define IR_NUM_HANDLERS                        437
+#define IR_NUM_HANDLERS                        442
 
 #ifdef __cplusplus
 }

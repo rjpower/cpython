@@ -2311,9 +2311,12 @@ register_context_forget_reads(PyCodeObject *code, int pc,
         int home = analysis->nl + j;
         if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[pc], arg, home) ||
             /* A call's child frame lies above the parent's, so it only
-             * takes the call's operands, which the read test covers */
+             * takes the call's operands, which the read test covers. A
+             * yield suspends this frame and takes nothing else with it. */
             (fmt->operands == _PyIR_OPERANDS_NONE &&
-             (fmt->effects & _PyIR_PUSHES_FRAME) && (base < 0 || home >= base)))
+             (fmt->effects & _PyIR_PUSHES_FRAME) &&
+             !(fmt->events & (1u << PY_MONITORING_EVENT_PY_YIELD)) &&
+             (base < 0 || home >= base)))
         {
             origins[j] = 0;
         }

@@ -1575,6 +1575,9 @@ class PilotTests(unittest.TestCase):
                     f"items.rop:{number}:5: {arm}: points: raise at {family}.Failed: "
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
+        attr_store = at("attrs.rop", "exit raise(AttrWrite.Failed, saved);", 5)
+        attr_delete = at("attrs.rop", "exit raise(AttrWrite.DeleteFailed, dsaved);", 5)
+        special = at("attrs.rop", "exit raise(SpecialLookup.Failed, saved);", 5)
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
         pattern_class = at("patterns.rop", "exit raise(PatternClass.Failed, saved);", 5)
         convert = at("text.rop", "exit raise(Convert.Failed, saved);", 5)
@@ -1639,6 +1642,14 @@ class PilotTests(unittest.TestCase):
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact",
+              f"{attr_store}: AttrWrite.Generic: points: raise at AttrWrite.Failed: "
+              "AttrWrite.Failed lists obj in spent, but obj is intact",
+              f"{attr_store}: AttrWrite.Generic: points: raise at AttrWrite.Failed: "
+              "AttrWrite.Failed lists value in spent, but value is intact",
+              f"{attr_delete}: AttrWrite.Generic: points: raise at AttrWrite.DeleteFailed: "
+              "AttrWrite.DeleteFailed lists obj in spent, but obj is intact",
+              f"{special}: SpecialLookup.Generic: points: raise at SpecialLookup.Failed: "
+              "SpecialLookup.Failed lists obj in spent, but obj is intact",
               f"{cell_map}: CellMapRead.Lookup: points: raise at CellMapRead.Failed: "
               "CellMapRead.Failed lists mapping in spent, but mapping is intact",
               f"{raise_getset}: GetAttr.GetSet: points: raise at GetAttr.Failed: "

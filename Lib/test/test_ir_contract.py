@@ -42,8 +42,6 @@ FEEDBACK = {
     "FOR_ITER": ("UNARY", 24),
     "GET_ITER": ("UNARY", 24),
     "SEND": ("UNARY", 24),
-    "STORE_ATTR": ("ATTR", 48),
-    "LOAD_SUPER_ATTR": ("ATTR", 48),
     "CALL_KW": ("CALL", 40),
     "CALL_FUNCTION_EX": ("CALL", 40),
 }
@@ -384,7 +382,6 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
             "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
             "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
-            "INSTRUMENTED_RESUME": {"PY_START", "PY_RESUME"},
         }
         for name, names in expected.items():
             with self.subTest(name=name):
@@ -486,7 +483,6 @@ class ContractTests(unittest.TestCase):
             self.assertFalse(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
         for name in ("CALL_KW", "STORE_FAST"):
             self.assertTrue(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        self.assertTrue(BY_NAME["RESUME"].effects & _opcode.IR_POLLS)
         self.assertTrue(BY_NAME["COMPARE_OP_INT"].effects & _opcode.IR_DEOPTS)
 
 

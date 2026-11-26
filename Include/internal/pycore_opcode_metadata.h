@@ -260,10 +260,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 1;
         case LOAD_SUPER_ATTR:
             return 3;
-        case LOAD_SUPER_ATTR_ATTR:
-            return 3;
-        case LOAD_SUPER_ATTR_METHOD:
-            return 3;
         case MAKE_CELL:
             return 0;
         case MAKE_FUNCTION:
@@ -339,16 +335,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
         case SET_UPDATE:
             return 2 + (oparg-1);
         case STORE_ATTR:
-            return 2;
-        case STORE_ATTR_INSTANCE_VALUE:
-            return 2;
-        case STORE_ATTR_SHAPE:
-            return 2;
-        case STORE_ATTR_SHAPE_ADD:
-            return 2;
-        case STORE_ATTR_SLOT:
-            return 2;
-        case STORE_ATTR_WITH_HINT:
             return 2;
         case STORE_DEREF:
             return 1;
@@ -538,7 +524,7 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
         case INSTRUMENTED_LINE:
             return 0;
         case INSTRUMENTED_LOAD_SUPER_ATTR:
-            return 1 + (oparg & 1);
+            return 1 + (oparg&1);
         case INSTRUMENTED_POP_ITER:
             return 0;
         case INSTRUMENTED_POP_JUMP_IF_FALSE:
@@ -620,11 +606,7 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
         case LOAD_SPECIAL:
             return 2;
         case LOAD_SUPER_ATTR:
-            return 1 + (oparg & 1);
-        case LOAD_SUPER_ATTR_ATTR:
-            return 1;
-        case LOAD_SUPER_ATTR_METHOD:
-            return 2;
+            return 1 + (oparg&1);
         case MAKE_CELL:
             return 0;
         case MAKE_FUNCTION:
@@ -701,16 +683,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 1 + (oparg-1);
         case STORE_ATTR:
             return 0;
-        case STORE_ATTR_INSTANCE_VALUE:
-            return 0;
-        case STORE_ATTR_SHAPE:
-            return 0;
-        case STORE_ATTR_SHAPE_ADD:
-            return 0;
-        case STORE_ATTR_SLOT:
-            return 0;
-        case STORE_ATTR_WITH_HINT:
-            return 0;
         case STORE_DEREF:
             return 0;
         case STORE_FAST:
@@ -764,7 +736,6 @@ enum InstructionFormat {
     INSTR_FMT_IX = 7,
     INSTR_FMT_IXC = 8,
     INSTR_FMT_IXC00 = 9,
-    INSTR_FMT_IXC000 = 10,
 };
 
 #define IS_VALID_OPCODE(OP) \
@@ -895,13 +866,13 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [INSTRUMENTED_JUMP_IF_FALSE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [INSTRUMENTED_JUMP_IF_TRUE_OR_POP] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [INSTRUMENTED_LINE] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
-    [INSTRUMENTED_LOAD_SUPER_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [INSTRUMENTED_LOAD_SUPER_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG },
     [INSTRUMENTED_POP_ITER] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INSTRUMENTED_POP_JUMP_IF_FALSE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [INSTRUMENTED_POP_JUMP_IF_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [INSTRUMENTED_POP_JUMP_IF_NOT_NONE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
     [INSTRUMENTED_POP_JUMP_IF_TRUE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG },
-    [INSTRUMENTED_RESUME] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
+    [INSTRUMENTED_RESUME] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
     [INSTRUMENTED_RETURN_VALUE] = { true, INSTR_FMT_IX, 0 },
     [INSTRUMENTED_YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [INTERPRETER_EXIT] = { true, INSTR_FMT_IX, 0 },
@@ -930,10 +901,8 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [LOAD_LOCALS] = { true, INSTR_FMT_IX, 0 },
     [LOAD_NAME] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_NAME_FLAG },
     [LOAD_SMALL_INT] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
-    [LOAD_SPECIAL] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_SUPER_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_SUPER_ATTR_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [LOAD_SUPER_ATTR_METHOD] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
+    [LOAD_SPECIAL] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
+    [LOAD_SUPER_ATTR] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_NAME_FLAG },
     [MAKE_CELL] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_LOCAL_FLAG | HAS_ESCAPES_FLAG },
     [MAKE_FUNCTION] = { true, INSTR_FMT_IX, 0 },
     [MAP_ADD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
@@ -956,7 +925,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [RAISE_VARARGS] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG },
     [RERAISE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
     [RESERVED] = { true, INSTR_FMT_IX, 0 },
-    [RESUME] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG },
+    [RESUME] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EVAL_BREAK_FLAG },
     [RETURN_GENERATOR] = { true, INSTR_FMT_IX, 0 },
     [RETURN_VALUE] = { true, INSTR_FMT_IX, 0 },
     [SEND] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_JUMP_FLAG | HAS_ERROR_FLAG | HAS_ERROR_NO_POP_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
@@ -967,12 +936,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [SET_ADD] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [SET_FUNCTION_ATTRIBUTE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
     [SET_UPDATE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
-    [STORE_ATTR] = { true, INSTR_FMT_IBC000, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
-    [STORE_ATTR_INSTANCE_VALUE] = { true, INSTR_FMT_IXC000, HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [STORE_ATTR_SHAPE] = { true, INSTR_FMT_IXC000, HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [STORE_ATTR_SHAPE_ADD] = { true, INSTR_FMT_IXC000, HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [STORE_ATTR_SLOT] = { true, INSTR_FMT_IXC000, HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [STORE_ATTR_WITH_HINT] = { true, INSTR_FMT_IBC000, HAS_ARG_FLAG | HAS_NAME_FLAG | HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
+    [STORE_ATTR] = { true, INSTR_FMT_IBC000, HAS_ARG_FLAG | HAS_NAME_FLAG },
     [STORE_DEREF] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_LOCAL_FLAG | HAS_ESCAPES_FLAG },
     [STORE_FAST] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_LOCAL_FLAG | HAS_ESCAPES_FLAG },
     [STORE_FAST_LOAD_FAST] = { true, INSTR_FMT_IB, HAS_ARG_FLAG },
@@ -1004,7 +968,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
 };
 #endif
 
-#define MAX_UOP_PER_EXPANSION 4
+#define MAX_UOP_PER_EXPANSION 3
 struct opcode_macro_expansion {
     int nuops;
     struct { int16_t uop; int8_t size; int8_t offset; } uops[MAX_UOP_PER_EXPANSION];
@@ -1035,9 +999,6 @@ _PyOpcode_macro_expansion[256] = {
     [JUMP_IF_FALSE_OR_POP] = { .nuops = 1, .uops = { { _JUMP_IF_FALSE_OR_POP, OPARG_SIMPLE, 0 } } },
     [JUMP_IF_TRUE_OR_POP] = { .nuops = 1, .uops = { { _JUMP_IF_TRUE_OR_POP, OPARG_SIMPLE, 0 } } },
     [LOAD_COMMON_CONSTANT] = { .nuops = 1, .uops = { { _LOAD_COMMON_CONSTANT, OPARG_SIMPLE, 0 } } },
-    [LOAD_SPECIAL] = { .nuops = 2, .uops = { { _INSERT_NULL, OPARG_SIMPLE, 0 }, { _LOAD_SPECIAL, OPARG_SIMPLE, 0 } } },
-    [LOAD_SUPER_ATTR_ATTR] = { .nuops = 1, .uops = { { _LOAD_SUPER_ATTR_ATTR, OPARG_SIMPLE, 1 } } },
-    [LOAD_SUPER_ATTR_METHOD] = { .nuops = 2, .uops = { { _GUARD_LOAD_SUPER_ATTR_METHOD, OPARG_SIMPLE, 1 }, { _LOAD_SUPER_ATTR_METHOD, OPARG_SIMPLE, 1 } } },
     [MATERIALIZE_KWARGS] = { .nuops = 1, .uops = { { _MATERIALIZE_KWARGS, OPARG_SIMPLE, 0 } } },
     [NOP] = { .nuops = 1, .uops = { { _NOP, OPARG_SIMPLE, 0 } } },
     [POP_EXCEPT] = { .nuops = 1, .uops = { { _POP_EXCEPT, OPARG_SIMPLE, 0 } } },
@@ -1051,12 +1012,6 @@ _PyOpcode_macro_expansion[256] = {
     [RETURN_GENERATOR] = { .nuops = 1, .uops = { { _RETURN_GENERATOR, OPARG_SIMPLE, 0 } } },
     [SEND_ASYNC_GEN] = { .nuops = 2, .uops = { { _GUARD_3OS_ASYNC_GEN_ASEND, OPARG_SIMPLE, 1 }, { _SEND_ASYNC_GEN, OPARG_REPLACED, 1 } } },
     [SEND_VIRTUAL] = { .nuops = 3, .uops = { { _GUARD_TOS_IS_NONE, OPARG_SIMPLE, 1 }, { _GUARD_NOS_NOT_NULL, OPARG_SIMPLE, 1 }, { _SEND_VIRTUAL, OPARG_REPLACED, 1 } } },
-    [STORE_ATTR] = { .nuops = 1, .uops = { { _STORE_ATTR, OPARG_SIMPLE, 4 } } },
-    [STORE_ATTR_INSTANCE_VALUE] = { .nuops = 4, .uops = { { _LOCK_OBJECT, OPARG_SIMPLE, 1 }, { _GUARD_TYPE_VERSION_LOCKED, 2, 1 }, { _GUARD_DORV_NO_DICT, OPARG_SIMPLE, 3 }, { _STORE_ATTR_INSTANCE_VALUE, 1, 3 } } },
-    [STORE_ATTR_SHAPE] = { .nuops = 3, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _GUARD_SHAPE, 0, 3 }, { _STORE_ATTR_SHAPE, 1, 3 } } },
-    [STORE_ATTR_SHAPE_ADD] = { .nuops = 4, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _GUARD_SHAPE, 0, 3 }, { _STORE_ATTR_SHAPE_ADD, 0, 3 }, { _STORE_ATTR_SHAPE_ADD, OPERAND1_1, 3 } } },
-    [STORE_ATTR_SLOT] = { .nuops = 2, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _STORE_ATTR_SLOT, 1, 3 } } },
-    [STORE_ATTR_WITH_HINT] = { .nuops = 2, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _STORE_ATTR_WITH_HINT, 1, 3 } } },
     [STORE_FAST] = { .nuops = 2, .uops = { { _SWAP_FAST, OPARG_SIMPLE, 0 }, { _POP_TOP_ANY, OPARG_SIMPLE, 0 } } },
     [TO_BOOL] = { .nuops = 1, .uops = { { _TO_BOOL, OPARG_SIMPLE, 3 } } },
     [UNARY_NOT] = { .nuops = 1, .uops = { { _UNARY_NOT, OPARG_SIMPLE, 0 } } },
@@ -1180,8 +1135,6 @@ const char *_PyOpcode_OpName[267] = {
     [LOAD_SMALL_INT] = "LOAD_SMALL_INT",
     [LOAD_SPECIAL] = "LOAD_SPECIAL",
     [LOAD_SUPER_ATTR] = "LOAD_SUPER_ATTR",
-    [LOAD_SUPER_ATTR_ATTR] = "LOAD_SUPER_ATTR_ATTR",
-    [LOAD_SUPER_ATTR_METHOD] = "LOAD_SUPER_ATTR_METHOD",
     [MAKE_CELL] = "MAKE_CELL",
     [MAKE_FUNCTION] = "MAKE_FUNCTION",
     [MAP_ADD] = "MAP_ADD",
@@ -1220,11 +1173,6 @@ const char *_PyOpcode_OpName[267] = {
     [SET_FUNCTION_ATTRIBUTE] = "SET_FUNCTION_ATTRIBUTE",
     [SET_UPDATE] = "SET_UPDATE",
     [STORE_ATTR] = "STORE_ATTR",
-    [STORE_ATTR_INSTANCE_VALUE] = "STORE_ATTR_INSTANCE_VALUE",
-    [STORE_ATTR_SHAPE] = "STORE_ATTR_SHAPE",
-    [STORE_ATTR_SHAPE_ADD] = "STORE_ATTR_SHAPE_ADD",
-    [STORE_ATTR_SLOT] = "STORE_ATTR_SLOT",
-    [STORE_ATTR_WITH_HINT] = "STORE_ATTR_WITH_HINT",
     [STORE_DEREF] = "STORE_DEREF",
     [STORE_FAST] = "STORE_FAST",
     [STORE_FAST_LOAD_FAST] = "STORE_FAST_LOAD_FAST",
@@ -1249,10 +1197,13 @@ const char *_PyOpcode_OpName[267] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Caches[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Caches[256] = {
+    [RESUME] = 1,
     [TO_BOOL] = 3,
     [STORE_SUBSCR] = 1,
     [UNPACK_SEQUENCE] = 1,
+    [STORE_ATTR] = 4,
     [LOAD_GLOBAL] = 4,
+    [LOAD_SUPER_ATTR] = 1,
     [LOAD_ATTR] = 9,
     [COMPARE_OP] = 1,
     [CONTAINS_OP] = 1,
@@ -1262,11 +1213,8 @@ const uint8_t _PyOpcode_Caches[256] = {
     [POP_JUMP_IF_NOT_NONE] = 1,
     [CALL] = 3,
     [BINARY_OP] = 5,
-    [RESUME] = 1,
     [SEND] = 1,
     [FOR_ITER] = 1,
-    [STORE_ATTR] = 4,
-    [LOAD_SUPER_ATTR] = 1,
     [JUMP_BACKWARD] = 1,
     [GET_ITER] = 1,
     [CALL_KW] = 3,
@@ -1274,7 +1222,7 @@ const uint8_t _PyOpcode_Caches[256] = {
 };
 #endif
 
-#define FB_MAX_FIELDS 2
+#define FB_MAX_FIELDS 1
 struct _PyFbField {
     uint8_t unit;  // in code units from the instruction
     uint8_t size;  // in code units
@@ -1290,11 +1238,6 @@ extern const struct _PyFbFields _PyOpcode_FeedbackFields[256];
 const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
     [CALL_KW_BOUND_METHOD] = { 1, { { 2, 2, offsetof(_PyFb_CALL_KW, func_version) } } },
     [CALL_KW_PY] = { 1, { { 2, 2, offsetof(_PyFb_CALL_KW, func_version) } } },
-    [STORE_ATTR_INSTANCE_VALUE] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
-    [STORE_ATTR_SHAPE] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
-    [STORE_ATTR_SHAPE_ADD] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, offset) } } },
-    [STORE_ATTR_SLOT] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, index) } } },
-    [STORE_ATTR_WITH_HINT] = { 2, { { 2, 2, offsetof(_PyFb_STORE_ATTR, type_version) }, { 4, 1, offsetof(_PyFb_STORE_ATTR, hint) } } },
 };
 #endif
 
@@ -1310,6 +1253,13 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [125] = 125,
     [126] = 126,
     [127] = 127,
+    [144] = 144,
+    [145] = 145,
+    [146] = 146,
+    [147] = 147,
+    [148] = 148,
+    [149] = 149,
+    [150] = 150,
     [151] = 151,
     [152] = 152,
     [153] = 153,
@@ -1499,8 +1449,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [LOAD_SMALL_INT] = LOAD_SMALL_INT,
     [LOAD_SPECIAL] = LOAD_SPECIAL,
     [LOAD_SUPER_ATTR] = LOAD_SUPER_ATTR,
-    [LOAD_SUPER_ATTR_ATTR] = LOAD_SUPER_ATTR,
-    [LOAD_SUPER_ATTR_METHOD] = LOAD_SUPER_ATTR,
     [MAKE_CELL] = MAKE_CELL,
     [MAKE_FUNCTION] = MAKE_FUNCTION,
     [MAP_ADD] = MAP_ADD,
@@ -1535,11 +1483,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [SET_FUNCTION_ATTRIBUTE] = SET_FUNCTION_ATTRIBUTE,
     [SET_UPDATE] = SET_UPDATE,
     [STORE_ATTR] = STORE_ATTR,
-    [STORE_ATTR_INSTANCE_VALUE] = STORE_ATTR,
-    [STORE_ATTR_SHAPE] = STORE_ATTR,
-    [STORE_ATTR_SHAPE_ADD] = STORE_ATTR,
-    [STORE_ATTR_SLOT] = STORE_ATTR,
-    [STORE_ATTR_WITH_HINT] = STORE_ATTR,
     [STORE_DEREF] = STORE_DEREF,
     [STORE_FAST] = STORE_FAST,
     [STORE_FAST_LOAD_FAST] = STORE_FAST_LOAD_FAST,
@@ -1571,6 +1514,13 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 125: \
     case 126: \
     case 127: \
+    case 144: \
+    case 145: \
+    case 146: \
+    case 147: \
+    case 148: \
+    case 149: \
+    case 150: \
     case 151: \
     case 152: \
     case 153: \

@@ -509,7 +509,7 @@ class LoweringTests(unittest.TestCase):
 
 # Under a JIT mode the lowering picks these forms of RESUME and
 # JUMP_BACKWARD; a unit compiles them as their base handler (Python/jit.c)
-JIT_FORMS = {"RESUME_JIT": "RESUME", "JUMP_BACKWARD_JIT": "JUMP_BACKWARD"}
+JIT_FORMS = {"JUMP_BACKWARD_JIT": "JUMP_BACKWARD"}
 
 
 def word_of(func, handler, nth=-1):
@@ -655,12 +655,6 @@ TRUTHS = ANY + [[1], -5, big(0), Plain(), "", Shape()]
 BINARY = "def f(a, b):\n    x = 1\n    x = a {op} b\n    return x"
 TEMPS = "def f(a, b):\n    return (a {op} b) {op} (b {op} a)"
 TEMPLATE_CASES = [
-    # RESUME's words compile to RESUME_CHECK's template, whose miss runs
-    # the RESUME form; a frame with cells reaches its RESUME after the
-    # words that make them
-    ("def f(a, b):\n    return a", (1, 2), "RESUME", "", [()]),
-    ("def f(a, b):\n    def g():\n        return a\n    return g", (1, 2), "RESUME", "",
-     [()]),
     *[(BINARY.format(op=op), (6, 3), "Add.Int", "ABC",
        [(Plain(), a, b) for a, b in INT_PAIRS])
       for op in ("+",)],
@@ -687,14 +681,6 @@ TEMPLATE_CASES = [
     # The local and constant arms (LocalRead, LocalWrite, SaveLocal, Const)
     # have no templates until the template generator lowers dup and acquire;
     # their forms run, and the interpreter's tests cover them
-    # Inline values only, as for the list store
-    *[("def f(a, b):\n    a.p = b\n    return a", (cls(), 1), handler, "AB",
-       [(o, v) for o in OWNERS for v in (7, 2.5)])
-      for cls, handler in ((Shape, "STORE_ATTR_SHAPE"), (Slots, "STORE_ATTR_SLOT"))],
-    # Each run adds the attribute to a new instance
-    ("def f(a, b):\n    a.z = b\n    return a", Fresh(lambda: (Shape(), 0)), "STORE_ATTR_SHAPE_ADD",
-     "AB", [(Fresh(o), v) for o in (Shape, owners_with_z, reversed_shape, Slots, Other)
-            for v in (7, 2.5, "s")] + [(None, 7), (4, 7)]),
     # (GlobalRead.Module and .Builtin have no template yet: their rows read a
     # recipe from the feedback entry, which the leaf IR cannot express.)
     # (Jump.Poll has no template yet: its poll row has no lowering.)
@@ -790,14 +776,11 @@ class TemplateTests(unittest.TestCase):
 
     def test_move_is_a_shared_stub(self):
         "A Move word calls its function form through the shared stub"
-        # The resolver renames most moves away; a with statement still
-        # stages its exit and value with a Move of one pair.  A chained
-        # comparison retires its middle operand when the first test fails.
+        # The resolver renames most moves away.  A chained comparison retires
+        # its middle operand when the first test fails.
         for source, args, handler, result in (
-                ("def f(a, b):\n    with a:\n        return b",
-                 (contextlib.nullcontext(), 2), "Move.Transfer", 2),
                 ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x",
-                 (2, 1), "Move.Retire", False)):
+                 (2, 1), "Move.Retire", False),):
             with self.subTest(handler=handler):
                 f = self.compile(source, args)
                 index = word_of(f, handler)[0]
@@ -805,23 +788,6 @@ class TemplateTests(unittest.TestCase):
                 self.assertEqual(capi.jit_unit(f.__code__)["plans"][index],
                                  (handler, "shared", "stub", handler))
                 self.assertEqual(f(*args), result)
-
-    def test_resume_check_misses_when_instrumentation_changes(self):
-        "RESUME_CHECK's template stays on its code until monitoring changes the version"
-        f = self.compile("def f(a, b):\n    return a", (1, 2))
-        index = word_of(f, "RESUME")[0]
-        self.assertFalse(capi.jit_template_run(f, index, {}, True)[1])
-        sys.monitoring.use_tool_id(4, "test_jit_template")
-        try:
-            sys.monitoring.set_events(4, sys.monitoring.events.PY_START)
-            # The code's version is behind the interpreter's: the miss runs
-            # the RESUME form, which instruments the code
-            next_, slow, exc, _ = capi.jit_template_run(f, index, {}, True)
-            self.assertTrue(slow)
-            self.assertIsNone(exc)
-        finally:
-            sys.monitoring.set_events(4, 0)
-            sys.monitoring.free_tool_id(4)
 
     def test_temporaries(self):
         "TEMPS puts the inputs of its last word in temporaries"

@@ -193,8 +193,8 @@ static int
 generator_resume_shape(const _PyIRWord *words, int nwords, int nl, int pc,
                        int *consumer)
 {
-    if (pc + 2 >= nwords || (!generator_is(words[pc + 1], RESUME) &&
-                             !generator_is(words[pc + 1], RESUME_JIT))) {
+    if (pc + 2 >= nwords ||
+        _PyIR_BaseOpcode(IR_HANDLER(words[pc + 1])) != RESUME) {
         return _PyIR_GEN_CONSUMER_NONE;
     }
     int home = (int)IR_A(words[pc]);
@@ -389,6 +389,14 @@ _PyIR_HandlerName(int handler)
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     return _PyIR_IsOnlyHandler(handler)
         ? _PyIR_OnlyNames[handler] : _PyOpcode_OpName[handler];
+}
+
+int
+_PyIR_OriginOpcode(PyCodeObject *co, int word)
+{
+    assert(word >= 0 && word < (int)_PyCode_IR(co)->nwords);
+    int offset = (int)_PyCode_IR(co)->pcmap[word];
+    return _PyOpcode_Deopt[_PyCode_CODE(co)[offset].op.code];
 }
 
 int

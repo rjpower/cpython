@@ -1014,7 +1014,7 @@ point Jump.PollFailed(current, site, pending) keep() spent() defs();
 point Jump.EventFailed(current, site, pending) keep() spent() defs();
 
 // _CHECK_PERIODIC: signals, the GC and other pending events
-extern helper poll(t:Thread)
+extern helper poll(t:Thread, at:Site)
   cases(ok(), err(e:Err))
   effects(runs_python, raises, polls)
   c _PyRop_Poll as int_zero_ok
@@ -1073,7 +1073,7 @@ arm Jump.Poll inline select(interruptible, jit_off)
   exits(jump, raise)
 {
   entry():
-    call poll(thread) {
+    call poll(thread, site) {
       ok -> Go();
       err -> Failed();
     }
@@ -1089,7 +1089,7 @@ arm Jump.Warm split select(interruptible, jit_on)
   exits(jump, raise, redirect)
 {
   entry():
-    call poll(thread) {
+    call poll(thread, site) {
       ok -> Go();
       err -> Failed();
     }
@@ -1114,7 +1114,7 @@ arm Jump.Observed split observes
   entry():
     branch goes_back(site, target) -> Back(), Event();
   Back():
-    call poll(thread) {
+    call poll(thread, site) {
       ok -> Event();
       err -> PollFailed();
     }

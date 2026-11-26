@@ -3391,7 +3391,7 @@ class UnpackToLocalsTest(unittest.TestCase):
         attribute((1, 2), box)
         subscript((1, 2), [0])
         cell((1, 2))
-        for func, store in ((attribute, "STORE_ATTR"),
+        for func, store in ((attribute, "AttrWrite.Generic"),
                             (subscript, "SetItem.Generic"),
                             (cell, "CellStore.Set")):
             with self.subTest(func=func.__name__):

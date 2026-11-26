@@ -7,9 +7,6 @@ enum PollMode(POLL, NO_POLL);
 // The four conditional jumps of the old bytecode: the sense of the test and
 // whether the jump edge keeps the tested owner (JUMP_IF_x_OR_POP)
 enum BranchMode(BRANCH_IF_FALSE, BRANCH_IF_TRUE, BRANCH_KEEP_IF_FALSE, BRANCH_KEEP_IF_TRUE);
-enum WriteMode(SET, DELETE);
-enum SuperMode(SUPER_ATTR, SUPER_METHOD);
-enum Special(ENTER, EXIT, AENTER, AEXIT);
 
 // P1: constants, local bindings, saved locals, residual moves, origins
 
@@ -331,15 +328,3 @@ family BranchNone(value:Src, sense:Bool, target:NearHead)
   ops(POP_JUMP_IF_NONE, POP_JUMP_IF_NOT_NONE)
   events(BRANCH_LEFT, BRANCH_RIGHT);
 
-// 1D: attribute writes, super and special-method resolution
-
-family AttrWrite(obj:Src, name:Name, value:Maybe<Src>, mode:Enum<WriteMode>,
-                 fb:Fb<Attr>)
-  exits(next, raise, miss, again) ops(STORE_ATTR);
-
-family SuperLookup(dst:Dst, self_dst:Maybe<Dst>, sup:Src, cls:Src, self:Src,
-                   name:Name, mode:Enum<SuperMode>, fb:Fb<Super>)
-  exits(next, raise, miss, again) ops(LOAD_SUPER_ATTR);
-
-family SpecialLookup(fn:Dst, self_dst:Maybe<Dst>, obj:Src, which:Enum<Special>)
-  exits(next, raise) ops(LOAD_SPECIAL);

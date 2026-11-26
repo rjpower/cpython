@@ -734,7 +734,7 @@ class DefinitionTests(unittest.TestCase):
     APPENDIX_A = """
         Nop Const LocalRead LocalWrite SaveLocal LocalDelete Move Add Truth Jump
         BranchTruth BranchNone Binary AppendText Unary Compare Identity Contains TestBranch
-        GetAttr GetMethod AttrWrite SuperLookup SpecialLookup
+        GetAttr GetMethod AttrWrite SuperAttr SuperAttrExplicit SuperMethod SuperMethodExplicit SpecialLookup
         GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement AddEntry
         UpdateContainer MergeKeywords Unpack UnpackStar
         CellMake CellRead CellMapRead CellStore CellDelete NamespaceRead NamespaceReadFrom
@@ -743,7 +743,7 @@ class DefinitionTests(unittest.TestCase):
         Function Intrinsic IntrinsicPair
         Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
         AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
-        CleanupThrow EndAsyncFor WithExit Resume Poll
+        CleanupThrow EndAsyncFor WithExit Resume
     """.split()
 
     def test_appendix_a_families(self):

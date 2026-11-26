@@ -1185,22 +1185,12 @@ class TestIRCases(unittest.TestCase):
         output = io.StringIO()
         ir_generator.generate_ir(
             [self.temp_input_filename], analysis, output, False)
-        for name in ("PUSH_EXC_INFO", "LOAD_SUPER_ATTR_METHOD"):
+        for name in ("PUSH_EXC_INFO",):
             with self.subTest(name=name):
                 self.assertEqual(contracts[name].output_kind, "_PyIR_OUTPUT_WINDOW")
                 handler = self.handler(output.getvalue(), name)
                 self.assertIn("IR_SET_TEMP(window[", handler)
                 self.assertNotIn("IR_MOVE_TO_DST", handler)
-        for name in ("LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR"):
-            with self.subTest(name=name):
-                self.assertEqual(contracts[name].output_kind,
-                                 "_PyIR_OUTPUT_WINDOW_DST_FIRST")
-                handler = self.handler(output.getvalue(), name)
-                self.assertIn("IR_SET_TEMP(window[0], attr);", handler)
-                self.assertIn("IR_MOVE_TO_DST(ir_word, A, window[0]);", handler)
-                self.assertLess(handler.index("IR_MOVE_TO_DST("),
-                                handler.index("PyValue_XCLOSE(ir_old);"))
-                self.assertEqual(formats[name].dst_offset, 0)
         # A call reads its inputs from operand words and writes its result to
         # the destination register; it has no window.
         self.assertEqual(contracts["CALL"].output_kind,
@@ -3062,39 +3052,6 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
                          "_PyIR_TRANSFER_UNKNOWN")
 
-    def test_resume_normal_transfer_checks_helper_footprint(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        inst = analysis.instructions["RESUME"]
-        fmt = ir_generator.compute_formats(analysis)["RESUME"]
-        self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                         "_PyIR_TRANSFER_PRESERVE")
-        body = [part for part in inst.parts if isinstance(part, analyzer.Uop)][-1].body
-        for statement in ("opaque(frame);", "*slots = PyValue_NULL;",
-                          "*(slots + offset) = PyValue_NULL;",
-                          "frame->base[0] = PyValue_NULL;"):
-            with self.subTest(statement=statement):
-                changed = self.analyze(f"\ninst(OP, (--)) {{ {statement} }}\n")
-                body.body.append(changed.instructions["OP"].parts[0].body.body[0])
-                try:
-                    self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                                     "_PyIR_TRANSFER_UNKNOWN")
-                finally:
-                    body.body.pop()
-
-        # Flattening both preprocessor arms loses their boundary: the same
-        # statements in a different arm must not satisfy the source proof.
-        instrument = [part for part in inst.parts
-                      if isinstance(part, analyzer.Uop)][0].body
-        branch = instrument.body[0]
-        original = branch.body.pop()
-        branch.else_body.insert(0, original)
-        try:
-            self.assertEqual(ir_generator.normal_transfer_kind(inst, fmt),
-                             "_PyIR_TRANSFER_UNKNOWN")
-        finally:
-            branch.body.append(branch.else_body.pop(0))
-
     def test_abrupt_prefix_requires_complete_suspension_source(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
@@ -3148,12 +3105,6 @@ class TestIRCases(unittest.TestCase):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
-        for name in ("LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR",
-                     "LOAD_SUPER_ATTR_ATTR", "LOAD_SUPER_ATTR_METHOD"):
-            with self.subTest(handler=name):
-                self.assertTrue(ir_generator.normal_vacate_capability(
-                    analysis.instructions[name], formats[name]))
-
         # The capability explains the helper/frame use, not an opcode name.
         call = ("_Py_call_instrumentation_2args(tstate, "
                 "PY_MONITORING_EVENT_CALL, frame, this_instr, left, right);")
@@ -3197,15 +3148,13 @@ class TestIRCases(unittest.TestCase):
     def test_home_helpers_keep_ordinary_escape_publication(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
-        expected = {"_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+        expected = {}
         for name, helper in expected.items():
             part = analysis.uops[name]
             self.assertTrue(ir_generator.home_operation_contract(part))
             self.assertNotIn(helper, analyzer.IR_MARKER_EFFECTS)
             self.assertIn(helper, {escape.call.text
                                   for escape in part.properties.escaping_calls.values()})
-        for name in ("_INSERT_NULL",):
-            self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
 
     def test_input_drain_requires_its_sole_owning_array(self):
         def check(source):
@@ -3339,7 +3288,6 @@ class TestIRCases(unittest.TestCase):
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); PyValue *alias = out; }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(&out[0]); }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); PyValue *alias = &(out[0]); }",
-                "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(name, pair); PyValue *alias = &((pair[0])); }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); opaque(&(oparg)); }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); (oparg) = 1; }",
                 "inst(OP, (-- out[2])) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); int oparg; }",
@@ -3351,8 +3299,6 @@ class TestIRCases(unittest.TestCase):
                 "inst(OP, (-- out[2])) { if (flag) { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } flag = 1; if (flag) { int vacant = PyValue_IsNull(out[0]); } }",
                 "inst(OP, (-- out[2])) { if (flag) {} else { IR_WRITE_OUTPUT(out, 0, PyValue_NULL); } int vacant = PyValue_IsNull(out[0]); }",
                 "inst(OP, (values[2] -- result)) { result = IR_BUILD_MAP(values); }",
-                "inst(OP, (pair[3] -- pair[3])) { int rc = IR_LOOKUP_SPECIAL(name, pair); }",
-                "inst(OP, (pair[2] -- pair[2])) { int rc = IR_LOOKUP_SPECIAL(frame, name, pair); }",
                 "inst(OP, (-- out[2])) {\n#if FEATURE\nIR_WRITE_OUTPUT(out, 0, PyValue_NULL);\n#endif\n}"):
             with self.subTest(source=source), self.assertRaises(SyntaxError):
                 check(source)
@@ -3642,7 +3588,7 @@ class TestIRCases(unittest.TestCase):
         expected = {
             "LOAD_COMMON_CONSTANT": "FRESH",
             "STORE_FAST": "LOCAL_STORE",
-            "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE",
+            "IR_JUMP": "PRESERVE",
             "CALL_KW": "UNKNOWN", "SEND": "UNKNOWN",
         }
         for name, kind in expected.items():

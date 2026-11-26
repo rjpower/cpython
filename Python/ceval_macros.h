@@ -681,12 +681,6 @@ check_periodics(PyThreadState *tstate) {
  * in the handler and the rest runs here, out of line. */
 static Py_NO_INLINE _Py_COLD_FUNCTION int
 handle_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
-    // Do not handle pending interrupts if the previous instruction was LOAD_SPECIAL
-    // This may also not handle interrupts if a cache looks like LOAD_SPECIAL,
-    // but this is benign as we won't skip periodic checks indefinitely.
-    if (IR_HANDLER(frame->instr_ptr[-1]) == LOAD_SPECIAL) {
-        return 0;
-    }
     return _Py_HandlePending(tstate);
 }
 
@@ -1147,21 +1141,21 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
  * and the code's instrumentation is current, start at the word after it, as
  * if it had run.  An instrumented RESUME always runs. */
 #if defined(__EMSCRIPTEN__)
-#  define IR_SKIP_RESUME_EMSCRIPTEN() \
+#  define ROP_ENTER_GATE_EMSCRIPTEN() \
     (_Py_emscripten_signal_clock != 0 && \
      (_Py_emscripten_signal_clock -= Py_EMSCRIPTEN_SIGNAL_HANDLING, 1))
 #else
-#  define IR_SKIP_RESUME_EMSCRIPTEN() 1
+#  define ROP_ENTER_GATE_EMSCRIPTEN() 1
 #endif
 #ifdef Py_GIL_DISABLED
-#  define IR_SKIP_RESUME_TLBC() \
+#  define ROP_ENTER_GATE_TLBC() \
     (frame->tlbc_index == ((_PyThreadStateImpl *)tstate)->tlbc_index)
 #else
-#  define IR_SKIP_RESUME_TLBC() 1
+#  define ROP_ENTER_GATE_TLBC() 1
 #endif
-#define IR_SKIP_RESUME() IR_SKIP_RESUME_IF(IR_HANDLER(*next_instr) == RESUME)
+#define ROP_ENTER_GATE() ROP_ENTER_GATE_IF(IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Poll)
 /* IS_RESUME: the word at next_instr is a RESUME to skip */
-#define IR_SKIP_RESUME_IF(IS_RESUME) \
+#define ROP_ENTER_GATE_IF(IS_RESUME) \
     do { \
         assert(next_instr == frame->instr_ptr); \
         /* A predicted branch, not arithmetic on the three loads: dispatch \
@@ -1170,7 +1164,7 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
             _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
                 FT_ATOMIC_LOAD_UINTPTR_ACQUIRE( \
                     _PyFrame_GetCode(frame)->_co_instrumentation_version) && \
-            IR_SKIP_RESUME_TLBC() && IR_SKIP_RESUME_EMSCRIPTEN()) \
+            ROP_ENTER_GATE_TLBC() && ROP_ENTER_GATE_EMSCRIPTEN()) \
         { \
             next_instr++; \
         } \

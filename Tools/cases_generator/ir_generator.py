@@ -381,12 +381,9 @@ def generator_boundary_source_closed(boundary: GeneratorBoundary,
                                      formats: dict[str, "IRFormat"]) -> bool:
     """Only complete audited sources may publish an executable shape."""
     insts = all_instructions(analysis)
-    resume = insts.get("RESUME")
-    # The yield-from loop's jump is a Jump word (Jump.Direct), whose source
-    # the family's rows hold; no handler of the stack op remains to audit.
-    if resume is None or normal_transfer_kind(
-            resume, formats["RESUME"]) != "_PyIR_TRANSFER_PRESERVE":
-        return False
+    # The yield-from loop's jump is a Jump word (Jump.Direct) and the resume
+    # point a Resume word, whose sources the families' rows hold; no handler
+    # of those stack ops remains to audit.
     # A new family member without the same source contract closes no shape;
     # eligibility is never recovered by declining its specialization later.
     send_members = [inst for name, inst in insts.items()
@@ -448,7 +445,7 @@ OPERAND_CALLS = {
 # operand.  A handler of the family reads them from its word, so
 # specialisation and instrumentation keep them by keeping the flags.
 CALL_ROLE_FLAGS = {
-    "CALL": ("IR_F_NO_SELF",),
+    "CALL": ("IR_F_NO_SELF", "IR_F_UNINTERRUPTED"),
     "CALL_KW": ("IR_F_NO_SELF",),
     "CALL_FUNCTION_EX": ("IR_F_NO_KW",),
 }
@@ -800,7 +797,6 @@ INPLACE_READERS = {
     # Python/specialize.c: they read types and values
     "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp",
-    "_Py_Specialize_StoreAttr",
 }
 
 
@@ -820,23 +816,14 @@ OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
 # (OBJECT_READERS_SEEN); that a name only reads is checked by review.
 # Uses inside assert() vanish from release builds and are not checked.
 OBJECT_READERS = {
-    # Statements
-    "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
     "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
     "PyUnicode_CheckExact",
-    "_PyObject_GetManagedDict", "_PyObject_InlineValues",
-    "_PyObject_Shape", "_PyObject_ValueSlot",
     # Operations that read their operands and count what they keep
     "PyErr_GivenExceptionMatches",
 
     "value_exception_group_match",
-    "value_load_from_dict", "_PySet_Contains",
-    "_PyUnicode_Equal",
-    # The indirect calls of BINARY_OP_EXTEND, through a table of functions
-    # that read their operands
-    "action",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set
@@ -1228,7 +1215,7 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
+STACK_ONLY = ("RESUME", "INSTRUMENTED_RESUME", "CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "INSTRUMENTED_RETURN_VALUE", "BINARY_OP", "UNARY_NEGATIVE", "UNARY_INVERT", "LOAD_ATTR", "LOAD_GLOBAL", "INTERPRETER_EXIT",
               "EXIT_INIT_CHECK", "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN",
               "LOAD_FAST_LOAD_FAST",
@@ -1257,7 +1244,9 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "CONVERT_VALUE", "FORMAT_SIMPLE", "FORMAT_WITH_SPEC",
               "GET_LEN", "MATCH_CLASS", "MATCH_MAPPING", "MATCH_SEQUENCE",
               "MATCH_KEYS",
-              "UNPACK_SEQUENCE", "UNPACK_EX")
+              "UNPACK_SEQUENCE", "UNPACK_EX",
+              "STORE_ATTR", "LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR",
+              "LOAD_SPECIAL")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -3485,7 +3474,6 @@ class IREmitter(Emitter):
         self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
         self._replacers["IR_BUILD_LIST"] = self.home_helper
-        self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
         for marker in ELEMENT_INTRINSICS:
             self._replacers[marker] = self.element_operation
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
@@ -3617,9 +3605,6 @@ class IREmitter(Emitter):
                 raise analysis_error("steal-success helper needs an unboxed terminal handoff", tkn)
             helper = IR_HELPER_CALLEES[tkn.text]
             expression = f"{helper}({local.name}, oparg)"
-        elif tkn.text == "IR_LOOKUP_SPECIAL":
-            expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
-                          f"&{local.name}[0], &{local.name}[1])")
         else:
             helper = {"IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
                       "IR_BUILD_SET": "_Py_BuildSet_ValueSteal"}[tkn.text]
@@ -5624,7 +5609,7 @@ class IREmitter(Emitter):
             self.emit("}\n")
             self.emit("_PyFrame_SetResumeValue(frame, ir_resume_input);\n")
             self.emit("LOAD_IP(0);\n")
-            self.emit("IR_SKIP_RESUME();\n")
+            self.emit("ROP_ENTER_GATE();\n")
             self.emit("DTRACE_FUNCTION_ENTRY();\n")
             self.emit("LLTRACE_RESUME_FRAME();\n")
             self.emit("DISPATCH();\n")
@@ -6557,7 +6542,7 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
         tstate->py_recursion_remaining--;
         RELOAD_STACK();
         LOAD_IP(0);
-        IR_SKIP_RESUME();
+        ROP_ENTER_GATE();
         DTRACE_FUNCTION_ENTRY();
         LLTRACE_RESUME_FRAME();
     }"""
@@ -7016,11 +7001,10 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL_KW", "INSTRUMENTED_CALL_KW", "CALL_KW_NON_PY", "LOAD_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR",
-                                   "STORE_ATTR_WITH_HINT", "LOAD_GLOBAL",
+                                   "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
-                                   "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
                                    "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
                                    "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr;\n")
@@ -8288,48 +8272,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             [token.text for token in part.body.tokens() if token.kind != "COMMENT"]
             == [token.text for token in tokenize(body)]
             for part, body in zip(parts, bodies))
-
-    if inst.name in ("RESUME", "RESUME_JIT") and scalar_shape(0, 0):
-        # These audited helper contracts may poll/instrument and change
-        # control flow; ordinary completion writes no scratch. Require the
-        # complete bodies, not a token blacklist that can miss pointer stores.
-        # Callback/error phases remain uncovered.  RESUME_JIT ends in the
-        # JIT's warm-up event, which moves no value.
-        expected_parts = ["_MAYBE_INSTRUMENT", "_CHECK_PERIODIC_IF_NOT_YIELD_FROM"]
-        if inst.name == "RESUME_JIT":
-            expected_parts.append("_JIT_EVENT")
-        if [part.name for part in parts] != expected_parts:
-            return unknown
-        instrument = """{
-            #ifdef Py_GIL_DISABLED
-            int check_instrumentation = 1;
-            #else
-            int check_instrumentation = (tstate->tracing == 0);
-            #endif
-            if (check_instrumentation) {
-                uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
-                uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                if (code_version != global_version) {
-                    int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-                    if (err) { ERROR_NO_POP(); }
-                    next_instr = this_instr;
-                    DISPATCH_SAME_OPARG();
-                }
-            }
-        }"""
-        periodic = """{
-            if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
-                int err = check_periodics(tstate);
-                ERROR_IF(err != 0);
-            }
-        }"""
-        event = "{ IR_JIT_EVENT(); }"
-        if (any(part.stack.inputs or part.stack.outputs for part in parts)
-                or any(statement_shape(part.body)
-                       != statement_shape(Parser(body, "<RESUME contract>").block())
-                       for part, body in zip(parts, (instrument, periodic, event)))):
-            return unknown
-        return "_PyIR_TRANSFER_PRESERVE"
 
     scalar = {
         "LOAD_COMMON_CONSTANT": ("{ assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "

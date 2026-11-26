@@ -66,20 +66,9 @@ class HandlerRecordTests(unittest.TestCase):
 
     def test_effects(self):
         for name, effects in (
-                ("_GUARD_TYPE_VERSION", {READS_HEAP}),
-                ("_POP_TOP_ANY", {MAY_RELEASE}),
-                ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE})):
+                ("_POP_TOP_ANY", {MAY_RELEASE}),):
             with self.subTest(uop=name):
                 self.assertEqual(ir_records.uop_record_effects(uops[name]), effects)
-
-    def test_type_version_facts(self):
-        def facts(handler, uop):
-            [found] = [u for u in records[handler].uops if u.name == uop]
-            return {str(f) for g in found.guards for f in g.facts}
-
-        # A specific version
-        self.assertIn("TYPE_VERSION(v1, type_version)",
-                      facts("STORE_ATTR_SHAPE", "_GUARD_TYPE_VERSION"))
 
     def test_poly_table_readers(self):
         # The poly arms are register instruction arms: no record of an

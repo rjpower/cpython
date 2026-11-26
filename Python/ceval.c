@@ -1082,22 +1082,6 @@ _Py_BuildSet_ValueSteal(
     return set;
 }
 
-/* Out of line: the vectorcall's argument array is a local, which would be
- * the handler's (spec 3.5, R-c).  super(class, self), or super() when nargs
- * is 0. */
-static Py_NO_INLINE PyValue
-super_call(PyValueBorrow global_super, PyValueBorrow class, PyValue self, int nargs)
-{
-    PyValue stack[] = {PyValue_DUP(class), self};
-    PyValue super = _PyValue_Vectorcall(global_super, stack, nargs, NULL);
-    PyValue_CLOSE(stack[0]);
-    return super;
-}
-
-#define super_call(G, C, S, N) \
-    (super_call)(PyValue_Borrow(G), PyValue_Borrow(C), S, N)
-
-
 /* Out of line, as super_call: exit_func(exit_self, exc, val, tb), or
  * exit_func(exc, val, tb) when exit_self is NULL.  exit_func is any attribute
  * value of the context manager's type, an inline scalar included, which the
@@ -2316,10 +2300,274 @@ _PyRop_SpendArgs(_PyInterpreterFrame *frame, const _PyIRWord *head,
     }
 }
 
+/* The Interrupt operand of a call word: whether the call polls when it
+ * returns (INTERRUPTIBLE is 0) */
+static inline bool
+_PyRop_Polls(uint32_t interrupt)
+{
+    return interrupt == 0;
+}
+
 static inline int
 _PyRop_EndPoll(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
     return check_periodics_at_end(tstate, frame);
+}
+
+/* The rows of AttrWrite, SuperAttr, SuperMethod and SpecialLookup
+ * (Python/register_ops/attrs.rop).  Every source is borrowed. */
+
+static Py_NO_INLINE int
+_PyRop_SetAttr(PyValueBorrow owner, PyObject *name, PyValueBorrow value)
+{
+    return (_PyValue_SetAttr)(owner, name, value);
+}
+
+/* The deletion protocol: a store of no value */
+static Py_NO_INLINE int
+_PyRop_DelAttr(PyValueBorrow owner, PyObject *name)
+{
+    return (_PyValue_SetAttr)(owner, name, PyValue_Borrow(PyValue_NULL));
+}
+
+/* super(class, self), or super() when the class was implied; the class and
+ * the receiver are counted for the call as its argument vector needs. */
+static Py_NO_INLINE PyValue
+_PyRop_SuperCall(PyValueBorrow sup, PyValueBorrow cls, PyValueBorrow self,
+                 bool explicit)
+{
+    PyValue stack[] = {PyValue_DUP(cls), PyValue_DUP(self)};
+    PyValue super = _PyValue_Vectorcall(sup, stack, explicit ? 2 : 0, NULL);
+    PyValue_CLOSE(stack[1]);
+    PyValue_CLOSE(stack[0]);
+    return super;
+}
+
+static void rop_take_items(const _PyRopSpan *span, PyValue *vals);
+
+/* The argument that the CALL event reports besides `super`: the class, or
+ * MISSING when the class was implied */
+static inline PyValueBorrow
+_PyRop_SuperEventArg(PyValueBorrow cls, bool explicit)
+{
+    return explicit ? cls
+                    : PyValue_FromObjectBorrow(&_PyInstrumentation_MISSING);
+}
+
+/* The attribute of super(...): the span holds super, the class and the
+ * receiver, which the row owns and closes on both outcomes.  With observed
+ * set, the CALL event runs before the call and C_RETURN or C_RAISE after it,
+ * as INSTRUMENTED_LOAD_SUPER_ATTR did; a callback that raises in C_RETURN
+ * closes the super object. */
+static inline PyValue
+rop_super_lookup(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *site, const _PyRopSpan *parts, bool explicit,
+                 PyObject *name, bool observed)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    PyValueBorrow sup = PyValue_Borrow(vals[0]);
+    PyValueBorrow cls = PyValue_Borrow(vals[1]);
+    PyValueBorrow self = PyValue_Borrow(vals[2]);
+    PyValue attr = PyValue_NULL;
+    PyValueBorrow arg = _PyRop_SuperEventArg(cls, explicit);
+    if (observed &&
+        (_Py_call_instrumentation_2args)(tstate, PY_MONITORING_EVENT_CALL,
+                                         frame, site, sup, arg) < 0) {
+        goto done;
+    }
+    PyValue super = _PyRop_SuperCall(sup, cls, self, explicit);
+    if (PyValue_IsNull(super)) {
+        if (observed) {
+            (_Py_call_instrumentation_exc2)(
+                tstate, PY_MONITORING_EVENT_C_RAISE, frame, site, sup, arg);
+        }
+        goto done;
+    }
+    if (observed &&
+        (_Py_call_instrumentation_2args)(tstate, PY_MONITORING_EVENT_C_RETURN,
+                                         frame, site, sup, arg) < 0) {
+        PyValue_CLEAR(super);
+        goto done;
+    }
+    attr = (_PyValue_GetAttr)(PyValue_Borrow(super), name);
+    PyValue_CLOSE(super);
+done:
+    {
+        PyObject *exc = PyValue_IsNull(attr) ? PyErr_GetRaisedException()
+                                             : NULL;
+        for (int i = 0; i < 3; i++) {
+            PyValue_XCLOSE(vals[i]);
+        }
+        if (exc != NULL) {
+            PyErr_SetRaisedException(exc);
+        }
+    }
+    return attr;
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookup(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                   const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, false, name,
+                            false);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupObserved(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                           const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, false, name,
+                            true);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupExplicit(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                           const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, true, name,
+                            false);
+}
+
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupExplicitObserved(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,
+                                   const _PyRopSpan *parts, PyObject *name)
+{
+    return rop_super_lookup(tstate, frame, site, parts, true, name,
+                            true);
+}
+
+/* The method forms of the lookups above: the attribute is bound, so the call
+ * has no receiver of its own */
+#define ROP_SUPER_METHOD_WRAPPER(name, from)                                  \
+    static Py_NO_INLINE PyValue                                               \
+    name(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,   \
+         const _PyRopSpan *parts, PyObject *attr_name, PyValue *self)        \
+    {                                                                         \
+        *self = PyValue_NULL;                                                 \
+        return from(tstate, frame, site, parts, attr_name);                   \
+    }
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethod, _PyRop_SuperLookup)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodObserved, _PyRop_SuperLookupObserved)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodExplicit, _PyRop_SuperLookupExplicit)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodExplicitObserved,
+                         _PyRop_SuperLookupExplicitObserved)
+#undef ROP_SUPER_METHOD_WRAPPER
+
+/* The part i of a super span, borrowed from its home */
+static inline PyValueBorrow
+rop_super_part(const _PyRopSpan *parts, int i)
+{
+    int slot = _PyIR_SpanElement(parts->head, parts->handler, parts->first + i);
+    return PyValue_Borrow(parts->frame->base[slot]);
+}
+
+/* `super` is the builtin and the class is a type: the lookup needs no super
+ * object */
+static inline bool
+_PyRop_SuperBuiltinReady(const _PyRopSpan *parts)
+{
+    PyValueBorrow sup = rop_super_part(parts, 0);
+    PyValueBorrow cls = rop_super_part(parts, 1);
+    return PyValue_IsObject(sup) && PyValue_IsObject(cls)
+        && PyValue_AsKnownObjectBorrow(sup) == (PyObject *)&PySuper_Type
+        && PyType_Check(PyValue_AsKnownObjectBorrow(cls));
+}
+
+/* The case of the adaptation row: 0 when the site can use the builtin
+ * lookup, 1 when it cannot */
+static inline int
+_PyRop_ClassifySuper(const _PyRopSpan *parts, _PyInstr *site,
+                     const _PyFbUnary *fb)
+{
+    (void)site;
+    (void)fb;
+    return _PyRop_SuperBuiltinReady(parts) ? 0 : 1;
+}
+
+/* super(...).name without the super object, as LOAD_SUPER_ATTR_ATTR did: the
+ * parts are the row's to close on both outcomes */
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupBuiltin(const _PyRopSpan *parts, PyObject *name)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    _PyStatusValue found = _PySuper_LookupValue(
+        (PyTypeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(vals[1])),
+        PyValue_Borrow(vals[2]), name, 0);
+    PyObject *exc = found.status < 0 ? PyErr_GetRaisedException() : NULL;
+    for (int i = 0; i < 3; i++) {
+        PyValue_XCLOSE(vals[i]);
+    }
+    if (exc != NULL) {
+        PyErr_SetRaisedException(exc);
+        return PyValue_NULL;
+    }
+    return found.value;
+}
+
+/* LOAD_SUPER_ATTR_METHOD: an unbound method comes with the receiver as the
+ * call's self, which moves from the parts to *self; a bound result closes
+ * it.  Only a receiver whose type has the generic getattro can have a method
+ * returned unbound.  The parts are the row's to close on both outcomes. */
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupBuiltinMethod(const _PyRopSpan *parts, PyObject *name,
+                                PyValue *self)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    *self = PyValue_NULL;
+    _PyStatusValue found = _PySuper_LookupValue(
+        (PyTypeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(vals[1])),
+        PyValue_Borrow(vals[2]), name,
+        PyValue_TYPE(PyValue_Borrow(vals[2]))->tp_getattro
+            == PyObject_GenericGetAttr);
+    PyObject *exc = found.status < 0 ? PyErr_GetRaisedException() : NULL;
+    int keep_self = found.status > 0;
+    for (int i = 0; i < 3; i++) {
+        if (i == 2 && keep_self) {
+            *self = vals[2];
+            continue;
+        }
+        PyValue_XCLOSE(vals[i]);
+    }
+    if (exc != NULL) {
+        PyErr_SetRaisedException(exc);
+        return PyValue_NULL;
+    }
+    return found.value;
+}
+
+/* The method of a special name on the receiver's type.  The lookup works on
+ * a counted copy of the receiver, which it keeps (*self) when the method is
+ * unbound and closes when the method is bound.  A missing method raises the
+ * protocol's TypeError, naming the asynchronous protocol when the type has
+ * it. */
+static Py_NO_INLINE PyValue
+_PyRop_LookupSpecial(PyValueBorrow obj, int which, PyValue *self)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue receiver = PyValue_DUP(obj);
+    PyValue method = PyValue_NULL;
+    int rc = _PyObject_LookupSpecialMethod(NULL, _Py_SpecialMethods[which].name,
+                                           &method, &receiver);
+    *self = PyValue_NULL;
+    if (rc <= 0) {
+        if (rc == 0) {
+            PyTypeObject *owner_type = PyValue_TYPE(receiver);
+            const char *errfmt = _PyEval_SpecialMethodCanSuggest(owner_type, which)
+                ? _Py_SpecialMethods[which].error_suggestion
+                : _Py_SpecialMethods[which].error;
+            assert(!_PyErr_Occurred(tstate));
+            assert(errfmt != NULL);
+            _PyErr_Format(tstate, PyExc_TypeError, errfmt, owner_type);
+        }
+        PyValue_XCLOSE(receiver);
+        return PyValue_NULL;
+    }
+    *self = receiver;
+    return method;
 }
 
 static Py_NO_INLINE void
@@ -2382,12 +2630,81 @@ _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return _PyRop_EdgeEvent(tstate, frame, site, true, PY_MONITORING_EVENT_JUMP);
 }
 
-/* The backedge's poll (Jump.Poll, Jump.Observed): signals, the GC and other
- * pending events, as _CHECK_PERIODIC */
+/* The poll of a word that is interruptible (the backedge Jump arms, Resume):
+ * signals, the GC and other pending events */
 static inline int
-_PyRop_Poll(PyThreadState *tstate)
+_PyRop_Poll(PyThreadState *tstate, _PyInstr *site)
 {
+    (void)site;
     return check_periodics(tstate);
+}
+
+/* The rows of Resume (Python/register_ops/resume.rop) */
+
+/* The code's instrumentation is current and no event is pending */
+static inline bool
+_PyRop_InstrumentationCurrent(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    return _Py_EvalBreaker(tstate) == FRAME_CODE_INSTRUMENTATION_VERSION();
+}
+
+/* Whether a resume point of this kind polls (the delegation loops and a
+ * generator expression's start do not) */
+static inline bool
+_PyRop_ResumePolls(uint32_t kind)
+{
+    return kind < RESUME_AFTER_YIELD_FROM;
+}
+
+/* Instrument the code if its version is out of date, as _MAYBE_INSTRUMENT.
+ * A positive result means the word runs again: return_pc names it, and it
+ * now has the handler that instrumentation installed. */
+static Py_NO_INLINE int
+_PyRop_InstrumentIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *site)
+{
+#ifdef Py_GIL_DISABLED
+    // For thread-safety, the instrumentation version is checked even when
+    // tracing: another thread may rewrite the bytecode while this one runs.
+    int check_instrumentation = 1;
+#else
+    int check_instrumentation = (tstate->tracing == 0);
+#endif
+    if (!check_instrumentation) {
+        return 0;
+    }
+    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
+                               & ~_PY_EVAL_EVENTS_MASK;
+    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+        _PyFrame_GetCode(frame)->_co_instrumentation_version);
+    if (code_version == global_version) {
+        return 0;
+    }
+    if (_Py_Instrument(_PyFrame_GetCode(frame), tstate->interp)) {
+        return -1;
+    }
+    frame->return_pc = site;
+    return 1;
+}
+
+/* PY_START at a frame's start, PY_RESUME at any other resume point.  A
+ * callback that moves the frame leaves the word to run in return_pc. */
+static Py_NO_INLINE int
+_PyRop_ResumeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *site, uint32_t kind)
+{
+    int err = _Py_call_instrumentation(
+        tstate, kind == RESUME_AT_FUNC_START ? PY_MONITORING_EVENT_PY_START
+                                             : PY_MONITORING_EVENT_PY_RESUME,
+        frame, site);
+    if (err) {
+        return -1;
+    }
+    if (frame->instr_ptr != site) {
+        frame->return_pc = frame->instr_ptr;
+        return 1;
+    }
+    return 0;
 }
 
 /* Whether the jump word at site goes back */

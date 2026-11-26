@@ -1846,6 +1846,23 @@ rule_jump(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* RESUME: the Resume family (Python/register_ops/resume.rop).  With the
+ * baseline JIT on, the gate is also the code's warm-up event: the arm that
+ * the JIT's setting selects. */
+static int
+rule_resume(_PyRegTr *t, const _PyRegOp *src)
+{
+    int jit = _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF
+                  ? ROP_SELECT_JIT_ON : ROP_SELECT_JIT_OFF;
+    int handler = _PyRop_SelectResume(jit);
+    assert(handler >= 0);
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == src->opcode);
+    op->opcode = handler;
+    return SUCCESS;
+}
+
 /* Whether identity v may hold an absent binding (a Maybe value): one that
  * SaveLocal took, or a parameter of a position where one has been.  The
  * positions over-approximate the edges, which is safe: a Restore of a
@@ -2086,10 +2103,27 @@ rule_call(_PyRegTr *t, const _PyRegOp *src)
         return stack_underflow(src);
     }
     int dst;
+    // The call that follows a special-method lookup (`with` and `async
+    // with`) does not poll when it returns: the body runs before a pending
+    // signal or collection does.  Source-only ops between them (an elided
+    // PUSH_NULL) do not count.
+    int after_lookup = 0;
+    for (int i = t->nops - 1; i >= t->block_op; i--) {
+        const _PyRegOp *prev = &t->ops[i];
+        if (prev->opcode == NOP && prev->nread == 0 && prev->nout == 0) {
+            continue;
+        }
+        after_lookup = prev->opcode == ROP_HANDLER_SpecialLookup_Generic;
+        break;
+    }
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Call_Generic,
                                   &t->stack[t->sp - nuses], nuses, &dst, 1,
-                                  NULL));
+                                  &op));
+    if (after_lookup) {
+        op->flags |= _PyReg_CALL_UNINTERRUPTED;
+    }
     t->sp -= nuses;
     return _PyRegTr_Push(t, dst);
 }
@@ -2326,6 +2360,81 @@ rule_setup_annotations(_PyRegTr *t, const _PyRegOp *src)
 {
     return _PyRegTr_Emit(t, src, ROP_HANDLER_SetupAnnotations_Setup,
                          NULL, 0, NULL, 0, NULL);
+}
+
+/* STORE_ATTR (Python/register_ops/attrs.rop).  The word starts on
+ * AttrWrite.Generic with the owner and the value in the family's order.  The
+ * compiler writes `del o.x` as PUSH_NULL and the store: the elided
+ * PUSH_NULL's register holds NULL, which the arm's optional value reads as
+ * absent, so the same word deletes. */
+static int
+rule_store_attr(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int uses[2] = {t->stack[t->sp - 1], t->stack[t->sp - 2]};
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_AttrWrite_Generic,
+                                  uses, 2, NULL, 0, &op));
+    op->oparg = src->oparg;
+    return _PyRegTr_Pop(t, 2, NULL);
+}
+
+/* LOAD_SUPER_ATTR is SuperAttr (`super()`) or SuperAttrExplicit
+ * (`super(C, self)`): the loaded super, the class and the receiver in, the
+ * attribute out.  The oparg's bit 1 says the class was written, the rest is
+ * the name.  Its bit 0 asks for a method: SuperMethod or SuperMethodExplicit
+ * then define the callable and the self the call takes, which is absent when
+ * the lookup bound the result. */
+static int
+rule_load_super_attr(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 3) {
+        return stack_underflow(src);
+    }
+    bool method = src->oparg & 1;
+    bool explicit = src->oparg & 2;
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    if (method) {
+        RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    }
+    int handler = method
+        ? (explicit ? ROP_HANDLER_SuperMethodExplicit_Generic
+                    : ROP_HANDLER_SuperMethod_Generic)
+        : (explicit ? ROP_HANDLER_SuperAttrExplicit_Generic
+                    : ROP_HANDLER_SuperAttr_Generic);
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 3], 3,
+                                  defs, method ? 2 : 1, &op));
+    op->oparg = src->oparg >> 2;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 3, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    if (method) {
+        RETURN_IF_ERROR(_PyRegTr_Push(t, defs[1]));
+    }
+    return SUCCESS;
+}
+
+/* LOAD_SPECIAL: the method and its self, as the call that follows reads
+ * them */
+static int
+rule_load_special(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int defs[2];
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_SpecialLookup_Generic,
+                                  &t->stack[t->sp - 1], 1, defs, 2, &op));
+    op->oparg = src->oparg;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
+    return _PyRegTr_Push(t, defs[1]);
 }
 
 /* IMPORT_NAME: level and fromlist are the two uses; the oparg's low bits
@@ -2615,6 +2724,7 @@ static const _PyRegRule rules[256] = {
     [POP_JUMP_IF_TRUE] = rule_branch,
     [POP_JUMP_IF_NONE] = rule_branch,
     [POP_JUMP_IF_NOT_NONE] = rule_branch,
+    [RESUME] = rule_resume,
     [JUMP_FORWARD] = rule_jump,
     [JUMP_BACKWARD] = rule_jump,
     [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,
@@ -2662,6 +2772,9 @@ static const _PyRegRule rules[256] = {
     [SETUP_ANNOTATIONS] = rule_setup_annotations,
     [IMPORT_NAME] = rule_import_name,
     [IMPORT_FROM] = rule_import_from,
+    [STORE_ATTR] = rule_store_attr,
+    [LOAD_SUPER_ATTR] = rule_load_super_attr,
+    [LOAD_SPECIAL] = rule_load_special,
     [BUILD_TUPLE] = rule_build,
     [BUILD_LIST] = rule_build,
     [BUILD_SET] = rule_build,

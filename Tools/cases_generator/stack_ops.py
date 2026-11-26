@@ -18,10 +18,10 @@ class StackFormat:
     roles: tuple[str, str, str, str]  # _PyIR_ROLE_<name>, `SRC+k` for inputs
     imm: str                        # _PyIR_LOC_<name>
     ninputs: int
-    dst: int | None                 # None: _PyIR_NO_DST
+    dst: int | None                 # None: _PyStack_NO_DST
     borrow_mask: int
     operands: str                   # _PyIR_OPERANDS_<name>
-    through: tuple[int, str]        # (k, form): _PyIR_EXT_<form>
+    through: tuple[int, str]        # (k, form): _PyStack_EXT_<form>
 
 
 @dataclass(frozen=True)

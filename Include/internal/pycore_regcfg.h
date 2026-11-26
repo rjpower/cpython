@@ -13,6 +13,70 @@ extern "C" {
 #include "pycore_rop_metadata.h" // ROP_OP_CallKw_Generic
 #include "pycore_symtable.h"    // _Py_SourceLocation
 
+/* The translator's row of a stack op (_PyStack_Formats, generated from
+ * Tools/cases_generator/stack_ops.py into pycore_regcfg_metadata.h) and of
+ * a register instruction as the translator places it (_PyRegCfg_ArmFormat).
+ * Window ops read and rewrite consecutive slots from a base (role GROUP);
+ * the others read their inputs from SRC fields and write dst. */
+typedef struct {
+    int8_t k;
+    uint8_t form;           // _PyStack_EXT_*
+} _PyStackExtent;
+
+typedef struct {
+    uint16_t flags;         // _PyIR_VALID, _PyIR_FORWARD, ..., _PyStack_*
+    uint16_t effects;       // _PyIR_RAISES, ...
+    uint8_t roles[4];       // of fields A, B, C and D
+    uint8_t imm;            // _PyIR_LOC_*: where the oparg lives
+    uint8_t ninputs;        // the inputs that SRC fields name
+    int8_t dst;             // slot of dst less the depth before, or for a
+                            // window less its base; or _PyStack_NO_DST
+    uint8_t borrow_mask;    // bit k: input k may name a borrowed local
+    uint8_t operands;       // _PyIR_OPERANDS_*
+    _PyStackExtent through; // the deepest inputs that the op leaves in
+                            // their slots with their values
+} _PyStackFormat;
+
+/* _PyStackFormat.flags of the translator's own, in bits that _PyIRFormat's
+ * flags leave free (pycore_ir.h) */
+#define _PyStack_WINDOW     0x2     // window style
+#define _PyStack_NO_FOLD    0x10    // an output may alias a borrowed input
+#define _PyStack_STORE_DST  0x40    // dst may name a local: a folded
+                                    // STORE_FAST, which releases the local's
+                                    // old value (_PyStack_MayRunPython())
+#define _PyStack_DISCARDS   0x800   // dst may be IR_NO_DST: the handler
+                                    // releases the result (the calls)
+
+/* _PyStackFormat.dst of a row without a result */
+#define _PyStack_NO_DST     INT8_MIN
+
+/* A count of slots as a function of the oparg: k plus the part of the oparg
+ * that form names */
+enum {
+    _PyStack_EXT_FIXED,     // k
+    _PyStack_EXT_OPARG,     // k + oparg
+    _PyStack_EXT_OPARG2,    // k + 2 * oparg
+    _PyStack_EXT_BIT0,      // k + (oparg & 1)
+    _PyStack_EXT_BYTES,     // k + (oparg & 0xFF) + (oparg >> 8): UNPACK_EX
+};
+
+static inline int
+_PyStack_Extent(_PyStackExtent e, int oparg)
+{
+    switch (e.form) {
+        case _PyStack_EXT_OPARG:
+            return e.k + oparg;
+        case _PyStack_EXT_OPARG2:
+            return e.k + 2 * oparg;
+        case _PyStack_EXT_BIT0:
+            return e.k + (oparg & 1);
+        case _PyStack_EXT_BYTES:
+            return e.k + (oparg & 0xFF) + (oparg >> 8);
+        default:
+            return e.k;
+    }
+}
+
 /* The register CFG (boil/design/07-compiler-passes.md).
  *
  * The flowgraph optimiser (Python/flowgraph.c) hands its basic blocks of
@@ -196,7 +260,7 @@ _PyRegOp_Through(const _PyRegOp *op, const _PyStackFormat *fmt)
         fmt->operands == _PyIR_OPERANDS_SPANS) {
         return 0;
     }
-    if (fmt->dst == _PyIR_NO_DST) {
+    if (fmt->dst == _PyStack_NO_DST) {
         return op->nout;
     }
     // An op that reads an input without popping it (ImportFrom.From) puts
@@ -244,15 +308,7 @@ void _PyRegCfg_ArmFormat(int handler, _PyStackFormat *row);
 /* The translator's row of a CFG opcode: a stack op's (_PyStack_Formats), or
  * an arm's, which _PyRegCfg_ArmFormat derives from its word format into
  * row */
-static inline const _PyStackFormat *
-_PyRegCfg_FormatInto(int opcode, _PyStackFormat *row)
-{
-    if (ROP_CFG_IS_ARM(opcode)) {
-        _PyRegCfg_ArmFormat(ROP_CFG_HANDLER(opcode), row);
-        return row;
-    }
-    return &_PyStack_Formats[opcode];
-}
+const _PyStackFormat *_PyRegCfg_FormatInto(int opcode, _PyStackFormat *row);
 
 /* The same, into a row that lives as long as the enclosing block */
 #define _PyRegCfg_FormatOf(opcode) \
@@ -272,7 +328,7 @@ _PyStack_OpargRole(const _PyStackFormat *fmt)
 /* Whether an op of row fmt may run Python code, which may rebind any
  * local through frame.f_locals: its row says so, or it releases the old
  * value of a local, whose __del__ may.  It does so through a dst that
- * names a local (_PyIR_STORE_DST, where dst_local says that dst does), and
+ * names a local (_PyStack_STORE_DST, where dst_local says that dst does), and
  * through an oparg whose role is _PyIR_ROLE_LOCAL_OUT or
  * _PyIR_ROLE_LOCAL_CLEAR. */
 static inline int
@@ -280,7 +336,7 @@ _PyStack_MayRunPython(const _PyStackFormat *fmt, int dst_local)
 {
     int role = _PyStack_OpargRole(fmt);
     return (fmt->flags & _PyIR_RUNS_CODE)
-           || (dst_local && (fmt->flags & _PyIR_STORE_DST))
+           || (dst_local && (fmt->flags & _PyStack_STORE_DST))
            || role == _PyIR_ROLE_LOCAL_OUT
            || role == _PyIR_ROLE_LOCAL_CLEAR;
 }

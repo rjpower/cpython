@@ -3,9 +3,8 @@
 The register instruction arms (Python/register_ops) follow the word kinds in
 every per-handler table, then the observed wrappers of the arms of families
 that declare events: rop_generator.arm_entries() lists them, and
-IR_NUM_HANDLERS counts them.  The translator reads a stack op's row
-(stack_ops.py) in _PyStack_Formats, of type _PyStackFormat, and derives an
-arm's from its word format (Python/regcfg.c, _PyRegCfg_ArmFormat).
+IR_NUM_HANDLERS counts them.  The translator's rows of the stack ops are
+in its own header (regcfg_metadata_generator.py).
 
 The tables are defined where NEED_IR_METADATA is defined (Python/ir.c) and
 declared elsewhere.  Handler ids without an instruction have a zeroed row,
@@ -20,7 +19,7 @@ import ir_arms
 from cwriter import CWriter
 from generators_common import ROOT, write_header
 from handler_table import first_arm, num_handlers
-from stack_ops import PSEUDOS, STACK_OPS, StackFormat, StackOp
+from stack_ops import PSEUDOS, STACK_OPS
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 STACK_NAMES = {op.name for op in STACK_OPS} | {p.name for p in PSEUDOS}
@@ -47,26 +46,6 @@ OPERANDS_FLAGS = "_PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_IR_ONLY | _PyIR_
 
 def bits(names: list[str]) -> str:
     return " | ".join(names) if names else "0"
-
-
-def extent_row(extent: tuple[int, str]) -> str:
-    k, form = extent
-    return f"{{ {k}, _PyIR_EXT_{form} }}"
-
-
-def stack_format_row(fmt: StackFormat) -> str:
-    "A _PyStackFormat row"
-    roles = ", ".join("_PyIR_ROLE_" + role.replace("+", " + ") for role in fmt.roles)
-    dst = "_PyIR_NO_DST" if fmt.dst is None else str(fmt.dst)
-    return (
-        f"{{ .flags = {bits(['_PyIR_' + f for f in fmt.flags])}, "
-        f".effects = {bits(['_PyIR_' + e for e in fmt.effects])}, "
-        f".roles = {{ {roles} }}, .imm = _PyIR_LOC_{fmt.imm}, "
-        f".ninputs = {fmt.ninputs}, .dst = {dst}, "
-        f".borrow_mask = {fmt.borrow_mask:#x}, "
-        f".operands = _PyIR_OPERANDS_{fmt.operands}, "
-        f".through = {extent_row(fmt.through)} }}"
-    )
 
 
 def arm_id(arm: ir_arms.ArmEntry) -> int:
@@ -208,17 +187,6 @@ def generate_ir_metadata(
         for arm in arms:
             assert arm.format is not None
             out.emit(f"[{arm_id(arm)}] = {arm_row(arm)},  /* {arm.dotted} */\n")
-        out.emit("};\n")
-        out.emit("#endif\n\n")
-
-        # The translator reads the row of a stack op by its stack number
-        # (_PyRegCfg_FormatOf)
-        out.emit("PyAPI_DATA(const _PyStackFormat) _PyStack_Formats[256];\n")
-        out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const _PyStackFormat _PyStack_Formats[256] = {\n")
-        for op in sorted(STACK_OPS, key=lambda op: op.opcode):
-            assert op.format is not None, op.name
-            out.emit(f"[{op.opcode}] = {stack_format_row(op.format)},  /* {op.name} */\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
 

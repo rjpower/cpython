@@ -85,7 +85,7 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->builtins_version, uint32_t: 1, de
 static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
               "recipe Global.index: _PyGlobalRecipe.index is not uint32_t");
 //
-// 35 templates.  Inline arms that keep the call of their form:
+// 41 templates.  Inline arms that keep the call of their form:
 //   AttrWrite.Hint: AttrWrite.Hint: home has no leaf lowering
 //   AttrWrite.Instance: AttrWrite.Instance: home has no leaf lowering
 //   AttrWrite.Shape: AttrWrite.Shape: admitted_store_shape has no leaf lowering
@@ -2037,20 +2037,17 @@ jit_template_Truth_Plain(_PyJitWordCx *cx)
     }
 }
 
-// The leaf graph of BranchTruth.Bool:
+// The leaf graph of BranchTruth.Bool_BRANCH_IF_FALSE:
 //   b0:
 //     %1:value = arg value
 //     %2:bool = prim PyValue_BoolCheck %1
 //     %3:bool = lnot %2
 //     exit_if EXIT %3
-//     %4:bool = jconst (IR_C(ir_word)) < 2
-//     %5:bool = lnot %4
-//     exit_if EXIT %5
-//     %6:bool = prim PyValue_IsTrue %1
-//     jmp b1(%6)
+//     %4:bool = prim PyValue_IsTrue %1
+//     jmp b1(%4)
 //   b1(%0:bool):
-//     %7:bool = xorb !((IR_C(ir_word)) & 1) %0
-//     br %7, b4, b5
+//     %5:bool = xorb !((0) & 1) %0
+//     br %5, b4, b5
 //   b2:
 //     branch
 //   b3:
@@ -2060,86 +2057,110 @@ jit_template_Truth_Plain(_PyJitWordCx *cx)
 //   b5:
 //     jmp b3
 static void
-jit_template_BranchTruth_Bool(_PyJitWordCx *cx)
+jit_template_BranchTruth_Bool_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
     _PyIRWord ir_word = cx->word;
     (void)ir_word;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
     _PyJitLower_PyValue_BoolCheck(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
-    _PyJitAsm_MovImm(a, _PyJitReg_RCX, (int64_t)((IR_C(ir_word)) < 2));
-    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
-    _PyJitAsm_Bind(a, L10);
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
     }
-    int c8 = _PyJitLower_PyValue_IsTrue(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
-    int c9 = ((!((IR_C(ir_word)) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c8) : (int)c8);
-    _PyJitTemplate_Branch(cx, c9);
+    int c6 = _PyJitLower_PyValue_IsTrue(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    int c7 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c6) : (int)c6);
+    _PyJitTemplate_Branch(cx, c7);
 }
 
-// The leaf graph of BranchTruth.Int:
+// The leaf graph of BranchTruth.Bool_BRANCH_IF_TRUE:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_BoolCheck %1
+//     %3:bool = lnot %2
+//     exit_if EXIT %3
+//     %4:bool = prim PyValue_IsTrue %1
+//     jmp b1(%4)
+//   b1(%0:bool):
+//     %5:bool = xorb !((1) & 1) %0
+//     br %5, b4, b5
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     jmp b2
+//   b5:
+//     jmp b3
+static void
+jit_template_BranchTruth_Bool_BRANCH_IF_TRUE(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    _PyJitLower_PyValue_BoolCheck(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    int c6 = _PyJitLower_PyValue_IsTrue(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    int c7 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c6) : (int)c6);
+    _PyJitTemplate_Branch(cx, c7);
+}
+
+// The leaf graph of BranchTruth.Int_BRANCH_IF_FALSE:
 //   b0:
 //     %1:value = arg value
 //     %2:bool = prim PyValue_LongCheckExact %1
 //     %3:bool = lnot %2
 //     exit_if EXIT %3
-//     %4:bool = jconst (IR_C(ir_word)) < 2
-//     %5:bool = lnot %4
-//     exit_if EXIT %5
-//     %6:bool = prim PyValue_IsInlineInt %1
-//     br %6, b4, b5
+//     %4:bool = prim PyValue_IsInlineInt %1
+//     br %4, b4, b5
 //   b1(%0:bool):
-//     %14:bool = xorb !((IR_C(ir_word)) & 1) %0
-//     br %14, b7, b8
+//     %12:bool = xorb !((0) & 1) %0
+//     br %12, b7, b8
 //   b2:
 //     branch
 //   b3:
 //     next
 //   b4:
-//     %8:i64 = prim PyValue_InlineInt64 %1
-//     %9:i64 = const 0
-//     %10:bool = cmp ne %8, %9
-//     jmp b6(%10)
+//     %6:i64 = prim PyValue_InlineInt64 %1
+//     %7:i64 = const 0
+//     %8:bool = cmp ne %6, %7
+//     jmp b6(%8)
 //   b5:
-//     %11:PyObject* = prim PyValue_AsKnownObjectBorrow %1
-//     %12:bool = prim _PyLong_IsZero %11
-//     %13:bool = lnot %12
-//     jmp b6(%13)
-//   b6(%7:bool):
-//     jmp b1(%7)
+//     %9:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %10:bool = prim _PyLong_IsZero %9
+//     %11:bool = lnot %10
+//     jmp b6(%11)
+//   b6(%5:bool):
+//     jmp b1(%5)
 //   b7:
 //     jmp b2
 //   b8:
 //     jmp b3
 static void
-jit_template_BranchTruth_Int(_PyJitWordCx *cx)
+jit_template_BranchTruth_Int_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
     _PyIRWord ir_word = cx->word;
     (void)ir_word;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L13 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
     _PyJitLower_PyValue_LongCheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
-    _PyJitAsm_MovImm(a, _PyJitReg_RCX, (int64_t)((IR_C(ir_word)) < 2));
-    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
-    _PyJitAsm_Bind(a, L13);
-    int c9 = _PyJitLower_PyValue_IsInlineInt(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
-    _PyJitAsm_Jcc(a, c9, L5);
+    int c7 = _PyJitLower_PyValue_IsInlineInt(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    _PyJitAsm_Jcc(a, c7, L5);
     _PyJitAsm_Bind(a, L6);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
-    int c17 = _PyJitLower__PyLong_IsZero(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
-    _PyJitAsm_Setcc(a, ((1) ? (int)_PyJitCond_Not((_PyJitCond)c17) : (int)c17), _PyJitReg_RCX);
+    int c15 = _PyJitLower__PyLong_IsZero(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Setcc(a, ((1) ? (int)_PyJitCond_Not((_PyJitCond)c15) : (int)c15), _PyJitReg_RCX);
     _PyJitAsm_AluRI(a, _PyJitAlu_AND, _PyJitReg_RCX, 0xFF);
     _PyJitAsm_Jmp(a, L7);
     _PyJitAsm_Bind(a, L5);
@@ -2156,18 +2177,88 @@ jit_template_BranchTruth_Int(_PyJitWordCx *cx)
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    int c10 = ((!((IR_C(ir_word)) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
-    _PyJitTemplate_Branch(cx, c10);
+    int c8 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    _PyJitTemplate_Branch(cx, c8);
 }
 
-// The leaf graph of BranchTruth.List:
+// The leaf graph of BranchTruth.Int_BRANCH_IF_TRUE:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_LongCheckExact %1
+//     %3:bool = lnot %2
+//     exit_if EXIT %3
+//     %4:bool = prim PyValue_IsInlineInt %1
+//     br %4, b4, b5
+//   b1(%0:bool):
+//     %12:bool = xorb !((1) & 1) %0
+//     br %12, b7, b8
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     %6:i64 = prim PyValue_InlineInt64 %1
+//     %7:i64 = const 0
+//     %8:bool = cmp ne %6, %7
+//     jmp b6(%8)
+//   b5:
+//     %9:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %10:bool = prim _PyLong_IsZero %9
+//     %11:bool = lnot %10
+//     jmp b6(%11)
+//   b6(%5:bool):
+//     jmp b1(%5)
+//   b7:
+//     jmp b2
+//   b8:
+//     jmp b3
+static void
+jit_template_BranchTruth_Int_BRANCH_IF_TRUE(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    _PyJitLower_PyValue_LongCheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c7 = _PyJitLower_PyValue_IsInlineInt(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    _PyJitAsm_Jcc(a, c7, L5);
+    _PyJitAsm_Bind(a, L6);
+    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+    int c15 = _PyJitLower__PyLong_IsZero(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Setcc(a, ((1) ? (int)_PyJitCond_Not((_PyJitCond)c15) : (int)c15), _PyJitReg_RCX);
+    _PyJitAsm_AluRI(a, _PyJitAlu_AND, _PyJitReg_RCX, 0xFF);
+    _PyJitAsm_Jmp(a, L7);
+    _PyJitAsm_Bind(a, L5);
+    _PyJitLower_PyValue_InlineInt64(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    _PyJitAsm_Setcc(a, _PyJitCond_NE, _PyJitReg_RCX);
+    _PyJitAsm_AluRI(a, _PyJitAlu_AND, _PyJitReg_RCX, 0xFF);
+    _PyJitAsm_Bind(a, L7);
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x2; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    }
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    int c8 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    _PyJitTemplate_Branch(cx, c8);
+}
+
+// The leaf graph of BranchTruth.List_BRANCH_IF_FALSE:
 //   b0:
 //     %1:value = arg value
 //     %2:bool = prim PyValue_IsObject %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %14:bool = xorb !((IR_C(ir_word)) & 1) %0
-//     br %14, b7, b8
+//     %12:bool = xorb !((0) & 1) %0
+//     br %12, b7, b8
 //   b2:
 //     branch
 //   b3:
@@ -2182,27 +2273,23 @@ jit_template_BranchTruth_Int(_PyJitWordCx *cx)
 //   b6(%3:bool):
 //     %7:bool = lnot %3
 //     exit_if EXIT %7
-//     %8:bool = jconst (IR_C(ir_word)) < 2
-//     %9:bool = lnot %8
-//     exit_if EXIT %9
-//     %10:PyObject* = prim PyValue_AsKnownObjectBorrow %1
-//     %11:i64 = prim PyList_GET_SIZE %10
-//     %12:i64 = const 0
-//     %13:bool = cmp ne %11, %12
-//     jmp b1(%13)
+//     %8:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %9:i64 = prim PyList_GET_SIZE %8
+//     %10:i64 = const 0
+//     %11:bool = cmp ne %9, %10
+//     jmp b1(%11)
 //   b7:
 //     jmp b2
 //   b8:
 //     jmp b3
 static void
-jit_template_BranchTruth_List(_PyJitWordCx *cx)
+jit_template_BranchTruth_List_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
     _PyIRWord ir_word = cx->word;
     (void)ir_word;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L13 = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
     _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, (const void *)(intptr_t)(cx->slow + 1));
@@ -2210,10 +2297,6 @@ jit_template_BranchTruth_List(_PyJitWordCx *cx)
     int c10 = _PyJitLower_PyList_CheckExact(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c10), cx->slow);
     _PyJitAsm_Bind(a, L11);
-    _PyJitAsm_MovImm(a, _PyJitReg_RDX, (int64_t)((IR_C(ir_word)) < 2));
-    _PyJitAsm_TestRR(a, _PyJitReg_RDX, _PyJitReg_RDX);
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
-    _PyJitAsm_Bind(a, L13);
     _PyJitLower_PyList_GET_SIZE(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RCX}, NULL);
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
@@ -2223,25 +2306,82 @@ jit_template_BranchTruth_List(_PyJitWordCx *cx)
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    int c18 = _PyJitCond_NE;
-    int c6 = ((!((IR_C(ir_word)) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c18) : (int)c18);
+    int c16 = _PyJitCond_NE;
+    int c6 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
     _PyJitTemplate_Branch(cx, c6);
 }
 
-// The leaf graph of BranchTruth.None:
+// The leaf graph of BranchTruth.List_BRANCH_IF_TRUE:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_IsObject %1
+//     br %2, b4, b5
+//   b1(%0:bool):
+//     %12:bool = xorb !((1) & 1) %0
+//     br %12, b7, b8
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     %4:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %5:bool = prim PyList_CheckExact %4
+//     jmp b6(%5)
+//   b5:
+//     %6:bool = const 0
+//     jmp b6(%6)
+//   b6(%3:bool):
+//     %7:bool = lnot %3
+//     exit_if EXIT %7
+//     %8:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %9:i64 = prim PyList_GET_SIZE %8
+//     %10:i64 = const 0
+//     %11:bool = cmp ne %9, %10
+//     jmp b1(%11)
+//   b7:
+//     jmp b2
+//   b8:
+//     jmp b3
+static void
+jit_template_BranchTruth_List_BRANCH_IF_TRUE(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, (const void *)(intptr_t)(cx->slow + 1));
+    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+    int c10 = _PyJitLower_PyList_CheckExact(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c10), cx->slow);
+    _PyJitAsm_Bind(a, L11);
+    _PyJitLower_PyList_GET_SIZE(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RCX}, NULL);
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x6; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
+    }
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    int c16 = _PyJitCond_NE;
+    int c6 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
+    _PyJitTemplate_Branch(cx, c6);
+}
+
+// The leaf graph of BranchTruth.None_BRANCH_IF_FALSE:
 //   b0:
 //     %1:value = arg value
 //     %2:bool = prim PyValue_IsNone %1
 //     %3:bool = lnot %2
 //     exit_if EXIT %3
-//     %4:bool = jconst (IR_C(ir_word)) < 2
-//     %5:bool = lnot %4
-//     exit_if EXIT %5
-//     %6:bool = const 0
-//     jmp b1(%6)
+//     %4:bool = const 0
+//     jmp b1(%4)
 //   b1(%0:bool):
-//     %7:bool = xorb !((IR_C(ir_word)) & 1) %0
-//     br %7, b4, b5
+//     %5:bool = xorb !((0) & 1) %0
+//     br %5, b4, b5
 //   b2:
 //     branch
 //   b3:
@@ -2251,40 +2391,76 @@ jit_template_BranchTruth_List(_PyJitWordCx *cx)
 //   b5:
 //     jmp b3
 static void
-jit_template_BranchTruth_None(_PyJitWordCx *cx)
+jit_template_BranchTruth_None_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
     _PyIRWord ir_word = cx->word;
     (void)ir_word;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L8 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
     int c4 = _PyJitLower_PyValue_IsNone(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c4), cx->slow);
     _PyJitAsm_Bind(a, L8);
-    _PyJitAsm_MovImm(a, _PyJitReg_RAX, (int64_t)((IR_C(ir_word)) < 2));
-    _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
-    _PyJitAsm_Bind(a, L10);
     _PyJitAsm_MovImm(a, _PyJitReg_RAX, 0);
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
-    int c9 = ((!((IR_C(ir_word)) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
-    _PyJitTemplate_Branch(cx, c9);
+    int c7 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    _PyJitTemplate_Branch(cx, c7);
 }
 
-// The leaf graph of BranchTruth.Str:
+// The leaf graph of BranchTruth.None_BRANCH_IF_TRUE:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_IsNone %1
+//     %3:bool = lnot %2
+//     exit_if EXIT %3
+//     %4:bool = const 0
+//     jmp b1(%4)
+//   b1(%0:bool):
+//     %5:bool = xorb !((1) & 1) %0
+//     br %5, b4, b5
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     jmp b2
+//   b5:
+//     jmp b3
+static void
+jit_template_BranchTruth_None_BRANCH_IF_TRUE(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L8 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    int c4 = _PyJitLower_PyValue_IsNone(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c4), cx->slow);
+    _PyJitAsm_Bind(a, L8);
+    _PyJitAsm_MovImm(a, _PyJitReg_RAX, 0);
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    _PyJitAsm_TestRR(a, _PyJitReg_RAX, _PyJitReg_RAX);
+    int c7 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    _PyJitTemplate_Branch(cx, c7);
+}
+
+// The leaf graph of BranchTruth.Str_BRANCH_IF_FALSE:
 //   b0:
 //     %1:value = arg value
 //     %2:bool = prim PyValue_IsObject %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %14:bool = xorb !((IR_C(ir_word)) & 1) %0
-//     br %14, b7, b8
+//     %12:bool = xorb !((0) & 1) %0
+//     br %12, b7, b8
 //   b2:
 //     branch
 //   b3:
@@ -2299,27 +2475,23 @@ jit_template_BranchTruth_None(_PyJitWordCx *cx)
 //   b6(%3:bool):
 //     %7:bool = lnot %3
 //     exit_if EXIT %7
-//     %8:bool = jconst (IR_C(ir_word)) < 2
-//     %9:bool = lnot %8
-//     exit_if EXIT %9
-//     %10:PyObject* = prim PyValue_AsKnownObjectBorrow %1
-//     %11:i64 = load PyASCIIObject.length %10
-//     %12:i64 = const 0
-//     %13:bool = cmp ne %11, %12
-//     jmp b1(%13)
+//     %8:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %9:i64 = load PyASCIIObject.length %8
+//     %10:i64 = const 0
+//     %11:bool = cmp ne %9, %10
+//     jmp b1(%11)
 //   b7:
 //     jmp b2
 //   b8:
 //     jmp b3
 static void
-jit_template_BranchTruth_Str(_PyJitWordCx *cx)
+jit_template_BranchTruth_Str_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
     _PyIRWord ir_word = cx->word;
     (void)ir_word;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L13 = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
     _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, (const void *)(intptr_t)(cx->slow + 1));
@@ -2327,10 +2499,6 @@ jit_template_BranchTruth_Str(_PyJitWordCx *cx)
     int c10 = _PyJitLower_PyUnicode_CheckExact(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c10), cx->slow);
     _PyJitAsm_Bind(a, L11);
-    _PyJitAsm_MovImm(a, _PyJitReg_RDX, (int64_t)((IR_C(ir_word)) < 2));
-    _PyJitAsm_TestRR(a, _PyJitReg_RDX, _PyJitReg_RDX);
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
-    _PyJitAsm_Bind(a, L13);
     _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJitReg_RCX, (int32_t)offsetof(PyASCIIObject, length)));
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
@@ -2340,19 +2508,79 @@ jit_template_BranchTruth_Str(_PyJitWordCx *cx)
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    int c18 = _PyJitCond_NE;
-    int c6 = ((!((IR_C(ir_word)) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c18) : (int)c18);
+    int c16 = _PyJitCond_NE;
+    int c6 = ((!((0) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
     _PyJitTemplate_Branch(cx, c6);
 }
 
-// The leaf graph of BranchTruth.Plain:
+// The leaf graph of BranchTruth.Str_BRANCH_IF_TRUE:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_IsObject %1
+//     br %2, b4, b5
+//   b1(%0:bool):
+//     %12:bool = xorb !((1) & 1) %0
+//     br %12, b7, b8
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     %4:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %5:bool = prim PyUnicode_CheckExact %4
+//     jmp b6(%5)
+//   b5:
+//     %6:bool = const 0
+//     jmp b6(%6)
+//   b6(%3:bool):
+//     %7:bool = lnot %3
+//     exit_if EXIT %7
+//     %8:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %9:i64 = load PyASCIIObject.length %8
+//     %10:i64 = const 0
+//     %11:bool = cmp ne %9, %10
+//     jmp b1(%11)
+//   b7:
+//     jmp b2
+//   b8:
+//     jmp b3
+static void
+jit_template_BranchTruth_Str_BRANCH_IF_TRUE(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, (const void *)(intptr_t)(cx->slow + 1));
+    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+    int c10 = _PyJitLower_PyUnicode_CheckExact(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c10), cx->slow);
+    _PyJitAsm_Bind(a, L11);
+    _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJitReg_RCX, (int32_t)offsetof(PyASCIIObject, length)));
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x6; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
+    }
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    int c16 = _PyJitCond_NE;
+    int c6 = ((!((1) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c16) : (int)c16);
+    _PyJitTemplate_Branch(cx, c6);
+}
+
+// The leaf graph of BranchTruth.Plain_BRANCH_IF_FALSE:
 //   b0:
 //     %1:value = arg value
 //     %2:bool = prim PyValue_IsNone %1
 //     br %2, b4, b5
 //   b1(%0:bool):
-//     %29:bool = xorb !((IR_C(ir_word)) & 1) %0
-//     br %29, b16, b17
+//     %27:bool = xorb !((0) & 1) %0
+//     br %27, b16, b17
 //   b2:
 //     branch
 //   b3:
@@ -2366,12 +2594,9 @@ jit_template_BranchTruth_Str(_PyJitWordCx *cx)
 //   b6(%3:bool):
 //     %24:bool = lnot %3
 //     exit_if EXIT %24
-//     %25:bool = jconst (IR_C(ir_word)) < 2
+//     %25:bool = prim PyValue_IsNone %1
 //     %26:bool = lnot %25
-//     exit_if EXIT %26
-//     %27:bool = prim PyValue_IsNone %1
-//     %28:bool = lnot %27
-//     jmp b1(%28)
+//     jmp b1(%26)
 //   b7:
 //     %7:u32 = cache type_version
 //     %8:u32 = const 0
@@ -2410,7 +2635,7 @@ jit_template_BranchTruth_Str(_PyJitWordCx *cx)
 //   b17:
 //     jmp b3
 static void
-jit_template_BranchTruth_Plain(_PyJitWordCx *cx)
+jit_template_BranchTruth_Plain_BRANCH_IF_FALSE(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
     _PyIRWord ir_word = cx->word;
@@ -2422,7 +2647,6 @@ jit_template_BranchTruth_Plain(_PyJitWordCx *cx)
     _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L14 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L20 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L22 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
@@ -2434,27 +2658,23 @@ jit_template_BranchTruth_Plain(_PyJitWordCx *cx)
     _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
     _PyJitAsm_MovRM32(a, _PyJitReg_RDX, _PyJitMem_At(_PyJit_WORDS, (int32_t)((char *)&fb->type_version - (char *)cx->words)));
     _PyJitAsm_TestRR(a, _PyJitReg_RDX, _PyJitReg_RDX);
-    int c21 = _PyJitCond_NE;
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c21), cx->slow);
+    int c19 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c19), cx->slow);
     _PyJitAsm_Bind(a, L11);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RDI}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_R8, _PyJitMem_At(_PyJitReg_RDI, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
     _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_R8, _PyJitReg_RDX);
-    int c26 = _PyJitCond_E;
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c26), cx->slow);
+    int c24 = _PyJitCond_E;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c24), cx->slow);
     _PyJitAsm_Bind(a, L14);
     _PyJitAsm_MovRM(a, _PyJitReg_RDI, _PyJitMem_At(_PyJitReg_RDI, (int32_t)offsetof(PyTypeObject, tp_flags)));
     _PyJitAsm_MovImm(a, _PyJitReg_RDX, (int64_t)(Py_TPFLAGS_HEAPTYPE));
     _PyJitAsm_AluRR(a, _PyJitAlu_AND, _PyJitReg_RDI, _PyJitReg_RDX);
     _PyJitAsm_TestRR(a, _PyJitReg_RDI, _PyJitReg_RDI);
-    int c32 = _PyJitCond_NE;
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c32), cx->slow);
+    int c30 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c30), cx->slow);
     _PyJitAsm_Bind(a, L20);
-    _PyJitAsm_MovImm(a, _PyJitReg_RDX, (int64_t)((IR_C(ir_word)) < 2));
-    _PyJitAsm_TestRR(a, _PyJitReg_RDX, _PyJitReg_RDX);
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
-    _PyJitAsm_Bind(a, L22);
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
     }
@@ -2463,7 +2683,121 @@ jit_template_BranchTruth_Plain(_PyJitWordCx *cx)
         _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     }
     _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
-    int c9 = ((!(!((IR_C(ir_word)) & 1))) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    int c9 = ((!(!((0) & 1))) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    _PyJitTemplate_Branch(cx, c9);
+}
+
+// The leaf graph of BranchTruth.Plain_BRANCH_IF_TRUE:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_IsNone %1
+//     br %2, b4, b5
+//   b1(%0:bool):
+//     %27:bool = xorb !((1) & 1) %0
+//     br %27, b16, b17
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     %4:bool = const 1
+//     jmp b6(%4)
+//   b5:
+//     %5:bool = prim PyValue_IsObject %1
+//     br %5, b7, b8
+//   b6(%3:bool):
+//     %24:bool = lnot %3
+//     exit_if EXIT %24
+//     %25:bool = prim PyValue_IsNone %1
+//     %26:bool = lnot %25
+//     jmp b1(%26)
+//   b7:
+//     %7:u32 = cache type_version
+//     %8:u32 = const 0
+//     %9:bool = cmp ne %7, %8
+//     br %9, b10, b11
+//   b8:
+//     %23:bool = const 0
+//     jmp b9(%23)
+//   b9(%6:bool):
+//     jmp b6(%6)
+//   b10:
+//     %11:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %12:PyTypeObject* = prim Py_TYPE %11
+//     %13:u32 = load PyTypeObject.tp_version_tag %12
+//     %14:bool = cmp eq %13, %7
+//     br %14, b13, b14
+//   b11:
+//     %22:bool = const 0
+//     jmp b12(%22)
+//   b12(%10:bool):
+//     jmp b9(%10)
+//   b13:
+//     %16:u64 = load PyTypeObject.tp_flags %12
+//     %17:u64 = jconst Py_TPFLAGS_HEAPTYPE
+//     %18:u64 = and %16, %17
+//     %19:u64 = const 0
+//     %20:bool = cmp ne %18, %19
+//     jmp b15(%20)
+//   b14:
+//     %21:bool = const 0
+//     jmp b15(%21)
+//   b15(%15:bool):
+//     jmp b12(%15)
+//   b16:
+//     jmp b2
+//   b17:
+//     jmp b3
+static void
+jit_template_BranchTruth_Plain_BRANCH_IF_TRUE(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyFbUnary *fb = (_PyFbUnary *)_PyIR_FbEntry(cx->words, IR_B(ir_word));
+    (void)fb;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L14 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L20 = _PyJitAsm_NewLabel(a);
+    _PyJitTemplate_CheckHandler(cx);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    _PyJitAsm_Setcc(a, _PyJitLower_PyValue_IsNone(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL), _PyJitReg_RCX);
+    _PyJitAsm_AluRI(a, _PyJitAlu_AND, _PyJitReg_RCX, 0xFF);
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, L20);
+    _PyJitAsm_Bind(a, L6);
+    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    _PyJitAsm_MovRM32(a, _PyJitReg_RDX, _PyJitMem_At(_PyJit_WORDS, (int32_t)((char *)&fb->type_version - (char *)cx->words)));
+    _PyJitAsm_TestRR(a, _PyJitReg_RDX, _PyJitReg_RDX);
+    int c19 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c19), cx->slow);
+    _PyJitAsm_Bind(a, L11);
+    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RAX}, NULL);
+    _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RDI}, NULL);
+    _PyJitAsm_MovRM32(a, _PyJitReg_R8, _PyJitMem_At(_PyJitReg_RDI, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_R8, _PyJitReg_RDX);
+    int c24 = _PyJitCond_E;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c24), cx->slow);
+    _PyJitAsm_Bind(a, L14);
+    _PyJitAsm_MovRM(a, _PyJitReg_RDI, _PyJitMem_At(_PyJitReg_RDI, (int32_t)offsetof(PyTypeObject, tp_flags)));
+    _PyJitAsm_MovImm(a, _PyJitReg_RDX, (int64_t)(Py_TPFLAGS_HEAPTYPE));
+    _PyJitAsm_AluRR(a, _PyJitAlu_AND, _PyJitReg_RDI, _PyJitReg_RDX);
+    _PyJitAsm_TestRR(a, _PyJitReg_RDI, _PyJitReg_RDI);
+    int c30 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c30), cx->slow);
+    _PyJitAsm_Bind(a, L20);
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x2; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    }
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    int c9 = ((!(!((1) & 1))) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
     _PyJitTemplate_Branch(cx, c9);
 }
 
@@ -2718,12 +3052,18 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [ROP_HANDLER_Truth_None] = jit_template_Truth_None,
     [ROP_HANDLER_Truth_Str] = jit_template_Truth_Str,
     [ROP_HANDLER_Truth_Plain] = jit_template_Truth_Plain,
-    [ROP_HANDLER_BranchTruth_Bool] = jit_template_BranchTruth_Bool,
-    [ROP_HANDLER_BranchTruth_Int] = jit_template_BranchTruth_Int,
-    [ROP_HANDLER_BranchTruth_List] = jit_template_BranchTruth_List,
-    [ROP_HANDLER_BranchTruth_None] = jit_template_BranchTruth_None,
-    [ROP_HANDLER_BranchTruth_Str] = jit_template_BranchTruth_Str,
-    [ROP_HANDLER_BranchTruth_Plain] = jit_template_BranchTruth_Plain,
+    [ROP_HANDLER_BranchTruth_Bool_BRANCH_IF_FALSE] = jit_template_BranchTruth_Bool_BRANCH_IF_FALSE,
+    [ROP_HANDLER_BranchTruth_Bool_BRANCH_IF_TRUE] = jit_template_BranchTruth_Bool_BRANCH_IF_TRUE,
+    [ROP_HANDLER_BranchTruth_Int_BRANCH_IF_FALSE] = jit_template_BranchTruth_Int_BRANCH_IF_FALSE,
+    [ROP_HANDLER_BranchTruth_Int_BRANCH_IF_TRUE] = jit_template_BranchTruth_Int_BRANCH_IF_TRUE,
+    [ROP_HANDLER_BranchTruth_List_BRANCH_IF_FALSE] = jit_template_BranchTruth_List_BRANCH_IF_FALSE,
+    [ROP_HANDLER_BranchTruth_List_BRANCH_IF_TRUE] = jit_template_BranchTruth_List_BRANCH_IF_TRUE,
+    [ROP_HANDLER_BranchTruth_None_BRANCH_IF_FALSE] = jit_template_BranchTruth_None_BRANCH_IF_FALSE,
+    [ROP_HANDLER_BranchTruth_None_BRANCH_IF_TRUE] = jit_template_BranchTruth_None_BRANCH_IF_TRUE,
+    [ROP_HANDLER_BranchTruth_Str_BRANCH_IF_FALSE] = jit_template_BranchTruth_Str_BRANCH_IF_FALSE,
+    [ROP_HANDLER_BranchTruth_Str_BRANCH_IF_TRUE] = jit_template_BranchTruth_Str_BRANCH_IF_TRUE,
+    [ROP_HANDLER_BranchTruth_Plain_BRANCH_IF_FALSE] = jit_template_BranchTruth_Plain_BRANCH_IF_FALSE,
+    [ROP_HANDLER_BranchTruth_Plain_BRANCH_IF_TRUE] = jit_template_BranchTruth_Plain_BRANCH_IF_TRUE,
     [ROP_HANDLER_BranchNone_Test] = jit_template_BranchNone_Test,
     [ROP_HANDLER_Jump_Direct] = jit_template_Jump_Direct,
     [ROP_HANDLER_Jump_Trailing] = jit_template_Jump_Trailing,

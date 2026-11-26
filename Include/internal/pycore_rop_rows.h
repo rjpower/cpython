@@ -654,12 +654,6 @@ _PyRop_BranchKeeps(int mode)
 }
 
 static inline bool
-_PyRop_BranchDrops(int mode)
-{
-    return mode < BRANCH_KEEP_IF_FALSE;
-}
-
-static inline bool
 _PyRop_SameBool(bool a, bool b)
 {
     return a == b;

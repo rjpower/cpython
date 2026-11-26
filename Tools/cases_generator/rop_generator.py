@@ -1030,6 +1030,7 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
         if arm.select:
             members = "_".join(m.value for m in arm.select)
             out.write(f"#define ROP_SELECT_{arm.family}_{members} ROP_ARM({c_name(name)})\n")
+    write_member_tables(out, prog)
     out.write("\n/* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */\n")
     for name, k in p.points.items():
         out.write(f"#define ROP_POINT_{c_name(name)} {k}\n")
@@ -1103,6 +1104,29 @@ typedef struct {
     out.write("};\n\n")
     write_selectors(out, prog)
     out.write("#endif\n")
+
+
+def member_table(name: str) -> str:
+    """The C table of a member set (rop_check.MemberSet)"""
+    return f"_PyRop_Members_{c_name(name)}"
+
+
+def write_member_tables(out: TextIO, prog: Program) -> None:
+    """Each member set's arm by member number: the member's arm, else the rest
+    arm, else the family's generic arm, whose install changes nothing"""
+    if not prog.member_sets:
+        return
+    out.write("\n/* The arms of the arms stated over an enum operand (`over(...)`), by\n"
+              " * member number: the member's arm, else the rest arm, else the family's\n"
+              " * generic arm.  Adaptation installs from them (candidate()). */\n")
+    for name, ms in prog.member_sets.items():
+        generic = prog.families[ms.family].generic
+        fallback = ms.rest or (f"{ms.family}.{generic}" if generic else None)
+        members = prog.enums[ms.enum].members
+        if fallback is None and len(ms.arms) != len(members):
+            raise GenerateError(f"{name}: a member has no arm, and the family no generic arm")
+        items = ", ".join(f"ROP_ARM({c_name(ms.arm_of(m) or fallback)})" for m in members)
+        out.write(f"static const uint16_t {member_table(name)}[{len(members)}] = {{{items}}};\n")
 
 
 def write_selectors(out: TextIO, prog: Program) -> None:

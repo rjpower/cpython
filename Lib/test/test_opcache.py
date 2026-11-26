@@ -1858,9 +1858,11 @@ class TestSpecializer(TestBase):
                 self.assert_no_opcode(f, "Truth.Generic")
 
     def assert_jump_specialized(self, f, kind):
-        # Either sense: the layout of the blocks may invert a jump
+        # Either sense, each its own member arm: the layout of the blocks may
+        # invert a jump
         names = adaptive_names(f)
-        self.assertIn(f"BranchTruth.{kind.capitalize()}", names)
+        arm = f"BranchTruth.{kind.capitalize()}"
+        self.assertTrue({f"{arm}_BRANCH_IF_FALSE", f"{arm}_BRANCH_IF_TRUE"} & names, names)
         self.assertNotIn("BranchTruth.Generic", names)
 
     @cpython_only

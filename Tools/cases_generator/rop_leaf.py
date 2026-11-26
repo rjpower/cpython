@@ -411,10 +411,15 @@ class LeafBuilder:
             self.env[op.result] = Opaque(op.attr)
         elif k is OpKind.const:
             t = self.ssa.types[op.result]
-            lt = leaf_type(t)
-            if lt is None or isinstance(t, EnumType):
+            if isinstance(t, EnumType):
+                # An enum member is its number, as an immediate of the word is
+                members = self.program.enums[t.name].members
+                self.env[op.result] = Imm(str(members.index(op.attr.rpartition(".")[2])),
+                                          "u32")
+            elif (lt := leaf_type(t)) is None:
                 self.refuse(f"a constant of type {t}")
-            self.env[op.result] = self.const(lt, int(op.attr))
+            else:
+                self.env[op.result] = self.const(lt, int(op.attr))
         elif k in (OpKind.prim, OpKind.call):
             results = self.row(op.attr, args)
             self.env[op.result] = results[0] if results else None
@@ -651,10 +656,6 @@ def _imm(b: LeafBuilder, rep: Rep) -> str:
     if not isinstance(rep, Imm):
         b.refuse(f"{rep} is not an immediate of the word")
     return rep.expr
-
-
-def _branch_drops(b, mode):
-    return (b.emit1("jconst", "bool", (), f"({_imm(b, mode)}) < 2"),)
 
 
 def _branch_taken(b, mode, hit):
@@ -951,7 +952,6 @@ def _truth_object(b, test, invert):
 ROW_LOWERINGS: dict[str, LoweringFn] = {
     # A branch's tests of its mode or sense: functions of the word, or a
     # test result negated or not by the word
-    "_PyRop_BranchDrops": _branch_drops,
     "_PyRop_BranchTaken": _branch_taken,
     "_PyRop_SameBool": _same_bool,
     "_PyValue_BorrowPresent": _borrow_present,

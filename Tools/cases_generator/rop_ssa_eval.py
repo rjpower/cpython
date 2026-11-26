@@ -292,7 +292,6 @@ MODELS = {
     "_PyRop_TruthObject": lambda ev, test, invert: value_word(
         ev.cx, "PyValue_True" if bool(test) != bool(invert) else "PyValue_False"),
     "_PyRop_BranchTaken": lambda ev, mode, test: bool(test) == bool(mode & 1),
-    "_PyRop_BranchDrops": lambda ev, mode: mode < 2,
     "_PyRop_BranchKeeps": lambda ev, mode: mode >= 2,
     "_PyRop_SameBool": lambda ev, a, b: bool(a) == bool(b),
     "_PyValue_BorrowPresent": lambda ev, m: m != EMPTY,

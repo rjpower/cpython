@@ -1760,8 +1760,13 @@ class PilotTests(unittest.TestCase):
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
-              f"{branch_slot}: BranchTruth.Slot: points: raise at BranchTruth.Failed: "
-              "BranchTruth.Failed lists value in spent, but value is intact",
+              # One finding per member arm of BranchTruth.Slot (`over(mode: ...)`)
+              f"{branch_slot}: BranchTruth.Slot_BRANCH_IF_FALSE: points: raise at "
+              "BranchTruth.Failed: BranchTruth.Failed lists value in spent, but value is "
+              "intact",
+              f"{branch_slot}: BranchTruth.Slot_BRANCH_IF_TRUE: points: raise at "
+              "BranchTruth.Failed: BranchTruth.Failed lists value in spent, but value is "
+              "intact",
               f"{branch_generic}: BranchTruth.Generic: points: raise at BranchTruth.Failed: "
               "BranchTruth.Failed lists value in spent, but value is intact",
               f"{branch_observed}: BranchTruth.Observed: points: raise at BranchTruth.Failed: "

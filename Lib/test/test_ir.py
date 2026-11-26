@@ -407,7 +407,7 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
             self.assertEqual(f(False, noop), 2)
         self.assertEqual(f(True, noop), 1)
-        self.assertIn("BranchTruth.Bool", handlers(f))
+        self.assertIn("BranchTruth.Bool_BRANCH_IF_FALSE", handlers(f))
         instructions = list(dis.get_instructions(f))
         self.assertNotIn("NOP", origins(f))
         source_line = f.__code__.co_firstlineno + 5  # try:
@@ -566,7 +566,7 @@ class AssemblerTest(unittest.TestCase):
                 self.assertEqual(f(xs, y), expected)
                 ir = handlers(f)
                 self.assertEqual(ir.count(handler), 3)
-                self.assertNotIn("BranchTruth.Bool", ir)
+                self.assertFalse([h for h in ir if h.startswith("BranchTruth.Bool")])
                 self.assertEqual(f(xs, y), expected)
                 # Operands of another type deoptimise the compare
                 self.assertEqual(f([None, y], y), 11)
@@ -1837,8 +1837,12 @@ class TruthTest(unittest.TestCase):
                     self.assertEqual(g(false), 2 if false else 1)
                 arm = {"BOOL": "Bool", "INT": "Int", "LIST": "List", "NONE": "None",
                        "STR": "Str", "ALWAYS_TRUE": "Plain"}[kind]
-                self.assertIn(f"BranchTruth.{arm}", handlers(f))
-                self.assertIn(f"BranchTruth.{arm}", handlers(g))
+                # Each sense is its own arm: `if x` jumps on false, `if not x`
+                # on true
+                self.assertIn(f"BranchTruth.{arm}_BRANCH_IF_FALSE", handlers(f))
+                self.assertIn(f"BranchTruth.{arm}_BRANCH_IF_TRUE", handlers(g))
+                self.assertNotIn(f"BranchTruth.{arm}_BRANCH_IF_TRUE", handlers(f))
+                self.assertNotIn(f"BranchTruth.{arm}_BRANCH_IF_FALSE", handlers(g))
                 # Another type deoptimises
                 for value in (Falsy(), 0.0, (), 1.5, (1,)):
                     self.assertEqual(f(value), 1 if value else 2)

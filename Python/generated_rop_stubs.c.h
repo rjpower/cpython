@@ -3,7 +3,7 @@
 //   Python/register_ops/add.rop, Python/register_ops/attrs.rop, Python/register_ops/calls.rop, Python/register_ops/cells.rop, Python/register_ops/cleanup.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/displays.rop, Python/register_ops/exceptions.rop, Python/register_ops/functions.rop, Python/register_ops/getattr.rop, Python/register_ops/items.rop, Python/register_ops/iteration.rop, Python/register_ops/monitoring.rop, Python/register_ops/names.rop, Python/register_ops/namespaces.rop, Python/register_ops/numeric.rop, Python/register_ops/patterns.rop, Python/register_ops/resume.rop, Python/register_ops/suspend.rop, Python/register_ops/tests.rop, Python/register_ops/text.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 //
-// 102 stubs.
+// 103 stubs.
 
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
@@ -3271,7 +3271,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     }
     goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_TryInt;
     rop_BranchTruth_Generic_adapt_before_use_branch_truth2_PickBool:
-    adapt_before_use_branch_truth2_c_bool = ROP_HANDLER_BranchTruth_Bool;
+    adapt_before_use_branch_truth2_c_bool = _PyRop_Members_BranchTruth_Bool[(uint32_t)IR_C(ir_word)];
     ret2 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h, adapt_before_use_branch_truth2_c_bool);
     if (ret2 == 0) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Run;
@@ -3288,7 +3288,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     }
     goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_TryList;
     rop_BranchTruth_Generic_adapt_before_use_branch_truth2_PickInt:
-    adapt_before_use_branch_truth2_c_int = ROP_HANDLER_BranchTruth_Int;
+    adapt_before_use_branch_truth2_c_int = _PyRop_Members_BranchTruth_Int[(uint32_t)IR_C(ir_word)];
     ret3 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h, adapt_before_use_branch_truth2_c_int);
     if (ret3 > 0) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Changed;
@@ -3303,7 +3303,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     }
     goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_TryNone;
     rop_BranchTruth_Generic_adapt_before_use_branch_truth2_PickList:
-    adapt_before_use_branch_truth2_c_list = ROP_HANDLER_BranchTruth_List;
+    adapt_before_use_branch_truth2_c_list = _PyRop_Members_BranchTruth_List[(uint32_t)IR_C(ir_word)];
     ret4 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h, adapt_before_use_branch_truth2_c_list);
     if (ret4 > 0) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Changed;
@@ -3318,7 +3318,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     }
     goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_TryStr;
     rop_BranchTruth_Generic_adapt_before_use_branch_truth2_PickNone:
-    adapt_before_use_branch_truth2_c_none = ROP_HANDLER_BranchTruth_None;
+    adapt_before_use_branch_truth2_c_none = _PyRop_Members_BranchTruth_None[(uint32_t)IR_C(ir_word)];
     ret5 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h, adapt_before_use_branch_truth2_c_none);
     if (ret5 > 0) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Changed;
@@ -3333,7 +3333,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     }
     goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_TryObject;
     rop_BranchTruth_Generic_adapt_before_use_branch_truth2_PickStr:
-    adapt_before_use_branch_truth2_c_str = ROP_HANDLER_BranchTruth_Str;
+    adapt_before_use_branch_truth2_c_str = _PyRop_Members_BranchTruth_Str[(uint32_t)IR_C(ir_word)];
     ret6 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h, adapt_before_use_branch_truth2_c_str);
     if (ret6 > 0) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Changed;
@@ -3351,7 +3351,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     if (!_PyRop_ValidatePlain(((_PyFbUnary *)IR_FB(IR_B(ir_word))), PyValue_Borrow(*home_value))) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_TrySlot;
     }
-    adapt_before_use_branch_truth2_c_plain = ROP_HANDLER_BranchTruth_Plain;
+    adapt_before_use_branch_truth2_c_plain = _PyRop_Members_BranchTruth_Plain[(uint32_t)IR_C(ir_word)];
     ret7 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h, adapt_before_use_branch_truth2_c_plain);
     if (ret7 > 0) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Changed;
@@ -3364,7 +3364,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     if (!_PyRop_ValidateSlot(((_PyFbUnary *)IR_FB(IR_B(ir_word))), PyValue_Borrow(*home_value))) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Backoff;
     }
-    adapt_before_use_branch_truth2_c_slot = ROP_HANDLER_BranchTruth_Slot;
+    adapt_before_use_branch_truth2_c_slot = _PyRop_Members_BranchTruth_Slot[(uint32_t)IR_C(ir_word)];
     ret8 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h, adapt_before_use_branch_truth2_c_slot);
     if (ret8 > 0) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Changed;
@@ -7419,22 +7419,22 @@ _PyIR_Rop_Stub_Truth_Slot(
 }
 
 static Py_NO_INLINE int
-_PyIR_Rop_Stub_BranchTruth_Slot(
+_PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_FALSE(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
 {
     _PyInstr *next_instr = site;
     _PyIRWord ir_word = *site;
     int ir_status = 0;
 
-    // BranchTruth.Slot (shared)
-    int opcode = ROP_HANDLER_BranchTruth_Slot;
+    // BranchTruth.Slot_BRANCH_IF_FALSE (shared)
+    int opcode = ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_FALSE;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     frame->instr_ptr = next_instr;
     IR_HOLD_NEXT();
     next_instr += 1;
-    INSTRUCTION_STATS(ROP_HANDLER_BranchTruth_Slot);
+    INSTRUCTION_STATS(ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_FALSE);
     PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
     PyValueBorrow v;
     PyValueBorrow a_view0;
@@ -7453,7 +7453,100 @@ _PyIR_Rop_Stub_BranchTruth_Slot(
     if (!_PyRop_SlotApplies(((_PyFbUnary *)IR_FB(IR_B(ir_word))), v)) {
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
-    if (!_PyRop_BranchDrops((uint32_t)IR_C(ir_word))) {
+    a_view0 = PyValue_Borrow(*home_value);
+    a_owned0 = (ir_word & IR_F_LOCAL_A) ? PyValue_DUP(a_view0) : PyValue_NULL;
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_SlotTruth(a_view0);
+    if (ret1 == 0) {
+        goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_No;
+    }
+    if (ret1 < 0) {
+        goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed;
+    }
+    if (_PyRop_RedirectPending(frame)) {
+        goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved;
+    }
+    slot_truth_at_origin1_hit = true;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Said:
+    if (slot_truth_at_origin1_hit) {
+        goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Is;
+    }
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Not;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Is:
+    hit = true;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Test:
+    if (_PyRop_BranchTaken(BRANCH_IF_FALSE, hit)) {
+        goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Taken;
+    }
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Fall;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Taken:
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_value = _PyFrame_TakeHome(frame, home_value);
+    }
+    PyValue_XCLOSE(a_owned0);
+    PyValue_XCLOSE(own_value);
+    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 28, this_instr);
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_No:
+    if (!_PyRop_RedirectPending(frame)) {
+        slot_truth_at_origin1_hit = false;
+        goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Said;
+    }
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Not:
+    hit = false;
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Test;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Fall:
+    if (!(ir_word & IR_F_LOCAL_A)) {
+        own_value = _PyFrame_TakeHome(frame, home_value);
+    }
+    PyValue_XCLOSE(a_owned0);
+    PyValue_XCLOSE(own_value);
+    DISPATCH();
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_TRUE(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // BranchTruth.Slot_BRANCH_IF_TRUE (shared)
+    int opcode = ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_TRUE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_TRUE);
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool slot_truth_at_origin1_hit;
+    v = PyValue_Borrow(*home_value);
+    if (!PyValue_IsObject(v)) {
+        JUMP_TO_PREDICTED(BranchTruth_Generic);
+    }
+    if (!_PyRop_SlotApplies(((_PyFbUnary *)IR_FB(IR_B(ir_word))), v)) {
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     a_view0 = PyValue_Borrow(*home_value);
@@ -7461,54 +7554,54 @@ _PyIR_Rop_Stub_BranchTruth_Slot(
     IR_STUB_ESCAPE();
     ret1 = _PyRop_SlotTruth(a_view0);
     if (ret1 == 0) {
-        goto rop_BranchTruth_Slot_slot_truth_at_origin1_No;
+        goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_No;
     }
     if (ret1 < 0) {
-        goto rop_BranchTruth_Slot_slot_truth_at_origin1_Failed;
+        goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed;
     }
     if (_PyRop_RedirectPending(frame)) {
-        goto rop_BranchTruth_Slot_slot_truth_at_origin1_Moved;
+        goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved;
     }
     slot_truth_at_origin1_hit = true;
-    rop_BranchTruth_Slot_slot_truth_at_origin1_Said:
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Said:
     if (slot_truth_at_origin1_hit) {
-        goto rop_BranchTruth_Slot_slot_truth_at_origin1_Is;
+        goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Is;
     }
-    goto rop_BranchTruth_Slot_slot_truth_at_origin1_Not;
-    rop_BranchTruth_Slot_slot_truth_at_origin1_Is:
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Not;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Is:
     hit = true;
-    rop_BranchTruth_Slot_Test:
-    if (_PyRop_BranchTaken((uint32_t)IR_C(ir_word), hit)) {
-        goto rop_BranchTruth_Slot_Taken;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Test:
+    if (_PyRop_BranchTaken(BRANCH_IF_TRUE, hit)) {
+        goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Taken;
     }
-    goto rop_BranchTruth_Slot_Fall;
-    rop_BranchTruth_Slot_Taken:
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Fall;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Taken:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
     PyValue_XCLOSE(a_owned0);
     PyValue_XCLOSE(own_value);
     IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
-    rop_BranchTruth_Slot_slot_truth_at_origin1_Failed:
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 28, this_instr);
-    rop_BranchTruth_Slot_slot_truth_at_origin1_No:
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         slot_truth_at_origin1_hit = false;
-        goto rop_BranchTruth_Slot_slot_truth_at_origin1_Said;
+        goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Said;
     }
-    rop_BranchTruth_Slot_slot_truth_at_origin1_Moved:
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved:
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     _PyRop_RetireAbandoned(&a_all4);
     IR_REDIRECT();
-    rop_BranchTruth_Slot_slot_truth_at_origin1_Not:
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Not:
     hit = false;
-    goto rop_BranchTruth_Slot_Test;
-    rop_BranchTruth_Slot_Fall:
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Test;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
@@ -8063,93 +8156,107 @@ const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [202] = {_PyIR_PLAN_INLINE, 0, 202, NULL, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Plain
     [203] = {_PyIR_PLAN_SHARED, 1, 203, (const void *)_PyIR_Rop_Stub_Truth_Slot, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Slot
     [204] = {_PyIR_PLAN_SHARED, 1, 204, (const void *)_PyIR_Rop_Stub_Truth_Generic, (const void *)_PyIR_Rop_Stub_Truth_Generic},  // Truth_Generic
-    [205] = {_PyIR_PLAN_INLINE, 0, 205, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Bool
-    [206] = {_PyIR_PLAN_INLINE, 0, 206, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Int
-    [207] = {_PyIR_PLAN_INLINE, 0, 207, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_List
-    [208] = {_PyIR_PLAN_INLINE, 0, 208, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_None
-    [209] = {_PyIR_PLAN_INLINE, 0, 209, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Str
-    [210] = {_PyIR_PLAN_INLINE, 0, 210, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Plain
-    [211] = {_PyIR_PLAN_SHARED, 1, 211, (const void *)_PyIR_Rop_Stub_BranchTruth_Slot, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Slot
-    [212] = {_PyIR_PLAN_SHARED, 1, 212, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Generic
-    [213] = {_PyIR_PLAN_INLINE, 0, 213, NULL, NULL},  // BranchNone_Test
-    [214] = {_PyIR_PLAN_NONE, 1, 214, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Observed
-    [215] = {_PyIR_PLAN_NONE, 1, 215, NULL, NULL},  // BranchNone_Observed
-    [216] = {_PyIR_PLAN_INLINE, 0, 216, NULL, NULL},  // Jump_Direct
-    [217] = {_PyIR_PLAN_INLINE, 0, 217, NULL, NULL},  // Jump_Trailing
-    [218] = {_PyIR_PLAN_INLINE, 1, 218, NULL, NULL},  // Jump_Poll
-    [219] = {_PyIR_PLAN_NONE, 1, 219, NULL, NULL},  // Jump_Warm
-    [220] = {_PyIR_PLAN_NONE, 1, 220, NULL, NULL},  // Jump_Observed
-    [221] = {_PyIR_PLAN_INLINE, 0, 221, NULL, NULL},  // Const_Pool
-    [222] = {_PyIR_PLAN_INLINE, 0, 222, NULL, NULL},  // Const_Small
-    [223] = {_PyIR_PLAN_INLINE, 0, 223, NULL, NULL},  // Const_Common
-    [224] = {_PyIR_PLAN_INLINE, 0, 224, NULL, NULL},  // LocalRead_Bound
-    [225] = {_PyIR_PLAN_SHARED, 0, 225, (const void *)_PyIR_Rop_Stub_LocalRead_Checked, NULL},  // LocalRead_Checked
-    [226] = {_PyIR_PLAN_INLINE, 1, 226, NULL, NULL},  // LocalWrite_Store
-    [227] = {_PyIR_PLAN_SHARED, 1, 227, (const void *)_PyIR_Rop_Stub_LocalWrite_Restore, NULL},  // LocalWrite_Restore
-    [228] = {_PyIR_PLAN_SHARED, 0, 228, (const void *)_PyIR_Rop_Stub_SaveLocal_Take, NULL},  // SaveLocal_Take
-    [229] = {_PyIR_PLAN_SHARED, 1, 229, (const void *)_PyIR_Rop_Stub_LocalDelete_Checked, NULL},  // LocalDelete_Checked
-    [230] = {_PyIR_PLAN_SHARED, 0, 230, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
-    [231] = {_PyIR_PLAN_SHARED, 1, 231, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
-    [232] = {_PyIR_PLAN_SHARED, 0, 232, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
-    [233] = {_PyIR_PLAN_NONE, 1, 233, NULL, NULL},  // SuperAttr_Observed
-    [234] = {_PyIR_PLAN_NONE, 1, 234, NULL, NULL},  // SuperAttr_Observed
-    [235] = {_PyIR_PLAN_NONE, 1, 235, NULL, NULL},  // SuperAttrExplicit_Observed
-    [236] = {_PyIR_PLAN_NONE, 1, 236, NULL, NULL},  // SuperAttrExplicit_Observed
-    [237] = {_PyIR_PLAN_NONE, 1, 237, NULL, NULL},  // SuperMethod_Observed
-    [238] = {_PyIR_PLAN_NONE, 1, 238, NULL, NULL},  // SuperMethod_Observed
-    [239] = {_PyIR_PLAN_NONE, 1, 239, NULL, NULL},  // SuperMethodExplicit_Observed
-    [240] = {_PyIR_PLAN_NONE, 1, 240, NULL, NULL},  // SuperMethodExplicit_Observed
-    [241] = {_PyIR_PLAN_NONE, 1, 241, NULL, NULL},  // Call_Observed
-    [242] = {_PyIR_PLAN_NONE, 1, 242, NULL, NULL},  // Call_Observed
-    [243] = {_PyIR_PLAN_NONE, 1, 243, NULL, NULL},  // Call_Observed
-    [244] = {_PyIR_PLAN_NONE, 1, 244, NULL, NULL},  // Call_Observed
-    [245] = {_PyIR_PLAN_NONE, 1, 245, NULL, NULL},  // Call_Observed
-    [246] = {_PyIR_PLAN_NONE, 1, 246, NULL, NULL},  // Return_Observed
-    [247] = {_PyIR_PLAN_NONE, 1, 247, NULL, NULL},  // Return_Observed
-    [248] = {_PyIR_PLAN_NONE, 1, 248, NULL, NULL},  // Return_Observed
-    [249] = {_PyIR_PLAN_NONE, 1, 249, NULL, NULL},  // Return_Observed
-    [250] = {_PyIR_PLAN_NONE, 1, 250, NULL, NULL},  // CallKw_Observed
-    [251] = {_PyIR_PLAN_NONE, 1, 251, NULL, NULL},  // CallKw_Observed
-    [252] = {_PyIR_PLAN_NONE, 1, 252, NULL, NULL},  // CallKw_Observed
-    [253] = {_PyIR_PLAN_NONE, 1, 253, NULL, NULL},  // CallKw_Observed
-    [254] = {_PyIR_PLAN_NONE, 1, 254, NULL, NULL},  // CallKw_Observed
-    [255] = {_PyIR_PLAN_NONE, 1, 255, NULL, NULL},  // CallEx_Observed
-    [256] = {_PyIR_PLAN_NONE, 1, 256, NULL, NULL},  // CallEx_Observed
-    [257] = {_PyIR_PLAN_NONE, 1, 257, NULL, NULL},  // CallEx_Observed
-    [258] = {_PyIR_PLAN_NONE, 1, 258, NULL, NULL},  // EndAsyncFor_Observed
-    [259] = {_PyIR_PLAN_NONE, 1, 259, NULL, NULL},  // ForIter_Observed
-    [260] = {_PyIR_PLAN_NONE, 1, 260, NULL, NULL},  // ForIter_Observed
-    [261] = {_PyIR_PLAN_NONE, 1, 261, NULL, NULL},  // ForIter_Observed
-    [262] = {_PyIR_PLAN_NONE, 1, 262, NULL, NULL},  // ForIter_Observed
-    [263] = {_PyIR_PLAN_NONE, 1, 263, NULL, NULL},  // ForIter_Observed
-    [264] = {_PyIR_PLAN_NONE, 1, 264, NULL, NULL},  // ForIter_Observed
-    [265] = {_PyIR_PLAN_NONE, 1, 265, NULL, NULL},  // IterClose_Observed
-    [266] = {_PyIR_PLAN_NONE, 1, 266, NULL, NULL},  // Resume_Observed
-    [267] = {_PyIR_PLAN_NONE, 1, 267, NULL, NULL},  // Resume_Observed
-    [268] = {_PyIR_PLAN_NONE, 1, 268, NULL, NULL},  // Yield_Observed
-    [269] = {_PyIR_PLAN_NONE, 1, 269, NULL, NULL},  // YieldFrom_Observed
-    [270] = {_PyIR_PLAN_NONE, 1, 270, NULL, NULL},  // Send_Observed
-    [271] = {_PyIR_PLAN_NONE, 1, 271, NULL, NULL},  // Send_Observed
-    [272] = {_PyIR_PLAN_NONE, 1, 272, NULL, NULL},  // Send_Observed
-    [273] = {_PyIR_PLAN_NONE, 1, 273, NULL, NULL},  // Send_Observed
-    [274] = {_PyIR_PLAN_NONE, 1, 274, NULL, NULL},  // TestBranch_Observed
-    [275] = {_PyIR_PLAN_NONE, 1, 275, NULL, NULL},  // TestBranch_Observed
-    [276] = {_PyIR_PLAN_NONE, 1, 276, NULL, NULL},  // TestBranch_Observed
-    [277] = {_PyIR_PLAN_NONE, 1, 277, NULL, NULL},  // TestBranch_Observed
-    [278] = {_PyIR_PLAN_NONE, 1, 278, NULL, NULL},  // TestBranch_Observed
-    [279] = {_PyIR_PLAN_NONE, 1, 279, NULL, NULL},  // TestBranch_Observed
-    [280] = {_PyIR_PLAN_NONE, 1, 280, NULL, NULL},  // TestBranch_Observed
+    [205] = {_PyIR_PLAN_INLINE, 0, 205, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Bool_BRANCH_IF_FALSE
+    [206] = {_PyIR_PLAN_INLINE, 0, 206, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Bool_BRANCH_IF_TRUE
+    [207] = {_PyIR_PLAN_INLINE, 0, 207, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Int_BRANCH_IF_FALSE
+    [208] = {_PyIR_PLAN_INLINE, 0, 208, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Int_BRANCH_IF_TRUE
+    [209] = {_PyIR_PLAN_INLINE, 0, 209, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_List_BRANCH_IF_FALSE
+    [210] = {_PyIR_PLAN_INLINE, 0, 210, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_List_BRANCH_IF_TRUE
+    [211] = {_PyIR_PLAN_INLINE, 0, 211, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_None_BRANCH_IF_FALSE
+    [212] = {_PyIR_PLAN_INLINE, 0, 212, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_None_BRANCH_IF_TRUE
+    [213] = {_PyIR_PLAN_INLINE, 0, 213, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Str_BRANCH_IF_FALSE
+    [214] = {_PyIR_PLAN_INLINE, 0, 214, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Str_BRANCH_IF_TRUE
+    [215] = {_PyIR_PLAN_INLINE, 0, 215, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Plain_BRANCH_IF_FALSE
+    [216] = {_PyIR_PLAN_INLINE, 0, 216, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Plain_BRANCH_IF_TRUE
+    [217] = {_PyIR_PLAN_SHARED, 1, 217, (const void *)_PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_FALSE, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Slot_BRANCH_IF_FALSE
+    [218] = {_PyIR_PLAN_SHARED, 1, 218, (const void *)_PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_TRUE, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Slot_BRANCH_IF_TRUE
+    [219] = {_PyIR_PLAN_SHARED, 1, 219, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Generic
+    [220] = {_PyIR_PLAN_INLINE, 0, 220, NULL, NULL},  // BranchNone_Test
+    [221] = {_PyIR_PLAN_NONE, 1, 221, NULL, (const void *)_PyIR_Rop_Stub_BranchTruth_Generic},  // BranchTruth_Observed
+    [222] = {_PyIR_PLAN_NONE, 1, 222, NULL, NULL},  // BranchNone_Observed
+    [223] = {_PyIR_PLAN_INLINE, 0, 223, NULL, NULL},  // Jump_Direct
+    [224] = {_PyIR_PLAN_INLINE, 0, 224, NULL, NULL},  // Jump_Trailing
+    [225] = {_PyIR_PLAN_INLINE, 1, 225, NULL, NULL},  // Jump_Poll
+    [226] = {_PyIR_PLAN_NONE, 1, 226, NULL, NULL},  // Jump_Warm
+    [227] = {_PyIR_PLAN_NONE, 1, 227, NULL, NULL},  // Jump_Observed
+    [228] = {_PyIR_PLAN_INLINE, 0, 228, NULL, NULL},  // Const_Pool
+    [229] = {_PyIR_PLAN_INLINE, 0, 229, NULL, NULL},  // Const_Small
+    [230] = {_PyIR_PLAN_INLINE, 0, 230, NULL, NULL},  // Const_Common
+    [231] = {_PyIR_PLAN_INLINE, 0, 231, NULL, NULL},  // LocalRead_Bound
+    [232] = {_PyIR_PLAN_SHARED, 0, 232, (const void *)_PyIR_Rop_Stub_LocalRead_Checked, NULL},  // LocalRead_Checked
+    [233] = {_PyIR_PLAN_INLINE, 1, 233, NULL, NULL},  // LocalWrite_Store
+    [234] = {_PyIR_PLAN_SHARED, 1, 234, (const void *)_PyIR_Rop_Stub_LocalWrite_Restore, NULL},  // LocalWrite_Restore
+    [235] = {_PyIR_PLAN_SHARED, 0, 235, (const void *)_PyIR_Rop_Stub_SaveLocal_Take, NULL},  // SaveLocal_Take
+    [236] = {_PyIR_PLAN_SHARED, 1, 236, (const void *)_PyIR_Rop_Stub_LocalDelete_Checked, NULL},  // LocalDelete_Checked
+    [237] = {_PyIR_PLAN_SHARED, 0, 237, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
+    [238] = {_PyIR_PLAN_SHARED, 1, 238, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
+    [239] = {_PyIR_PLAN_SHARED, 0, 239, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
+    [240] = {_PyIR_PLAN_NONE, 1, 240, NULL, NULL},  // SuperAttr_Observed
+    [241] = {_PyIR_PLAN_NONE, 1, 241, NULL, NULL},  // SuperAttr_Observed
+    [242] = {_PyIR_PLAN_NONE, 1, 242, NULL, NULL},  // SuperAttrExplicit_Observed
+    [243] = {_PyIR_PLAN_NONE, 1, 243, NULL, NULL},  // SuperAttrExplicit_Observed
+    [244] = {_PyIR_PLAN_NONE, 1, 244, NULL, NULL},  // SuperMethod_Observed
+    [245] = {_PyIR_PLAN_NONE, 1, 245, NULL, NULL},  // SuperMethod_Observed
+    [246] = {_PyIR_PLAN_NONE, 1, 246, NULL, NULL},  // SuperMethodExplicit_Observed
+    [247] = {_PyIR_PLAN_NONE, 1, 247, NULL, NULL},  // SuperMethodExplicit_Observed
+    [248] = {_PyIR_PLAN_NONE, 1, 248, NULL, NULL},  // Call_Observed
+    [249] = {_PyIR_PLAN_NONE, 1, 249, NULL, NULL},  // Call_Observed
+    [250] = {_PyIR_PLAN_NONE, 1, 250, NULL, NULL},  // Call_Observed
+    [251] = {_PyIR_PLAN_NONE, 1, 251, NULL, NULL},  // Call_Observed
+    [252] = {_PyIR_PLAN_NONE, 1, 252, NULL, NULL},  // Call_Observed
+    [253] = {_PyIR_PLAN_NONE, 1, 253, NULL, NULL},  // Return_Observed
+    [254] = {_PyIR_PLAN_NONE, 1, 254, NULL, NULL},  // Return_Observed
+    [255] = {_PyIR_PLAN_NONE, 1, 255, NULL, NULL},  // Return_Observed
+    [256] = {_PyIR_PLAN_NONE, 1, 256, NULL, NULL},  // Return_Observed
+    [257] = {_PyIR_PLAN_NONE, 1, 257, NULL, NULL},  // CallKw_Observed
+    [258] = {_PyIR_PLAN_NONE, 1, 258, NULL, NULL},  // CallKw_Observed
+    [259] = {_PyIR_PLAN_NONE, 1, 259, NULL, NULL},  // CallKw_Observed
+    [260] = {_PyIR_PLAN_NONE, 1, 260, NULL, NULL},  // CallKw_Observed
+    [261] = {_PyIR_PLAN_NONE, 1, 261, NULL, NULL},  // CallKw_Observed
+    [262] = {_PyIR_PLAN_NONE, 1, 262, NULL, NULL},  // CallEx_Observed
+    [263] = {_PyIR_PLAN_NONE, 1, 263, NULL, NULL},  // CallEx_Observed
+    [264] = {_PyIR_PLAN_NONE, 1, 264, NULL, NULL},  // CallEx_Observed
+    [265] = {_PyIR_PLAN_NONE, 1, 265, NULL, NULL},  // EndAsyncFor_Observed
+    [266] = {_PyIR_PLAN_NONE, 1, 266, NULL, NULL},  // ForIter_Observed
+    [267] = {_PyIR_PLAN_NONE, 1, 267, NULL, NULL},  // ForIter_Observed
+    [268] = {_PyIR_PLAN_NONE, 1, 268, NULL, NULL},  // ForIter_Observed
+    [269] = {_PyIR_PLAN_NONE, 1, 269, NULL, NULL},  // ForIter_Observed
+    [270] = {_PyIR_PLAN_NONE, 1, 270, NULL, NULL},  // ForIter_Observed
+    [271] = {_PyIR_PLAN_NONE, 1, 271, NULL, NULL},  // ForIter_Observed
+    [272] = {_PyIR_PLAN_NONE, 1, 272, NULL, NULL},  // IterClose_Observed
+    [273] = {_PyIR_PLAN_NONE, 1, 273, NULL, NULL},  // Resume_Observed
+    [274] = {_PyIR_PLAN_NONE, 1, 274, NULL, NULL},  // Resume_Observed
+    [275] = {_PyIR_PLAN_NONE, 1, 275, NULL, NULL},  // Yield_Observed
+    [276] = {_PyIR_PLAN_NONE, 1, 276, NULL, NULL},  // YieldFrom_Observed
+    [277] = {_PyIR_PLAN_NONE, 1, 277, NULL, NULL},  // Send_Observed
+    [278] = {_PyIR_PLAN_NONE, 1, 278, NULL, NULL},  // Send_Observed
+    [279] = {_PyIR_PLAN_NONE, 1, 279, NULL, NULL},  // Send_Observed
+    [280] = {_PyIR_PLAN_NONE, 1, 280, NULL, NULL},  // Send_Observed
     [281] = {_PyIR_PLAN_NONE, 1, 281, NULL, NULL},  // TestBranch_Observed
-    [282] = {_PyIR_PLAN_NONE, 1, 282, NULL, NULL},  // BranchTruth_Observed
-    [283] = {_PyIR_PLAN_NONE, 1, 283, NULL, NULL},  // BranchTruth_Observed
-    [284] = {_PyIR_PLAN_NONE, 1, 284, NULL, NULL},  // BranchTruth_Observed
-    [285] = {_PyIR_PLAN_NONE, 1, 285, NULL, NULL},  // BranchTruth_Observed
-    [286] = {_PyIR_PLAN_NONE, 1, 286, NULL, NULL},  // BranchTruth_Observed
-    [287] = {_PyIR_PLAN_NONE, 1, 287, NULL, NULL},  // BranchTruth_Observed
-    [288] = {_PyIR_PLAN_NONE, 1, 288, NULL, NULL},  // BranchTruth_Observed
+    [282] = {_PyIR_PLAN_NONE, 1, 282, NULL, NULL},  // TestBranch_Observed
+    [283] = {_PyIR_PLAN_NONE, 1, 283, NULL, NULL},  // TestBranch_Observed
+    [284] = {_PyIR_PLAN_NONE, 1, 284, NULL, NULL},  // TestBranch_Observed
+    [285] = {_PyIR_PLAN_NONE, 1, 285, NULL, NULL},  // TestBranch_Observed
+    [286] = {_PyIR_PLAN_NONE, 1, 286, NULL, NULL},  // TestBranch_Observed
+    [287] = {_PyIR_PLAN_NONE, 1, 287, NULL, NULL},  // TestBranch_Observed
+    [288] = {_PyIR_PLAN_NONE, 1, 288, NULL, NULL},  // TestBranch_Observed
     [289] = {_PyIR_PLAN_NONE, 1, 289, NULL, NULL},  // BranchTruth_Observed
-    [290] = {_PyIR_PLAN_NONE, 1, 290, NULL, NULL},  // BranchNone_Observed
-    [291] = {_PyIR_PLAN_NONE, 1, 291, NULL, NULL},  // Jump_Observed
-    [292] = {_PyIR_PLAN_NONE, 1, 292, NULL, NULL},  // Jump_Observed
-    [293] = {_PyIR_PLAN_NONE, 1, 293, NULL, NULL},  // Jump_Observed
+    [290] = {_PyIR_PLAN_NONE, 1, 290, NULL, NULL},  // BranchTruth_Observed
+    [291] = {_PyIR_PLAN_NONE, 1, 291, NULL, NULL},  // BranchTruth_Observed
+    [292] = {_PyIR_PLAN_NONE, 1, 292, NULL, NULL},  // BranchTruth_Observed
+    [293] = {_PyIR_PLAN_NONE, 1, 293, NULL, NULL},  // BranchTruth_Observed
+    [294] = {_PyIR_PLAN_NONE, 1, 294, NULL, NULL},  // BranchTruth_Observed
+    [295] = {_PyIR_PLAN_NONE, 1, 295, NULL, NULL},  // BranchTruth_Observed
+    [296] = {_PyIR_PLAN_NONE, 1, 296, NULL, NULL},  // BranchTruth_Observed
+    [297] = {_PyIR_PLAN_NONE, 1, 297, NULL, NULL},  // BranchTruth_Observed
+    [298] = {_PyIR_PLAN_NONE, 1, 298, NULL, NULL},  // BranchTruth_Observed
+    [299] = {_PyIR_PLAN_NONE, 1, 299, NULL, NULL},  // BranchTruth_Observed
+    [300] = {_PyIR_PLAN_NONE, 1, 300, NULL, NULL},  // BranchTruth_Observed
+    [301] = {_PyIR_PLAN_NONE, 1, 301, NULL, NULL},  // BranchTruth_Observed
+    [302] = {_PyIR_PLAN_NONE, 1, 302, NULL, NULL},  // BranchTruth_Observed
+    [303] = {_PyIR_PLAN_NONE, 1, 303, NULL, NULL},  // BranchTruth_Observed
+    [304] = {_PyIR_PLAN_NONE, 1, 304, NULL, NULL},  // BranchNone_Observed
+    [305] = {_PyIR_PLAN_NONE, 1, 305, NULL, NULL},  // Jump_Observed
+    [306] = {_PyIR_PLAN_NONE, 1, 306, NULL, NULL},  // Jump_Observed
+    [307] = {_PyIR_PLAN_NONE, 1, 307, NULL, NULL},  // Jump_Observed
 };

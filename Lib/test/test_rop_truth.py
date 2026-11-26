@@ -34,12 +34,24 @@ SOURCES = {
         "locals": "def f(a):\n    if a:\n        return 1\n    return 2\n",
         "temporaries": "def f(a):\n    if a * 1:\n        return 1\n    return 2\n",
     },
+    # `if not a` jumps on true: the other member of BranchMode's drop modes
+    "branch_true": {
+        "locals": "def f(a):\n    if not a:\n        return 1\n    return 2\n",
+        "temporaries": "def f(a):\n    if not (a * 1):\n        return 1\n    return 2\n",
+    },
     "none": {
         "locals": "def f(a):\n    if a is None:\n        return 1\n    return 2\n",
     },
 }
 GENERIC = {"truth": "Truth.Generic", "branch": "BranchTruth.Generic",
-           "none": "BranchNone.Test"}
+           "branch_true": "BranchTruth.Generic", "none": "BranchNone.Test"}
+# The BranchTruth member arm of each source's mode (`over(mode: ...)`)
+MEMBER = {"branch": "BRANCH_IF_FALSE", "branch_true": "BRANCH_IF_TRUE"}
+
+
+def branch_arm(family, arm):
+    """The BranchTruth arm that a word of family's source runs as arm"""
+    return f"BranchTruth.{arm}" if arm == "Generic" else f"BranchTruth.{arm}_{MEMBER[family]}"
 
 
 class Final:
@@ -160,7 +172,9 @@ def check_branch(test, family, arm, kind, value, mode, field):
                                                  arms()[arm])
     _, _, exc, slots = result
     try:
-        taken = (value is not None) if family == "none" else not truth_of(value)
+        taken = ((value is not None) if family == "none"
+                 else truth_of(value) if family == "branch_true"
+                 else not truth_of(value))
     except Exception as e:
         test.assertIsInstance(exc, type(e))
         return
@@ -196,15 +210,17 @@ class TruthArmTests(unittest.TestCase):
                             check_truth(self, f"Truth.{arm}", kind, value, mode)
 
     def test_branch(self):
-        for arm in TRUTH_ARMS:
-            for kind in SOURCES["branch"]:
-                for value in VALUES:
-                    for mode in (FORM, STUB):
-                        if mode == STUB and arm not in SHARED:
-                            continue
-                        with self.subTest(arm=arm, kind=kind, value=value, mode=mode):
-                            check_branch(self, "branch", f"BranchTruth.{arm}", kind, value,
-                                         mode, "A")
+        for family in MEMBER:
+            for arm in TRUTH_ARMS:
+                for kind in SOURCES[family]:
+                    for value in VALUES:
+                        for mode in (FORM, STUB):
+                            if mode == STUB and arm not in SHARED:
+                                continue
+                            with self.subTest(family=family, arm=arm, kind=kind,
+                                              value=value, mode=mode):
+                                check_branch(self, family, branch_arm(family, arm), kind,
+                                             value, mode, "A")
 
     def test_none(self):
         for value in VALUES:
@@ -213,7 +229,7 @@ class TruthArmTests(unittest.TestCase):
 
     def test_temporary_operand_is_retired(self):
         Final.log.clear()
-        for arm in ("BranchTruth.Generic", "BranchTruth.Plain"):
+        for arm in ("BranchTruth.Generic", "BranchTruth.Plain_BRANCH_IF_FALSE"):
             for mode in (FORM, STUB):
                 if mode == STUB and arm != "BranchTruth.Generic":
                     continue
@@ -253,13 +269,14 @@ class AdaptationTests(unittest.TestCase):
     ]
 
     def test_each_arm_is_picked(self):
-        for family, prefix in (("truth", "Truth"), ("branch", "BranchTruth")):
+        for family in ("truth", *MEMBER):
             for value, arm in self.EXPECTED:
                 with self.subTest(family=family, value=value):
-                    self.assertEqual(adapted_arm(family, value), f"{prefix}.{arm}")
+                    want = f"Truth.{arm}" if family == "truth" else branch_arm(family, arm)
+                    self.assertEqual(adapted_arm(family, value), want)
 
     def test_floats_stay_generic(self):
-        for family in ("truth", "branch"):
+        for family in ("truth", *MEMBER):
             self.assertEqual(adapted_arm(family, 1.5), GENERIC[family])
 
     def test_a_word_runs_on_after_a_miss(self):

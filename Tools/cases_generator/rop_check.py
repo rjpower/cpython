@@ -184,6 +184,29 @@ class GraphInfo:
 
 
 @dataclass(frozen=True)
+class MemberSet:
+    """An arm stated over the members of an enum operand (`over(...)`): the
+    arm of each listed member, and the rest arm, which reads the operand from
+    the word, when the set declares one."""
+    name: str                       # the declared arm, Family.Arm
+    operand: str
+    enum: str
+    arms: Mapping[str, str]         # member -> its arm
+    rest: str | None
+
+    @property
+    def family(self) -> str:
+        return self.name.split(".")[0]
+
+    def arm_of(self, member: str) -> str | None:
+        return self.arms.get(member, self.rest)
+
+
+def member_arm_name(name: str, member: str) -> str:
+    return f"{name}_{member}"
+
+
+@dataclass(frozen=True)
 class Program:
     files: tuple[SourceFile, ...]
     enums: Mapping[str, EnumDecl]
@@ -201,6 +224,8 @@ class Program:
     # it takes (rop_verify.load fills it)
     exit_points: Mapping[str, frozenset[tuple[int, str | None]]] = field(
         default_factory=dict)
+    # The member sets (`over(...)`), by the declared arm name
+    member_sets: Mapping[str, "MemberSet"] = field(default_factory=dict)
 
     @property
     def pending(self) -> tuple[str, ...]:
@@ -444,6 +469,7 @@ class Checker:
     callees: dict[str, frozenset[str]] = field(default_factory=dict)
     encodings: dict[str, Encoding] = field(default_factory=dict)
     completions: dict[str, Arm] = field(default_factory=dict)
+    member_sets: dict[str, MemberSet] = field(default_factory=dict)
 
     def arm(self, name: str) -> Arm:
         """A word arm or a completion arm"""
@@ -476,7 +502,7 @@ def check(files: Iterable[SourceFile]) -> Program:
     return Program(c.files, dict(c.enums), dict(c.families), dict(c.points),
                    dict(c.arms), dict(c.macros), dict(c.externs), dict(c.graphs),
                    dict(c.encodings), tuple(sorted(c.diagnostics, key=diagnostic_order)),
-                   dict(c.completions))
+                   dict(c.completions), member_sets=dict(c.member_sets))
 
 
 def diagnostic_order(d: Diagnostic) -> tuple[str, int, int]:
@@ -533,6 +559,123 @@ def collect(c: Checker) -> None:
     for e in c.enums.values():
         for m in e.members:
             c.members.setdefault(m, []).append(e.name)
+    expand_member_sets(c)
+
+
+def expand_member_sets(c: Checker) -> None:
+    """Replace each arm stated `over(op: ...)` by one arm per member, in which
+    every use of op is the member, and by the rest arm when the set has one.
+    The arms keep the declared arm's place, so handler ids stay in definition
+    order."""
+    arms: dict[str, Arm] = {}
+    for a in c.arms.values():
+        if a.over is None:
+            arms[a.name] = a
+            continue
+        enum = over_enum(c, a)
+        if enum is None:
+            arms[a.name] = replace(a, over=None)
+            continue
+        by_member: dict[str, str] = {}
+        for m in a.over.members:
+            name = member_arm_name(a.name, m)
+            if name in c.arms or name in c.completions:
+                c.report(a.over.span, a.name, f"member arm {name} is also declared")
+                continue
+            by_member[m] = name
+            graph = substitute_graph(a.graph, a.over.operand, Name(m, a.over.span))
+            arms[name] = replace(a, name=name, graph=graph, over=None, member=m)
+        rest = None
+        if a.over.rest:
+            rest = a.name
+            arms[a.name] = replace(a, over=None)
+        c.member_sets[a.name] = MemberSet(a.name, a.over.operand, enum, by_member, rest)
+    c.arms = arms
+
+
+def over_enum(c: Checker, a: Arm) -> str | None:
+    """The enum of an `over` operand, or None with a diagnostic"""
+    assert a.over is not None
+    fam = c.families.get(a.family)
+    param = next((p for p in fam.params if p.name == a.over.operand), None) if fam else None
+    if param is None or not isinstance(param.type, EnumType):
+        c.report(a.over.span, a.name, f"over({a.over.operand}): not an Enum<E> operand "
+                 f"of family {a.family}")
+        return None
+    enum = c.enums.get(param.type.name)
+    if enum is None:
+        return None
+    unknown = [m for m in a.over.members if m not in enum.members]
+    if unknown:
+        c.report(a.over.span, a.name, f"over({a.over.operand}): {', '.join(unknown)} "
+                 f"not a member of {enum.name}")
+        return None
+    if len(set(a.over.members)) != len(a.over.members):
+        c.report(a.over.span, a.name, f"over({a.over.operand}): a member is listed twice")
+        return None
+    if a.over.rest and len(a.over.members) == len(enum.members):
+        c.report(a.over.span, a.name, f"over({a.over.operand}): rest, but every member "
+                 f"of {enum.name} is listed")
+    if a.observes or a.select or a.completion is not None or a.trailing or a.displacing:
+        c.report(a.over.span, a.name, "only an adaptive arm is stated over members: not "
+                 "an observed, selected, completion, trailing or displacing arm")
+        return None
+    if fam.generic is not None and a.name == f"{fam.name}.{fam.generic}":
+        c.report(a.over.span, a.name, "the generic arm reads the operand: it is not "
+                 "stated over members")
+        return None
+    return enum.name
+
+
+def substitute_expr(e: Expr, operand: str, member: Name) -> Expr:
+    if isinstance(e, Name):
+        return member if e.name == operand else e
+    if isinstance(e, Call):
+        return replace(e, args=tuple(substitute_expr(a, operand, member) for a in e.args))
+    if isinstance(e, SpanLit):
+        return replace(e, items=tuple(substitute_expr(a, operand, member) for a in e.items))
+    return e
+
+
+def substitute_target(t: Target, operand: str, member: Name) -> Target:
+    return replace(t, args=tuple(substitute_expr(a, operand, member) for a in t.args))
+
+
+def substitute_stmt(st, operand: str, member: Name):
+    if isinstance(st, Guard):
+        return replace(st, cond=substitute_expr(st.cond, operand, member))
+    if isinstance(st, Let):
+        return replace(st, value=substitute_expr(st.value, operand, member))
+    assert isinstance(st, Publish)
+    return replace(st, bindings=tuple(replace(b, value=substitute_expr(b.value, operand, member))
+                                      for b in st.bindings))
+
+
+def substitute_term(t: Term, operand: str, member: Name) -> Term:
+    if isinstance(t, Goto):
+        return replace(t, target=substitute_target(t.target, operand, member))
+    if isinstance(t, Branch):
+        return replace(t, cond=substitute_expr(t.cond, operand, member),
+                       if_true=substitute_target(t.if_true, operand, member),
+                       if_false=substitute_target(t.if_false, operand, member))
+    if isinstance(t, CallTerm):
+        return replace(t, args=tuple(substitute_expr(a, operand, member) for a in t.args),
+                       edges=tuple(replace(e, target=substitute_target(e.target, operand, member))
+                                   for e in t.edges))
+    if isinstance(t, Each):
+        return replace(t, over=substitute_expr(t.over, operand, member),
+                       exhaust=substitute_target(t.exhaust, operand, member))
+    if isinstance(t, Exit):
+        return replace(t, args=tuple(substitute_expr(a, operand, member) for a in t.args))
+    return t
+
+
+def substitute_graph(g: Graph, operand: str, member: Name) -> Graph:
+    """The graph with every use of the operand replaced by the member"""
+    return replace(g, blocks=tuple(
+        replace(b, stmts=tuple(substitute_stmt(st, operand, member) for st in b.stmts),
+                term=substitute_term(b.term, operand, member))
+        for b in g.blocks))
 
 
 def check_enum(c: Checker, e: EnumDecl) -> None:
@@ -1813,7 +1956,9 @@ def type_of_candidate(c: Checker, scope: Scope, e: Call, block: str, i: int
     if not e.args or not isinstance(e.args[0], Name):
         c.report(e.span, scope.definition, "candidate(Family.Arm[, recipe]) names an arm")
         return None
-    arm = c.arms.get(e.args[0].name)
+    name = e.args[0].name
+    members = c.member_sets.get(name)
+    arm = c.arms.get(next(iter(members.arms.values())) if members else name)
     if arm is None:
         c.report(e.args[0].span, scope.definition, f"candidate: no arm {e.args[0].name}")
         return None

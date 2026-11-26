@@ -458,6 +458,19 @@ class Point:
 
 
 @dataclass(frozen=True, slots=True)
+class Over:
+    """`over(op: M1, M2[; rest])`: the arm is stated once and stands for one
+    arm per listed member of the family's enum operand `operand`, in which
+    the operand is that member, a constant.  `rest` keeps one more arm, under
+    the declared name, for the members not listed, where the operand is read
+    from the word."""
+    operand: str
+    members: tuple[str, ...]
+    rest: bool = False
+    span: SrcSpan = _span()
+
+
+@dataclass(frozen=True, slots=True)
 class Arm:
     name: str
     region: Region
@@ -483,6 +496,11 @@ class Arm:
     # another one, whose handler it runs once its hook has returned.  Only
     # such an arm has the `dispatch` exit and the name `prev_head`.
     displacing: bool = False
+    # The member set the arm states (`over(...)`), as parsed.  The checker
+    # replaces the arm by its member arms, each with no set and with
+    # `member` naming its member, and the rest arm, with neither.
+    over: Over | None = None
+    member: str | None = None
 
     @property
     def family(self) -> str:

@@ -1,10 +1,11 @@
 /* The labels and non-arm handlers of the interpreter, each written once.
  *
- * Python/ceval.c includes this file twice, as it includes the generated
- * handlers: with IR_FUNCTION_FORMS defined, for the function form of each
- * (ir_run_<handler> or ir_<label>), and in ir_evaluate(), for its TARGET or
- * LABEL.  The macros below open and close the two shapes, so the body is one
- * text for both. */
+ * Python/ceval_forms.c includes this file with IR_FUNCTION_FORMS defined,
+ * for the function form of each (ir_run_<handler> or ir_<label>), and
+ * Python/ceval.c as it includes the generated handlers: in ir_evaluate(),
+ * for its TARGET or LABEL, or with IR_TAIL_CALLS defined, for the
+ * tail-calling interpreter's function of each (ir_tail_<name>).  The macros
+ * below open and close the shapes, so the body is one text for all. */
 
 #ifdef IR_FUNCTION_FORMS
 #  define IR_HANDLER_BEGIN(name) \
@@ -15,6 +16,11 @@
     static Py_NO_INLINE _PyIRTransfer \
     ir_##name(PyThreadState *tstate, _PyInterpreterFrame *frame, \
               _PyInstr *next_instr, _PyIRWord ir_word) {
+#  define IR_END }
+#elif defined(IR_TAIL_CALLS)
+/* The tail-calling interpreter's functions (Python/ceval_tail.h) */
+#  define IR_HANDLER_BEGIN(name) IR_TAIL_HEAD(ir_tail_##name) {
+#  define IR_ENTRY_BEGIN(name) IR_TAIL_HEAD(ir_tail_##name) {
 #  define IR_END }
 #else
 #  define IR_HANDLER_BEGIN(name) TARGET_##name: {
@@ -63,7 +69,7 @@ IR_ENTRY_BEGIN(throw_error)
     PROCESS_ERROR_AT(THROW, 0, next_instr - 1);
 IR_END
 
-#ifndef IR_FUNCTION_FORMS
+#if !defined(IR_FUNCTION_FORMS) && !defined(IR_TAIL_CALLS)
 /* The exits that only the evaluator reaches by label */
 IR_ENTRY_BEGIN(error)
     PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);

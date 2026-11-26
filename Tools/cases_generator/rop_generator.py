@@ -417,12 +417,17 @@ def write_stub_plans(out: TextIO, p: Products) -> None:
 
 
 def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
-    """The dispatch table of the evaluator, which is local to ir_evaluate()
-    and has the addresses of its labels.  Dispatch masks the word with
-    IR_HANDLER_MASK, so the table covers every id the mask yields."""
+    """The dispatch targets of the interpreter, IR_TARGETS(X): X(ID, ARM)
+    for every handler id, from which Python/ceval.c builds its dispatch
+    table (the labels of ir_evaluate() or the arm functions of the
+    tail-calling interpreter).  Dispatch masks the word with
+    IR_HANDLER_MASK, so the list covers every id the mask yields."""
     write_header(__file__, sources, out)
     by_arm = emitted_arm_ids(p)
-    out.write(f"\nstatic void *const opcode_targets[{ir_arms.IR_LIMIT}] = {{\n")
+    out.write(f"\n#define IR_TARGETS_COUNT {ir_arms.IR_LIMIT}\n")
+    out.write("static_assert(IR_TARGETS_COUNT == IR_HANDLER_MASK + 1,\n"
+              '              "dispatch covers every id that IR_HANDLER yields");\n')
+    out.write("\n#define IR_TARGETS(X) \\\n")
     for i in range(ir_arms.IR_LIMIT):
         if i in by_arm:
             name = by_arm[i].name
@@ -430,10 +435,8 @@ def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
             name = "IR_OPERANDS"
         else:
             name = "UNKNOWN_OPCODE"
-        out.write(f"[{i}] = &&TARGET_{name},\n")
-    out.write("};\n")
-    out.write("static_assert(Py_ARRAY_LENGTH(opcode_targets) == IR_HANDLER_MASK + 1,\n"
-              '              "dispatch covers every id that IR_HANDLER yields");\n')
+        out.write(f"    X({i}, {name}) \\\n")
+    out.write("\n")
 
 
 def completion_name(arm: str) -> str:

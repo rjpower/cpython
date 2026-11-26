@@ -2291,6 +2291,7 @@ Python/ceval.o Python/ceval_forms.o: \
 		$(srcdir)/Python/ceval_routines.h \
 		$(srcdir)/Python/condvar.h \
 		$(srcdir)/Python/ceval_labels.h \
+		$(srcdir)/Python/ceval_tail.h \
 		$(srcdir)/Python/ir_targets.h \
 		$(srcdir)/Python/generated_rop_cases.c.h \
 		$(srcdir)/Python/generated_rop_forms.c.h \

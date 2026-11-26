@@ -1,6 +1,8 @@
 """The inline policy of the register instruction rows holds in the binary:
 the interpreter makes no call to a row declared `inline`, and the forms and
-stubs share one out-of-line copy of it (Tools/cases_generator/rop_cgen.py)."""
+stubs share one out-of-line copy of it (Tools/cases_generator/rop_cgen.py).
+The interpreter is ir_evaluate() and, when it tail-calls, the function of
+each handler, label and routine (ir_tail_*, Python/ceval_tail.h)."""
 
 import re
 import shutil
@@ -30,6 +32,23 @@ def run(*argv: str) -> str:
     return subprocess.run(argv, capture_output=True, text=True, check=True).stdout
 
 
+def interpreter_code(text: str) -> str:
+    """The disassembly of the interpreter's functions, from one objdump run
+    over the range that holds them"""
+    funcs = {}
+    for address, size, name in re.findall(
+            r"^([0-9a-f]+) ([0-9a-f]+) [tT] (ir_evaluate|ir_tail_\w+)$", text, re.M):
+        funcs[name] = (int(address, 16), int(size, 16))
+    start = min(a for a, _ in funcs.values())
+    stop = max(a + n for a, n in funcs.values())
+    dump = run("objdump", "-d", "--no-show-raw-insn", f"--start-address={start:#x}",
+               f"--stop-address={stop:#x}", sys.executable)
+    # keep the blocks of the interpreter's functions only
+    blocks = re.split(r"^(?=[0-9a-f]+ <)", dump, flags=re.M)
+    return "".join(b for b in blocks
+                   if re.match(r"[0-9a-f]+ <(ir_evaluate|ir_tail_\w+)>:", b))
+
+
 @unittest.skipUnless(shutil.which("nm") and shutil.which("objdump"),
                      "needs nm and objdump")
 class InlineRowBinaryTests(unittest.TestCase):
@@ -43,8 +62,7 @@ class InlineRowBinaryTests(unittest.TestCase):
         cls.text = run("nm", "-S", sys.executable)
         if not re.search(r" [tT] ir_evaluate$", cls.text, re.M):
             raise unittest.SkipTest("ir_evaluate is not in this executable's symbols")
-        cls.calls = run("objdump", "-d", "--no-show-raw-insn",
-                        "--disassemble=ir_evaluate", sys.executable)
+        cls.calls = interpreter_code(cls.text)
 
     def test_the_declared_rows_are_declared(self):
         self.assertIn("_PyRop_PushExact", self.symbols)

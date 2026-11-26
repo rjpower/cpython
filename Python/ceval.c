@@ -2556,7 +2556,10 @@ rop_close_items(PyValue *vals, int n)
     }
 }
 
-PyValue
+/* The span builders hold their items in a variable-length array: an arm
+ * that inlined one would allocate on its C frame and could not tail-call
+ * (Python/ceval_tail.h), so none is inlined. */
+Py_NO_INLINE PyValue
 _PyRop_BuildTuple(const _PyRopSpan *items)
 {
     int n = items->count;
@@ -2570,7 +2573,7 @@ _PyRop_BuildTuple(const _PyRopSpan *items)
     return PyValue_FromObjectSteal(tup);
 }
 
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_BuildList(const _PyRopSpan *items)
 {
     int n = items->count;
@@ -2584,7 +2587,7 @@ _PyRop_BuildList(const _PyRopSpan *items)
     return PyValue_FromObjectSteal(list);
 }
 
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_BuildSet(const _PyRopSpan *items)
 {
     int n = items->count;
@@ -2608,7 +2611,7 @@ _PyRop_BuildSet(const _PyRopSpan *items)
     return PyValue_FromObjectSteal(set);
 }
 
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_BuildMap(const _PyRopSpan *items)
 {
     int n = items->count;
@@ -2625,7 +2628,7 @@ _PyRop_BuildMap(const _PyRopSpan *items)
 
 /* The rows of BuildText (Python/register_ops/text.rop).  Every piece is
  * spent on every outcome. */
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_JoinText(const _PyRopSpan *parts)
 {
     int n = parts->count;
@@ -2643,7 +2646,7 @@ _PyRop_JoinText(const _PyRopSpan *parts)
     return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
 }
 
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_BuildInterpolation(const _PyRopSpan *parts, int flags)
 {
     int n = parts->count;
@@ -3197,6 +3200,71 @@ jit_resume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next)
 #endif
 
 
+/* The interpreter is compiled one of two ways (a prototype's choice, rir90
+ * TI): Py_IR_TAIL_CALL 0, ir_evaluate() below, one function that
+ * dispatches by computed goto; 1, the tail-calling interpreter, a function
+ * per handler, label and routine that dispatches by guaranteed tail call
+ * (Python/ceval_tail.h).  Both compile the same bodies. */
+#ifndef Py_IR_TAIL_CALL
+#  define Py_IR_TAIL_CALL 1
+#endif
+
+/* IR_TARGETS(X): the handler of every id */
+#include "ir_targets.h"
+
+#if Py_IR_TAIL_CALL
+
+#define IR_TAIL_CALLS
+#include "ceval_tail.h"
+
+/* Every function of the interpreter, declared before the table and the
+ * functions, which tail-call one another (an id without a handler repeats
+ * its declaration) */
+#define IR_TAIL_DECLARE(ID, NAME) IR_TAIL_HEAD(ir_tail_##NAME);
+IR_TARGETS(IR_TAIL_DECLARE)
+#undef IR_TAIL_DECLARE
+IR_TAIL_FN(start_frame);
+IR_TAIL_FN(throw_error);
+IR_TAIL_FN(process_error);
+IR_TAIL_FN(gen_return);
+
+static const _PyIRTailFn ir_tail_table[IR_TARGETS_COUNT] = {
+#define IR_TAIL_TARGET(ID, NAME) [ID] = ir_tail_##NAME,
+    IR_TARGETS(IR_TAIL_TARGET)
+#undef IR_TAIL_TARGET
+};
+
+/* The bodies read some locals that only the evaluator's bindings use (an
+ * `int opcode` before a dispatch) */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+/* GCC warns of every local whose address an arm passed to a helper, such as
+ * a checked sum's out-parameter: the helper has returned before the tail
+ * call, and no tail call passes such an address. */
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 15
+#pragma GCC diagnostic ignored "-Wmaybe-musttail-local-addr"
+#endif
+#include "ceval_labels.h"
+#include "generated_rop_cases.c.h"
+#include "ceval_routines.h"
+#pragma GCC diagnostic pop
+#undef IR_TAIL_CALLS
+
+/* The driver: runs the frame to its end, as the evaluator below does.  The
+ * functions return only when the activation ends. */
+static Py_NO_INLINE PyValue
+ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+{
+    _PyInstr *next_instr = frame->instr_ptr;
+    if (throwflag) {
+        return ir_tail_throw_error(tstate, frame, next_instr, 0);
+    }
+    return ir_tail_start_frame(tstate, frame, next_instr, 0);
+}
+
+#else
+
 /* The evaluator: every handler and label of the interpreter in one
  * function, which dispatches by computed goto (Python/ceval_macros.h).  Its
  * locals are the interpreter's state and are never address-taken; the
@@ -3207,7 +3275,11 @@ jit_resume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next)
 static Py_NO_INLINE PyValue
 ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
-#include "ir_targets.h"
+    static void *const opcode_targets[IR_TARGETS_COUNT] = {
+#define IR_LABEL_TARGET(ID, NAME) [ID] = &&TARGET_##NAME,
+        IR_TARGETS(IR_LABEL_TARGET)
+#undef IR_LABEL_TARGET
+    };
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
     /* The operands of the shared bodies that the labels below read: the
@@ -3263,6 +3335,8 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 
 #include "ceval_routines.h"
 }
+
+#endif  /* Py_IR_TAIL_CALL */
 
 void
 _PyEval_RecordSourceError(PyThreadState *tstate, _PyInterpreterFrame *frame,
@@ -6786,7 +6860,7 @@ Py_NO_INLINE PyValue
 /* The function over the code, and the attributes of `present`: bit k is
  * the compiler's flag 1 << k, and the span holds the attributes in the order
  * of their bits.  The code and every attribute are spent on both outcomes. */
-PyValue
+Py_NO_INLINE PyValue
 _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
                     const _PyRopSpan *fields, uint32_t present)
 {

@@ -215,6 +215,8 @@ class ContractTests(unittest.TestCase):
                     self.assertTrue(row.events == 0 or name.endswith(".Observed"))
                     continue
                 self.assertTrue(dis._all_opname[twin].endswith(".Observed"))
+                if row.effects & (_opcode.IR_PUSHES_FRAME | _opcode.IR_SUSPENDS):
+                    self.assertTrue(ROWS[twin].effects & _opcode.IR_RUNS_PYTHON)
                 self.assertEqual(ROWS[twin].twin, twin)
                 self.assertEqual(row.events, ROWS[twin].events)
                 self.assertEqual(row.flags, ROWS[twin].flags)
@@ -305,6 +307,9 @@ class ContractTests(unittest.TestCase):
                 if effects & _opcode.IR_PURE:
                     # A release may run code, but a pure word does not raise
                     self.assertFalse(effects & _opcode.IR_RAISES)
+                if effects & (_opcode.IR_PUSHES_FRAME | _opcode.IR_SUSPENDS):
+                    # Running the frame is an escape
+                    self.assertTrue(effects & _opcode.IR_RUNS_PYTHON)
                 if effects & _opcode.IR_SPECIALIZES:
                     self.assertNotEqual(row.fb_size, 0)
         suspends = {dis._all_opname[h] for h, row in ROWS.items()

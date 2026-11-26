@@ -2127,6 +2127,44 @@ find_arm(const char *name)
     return NULL;
 }
 
+/* declared_enums() -> {name: (member, ...)}: the enums that the register
+ * instruction families declare, with their members in declaration order,
+ * which are the numbers that words hold for them. */
+static PyObject *
+declared_enums(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *result = PyDict_New();
+    if (result == NULL) {
+        return NULL;
+    }
+    for (const _PyRopEnum *e = _PyRop_Enums; e->name != NULL; e++) {
+        PyObject *members = PyList_New(0);
+        if (members == NULL) {
+            goto error;
+        }
+        for (const char *const *m = e->members; *m != NULL; m++) {
+            PyObject *name = PyUnicode_FromString(*m);
+            if (name == NULL || PyList_Append(members, name) < 0) {
+                Py_XDECREF(name);
+                Py_DECREF(members);
+                goto error;
+            }
+            Py_DECREF(name);
+        }
+        PyObject *tuple = PyList_AsTuple(members);
+        Py_DECREF(members);
+        if (tuple == NULL || PyDict_SetItemString(result, e->name, tuple) < 0) {
+            Py_XDECREF(tuple);
+            goto error;
+        }
+        Py_DECREF(tuple);
+    }
+    return result;
+error:
+    Py_DECREF(result);
+    return NULL;
+}
+
 /* arm_operands() -> {family: ((name, kind, role, optional, bits, offset), ...)}:
  * the declared operands of each register instruction family, in declaration
  * order.  kind is one of "home", "imm", "name", "const", "feedback",
@@ -5748,6 +5786,7 @@ static PyMethodDef module_functions[] = {
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
     {"arm_operands", arm_operands, METH_NOARGS, NULL},
+    {"declared_enums", declared_enums, METH_NOARGS, NULL},
     {"get_feedback_names", get_feedback_names, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
     {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},

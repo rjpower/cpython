@@ -20,16 +20,19 @@ from test.support.ir_dis import IRCode
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = _testinternalcapi.get_ir
 
-# The modes of a BranchTruth word, in the order of the BranchMode enum
-# (Python/register_ops/truth.rop): the jump on false or true, which drops the
+# The enums that the register instruction families declare, by name
+ENUMS = _testinternalcapi.declared_enums()
+# The modes of a BranchTruth word: the jump on false or true, which drops the
 # tested value, and the jump on false or true that keeps it
-JUMP_IF_FALSE, JUMP_IF_TRUE, KEEP_IF_FALSE, KEEP_IF_TRUE = range(4)
+JUMP_IF_FALSE, JUMP_IF_TRUE, KEEP_IF_FALSE, KEEP_IF_TRUE = (
+    ENUMS["BranchMode"].index(name) for name in (
+        "BRANCH_IF_FALSE", "BRANCH_IF_TRUE",
+        "BRANCH_KEEP_IF_FALSE", "BRANCH_KEEP_IF_TRUE"))
 
 
-# The ids of an IntrinsicPair.Attr word, which are the places of
-# INTRINSIC_GETATTR and INTRINSIC_SETATTR in enum IntrinsicId
-# (Python/register_ops/functions.rop)
-INTRINSIC_GETATTR, INTRINSIC_SETATTR = 18, 19
+# The ids of an IntrinsicPair.Attr word
+INTRINSIC_GETATTR = ENUMS["IntrinsicId"].index("INTRINSIC_GETATTR")
+INTRINSIC_SETATTR = ENUMS["IntrinsicId"].index("INTRINSIC_SETATTR")
 
 
 def origins(func):

@@ -179,6 +179,14 @@ class IRMetadataTests(unittest.TestCase):
         self.assertEqual(kinds, {"home", "imm", "name", "feedback", "target",
                                  "vector", "flag"})
 
+    def test_declared_enums(self):
+        testinternalcapi = import_module("_testinternalcapi")
+        enums = testinternalcapi.declared_enums()
+        self.assertEqual(enums["BranchMode"],
+                         ("BRANCH_IF_FALSE", "BRANCH_IF_TRUE",
+                          "BRANCH_KEEP_IF_FALSE", "BRANCH_KEEP_IF_TRUE"))
+        self.assertIn("INTRINSIC_GETATTR", enums["IntrinsicId"])
+
     def test_feedback_names(self):
         testinternalcapi = import_module("_testinternalcapi")
         kinds, states = testinternalcapi.get_feedback_names()

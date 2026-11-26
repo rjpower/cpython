@@ -954,6 +954,15 @@ def write_encodings(out: TextIO, p: Products) -> None:
         out.write(f'    [ROP_FAMILY_{f}] = {{"{f}", {len(enc.placements)}, {enc.words}, '
                   f'_PyRop_Operands_{f}}},\n')
     out.write("};\n\n")
+    enums = sorted(prog.enums.values(), key=lambda e: e.name)
+    for e in enums:
+        members = ", ".join(f'"{m}"' for m in e.members)
+        out.write(f"static const char *const _PyRop_EnumMembers_{e.name}[] = "
+                  f"{{{members}, NULL}};\n")
+    out.write("\nstatic const _PyRopEnum _PyRop_Enums[] = {\n")
+    for e in enums:
+        out.write(f'    {{"{e.name}", _PyRop_EnumMembers_{e.name}}},\n')
+    out.write("    {NULL, NULL},\n};\n\n")
 
 
 def operand_mask(names: tuple[str, ...], operands: list[str]) -> str:
@@ -1040,6 +1049,13 @@ typedef struct {
     uint8_t words;           /* operand words after the head, vectors aside */
     const _PyRopOperand *operands;
 } _PyRopFamily;
+
+/* A declared enum: its members in declaration order, which are the numbers
+ * the handlers use for the enum's names */
+typedef struct {
+    const char *name;
+    const char *const *members;     /* NULL-terminated */
+} _PyRopEnum;
 
 typedef struct {
     const char *name;

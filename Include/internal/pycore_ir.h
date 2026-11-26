@@ -9,6 +9,11 @@ extern "C" {
 #endif
 
 #include "opcode.h"              // NB_ADD
+#include "ir_handler_ids.h"      // IR_H_*, IR_NUM_HANDLERS
+
+/* The handlers of the words that are not instructions: handler-only names */
+#define IR_JUMP IR_H_IR_JUMP
+#define IR_OPERANDS IR_H_IR_OPERANDS
 #include "pycore_feedback.h"    // _PyFbBlock, _PyFbHeader
 #include "pycore_structs.h"     // _PyIRWord
 

@@ -2907,15 +2907,15 @@ _Py_Specialize_Send(PyValue receiver_st, _PyInstr *instr)
             SPECIALIZATION_FAIL(SEND, SPEC_FAIL_OTHER);
             goto failure;
         }
-        specialize(instr, SEND_GEN);
+        specialize(instr, IR_H_SEND_GEN);
         return;
     }
     if (tp->_tp_iteritem != NULL) {
-        specialize(instr, SEND_VIRTUAL);
+        specialize(instr, IR_H_SEND_VIRTUAL);
         return;
     }
     if (tp == &_PyAsyncGenASend_Type) {
-        specialize(instr, SEND_ASYNC_GEN);
+        specialize(instr, IR_H_SEND_ASYNC_GEN);
         return;
     }
     SPECIALIZATION_FAIL(SEND,

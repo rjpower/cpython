@@ -65,7 +65,7 @@ ir_GEN_COMPLETE_EFFECT(PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInstr *site = next_instr;
     _PyIRWord source_word = *site;
     int source_handler = _PyIR_RealHandler(frame, site);
-    bool throwing = _PyIR_GeneratorBoundaries[source_handler].ordinary == CLEANUP_THROW;
+    bool throwing = _PyIR_GeneratorBoundaries[source_handler].ordinary == IR_H_CLEANUP_THROW;
     int count = throwing ? 4 : 3;
     int base = IR_B(source_word);
     int destination = IR_A(source_word);

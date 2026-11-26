@@ -381,11 +381,7 @@ is_instrumented(int opcode)
 {
     assert(opcode != 0);
     assert(opcode != RESERVED);
-    // The two keeping jumps have no stack opcode: their instrumented forms
-    // are register handler ids below MIN_INSTRUMENTED_OPCODE.
-    return opcode >= MIN_INSTRUMENTED_OPCODE ||
-           opcode == INSTRUMENTED_JUMP_IF_FALSE_OR_POP ||
-           opcode == INSTRUMENTED_JUMP_IF_TRUE_OR_POP;
+    return opcode >= MIN_INSTRUMENTED_OPCODE;
 }
 
 #ifndef NDEBUG
@@ -2120,7 +2116,7 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     uint8_t original_opcode;
 done:
     original_opcode = _PyCode_GetOriginalOpcode(line_data, i);
-    if (IR_HANDLER(*instr) == INSTRUMENTED_INSTRUCTION) {
+    if (IR_HANDLER(*instr) == IR_H_INSTRUMENTED_INSTRUCTION) {
         /* A LINE callback may have disabled the last LINE tool while
          * leaving INSTRUCTION monitoring enabled. */
         original_opcode = INSTRUMENTED_INSTRUCTION;

@@ -29,7 +29,7 @@
 #  error "this header file must not be included directly"
 #endif
 
-#include "opcode_ids.h"          // IR_NUM_HANDLERS
+#include "ir_handler_ids.h"     // IR_NUM_HANDLERS
 
 #define SPECIALIZATION_FAILURE_KINDS 60
 

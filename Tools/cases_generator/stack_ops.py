@@ -66,7 +66,7 @@ MIN_INSTRUMENTED_OPCODE = 233
 
 # The handlers that Python/bytecodes.c still defines, in id order: dense ids
 # from 0, which the arms follow.  They go with LO's ports and step 4.
-OLD_HANDLERS = ('CACHE', 'RESERVED', 'NOP', 'COPY_FREE_VARS', 'DELETE_DEREF', 'LOAD_DEREF', 'LOAD_FROM_DICT_OR_DEREF', 'MAKE_CELL', 'STORE_DEREF', 'INSTRUMENTED_INSTRUCTION', 'INSTRUMENTED_LINE', 'IR_OPERANDS')
+OLD_HANDLERS = ('CACHE', 'RESERVED', 'COPY_FREE_VARS', 'DELETE_DEREF', 'LOAD_DEREF', 'LOAD_FROM_DICT_OR_DEREF', 'MAKE_CELL', 'STORE_DEREF', 'IR_OPERANDS')
 
 # Of them, the ones that are no stack op: a word kind, not an instruction
 OLD_ONLY_HANDLERS = ('IR_OPERANDS',)
@@ -77,7 +77,7 @@ def _f(*args):
 
 
 STACK_OPS = (
-    StackOp('NOP', PINNED_OPCODES['NOP'], 1, None, (), False, '0', '0', format=_f(('ERROR_PROGRAM',), ('PURE',), ('NONE', 'NONE', 'NONE', 'NONE'), 'NONE', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
+    StackOp('NOP', PINNED_OPCODES['NOP'], 1, None, (), False, '0', '0', stack_only=True, abort_stub=True, format=_f((), (), ('NONE', 'NONE', 'NONE', 'NONE'), 'NONE', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
     StackOp('RESUME', PINNED_OPCODES['RESUME'], 2, None, ('ARG', 'EVAL_BREAK'), True, '0', '0', stack_only=True, abort_stub=True, format=_f(('RUNS_CODE',), ('POLLS',), ('IMM', 'NONE', 'NONE', 'NONE'), 'A', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
     StackOp('INSTRUMENTED_RESUME', PINNED_OPCODES['INSTRUMENTED_RESUME'], 2, None, ('ARG', 'EVAL_BREAK'), True, '0', '0', stack_only=True, abort_stub=True, format=_f(('RUNS_CODE',), ('RUNS_PYTHON', 'POLLS'), ('IMM', 'NONE', 'NONE', 'NONE'), 'A', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
     StackOp('STORE_FAST', PINNED_OPCODES['STORE_FAST'], 1, None, ('ARG', 'LOCAL'), True, '1', '0', stack_only=True, abort_stub=True, format=_f((), (), ('IN0+0', 'LOCAL_OUT', 'NONE', 'NONE'), 'B', 1, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (1, 'FIXED'), (0, 'FIXED'))),
@@ -184,8 +184,8 @@ STACK_OPS = (
     StackOp('FORMAT_SIMPLE', PINNED_OPCODES['FORMAT_SIMPLE'], 1, None, (), False, '1', '1', stack_only=True, abort_stub=True, format=_f(('STORE_DST', 'DISCARDS'), (), ('DST', 'IN0+0', 'NONE', 'NONE'), 'NONE', 1, -1, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (1, 'FIXED'), (1, 'FIXED'))),
     StackOp('FORMAT_WITH_SPEC', PINNED_OPCODES['FORMAT_WITH_SPEC'], 1, None, (), False, '2', '1', stack_only=True, abort_stub=True, format=_f(('STORE_DST', 'DISCARDS'), (), ('DST', 'IN0+0', 'IN0+1', 'NONE'), 'NONE', 2, -2, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (2, 'FIXED'), (1, 'FIXED'))),
     StackOp('BINARY_OP', PINNED_OPCODES['BINARY_OP'], 6, None, ('ARG',), True, '2', '1', stack_only=True, abort_stub=True, format=_f(('STORE_DST', 'DISCARDS'), (), ('DST', 'IN0+0', 'IN0+1', 'IMM'), 'D', 2, -2, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (2, 'FIXED'), (1, 'FIXED'))),
-    StackOp('INSTRUMENTED_LINE', PINNED_OPCODES['INSTRUMENTED_LINE'], 1, None, (), False, '0', '0', format=_f(('TRANSPARENT', 'RUNS_CODE'), ('RAISES', 'ESCAPES', 'RUNS_PYTHON'), ('NONE', 'NONE', 'NONE', 'NONE'), 'NONE', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
-    StackOp('INSTRUMENTED_INSTRUCTION', PINNED_OPCODES['INSTRUMENTED_INSTRUCTION'], 1, None, (), False, '0', '0', format=_f(('TRANSPARENT', 'RUNS_CODE'), ('RAISES', 'ESCAPES', 'RUNS_PYTHON'), ('NONE', 'NONE', 'NONE', 'NONE'), 'NONE', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
+    StackOp('INSTRUMENTED_LINE', PINNED_OPCODES['INSTRUMENTED_LINE'], 1, None, (), False, '0', '0', stack_only=True, abort_stub=True, format=_f(('RUNS_CODE',), ('RUNS_PYTHON',), ('NONE', 'NONE', 'NONE', 'NONE'), 'NONE', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
+    StackOp('INSTRUMENTED_INSTRUCTION', PINNED_OPCODES['INSTRUMENTED_INSTRUCTION'], 1, None, (), False, '0', '0', stack_only=True, abort_stub=True, format=_f(('RUNS_CODE',), ('RUNS_PYTHON',), ('NONE', 'NONE', 'NONE', 'NONE'), 'NONE', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
     StackOp('INSTRUMENTED_JUMP_FORWARD', PINNED_OPCODES['INSTRUMENTED_JUMP_FORWARD'], 1, None, ('ARG',), True, '0', '0', stack_only=True, abort_stub=True, format=_f(('JUMPS', 'RUNS_CODE', 'JUMP_ALWAYS'), ('RUNS_PYTHON',), ('NONE', 'NONE', 'IMM', 'IMM'), 'CD', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
     StackOp('INSTRUMENTED_JUMP_BACKWARD', PINNED_OPCODES['INSTRUMENTED_JUMP_BACKWARD'], 2, None, ('ARG', 'EVAL_BREAK'), True, '0', '0', stack_only=True, abort_stub=True, format=_f(('JUMPS', 'RUNS_CODE', 'JUMP_ALWAYS'), ('RUNS_PYTHON', 'POLLS'), ('NONE', 'NONE', 'IMM', 'IMM'), 'CD', 0, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (0, 'FIXED'), (0, 'FIXED'))),
     StackOp('INSTRUMENTED_POP_JUMP_IF_TRUE', PINNED_OPCODES['INSTRUMENTED_POP_JUMP_IF_TRUE'], 2, None, ('ARG',), True, '1', '0', stack_only=True, abort_stub=True, format=_f(('JUMPS', 'RUNS_CODE'), ('RUNS_PYTHON',), ('IN0+0', 'NONE', 'IMM', 'IMM'), 'CD', 1, None, 0, 'NONE', (0, 'FIXED'), 'REGISTER_DST', ('NONE', 'NONE'), (1, 'FIXED'), (0, 'FIXED'))),

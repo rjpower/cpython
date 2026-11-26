@@ -2989,6 +2989,10 @@ class VerifierTests(unittest.TestCase):
     def test_the_generator_initializes_the_state_as_its_row_declares(self):
         source = (Path(__file__).resolve().parents[2] / "Python"
                   / "generated_ir_cases.c.h").read_text()
+        if not any("call_state" in line and "static_assert" not in line
+                   for line in source.splitlines()):
+            # The handlers that kept the call state are deleted
+            raise unittest.SkipTest("no live handler left; the old generator goes at D")
         self.assertIn("int call_state = IR_CALL_SELF_STATE(ir_word);", source)
 
     def test_guards_state_facts_of_call_state(self):

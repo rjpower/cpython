@@ -52,7 +52,7 @@ OPARGS = (0, 1, 2, 3, 7, 0x102)
 # ir_generator.py)
 IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
-                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
+                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP")
 
 
 def extent(e, oparg):
@@ -188,7 +188,7 @@ class ContractTests(unittest.TestCase):
                 self.assertIn(row.shadow, ROWS)
         for name in (*opcode._specialized_opmap, *opcode._ir_opmap):
             if (opcode._ir_opmap.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS
-                    or name in IR_BASE_ONLY and name != "MATERIALIZE_KWARGS"):
+                    or name in IR_BASE_ONLY):
                 continue
             self.assertIn(name, BY_NAME)
 

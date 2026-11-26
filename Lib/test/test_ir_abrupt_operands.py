@@ -81,7 +81,7 @@ class AbruptOperandTests(unittest.TestCase):
             return function(value=[item async for item in source])
 
         names = {row[0] for row in _testinternalcapi.get_ir(invoke.__code__)}
-        self.assertIn("CALL_KW+NO_SELF", names)
+        self.assertIn("CallKw.Generic+NO_SELF", names)
         for code in routes(invoke.__code__):
             function = types.FunctionType(code, globals())
             for values in ((), (17, 23)):

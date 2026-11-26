@@ -46,7 +46,7 @@ class CallOperandOwnershipTests(unittest.TestCase):
         cases = ((plain, {}), (keywords, {"label": "kept"}))
         for template, expected_keywords in cases:
             for code in routes(template.__code__):
-                self.assertTrue(call_rows(code)[0][0].startswith("CALL_FUNCTION_EX"))
+                self.assertTrue(call_rows(code)[0][0].startswith("CallEx."))
                 invoke = types.FunctionType(code, {})
                 for arguments in ((), (payload, 1, -0.0)):
                     with self.subTest(keywords=expected_keywords,
@@ -292,7 +292,7 @@ class CallOperandOwnershipTests(unittest.TestCase):
             self.assertIs(state[6][state[3] + 2], value)
             names = [word[0] for word in
                      _testinternalcapi.get_ir(driver.__code__, True)]
-            self.assertIn("CALL_KW_NON_PY" if keyword else "Call.Generic", names)
+            self.assertIn("CallKw.Generic" if keyword else "Call.Generic", names)
             states.clear()
 
     def test_iterable_retirement_sees_final_tuple(self):

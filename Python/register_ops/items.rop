@@ -515,7 +515,7 @@ extern helper dict_first_probe(v:B, k:B)
               "as it was. No hash or equality callback.");
 
 // Stores a value into a list slot under the list's lock, as the old
-// _STORE_SUBSCR_LIST_INT did: lock, check the bounds again, exchange, unlock.
+// _STORE_SUBSCR_LIST_INT did: lock, check the bounds again, swap the item, unlock.
 // absent: the lock was not taken or the index is out of bounds under it;
 // nothing changed and x was not counted, so the arm runs the generic store.
 extern helper list_exchange_locked(v:B, k:B, x:B)

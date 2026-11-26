@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `25e88d21f6e` (pushed) holds:
+`pyjit/rir90` at `674dc7aff6b` (pushed; OB merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -77,7 +77,7 @@ interpreter hold no reference to the stack at step D, and tests check it.
   - `bytecodes.c`, the stack-semantic generator and their tests are deleted;
     the arms are dense from id 1 (294 handlers);
   - specialization statistics are kept by register family and arm;
-  - instrumentation is stated by handler: a word's monitoring state is its
+  - instrumentation was stated by handler (replaced by OB, below): a word's monitoring state was its
     handler, its observed twin, or a line or instruction wrapper over either,
     and the opcode-indexed event tables are deleted;
 - WF1-WF3: the `.rop` language declares each family's homes, vacant parts
@@ -248,42 +248,51 @@ unpack_sequence 2.96 to 1.85, nbody 1.85 to 1.37, generators 1.82 to 1.39,
 spectral_norm 1.79 to 1.41, comprehensions 1.47 to 1.16, nqueens 1.49 to
 1.12.  Eight benchmarks are within 10% of golden87; json_dumps (1.03 to
 1.13) and logging_simple (1.15 to 1.20) are slower than after wave 1.
-The full suites of the wave join are running.
+The join's full suites (`25e88d21f6e`, release and assert, JIT off and
+always) found two faults.  `test_value_slots` asserted that a plain
+attribute read goes through the type's getattro slot, which SP's
+`GetAttr.Generic` no longer does (behaviour unchanged; the test reads
+through `getattr()`, `6b74f9f0cd6`).  With the JIT on, four modules
+segfaulted: SP left `GetItem.ListSlice` compiled as a stub whose miss
+calls a generic stub that its split family no longer has (JX, below).
+
+**OB, merged at `58712a90555`, 2026-11-26** (user decision): observation is
+a mode, not IR.  Every arm of an event family had an observed twin with
+its own id, and line and instruction hooks displaced words in the
+executing copy: upstream's in-place instrumentation restated per arm.  Now
+an observed code object's frames run in a second compilation of the
+evaluator (`Python/ceval_observing.c`), which sends each event family to
+its observer and reads line, instruction and event bits per word from the
+code's observe table.  The words, the handler ids (401 to 302) and every
+reader carry no monitoring; `DISABLE` clears a bit and rewrites no word,
+and specialization survives a tool's coming and going.  Frames switch at
+RESUME (the observed mark fails the existing version test), at the poll
+after a change, and by the stop-the-world walk that redirects each
+running frame's resume point.  The normal path's instructions are within
+0.3% of before; coverage-style monitoring runs 1.2 times the old cost and
+`settrace` line tracing 0.7 times.  A change made by a finalizer or a
+native call in the middle of straight-line code reaches the running frame
+at its next switch point, not at the next instruction (`674dc7aff6b`
+states it in `test_pyvalue_release`).
+
+**TI, the tail-calling interpreter, measured 2026-11-26** (user approval;
+gcc 15 or clang required): each generated arm is its own function and
+dispatch is a guaranteed tail call through the table, so each arm gets its
+own register allocation in place of one computed-goto function with a
+6,920-byte frame that spilled hot values.  On the all-29 timing (CPU 15,
+JIT off) the prototype (`954c8715770`) runs **1.114 of golden87's time**
+against the computed-goto evaluator's 1.191; spectral_norm 1.42 to 0.98,
+unpack_sequence 1.85 to 1.54, raytrace 1.28 to 1.08; coroutines lost
+(1.02 to 1.08).  Clang was no better.  The landing deletes the
+computed-goto evaluator and makes the observing mode a second table of
+tail functions.
 
 Running:
-- OB (user decision, 2026-11-26): observation leaves the word stream.
-  Every arm of a family that declares events had an observed twin with its
-  own id (81 twins and 19 observer arms, 100 of 366 ids), and line and
-  instruction hooks displaced words in the executing copy: upstream's
-  in-place instrumentation, restated per arm.  Instead, an observed code
-  object's frames run in a second compilation of the evaluator, which
-  sends each event family to its observer arm and reads per-location line,
-  instruction and `DISABLE` bits from the monitoring side table.  The words,
-  the handler ids and every reader carry no monitoring, specialization
-  survives a tool's coming and going, and the normal loop's hot path does
-  not change.  A per-frame table pointer was refused (about 3-10% more
-  instructions, or a pinned register), and so was a single writable table
-  (every function pays while any tool is active).
-- TI (user approval, 2026-11-26): a tail-calling interpreter.  The
-  remaining gap is mostly the shape of `ir_evaluate`, one computed-goto
-  function holding every arm: under gcc 15 `-O3` it is 190 KB to
-  golden87's 89 KB, with a 6,920-byte stack frame to 152 and 5,794
-  stack-memory operands to 1,257.  Hot arms spill on their fast path
-  (Add.Int nine stack operations to golden87's none, Move.Copy twelve,
-  ForIter.Range fourteen), while the same arm compiled as its own function
-  form has none.  TI compiles the generated arms as functions that dispatch
-  by guaranteed tail call, so each arm gets its own register allocation.
-  Done on `pyjit/rir90-ti` (`954c8715770`, not merged).  On seven kernels
-  (CPU 3, ratio to golden87), gcc 15 with tail functions that save no
-  callee-saved register runs 1.143 of golden87's cycles against the
-  computed-goto loop's 1.274, with 1.241 of its instructions against
-  1.277.  The hot arms touch no stack memory on their fast path.  Clang
-  is no better (tail calls with `preserve_none` 1.247, computed goto
-  1.500), so the landing needs no clang.  It lands after OB, whose
-  observing evaluator becomes a second table of tail functions.  The
-  computed-goto loop is then deleted, so the build needs a compiler with
-  `musttail` (gcc 15 or clang).  The all-29 timing on CPU 15 follows the
-  full suites.
+- TI's landing on rir90 with OB.
+- JX's fix is being merged: SP's `edb30efc8e3` left `GetItem.ListSlice`
+  planned for the JIT with no generic stub to miss to; every arm that can
+  miss is now unplanned when its family's generic is split, and the
+  generator refuses a planned miss with no generic stub.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

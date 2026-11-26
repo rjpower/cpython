@@ -2310,18 +2310,41 @@ static PyValue _PyRop_StarTuple(PyThreadState *tstate,
                                 _PyInstr *head);
 static _PyInterpreterFrame *_PyRop_PushPythonEx(PyThreadState *tstate,
                                                 _PyInterpreterFrame *frame,
-                                                PyValue *fn, PyValue tup,
+                                                PyValue *fn, PyValue fo,
+                                                PyValue ko, PyValue tup,
                                                 _PyInstr *head);
 static PyValue _PyRop_CallNativeEx(PyThreadState *tstate,
-                                   _PyInterpreterFrame *frame, PyValue *fn,
-                                   PyValue tup, _PyInstr *head);
+                                   _PyInterpreterFrame *frame, PyValue fo,
+                                   PyValue ko, PyValue tup, _PyInstr *head);
 static PyValue _PyRop_CallEventEx(PyThreadState *tstate,
                                   _PyInterpreterFrame *frame, _PyInstr *site,
-                                  PyValue *fn, PyValue tup, _PyInstr *head);
+                                  PyValue fo, PyValue tup, _PyInstr *head);
 static PyValue _PyRop_CallNativeObservedEx(PyThreadState *tstate,
                                            _PyInterpreterFrame *frame,
-                                           _PyInstr *site, PyValue *fn,
-                                           PyValue tup, _PyInstr *head);
+                                           _PyInstr *site, PyValue fo,
+                                           PyValue ko, PyValue tup,
+                                           _PyInstr *head);
+static bool _PyRop_PythonTargetHeld(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, PyValue fo,
+                                    const _PyIRWord *head);
+static _PyInterpreterFrame *_PyRop_PushPythonHeld(PyThreadState *tstate,
+                                                  _PyInterpreterFrame *frame,
+                                                  PyValue *fn, PyValue fo,
+                                                  _PyInstr *head);
+static PyValue _PyRop_CallNativeObservedHeld(PyThreadState *tstate,
+                                             _PyInterpreterFrame *frame,
+                                             _PyInstr *site, PyValue *fn,
+                                             PyValue fo,
+                                             const _PyIRWord *head);
+static inline void _PyRop_RetireFailedHeld(_PyInterpreterFrame *frame,
+                                           PyValue *fn, PyValue fo,
+                                           const _PyIRWord *head);
+static PyValue _PyRop_HoldKwargs(_PyInterpreterFrame *frame,
+                                 const _PyIRWord *head);
+static inline void _PyRop_RetireFailedHeldEx(_PyInterpreterFrame *frame,
+                                             PyValue *fn, PyValue fo,
+                                             PyValue ko,
+                                             const _PyIRWord *head);
 static bool _PyRop_PlanFits(PyThreadState *tstate, _PyInterpreterFrame *frame,
                             PyValueBorrow fn, const _PyIRWord *head,
                             const _PyFbCall *fb);
@@ -6675,7 +6698,6 @@ _PyRop_PushPython(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   PyValue *fn, _PyInstr *head)
 {
     _PyIRWord word = head[0];
-    assert(fn == &_PyFrame_Slots(frame)[IR_B(word)]);
     PyValue receiver;
     PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
                                           &receiver);
@@ -6814,7 +6836,6 @@ static Py_NO_INLINE PyValue
 _PyRop_CallNativeObserved(PyThreadState *tstate, _PyInterpreterFrame *frame,
                           _PyInstr *site, PyValue *fn, const _PyIRWord *head)
 {
-    assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
     PyValue receiver;
     PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
                                           &receiver);
@@ -6875,14 +6896,22 @@ rop_ex_callargs(PyValue tup)
     return PyValue_AsKnownObjectBorrow(tup);
 }
 
+/* The kwargs dict of the call is the one that the call held first (a
+ * NULL owner if the word has none): the iteration of the arguments can run
+ * Python, which can rebind the local that the dict was read from */
 static inline PyObject *
-rop_ex_kwargs(_PyInterpreterFrame *frame, const _PyIRWord *head)
+rop_ex_kwargs(PyValue ko)
+{
+    return PyValue_IsNull(ko) ? NULL : PyValue_AsKnownObjectBorrow(ko);
+}
+
+static PyValue
+_PyRop_HoldKwargs(_PyInterpreterFrame *frame, const _PyIRWord *head)
 {
     if (head[0] & IR_F_NO_KW) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyValue_AsKnownObjectBorrow(
-        _PyFrame_Slots(frame)[_PyIR_CallOperand(head, 1)]);
+    return PyValue_DUP(_PyFrame_Slots(frame)[_PyIR_CallOperand(head, 1)]);
 }
 
 static PyValue
@@ -6903,14 +6932,14 @@ _PyRop_StarTuple(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 static PyValue
 _PyRop_CallEventEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                   _PyInstr *site, PyValue *fn, PyValue tup, _PyInstr *head)
+                   _PyInstr *site, PyValue fo, PyValue tup, _PyInstr *head)
 {
     PyObject *callargs = rop_ex_callargs(tup);
     PyValue first = PyValue_NULL;
     if (PyTuple_GET_SIZE(callargs)) {
         first = _PyIR_AdoptTemp(PyTuple_GET_VALUE(callargs, 0));
     }
-    if (call_monitor(tstate, frame, site, *fn, first) < 0) {
+    if (call_monitor(tstate, frame, site, fo, first) < 0) {
         PyValue_XCLOSE(tup);
         return PyValue_NULL;
     }
@@ -6919,28 +6948,30 @@ _PyRop_CallEventEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 static PyValue
 _PyRop_CallNativeEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                    PyValue *fn, PyValue tup, _PyInstr *head)
+                    PyValue fo, PyValue ko, PyValue tup, _PyInstr *head)
 {
-    PyValue result = _PyValue_Call(tstate, *fn, rop_ex_callargs(tup),
-                                   rop_ex_kwargs(frame, head));
+    PyValue result = _PyValue_Call(tstate, fo, rop_ex_callargs(tup),
+                                   rop_ex_kwargs(ko));
     PyValue_XCLOSE(tup);
+    PyValue_XCLOSE(ko);
+    PyValue_XCLOSE(fo);
     return result;
 }
 
 /* A function or method fires no C event: the Python path pushes its frame */
 static PyValue
 _PyRop_CallNativeObservedEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                            _PyInstr *site, PyValue *fn, PyValue tup,
+                            _PyInstr *site, PyValue fo, PyValue ko, PyValue tup,
                             _PyInstr *head)
 {
     PyObject *callargs = rop_ex_callargs(tup);
-    PyValue callable = *fn;
+    PyValue callable = fo;
     PyValue first = PyValue_NULL;
     if (PyTuple_GET_SIZE(callargs)) {
         first = _PyIR_AdoptTemp(PyTuple_GET_VALUE(callargs, 0));
     }
     PyValue result = _PyValue_Call(tstate, callable, callargs,
-                                   rop_ex_kwargs(frame, head));
+                                   rop_ex_kwargs(ko));
     int refreshed = call_refresh(tstate, frame, site);
     int failed = PyValue_IsNull(result);
     if (!(PyValue_IsObject(callable) &&
@@ -6953,6 +6984,8 @@ _PyRop_CallNativeObservedEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
         }
     }
     PyValue_XCLOSE(tup);
+    PyValue_XCLOSE(ko);
+    PyValue_XCLOSE(fo);
     if (failed || refreshed < 0) {
         PyValue_XCLOSE(result);
         return PyValue_NULL;
@@ -6961,13 +6994,12 @@ _PyRop_CallNativeObservedEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 static _PyInterpreterFrame *
-_PyRop_PushPythonEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                    PyValue *fn, PyValue tup, _PyInstr *head)
+rop_push_python_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   PyValue callable, PyValue ko, PyValue tup, _PyInstr *head)
 {
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*head);
-    PyValue callable = *fn;
     PyObject *callargs = rop_ex_callargs(tup);
-    PyObject *kwargs = rop_ex_kwargs(frame, head);
+    PyObject *kwargs = rop_ex_kwargs(ko);
     int operands = _PyIR_CallSlotOperands(word);
     PyValue receiver;
     PyValue target = call_expand_method(callable, 0, &receiver);
@@ -7062,6 +7094,65 @@ _PyRop_PushPythonEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return child;
 }
 
+
+static _PyInterpreterFrame *
+_PyRop_PushPythonEx(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    PyValue *fn, PyValue fo, PyValue ko, PyValue tup,
+                    _PyInstr *head)
+{
+    _PyInterpreterFrame *child =
+        rop_push_python_ex(tstate, frame, fo, ko, tup, head);
+    PyValue_XCLOSE(ko);
+    PyValue_XCLOSE(fo);
+    return child;
+}
+
+static inline void
+_PyRop_RetireFailedHeldEx(_PyInterpreterFrame *frame, PyValue *fn, PyValue fo,
+                          PyValue ko, const _PyIRWord *head)
+{
+    PyValue_XCLOSE(ko);
+    PyValue_XCLOSE(fo);
+    _PyRop_RetireFailedArgs(frame, fn, head);
+}
+
+/* The rows of the observed forms of Call and CallKw that hold the callable
+ * (CALL event first): the shared rows on the held value */
+
+static bool
+_PyRop_PythonTargetHeld(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        PyValue fo, const _PyIRWord *head)
+{
+    return _PyRop_PythonTarget(tstate, frame, &fo, head);
+}
+
+static _PyInterpreterFrame *
+_PyRop_PushPythonHeld(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      PyValue *fn, PyValue fo, _PyInstr *head)
+{
+    _PyInterpreterFrame *child = _PyRop_PushPython(tstate, frame, &fo, head);
+    PyValue_XCLOSE(fo);
+    return child;
+}
+
+static PyValue
+_PyRop_CallNativeObservedHeld(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                              _PyInstr *site, PyValue *fn, PyValue fo,
+                              const _PyIRWord *head)
+{
+    PyValue result = _PyRop_CallNativeObserved(tstate, frame, site, &fo, head);
+    PyValue_XCLOSE(fo);
+    return result;
+}
+
+static inline void
+_PyRop_RetireFailedHeld(_PyInterpreterFrame *frame, PyValue *fn, PyValue fo,
+                        const _PyIRWord *head)
+{
+    PyValue_XCLOSE(fo);
+    _PyRop_RetireFailedArgs(frame, fn, head);
+}
+
 static bool
 _PyRop_KwargsPending(_PyInterpreterFrame *frame, PyValue *local)
 {
@@ -7074,6 +7165,7 @@ _PyRop_NewKwargs(_PyInterpreterFrame *frame, PyValue *local)
     uint16_t slot = frame->pending_kwargs;
     assert(slot != IR_NO_DST);
     assert(local == &_PyFrame_Slots(frame)[slot]);
+    (void)slot;
     assert(PyValue_IsNull(*local));
     PyObject *dict = PyDict_New();
     if (dict == NULL) {

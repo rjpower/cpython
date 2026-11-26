@@ -2599,6 +2599,7 @@ ir_run_Call_Observed(
     next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
     INSTRUCTION_STATS(ROP_HANDLER_Call_Observed);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
     int ret1;
     void * ret2;
     PyValue ret3;
@@ -2606,20 +2607,29 @@ ir_run_Call_Observed(
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     int ret4;
+    PyValue efo;
+    PyValue rfo;
+    PyValue pfo;
     _PyInterpreterFrame * c;
+    PyValue nfo;
     PyValue z;
+    fo = PyValue_DUP(PyValue_Borrow(*home_fn));
     IR_STUB_ESCAPE();
     ret1 = _PyRop_CallEvent(tstate, frame, this_instr, home_fn, this_instr);
     if (ret1 < 0) {
+        efo = fo;
         goto rop_Call_Observed_EventFailed;
     }
-    if (_PyRop_PythonTarget(tstate, frame, home_fn, this_instr)) {
+    rfo = fo;
+    if (_PyRop_PythonTargetHeld(tstate, frame, rfo, this_instr)) {
+        pfo = rfo;
         goto rop_Call_Observed_Python;
     }
+    nfo = rfo;
     goto rop_Call_Observed_Native;
     rop_Call_Observed_Python:
     IR_STUB_ESCAPE();
-    ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
+    ret2 = _PyRop_PushPythonHeld(tstate, frame, home_fn, pfo, this_instr);
     if (ret2 == NULL) {
         goto rop_Call_Observed_Failed;
     }
@@ -2627,11 +2637,11 @@ ir_run_Call_Observed(
     ROP_ENTER(c, IR_A(ir_word));
     rop_Call_Observed_EventFailed:
     IR_STUB_ESCAPE();
-    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    _PyRop_RetireFailedHeld(frame, home_fn, efo, this_instr);
     PROCESS_ERROR_AT(RAISE, 22, this_instr);
     rop_Call_Observed_Native:
     IR_STUB_ESCAPE();
-    ret3 = _PyRop_CallNativeObserved(tstate, frame, this_instr, home_fn, this_instr);
+    ret3 = _PyRop_CallNativeObservedHeld(tstate, frame, this_instr, home_fn, nfo, this_instr);
     if (PyValue_IsNull(ret3)) {
         goto rop_Call_Observed_NativeFailed;
     }
@@ -2912,6 +2922,7 @@ ir_run_CallKw_Observed(
     next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
     INSTRUCTION_STATS(ROP_HANDLER_CallKw_Observed);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
     int ret1;
     void * ret2;
     PyValue ret3;
@@ -2919,20 +2930,29 @@ ir_run_CallKw_Observed(
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     int ret4;
+    PyValue efo;
+    PyValue rfo;
+    PyValue pfo;
     _PyInterpreterFrame * c;
+    PyValue nfo;
     PyValue z;
+    fo = PyValue_DUP(PyValue_Borrow(*home_fn));
     IR_STUB_ESCAPE();
     ret1 = _PyRop_CallEvent(tstate, frame, this_instr, home_fn, this_instr);
     if (ret1 < 0) {
+        efo = fo;
         goto rop_CallKw_Observed_EventFailed;
     }
-    if (_PyRop_PythonTarget(tstate, frame, home_fn, this_instr)) {
+    rfo = fo;
+    if (_PyRop_PythonTargetHeld(tstate, frame, rfo, this_instr)) {
+        pfo = rfo;
         goto rop_CallKw_Observed_Python;
     }
+    nfo = rfo;
     goto rop_CallKw_Observed_Native;
     rop_CallKw_Observed_Python:
     IR_STUB_ESCAPE();
-    ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
+    ret2 = _PyRop_PushPythonHeld(tstate, frame, home_fn, pfo, this_instr);
     if (ret2 == NULL) {
         goto rop_CallKw_Observed_Failed;
     }
@@ -2940,11 +2960,11 @@ ir_run_CallKw_Observed(
     ROP_ENTER(c, IR_A(ir_word));
     rop_CallKw_Observed_EventFailed:
     IR_STUB_ESCAPE();
-    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    _PyRop_RetireFailedHeld(frame, home_fn, efo, this_instr);
     PROCESS_ERROR_AT(RAISE, 30, this_instr);
     rop_CallKw_Observed_Native:
     IR_STUB_ESCAPE();
-    ret3 = _PyRop_CallNativeObserved(tstate, frame, this_instr, home_fn, this_instr);
+    ret3 = _PyRop_CallNativeObservedHeld(tstate, frame, this_instr, home_fn, nfo, this_instr);
     if (PyValue_IsNull(ret3)) {
         goto rop_CallKw_Observed_NativeFailed;
     }
@@ -2988,49 +3008,91 @@ ir_run_CallEx_Generic(
     next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
     INSTRUCTION_STATS(ROP_HANDLER_CallEx_Generic);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
     PyValue ret1;
-    void * ret2;
-    PyValue ret3;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    void * ret13;
+    PyValue ret14;
     PyValue own_fn = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-    int ret4;
+    int ret15;
+    PyValue tfo;
+    PyValue tko;
     PyValue tup;
+    PyValue pfo;
+    PyValue pko;
     PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
     _PyInterpreterFrame * c;
     PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
     PyValue z;
+    fo = PyValue_DUP(PyValue_Borrow(*home_fn));
+    ko = _PyRop_HoldKwargs(frame, this_instr);
     IR_STUB_ESCAPE();
     ret1 = _PyRop_StarTuple(tstate, frame, home_fn, this_instr);
     if (PyValue_IsNull(ret1)) {
+        arg2 = fo;
+        arg3 = ko;
+        tfo = arg2;
+        tko = arg3;
         goto rop_CallEx_Generic_TupleFailed;
     }
-    tup = ret1;
-    if (_PyRop_PythonTarget(tstate, frame, home_fn, this_instr)) {
-        ptup = tup;
+    arg4 = ret1;
+    arg5 = fo;
+    arg6 = ko;
+    tup = arg4;
+    pfo = arg5;
+    pko = arg6;
+    if (_PyRop_PythonTargetHeld(tstate, frame, pfo, this_instr)) {
+        arg7 = tup;
+        arg8 = pfo;
+        arg9 = pko;
+        ptup = arg7;
+        qfo = arg8;
+        qko = arg9;
         goto rop_CallEx_Generic_Python;
     }
-    ntup = tup;
+    arg10 = tup;
+    arg11 = pfo;
+    arg12 = pko;
+    ntup = arg10;
+    nfo = arg11;
+    nko = arg12;
     goto rop_CallEx_Generic_Native;
     rop_CallEx_Generic_Python:
     IR_STUB_ESCAPE();
-    ret2 = _PyRop_PushPythonEx(tstate, frame, home_fn, ptup, this_instr);
-    if (ret2 == NULL) {
+    ret13 = _PyRop_PushPythonEx(tstate, frame, home_fn, qfo, qko, ptup, this_instr);
+    if (ret13 == NULL) {
         goto rop_CallEx_Generic_Failed;
     }
-    c = ret2;
+    c = ret13;
     ROP_ENTER(c, IR_A(ir_word));
     rop_CallEx_Generic_TupleFailed:
     IR_STUB_ESCAPE();
-    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
     PROCESS_ERROR_AT(RAISE, 26, this_instr);
     rop_CallEx_Generic_Native:
     IR_STUB_ESCAPE();
-    ret3 = _PyRop_CallNativeEx(tstate, frame, home_fn, ntup, this_instr);
-    if (PyValue_IsNull(ret3)) {
+    ret14 = _PyRop_CallNativeEx(tstate, frame, nfo, nko, ntup, this_instr);
+    if (PyValue_IsNull(ret14)) {
         goto rop_CallEx_Generic_NativeFailed;
     }
-    z = ret3;
+    z = ret14;
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_fn = _PyFrame_TakeHome(frame, home_fn);
     }
@@ -3041,8 +3103,8 @@ ir_run_CallEx_Generic(
     PyValue_XCLOSE(own_fn);
     PyValue_XCLOSE(old_dst);
     IR_STUB_ESCAPE();
-    ret4 = _PyRop_EndPoll(tstate, frame);
-    if (ret4 < 0) {
+    ret15 = _PyRop_EndPoll(tstate, frame);
+    if (ret15 < 0) {
         goto rop_CallEx_Generic_PollFailed;
     }
     DISPATCH();
@@ -3070,61 +3132,121 @@ ir_run_CallEx_Observed(
     next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
     INSTRUCTION_STATS(ROP_HANDLER_CallEx_Observed);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
     PyValue ret1;
-    PyValue ret2;
-    void * ret3;
-    PyValue ret4;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue ret7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    PyValue arg13;
+    PyValue arg14;
+    PyValue arg15;
+    PyValue arg16;
+    PyValue arg17;
+    PyValue arg18;
+    void * ret19;
+    PyValue ret20;
     PyValue own_fn = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-    int ret5;
+    int ret21;
+    PyValue tfo;
+    PyValue tko;
     PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue efo;
+    PyValue eko;
     PyValue etup;
+    PyValue rfo;
+    PyValue rko;
     PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
     _PyInterpreterFrame * c;
     PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
     PyValue z;
+    fo = PyValue_DUP(PyValue_Borrow(*home_fn));
+    ko = _PyRop_HoldKwargs(frame, this_instr);
     IR_STUB_ESCAPE();
     ret1 = _PyRop_StarTuple(tstate, frame, home_fn, this_instr);
     if (PyValue_IsNull(ret1)) {
+        arg2 = fo;
+        arg3 = ko;
+        tfo = arg2;
+        tko = arg3;
         goto rop_CallEx_Observed_TupleFailed;
     }
-    tup = ret1;
+    arg4 = ret1;
+    arg5 = fo;
+    arg6 = ko;
+    tup = arg4;
+    pfo = arg5;
+    pko = arg6;
     IR_STUB_ESCAPE();
-    ret2 = _PyRop_CallEventEx(tstate, frame, this_instr, home_fn, tup, this_instr);
-    if (PyValue_IsNull(ret2)) {
+    ret7 = _PyRop_CallEventEx(tstate, frame, this_instr, pfo, tup, this_instr);
+    if (PyValue_IsNull(ret7)) {
+        arg8 = pfo;
+        arg9 = pko;
+        efo = arg8;
+        eko = arg9;
         goto rop_CallEx_Observed_EventFailed;
     }
-    etup = ret2;
-    if (_PyRop_PythonTarget(tstate, frame, home_fn, this_instr)) {
-        ptup = etup;
+    arg10 = ret7;
+    arg11 = pfo;
+    arg12 = pko;
+    etup = arg10;
+    rfo = arg11;
+    rko = arg12;
+    if (_PyRop_PythonTargetHeld(tstate, frame, rfo, this_instr)) {
+        arg13 = etup;
+        arg14 = rfo;
+        arg15 = rko;
+        ptup = arg13;
+        qfo = arg14;
+        qko = arg15;
         goto rop_CallEx_Observed_Python;
     }
-    ntup = etup;
+    arg16 = etup;
+    arg17 = rfo;
+    arg18 = rko;
+    ntup = arg16;
+    nfo = arg17;
+    nko = arg18;
     goto rop_CallEx_Observed_Native;
     rop_CallEx_Observed_Python:
     IR_STUB_ESCAPE();
-    ret3 = _PyRop_PushPythonEx(tstate, frame, home_fn, ptup, this_instr);
-    if (ret3 == NULL) {
+    ret19 = _PyRop_PushPythonEx(tstate, frame, home_fn, qfo, qko, ptup, this_instr);
+    if (ret19 == NULL) {
         goto rop_CallEx_Observed_Failed;
     }
-    c = ret3;
+    c = ret19;
     ROP_ENTER(c, IR_A(ir_word));
     rop_CallEx_Observed_TupleFailed:
     IR_STUB_ESCAPE();
-    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
     PROCESS_ERROR_AT(RAISE, 26, this_instr);
     rop_CallEx_Observed_EventFailed:
     IR_STUB_ESCAPE();
-    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    _PyRop_RetireFailedHeldEx(frame, home_fn, efo, eko, this_instr);
     PROCESS_ERROR_AT(RAISE, 26, this_instr);
     rop_CallEx_Observed_Native:
     IR_STUB_ESCAPE();
-    ret4 = _PyRop_CallNativeObservedEx(tstate, frame, this_instr, home_fn, ntup, this_instr);
-    if (PyValue_IsNull(ret4)) {
+    ret20 = _PyRop_CallNativeObservedEx(tstate, frame, this_instr, nfo, nko, ntup, this_instr);
+    if (PyValue_IsNull(ret20)) {
         goto rop_CallEx_Observed_NativeFailed;
     }
-    z = ret4;
+    z = ret20;
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_fn = _PyFrame_TakeHome(frame, home_fn);
     }
@@ -3135,8 +3257,8 @@ ir_run_CallEx_Observed(
     PyValue_XCLOSE(own_fn);
     PyValue_XCLOSE(old_dst);
     IR_STUB_ESCAPE();
-    ret5 = _PyRop_EndPoll(tstate, frame);
-    if (ret5 < 0) {
+    ret21 = _PyRop_EndPoll(tstate, frame);
+    if (ret21 < 0) {
         goto rop_CallEx_Observed_PollFailed;
     }
     DISPATCH();

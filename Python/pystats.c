@@ -184,7 +184,7 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
         for (int j = 0; j < SPECIALIZATION_FAILURE_KINDS; j++) {
             uint64_t val = stats[i].specialization.failure_kinds[j];
             if (val) {
-                fprintf(out, "    opcode[%s].specialization.failure_kinds[%d] : %"
+                fprintf(out, "    family[%s].specialization.failure_kinds[%d] : %"
                     PRIu64 "\n", name, j, val);
             }
         }
@@ -205,7 +205,7 @@ print_family_stats(FILE *out, SpecializationStats *stats)
 {
 #define PRINT_FAMILY(i, field) \
     if (stats[i].field) { \
-        fprintf(out, "    opcode[%s].specialization." #field " : %" PRIu64 "\n", \
+        fprintf(out, "    family[%s].specialization." #field " : %" PRIu64 "\n", \
                 _PyIR_FamilyNames[i], stats[i].field); \
     }
     for (int i = 0; i < IR_NUM_FAMILIES; i++) {
@@ -217,7 +217,7 @@ print_family_stats(FILE *out, SpecializationStats *stats)
         PRINT_FAMILY(i, deopt);
         for (int j = 0; j < SPECIALIZATION_FAILURE_KINDS; j++) {
             if (stats[i].failure_kinds[j]) {
-                fprintf(out, "    opcode[%s].specialization.failure_kinds[%d] : %"
+                fprintf(out, "    family[%s].specialization.failure_kinds[%d] : %"
                         PRIu64 "\n", _PyIR_FamilyNames[i], j, stats[i].failure_kinds[j]);
             }
         }

@@ -12585,6 +12585,18 @@
             IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
         }
 
+        TARGET(Jump_Trailing) {
+            // Jump.Trailing (inline)
+            int opcode = ROP_HANDLER_Jump_Trailing;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Jump_Trailing);
+            IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+        }
+
         TARGET(Jump_Poll) {
             // Jump.Poll (inline)
             int opcode = ROP_HANDLER_Jump_Poll;

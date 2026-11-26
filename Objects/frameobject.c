@@ -1338,7 +1338,7 @@ frame_trace_opcodes_set_impl(PyFrameObject *self, PyObject *value)
     return 0;
 }
 
-/* Physical successors retain relaxed IR_JUMP words as real instructions. */
+/* Physical successors retain trailing Jump.Trailing words as real instructions. */
 static void
 register_resume_successors(PyCodeObject *code, int i, int next[2])
 {

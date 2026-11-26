@@ -15,19 +15,16 @@ extern "C" {
 #define IR_H_NOP                                    2
 #define IR_H_COPY_FREE_VARS                         3
 #define IR_H_DELETE_DEREF                           4
-#define IR_H_LOAD_COMMON_CONSTANT                   5
-#define IR_H_LOAD_DEREF                             6
-#define IR_H_LOAD_FROM_DICT_OR_DEREF                7
-#define IR_H_MAKE_CELL                              8
-#define IR_H_STORE_DEREF                            9
-#define IR_H_STORE_FAST                            10
-#define IR_H_INSTRUMENTED_INSTRUCTION              11
-#define IR_H_INSTRUMENTED_LINE                     12
-#define IR_H_IR_JUMP                               13
-#define IR_H_IR_OPERANDS                           14
+#define IR_H_LOAD_DEREF                             5
+#define IR_H_LOAD_FROM_DICT_OR_DEREF                6
+#define IR_H_MAKE_CELL                              7
+#define IR_H_STORE_DEREF                            8
+#define IR_H_INSTRUMENTED_INSTRUCTION               9
+#define IR_H_INSTRUMENTED_LINE                     10
+#define IR_H_IR_OPERANDS                           11
 
-#define IR_NUM_OLD_HANDLERS                     15
-#define IR_NUM_HANDLERS                        305
+#define IR_NUM_OLD_HANDLERS                     12
+#define IR_NUM_HANDLERS                        303
 
 /* What _PyIR_HandlerBase holds for a handler that is no stack op: a number
  * past every stack opcode and pseudo-instruction */

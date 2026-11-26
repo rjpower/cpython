@@ -202,29 +202,21 @@ dummy_func(
             LOAD_FAST,
         };
 
-        macro(STORE_FAST) = _SWAP_FAST + _POP_TOP_ANY;
-
-        leaf op(_SWAP_FAST, (value: consumed -- trash: moved(home)))
-            effects() exits(next)
+        /* A stack op only: STORE_FAST is the LocalWrite family (Python/register_ops/values.rop). */
+        tier1 inst(STORE_FAST, (value: consumed --))
+            exits(abort)
         {
             PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
             GETLOCAL(oparg) = value;
-            _PyValue_CheckHome(value);
             DEAD(value);
-            trash = tmp;
+            PyValue_XCLOSE(tmp);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         pseudo(STORE_FAST_MAYBE_NULL, (unused --)) = {
             STORE_FAST,
         };
-
-        // The release that inherited register instructions end with.  The
-        // POP_TOP stack op itself lowers to a retirement (rule_pop_top).
-        leaf op(_POP_TOP_ANY, (value: consumed --))
-            effects(releases) exits(next)
-        {
-            PyValue_XCLOSE(value);
-        }
 
         leaf inline_ok op(_POP_TOP_INT, (value: consumed exact(PyLong_Type) --))
             effects(writes) exits(next)
@@ -671,13 +663,13 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        pure inst(LOAD_COMMON_CONSTANT, ( -- value: owned))
-            effects(reads) exits(next)
+        /* A stack op only: LOAD_COMMON_CONSTANT is Const.Common (Python/register_ops/values.rop). */
+        tier1 inst(LOAD_COMMON_CONSTANT, ( -- value: owned))
+            exits(abort)
         {
-            // Keep in sync with _common_constants in opcode.py
-            assert(oparg < NUM_COMMON_CONSTANTS);
-            PyValueBorrow constant = _PyValue_CommonConstant(tstate->interp->common_consts[oparg]);
-            value = PyValue_DUP(constant);
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* The namespace and import stack ops only: their rules in
@@ -1894,18 +1886,6 @@ dummy_func(
 
         /* Handlers of the register IR only (Include/internal/pycore_ir.h).
          * They have no opcode. */
-
-        // The jumps that the assembler adds after a relaxed FOR_ITER or
-        // SEND (Python/assemble.c), which no instruction of the stack
-        // machine stands for.  They leave frame->instr_ptr at the loop, so
-        // that the events after them see the loop as the instruction before.
-        // Contract (seed, reviewed G0d1): JUMP_FORWARD's, `effects() exits(next,
-        // jump)`.
-        ir_only no_save_ip inst(IR_JUMP, ( -- ))
-            effects() exits(next, jump)
-        {
-            JUMPTO(oparg);
-        }
 
         // The words after a call head that name its operands, four slots
         // each (_PyIR_WordLength()).  The head consumes them, so no

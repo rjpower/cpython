@@ -105,11 +105,8 @@ class ContractTests(unittest.TestCase):
             return testapi.ir_normal_physical_transfer(
                 named[name], *fields, arg, edge, home, nl, limit)
 
-        # COPY, SWAP and POP_TOP are stack ops that regcfg.c lowers by
-        # their own rules
-        store_fast = (4, 0, 0, 0)
-        self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 4), set_null)
-        self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 5), preserve)
+        # COPY, SWAP, POP_TOP and STORE_FAST are stack ops that regcfg.c
+        # lowers by their own rules
 
         # POP_TOP lowers to a retirement: Move.Retire([], [src]) is
         # A = 0 destinations, B = 1 source, the source in C

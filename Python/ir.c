@@ -106,9 +106,6 @@ int
 _PyIR_BaseOpcode(int handler)
 {
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);
-    if (handler == IR_JUMP) {
-        return JUMP_FORWARD;
-    }
     if (handler == IR_OPERANDS) {
         // Part of the instruction before it, as a CACHE is upstream
         return CACHE;
@@ -471,6 +468,12 @@ tools_observe(PyCodeObject *co, int i, int handler)
         }
     }
     return 0;
+}
+
+int
+_PyCode_IsTrailing(PyCodeObject *co, int i)
+{
+    return (_PyIR_HandlerFlags[_PyCode_InstrHandler(co, i)] & _PyIR_H_TRAILING) != 0;
 }
 
 int

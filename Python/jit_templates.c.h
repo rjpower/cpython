@@ -2,19 +2,8 @@
 // from the leaf IR of Python/bytecodes.c.
 // Do not edit!
 //
-// 3 templates.  The handlers whose uops are all leaf but that
+// 1 templates.  The handlers whose uops are all leaf but that
 // keep the call of their form:
-
-static void
-jit_template_IR_JUMP(_PyJitWordCx *cx)
-{
-    _PyJitAsm *a = cx->a;
-    _PyIRWord ir_word = cx->word;
-    (void)ir_word;
-    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Bind(a, L0);
-    _PyJitAsm_Jmp(a, cx->target);
-}
 
 static void
 jit_template_NOP(_PyJitWordCx *cx)
@@ -26,29 +15,8 @@ jit_template_NOP(_PyJitWordCx *cx)
     _PyJitAsm_Bind(a, L0);
 }
 
-static void
-jit_template_STORE_FAST(_PyJitWordCx *cx)
-{
-    _PyJitAsm *a = cx->a;
-    _PyIRWord ir_word = cx->word;
-    (void)ir_word;
-    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Bind(a, L0);
-    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
-    _PyJitAsm_MovImm(a, _PyJitReg_RCX, (int64_t)((int)IR_B(ir_word)));
-    _PyJitLower_GETLOCAL(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RCX}, NULL);
-    _PyJitLower_IR_SLOTS(cx, (const uint8_t[]){_PyJitReg_RSI}, NULL);
-    _PyJitTemplate_PtrAdd(cx, _PyJitReg_RDI, _PyJitReg_RSI, _PyJitReg_RCX, sizeof(PyValue));
-    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJitReg_RDI, (int32_t)0), _PyJitReg_RAX);
-    _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
-    cx->live = 0x0; cx->live_xmm = 0x0;
-    _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
-}
-
 const _PyJitTemplate _PyJit_Templates[512] = {
     [2] = jit_template_NOP,
-    [10] = jit_template_STORE_FAST,
-    [13] = jit_template_IR_JUMP,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
     [ROP_HANDLER_GetAttr_Instance] = jit_template_GetAttr_Instance,
     [ROP_HANDLER_GetAttr_Shape] = jit_template_GetAttr_Shape,
@@ -78,6 +46,7 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [ROP_HANDLER_BranchTruth_Plain] = jit_template_BranchTruth_Plain,
     [ROP_HANDLER_BranchNone_Test] = jit_template_BranchNone_Test,
     [ROP_HANDLER_Jump_Direct] = jit_template_Jump_Direct,
+    [ROP_HANDLER_Jump_Trailing] = jit_template_Jump_Trailing,
     [ROP_HANDLER_Jump_Poll] = jit_template_Jump_Poll,
     [ROP_HANDLER_Const_Pool] = jit_template_Const_Pool,
     [ROP_HANDLER_Const_Small] = jit_template_Const_Small,

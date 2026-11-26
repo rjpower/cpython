@@ -3,17 +3,6 @@
 //   Python/bytecodes.c
 // Do not edit!
 static int
-leaf_probe__IR_JUMP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    result->branch = 1;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__NOP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -23,42 +12,7 @@ leaf_probe__NOP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     return LEAF_PROBE_NEXT;
 }
 
-static int
-leaf_probe__POP_TOP_ANY(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    value = stack_pointer[-1];
-    stack_pointer += -1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    PyValue_XCLOSE(value);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__SWAP_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value, trash;
-    value = stack_pointer[-1];
-    PyValue tmp = GETLOCAL(oparg);
-    GETLOCAL(oparg) = value;
-    _PyValue_CheckHome(value);
-    trash = tmp;
-    stack_pointer[-1] = trash;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
 static const struct leaf_probe LEAF_PROBES[] = {
-    {"_IR_JUMP", leaf_probe__IR_JUMP, 0},
     {"_NOP", leaf_probe__NOP, 0},
-    {"_POP_TOP_ANY", leaf_probe__POP_TOP_ANY, 1},
-    {"_SWAP_FAST", leaf_probe__SWAP_FAST, 1},
 {NULL, NULL, 0},
 };

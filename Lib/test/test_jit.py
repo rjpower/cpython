@@ -870,6 +870,29 @@ class TestCompletionStubs(JitTestCase):
             print(f(seqs[::-1]))
         """)
 
+    def test_list_slice_misses_to_a_frame_entering_generic(self):
+        # GetItem.Generic can enter a __getitem__ frame, so it has no stub:
+        # a word adapted to GetItem.ListSlice runs ListSlice's form, whose
+        # miss on a str, a tuple or a class with __getitem__ goes on in the
+        # generic's form (it once called a NULL generic stub)
+        self.check_same("""
+            class G:
+                def __getitem__(self, k):
+                    return ("G", k.step)
+            def rev(xs):
+                return xs[::-1]
+            out = []
+            for i in range(50):
+                out.append(rev([i, 1, 2]))
+            print(out[-1])
+            for xs in ([1, 2], "abc", (3, 4), G(), b"xy"):
+                print(rev(xs))
+            for i in range(20):
+                for xs in ([1, 2], "abc", G()):
+                    out.append(rev(xs))
+            print(out[-6:])
+        """)
+
     def test_unpack_into_locals_and_temporaries(self):
         # The elements go to locals (the direct form) or to temporaries; the
         # destination aliases the sequence's own local; the counts of the

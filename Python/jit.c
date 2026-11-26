@@ -632,6 +632,8 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
         assert(status == _PyIR_MISS);
         int handler = _PyJit_CompiledHandler((_PyIRWord)(compiled & COMPILED_HANDLER_BITS));
         completion_stub generic = (completion_stub)_PyIR_StubPlans[handler].generic;
+        /* The generator plans no arm that can miss without one */
+        assert(generic != NULL);
         status = generic(tstate, frame, site);
         assert(!(status & _PyIR_MISS));
     }

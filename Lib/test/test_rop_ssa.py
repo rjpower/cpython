@@ -1167,6 +1167,13 @@ NOT_RUN = {
     "AppendText.Generic": "no scenario yet: the tracer's view is deferred",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",
     "Import.Lazy": "`lazy import` is a module-level statement",
+    "Raise.Throw": "no scenario drives an unwinding exit yet",
+    "Reraise.Plain": "no scenario drives an unwinding exit yet",
+    "Reraise.Origin": "no scenario drives an unwinding exit yet",
+    "ExceptEnter.Install": "no scenario drives an unwinding exit yet",
+    "ExceptLeave.Restore": "no scenario drives an unwinding exit yet",
+    "ExceptMatch.Match": "no scenario drives an unwinding exit yet",
+    "ExceptGroupMatch.Split": "no scenario drives an unwinding exit yet",
     # select(jit_on) and select(jit_off): the word is the one the JIT's
     # state chose when the function was lowered
     "Intrinsic.StopIteration": STOPITERATION_WHY,

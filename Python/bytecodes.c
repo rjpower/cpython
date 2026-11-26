@@ -543,41 +543,12 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined tier1 inst(RAISE_VARARGS, (args[oparg]: consumed -- ))
-            effects(runs_python) exits(raise)
+        /* A stack op only: RAISE_VARARGS is the Raise family (Python/register_ops/exceptions.rop). */
+        tier1 inst(RAISE_VARARGS, (args[oparg]: consumed -- ))
+            exits(abort)
         {
-            assert(oparg < 3);
-            _PyValue_RecheckWindow(args, oparg);
-            PyObject *exc = NULL;
-            PyObject *cause = NULL;
-            if (oparg > 0) {
-                // A number is not an exception
-                exc = PyValue_ObjectOrNull(args[0]);
-                if (exc == NULL) {
-                    _PyErr_SetString(tstate, PyExc_TypeError,
-                                     "exceptions must derive from BaseException");
-                    ERROR_IF(true, holding(args));
-                }
-            }
-            // A number is not a cause: do_raise reports it after the
-            // exception is made
-            bool cause_is_number = false;
-            if (oparg == 2) {
-                cause = PyValue_ObjectOrNull(args[1]);
-                cause_is_number = cause == NULL;
-            }
-            /* do_raise consumes independent object owners, made before
-             * the inputs are released */
-            PyObject *exc_owner = Py_XNewRef(exc);
-            PyObject *cause_owner = Py_XNewRef(cause);
-            DECREF_INPUTS();
-            int err = do_raise(tstate, exc_owner, cause_owner, cause_is_number);
-            if (err) {
-                assert(oparg == 0);
-                monitor_reraise(tstate, frame, this_instr);
-                goto exception_unwind;
-            }
-            ERROR_IF(true);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* A stack op only: the entry trampoline's exit: its word is Return.External. */
@@ -952,36 +923,21 @@ dummy_func(
 
         boundary(INSTRUMENTED_YIELD_DELEGATED) at(last) resumes(SEND, STORE_LOCAL);
 
-        outlined inst(POP_EXCEPT, (exc_value: consumed assumed(object) by _PUSH_EXC_INFO -- ))
-            effects(reads, releases) exits(next)
+        /* A stack op only: POP_EXCEPT is the ExceptLeave family. */
+        tier1 inst(POP_EXCEPT, (exc_value: consumed assumed(object) by PUSH_EXC_INFO -- ))
+            exits(abort)
         {
-            _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (PyValue_IsNone(exc_value)) {
-                DEAD(exc_value);    // immortal: it owes no count
-                Py_CLEAR(exc_info->exc_value);
-            }
-            else {
-                PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
-                Py_XSETREF(exc_info->exc_value, exc);
-            }
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined tier1 inst(RERAISE,
+        /* A stack op only: RERAISE is the Reraise family. */
+        tier1 inst(RERAISE,
                 (values[oparg], exc_st: consumed assumed(object) by exception_unwind -- values[oparg]))
-            effects(runs_python) exits(raise)
+            exits(abort)
         {
-            // An exception being handled is an instance of BaseException;
-            // the generator asserts the declared assumed(object)
-            PyObject *exc = PyValue_AsKnownObjectSteal(exc_st);
-
-            assert(oparg >= 0 && oparg <= 2);
-            if (oparg) {
-                frame->instr_ptr = INSTR_AT_OFFSET(PyValue_UntagIndex(values[0]));
-            }
-            assert(exc && PyExceptionInstance_Check(exc));
-            _PyErr_SetRaisedException(tstate, exc);
-            monitor_reraise(tstate, frame, this_instr);
-            goto exception_unwind;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // exc_st is the exception that exception_unwind pushed into a
@@ -1507,60 +1463,24 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(CHECK_EG_MATCH,
+        /* A stack op only: CHECK_EG_MATCH is the ExceptGroupMatch family. */
+        tier1 inst(CHECK_EG_MATCH,
                 (exc_value_st: consumed assumed(object) by exception_unwind, match_type_st: consumed
                  -- exc_rest: owned, exc_match: owned))
-            effects(runs_python, releases) exits(next, raise)
+            exits(abort)
         {
-            // The exception being handled is an object; the generator
-            // asserts the assumption
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
-            // Taken before the check, which can run code
-            PyValue held_exc = TAKE(exc_value_st);
-            PyValue held_type = TAKE(match_type_st);
-            // A number is not an exception class: the check rejects it
-            int err = _PyEval_CheckExceptStarTypeValidValue(tstate, held_type);
-            if (err < 0) {
-                PyValue_CLOSE(held_type);
-                PyValue_CLOSE(held_exc);
-                ERROR_IF(true);
-            }
-            PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
-
-            _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyValue_CLOSE(held_type);
-            PyValue_CLOSE(held_exc);
-            // A null match is an error, including a failed match (res < 0)
-            ERROR_IF(matched.match == NULL);
-
-            if (!Py_IsNone(matched.match)) {
-                PyErr_SetHandledException(matched.match);
-            }
-            exc_rest = PyValue_FromObjectSteal(matched.rest);
-            exc_match = PyValue_FromObjectSteal(matched.match);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inst(CHECK_EXC_MATCH,
+        /* A stack op only: CHECK_EXC_MATCH is the ExceptMatch family. */
+        tier1 inst(CHECK_EXC_MATCH,
                 (left: assumed(object) by exception_unwind, right: consumed
                  -- left, b: owned exact(PyBool_Type)))
-            effects(runs_python, releases) exits(next, raise)
+            exits(abort)
         {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            // Taken before the check, which can run code
-            PyValue held_right = TAKE(right);
-
-            assert(PyExceptionInstance_Check(left_o));
-            // A number is not an exception class: the check rejects it
-            int err = _PyEval_CheckExceptTypeValidValue(tstate, held_right);
-            if (err < 0) {
-                PyValue_CLOSE(held_right);
-                ERROR_NO_POP();
-            }
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);
-
-            int res = PyErr_GivenExceptionMatches(left_o, right_o);
-            PyValue_CLOSE(held_right);
-            b = res ? PyValue_True : PyValue_False;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // The compiler loads fromlist from a constant: None or a tuple of str
@@ -2325,23 +2245,13 @@ dummy_func(
             NOP,
         };
 
-        outlined window inst(PUSH_EXC_INFO,
+        /* A stack op only: PUSH_EXC_INFO is the ExceptEnter family. */
+        tier1 inst(PUSH_EXC_INFO,
                 (exc: consumed -- prev_exc: owned, new_exc: moved(exc)))
-            effects(reads, writes) exits(next)
+            exits(abort)
         {
-
-            _PyErr_StackItem *exc_info = tstate->exc_info;
-            PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
-            if (prev_o != NULL) {
-                prev_exc = PyValue_FromObjectSteal(prev_o);
-            }
-            else {
-                prev_exc = PyValue_None;
-            }
-            assert(PyValue_ExceptionInstanceCheck(exc));
-            exc_info->exc_value = PyValue_AsPyObjectNew(exc);
-            new_exc = exc;
-            DEAD(exc);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
 

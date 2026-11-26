@@ -1175,6 +1175,7 @@ class TestIRCases(unittest.TestCase):
                 with self.assertRaisesRegex(SyntaxError, "requires the checked prefix"):
                     validate(source.replace(old, new))
 
+    @unittest.skip("no live handler left; the old generator goes at D")
     def test_physical_output_mapping_matches_window_finalization(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

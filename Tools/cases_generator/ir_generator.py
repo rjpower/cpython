@@ -820,10 +820,6 @@ OBJECT_READERS = {
     "Py_TYPE",
     "PyCoro_CheckExact", "PyGen_Check",
     "PyUnicode_CheckExact",
-    # Operations that read their operands and count what they keep
-    "PyErr_GivenExceptionMatches",
-
-    "value_exception_group_match",
     "_PyTemplate_Build",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
@@ -1241,6 +1237,8 @@ STACK_ONLY = ("RESUME", "INSTRUMENTED_RESUME", "CALL", "INSTRUMENTED_CALL", "RET
               "COMPARE_OP", "IS_OP", "CONTAINS_OP",
               "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
               "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
+              "RAISE_VARARGS", "RERAISE", "PUSH_EXC_INFO", "POP_EXCEPT",
+              "CHECK_EXC_MATCH", "CHECK_EG_MATCH",
               "UNPACK_SEQUENCE", "UNPACK_EX",
               "STORE_ATTR", "LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR",
               "LOAD_SPECIAL")

@@ -13,8 +13,6 @@ inherited CALL_KW
 inherited CALL_KW_BOUND_METHOD
 inherited CALL_KW_NON_PY
 inherited CALL_KW_PY
-inherited CHECK_EG_MATCH
-inherited CHECK_EXC_MATCH
 inherited CLEANUP_THROW
 inherited CLEANUP_THROW_XFER_DISCARD
 inherited CLEANUP_THROW_XFER_HOME
@@ -66,11 +64,7 @@ inherited MATCH_MAPPING
 inherited MATCH_SEQUENCE
 inherited MATERIALIZE_KWARGS
 inherited NOP
-inherited POP_EXCEPT
 inherited POP_ITER
-inherited PUSH_EXC_INFO
-inherited RAISE_VARARGS
-inherited RERAISE
 inherited RETURN_GENERATOR
 inherited SEND
 inherited SEND_ASYNC_GEN
@@ -119,6 +113,8 @@ stub CACHE
 stub CALL
 stub CALL_INTRINSIC_1
 stub CALL_INTRINSIC_2
+stub CHECK_EG_MATCH
+stub CHECK_EXC_MATCH
 stub COMPARE_OP
 stub CONTAINS_OP
 stub COPY
@@ -176,12 +172,16 @@ stub MAKE_CELL
 stub MAKE_FUNCTION
 stub MAP_ADD
 stub NOT_TAKEN
+stub POP_EXCEPT
 stub POP_JUMP_IF_FALSE
 stub POP_JUMP_IF_NONE
 stub POP_JUMP_IF_NOT_NONE
 stub POP_JUMP_IF_TRUE
 stub POP_TOP
+stub PUSH_EXC_INFO
 stub PUSH_NULL
+stub RAISE_VARARGS
+stub RERAISE
 stub RESERVED
 stub RESUME
 stub RETURN_VALUE

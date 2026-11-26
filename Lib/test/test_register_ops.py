@@ -742,12 +742,12 @@ class DefinitionTests(unittest.TestCase):
         GlobalRead SetupAnnotations Import ImportFrom BuildText Convert Format Length Pattern
         Function Intrinsic IntrinsicPair
         Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
-        AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
+        AsyncIter Awaitable Send Yield Raise Reraise ExceptEnter ExceptLeave ExceptMatch ExceptGroupMatch
         CleanupThrow EndAsyncFor WithExit Resume
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 80)
+        self.assertEqual(len(self.APPENDIX_A), 82)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

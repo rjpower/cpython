@@ -6,8 +6,6 @@ enum IterMode(ORDINARY_ITER, YIELD_FROM_ITER);
 enum AsyncIterMode(AITER, ANEXT);
 enum AwaitOrigin(AWAIT, AWAIT_AENTER, AWAIT_AEXIT);
 enum YieldMode(ORDINARY_YIELD, DELEGATED_YIELD);
-enum ExceptMode(ENTER_HANDLER, LEAVE_HANDLER);
-enum MatchMode(ORDINARY_MATCH, GROUP_MATCH);
 // A call word's poll: a flag of the word, set by the translator on the call
 // that follows a special-method lookup, which `with` relies on to enter the
 // body without a pending signal or collection running first.
@@ -785,21 +783,6 @@ family Send(yielded:Dst, completed:Dst, pair:IterPair, sent:Src, done:NearHead,
 
 family Yield(value:Src, resume:Dst, route:NearHead, mode:Enum<YieldMode>)
   exits(yield, raise, redirect) ops(YIELD_VALUE);
-
-// 2D: exceptions
-
-family Raise(exc:Maybe<Src>, cause:Maybe<Src>)
-  exits(raise) ops(RAISE_VARARGS);
-
-family Reraise(exc:Src, lasti:Maybe<Src>)
-  exits(raise) ops(RERAISE);
-
-family ExceptState(mode:Enum<ExceptMode>, dst:Maybe<Dst>, exc:Src)
-  exits(next) ops(PUSH_EXC_INFO, POP_EXCEPT);
-
-family ExceptMatch(dst:Dst, rest:Maybe<Dst>, exc:Src, pattern:Src,
-                   mode:Enum<MatchMode>)
-  exits(next, raise) ops(CHECK_EXC_MATCH, CHECK_EG_MATCH);
 
 // 2E: throw completion, async-for termination, exceptional context exit
 

@@ -38,47 +38,47 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `a7795635a94` (pushed) holds:
+`pyjit/rir90` at `ee63f5b25c4` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
   `GetAttr` and `GetMethod` (P3), `Call`, `InitResult` and `Return` (P4),
   and truth, branches and jumps (P5);
-- handler numbers computed at each build, with no pin table (PN);
-- the freeze:
-  - PT: POP_TOP emits no instruction, and slots no longer creep;
-  - TT: stack ops carry no semantic flags;
-  - EC: tests show the set of inherited instructions only shrinks;
-  - SSA: pilot arms expand to the tracer's SSA form, checked against C;
-  - LF, the frozen language:
-    - only `publish` writes homes;
-    - a row that leaves the word is a transfer row;
-    - declared `entry`, `generic`, `observes` and `requires` clauses;
-    - optional sources are read only where `present(x)` holds;
-    - spans of owners;
-  - CA: COPY emits no word where one owner covers both uses (Move.Copy
-    words 64,952 to 28,294);
-  - HN: deleted handlers free their ids;
-  - IL: a row declared `inline` is always inlined into the interpreter,
-    and function forms and stubs call one out-of-line copy;
-  - TM: baseline templates derive from the same arm expansion as the
-    tracer, and can read word and feedback-entry fields; templated static
-    words rise from 3.3% to 30.6% of arm words;
-- W1 round 1: global loads (GR), namespaces and imports (NS), items and
-  slices (IT), functions and intrinsics (FN, one word per `def`), displays
-  (DP, span operands for every format), and packed small immediates (CP).
+- the freeze: PT, TT, EC, SSA, the frozen language (LF), CA, HN, IL and TM
+  ([plan](design/proposals/rir90.md));
+- W1: global loads (GR), namespaces and imports (NS), items and slices (IT),
+  functions and intrinsics (FN), displays and unpacking (DP), comparisons,
+  containment and test-and-branch (CP), cells (CE), attribute writes, super
+  and special lookups (AW), numeric operators (BN), text, length and
+  patterns (TP);
+- W2: keyword and expanded calls (KC), iteration (FI), exceptions (EX),
+  resume and polls (RS);
+- the known failures fixed once: settrace jumps refused by design and raw
+  value bits gone (KF), tests that deletions cannot break, with STACK_ONLY
+  derived (TS);
+- PS: stack opcode numbers pinned to upstream's table. Stubbing or deleting
+  an op leaves `opcode_ids.h` unchanged, so ports no longer bump the pyc
+  magic number (64451), and translator-only ops have no stack number.
 
-Family arms are 80.6% of the IR words over Lib/ (55.5% at the freeze); 85
-inherited instructions remain. Merge checks show known failures only, and
-the verifier reports no error over 109,185 code objects. At the pilot
-join, `always` ran about 1.30 of golden87's interpreter time, and rir90's
-interpreter about 1.26. Most of the gap was Call and Return rows compiled
-out of line (28%), which IL addresses, and attribute loads (26%). By the
-user's choice, the remainder is fixed after D; timing is next taken at the
-W1 join.
+Family arms are 98.7% of the IR words over Lib/ (55.5% at the freeze); 17
+inherited instructions remain, all in SY's and TC's scope (yield, send,
+awaitables, `WITH_EXCEPT_START`, `CLEANUP_THROW`, `END_ASYNC_FOR`). The last
+merge check shows no failure on release or assert, and the verifier reports
+no error over 109,655 code objects. Ports keep the old handlers' object
+locks and turn every old specialization into an arm.
 
-W1 round 2 is running: displays' unpack step, comparisons, cells,
-attribute writes, numeric operators, and text and patterns.
+Interpreter first (user, 2026-11-25): port every op, reach test parity, then
+interpreter performance parity with golden87 (within 5% on the timed
+geomean, JIT off); only then the JIT. Units run the tests their branch
+touches; root runs the smoke set at each merge and full suites at the wave
+join.
+
+Running: PS step 2 makes register handler ids dense and independent of stack
+opcode numbers. Today ids 0-255 are reserved one per stack number, so 185 of
+the 511 ids hold no handler and new arms no longer fit the 9-bit field (326
+real handlers). KC's restored call specializations and SY's Send port
+(restoring SEND_GEN, SEND_VIRTUAL and SEND_ASYNC_GEN as arms) merge after it;
+TC follows SY.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

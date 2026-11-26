@@ -1027,7 +1027,12 @@ PyValue_CLOSE_SPECIALIZED(PyValue ref, destructor destruct)
     }
 }
 
-static inline void
+/* The tag test and the decrement are inlined into every caller: GCC's
+ * budgets refuse a close in a large function (the evaluator has one per
+ * owner), and each refusal is a call that spills the owners around it.  The
+ * rare end, the deallocation, is the out-of-line _Py_Dealloc() of
+ * Py_DECREF_MORTAL(). */
+static Py_ALWAYS_INLINE void
 PyValue_XCLOSE(PyValue ref)
 {
     if (PyValue_RefcountOnObject(ref)) {

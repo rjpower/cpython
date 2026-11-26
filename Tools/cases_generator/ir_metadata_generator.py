@@ -200,7 +200,9 @@ def arm_row(arm: ir_arms.ArmEntry,
         f".reads = {{ {fmt.ninputs if fmt.reads is None else fmt.reads}, _PyIR_EXT_FIXED }}, "
         f".writes = {{ {fmt.writes}, _PyIR_EXT_FIXED }}, "
         f".through = {{ {fmt.through}, _PyIR_EXT_FIXED }}, .shadow = {shadow}, "
-        f".twin = {twin}, .events = {events} }}")
+        f".twin = {twin}, .events = {events}, .group = {fmt.group}, "
+        f".group_at = {fmt.group_at}, .normal = {fmt.normal:#x}, .vacant = {fmt.vacant:#x}, "
+        f".committed = {fmt.committed:#x}, .edges = {fmt.edges:#x} }}")
 
 
 def generate_ir_metadata(

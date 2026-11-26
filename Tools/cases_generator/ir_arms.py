@@ -46,6 +46,17 @@ class ArmFormat:
     # differ from its inputs (a window)
     reads: int | None = None
     through: int = 0
+    # The word's homes (rop_generator.family_homes): the home group's parts
+    # and the field naming its first, the homes that may be vacant when
+    # read (bit h), the committed edges (bit e) and each home's state after
+    # each normal edge (_PyIR_HOME_* in two bits at 2 * (6e + h)).  Home h
+    # is field h for h < 4, and part h - 3 of the group for h = 4, 5.
+    group: int = 0
+    group_at: int = 0
+    normal: int = 0           # bit e: an arm of the family takes edge e
+    vacant: int = 0
+    committed: int = 0
+    edges: int = 0
 
 
 @dataclass(frozen=True)

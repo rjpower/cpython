@@ -513,7 +513,26 @@ typedef struct _PyIRFormat {
     uint16_t twin;          // the handler that instrumentation runs on the
                             // word (itself for a twin), or _PyIR_NO_HANDLER
     uint32_t events;        // bit e: semantic handler or twin can fire event e
+    /* The homes a register instruction names (_PyIR_WordHomes): home h is
+     * field h for h < 4, and part h - 3 of its home group for h = 4, 5.
+     * Rows of stack ops and old handlers leave them 0. */
+    uint8_t group;          // the parts of the home group operand, or 0
+    uint8_t group_at;       // the field that names the group's part 0
+    uint8_t normal;         // bit e: an arm of the family takes edge e
+    uint8_t vacant;         // bit h: home h may be NULL when the word reads it
+    uint8_t committed;      // bit e: edge e publishes before its callbacks
+    uint32_t edges;         // _PyIR_HOME_* of home h after edge e, in the two
+                            // bits at 2 * (_PyIR_HOMES * e + h)
 } _PyIRFormat;
+
+#define _PyIR_HOMES 6
+/* A home after a normal edge of the word */
+enum {
+    _PyIR_HOME_PRESERVE,    // untouched, or read and kept with its owner
+    _PyIR_HOME_VACATE,      // its owner retired; the home is left NULL
+    _PyIR_HOME_DEFINE,      // holds what the word published there
+    _PyIR_HOME_UNKNOWN,     // the arms of the family leave it differently
+};
 
 /* "None" for a handler id or a stack opcode: 0 is a valid id of each */
 #define _PyIR_NO_HANDLER 0xffff

@@ -1936,7 +1936,7 @@ ir_span_probe(PyObject *self, PyObject *args)
         Py_DECREF(item);
     }
     for (int home = 0; home < (int)ir->nslots; home++) {
-        if (_PyIR_ReadsHome(wp, 0, home)) {
+        if (_PyIR_ReadsHome(wp, home)) {
             PyObject *h = PyLong_FromLong(home);
             if (h == NULL || PyList_Append(reads, h) < 0) {
                 Py_XDECREF(h);
@@ -1946,7 +1946,7 @@ ir_span_probe(PyObject *self, PyObject *args)
         }
     }
     int lo, hi;
-    _PyIR_ReadBounds(wp, 0, &lo, &hi);
+    _PyIR_ReadBounds(wp, &lo, &hi);
     return Py_BuildValue("(NN(ii))", spans, reads, lo, hi);
 error:
     Py_XDECREF(spans);
@@ -2251,10 +2251,10 @@ plant_arm_words(PyObject *self, PyObject *args)
 static PyObject *
 ir_normal_physical_transfer(PyObject *self, PyObject *args)
 {
-    int handler, a, b, c, d, arg, edge, home, nl, limit;
+    int handler, a, b, c, d, edge, home, nl, limit;
     PyObject *operands = NULL;
-    if (!PyArg_ParseTuple(args, "iiiiiiiiii|O!", &handler, &a, &b, &c, &d,
-                          &arg, &edge, &home, &nl, &limit,
+    if (!PyArg_ParseTuple(args, "iiiiiiiii|O!", &handler, &a, &b, &c, &d,
+                          &edge, &home, &nl, &limit,
                           &PyTuple_Type, &operands)) {
         return NULL;
     }
@@ -2289,8 +2289,70 @@ ir_normal_physical_transfer(PyObject *self, PyObject *args)
         words[1 + k] = IR_WORD(IR_OPERANDS, fields[0], fields[1], fields[2], fields[3]);
     }
     _PyIRPhysicalTransfer result =
-        _PyIR_NormalPhysicalTransfer(words, arg, edge, home, nl, limit);
+        _PyIR_NormalPhysicalTransfer(words, edge, home, nl, limit);
     return Py_BuildValue("(ii)", result.kind, result.source);
+}
+
+/* What edge EDGE (-1: every normal edge) of the word at index INDEX of
+ * CODE's lowering leaves in the frame's homes, by the readers of
+ * pycore_ir_outcomes.h: (nl, physical, observed).  physical holds the
+ * _PyIR_PHYSICAL_* kind of every scratch home; observed holds, for a
+ * committed edge, the (home, _PyIR_OBSERVED_*, old owner retired) of each
+ * home it names, and is None for any other edge. */
+static PyObject *
+ir_edge_homes(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    int index, edge;
+    if (!PyArg_ParseTuple(args, "O!ii", &PyCode_Type, &code, &index, &edge)) {
+        return NULL;
+    }
+    const _PyCodeIR *ir = _PyCode_GetIR(code);
+    if (ir == NULL) {
+        return NULL;
+    }
+    if (index < 0 || (uint32_t)index >= ir->nwords || edge < -1 || edge > 1) {
+        PyErr_SetString(PyExc_IndexError, "word index or edge out of range");
+        return NULL;
+    }
+    const _PyIRWord *wp = &ir->words[index];
+    int nl = (int)ir->nfixed, limit = (int)ir->nslots;
+    PyObject *physical = PyList_New(0);
+    if (physical == NULL) {
+        return NULL;
+    }
+    for (int home = nl; home < limit; home++) {
+        _PyIRPhysicalTransfer t =
+            _PyIR_NormalPhysicalTransfer(wp, edge, home, nl, limit);
+        PyObject *kind = PyLong_FromLong(t.kind);
+        if (kind == NULL || PyList_Append(physical, kind) < 0) {
+            Py_XDECREF(kind);
+            Py_DECREF(physical);
+            return NULL;
+        }
+        Py_DECREF(kind);
+    }
+    _PyIRObservedHomes seen;
+    if (edge < 0 || !_PyIR_ObservedHomes(*wp, edge, nl, limit, &seen)) {
+        return Py_BuildValue("(iNO)", nl, physical, Py_None);
+    }
+    PyObject *observed = PyList_New(0);
+    if (observed == NULL) {
+        Py_DECREF(physical);
+        return NULL;
+    }
+    for (int k = 0; k < seen.count; k++) {
+        PyObject *item = Py_BuildValue("(iii)", seen.home[k], seen.physical[k],
+                                       seen.old_cut[k]);
+        if (item == NULL || PyList_Append(observed, item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(physical);
+            Py_DECREF(observed);
+            return NULL;
+        }
+        Py_DECREF(item);
+    }
+    return Py_BuildValue("(iNN)", nl, physical, observed);
 }
 
 /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
@@ -5597,6 +5659,7 @@ static PyMethodDef module_functions[] = {
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
     {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},
+    {"ir_edge_homes", ir_edge_homes, METH_VARARGS, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

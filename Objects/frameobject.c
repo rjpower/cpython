@@ -1468,17 +1468,13 @@ register_committed_scope(_PyInterpreterFrame *frame,
 
 /* The common committed-scope proof has already checked the physical edge. */
 static bool
-register_neutral_jump_word(_PyIRWord word, int arg)
+register_neutral_jump_word(_PyIRWord word)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (_PyIR_ObserverOutcome(word, _PyIR_EDGE_TAKEN) != _PyIR_OBSERVER_FORMAT_VALUE ||
+    if (!_PyIR_Committed(word, _PyIR_EDGE_TAKEN) ||
         !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) ||
         !(fmt->flags & _PyIR_JUMP_ALWAYS) ||
-        (fmt->effects & (_PyIR_PUSHES_FRAME | _PyIR_SUSPENDS)) ||
-        _PyIR_Extent(fmt->reads, arg) != 0 ||
-        _PyIR_Extent(fmt->writes, arg) != 0 ||
-        _PyIR_Extent(fmt->through, arg) != 0 ||
-        _PyIR_Outcome(word, _PyIR_EDGE_TAKEN).semantic)
+        (fmt->effects & (_PyIR_PUSHES_FRAME | _PyIR_SUSPENDS)))
     {
         return false;
     }
@@ -1511,8 +1507,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
     {
         int pc = _PyFrame_InstrOffset(frame, context.site);
         PyCodeObject *code = _PyFrame_GetCode(frame);
-        neutral_jump = register_neutral_jump_word(_PyCode_IRWords(code)[pc],
-                                                  _PyCode_InstrOparg(code, pc));
+        neutral_jump = register_neutral_jump_word(_PyCode_IRWords(code)[pc]);
     }
     bool original_pre = context.phase == _PY_IR_OBSERVER_PRE_WORD &&
                         context.site == frame->instr_ptr &&
@@ -1793,7 +1788,6 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
         count--;
         queued[pc] = 0;
         const uint64_t *before = analysis->null_states + (size_t)pc * stride;
-        int arg = _PyCode_InstrOparg(code, pc);
         for (int e = analysis->edge_heads[pc]; e >= 0;
              e = analysis->edges[e].next)
         {
@@ -1804,7 +1798,7 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
             if (edge.floor < 0 && edge.phase >= 0) {
                 for (int j = 0; j < nt; j++) {
                     _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
-                        &_PyCode_IRWords(code)[pc], arg, edge.phase, nl + j, nl, nl + nt);
+                        &_PyCode_IRWords(code)[pc], edge.phase, nl + j, nl, nl + nt);
                     bool is_null = transfer.kind == _PyIR_PHYSICAL_SET_NULL;
                     int source = transfer.kind == _PyIR_PHYSICAL_TRANSPORT
                         ? transfer.source - nl : j;
@@ -1822,8 +1816,8 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
             else if (edge.phase < 0) {
                 /* Unwinding applies the recipe, clears every home from the
                  * floor up and then writes lasti and the exception. Below the
-                 * floor, only homes the failing word leaves alone on success
-                 * keep their facts. */
+                 * floor, only homes the failing word leaves alone on every
+                 * normal edge keep their facts. */
                 const int32_t *recipe = _PyIR_Recipe(_PyCode_IR(code), edge.recipe);
                 /* The floor holds lasti or the exception, the home above it
                  * the exception or NULL. */
@@ -1843,7 +1837,7 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
                             moved |= recipe[1 + 2 * q] == home || recipe[2 + 2 * q] == home;
                         }
                         is_null = !moved &&
-                            _PyIR_NormalPhysicalTransfer(&_PyCode_IRWords(code)[pc], arg, 0,
+                            _PyIR_NormalPhysicalTransfer(&_PyCode_IRWords(code)[pc], -1,
                                                          home, nl, nl + nt).kind ==
                                 _PyIR_PHYSICAL_PRESERVE &&
                             ((before[j / 64] >> (j % 64)) & 1);
@@ -1877,7 +1871,7 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
 /* Map both demand kinds through the same simultaneous physical transport.
  * UNKNOWN is not an owner definition and cannot discharge a demand. */
 static void
-register_resume_transport_needs(const _PyIRWord *word, int arg, int outcome, int lane,
+register_resume_transport_needs(const _PyIRWord *word, int outcome, int lane,
                                RegisterResumeAnalysis *analysis,
                                uint64_t *needs, uint64_t *mapped)
 {
@@ -1885,7 +1879,7 @@ register_resume_transport_needs(const _PyIRWord *word, int arg, int outcome, int
     memcpy(mapped, needs, analysis->stride * sizeof(uint64_t));
     for (int j = 0; j < nt; j++) {
         _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
-            word, arg, outcome, nl + j, nl, nl + nt);
+            word, outcome, nl + j, nl, nl + nt);
         if ((lane == REGISTER_REQUIRE_NULL_ONLY &&
              transfer.kind == _PyIR_PHYSICAL_SET_NULL) ||
             transfer.kind == _PyIR_PHYSICAL_TRANSPORT)
@@ -1898,7 +1892,7 @@ register_resume_transport_needs(const _PyIRWord *word, int arg, int outcome, int
             continue;
         }
         _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
-            word, arg, outcome, nl + j, nl, nl + nt);
+            word, outcome, nl + j, nl, nl + nt);
         int source = transfer.source - nl;
         if (transfer.kind == _PyIR_PHYSICAL_TRANSPORT && source >= 0 && source < nt) {
             mapped[source / 64] |= (uint64_t)1 << (source % 64);
@@ -1953,49 +1947,33 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
         for (int i = 0; i < n; i += _PyCode_InstrLength(code, i)) {
             _PyIRWord word = _PyCode_IRWords(code)[i];
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-            int arg = _PyCode_InstrOparg(code, i);
-            int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+            const _PyIRWord *wp = &_PyCode_IRWords(code)[i];
             uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-            int window = -1;
             for (int f = 0; f < 4; f++) {
-                int role = fmt->roles[f];
-                if (role >= _PyIR_ROLE_LOCAL_IN && role <= _PyIR_ROLE_CELL &&
-                    fields[f] >= (uint32_t)nl)
-                {
+                if (fmt->roles[f] == _PyIR_ROLE_CELL && fields[f] >= (uint32_t)nl) {
                     PyErr_SetString(PyExc_ValueError,
                                     "jump requires valid named-local operands");
                     goto error;
                 }
-                if (role == _PyIR_ROLE_BASE) {
-                    window = (int)fields[f];
-                }
             }
+            _PyIRHomes view;
+            _PyIR_WordHomes(word, &view);
+            int window = _PyIR_HomeGroup(&view);
             for (int j = 0; j < nt; j++) {
                 int home = nl + j;
-                bool written = _PyIR_DefinesHome(word, arg, home);
-                for (int taken = 0; taken < 2; taken++) {
-                    _PyIRSlotOutcome outcome = _PyIR_Outcome(word, taken);
-                    written |= outcome.semantic &&
-                        ((home >= outcome.first &&
-                          home < outcome.first + outcome.count) ||
-                         home == outcome.dst);
-                }
+                bool written = _PyIR_HomeWritten(&view, home);
                 if (_PyIR_IsMoveWord(word)) {
-                    const _PyIRWord *wp = &_PyCode_IRWords(code)[i];
                     written |= _PyIR_MoveGives(wp, home) >= 0 ||
                                _PyIR_MoveReads(wp, home);
                 }
-                else if (opcode == SWAP && window >= 0) {
-                    written |= home == window || home == window + arg - 1;
-                }
                 else if (fmt->operands == _PyIR_OPERANDS_SPANS) {
                     // The span's sources leave their homes vacant
-                    written |= _PyIR_SpanReadsHome(&_PyCode_IRWords(code)[i], home);
+                    written |= _PyIR_SpanReadsHome(wp, home);
                 }
-                /* Unknown activation adapters can reuse the scratch tail. */
+                /* A frame switch other than a call (a send, a return) may
+                 * reuse the scratch tail from its group up. */
                 if ((fmt->effects & _PyIR_PUSHES_FRAME) &&
-                    opcode != CALL && opcode != CALL_KW &&
-                    opcode != CALL_FUNCTION_EX)
+                    !_PyIR_CALL_SHAPED(fmt->operands))
                 {
                     written |= window < 0 || home >= window;
                 }
@@ -2058,8 +2036,8 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
             for (int lane = REGISTER_REQUIRE_ALL; lane < lanes; lane++) {
                 uint64_t *lane_live = live + (size_t)lane * rows;
                 _PyIRWord word = _PyCode_IRWords(code)[i];
-                const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-                int arg = _PyCode_InstrOparg(code, i);
+                _PyIRHomes view;
+                _PyIR_WordHomes(word, &view);
                 memset(work, 0, stride * sizeof(uint64_t));
                 int successors[2];
                 register_resume_successors(code, i, successors);
@@ -2080,37 +2058,26 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                             }
                         }
                         if (lane != REGISTER_REQUIRE_ALL) {
-                            register_resume_transport_needs(&_PyCode_IRWords(code)[i], arg, k, lane, analysis,
+                            register_resume_transport_needs(&_PyCode_IRWords(code)[i], k, lane, analysis,
                                                             edge, mapped);
                         }
-                        _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k == 1);
-                        if (outcome.semantic) {
-                            for (int r = 0; r <= outcome.count; r++) {
-                                int slot = (r < outcome.count ? outcome.first + r : outcome.dst) - nl;
-                                if (slot >= 0 && slot < nt && slot + nl != IR_NO_DST) {
-                                    if (lane == REGISTER_REQUIRE_VALUE && _PyIR_NormalPhysicalTransfer(
-                                            &_PyCode_IRWords(code)[i], arg, k, slot + nl, nl, nl + nt).kind ==
-                                                _PyIR_PHYSICAL_SET_NULL)
-                                    {
-                                        continue;
-                                    }
-                                    edge[slot / 64] &= ~((uint64_t)1 << (slot % 64));
-                                }
+                        /* The edge discharges what it writes. A home it
+                         * leaves NULL cannot meet a demand for a value. */
+                        for (int h = 0; h < _PyIR_HOMES; h++) {
+                            int slot = view.slot[h] - nl;
+                            if (slot < 0 || slot >= nt) {
+                                continue;
                             }
+                            int after = _PyIR_HomeAfter(&view, k, slot + nl);
+                            if (after == _PyIR_HOME_PRESERVE ||
+                                (after == _PyIR_HOME_VACATE && lane == REGISTER_REQUIRE_VALUE))
+                            {
+                                continue;
+                            }
+                            edge[slot / 64] &= ~((uint64_t)1 << (slot % 64));
                         }
                         for (int j = 0; j < nb; j++) {
                             work[j] |= edge[j];
-                        }
-                    }
-                }
-                /* Conditional and semantic outputs are handled per edge above.
-                 * Other definitions use the actual generated output mapping. */
-                if (!_PyIR_Outcome(word, 0).semantic &&
-                    !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)))
-                {
-                    for (int j = 0; j < nt; j++) {
-                        if (_PyIR_DefinesHome(word, arg, nl + j)) {
-                            work[j / 64] &= ~((uint64_t)1 << (j % 64));
                         }
                     }
                 }
@@ -2126,7 +2093,6 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 _PyInstr *instr = _PyFrame_InstrAt(frame, i);
                 int real_handler = _PyIR_RealHandler(frame, instr);
                 _PyIRWord actual = (word & ~(_PyIRWord)IR_HANDLER_MASK) | real_handler;
-                int swap_lo = -1, swap_hi = -1;
                 const _PyIRWord *wp = &_PyCode_IRWords(code)[i];
                 int is_move = _PyIR_IsMoveWord(*wp);
                 if (is_move && lane == REGISTER_REQUIRE_ALL) {
@@ -2149,35 +2115,16 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                         }
                     }
                 }
-                else if (!is_move && _PyIR_BaseOpcode(real_handler) == SWAP) {
-                    /* A swap requires nothing: what is needed at one end
-                     * after it is needed at the other before it, which the
-                     * other lanes' transport already maps. */
-                    swap_lo = (int)IR_A(word) - nl;
-                    swap_hi = swap_lo + arg - 1;
-                    if (swap_lo < 0 || swap_hi >= nt || swap_lo >= swap_hi) {
-                        swap_lo = swap_hi = -1;
-                    }
-                    else if (lane == REGISTER_REQUIRE_ALL) {
-                        uint64_t lo = (work[swap_lo / 64] >> (swap_lo % 64)) & 1;
-                        uint64_t hi = (work[swap_hi / 64] >> (swap_hi % 64)) & 1;
-                        work[swap_lo / 64] &= ~((uint64_t)1 << (swap_lo % 64));
-                        work[swap_hi / 64] &= ~((uint64_t)1 << (swap_hi % 64));
-                        work[swap_lo / 64] |= hi << (swap_lo % 64);
-                        work[swap_hi / 64] |= lo << (swap_hi % 64);
-                    }
-                }
                 for (int j = 0; j < nt; j++) {
-                    if (j == swap_lo || j == swap_hi ||
-                        (is_move && _PyIR_MoveReads(wp, nl + j))) {
+                    if (is_move && _PyIR_MoveReads(wp, nl + j)) {
                         continue;
                     }
                     int home = nl + j;
-                    bool nullable = _PyIR_NullableHomeAs(actual, &_PyCode_IRWords(code)[i], arg, home);
+                    bool nullable = _PyIR_NullableHomeAs(actual, wp, home);
                     bool path_null = analysis->null_states != NULL && nullable &&
                         (analysis->null_states[(size_t)i * stride + j / 64] &
                          ((uint64_t)1 << (j % 64)));
-                    if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[i], arg, home) && !(null_home[j] && nullable) &&
+                    if (_PyIR_ReadsHome(wp, home) && !(null_home[j] && nullable) &&
                         (lane == REGISTER_REQUIRE_ALL ||
                          (lane == REGISTER_REQUIRE_VALUE && !path_null) ||
                          (lane == REGISTER_REQUIRE_NULL_ONLY && path_null)))
@@ -2300,17 +2247,12 @@ register_context_forget_reads(PyCodeObject *code, int pc,
 {
     _PyIRWord word = _PyCode_IRWords(code)[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    int arg = _PyCode_InstrOparg(code, pc);
-    int base = -1;
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-            base = (int)fields[f];
-        }
-    }
+    _PyIRHomes view;
+    _PyIR_WordHomes(word, &view);
+    int base = _PyIR_HomeGroup(&view);
     for (int j = 0; j < analysis->nt; j++) {
         int home = analysis->nl + j;
-        if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[pc], arg, home) ||
+        if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[pc], home) ||
             /* A call's child frame lies above the parent's, so it only
              * takes the call's operands, which the read test covers */
             (fmt->operands == _PyIR_OPERANDS_NONE &&
@@ -2364,7 +2306,6 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
         return context;
     }
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-    int arg = _PyCode_InstrOparg(code, pc);
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int base = -1;
@@ -2394,18 +2335,6 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
     local = register_local_of(IR_HANDLER(word), fields, local);
     int input_origin = input >= 0 && input < analysis->nt ? origins[input] : 0;
     int old = base >= 0 && base < analysis->nt ? origins[base] : 0;
-    int top = opcode == SWAP && base >= 0 && base < analysis->nt &&
-              arg >= 2 && arg <= analysis->nt - base ? base + arg - 1 : -1;
-    int old_top = top >= 0 && top < analysis->nt ? origins[top] : 0;
-    if (opcode == SWAP && top < 0) {
-        /* This proof tracks scratch-only permutations. A constructed window
-         * crossing named locals cannot preserve a saved-owner label here. */
-        memset(origins, 0, (size_t)analysis->nt * sizeof(int));
-        for (int col = 0; col < analysis->nsave_columns; col++) {
-            save_tops[col] = REGISTER_CONTEXT_AMBIGUOUS;
-        }
-        return REGISTER_CONTEXT_AMBIGUOUS;
-    }
     if (opcode == POP_EXCEPT) {
         /* Use POP_EXCEPT's actual explicit register input. */
         if (context <= 0 || old != context ||
@@ -2438,39 +2367,18 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
         /* A token stored to a different, unsaved local does not restore its
          * original binding. Its original column remains active. */
     }
-    if (opcode != COPY && opcode != SWAP) {
-        register_context_forget_reads(code, pc, analysis, origins);
-    }
-    for (int j = 0; j < analysis->nt; j++) {
-        if (_PyIR_DefinesHome(word, arg, analysis->nl + j)) {
+    register_context_forget_reads(code, pc, analysis, origins);
+    _PyIRHomes view;
+    _PyIR_WordHomes(word, &view);
+    for (int h = 0; h < _PyIR_HOMES; h++) {
+        int j = view.slot[h] - analysis->nl;
+        if (j >= 0 && j < analysis->nt &&
+            _PyIR_HomeAfter(&view, taken, view.slot[h]) != _PyIR_HOME_PRESERVE)
+        {
             origins[j] = 0;
         }
     }
-    _PyIRSlotOutcome outcome = _PyIR_Outcome(word, taken);
-    if (outcome.semantic) {
-        for (int j = 0; j < analysis->nt; j++) {
-            int home = analysis->nl + j;
-            if ((home >= outcome.first && home < outcome.first + outcome.count) ||
-                home == outcome.dst)
-            {
-                origins[j] = 0;
-            }
-        }
-    }
-    if (opcode == COPY) {
-        /* Actual COPY output is the new window tail; middle holes survive. */
-        if (arg >= 1 && base >= 0 && base < analysis->nt &&
-            arg < analysis->nt - base)
-        {
-            origins[base + arg] = old;
-        }
-    }
-    else if (opcode == SWAP && base >= 0 && base < analysis->nt &&
-             top < analysis->nt && top >= 0) {
-        origins[base] = old_top;
-        origins[top] = old;
-    }
-    else if (opcode == PUSH_EXC_INFO) {
+    if (opcode == PUSH_EXC_INFO) {
         int node = pc + 1;
         int *parent = &analysis->parents[pc];
         if (context < 0 || !register_context_chain(analysis, context, node)) {
@@ -2860,22 +2768,13 @@ error:
 static bool
 register_anchor_cut(PyCodeObject *code, int i, int base)
 {
-    _PyIRWord word = _PyCode_IRWords(code)[i];
-    int arg = _PyCode_InstrOparg(code, i);
+    _PyIRHomes view;
+    _PyIR_WordHomes(_PyCode_IRWords(code)[i], &view);
     for (int home = base; home < base + 2; home++) {
-        if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[i], arg, home) ||
-            _PyIR_DefinesHome(word, arg, home))
+        if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[i], home) ||
+            _PyIR_HomeWritten(&view, home))
         {
             return true;
-        }
-        for (int taken = 0; taken < 2; taken++) {
-            _PyIRSlotOutcome outcome = _PyIR_Outcome(word, taken);
-            if (outcome.semantic &&
-                ((home >= outcome.first && home < outcome.first + outcome.count) ||
-                 home == outcome.dst))
-            {
-                return true;
-            }
         }
     }
     return false;
@@ -3079,35 +2978,22 @@ register_context_cut(PyCodeObject *code, RegisterResumeAnalysis *analysis,
     if (opcode == PUSH_EXC_INFO || opcode == POP_EXCEPT) {
         return true;
     }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    _PyIRHomes view;
+    _PyIR_WordHomes(word, &view);
+    int base = _PyIR_HomeGroup(&view);
     for (int j = 0; j < analysis->nt; j++) {
         if (register_plan_has(plan, j)) {
             int home = analysis->nl + j;
-            int arg = _PyCode_InstrOparg(code, pc);
-            if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[pc], arg, home) || _PyIR_DefinesHome(word, arg, home)) {
+            if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[pc], home) ||
+                _PyIR_HomeWritten(&view, home))
+            {
                 return true;
             }
-            for (int k = 0; k < 2; k++) {
-                _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k);
-                if (outcome.semantic &&
-                    ((home >= outcome.first && home < outcome.first + outcome.count) ||
-                     home == outcome.dst))
-                {
-                    return true;
-                }
-            }
-            const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
             if (fmt->operands == _PyIR_OPERANDS_NONE &&
-                (fmt->effects & _PyIR_PUSHES_FRAME)) {
-                uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-                int base = -1;
-                for (int f = 0; f < 4; f++) {
-                    if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-                        base = (int)fields[f];
-                    }
-                }
-                if (base < 0 || home >= base) {
-                    return true;
-                }
+                (fmt->effects & _PyIR_PUSHES_FRAME) && (base < 0 || home >= base))
+            {
+                return true;
             }
         }
     }
@@ -3308,8 +3194,7 @@ register_unbound_target_safe(PyCodeObject *code, RegisterResumeAnalysis *analysi
     while (head < tail && result) {
         int pc = queue[head++];
         _PyIRWord word = _PyCode_IRWords(code)[pc];
-        int arg = _PyCode_InstrOparg(code, pc);
-        if (_PyIR_BindingRead(&_PyCode_IRWords(code)[pc], arg, local) == _PyIR_BINDING_REQUIRES_VALUE) {
+        if (_PyIR_BindingRead(&_PyCode_IRWords(code)[pc], local) == _PyIR_BINDING_REQUIRES_VALUE) {
             result = 0;
             break;
         }
@@ -3318,7 +3203,7 @@ register_unbound_target_safe(PyCodeObject *code, RegisterResumeAnalysis *analysi
         {
             RegisterResumeEdge edge = analysis->edges[e];
             if (edge.phase >= 0 &&
-                _PyIR_DefinesBinding(word, arg, edge.phase, local))
+                _PyIR_DefinesBinding(word, edge.phase, local))
             {
                 continue;
             }

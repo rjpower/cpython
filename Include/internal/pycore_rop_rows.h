@@ -368,6 +368,15 @@ PyAPI_FUNC(PyValue) _PyRop_ImportName(PyThreadState *, _PyInterpreterFrame *,
 PyAPI_FUNC(PyValue) _PyRop_ImportFrom(PyThreadState *, _PyInterpreterFrame *,
                                       PyValue, uint32_t);
 
+/* IterOpen (Python/register_ops/iteration.rop).  The members of IterMode in
+ * declaration order: an ordinary GET_ITER, and that of `yield from` where
+ * the code's flags allow a coroutine or refuse it. */
+enum {
+    ITER_ORDINARY,
+    ITER_DELEGATE_COROUTINE_OK,
+    ITER_DELEGATE_NO_COROUTINE,
+};
+
 /* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The
  * members of BranchMode in declaration order, the numbers the generated
  * handlers use for the enum's names: the jump is taken when the test is

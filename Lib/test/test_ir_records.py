@@ -126,7 +126,7 @@ class HandlerRecordTests(unittest.TestCase):
         # so the generator's guards precede it (contract87 TR)
         self.assertNotHasAttr(ir_records, "GUARD_ORDER_EXCEPTIONS")
         instructions = ir_generator.handler_instructions(analysis)
-        for name in ("FOR_ITER_GEN", "SEND_GEN", "CALL_KW_BOUND_METHOD",
+        for name in ("SEND_GEN", "CALL_KW_BOUND_METHOD",
                      "CALL_KW_PY", "CALL_EX_PY"):
             with self.subTest(handler=name):
                 parts = [p for p in instructions[name].parts

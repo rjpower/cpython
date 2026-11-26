@@ -978,6 +978,12 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
+    # Iteration (rir90 FI): the arms are checked by test_rop_iter
+    "IterOpen.Generic": "covered by test_rop_iter",
+    "ForIter.Generic": "covered by test_rop_iter",
+    "ForIter.Observed": "covered by test_rop_iter",
+    "IterClose.Retire": "covered by test_rop_iter",
+    "IterClose.Observed": "covered by test_rop_iter",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "

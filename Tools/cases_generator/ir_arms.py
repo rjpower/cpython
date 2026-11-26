@@ -40,6 +40,12 @@ class ArmFormat:
     # The words the observer reads at the edges of a branch: the format
     # (reads, writes, through) says what the edge leaves in the homes
     observer: str = "_PyIR_OBSERVER_NONE"
+    # The fact of the taken edge where it differs (a loop's exhaustion)
+    observer_taken: str | None = None
+    # Set where the stack positions that the word reads and passes through
+    # differ from its inputs (a window)
+    reads: int | None = None
+    through: int = 0
 
 
 @dataclass(frozen=True)

@@ -1815,6 +1815,55 @@ rule_branch(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* The loop words.  GET_ITER opens the iterator and its cursor, FOR_ITER
+ * steps them, and an early exit's POP_ITER closes them (the exhaustion
+ * edge's END_FOR and POP_ITER are FOR_ITER's completion and get no word):
+ * Python/register_ops/iteration.rop.  The stack op's translation is the
+ * arm's: the pair is the window of FOR_ITER and the outputs of GET_ITER. */
+static int
+rule_get_iter(_PyRegTr *t, const _PyRegOp *src)
+{
+    int mode;
+    switch (src->oparg) {
+        case 0:
+            mode = ITER_ORDINARY;
+            break;
+        case GET_ITER_YIELD_FROM_NO_CHECK:
+            mode = ITER_DELEGATE_COROUTINE_OK;
+            break;
+        default:
+            assert(src->oparg == GET_ITER_YIELD_FROM_CORO_CHECK);
+            mode = ITER_DELEGATE_NO_COROUTINE;
+            break;
+    }
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == GET_ITER);
+    op->opcode = ROP_HANDLER_IterOpen_Generic;
+    op->oparg = mode;
+    return SUCCESS;
+}
+
+static int
+rule_for_iter(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == FOR_ITER);
+    op->opcode = ROP_HANDLER_ForIter_Generic;
+    return SUCCESS;
+}
+
+static int
+rule_pop_iter(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == POP_ITER);
+    op->opcode = ROP_HANDLER_IterClose_Retire;
+    return SUCCESS;
+}
+
 /* The jumps: the Jump family (Python/register_ops/truth.rop).  A backedge
  * that polls is the arm that the baseline JIT's setting selects: the one
  * that is also its warm-up event while the JIT is on. */
@@ -2434,6 +2483,9 @@ static const _PyRegRule rules[256] = {
     [POP_JUMP_IF_TRUE] = rule_branch,
     [POP_JUMP_IF_NONE] = rule_branch,
     [POP_JUMP_IF_NOT_NONE] = rule_branch,
+    [GET_ITER] = rule_get_iter,
+    [FOR_ITER] = rule_for_iter,
+    [POP_ITER] = rule_pop_iter,
     [JUMP_FORWARD] = rule_jump,
     [JUMP_BACKWARD] = rule_jump,
     [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,
@@ -3647,46 +3699,6 @@ window_base(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int *base)
     return SUCCESS;
 }
 
-/* GET_ITER's specialisations keep the iterable in its slot as the
- * iterator: its outputs go from its input's slot, which staging gives a
- * vacant place first where it has none. */
-static int
-in_place_dst(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int *dst)
-{
-    int nl = cfg->nlocalsplus;
-    const int *in = _PyReg_IN(cfg, op);
-    const int *out = _PyReg_OUT(cfg, op);
-    int required = -1;
-    for (int j = 0; j < op->nout; j++) {
-        if (_PyReg_IS_CANON(cfg, out[j])) {
-            required = _PyRegCfg_Slot(cfg, out[j]) - j;
-            break;
-        }
-    }
-    int s = in[0] >= nl ? _PyRegCfg_Slot(cfg, in[0]) : -1;
-    if (required >= 0) {
-        RETURN_IF_ERROR(evict(cfg, o, op, i, required, required + op->nout));
-    }
-    if (s >= nl && (required >= 0 ? s == required
-                    : window_vacant(cfg, o, op, i, s, op->nout)))
-    {
-        *dst = s;
-        return SUCCESS;
-    }
-    if (required >= 0) {
-        s = required;
-    }
-    else {
-        s = nl + o->top;
-        while (!window_vacant(cfg, o, op, i, s, op->nout)) {
-            s++;
-        }
-    }
-    RETURN_IF_ERROR(stage_input(cfg, o, op, i, 0, s));
-    *dst = s;
-    return SUCCESS;
-}
-
 /* A vacant slot below the top for the one new output of op i, or -1.  A
  * temporary that an op takes below others leaves its slot vacant (SWAP
  * reorders the stack and emits no word), and without reuse the next output
@@ -3822,18 +3834,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
     }
     else {
         int through = _PyRegOp_Through(op, fmt);
-        if (op->opcode == GET_ITER && op->dst < 0 && through == 0 &&
-            op->nread == 1 && op->npop == 1 && op->nout > 0 && out[0] >= nl)
-        {
-            int dst;
-            RETURN_IF_ERROR(in_place_dst(cfg, o, op, i, &dst));
-            in = _PyReg_IN(cfg, op);
-            out = _PyReg_OUT(cfg, op);
-            for (int j = 0; j < op->nout; j++) {
-                RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
-            }
-        }
-        else if (through < op->nout && out[through] >= nl) {
+        if (through < op->nout && out[through] >= nl) {
             int dst;
             int v0 = out[through];
             if (_PyReg_IS_CANON(cfg, v0)) {

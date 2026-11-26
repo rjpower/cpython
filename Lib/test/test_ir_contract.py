@@ -117,15 +117,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(transfer("Move.Retire", retire, 0, 1, 4), unknown)
 
         for_iter = (6, 4, 0, 1)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 4), set_null)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 5), set_null)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 0, 5), unknown)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 0, 7), unknown)
-        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 7), unknown)
-        self.assertEqual(transfer("FOR_ITER", (7, 4, 0, 1), 1, 1, 4), unknown)
-        self.assertEqual(transfer("FOR_ITER_RANGE", for_iter, 1, 1, 4), set_null)
-        self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 1, 4), set_null)
-        self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 0, 7), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 4), set_null)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 5), set_null)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 0, 5), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 0, 7), unknown)
+        self.assertEqual(transfer("ForIter.Generic", for_iter, 1, 1, 7), unknown)
+        self.assertEqual(transfer("ForIter.Generic", (7, 4, 0, 1), 1, 1, 4), unknown)
 
     def test_call_family(self):
         # Pin the finite family of calls: the words that name their operands
@@ -164,8 +161,7 @@ class ContractTests(unittest.TestCase):
                                              _opcode.IR_ROLE_IMM))
                 self.assertEqual(row.imm, _opcode.IR_LOC_D)
                 self.assertTrue(row.flags & _opcode.IR_FORWARD)
-        self.assertTrue({'SEND', 'SEND_GEN', 'FOR_ITER', 'FOR_ITER_GEN',
-                         'INSTRUMENTED_FOR_ITER'} <= selected)
+        self.assertTrue({'SEND', 'SEND_GEN'} <= selected)
 
     def test_no_result_publication_phase(self):
         # A handler stores its result in its place in the upstream order,
@@ -224,10 +220,7 @@ class ContractTests(unittest.TestCase):
         # (null_or_index of FOR_ITER and SEND), nor one that it replaces
         # with its result
         expected = {
-            "FOR_ITER": 1, "FOR_ITER_LIST": 1, "FOR_ITER_TUPLE": 1,
-            "FOR_ITER_VIRTUAL": 1, "INSTRUMENTED_FOR_ITER": 1, "SEND": 1,
-            "SEND_VIRTUAL": 1, "FOR_ITER_RANGE": 2, "FOR_ITER_GEN": 2,
-            "SEND_GEN": 2,
+            "SEND": 1, "SEND_VIRTUAL": 1, "SEND_GEN": 2,
         }
         for name, count in expected.items():
             for oparg in (2, 3, 7):
@@ -323,6 +316,8 @@ class ContractTests(unittest.TestCase):
                                  FEEDBACK[family])
         # Every family that has an entry has one in the generic form
         for family in FEEDBACK:
+            if family in ("FOR_ITER", "GET_ITER"):
+                continue  # arms, not in BY_NAME
             self.assertNotEqual(BY_NAME[family].fb, _opcode.IR_LOC_NONE)
         # The generic handlers that specialise from their entry
         self.assertEqual(
@@ -330,7 +325,8 @@ class ContractTests(unittest.TestCase):
              if CONTRACT[op] is not None
              and op not in opcode._ir_only_handlers
              and CONTRACT[op].effects & _opcode.IR_SPECIALIZES},
-            set(FEEDBACK))
+            # GET_ITER and FOR_ITER specialise again at step 3
+            set(FEEDBACK) - {"GET_ITER", "FOR_ITER"})
 
     def test_feedback_tables(self):
         # The assembler writes each entry's kind into the code object's
@@ -383,8 +379,6 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
             "INSTRUMENTED_YIELD_DELEGATED": {"PY_YIELD"},
             "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
-            "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
-            "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
             "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_RESUME": {"PY_START", "PY_RESUME"},
         }
@@ -481,7 +475,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
                                     "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
                                     "SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"})
-        for name in ("CALL_KW_PY", "SEND", "SEND_GEN", "FOR_ITER_GEN"):
+        for name in ("CALL_KW_PY", "SEND", "SEND_GEN"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
                             name)
         for name in ("LOAD_COMMON_CONSTANT",):
@@ -781,8 +775,8 @@ class SourceScanTests(unittest.TestCase):
             if name in ops or name in macros:
                 result[h] = _scan_stack(ops, macros, name)
         names = {opcode.opname[h] for h in result}
-        self.assertLessEqual({"FOR_ITER", "FOR_ITER_RANGE", "SEND"}, names)
-        self.assertGreater(len(result), 100)
+        self.assertLessEqual({"SEND"}, names)
+        self.assertGreater(len(result), 90)
         return result
 
     def test_through(self):

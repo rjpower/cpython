@@ -555,7 +555,7 @@ class RecordTests(unittest.TestCase):
 
     def test_annotated_uops_have_leaf_ir(self):
         annotated = {name for name, uop in self.uops.items() if "leaf" in uop.annotations}
-        self.assertGreater(len(annotated), 30)
+        self.assertGreater(len(annotated), 20)
         for uop in self.record_uops():
             if uop.name in annotated:
                 self.assertIsNotNone(uop.leaf, uop.name)
@@ -676,11 +676,6 @@ HANDLERS = {
     **{name: (float_domain, None, [0]) for name in (
         "BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
         "BINARY_OP_TRUEDIV_FLOAT")},
-    "FOR_ITER_LIST": (lambda: iterator_domain(lambda: [(l, len(l)) for l in LISTS]), None, [0]),
-    "FOR_ITER_TUPLE": (lambda: iterator_domain(lambda: [(t, len(t)) for t in TUPLES]), None, [0]),
-    "FOR_ITER_RANGE": (lambda: [(word(it), 0) for it in
-                                (iter(range(3)), iter(range(5, -2, -2)), iter(range(0)))]
-                       + [(word(it), 0) for it in (iter([1]),)], None, [0]),
     "STORE_ATTR_SHAPE": (store_domain, store_caches, [0]),
 }
 

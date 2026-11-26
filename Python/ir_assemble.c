@@ -361,6 +361,10 @@ assemble_pcmap(struct assembler *a, _PyRegCfg *cfg)
 
 /* Words: choosing handlers, feedback entries, layout and encoding */
 
+/* The loop word of a for statement: the ForIter arm that the translator
+ * emits, before any specialization chooses another */
+#define IS_FOR_ITER(op) ((op)->opcode == ROP_HANDLER_ForIter_Generic)
+
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
 int _PyIR_MaxForward = IR_MAX_FORWARD;
 
@@ -833,9 +837,9 @@ lower_completions(_PyRegCfg *cfg)
 {
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
-        if (op->opcode == FOR_ITER || op->opcode == SEND) {
+        if (IS_FOR_ITER(op) || op->opcode == SEND) {
             int target = next_frontend_op(cfg, cfg->blocks[op->target].start, 0);
-            int expected = op->opcode == FOR_ITER ? END_FOR : END_SEND;
+            int expected = IS_FOR_ITER(op) ? END_FOR : END_SEND;
             if (target < 0 || cfg->ops[target].opcode != expected || op->nout != 3) {
                 return completion_error(cfg, op, "missing completion producer/target");
             }
@@ -847,9 +851,9 @@ lower_completions(_PyRegCfg *cfg)
             }
             end->flags |= _PyReg_COMPLETED;
             op->completion = target + 1;
-            if (op->opcode == FOR_ITER) {
+            if (IS_FOR_ITER(op)) {
                 int pop = next_frontend_op(cfg, target + 1, 0);
-                if (pop < 0 || cfg->ops[pop].opcode != POP_ITER ||
+                if (pop < 0 || cfg->ops[pop].opcode != ROP_HANDLER_IterClose_Retire ||
                     cfg->ops[pop].nread != 2 ||
                     memcmp(_PyReg_IN(cfg, &cfg->ops[pop]),
                            _PyReg_OUT(cfg, op), 2 * sizeof(int)))
@@ -936,7 +940,7 @@ lower_completions(_PyRegCfg *cfg)
         }
         _PyRegSlots slots;
         _PyRegCfg_OpSlots(cfg, op, &slots);
-        int count = op->opcode == FOR_ITER ? 2 : op->opcode == SEND ? 3 : 4;
+        int count = IS_FOR_ITER(op) ? 2 : op->opcode == SEND ? 3 : 4;
         int limit = cfg->nlocalsplus + cfg->ntemps;
         if (slots.base < cfg->nlocalsplus || slots.base > limit - count) {
             return completion_error(cfg, op, "physical completion window is outside frame");
@@ -950,7 +954,7 @@ lower_completions(_PyRegCfg *cfg)
          * retired home before redefining it. A preserved exception prefix may
          * contain dead implicit unwind anchors, as in generator wrappers. */
         int dst = slots.out[0];
-        if (op->opcode != FOR_ITER) {
+        if (!IS_FOR_ITER(op)) {
             _PyRegSlots completed;
             _PyRegCfg_OpSlots(cfg, &cfg->ops[op->completion - 1], &completed);
             dst = completed.out[0];
@@ -959,7 +963,7 @@ lower_completions(_PyRegCfg *cfg)
             (dst < 0 || dst >= limit ||
              (dst >= cfg->nlocalsplus && dst < handler_base &&
               (dst < slots.base || dst >= slots.base + count)) ||
-             (op->opcode == FOR_ITER && dst >= slots.base && dst < slots.base + 2)))
+             (IS_FOR_ITER(op) && dst >= slots.base && dst < slots.base + 2)))
         {
             return completion_error(cfg, op, "completion destination aliases a live owner");
         }
@@ -1155,12 +1159,12 @@ layout(struct assembler *a, _PyRegCfg *cfg)
                 }
                 continue;
             }
-            if ((op->opcode != FOR_ITER && op->opcode != SEND) || op->nwords > 1) {
+            if ((!IS_FOR_ITER(op) && op->opcode != SEND) || op->nwords > 1) {
                 continue;
             }
             int distance = jump_target(cfg, op) - (op->word + 1);
             if (distance > _PyIR_MaxForward) {
-                op->nwords = op->opcode == FOR_ITER
+                op->nwords = IS_FOR_ITER(op)
                     ? RELAXED_FOR_ITER_WORDS : RELAXED_SEND_WORDS;
                 changed = 1;
             }
@@ -1382,7 +1386,7 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             }
             else if (op->nwords > 1) {
                 int exit = jump_target(cfg, op);
-                if (op->opcode == FOR_ITER) {
+                if (IS_FOR_ITER(op)) {
                     words[w + 1] = jump_word(w + RELAXED_FOR_ITER_WORDS);
                     words[w + 2] = jump_word(exit);
                 }

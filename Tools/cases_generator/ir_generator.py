@@ -1282,7 +1282,10 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
               "COMPARE_OP", "IS_OP", "CONTAINS_OP",
               "DICT_UPDATE", "DICT_MERGE", "STORE_SUBSCR", "DELETE_SUBSCR",
-              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE")
+              "BINARY_SLICE", "STORE_SLICE", "BUILD_SLICE",
+              "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER",
+              "INSTRUMENTED_FOR_ITER", "INSTRUMENTED_END_FOR",
+              "INSTRUMENTED_POP_ITER")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -1300,10 +1303,31 @@ def ir_only_handler_names(analysis: Analysis) -> list[str]:
             + sorted(generator_boundaries(analysis)))
 
 
-def ir_only_numbers(analysis: Analysis, count: int) -> list[int]:
-    "The numbers of the first count IR-only handlers"
-    wide = max(0, count - len(analysis.free_ids))
-    return [*analysis.free_ids[:count], *range(256, 256 + wide)]
+def ir_only_numbers(analysis: Analysis, names: list[str]) -> list[int]:
+    """The numbers of the IR-only handlers, in order.  They take the free
+    numbers below 256 and continue from 256.  The handlers of BINARY_OP are
+    one run of consecutive numbers (_PyIR_BINARY_OP_FIRST + operation), so
+    the free numbers that are left short of such a run stay unused."""
+    free = list(analysis.free_ids)
+    wide = 256
+    binary = binary_op_handlers(analysis)
+    first = names.index(binary[0]) if binary else -1
+    numbers: list[int] = []
+    for i, name in enumerate(names):
+        if i == first:
+            while free and not run_fits(free, len(binary)):
+                free.pop(0)
+        if free:
+            numbers.append(free.pop(0))
+        else:
+            numbers.append(wide)
+            wide += 1
+    return numbers
+
+
+def run_fits(free: list[int], count: int) -> bool:
+    "Whether the first count free numbers are consecutive"
+    return len(free) >= count and free[count - 1] - free[0] == count - 1
 
 
 def handler_ids(analysis: Analysis) -> dict[str, int]:
@@ -1315,7 +1339,7 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
     names = ir_only_handler_names(analysis)
-    for number, name in zip(ir_only_numbers(analysis, len(names)), names):
+    for number, name in zip(ir_only_numbers(analysis, names), names):
         ids[name] = number
     return ids
 
@@ -9157,7 +9181,8 @@ def num_old_handlers(analysis: Analysis) -> int:
     """The arms start here.  The IR-only handlers fill the free numbers below
     256 and continue from 256, so the arms' range stays contiguous.  If they
     do not fill the free numbers, the rest stay unused."""
-    return 256 + max(0, len(ir_only_handler_names(analysis)) - len(analysis.free_ids))
+    names = ir_only_handler_names(analysis)
+    return max([256, *(n + 1 for n in ir_only_numbers(analysis, names))])
 
 
 def num_handlers(analysis: Analysis, arms: Sequence[ir_arms.ArmEntry]) -> int:

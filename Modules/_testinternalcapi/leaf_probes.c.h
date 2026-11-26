@@ -415,21 +415,6 @@ leaf_probe__CHECK_FUNCTION_VERSION_KW(_PyInterpreterFrame *frame, PyValue *stack
 }
 
 static int
-leaf_probe__END_FOR(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue value;
-    value = stack_pointer[-1];
-    stack_pointer += -1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    PyValue_CLOSE(value);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__END_SEND(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -639,210 +624,6 @@ leaf_probe__IR_JUMP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int opar
 }
 
 static int
-leaf_probe__ITER_CHECK_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index;
-    iter = stack_pointer[-2];
-    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-    if (!PyList_CheckExact(iter_o)) {
-        return LEAF_PROBE_EXIT;
-    }
-    #ifdef Py_GIL_DISABLED
-    if (!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o)) {
-        return LEAF_PROBE_EXIT;
-    }
-    #endif
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__ITER_CHECK_RANGE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index;
-    iter = stack_pointer[-2];
-    _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
-    if (Py_TYPE(r) != &PyRangeIter_Type) {
-        return LEAF_PROBE_EXIT;
-    }
-    #ifdef Py_GIL_DISABLED
-    if (!_PyObject_IsUniquelyReferenced((PyObject *)r)) {
-        return LEAF_PROBE_EXIT;
-    }
-    #endif
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__ITER_CHECK_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index;
-    iter = stack_pointer[-2];
-    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-    if (!PyTuple_CheckExact(iter_o)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__ITER_JUMP_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, index, next_index;
-    index = stack_pointer[-1];
-    iter = stack_pointer[-2];
-    #ifdef Py_GIL_DISABLED
-
-    #else
-    PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-    STAT_INC(FOR_ITER, hit);
-    if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyList_GET_SIZE(list_o)) {
-        next_index = PyValue_TagIndex(-1);
-        PyValue completed = PyValue_None;
-        stack_pointer[-1] = next_index;
-        result->completed = completed;
-return LEAF_PROBE_COMPLETE;
-    }
-    #endif
-    next_index = index;
-    stack_pointer[-1] = next_index;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__ITER_JUMP_RANGE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index;
-    iter = stack_pointer[-2];
-    _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
-    #ifdef Py_GIL_DISABLED
-
-    #endif
-    STAT_INC(FOR_ITER, hit);
-    if (r->len <= 0) {
-        PyValue completed = PyValue_None;
-        result->completed = completed;
-return LEAF_PROBE_COMPLETE;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__ITER_JUMP_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, index, next_index;
-    index = stack_pointer[-1];
-    iter = stack_pointer[-2];
-    PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
-    (void)tuple_o;
-    STAT_INC(FOR_ITER, hit);
-    if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-        next_index = PyValue_TagIndex(-1);
-        PyValue completed = PyValue_None;
-        stack_pointer[-1] = next_index;
-        result->completed = completed;
-return LEAF_PROBE_COMPLETE;
-    }
-    next_index = index;
-    stack_pointer[-1] = next_index;
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__ITER_NEXT_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, index, next_index, next;
-    index = stack_pointer[-1];
-    iter = stack_pointer[-2];
-    PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-    PyValueBorrow item = _PyValue_PublishedItem(
-        PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
-    next = PyValue_DUP(item);
-    next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
-    stack_pointer[-1] = next_index;
-    stack_pointer[0] = next;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__ITER_NEXT_RANGE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index, next;
-    iter = stack_pointer[-2];
-    _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
-    #ifdef Py_GIL_DISABLED
-
-    #endif
-
-    long value = r->start;
-    r->start = value + r->step;
-    r->len--;
-    next = PyValue_FromInt64(value);
-    if (PyValue_IsNull(next)) {
-        return LEAF_PROBE_RAISE;
-    }
-    stack_pointer[0] = next;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__ITER_NEXT_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, index, next_index, next;
-    index = stack_pointer[-1];
-    iter = stack_pointer[-2];
-    PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
-    uintptr_t i = PyValue_UntagIndex(index);
-    PyValueBorrow item = _PyValue_PublishedItem(PyTuple_GET_VALUE(tuple_o, i));
-    next = PyValue_DUP(item);
-    next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
-    stack_pointer[-1] = next_index;
-    stack_pointer[0] = next;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__LOCK_OBJECT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -894,23 +675,6 @@ leaf_probe__NULL_SLOT_CONDITIONAL(_PyInterpreterFrame *frame, PyValue *stack_poi
 }
 
 static int
-leaf_probe__POP_ITER(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, index_or_null;
-    index_or_null = stack_pointer[-1];
-    iter = stack_pointer[-2];
-    (void)index_or_null;
-    stack_pointer += -2;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    PyValue_CLOSE(iter);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__POP_TOP_ANY(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -949,36 +713,6 @@ leaf_probe__POP_TOP_NUMBER(_PyInterpreterFrame *frame, PyValue *stack_pointer, i
     PyValue value;
     value = stack_pointer[-1];
     stack_pointer += -1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__PUSH_NULL(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue res;
-    res = PyValue_NULL;
-    stack_pointer[0] = res;
-    stack_pointer += 1;
-    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__PUSH_TAGGED_ZERO(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue zero;
-    zero = PyValue_TagIndex(0);
-    stack_pointer[0] = zero;
-    stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
     result->stack_pointer = stack_pointer;
     return LEAF_PROBE_NEXT;
@@ -1105,7 +839,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_BINARY_OP_TRUEDIV_FLOAT", leaf_probe__BINARY_OP_TRUEDIV_FLOAT, 2},
     {"_BINARY_OP_XOR_INT", leaf_probe__BINARY_OP_XOR_INT, 2},
     {"_CHECK_FUNCTION_VERSION_KW", leaf_probe__CHECK_FUNCTION_VERSION_KW, 3},
-    {"_END_FOR", leaf_probe__END_FOR, 1},
     {"_END_SEND", leaf_probe__END_SEND, 3},
     {"_GUARD_NOS_INT", leaf_probe__GUARD_NOS_INT, 2},
     {"_GUARD_NOS_NOT_NULL", leaf_probe__GUARD_NOS_NOT_NULL, 2},
@@ -1119,25 +852,13 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_GUARD_TYPE_VERSION", leaf_probe__GUARD_TYPE_VERSION, 1},
     {"_GUARD_TYPE_VERSION_LOCKED", leaf_probe__GUARD_TYPE_VERSION_LOCKED, 1},
     {"_IR_JUMP", leaf_probe__IR_JUMP, 0},
-    {"_ITER_CHECK_LIST", leaf_probe__ITER_CHECK_LIST, 2},
-    {"_ITER_CHECK_RANGE", leaf_probe__ITER_CHECK_RANGE, 2},
-    {"_ITER_CHECK_TUPLE", leaf_probe__ITER_CHECK_TUPLE, 2},
-    {"_ITER_JUMP_LIST", leaf_probe__ITER_JUMP_LIST, 2},
-    {"_ITER_JUMP_RANGE", leaf_probe__ITER_JUMP_RANGE, 2},
-    {"_ITER_JUMP_TUPLE", leaf_probe__ITER_JUMP_TUPLE, 2},
-    {"_ITER_NEXT_LIST", leaf_probe__ITER_NEXT_LIST, 2},
-    {"_ITER_NEXT_RANGE", leaf_probe__ITER_NEXT_RANGE, 2},
-    {"_ITER_NEXT_TUPLE", leaf_probe__ITER_NEXT_TUPLE, 2},
     {"_LOCK_OBJECT", leaf_probe__LOCK_OBJECT, 1},
     {"_MAKE_HEAP_SAFE", leaf_probe__MAKE_HEAP_SAFE, 1},
     {"_NOP", leaf_probe__NOP, 0},
     {"_NULL_SLOT_CONDITIONAL", leaf_probe__NULL_SLOT_CONDITIONAL, 0},
-    {"_POP_ITER", leaf_probe__POP_ITER, 2},
     {"_POP_TOP_ANY", leaf_probe__POP_TOP_ANY, 1},
     {"_POP_TOP_INT", leaf_probe__POP_TOP_INT, 1},
     {"_POP_TOP_NUMBER", leaf_probe__POP_TOP_NUMBER, 1},
-    {"_PUSH_NULL", leaf_probe__PUSH_NULL, 0},
-    {"_PUSH_TAGGED_ZERO", leaf_probe__PUSH_TAGGED_ZERO, 0},
     {"_RESUME_CHECK", leaf_probe__RESUME_CHECK, 0},
     {"_STORE_ATTR_SHAPE", leaf_probe__STORE_ATTR_SHAPE, 2},
     {"_STORE_ATTR_SHAPE_ADD", leaf_probe__STORE_ATTR_SHAPE_ADD, 2},

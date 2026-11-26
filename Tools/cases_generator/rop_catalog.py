@@ -228,6 +228,8 @@ FB_LAYOUT: dict[Schema, CLayout] = {
     # versions that it records
     Schema.Item: CLayout("_PyFbBinary", {
         "kind": _NONE, "type_version": _NONE, "func_version": _NONE}),
+    Schema.Iter: CLayout("_PyFbUnary", {
+        "kind": _NONE, "type_version": _NONE, "func_version": _NONE}),
     Schema.Call: CLayout("_PyFbCall", {
         "kind": _NONE, "func_version": CField("func_version", _U32),
         "type_version": CField("type_version", _U32),
@@ -783,6 +785,13 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("status_optional", CReturn.status_value,
           COutcome(CTest.positive, _RES, (_VAL,), False),
           COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # A loop step as _PyStatusValue: positive an item, its value the first
+    # payload and the next cursor written through the last parameter; zero
+    # the end, its value the payload; negative raised
+    _conv("step_out", CReturn.status_value,
+          COutcome(CTest.positive, _RES, (_VAL, CSource.out), False),
+          COutcome(CTest.zero, _RES, (_VAL,), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,

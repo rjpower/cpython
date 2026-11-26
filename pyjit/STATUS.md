@@ -136,7 +136,7 @@ executes 2.05 times golden87's instructions at an IPC of 2.06 against 3.08;
 `ir_evaluate` takes 60% of its time and out-of-line routines most of the
 rest.
 
-IP's [diagnosis](../../python-boil-the-ocean/build/pyjit-link-wave1/register-semantics59/rir90/ip/diagnosis.md)
+IP's [diagnosis](issues/register-semantics59/rir90-interp-diagnosis.md)
 (1.563 of golden87's cycles, 1.407 of its instructions): rir90 executes as
 many words as golden87 or fewer, with the same dispatch, so the excess is
 in the handler bodies.  The causes, by expected gain:

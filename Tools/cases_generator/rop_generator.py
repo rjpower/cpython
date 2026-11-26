@@ -797,7 +797,9 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("\n/* The translator's CFG holds stack opcodes below 256 in its ops, so an op\n"
               " * that names an arm is tagged: ROP_OP_<arm> is ROP_CFG_BASE plus the arm's\n"
               " * handler offset, and ROP_CFG_HANDLER() takes it back to the handler id */\n")
-    out.write("#define ROP_CFG_BASE 512\n")
+    out.write("#define ROP_CFG_BASE 1024\n")
+    out.write("static_assert(ROP_CFG_BASE >= IR_HANDLER_ONLY_BASE(IR_NUM_HANDLERS),\n"
+              "              \"CFG arm numbers overlap handler-only bases\");\n")
     out.write("#define ROP_CFG_IS_ARM(op) ((op) >= ROP_CFG_BASE)\n")
     out.write("#define ROP_CFG_HANDLER(op) ((op) - ROP_CFG_BASE + ROP_FIRST_HANDLER)\n")
     for name in prog.arms:

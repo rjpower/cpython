@@ -849,7 +849,7 @@ ir_run_CACHE(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(CACHE);
+            INSTRUCTION_STATS(opcode);
             assert(0 && "Executing a cache.");
             Py_FatalError("Executing a cache.");
             DISPATCH();
@@ -867,7 +867,7 @@ ir_run_CLEANUP_THROW(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(CLEANUP_THROW);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -905,7 +905,7 @@ ir_run_COPY_FREE_VARS(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(COPY_FREE_VARS);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             (void)oparg;
@@ -926,7 +926,7 @@ ir_run_DELETE_DEREF(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(DELETE_DEREF);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
@@ -951,7 +951,7 @@ ir_run_END_ASYNC_FOR(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(END_ASYNC_FOR);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -1001,7 +1001,7 @@ ir_run_INSTRUMENTED_END_ASYNC_FOR(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_END_ASYNC_FOR);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -1059,7 +1059,7 @@ ir_run_INSTRUMENTED_INSTRUCTION(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_INSTRUCTION);
+            INSTRUCTION_STATS(opcode);
             opcode = IR_H_INSTRUMENTED_INSTRUCTION;
             int next_opcode = _Py_call_instrumentation_instruction(
                 tstate, frame, this_instr);
@@ -1088,7 +1088,7 @@ ir_run_INSTRUMENTED_LINE(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_LINE);
+            INSTRUCTION_STATS(opcode);
             opcode = IR_H_INSTRUMENTED_LINE;
             int original_opcode = 0;
             if (tstate->tracing) {
@@ -1128,7 +1128,7 @@ ir_run_IR_JUMP(
             (void)this_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(IR_JUMP);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             JUMPTO(oparg);
@@ -1146,7 +1146,7 @@ ir_run_IR_OPERANDS(
             (void)this_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(IR_OPERANDS);
+            INSTRUCTION_STATS(opcode);
             assert(0 && "Executing operand words.");
             Py_FatalError("Executing operand words.");
             DISPATCH();
@@ -1164,7 +1164,7 @@ ir_run_LOAD_COMMON_CONSTANT(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -1191,7 +1191,7 @@ ir_run_LOAD_DEREF(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_DEREF);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -1221,7 +1221,7 @@ ir_run_LOAD_FROM_DICT_OR_DEREF(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -1259,7 +1259,7 @@ ir_run_MAKE_CELL(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(MAKE_CELL);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
@@ -1283,7 +1283,7 @@ ir_run_NOP(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(NOP);
+            INSTRUCTION_STATS(opcode);
             DISPATCH();
         }
 
@@ -1299,7 +1299,7 @@ ir_run_RESERVED(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(RESERVED);
+            INSTRUCTION_STATS(opcode);
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
             DISPATCH();
@@ -1317,7 +1317,7 @@ ir_run_STORE_DEREF(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(STORE_DEREF);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue v;
@@ -1345,7 +1345,7 @@ ir_run_STORE_FAST(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(STORE_FAST);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
@@ -1379,7 +1379,7 @@ ir_run_WITH_EXCEPT_START(
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(WITH_EXCEPT_START);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -1985,7 +1985,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(CACHE);
+            INSTRUCTION_STATS(opcode);
             assert(0 && "Executing a cache.");
             Py_FatalError("Executing a cache.");
             DISPATCH();
@@ -1999,7 +1999,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(CLEANUP_THROW);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -2033,7 +2033,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(COPY_FREE_VARS);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             (void)oparg;
@@ -2050,7 +2050,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(DELETE_DEREF);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
@@ -2074,7 +2074,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_END_ASYNC_FOR);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_CD(ir_word);
@@ -2128,7 +2128,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_INSTRUCTION);
+            INSTRUCTION_STATS(opcode);
             opcode = IR_H_INSTRUMENTED_INSTRUCTION;
             int next_opcode = _Py_call_instrumentation_instruction(
                 tstate, frame, this_instr);
@@ -2153,7 +2153,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_LINE);
+            INSTRUCTION_STATS(opcode);
             opcode = IR_H_INSTRUMENTED_LINE;
             int original_opcode = 0;
             if (tstate->tracing) {
@@ -2189,7 +2189,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)this_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(IR_JUMP);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             JUMPTO(oparg);
@@ -2203,7 +2203,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)this_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(IR_OPERANDS);
+            INSTRUCTION_STATS(opcode);
             assert(0 && "Executing operand words.");
             Py_FatalError("Executing operand words.");
             DISPATCH();
@@ -2217,7 +2217,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -2240,7 +2240,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_DEREF);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_B(ir_word);
@@ -2266,7 +2266,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -2300,7 +2300,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(MAKE_CELL);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
@@ -2320,7 +2320,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(NOP);
+            INSTRUCTION_STATS(opcode);
             DISPATCH();
         }
 
@@ -2332,7 +2332,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(RESERVED);
+            INSTRUCTION_STATS(opcode);
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
             DISPATCH();
@@ -2346,7 +2346,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(STORE_DEREF);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue v;
@@ -2370,7 +2370,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(STORE_FAST);
+            INSTRUCTION_STATS(opcode);
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;

@@ -3703,7 +3703,7 @@ class IREmitter(Emitter):
         self.emit("if (!PyValue_IsNull(ir_leaf_result)) {\n")
         self.emit("PyValue ir_leaf_dict = IR_DETACH(ir_word, B, dict_st);\n")
         self.emit("PyValue ir_leaf_key = IR_DETACH(ir_word, C, sub_st);\n")
-        self.emit("STAT_INC(BINARY_OP, hit);\n")
+        self.emit("FAMILY_STAT_INC(BINARY_OP, hit);\n")
         self.emit("IR_STORE_DST(ir_word, A, ir_leaf_result);\n")
         self.emit("PyValue_XCLOSE(ir_leaf_key);\n")
         self.emit("PyValue_XCLOSE(ir_leaf_dict);\n")
@@ -6347,7 +6347,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     # A call is a head and its operand words
     out.emit("next_instr += IR_CALL_LENGTH(ir_word);\n" if fmt.operands != "_PyIR_OPERANDS_NONE"
              else "next_instr += 1;\n")
-    out.emit(f"INSTRUCTION_STATS({handler_id});\n")
+    out.emit("INSTRUCTION_STATS(opcode);\n")
     if is_target:
         qualifier = "" if transaction or emitter.result_publication is not None or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         back = ("IR_CALL_LENGTH(ir_word)" if fmt.operands != "_PyIR_OPERANDS_NONE"

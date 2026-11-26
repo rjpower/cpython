@@ -163,7 +163,11 @@ class ContractTests(unittest.TestCase):
         for name in names_with(_opcode.IR_JUMP_ALWAYS, "flags"):
             self.assertTrue(BY_NAME[name].flags
                             & (_opcode.IR_JUMPS | _opcode.IR_FORWARD), name)
-            self.assertNotEqual(name.split(".")[0], "ForIter")
+            # ForIter.Gen has no next or branch exit of its own: the generator
+            # it enters returns to the body through the frame's return_pc,
+            # as Send.Gen's does
+            if not name.startswith("ForIter.Gen"):
+                self.assertNotEqual(name.split(".")[0], "ForIter")
 
     def test_feedback(self):
         kinds = dis._FEEDBACK_KINDS

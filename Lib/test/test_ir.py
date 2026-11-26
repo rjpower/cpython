@@ -1704,7 +1704,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(caller(target), (1, (2,), {}))
         if SPECIALIZES:
-            self.assertIn("Call.Generic+NO_SELF", handlers(caller))
+            self.assertIn("Call.PyGeneral+NO_SELF", handlers(caller))
         def replacement(a=5, *args, **kwargs):
             return ("new", a, args, kwargs)
         target.__code__ = replacement.__code__
@@ -1731,7 +1731,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(caller(target), (1, (2,), {}))
         if SPECIALIZES:
-            self.assertIn("Call.Generic+NO_SELF", handlers(caller))
+            self.assertIn("Call.PyGeneral+NO_SELF", handlers(caller))
         testcapi.function_set_test_vectorcall(target)
         self.assertEqual(caller(target), "custom vectorcall")
 
@@ -1743,7 +1743,7 @@ class GuardedPythonCallTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             caller(target)
         if SPECIALIZES:
-            self.assertIn("Call.Generic+NO_SELF", handlers(caller))
+            self.assertIn("Call.PyGeneral+NO_SELF", handlers(caller))
         events = []
         mon = sys.monitoring
         tool = mon.DEBUGGER_ID

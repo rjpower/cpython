@@ -47,7 +47,7 @@ class TestDefaultsAndKeywords(PlanTestCase):
             return f(x)
         call = reset_code(call)
         self.assertEqual(warm(call, 0), (0, 1, 2))
-        self.assertIn("Call.Generic", handlers(call))
+        self.assertIn("Call.PyGeneral", handlers(call))
 
     def test_keywords_use_the_plan(self):
         def f(x, a=1, b=2):

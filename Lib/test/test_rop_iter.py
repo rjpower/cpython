@@ -375,7 +375,8 @@ ARMS = {
     "str": (lambda: "abc", "IterOpen.Indexed", "ForIter.Indexed"),
     "iterator": (lambda: iter([1, 2, 3]), "IterOpen.Self", "ForIter.Slot"),
     "user": (lambda: User(3), "IterOpen.Generic", "ForIter.Slot"),
-    "generator method": (lambda: Counting(3), "IterOpen.GenMethod", "ForIter.Slot"),
+    "generator method": (lambda: Counting(3), "IterOpen.GenMethod", "ForIter.Gen"),
+    "generator": (lambda: (i for i in range(3)), "IterOpen.Self", "ForIter.Gen"),
 }
 
 
@@ -441,6 +442,189 @@ class SpecializedTests(unittest.TestCase):
                 items.append(4)
         self.assertEqual(seen, [1, 2, 3, 4])
         self.assertEqual(f(items), [1, 2, 3, 4])
+
+
+def warm_generator_loop(f, n=100):
+    for _ in range(n):
+        f(i for i in range(3))
+
+
+class GeneratorStepTests(unittest.TestCase):
+    """ForIter.Gen enters the generator's frame in the loop's activation, and
+    ForIter.Complete runs when the generator returns"""
+
+    @cpython_only
+    @requires_specialization
+    def test_a_warm_loop_enters_the_generator_in_place(self):
+        import _testinternalcapi
+        f = fresh_loop()
+        warm_generator_loop(f)
+        words = [w[0] for w in _testinternalcapi.get_ir(f.__code__, True)]
+        self.assertIn("ForIter.Gen", words)
+
+    def test_items_and_a_return_value(self):
+        def gen(n):
+            for i in range(n):
+                yield i
+            return "dropped"
+
+        def collect(n):
+            seen = []
+            for x in gen(n):
+                seen.append(x)
+            return seen
+
+        for _ in range(100):
+            self.assertEqual(collect(3), [0, 1, 2])
+        self.assertEqual(collect(0), [])
+
+    def test_an_exception_of_the_generator_propagates(self):
+        def gen():
+            yield 1
+            raise KeyError("boom")
+
+        def run():
+            seen = []
+            for x in gen():
+                seen.append(x)
+            return seen
+
+        for _ in range(100):
+            with self.assertRaises(KeyError):
+                run()
+
+    def test_break_leaves_a_suspended_generator_that_the_loop_closes(self):
+        log = []
+
+        def gen():
+            try:
+                yield 1
+                yield 2
+            finally:
+                log.append("closed")
+
+        def run():
+            for x in gen():
+                break
+            return x
+
+        for _ in range(100):
+            log.clear()
+            self.assertEqual(run(), 1)
+            self.assertEqual(log, ["closed"])
+
+    def test_a_generator_that_is_running_cannot_be_iterated(self):
+        def gen():
+            for x in me:
+                yield x
+
+        for _ in range(100):
+            me = gen()
+            with self.assertRaisesRegex(ValueError, "already executing"):
+                for _ in me:
+                    pass
+
+    def test_a_generator_shared_by_two_loops(self):
+        def run(g):
+            first = []
+            for x in g:
+                first.append(x)
+                if x == 1:
+                    break
+            rest = []
+            for x in g:
+                rest.append(x)
+            return first, rest
+
+        for _ in range(100):
+            self.assertEqual(run(i for i in range(4)), ([0, 1], [2, 3]))
+
+    def test_nested_generators(self):
+        def inner(n):
+            for i in range(n):
+                yield i
+
+        def outer(n):
+            for i in range(n):
+                for j in inner(i):
+                    yield (i, j)
+
+        def run():
+            return list(outer(3))
+
+        for _ in range(100):
+            self.assertEqual(run(), [(1, 0), (2, 0), (2, 1)])
+
+    def test_a_site_that_changes_from_a_generator_to_a_list(self):
+        f = fresh_loop()
+        for _ in range(100):
+            self.assertEqual(f(i for i in range(3)), [0, 1, 2])
+        self.assertEqual(f([4, 5]), [4, 5])
+        self.assertEqual(f(i for i in range(2)), [0, 1])
+
+    def test_the_stop_iteration_event_after_a_warm_loop_is_observed(self):
+        events = sys.monitoring.events
+        tool = sys.monitoring.PROFILER_ID
+        seen = []
+
+        def gen():
+            yield 1
+            return "value"
+
+        def loop():
+            for _ in gen():
+                pass
+
+        for _ in range(100):
+            loop()
+
+        def on_stop(code, offset, exception):
+            if code.co_name == "loop":
+                seen.append(exception.value)
+
+        sys.monitoring.use_tool_id(tool, "test_rop_iter")
+        try:
+            sys.monitoring.register_callback(tool, events.STOP_ITERATION, on_stop)
+            sys.monitoring.set_events(tool, events.STOP_ITERATION)
+            loop()
+        finally:
+            sys.monitoring.set_events(tool, 0)
+            sys.monitoring.free_tool_id(tool)
+        self.assertEqual(seen, ["value"])
+
+    def test_monitoring_that_starts_while_the_generator_runs(self):
+        events = sys.monitoring.events
+        tool = sys.monitoring.PROFILER_ID
+        seen = []
+        armed = []
+
+        def gen():
+            yield 1
+            if armed:
+                sys.monitoring.set_events(tool, events.STOP_ITERATION)
+            yield 2
+            return "value"
+
+        def loop():
+            for _ in gen():
+                pass
+
+        for _ in range(100):
+            loop()
+
+        def on_stop(code, offset, exception):
+            if code.co_name == "loop":
+                seen.append(exception.value)
+
+        sys.monitoring.use_tool_id(tool, "test_rop_iter")
+        try:
+            sys.monitoring.register_callback(tool, events.STOP_ITERATION, on_stop)
+            armed.append(True)
+            loop()
+        finally:
+            sys.monitoring.set_events(tool, 0)
+            sys.monitoring.free_tool_id(tool)
+        self.assertEqual(seen, ["value"])
 
 
 if __name__ == "__main__":

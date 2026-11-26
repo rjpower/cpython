@@ -1797,6 +1797,63 @@ _PyRop_GeneratorReceiver(PyValueBorrow receiver)
     return type == &PyGen_Type || type == &PyCoro_Type;
 }
 
+/* The rows of ForIter.Gen (Python/register_ops/iteration.rop): the guards of
+ * the old _FOR_ITER_GEN_FRAME.  The answer of the first can be stale on the
+ * free-threaded build: the claim in the second decides. */
+static inline bool
+_PyRop_ExactGeneratorIter(PyValueBorrow receiver)
+{
+    return PyValue_IsObject(receiver) &&
+        _PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) &&
+        Py_TYPE(PyValue_AsKnownObjectBorrow(receiver)) == &PyGen_Type;
+}
+
+static inline bool
+_PyRop_ClaimableForGenerator(PyThreadState *tstate, PyValueBorrow receiver)
+{
+    if (IS_PEP523_HOOKED(tstate) || !PyValue_IsObject(receiver)) {
+        return false;
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
+    return Py_TYPE(object) == &PyGen_Type && gen_may_claim((PyGenObject *)object);
+}
+
+/* ForIter.Generic's claim: the guards of the old _FOR_ITER_GEN_FRAME, with
+ * the claim of gen_try_set_executing.  A generator that is running, or that
+ * another thread holds, is stepped. */
+static inline bool
+_PyRop_ClaimForGenerator(PyThreadState *tstate, PyValueBorrow receiver)
+{
+    if (IS_PEP523_HOOKED(tstate) || !PyValue_IsObject(receiver)) {
+        return false;
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
+    return Py_TYPE(object) == &PyGen_Type &&
+        gen_try_set_executing((PyGenObject *)object);
+}
+
+static inline _PyInterpreterFrame *
+_PyRop_EnterForClaimed(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       PyValueBorrow receiver)
+{
+    PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+    return _PyRop_LinkGenerator(tstate, frame, gen, PyValue_None);
+}
+
+/* Claim the generator that _PyRop_ClaimableForGenerator accepted and link its
+ * frame under frame, with None to resume with.  NULL: another thread
+ * claimed it first, and ValueError is set. */
+static inline _PyInterpreterFrame *
+_PyRop_EnterForGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         PyValueBorrow receiver)
+{
+    PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+    if (!gen_claim(tstate, gen)) {
+        return NULL;
+    }
+    return _PyRop_LinkGenerator(tstate, frame, gen, PyValue_None);
+}
+
 static inline bool
 _PyRop_HasIterItem(PyValueBorrow receiver)
 {

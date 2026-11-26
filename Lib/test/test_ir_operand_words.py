@@ -111,7 +111,7 @@ class WordLengthTests(unittest.TestCase):
 
     def test_only_the_call_families_have_operand_words(self):
         length = _opcode.get_ir_word_length
-        for handler, row in enumerate(CONTRACT[:_opcode.IR_NUM_OLD_HANDLERS]):
+        for handler, row in enumerate(CONTRACT[:_opcode.IR_FIRST_ARM]):
             if row is None:
                 continue
             name = dis._all_opname[handler]

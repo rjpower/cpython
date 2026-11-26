@@ -26,7 +26,7 @@ import _opcode
 CONTRACT = _opcode.get_ir_contract()
 # The rows of the register instruction arms follow the old handlers and have
 # no stack effect to check (test_ir_arm_words)
-OLD_CONTRACT = CONTRACT[:_opcode.IR_NUM_OLD_HANDLERS]
+OLD_CONTRACT = CONTRACT[:_opcode.IR_FIRST_ARM]
 ROWS = {h: row for h, row in enumerate(OLD_CONTRACT) if row is not None}
 BY_NAME = {opcode._all_opname[h]: row for h, row in ROWS.items()}
 
@@ -178,7 +178,7 @@ class ContractTests(unittest.TestCase):
                                            for h in opcode._ir_only_handlers)})
                 self.assertIn(row.shadow, {None, *opcode._stack_opmap.values()})
         for name in (*opcode._specialized_opmap, *opcode._ir_handlers):
-            if (opcode._ir_handlers.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS
+            if (opcode._ir_handlers.get(name, 0) >= _opcode.IR_FIRST_ARM
                     or name in TRANSLATOR_ONLY):
                 continue
             self.assertIn(name, BY_NAME)
@@ -296,7 +296,7 @@ class ContractTests(unittest.TestCase):
                 self.assertNotEqual(BY_NAME[family].fb, _opcode.IR_LOC_NONE)
         # The generic handlers that specialise from their entry
         self.assertLessEqual(
-            {opcode._all_opname[op] for op in range(_opcode.IR_NUM_OLD_HANDLERS)
+            {opcode._all_opname[op] for op in range(_opcode.IR_FIRST_ARM)
              if CONTRACT[op] is not None
              and not opcode._all_opname[op].startswith("INSTRUMENTED_")
              and op not in opcode._ir_only_handlers

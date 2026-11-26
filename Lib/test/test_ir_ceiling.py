@@ -148,7 +148,7 @@ class HandlerIdTests(unittest.TestCase):
         self.assertEqual(sorted(ids.values()),
                          list(range(_opcode.IR_NUM_HANDLERS - len(ids),
                                     _opcode.IR_NUM_HANDLERS)))
-        old = {name for name, h in ids.items() if h < _opcode.IR_NUM_OLD_HANDLERS}
+        old = {name for name, h in ids.items() if h < _opcode.IR_FIRST_ARM}
         self.assertFalse(old & arm_names())
         self.assertTrue(arm_names() <= set(ids))
 

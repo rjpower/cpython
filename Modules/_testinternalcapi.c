@@ -2003,7 +2003,7 @@ get_ir(PyObject *self, PyObject *args)
          * copy's word is wrapped by LINE or INSTRUCTION, whose length reads
          * as 1 */
         int original = IR_HANDLER(ir->words[w]);
-        if (original >= IR_NUM_OLD_HANDLERS) {
+        if (original >= IR_FIRST_ARM) {
             fixed_left = _PyIR_FormatOf(original)->fixed_words;
         }
         const char *name = _PyIR_HandlerName(handler);

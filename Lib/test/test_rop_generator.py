@@ -541,7 +541,7 @@ class ArmRowTests(unittest.TestCase):
         entries = rop_generator.arm_entries(products())
         header = (ROOT / "Include/internal/pycore_ir_metadata.h").read_text()
         ids = (ROOT / "Include/ir_handler_ids.h").read_text()
-        old = int(re.search(r"IR_NUM_OLD_HANDLERS\s+(\d+)", ids).group(1))
+        old = int(re.search(r"IR_FIRST_ARM\s+(\d+)", ids).group(1))
         total = int(re.search(r"IR_NUM_HANDLERS\s+(\d+)", ids).group(1))
         self.assertEqual(total, old + len(entries))
         for entry in entries:

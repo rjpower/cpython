@@ -286,6 +286,7 @@ def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
                   "    PyThreadState *tstate, _PyInterpreterFrame *frame, "
                   "_PyInstr *next_instr, _PyIRWord ir_word)\n{\n")
         out.write("\n".join(handler_text(arm, low, "    ")) + "\n}\n")
+    write_form_table(out, p)
 
 
 # Whole-word completion stubs (regions89 G1a) and the plan of each arm
@@ -293,15 +294,25 @@ def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
 STUB_PREAMBLE = """\
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
- * A release reports ESCAPED exactly when it deallocates. */
-#ifndef _PyIR_STUB_RELEASE
+ * Python/ceval.c includes this file after the function forms, whose
+ * bindings of the other macros the stubs share. */
+
+/* Whether closing V drops a last count, which runs its destructor: then
+ * the path may have reentered Python (ESCAPED) */
+static inline int
+_PyIR_StubDropsLast(PyValue v)
+{
+    return PyValue_RefcountOnObject(v) && Py_REFCNT(BITS_TO_PTR(v)) == 1
+        ? _PyIR_ESCAPED : 0;
+}
+
+/* A release reports ESCAPED exactly when it deallocates */
 #define _PyIR_STUB_RELEASE(CLOSE, V) \\
     do { \\
         PyValue ir_released = (V); \\
         ir_status |= _PyIR_StubDropsLast(ir_released); \\
         (CLOSE)(ir_released); \\
     } while (0)
-#endif
 #pragma push_macro("DISPATCH")
 #undef DISPATCH
 #pragma push_macro("DISPATCH_SAME_OPARG")

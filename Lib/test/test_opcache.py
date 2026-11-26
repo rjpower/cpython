@@ -1635,9 +1635,9 @@ class TestSpecializer(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             A()
 
-        # The method form is this family followed by the vacant self; the
-        # unbound-method arm (SuperMethod) is a later step
+        # `super().__init__()` is the method form
         self.assert_specialized(A.__init__, "SuperAttr.Builtin")
+        self.assert_specialized(A.__init__, "SuperMethod.Builtin")
         self.assert_no_opcode(A.__init__, "LOAD_SUPER_ATTR")
 
         # Temporarily replace super() with something else.
@@ -1660,6 +1660,50 @@ class TestSpecializer(TestBase):
 
         # The arm stays installed and misses to Generic while super is
         # replaced; the guard, not unspecialization, keeps A() correct.
+
+    @cpython_only
+    @requires_specialization
+    def test_load_super_method(self):
+        """The method form keeps an unbound method's receiver as its self."""
+
+        class A:
+            def f(self, x):
+                return (type(self).__name__, x)
+
+            @classmethod
+            def c(cls, x):
+                return (cls.__name__, x)
+
+            @staticmethod
+            def s(x):
+                return x
+
+        class B(A):
+            def f(self, x):
+                return super().f(x)
+
+            def c(self, x):
+                return super().c(x)
+
+            def s(self, x):
+                return super().s(x)
+
+            def explicit(self, x):
+                return super(B, self).f(x)
+
+        class Custom(B):
+            # A type with its own getattro binds the method itself
+            def __getattribute__(self, name):
+                return object.__getattribute__(self, name)
+
+        for obj in (B(), Custom()):
+            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
+                self.assertEqual(obj.f(1), (type(obj).__name__, 1))
+                self.assertEqual(obj.c(2), ("Custom" if type(obj) is Custom else "B", 2))
+                self.assertEqual(obj.s(3), 3)
+                self.assertEqual(obj.explicit(4), (type(obj).__name__, 4))
+        self.assert_specialized(B.f, "SuperMethod.Builtin")
+        self.assert_specialized(B.explicit, "SuperMethodExplicit.Builtin")
 
     @cpython_only
     @requires_specialization

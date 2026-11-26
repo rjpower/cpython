@@ -2384,6 +2384,23 @@ _PyRop_SuperLookupExplicitObserved(PyThreadState *tstate, _PyInterpreterFrame *f
                             true);
 }
 
+/* The method forms of the lookups above: the attribute is bound, so the call
+ * has no receiver of its own */
+#define ROP_SUPER_METHOD_WRAPPER(name, from)                                  \
+    static Py_NO_INLINE PyValue                                               \
+    name(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *site,   \
+         const _PyRopSpan *parts, PyObject *attr_name, PyValue *self)        \
+    {                                                                         \
+        *self = PyValue_NULL;                                                 \
+        return from(tstate, frame, site, parts, attr_name);                   \
+    }
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethod, _PyRop_SuperLookup)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodObserved, _PyRop_SuperLookupObserved)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodExplicit, _PyRop_SuperLookupExplicit)
+ROP_SUPER_METHOD_WRAPPER(_PyRop_SuperMethodExplicitObserved,
+                         _PyRop_SuperLookupExplicitObserved)
+#undef ROP_SUPER_METHOD_WRAPPER
+
 /* The part i of a super span, borrowed from its home */
 static inline PyValueBorrow
 rop_super_part(const _PyRopSpan *parts, int i)
@@ -2427,6 +2444,38 @@ _PyRop_SuperLookupBuiltin(const _PyRopSpan *parts, PyObject *name)
         PyValue_Borrow(vals[2]), name, 0);
     PyObject *exc = found.status < 0 ? PyErr_GetRaisedException() : NULL;
     for (int i = 0; i < 3; i++) {
+        PyValue_XCLOSE(vals[i]);
+    }
+    if (exc != NULL) {
+        PyErr_SetRaisedException(exc);
+        return PyValue_NULL;
+    }
+    return found.value;
+}
+
+/* LOAD_SUPER_ATTR_METHOD: an unbound method comes with the receiver as the
+ * call's self, which moves from the parts to *self; a bound result closes
+ * it.  Only a receiver whose type has the generic getattro can have a method
+ * returned unbound.  The parts are the row's to close on both outcomes. */
+static Py_NO_INLINE PyValue
+_PyRop_SuperLookupBuiltinMethod(const _PyRopSpan *parts, PyObject *name,
+                                PyValue *self)
+{
+    PyValue vals[3];
+    rop_take_items(parts, vals);
+    *self = PyValue_NULL;
+    _PyStatusValue found = _PySuper_LookupValue(
+        (PyTypeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(vals[1])),
+        PyValue_Borrow(vals[2]), name,
+        PyValue_TYPE(PyValue_Borrow(vals[2]))->tp_getattro
+            == PyObject_GenericGetAttr);
+    PyObject *exc = found.status < 0 ? PyErr_GetRaisedException() : NULL;
+    int keep_self = found.status > 0;
+    for (int i = 0; i < 3; i++) {
+        if (i == 2 && keep_self) {
+            *self = vals[2];
+            continue;
+        }
         PyValue_XCLOSE(vals[i]);
     }
     if (exc != NULL) {

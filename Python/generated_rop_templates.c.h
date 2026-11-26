@@ -107,6 +107,8 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 //   SetItem.ListIndex: SetItem.ListIndex: list_in_bounds has no leaf lowering
 //   SuperAttr.Builtin: SuperAttr.Builtin: home has no leaf lowering
 //   SuperAttrExplicit.Builtin: SuperAttrExplicit.Builtin: home has no leaf lowering
+//   SuperMethod.Builtin: SuperMethod.Builtin: home has no leaf lowering
+//   SuperMethodExplicit.Builtin: SuperMethodExplicit.Builtin: home has no leaf lowering
 
 // The leaf graph of Add.Int:
 //   b0:

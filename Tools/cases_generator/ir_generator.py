@@ -1000,7 +1000,7 @@ STACK_ONLY_WITH_BODY = (
     # The loop stubs keep the bodies that name their exits (FOR_ITER is a jump)
     "GET_ITER", "FOR_ITER", "END_FOR", "POP_ITER", "INSTRUMENTED_FOR_ITER",
     "INSTRUMENTED_END_FOR", "INSTRUMENTED_POP_ITER",
-    "SEND")
+    "SEND", "END_ASYNC_FOR", "INSTRUMENTED_END_ASYNC_FOR")
 
 # Abort stubs that still have a handler and an id (the cell ops that CE
 # ported were left out of the old list; IR_OPERANDS is a word, not an op).
@@ -4954,13 +4954,8 @@ class IREmitter(Emitter):
         """
         kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
         assert inst is not None
-        # IR_EXIT is the word's exit, for an instruction whose stack form has
-        # no operand (CLEANUP_THROW); SEND and FOR_ITER pass their oparg
-        if distance == "IR_EXIT":
-            distance = "oparg"
         entries = {
             "_PY_IR_FOR_ITER": "_PyEval_CompleteForIter",
-            "_PY_IR_SEND_THROW": "_PyEval_CompleteSendThrow",
         }
         if kind not in entries:
             raise analysis_error("unsupported completion kind", tkn)
@@ -4972,8 +4967,7 @@ class IREmitter(Emitter):
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit("{\n")
-        target = (f"_PyFrame_InstrAt(frame, {distance})" if kind == "_PY_IR_SEND_THROW"
-                  else f"next_instr + {distance}")
+        target = f"next_instr + {distance}"
         recipient = "" if kind == "_PY_IR_FOR_ITER" else f"{dst}, "
         self.emit(f"_PyIRStepResult ir_step_result = {entries[kind]}(tstate, frame, this_instr, {base}, {recipient}{target}, {value});\n")
         self.emit("next_instr = ir_step_result.next;\n")
@@ -4990,11 +4984,11 @@ class IREmitter(Emitter):
     def normal_completion(self, inst, fmt, kind):
         inputs, _ = external_io(inst)
         produces_result = kind != "_PY_IR_FOR_ITER"
-        count = 4 if kind == "_PY_IR_SEND_THROW" else 3 if produces_result else 2
+        count = 3 if produces_result else 2
         if (not fmt.window or len(inputs) != count or
                 any(item.is_array() for item in inputs) or
                 fmt.field_of(ROLE_BASE) != "B" or fmt.field_of(ROLE_DST) != "A" or
-                fmt.dst_offset != (0 if kind == "_PY_IR_SEND_THROW" else 2)):
+                fmt.dst_offset != 2):
             raise analysis_error("unsupported normal completion window", inst.where)
         # The actual completion helper drains the complete input window,
         # then SEND publishes A. A resumed child reaches the same helper on
@@ -5177,9 +5171,7 @@ def deopt_target(inst: Instruction, analysis: Analysis) -> str:
 
 def oparg_source(inst: Instruction, fmt: IRFormat, operation: str | None) -> str:
     "Where the handler's oparg comes from: the IMMEDIATE operand's detail"
-    # CLEANUP_THROW has no oparg in the stack form; its word keeps the jump
-    # distance for IR_EXIT
-    if not inst.properties.oparg and "IR_EXIT" not in uop_tokens(inst):
+    if not inst.properties.oparg:
         return ""
     if operation is not None:
         return "OPERATION"
@@ -6011,54 +6003,8 @@ def operand_errors_from_summary(source) -> frozenset[int] | None:
     return source.error_sources
 
 
-def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
-    """Only the matched-exception arm reaches a drained normal successor."""
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    if (len(parts) not in (1, 2) or len(parts) != len(inst.parts)
-            or not fmt.window or not fmt.names_target or fmt.n_inputs
-            or fmt.roles != [ROLE_BASE, ROLE_NONE, ROLE_IMM, ROLE_IMM]
-            or fmt.imm != LOC_CD or fmt.store_dst):
-        return False
-    producer = parts[-1]
-    if ([(i.name, i.peek, i.size) for i in producer.stack.inputs] !=
-            [("awaitable_st", False, ""), ("exc_st", False, "")]
-            or producer.stack.outputs):
-        return False
-    expected = """{
-        (void)oparg;
-        assert(PyValue_IsObject(exc_st));
-        PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
-        assert(exc && PyExceptionInstance_Check(exc));
-        int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
-        if (matches) {
-            DECREF_INPUTS();
-        }
-        else {
-            _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
-            monitor_reraise(tstate, frame, this_instr);
-            goto exception_unwind;
-        }
-        JUMPBY(0);
-    }"""
-    if statement_shape(producer.body) != statement_shape(
-            Parser(expected, "<async exit transport>").block()):
-        return False
-    if len(parts) == 1:
-        return True
-    observer = parts[0]
-    expected = """{
-        assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
-        INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
-    }"""
-    return (not observer.stack.inputs and not observer.stack.outputs
-            and statement_shape(observer.body) == statement_shape(
-                Parser(expected, "<async exit observer>").block()))
-
-
 def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
     """Conditions shared by actual final commits, never a source-name grant."""
-    if async_exit_transport(inst, fmt):
-        return True
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     reserved = {"frame", *NORMAL_FRAME_OBSERVERS}
     steals = [part for part in parts if any(

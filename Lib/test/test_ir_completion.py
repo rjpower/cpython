@@ -45,8 +45,12 @@ class SemanticCompletionTests(unittest.TestCase):
         ir_code = dis.IRCode(outer.__code__).co_code
         words = struct.unpack(f'<{len(ir_code) // 8}Q', ir_code)
         for instruction in throws:
-            # The word names its target, a word of the code
-            self.assertIn(words[instruction.offset] >> 40, offsets)
+            # The word names its target, a word of the code: the signed
+            # distance of field D, from the word after it
+            distance = words[instruction.offset] >> 52
+            if distance >= 1 << 11:
+                distance -= 1 << 12
+            self.assertIn(instruction.offset + 1 + distance, offsets)
         self.assertNotIn('END_SEND', [i.opname for i in instructions])
         generator = outer()
         self.assertEqual(next(generator), 'ready')

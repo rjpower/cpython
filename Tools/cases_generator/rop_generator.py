@@ -442,6 +442,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     pair_writes = 0
     window = False
     send_window = False
+    window_name = ""
     has_target = has_args = has_span = False
     target = "_PyIR_LOC_NONE"
     for slot in enc.elements:
@@ -483,6 +484,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                 role = "_PyIR_ROLE_BASE"
                 window = True
                 send_window = True
+                window_name = pl.operand
             elif kind == "ITERPAIR":
                 pair = pl.operand
                 if pair in defined:
@@ -547,9 +549,15 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
     flags = ["_PyIR_VALID"]
     if window:
         # FOR_ITER's shape: the pair is read and rewritten in place, the
-        # item goes two homes above it, and the receiver passes through
+        # item goes two homes above it, and the receiver passes through.  A
+        # window that no point keeps (a throw's completion spends it) has no
+        # pass-through, and its sources follow the window's homes.
         flags.append("_PyIR_WINDOW")
-        reads, through = (3, 1) if send_window else (2, 1)
+        kept = send_window and any(
+            f"{window_name}.receiver" in pt.keep and pt.defs
+            for pt in program.points.values() if pt.family == arm.family)
+        reads, through = ((3 + ninputs, 1 if kept else 0) if send_window
+                          else (2, 1))
         writes = 3
     if writes:
         # A result that nothing reads goes to the frame's discard slot
@@ -560,6 +568,10 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
         flags.append("_PyIR_FORWARD")
         if not exits & {"next", "branch"}:
             flags.append("_PyIR_JUMP_ALWAYS")
+        if not set(fam.exits) & {"branch", "jump"}:
+            # No exit of the family goes to the target: the word names it for
+            # sys.monitoring
+            flags.append("_PyIR_NAMES_TARGET")
     return ir_arms.ArmFormat(
         tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
         imm, fb, ninputs,

@@ -1,0 +1,209 @@
+// 2E: throw completion, async-for termination and the exceptional exit of a
+// context manager.
+//
+// The three words run inside exception handlers: the exception they test is
+// the handler's, a home that the unwinder wrote.  A word that does not take
+// the exception it was given passes it on to the unwinder, which releases
+// the homes of the word that it left in place.
+
+// CLEANUP_THROW: the end of a delegation that was thrown into.  `send` is
+// the delegation's receiver, cursor and sent value, which the throw leaves in
+// place, and `exc` the exception that the receiver raised.  A StopIteration
+// is the end of the delegation: its value is the word's `completed`, the
+// operands are spent and the word goes to `done`, where the END_SEND that
+// followed it has no word.  Any other exception is raised again.
+family CleanupThrow(completed:Dst, send:SendWindow, exc:Src, done:NearHead)
+  exits(jump, unwind) ops(CLEANUP_THROW);
+
+// The delegation ended with the StopIteration's value; the operands are
+// retired
+point CleanupThrow.Done(current, target, clear) keep() spent(send, exc) defs(completed);
+// Another exception: the operands stay for the unwinder
+point CleanupThrow.Raised(current, site, pending) keep(send, exc) spent() defs();
+
+// Whether the exception is a StopIteration
+extern helper is_stop_iteration(e:B) -> Bool
+  effects(reads)
+  c _PyRop_IsStopIteration as bool
+  evidence(
+    review: "the former CLEANUP_THROW: PyErr_GivenExceptionMatches(exc, PyExc_StopIteration).",
+    contract: "A subtype test of the exception's class; no allocation, no callback.");
+
+// The value of a StopIteration, a new owner (None when it has none)
+extern helper stop_iteration_value(e:B) -> O
+  effects(reads, allocates)
+  c _PyRop_StopIterationValue as value
+  evidence(
+    review: "the former CLEANUP_THROW: _PyStopIteration_GetValue.",
+    contract: "Reads the exception's value attribute; a new owner. No callback.");
+
+arm CleanupThrow.Generic split
+  effects(reads, writes, allocates, releases on (completed), runs_python, raises)
+  feedback()
+  exits(jump, unwind)
+{
+  entry():
+    let m:Bool = is_stop_iteration(use(exc));
+    branch m -> Stopped(), Reraise();
+  Stopped():
+    let v:O = stop_iteration_value(use(exc));
+    publish [completed = v] retire [spent(exc), spent(send), old(completed)] at CleanupThrow.Done;
+    exit jump(done);
+  Reraise():
+    call restore_exception(thread, frame, site, exc) {
+      err -> Failed();
+    }
+  Failed(x:Err):
+    exit unwind(CleanupThrow.Raised, x);
+}
+
+// END_ASYNC_FOR: the end of an `async for`.  `iter` is the async iterator
+// and `exc` the exception that its __anext__ raised.  A StopAsyncIteration
+// ends the loop and the word goes on; any other exception is raised again.
+// `send` here is the SEND of the loop, which the word names for the BRANCH_RIGHT
+// event and never goes to.
+family EndAsyncFor(iter:Src, exc:Src, send:NearHead)
+  exits(next, unwind, raise, redirect) ops(END_ASYNC_FOR)
+  events(BRANCH_RIGHT);
+
+// The loop ended: both operands are retired
+point EndAsyncFor.Done(current, next_head, clear) keep() spent(iter, exc) defs();
+// Another exception: the operands stay for the unwinder
+point EndAsyncFor.Raised(current, site, pending) keep(iter, exc) spent() defs();
+// A callback of the event raised before the exception was tested
+point EndAsyncFor.EventFailed(current, site, pending) keep(iter, exc) spent() defs();
+
+// Whether the exception is a StopAsyncIteration
+extern helper is_stop_async_iteration(e:B) -> Bool
+  effects(reads)
+  c _PyRop_IsStopAsyncIteration as bool
+  evidence(
+    review: "the former END_ASYNC_FOR: PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration).",
+    contract: "A subtype test of the exception's class; no allocation, no callback.");
+
+// The BRANCH_RIGHT event of the word, reported at the SEND that it names.
+// The callbacks run Python, may fail, and may move the frame.
+extern helper end_async_for_event(t:Thread, f:Frame, at:Site)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  requires(instrumented(at))
+  c _PyRop_EndAsyncForEvent as int_redirect
+  evidence(
+    review: "the former _MONITOR_END_ASYNC_FOR: INSTRUMENTED_JUMP of the SEND, with"
+            "BRANCH_RIGHT, before the exception is tested.",
+    contract: "The operands stay in their homes. A callback may raise, or move the"
+              "frame, whose return_pc then names the word to run.");
+
+arm EndAsyncFor.Generic split
+  effects(reads, writes, releases, runs_python, raises)
+  feedback()
+  exits(next, unwind)
+{
+  entry():
+    let m:Bool = is_stop_async_iteration(use(exc));
+    branch m -> Stopped(), Reraise();
+  Stopped():
+    publish [] retire [spent(iter), spent(exc)] at EndAsyncFor.Done;
+    exit next();
+  Reraise():
+    call restore_exception(thread, frame, site, exc) {
+      err -> Failed();
+    }
+  Failed(x:Err):
+    exit unwind(EndAsyncFor.Raised, x);
+}
+
+// The observed twin: the event first, then the word
+arm EndAsyncFor.Observed split observes
+  effects(reads, writes, releases, runs_python, raises)
+  feedback()
+  exits(next, unwind, raise, redirect)
+{
+  entry():
+    call end_async_for_event(thread, frame, site) {
+      ok -> Go();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Moved(r:Route):
+    exit redirect(r);
+  EventFailed(ee:Err):
+    exit raise(EndAsyncFor.EventFailed, ee);
+  Go():
+    let m:Bool = is_stop_async_iteration(use(exc));
+    branch m -> Stopped(), Reraise();
+  Stopped():
+    publish [] retire [spent(iter), spent(exc)] at EndAsyncFor.Done;
+    exit next();
+  Reraise():
+    call restore_exception(thread, frame, site, exc) {
+      err -> Failed();
+    }
+  Failed(x:Err):
+    exit unwind(EndAsyncFor.Raised, x);
+}
+
+// WITH_EXCEPT_START: the exit of a context manager that an exception leaves.
+// `exit_fn` is the __exit__ function or bound method and `self` the context
+// it is unbound from (absent when `exit_fn` is bound); `exc` is the handled
+// exception.  The result is the word's `dst`.  The operands stay: the
+// handler's code uses them after the call.
+family WithExit(dst:Dst, exit_fn:Src, self:Maybe<Src>, exc:Src)
+  exits(next, raise) ops(WITH_EXCEPT_START);
+
+point WithExit.Done(current, next_head, handled) keep(exit_fn, self, exc) spent() defs(dst);
+point WithExit.Failed(current, site, pending) keep(exit_fn, self, exc) spent() defs();
+
+// __exit__(type(exc), exc, exc.__traceback__), unbound when `self` is there;
+// None for a missing traceback.  The call rejects a value that is no callable
+// with upstream's TypeError.  The operands are borrowed.
+extern helper with_exit_call(fn:B, self:B, exc:B)
+  cases(ok(z:O), err(e:Err))
+  effects(reads, allocates, runs_python, raises)
+  c _PyRop_WithExitCall as value_or_null
+  evidence(
+    review: "the former WITH_EXCEPT_START and ceval.c with_exit_call.",
+    contract: "Reads the exception's class and traceback; the call runs Python. A new"
+              "owner of the result, or the exception set.");
+
+// The same for a bound method: no `self`
+extern helper with_exit_bound(fn:B, exc:B)
+  cases(ok(z:O), err(e:Err))
+  effects(reads, allocates, runs_python, raises)
+  c _PyRop_WithExitBound as value_or_null
+  evidence(
+    review: "the former WITH_EXCEPT_START with a NULL exit_self.",
+    contract: "As with_exit_call, with the exit function bound.");
+
+arm WithExit.Generic shared
+  effects(reads, allocates, releases on (dst), runs_python, raises)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    branch present_src(self) -> Method(), Bound();
+  Method():
+    let a:Anchors = anchor_for_call([exit_fn, self, exc]);
+    call with_exit_call(arg(a, 0), arg(a, 1), arg(a, 2)) {
+      ok -> MethodDone();
+      err -> MethodFailed();
+    }
+  MethodDone(z:O):
+    publish [dst = z] retire [roots(a), old(dst)] at WithExit.Done;
+    exit next();
+  MethodFailed(e:Err):
+    let saved:Err = retire_failed_call(a, [], e);
+    exit raise(WithExit.Failed, saved);
+  Bound():
+    let b:Anchors = anchor_for_call([exit_fn, exc]);
+    call with_exit_bound(arg(b, 0), arg(b, 1)) {
+      ok -> BoundDone();
+      err -> BoundFailed();
+    }
+  BoundDone(y:O):
+    publish [dst = y] retire [roots(b), old(dst)] at WithExit.Done;
+    exit next();
+  BoundFailed(f:Err):
+    let saved_bound:Err = retire_failed_call(b, [], f);
+    exit raise(WithExit.Failed, saved_bound);
+}

@@ -665,11 +665,9 @@ HELPERS = {h.name: h for h in (
     # The completions that a `complete` exit calls (IREmitter.complete_step):
     # each drains the input window, which may release the iterator
     *(Helper(name, (V,), (), frozenset(EFFECTS), f"the completion of {kind}")
-      for kind, name in (("_PY_IR_FOR_ITER", "_PyEval_CompleteForIter"),
-                         ("_PY_IR_SEND_THROW", "_PyEval_CompleteSendThrow"))),
+      for kind, name in (("_PY_IR_FOR_ITER", "_PyEval_CompleteForIter"),)),
 )}
-COMPLETIONS = {"_PY_IR_FOR_ITER": "_PyEval_CompleteForIter",
-               "_PY_IR_SEND_THROW": "_PyEval_CompleteSendThrow"}
+COMPLETIONS = {"_PY_IR_FOR_ITER": "_PyEval_CompleteForIter"}
 
 
 # ---------------------------------------------------------------------------

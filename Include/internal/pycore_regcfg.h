@@ -385,7 +385,9 @@ void _PyRegCfg_Rename(_PyRegCfg *cfg, int b, int from, int to);
 static inline int
 _PyRegOp_EndsFlow(int opcode)
 {
-    return IS_NO_FALLTHROUGH_OPCODE(opcode) || opcode == CLEANUP_THROW;
+    return IS_NO_FALLTHROUGH_OPCODE(opcode)
+           || opcode == CLEANUP_THROW
+           || opcode == ROP_OP_CleanupThrow_Generic;
 }
 
 #ifdef __cplusplus

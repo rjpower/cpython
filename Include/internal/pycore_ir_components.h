@@ -1426,13 +1426,6 @@
     HELPER(value_unicode_append, PyObject *, (PyObject *, PyObject *), \
         ARGS(consumed object, object), VALUE_OR_NULL(owned), \
         EFFECTS(runs_python, raises)) \
-    /* Python/ceval.c: builds a four-slot window of borrowed words and \
-     * calls _PyValue_Vectorcall(exit_func, ...), which runs any callable \
-     * (an inline exit_func is rejected with TypeError).  All five \
-     * arguments are borrowed (the window holds views).  Failure: NULL \
-     * with an exception set; success: a new reference. */ \
-    HELPER(with_exit_call, PyValue, (PyValueBorrow, PyValueBorrow, PyObject *, PyObject *, PyObject *), \
-        ARGS(borrowed, borrowed, object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Objects/unicodeobject.c: frees an exact str's memory (the \
      * interned-state and the cached utf8 buffer are freed too) and \
      * releases no other object */ \

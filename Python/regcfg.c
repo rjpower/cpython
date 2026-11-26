@@ -1883,6 +1883,48 @@ rule_send(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* CLEANUP_THROW, END_ASYNC_FOR: the CleanupThrow and EndAsyncFor families
+ * (Python/register_ops/cleanup.rop).  The stack op's window is the family's
+ * operands; CleanupThrow's END_SEND completion gets no word
+ * (lower_completions). */
+static int
+rule_cleanup_throw(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == CLEANUP_THROW);
+    op->opcode = ROP_OP_CleanupThrow_Generic;
+    return SUCCESS;
+}
+
+static int
+rule_end_async_for(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == END_ASYNC_FOR);
+    op->opcode = ROP_OP_EndAsyncFor_Generic;
+    return SUCCESS;
+}
+
+/* WITH_EXCEPT_START: the WithExit family.  The exit function, its context
+ * (NULL when the function is bound) and the handled exception are read in
+ * place, with the saved lasti and exception between them untouched, and the
+ * result is pushed over all of them. */
+static int
+rule_with_except_start(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 5) {
+        return stack_underflow(src);
+    }
+    int uses[3] = {t->stack[t->sp - 5], t->stack[t->sp - 4], t->stack[t->sp - 1]};
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, ROP_OP_WithExit_Generic,
+                                        uses, 3, 0, &dst, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
 /* The jumps: the Jump family (Python/register_ops/truth.rop).  A backedge
  * that polls is the arm that the baseline JIT's setting selects: the one
  * that is also its warm-up event while the JIT is on. */
@@ -3153,6 +3195,9 @@ static const _PyRegRule rules[256] = {
     [MATCH_CLASS] = rule_match_class,
     [RAISE_VARARGS] = rule_raise_varargs,
     [RERAISE] = rule_reraise,
+    [CLEANUP_THROW] = rule_cleanup_throw,
+    [END_ASYNC_FOR] = rule_end_async_for,
+    [WITH_EXCEPT_START] = rule_with_except_start,
     [PUSH_EXC_INFO] = rule_push_exc_info,
     [POP_EXCEPT] = rule_pop_except,
     [CHECK_EXC_MATCH] = rule_check_exc_match,

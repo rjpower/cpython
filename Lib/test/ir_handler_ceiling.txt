@@ -3,16 +3,12 @@
 # the generated classification against this file.  New instructions are written
 # in Python/register_ops/*.rop, never added here.  A port deletes its lines; the
 # file is empty at step D.
-inherited CLEANUP_THROW
-inherited END_ASYNC_FOR
-inherited INSTRUMENTED_END_ASYNC_FOR
 inherited INSTRUMENTED_INSTRUCTION
 inherited INSTRUMENTED_LINE
 inherited IR_JUMP
 inherited LOAD_COMMON_CONSTANT
 inherited NOP
 inherited STORE_FAST
-inherited WITH_EXCEPT_START
 stub BINARY_OP
 stub BINARY_SLICE
 stub BUILD_INTERPOLATION
@@ -31,6 +27,7 @@ stub CALL_INTRINSIC_2
 stub CALL_KW
 stub CHECK_EG_MATCH
 stub CHECK_EXC_MATCH
+stub CLEANUP_THROW
 stub COMPARE_OP
 stub CONTAINS_OP
 stub CONVERT_VALUE
@@ -41,6 +38,7 @@ stub DELETE_FAST
 stub DELETE_SUBSCR
 stub DICT_MERGE
 stub DICT_UPDATE
+stub END_ASYNC_FOR
 stub END_FOR
 stub END_SEND
 stub EXIT_INIT_CHECK
@@ -58,6 +56,7 @@ stub IMPORT_NAME
 stub INSTRUMENTED_CALL
 stub INSTRUMENTED_CALL_FUNCTION_EX
 stub INSTRUMENTED_CALL_KW
+stub INSTRUMENTED_END_ASYNC_FOR
 stub INSTRUMENTED_END_FOR
 stub INSTRUMENTED_END_SEND
 stub INSTRUMENTED_FOR_ITER
@@ -146,4 +145,5 @@ stub UNARY_NEGATIVE
 stub UNARY_NOT
 stub UNPACK_EX
 stub UNPACK_SEQUENCE
+stub WITH_EXCEPT_START
 stub YIELD_VALUE

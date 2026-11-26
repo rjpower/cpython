@@ -28,7 +28,7 @@ class SendTransferTests(unittest.TestCase):
 
         # The words name the arms of the families
         names = {row[0] for row in _testinternalcapi.get_ir(outer.__code__)}
-        for family in ("Send.", "CLEANUP_THROW"):
+        for family in ("Send.", "CleanupThrow."):
             self.assertTrue(any(name.startswith(family) for name in names), family)
         for admitted in routes(outer.__code__):
             function = types.FunctionType(admitted, globals())

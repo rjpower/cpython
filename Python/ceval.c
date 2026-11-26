@@ -1082,27 +1082,6 @@ _Py_BuildSet_ValueSteal(
     return set;
 }
 
-/* Out of line, as super_call: exit_func(exit_self, exc, val, tb), or
- * exit_func(exc, val, tb) when exit_self is NULL.  exit_func is any attribute
- * value of the context manager's type, an inline scalar included, which the
- * call rejects with upstream's TypeError.  The words are borrowed. */
-static Py_NO_INLINE PyValue
-with_exit_call(PyValueBorrow exit_func, PyValueBorrow exit_self,
-               PyObject *exc, PyObject *val, PyObject *tb)
-{
-    PyValue stack[4];
-    int has_self = !PyValue_IsNull(exit_self);
-    _PyValue_WindowPut(&stack[0], exit_self);
-    _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(exc));
-    _PyValue_WindowPut(&stack[2], PyValue_FromObjectBorrow(val));
-    _PyValue_WindowPut(&stack[3], PyValue_FromObjectBorrow(tb));
-    return _PyValue_Vectorcall(exit_func, stack + 1 - has_self, 3 + has_self,
-                               NULL);
-}
-
-#define with_exit_call(F, S, E, V, T) \
-    (with_exit_call)(PyValue_Borrow(F), PyValue_Borrow(S), E, V, T)
-
 int _Py_CheckRecursiveCallPy(
     PyThreadState *tstate)
 {
@@ -2599,6 +2578,16 @@ static PyValue _PyRop_SwapHandled(PyThreadState *tstate, PyValue *home);
 static void _PyRop_RestoreHandled(PyThreadState *tstate, PyValue x);
 static int _PyRop_CheckExceptType(PyThreadState *tstate, PyValue *home);
 static bool _PyRop_ExceptionMatches(PyValueBorrow exc, PyValueBorrow pattern);
+/* The rows of CleanupThrow, EndAsyncFor and WithExit
+ * (Python/register_ops/cleanup.rop) */
+static bool _PyRop_IsStopIteration(PyValueBorrow exc);
+static PyValue _PyRop_StopIterationValue(PyValueBorrow exc);
+static bool _PyRop_IsStopAsyncIteration(PyValueBorrow exc);
+static int _PyRop_EndAsyncForEvent(PyThreadState *tstate,
+                                   _PyInterpreterFrame *frame, _PyInstr *site);
+static PyValue _PyRop_WithExitCall(PyValueBorrow fn, PyValueBorrow self,
+                                   PyValueBorrow exc);
+static PyValue _PyRop_WithExitBound(PyValueBorrow fn, PyValueBorrow exc);
 static int _PyRop_CheckExceptStarType(PyThreadState *tstate, PyValue *home);
 static PyValue _PyRop_GroupMatch(PyThreadState *tstate,
                                  _PyInterpreterFrame *frame, PyValue *exc,
@@ -6369,8 +6358,7 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyValue receiver = window[0];
     PyCodeObject *code = _PyFrame_GetCode(frame);
     frame->instr_ptr = site;
-    if (code->_co_monitoring != NULL &&
-        kind != _PY_IR_SEND_THROW && PyValue_IsObject(receiver)) {
+    if (code->_co_monitoring != NULL && PyValue_IsObject(receiver)) {
         PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
         if (PyGen_CheckExact(object) || PyCoro_CheckExact(object)) {
             _PyIRStepResult observed = _PyIR_ObserveStep(
@@ -6399,13 +6387,9 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
      * any input; detach the whole window before publishing it. */
     PyValue cursor = window[1];
     PyValue sent = kind != _PY_IR_FOR_ITER ? window[2] : PyValue_NULL;
-    PyValue exception = kind == _PY_IR_SEND_THROW ? window[3] : PyValue_NULL;
     window[0] = window[1] = PyValue_NULL;
     if (kind != _PY_IR_FOR_ITER) {
         window[2] = PyValue_NULL;
-    }
-    if (kind == _PY_IR_SEND_THROW) {
-        window[3] = PyValue_NULL;
     }
     PyValue displaced = PyValue_NULL;
     if (kind != _PY_IR_FOR_ITER) {
@@ -6431,7 +6415,6 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     PyObject *error = observed.status < 0 ? PyErr_GetRaisedException() : NULL;
     assert(observed.status >= 0 || error != NULL);
-    PyValue_XCLOSE(exception);
     PyValue_XCLOSE(sent);
     PyValue_XCLOSE(cursor);
     PyValue_XCLOSE(receiver);
@@ -6452,15 +6435,6 @@ _PyEval_CompleteForIter(PyThreadState *tstate, _PyInterpreterFrame *frame,
 {
     return complete_step_impl(tstate, frame, site, base, IR_NO_DST, exit,
                               value, _PY_IR_FOR_ITER);
-}
-
-_PyIRStepResult
-_PyEval_CompleteSendThrow(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                          _PyInstr *site, int base, int destination,
-                          _PyInstr *exit, PyValue value)
-{
-    return complete_step_impl(tstate, frame, site, base, destination, exit,
-                              value, _PY_IR_SEND_THROW);
 }
 
 static PyValue
@@ -10207,6 +10181,95 @@ _PyRop_ExceptionMatches(PyValueBorrow exc, PyValueBorrow pattern)
     assert(PyValue_IsObject(exc) && PyValue_IsObject(pattern));
     return PyErr_GivenExceptionMatches(PyValue_AsKnownObjectBorrow(exc),
                                        PyValue_AsKnownObjectBorrow(pattern));
+}
+
+/* The exception that a handler holds is an instance of BaseException */
+static bool
+_PyRop_IsStopIteration(PyValueBorrow exc)
+{
+    assert(PyValue_IsObject(exc));
+    PyObject *o = PyValue_AsKnownObjectBorrow(exc);
+    assert(PyExceptionInstance_Check(o));
+    return PyErr_GivenExceptionMatches(o, PyExc_StopIteration);
+}
+
+static PyValue
+_PyRop_StopIterationValue(PyValueBorrow exc)
+{
+    return _PyStopIteration_GetValue(PyValue_AsKnownObjectBorrow(exc));
+}
+
+static bool
+_PyRop_IsStopAsyncIteration(PyValueBorrow exc)
+{
+    assert(PyValue_IsObject(exc));
+    PyObject *o = PyValue_AsKnownObjectBorrow(exc);
+    assert(PyExceptionInstance_Check(o));
+    return PyErr_GivenExceptionMatches(o, PyExc_StopAsyncIteration);
+}
+
+/* The BRANCH_RIGHT event of END_ASYNC_FOR, reported at the SEND of its loop
+ * that the word names (the former INSTRUMENTED_JUMP of _MONITOR_END_ASYNC_FOR).
+ * A callback that moves the frame leaves the word to run in frame->return_pc,
+ * where the redirect exit goes on. */
+static Py_NO_INLINE int
+_PyRop_EndAsyncForEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        _PyInstr *site)
+{
+    if (tstate->tracing) {
+        return 0;
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    _PyInstr *send = site + 1 + _PyIR_FormatDistance(fmt, *site);
+    _PyInstr *dest = site + 1 + fmt->fixed_words;
+    frame->return_pc = dest;
+    _PyIRObserverResult result = _Py_call_instrumentation_jump(
+        site, tstate, PY_MONITORING_EVENT_BRANCH_RIGHT, frame, send, dest);
+    if (result.status < 0) {
+        return -1;
+    }
+    if (result.status > 0) {
+        frame->return_pc = result.next;
+    }
+    return result.status;
+}
+
+/* exit_func(self, type(exc), exc, tb), or exit_func(type(exc), exc, tb) when
+ * the exit function is bound.  exit_func is any attribute value of the context
+ * manager's type, an inline scalar included, which the call rejects with
+ * upstream's TypeError.  The words are borrowed; a missing traceback is None. */
+static Py_NO_INLINE PyValue
+with_exit_vectorcall(PyValueBorrow exit_func, PyValueBorrow exit_self,
+                     PyValueBorrow exc)
+{
+    PyObject *val_o = PyValue_AsKnownObjectBorrow(exc);
+    assert(val_o && PyExceptionInstance_Check(val_o));
+    PyObject *type_o = PyExceptionInstance_Class(val_o);
+    // A new reference or NULL
+    PyObject *original_tb = PyException_GetTraceback(val_o);
+    PyValue stack[4];
+    int has_self = !PyValue_IsNull(exit_self);
+    _PyValue_WindowPut(&stack[0], exit_self);
+    _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(type_o));
+    _PyValue_WindowPut(&stack[2], PyValue_FromObjectBorrow(val_o));
+    _PyValue_WindowPut(&stack[3], PyValue_FromObjectBorrow(
+        original_tb == NULL ? Py_None : original_tb));
+    PyValue res = _PyValue_Vectorcall(exit_func, stack + 1 - has_self,
+                                      3 + has_self, NULL);
+    Py_XDECREF(original_tb);
+    return res;
+}
+
+static PyValue
+_PyRop_WithExitCall(PyValueBorrow fn, PyValueBorrow self, PyValueBorrow exc)
+{
+    return with_exit_vectorcall(fn, self, exc);
+}
+
+static PyValue
+_PyRop_WithExitBound(PyValueBorrow fn, PyValueBorrow exc)
+{
+    return with_exit_vectorcall(fn, PyValue_Borrow(PyValue_NULL), exc);
 }
 
 static int

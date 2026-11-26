@@ -48,7 +48,7 @@ def adaptive_names(f):
     arms = {w[0].partition("+")[0]
             for w in _testinternalcapi.get_ir(f.__code__, True)}
     arms &= ARMS.keys()
-    names -= {dis.opname[CONTRACT[ARMS[arm]].base] for arm in arms}
+    names -= {dis.opname[dis._deoptop(ARMS[arm])] for arm in arms}
     return names | arms
 
 

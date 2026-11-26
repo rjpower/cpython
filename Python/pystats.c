@@ -168,7 +168,6 @@ print_spec_stats(FILE *out, OpcodeStats *stats)
         const char *name = handler_name(i);
         assert(name != NULL);
         fprintf(out, "opcode[%s].handler_id : %d\n", name, i);
-        fprintf(out, "opcode[%s].base_id : %d\n", name, _PyIR_HandlerBase[i]);
         fprintf(out, "opcode[%s].handler_flags : %d\n", name, _PyIR_HandlerFlags[i]);
         if (_PyIR_HandlerFlags[i] & _PyIR_H_ADAPTIVE) {
             fprintf(out, "opcode[%s].specializable : 1\n", name);

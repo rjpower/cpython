@@ -390,7 +390,6 @@ typedef struct _PyIRFormat {
                             // may carry: IR_F_CALL_ROLES or a subset
     uint32_t edges;         // _PyIR_HOME_* of home h after edge e, in the two
                             // bits at 2 * (_PyIR_HOMES * e + h)
-    uint16_t shadow;        // the stack opcode that the handler stands for, or _PyIR_NO_OPCODE
     uint16_t twin;          // the handler that instrumentation runs on the
                             // word (itself for a twin), or _PyIR_NO_HANDLER
     uint32_t events;        // bit e: semantic handler or twin can fire event e
@@ -426,7 +425,6 @@ enum {
 
 /* "None" for a handler id or a stack opcode: 0 is a valid id of each */
 #define _PyIR_NO_HANDLER 0xffff
-#define _PyIR_NO_OPCODE 0xffff
 
 /* The number of words of the instruction that starts with word: 1, or for
  * a call head 1 + ceil(n / 4).  Every walker over the words, of the code
@@ -761,18 +759,6 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
 {
     return _PyIR_WordLength(_PyCode_IRWords(co)[i]);
 }
-
-/* The opcode of the stack instruction that handler stands for, without
- * specialisation or instrumentation: BINARY_OP for BINARY_OP_ADD, LOAD_ATTR
- * for LOAD_ATTR.  Jump.Trailing, which has no stack instruction, is
- * JUMP_FORWARD. */
-PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
-
-/* The stack opcode that the translator lowered into the word at index
- * `word` of co: the first stack instruction the word covers, from the
- * public offset that pcmap records.  Instrumentation and the generator
- * machinery read a word's origin here, whatever handler the word has. */
-PyAPI_FUNC(int) _PyIR_OriginOpcode(PyCodeObject *co, int word);
 
 /* The handler that the executing copy of co starts with at index i: the
  * generic handler.

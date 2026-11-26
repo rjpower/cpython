@@ -2064,7 +2064,7 @@ const _PyValue_binaryop _PyValue_BinaryOps[] = {
     [NB_SUBSCR] = NULL,
 };
 static_assert(Py_ARRAY_LENGTH(_PyValue_BinaryOps) == NB_SUBSCR + 1,
-              "one dispatcher per BINARY_OP oparg");
+              "one dispatcher per binary operator");
 
 
 /* Unary operators and functions */

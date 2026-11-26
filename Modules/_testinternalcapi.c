@@ -2111,6 +2111,52 @@ arm_handlers(PyObject *self, PyObject *Py_UNUSED(ignored))
     return result;
 }
 
+/* handler_base_ops() -> a list with, for each handler id, the first stack op
+ * of its family's ops(...) clause, or None for a handler of no family that
+ * lowers from a stack op.  The disassembler shows a word as that op. */
+static PyObject *
+handler_base_ops(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *result = PyList_New(IR_NUM_HANDLERS);
+    if (result == NULL) {
+        return NULL;
+    }
+    for (int h = 0; h < IR_NUM_HANDLERS; h++) {
+        const char *name = _PyIR_FamilyNames[_PyIR_HandlerFamily[h]];
+        PyObject *op = Py_NewRef(Py_None);
+        for (int f = 0; f < ROP_NUM_FAMILIES; f++) {
+            if (strcmp(_PyRop_Families[f].name, name) == 0) {
+                Py_SETREF(op, PyLong_FromLong(_PyRop_Families[f].ops[0]));
+                break;
+            }
+        }
+        if (op == NULL) {
+            Py_DECREF(result);
+            return NULL;
+        }
+        PyList_SET_ITEM(result, h, op);
+    }
+    return result;
+}
+
+/* The stack op of co_code at byte offset `offset`, without specialisation */
+static int
+word_stack_op(PyCodeObject *code, int offset)
+{
+    return _PyOpcode_Deopt[_PyCode_CODE(code)[offset / 2].op.code];
+}
+
+static int
+family_has_op(const _PyRopFamily *family, int op)
+{
+    for (int k = 0; k < family->nops; k++) {
+        if (family->ops[k] == op) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* force_arm(code, offset, arm): make the word of the executing copy of code
  * that stands for the stack op at byte offset `offset` of co_code run the
  * register instruction arm `arm`, whatever its feedback says.  A test hook
@@ -2141,11 +2187,9 @@ force_arm(PyObject *self, PyObject *args)
          i += _PyIR_WordLength(_PyCode_IRWords(code)[i]))
     {
         int generic = _PyCode_InstrHandler(code, i);
-        int base = _PyIR_BaseOpcode(generic);
-        for (int k = 0; k < family->nops; k++) {
-            if (family->ops[k] != base) {
-                continue;
-            }
+        int base = word_stack_op(code, offset);
+        const char *head = _PyOpcode_OpName[base];
+        if (family_has_op(family, base)) {
             const _PyIRFormat *old = _PyIR_FormatOf(generic);
             const _PyIRFormat *fmt = _PyIR_FormatOf(arm->handler);
             if (memcmp(old->roles, fmt->roles, sizeof(fmt->roles)) != 0 ||
@@ -2156,7 +2200,7 @@ force_arm(PyObject *self, PyObject *args)
                 PyErr_Format(PyExc_ValueError,
                              "the word at offset %d (%s) has an operand layout "
                              "that %s does not encode", offset,
-                             _PyOpcode_OpName[base], arm_name);
+                             head, arm_name);
                 return NULL;
             }
             if (IR_HANDLER(exec->words[i]) != generic &&
@@ -2216,11 +2260,7 @@ plant_arm_words(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "no room for the operand words");
         return NULL;
     }
-    int base = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
-    for (int k = 0; k < family->nops; k++) {
-        if (family->ops[k] != base) {
-            continue;
-        }
+    if (family_has_op(family, word_stack_op(code, offset))) {
         /* The lowered words too: instrumentation restores a word to its
          * canonical handler, which must be the arm to keep its operand words. */
         _PyIRWord *canonical = (_PyIRWord *)_PyCode_IRWords(code);
@@ -5657,6 +5697,7 @@ static PyMethodDef module_functions[] = {
     {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
+    {"handler_base_ops", handler_base_ops, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
     {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},
     {"ir_edge_homes", ir_edge_homes, METH_VARARGS, NULL},

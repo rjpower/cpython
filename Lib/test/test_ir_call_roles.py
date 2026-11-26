@@ -22,6 +22,9 @@ def routes(code):
     return (code, code.replace(), marshal.loads(marshal.dumps(code)))
 
 
+CALL_FAMILIES = ("Call", "CallKw", "CallEx")
+
+
 def contract_of(name):
     "The contract row of the handler of a word named name"
     return CONTRACT[dis._handler_field(name) & _opcode.IR_HANDLER_MASK]
@@ -35,9 +38,8 @@ def role_flags(name):
 def call_rows(code, adaptive=False):
     # An OPERAND word (an arm's operand) has no handler
     return [row for row in _testinternalcapi.get_ir(code, adaptive)
-            if row[0] != "OPERAND" and contract_of(row[0]).base in
-            (opcode.opmap["CALL"], opcode.opmap["CALL_KW"],
-             opcode.opmap["CALL_FUNCTION_EX"])]
+            if row[0] != "OPERAND"
+            and row[0].partition("+")[0].split(".")[0] in CALL_FAMILIES]
 
 
 def argument_functions(count):

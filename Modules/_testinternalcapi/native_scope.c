@@ -511,14 +511,14 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
      * tuple and the kwargs.  The temporary operands stand in their homes,
      * as the callable does, while a native callee runs. */
     int has_self = (word & IR_F_NO_SELF) == 0, count;
-    switch (_PyIR_BaseOpcode(semantic_handler)) {
-        case CALL_FUNCTION_EX:
+    switch (_PyIR_HandlerFamily[semantic_handler]) {
+        case IR_FAMILY_CallEx:
             count = 4;
             break;
-        case CALL_KW:
+        case IR_FAMILY_CallKw:
             count = 3 + (int)IR_C(word) - 1 - has_self;
             break;
-        case CALL:
+        case IR_FAMILY_Call:
             count = 2 + (int)IR_C(word) - has_self;
             break;
         default:

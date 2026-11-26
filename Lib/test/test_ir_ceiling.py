@@ -114,7 +114,7 @@ class HandlerIdTests(unittest.TestCase):
         # A handler id that is compared with a bare stack opcode constant
         # (CALL, INSTRUMENTED_LINE, ...) matches whichever handler has that
         # number.  Handler ids are IR_H_<name>; stack opcodes come from
-        # _PyIR_BaseOpcode(), _PyIR_OpcodeHandler[] and the other maps.
+        # _PyIR_OpcodeHandler[].
         test_tools.skip_if_missing("cases_generator")
         root = Path(test_tools.basepath)
         stack = "|".join(sorted(metadata.opmap, key=len, reverse=True))

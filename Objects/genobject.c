@@ -573,13 +573,14 @@ gen_close_iter(PyObject *yf)
     return 0;
 }
 
-/* Whether the word that instr_ptr names came from a RESUME: a Resume arm or
- * its instrumented twin, found by the word's origin */
+/* Whether the word that instr_ptr names is a Resume arm or its instrumented
+ * twin, which the word's family says */
 static inline bool
 is_resume(_PyInterpreterFrame *frame)
 {
     int word = _PyFrame_InstrOffset(frame, frame->instr_ptr);
-    return _PyIR_OriginOpcode(_PyFrame_GetCode(frame), word) == RESUME;
+    int handler = _PyCode_InstrHandler(_PyFrame_GetCode(frame), word);
+    return _PyIR_HandlerFamily[handler] == IR_FAMILY_Resume;
 }
 
 static PyObject *

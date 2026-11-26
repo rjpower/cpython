@@ -59,7 +59,7 @@ HANDLER_FACTS = {
     "Handler metadata entries": "_handler_metadata_entries",
 }
 HANDLER_CONTRACT = (*HANDLER_FACTS.values(), "_handler_metadata")
-HANDLER_FIELDS = ("handler_id", "base_id", "handler_flags")
+HANDLER_FIELDS = ("handler_id", "handler_flags")
 OPCODE_FIELD = re.compile(r"opcode\[([^]]+)\]\.(.+)")
 
 
@@ -98,9 +98,9 @@ def validate_handler_data(data: RawData) -> None:
                 or set(entry) != set(HANDLER_FIELDS)
                 or any(type(entry[field]) is not int for field in HANDLER_FIELDS)):
             raise ValueError(f"incomplete handler facts: {name}")
-        identity, base, flags = (entry[field] for field in HANDLER_FIELDS)
+        identity, flags = (entry[field] for field in HANDLER_FIELDS)
         if (not 0 <= identity < count or identity in by_id
-                or not 0 <= base < count or flags < 0 or flags & ~1023
+                or flags < 0 or flags & ~1023
                 or not flags & HANDLER_METADATA):
             raise ValueError(f"invalid handler facts: {name}")
         if flags & HANDLER_ADAPTIVE and (
@@ -109,12 +109,8 @@ def validate_handler_data(data: RawData) -> None:
                             | HANDLER_NOFB)):
             raise ValueError(f"invalid adaptive handler: {name}")
         by_id[identity] = name
-    for name, entry in metadata.items():
-        base = by_id.get(entry["base_id"])
-        if base is None or metadata[base]["base_id"] != entry["base_id"]:
-            raise ValueError(f"invalid canonical handler base: {name}")
-    if "CACHE" not in metadata or metadata["CACHE"]["handler_id"] != 0:
-        raise ValueError("missing CACHE-0 pair sentinel")
+    if "IR_OPERANDS" not in metadata or metadata["IR_OPERANDS"]["handler_id"] != 0:
+        raise ValueError("missing IR_OPERANDS-0 pair sentinel")
 
     def dispatchable(name):
         return (name in metadata
@@ -134,8 +130,13 @@ def validate_handler_data(data: RawData) -> None:
         if field.startswith("pair_count"):
             pair = re.fullmatch(r"pair_count\[([^]]+)\]", field)
             if (pair is None or not dispatchable(pair[1])
-                    or not (dispatchable(name) or name == "CACHE")):
+                    or not (dispatchable(name) or name == "IR_OPERANDS")):
                 raise ValueError(f"invalid counted-entry pair: {key}")
+
+
+def family_of(handler: str) -> str:
+    """The family of a handler: the head of its dotted name."""
+    return handler.split(".")[0]
 
 
 def pretty(name: str) -> str:
@@ -382,10 +383,9 @@ class OpcodeStats:
                 if "execution_count" in entry}
 
     def get_family_execution_counts(self) -> dict[str, int]:
-        names = {entry["handler_id"]: name for name, entry in self._metadata.items()}
         counts = collections.Counter()
         for name, count in self.get_execution_counts().items():
-            counts[names[self._metadata[name]["base_id"]]] += count
+            counts[family_of(name)] += count
         return dict(counts)
 
     @functools.cache
@@ -479,10 +479,9 @@ class OpcodeStats:
         }
 
     def is_specializable(self, opcode: str) -> bool:
-        identity = self._metadata[opcode]["handler_id"]
-        return any(entry["base_id"] == identity
+        return any(family_of(name) == opcode
                    and entry["handler_flags"] & HANDLER_ADAPTIVE
-                   for entry in self._metadata.values())
+                   for name, entry in self._metadata.items())
 
     def get_entry_kind_counts(self) -> tuple[int, int, int]:
         adaptive = specialized = other = 0

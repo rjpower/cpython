@@ -28,6 +28,8 @@ CONTRACT = _opcode.get_ir_contract()
 OLD_CONTRACT = CONTRACT[:_opcode.IR_FIRST_ARM]
 ROWS = {h: row for h, row in enumerate(OLD_CONTRACT) if row is not None}
 BY_NAME = {opcode._all_opname[h]: row for h, row in ROWS.items()}
+ALL_BY_NAME = {opcode._all_opname[h]: row for h, row in enumerate(CONTRACT)
+               if row is not None}
 
 SLOT_ROLES = (_opcode.IR_ROLE_LOCAL_IN, _opcode.IR_ROLE_LOCAL_OUT,
               _opcode.IR_ROLE_LOCAL_CLEAR, _opcode.IR_ROLE_LOCAL_MOVE,
@@ -120,31 +122,11 @@ class ContractTests(unittest.TestCase):
         # The words that name their operands carry the transfers of their
         # homes, not the head: every handler of the keyword call admits the
         # virtual self role, a flag of the word
-        bases = {opcode.opmap["CALL_KW"], opcode.opmap["INSTRUMENTED_CALL_KW"]}
-        calls = present(*(name for name, row in BY_NAME.items()
-                          if row.base in bases))
-        self.assertEqual({BY_NAME[name].word_flags for name in calls},
-                         {_opcode.IR_F_NO_SELF})
-
-    def test_generator_completion_operand_layout(self):
-        families = {opcode.opmap['FOR_ITER']}
-        # Exported base uses BaseOpcode, which retains instrumented IDs.
-        # Include their positively declared canonical-family twin links.
-        twins = {row.twin for row in ROWS.values()
-                 if row.base in families and row.twin}
-        selected = set()
-        for handler, row in ROWS.items():
-            if row.base not in families and handler not in twins:
-                continue
-            name = opcode._all_opname[handler]
-            selected.add(name)
-            with self.subTest(handler=name):
-                self.assertEqual(row.roles, (_opcode.IR_ROLE_DST,
-                                             _opcode.IR_ROLE_BASE,
-                                             _opcode.IR_ROLE_FB,
-                                             _opcode.IR_ROLE_IMM))
-                self.assertEqual(row.imm, _opcode.IR_LOC_D)
-                self.assertTrue(row.flags & _opcode.IR_FORWARD)
+        calls = {name: row for name, row in ALL_BY_NAME.items()
+                 if name.split(".")[0] == "CallKw"}
+        self.assertTrue(calls)
+        for name, row in calls.items():
+            self.assertTrue(row.word_flags & _opcode.IR_F_NO_SELF, name)
 
     def test_rows(self):
         self.assertEqual(len(CONTRACT), _opcode.IR_NUM_HANDLERS)
@@ -153,12 +135,6 @@ class ContractTests(unittest.TestCase):
             with self.subTest(handler=opcode._all_opname[h]):
                 self.assertTrue(row.flags & _opcode.IR_VALID)
                 self.assertIn(opcode._all_opname[h], named)
-                # A base is the stack opcode that the handler stands for, or
-                # 512 + the handler for one that has no stack op
-                self.assertIn(row.base, {*opcode._stack_opmap.values(),
-                                         *(opcode._HANDLER_OP + h
-                                           for h in opcode._ir_only_handlers)})
-                self.assertIn(row.shadow, {None, *opcode._stack_opmap.values()})
         for name in (*opcode._specialized_opmap, *opcode._ir_handlers):
             if (opcode._ir_handlers.get(name, 0) >= _opcode.IR_FIRST_ARM
                     or name in TRANSLATOR_ONLY):
@@ -210,17 +186,6 @@ class ContractTests(unittest.TestCase):
             role = expected[name]
             with self.subTest(name=name):
                 self.assertEqual(oparg_role(BY_NAME[name]), role)
-        # Exactly the opcodes whose oparg names a local or a cell have slot
-        # roles, except the stack ops that regcfg.c lowers by their own rules
-        stack_only = {"LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK",
-                      "LOAD_FAST_AND_CLEAR", "DELETE_FAST"}
-        named = {opcode.opname[op] for op in (*opcode.haslocal, *opcode.hasfree)
-                 if op < opcode.MIN_INSTRUMENTED_OPCODE} - stack_only
-        slots = {name for name, row in BY_NAME.items()
-                 if row.base < opcode.MIN_INSTRUMENTED_OPCODE
-                 and oparg_role(row) in SLOT_ROLES}
-        bases = {opcode.opname[BY_NAME[name].base] for name in slots}
-        self.assertLessEqual(bases, named)
 
     def test_targets(self):
         for name, op in opcode.opmap.items():
@@ -249,7 +214,7 @@ class ContractTests(unittest.TestCase):
         kinds = dis._FEEDBACK_KINDS
         for h, row in ROWS.items():
             # A twin shares the format, and so the entry, of its family
-            family = opcode.opname[row.base].removeprefix("INSTRUMENTED_")
+            family = opcode._all_opname[h]
             with self.subTest(handler=opcode._all_opname[h]):
                 if row.fb == _opcode.IR_LOC_NONE:
                     self.assertEqual((row.fb_kind, row.fb_size), (0, 0))
@@ -302,13 +267,7 @@ class ContractTests(unittest.TestCase):
                 if name.startswith("INSTRUMENTED_"):
                     self.assertEqual(twin, h)
                 if twin is None:
-                    if row.base == opcode.opmap["SEND"]:
-                        self.assertEqual(row.events, events.STOP_ITERATION | events.BRANCH_LEFT)
-                    elif row.base in {opcode.opmap[name] for name in
-                                      ('CLEANUP_THROW', 'RAISE_VARARGS', 'RERAISE')}:
-                        self.assertEqual(row.events, events.RERAISE)
-                    else:
-                        self.assertEqual(row.events, 0)
+                    self.assertEqual(row.events, 0)
                     continue
                 self.assertTrue(opcode._all_opname[twin].startswith("INSTRUMENTED_"))
                 self.assertEqual(ROWS[twin].twin, twin)

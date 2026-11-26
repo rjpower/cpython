@@ -19,7 +19,6 @@
 #include "pycore_long.h"          // _PyLong_IsNonNegativeCompact()
 #include "pycore_moduleobject.h"
 #include "pycore_object.h"
-#include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
 #include "pycore_pylifecycle.h"   // _PyOS_URandomNonblock()
 #include "pycore_rop_rows.h"      // _PyRop_Install()
@@ -242,19 +241,6 @@ static inline int
 instr_family(_PyInstr *instr)
 {
     return _PyIR_HandlerFamily[IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr))];
-}
-
-/* The opcode of the handler; for an IR-only handler, the instruction that
- * it stands for, as BINARY_OP for BINARY_OP_ADD. */
-static inline int
-instr_opcode(_PyInstr *instr)
-{
-    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    if (_PyIR_IsOnlyHandler(handler)) {
-        handler = _PyIR_FormatOf(handler)->shadow;
-        assert(!_PyIR_IsOnlyHandler(handler));
-    }
-    return handler;
 }
 
 static inline int
@@ -1288,7 +1274,7 @@ specialize_value_getset(PyObject *owner, _PyInstr *instr, PyObject *descr,
 
 static int
 do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name,
-                                 bool method, bool shadow, uint32_t shared_keys_version,
+                                 bool method, bool shadowed, uint32_t shared_keys_version,
                                  DescriptorClassification kind, PyValue descriptor, unsigned int tp_version)
 {
     PyObject *descr = PyValue_IsObject(descriptor) ? PyValue_AsKnownObjectBorrow(descriptor) : NULL;
@@ -1307,7 +1293,7 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             return -1;
         case METHOD:
         {
-            if (shadow) {
+            if (shadowed) {
                 goto try_instance;
             }
             if (method) {
@@ -1386,13 +1372,13 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
         case BUILTIN_CLASSMETHOD:
         case PYTHON_CLASSMETHOD:
         case NON_OVERRIDING:
-            if (shadow) {
+            if (shadowed) {
                 goto try_instance;
             }
             return -1;
         case INLINE_VALUE:
         case NON_DESCRIPTOR:
-            if (shadow) {
+            if (shadowed) {
                 goto try_instance;
             }
             if (!method) {
@@ -1405,7 +1391,7 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             }
             return -1;
         case ABSENT:
-            if (shadow) {
+            if (shadowed) {
                 goto try_instance;
             }
             // The row reports "none" and the macro backs off
@@ -1434,8 +1420,8 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name,
     // then the type version, this ensures we will still deopt if that happens.
     DescriptorClassification kind = analyze_descriptor_load(type, name, &descr, &tp_version);
     uint32_t shared_keys_version = 0;
-    bool shadow = instance_has_key(owner, name, &shared_keys_version);
-    int result = do_specialize_instance_load_attr(owner, instr, name, method, shadow, shared_keys_version, kind, descr, tp_version);
+    bool shadowed = instance_has_key(owner, name, &shared_keys_version);
+    int result = do_specialize_instance_load_attr(owner, instr, name, method, shadowed, shared_keys_version, kind, descr, tp_version);
     PyValue_XCLOSE(descr);
     return result;
 }
@@ -1447,7 +1433,6 @@ attr_specialize(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name,
                 bool method)
 {
     assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[LOAD_ATTR] == INLINE_CACHE_ENTRIES_LOAD_ATTR);
     if (!PyValue_IsObject(owner_st)) {
         SPECIALIZATION_FAIL(IR_FAMILY_GetAttr, SPEC_FAIL_OTHER);
         unspecialize(instr);
@@ -1501,7 +1486,6 @@ static void
 attr_specialize_store(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
-    assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
     PyValue descr = PyValue_NULL;
     _PyFbAttr *fb = NULL;
     if (!PyValue_IsObject(owner_st)) {

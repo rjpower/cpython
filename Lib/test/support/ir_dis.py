@@ -347,13 +347,17 @@ _ARM_OPS = {"Const.Small": "LOAD_SMALL_INT", "Const.Common": "LOAD_COMMON_CONSTA
 # The field of the local, for the families whose local is a home operand
 _LOCAL_FIELD = {"LocalRead": 1, "SaveLocal": 1, "LocalWrite": 0, "LocalDelete": 0}
 
+# The first stack op of the family of each handler, which the family's ops
+# clause declares
+_family_ops = _testinternalcapi.handler_base_ops()
+
 def _deoptop(op):
     """The opcode that handler op stands for, without specialisation"""
-    row = _ir_contract[op] if op < len(_ir_contract) else None
-    if row is None:
+    base = _family_ops[op] if op < len(_family_ops) else None
+    if base is None:
         return op
     name = _ARM_OPS.get(_all_opname[op])
-    return row.base if name is None else _stack_opmap[name]
+    return base if name is None else _stack_opmap[name]
 
 def _op_of_name(name):
     """The opcode that Instruction.opcode holds for the name of an instruction"""
@@ -547,7 +551,7 @@ def _decode_word(handler, fields, fbinit=None):
     YIELD_VALUE destination receives the next resume input; neither is an
     unconditional definition during the current operation."""
     row = _ir_contract[handler]
-    roles, imm, base = row.roles, row.imm, row.base
+    roles, imm, base = row.roles, row.imm, _deoptop(handler)
     dst = None
     srcs = []
     fb = None
@@ -1130,10 +1134,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # shows as the instruction that it runs; a specialisation shows
             # as itself
             if runs in _ir_only_handlers:
-                # Execution-only variants preserve their specialization in
-                # the adaptive view; structural IR handlers keep their base.
-                shadow = _ir_contract[runs].shadow
-                op = shadow if shadow is not None else _deoptop(runs)
+                op = _deoptop(runs)
             else:
                 op = _HANDLER_STACK.get(runs, _HANDLER_OP + runs)
         if arg_resolver:

@@ -276,7 +276,6 @@ class ForceArmTests(unittest.TestCase):
         twins = {contract[h].twin for h in handlers.values()} - {None}
         self.assertEqual(len(contract), max(twins.union(handlers.values())) + 1)
         row = contract[handlers["Add.Int"]]
-        self.assertEqual(row.base, dis.opmap["BINARY_OP"])
         self.assertEqual(row.roles[1:3],
                          (_opcode.IR_ROLE_IN0, _opcode.IR_ROLE_IN0 + 1))
         self.assertIsNone(row.twin)
@@ -295,24 +294,6 @@ class ForceArmTests(unittest.TestCase):
                                        "Binary.", "AppendText."))
                 self.assertEqual(length, 2 if two else 1)
                 self.assertIsNotNone(contract[handler])
-
-    def test_every_arm_stands_for_a_stack_op_of_its_family(self):
-        # Tables sized for stack ops (_PyOpcode_Deopt, _PyOpcode_Caches, the
-        # statistics) are indexed through the base opcode, never the handler
-        # The base is the first stack op of the family's ops(...) clause
-        test_tools.skip_if_missing("cases_generator")
-        with test_tools.imports_under_tool("cases_generator"):
-            import rop_check
-        root = Path(__file__).resolve().parents[2]
-        program = rop_check.load(
-            sorted((root / "Python" / "register_ops").glob("*.rop")))
-        contract = _opcode.get_ir_contract()
-        for name, handler in capi.arm_handlers().items():
-            with self.subTest(arm=name):
-                family = program.families[program.arms[name].family]
-                self.assertEqual(contract[handler].base,
-                                 dis.opmap[family.ops[0]])
-                self.assertEqual(contract[handler].shadow, contract[handler].base)
 
     def test_the_old_specializer_leaves_a_forced_arm_to_its_miss_route(self):
         # Adaptation of an arm word goes through the family's adaptation

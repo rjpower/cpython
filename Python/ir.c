@@ -84,30 +84,7 @@ const char *
 _PyIR_HandlerName(int handler)
 {
     assert(handler >= 0 && handler < IR_NUM_HANDLERS);
-    return _PyIR_IsOnlyHandler(handler)
-        ? _PyIR_OnlyNames[handler] : _PyOpcode_OpName[_PyIR_HandlerOpcode[handler]];
-}
-
-int
-_PyIR_OriginOpcode(PyCodeObject *co, int word)
-{
-    assert(word >= 0 && word < (int)_PyCode_IR(co)->nwords);
-    int offset = (int)_PyCode_IR(co)->pcmap[word];
-    return _PyOpcode_Deopt[_PyCode_CODE(co)[offset].op.code];
-}
-
-int
-_PyIR_BaseOpcode(int handler)
-{
-    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
-    if (handler == IR_OPERANDS) {
-        // Part of the instruction before it, as a CACHE is upstream
-        return CACHE;
-    }
-    // The shadow of a handler is the stack opcode that it stands for
-    int shadow = _PyIR_FormatOf(handler)->shadow;
-    assert(shadow < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
-    return _PyOpcode_Deopt[shadow];
+    return _PyIR_OnlyNames[handler];
 }
 
 /* The value of the field at loc of word */

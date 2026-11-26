@@ -128,9 +128,9 @@ def _handler_field(name):
     handler, *flags = name.split("+")
     return _all_opmap[handler] | sum(_WORD_FLAGS[flag] for flag in flags)
 _ROLE_DST = _opcode.IR_ROLE_DST
-_ROLE_BASE = _opcode.IR_ROLE_BASE
+_ROLE_GROUP = _opcode.IR_ROLE_GROUP
 _ROLE_FB = _opcode.IR_ROLE_FB
-_ROLE_IN0 = _opcode.IR_ROLE_IN0
+_ROLE_SRC = _opcode.IR_ROLE_SRC
 _LOC_NONE = _opcode.IR_LOC_NONE
 _LOC_A = _opcode.IR_LOC_A
 _LOC_CD = _opcode.IR_LOC_CD
@@ -552,10 +552,11 @@ def _decode_word(handler, fields, fbinit=None):
     srcs = []
     fb = None
     for k, role in enumerate(roles):
-        if role == _ROLE_DST:
+        if role == _ROLE_DST or (role == _ROLE_GROUP
+                                 and row.flags & _opcode.IR_GROUP_OUT):
             # The sentinel discards a semantic result or unused resume input.
             dst = fields[k] if fields[k] != 0xFFF else None
-        elif role == _ROLE_BASE or role >= _ROLE_IN0:
+        elif role == _ROLE_GROUP or role >= _ROLE_SRC:
             srcs.append(fields[k])
         elif role == _ROLE_FB:
             fb = _fb_unit(fields[k])

@@ -86,7 +86,7 @@ class CallRoleTests(unittest.TestCase):
                     self.assertEqual(row.word_flags & flags, flags)
                     # The callable is an input; the operands follow the head
                     self.assertEqual(row.roles[0:2],
-                                     (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_IN0))
+                                     (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_SRC))
 
     def test_fused_branches_retire_holes_on_both_successors(self):
         def choose(fn, first, second, sentinel):

@@ -224,6 +224,53 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
 }
 
 
+/* Formats */
+
+/* The translator's row of an arm: its word format's flags, effects, imm and
+ * operands, its fields' translator roles (_PyRegCfg_ArmRole), and the
+ * inputs and result those roles give.  A window's result is part 2 of its
+ * group, and part 0 passes through where the family's edge 0 keeps it. */
+void
+_PyRegCfg_ArmFormat(int handler, _PyStackFormat *row)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    memset(row, 0, sizeof(*row));
+    row->flags = fmt->flags & ~_PyIR_GROUP_OUT;
+    row->effects = fmt->effects;
+    row->imm = fmt->imm;
+    row->operands = fmt->operands;
+    row->through = (_PyIRExtent){0, _PyIR_EXT_FIXED};
+    int window = -1, result = 0, own_dst = 0, ninputs = 0;
+    for (int f = 0; f < 4; f++) {
+        int role = _PyRegCfg_ArmRole(fmt, f);
+        row->roles[f] = (uint8_t)role;
+        if (role == _PyIR_ROLE_GROUP) {
+            window = f;
+        }
+        else if (role >= _PyIR_ROLE_SRC) {
+            ninputs += fmt->roles[f] == _PyIR_ROLE_GROUP ? fmt->group : 1;
+        }
+        else if (role == _PyIR_ROLE_DST) {
+            result = 1;
+            own_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
+        }
+    }
+    row->ninputs = (uint8_t)ninputs;
+    row->borrow_mask = (uint8_t)((1 << ninputs) - 1);
+    if (window >= 0) {
+        int kept = ((fmt->edges >> (2 * window)) & 3) == _PyIR_HOME_PRESERVE;
+        row->flags |= _PyIR_WINDOW;
+        row->dst = 2;
+        row->through.k = (int8_t)((fmt->normal & 1) && kept);
+    }
+    else {
+        row->dst = result ? (int8_t)-ninputs : _PyIR_NO_DST;
+    }
+    if (window >= 0 || own_dst) {
+        row->flags |= _PyIR_STORE_DST | _PyIR_DISCARDS;
+    }
+}
+
 /* Whether op jumps to its target.  END_ASYNC_FOR names the SEND of its
  * loop, for sys.monitoring, but does not go there (_PyIR_NAMES_TARGET). */
 static inline int
@@ -4825,13 +4872,13 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
                 && !(op->flags & _PyReg_DISCARD)) {
                 high = Py_MAX(high, slots.out[ndst++]);
             }
-            else if (role == _PyIR_ROLE_BASE) {
+            else if (role == _PyIR_ROLE_GROUP) {
                 // A window's handler reads and writes from its base up
                 int n = Py_MAX(op->nread, op->nout);
                 high = Py_MAX(high, slots.base + Py_MAX(n, 1) - 1);
             }
-            else if (role >= _PyIR_ROLE_IN0) {
-                high = Py_MAX(high, slots.in[role - _PyIR_ROLE_IN0]);
+            else if (role >= _PyIR_ROLE_SRC) {
+                high = Py_MAX(high, slots.in[role - _PyIR_ROLE_SRC]);
             }
         }
         cfg->ntemps = Py_MAX(cfg->ntemps, high + 1 - nl);

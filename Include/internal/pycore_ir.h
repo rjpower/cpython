@@ -205,14 +205,16 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_FB_UNITS_MAX     4096
 #define IR_FB_SHARED        IR_FIELD_MAX
 
-/* Field roles; input k of a register-style instruction is _PyIR_ROLE_IN0 + k.
- * A field that holds the oparg has role IMM, or one of the slot roles when
+/* Field roles; source k of a register instruction is _PyIR_ROLE_SRC + k, and
+ * its home group's part 0 is the home of its GROUP field (part i is that
+ * home plus i).  A translator's row (_PyStackFormat) gives the base of a
+ * window role GROUP.  A field that holds the oparg has role IMM, or one of the slot roles when
  * the oparg names a slot below co_nlocalsplus that the handler reads or
  * writes itself (_PyIR_RoleIsImm()). */
 enum {
     _PyIR_ROLE_NONE,
     _PyIR_ROLE_DST,
-    _PyIR_ROLE_BASE,
+    _PyIR_ROLE_GROUP,
     _PyIR_ROLE_FB,
     _PyIR_ROLE_IMM,
     _PyIR_ROLE_LOCAL_IN,    // reads the local, which keeps its value
@@ -224,7 +226,7 @@ enum {
     _PyIR_ROLE_CELL,        // reads the cell or free variable in the slot
     _PyIR_ROLE_COUNT,       // the length of a span operand
     _PyIR_ROLE_ELEMENT,     // an element of the word's spans
-    _PyIR_ROLE_IN0,
+    _PyIR_ROLE_SRC,
 };
 
 static inline int
@@ -270,6 +272,8 @@ enum {
 #define _PyIR_NAMES_TARGET  0x200   // the oparg names a word for monitoring
                                     // only, which control never reaches
                                     // (END_ASYNC_FOR names its END_SEND)
+#define _PyIR_GROUP_OUT     0x400   // the word defines its home group
+                                    // and does not read it (Out<G>)
 #define _PyIR_DISCARDS      0x800   // dst may be IR_NO_DST: the handler
                                     // releases the result (the calls)
 
@@ -381,8 +385,7 @@ typedef struct _PyIRFormat {
     uint8_t transfer_kind;  // checked normal-edge _PyIR_TRANSFER_* contract
     /* The homes a register instruction names (_PyIR_WordHomes): home h is
      * field h for h < 4, and part h - 3 of its home group for h = 4, 5. */
-    uint8_t group;          // the parts of the home group operand, or 0
-    uint8_t group_at;       // the field that names the group's part 0
+    uint8_t group;          // the parts of the GROUP operand, or 0
     uint8_t normal;         // bit e: an arm of the family takes edge e
     uint8_t vacant;         // bit h: home h may be NULL when the word reads it
     uint8_t committed;      // bit e: edge e publishes before its callbacks
@@ -460,11 +463,23 @@ static inline int
 _PyIR_HasDst(const _PyIRFormat *fmt)
 {
     for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] == _PyIR_ROLE_DST && !(fmt->group && f == fmt->group_at)) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
             return 1;
         }
     }
     return 0;
+}
+
+/* The field of the word format's GROUP operand, or -1 */
+static inline int
+_PyIR_GroupField(const _PyIRFormat *fmt)
+{
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_GROUP) {
+            return f;
+        }
+    }
+    return -1;
 }
 
 /* Whether words of the generic handler opcode specialise from their entry
@@ -936,7 +951,7 @@ _PyIR_SingleSpanReads(const _PyIRFormat *fmt)
     int has_dst = 0, has_input = 0;
     for (int f = 0; f < 4; f++) {
         has_dst |= fmt->roles[f] == _PyIR_ROLE_DST;
-        has_input |= fmt->roles[f] >= _PyIR_ROLE_IN0;
+        has_input |= fmt->roles[f] >= _PyIR_ROLE_SRC;
     }
     return has_dst || !has_input;
 }

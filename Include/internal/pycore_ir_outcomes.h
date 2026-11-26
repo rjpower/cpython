@@ -39,10 +39,10 @@ _PyIR_NormalSemanticTransfer(_PyIRWord word, int arg, int home, int nl)
                 dst = (int)fields[f];
             }
         }
-        else if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+        else if (fmt->roles[f] == _PyIR_ROLE_GROUP) {
             base = (int)fields[f];
         }
-        else if (fmt->roles[f] == _PyIR_ROLE_IN0) {
+        else if (fmt->roles[f] == _PyIR_ROLE_SRC) {
             input = (int)fields[f];
         }
     }
@@ -113,30 +113,33 @@ _PyIR_WordHomes(_PyIRWord word, _PyIRHomes *v)
     for (int h = 0; h < _PyIR_HOMES; h++) {
         v->slot[h] = -1;
     }
+    int at = -1;
     for (int f = 0; f < 4; f++) {
         int role = fmt->roles[f];
-        int group = fmt->group && f == fmt->group_at;
         if (role == _PyIR_ROLE_DST) {
-            /* A group in a destination field is defined, not read (Out) */
             if (fields[f] != IR_NO_DST) {
                 v->slot[f] = (int)fields[f];
             }
-            if (!group) {
-                v->dst |= 1u << f;
+            v->dst |= 1u << f;
+        }
+        else if (role == _PyIR_ROLE_GROUP) {
+            /* A defined group (GROUP_OUT) is not read */
+            at = f;
+            v->slot[f] = (int)fields[f];
+            if (!(fmt->flags & _PyIR_GROUP_OUT)) {
+                v->read |= 1u << f;
             }
         }
-        else if (role == _PyIR_ROLE_BASE || role == _PyIR_ROLE_CELL ||
-                 role >= _PyIR_ROLE_IN0)
-        {
+        else if (role == _PyIR_ROLE_CELL || role >= _PyIR_ROLE_SRC) {
             v->slot[f] = (int)fields[f];
             v->read |= 1u << f;
         }
     }
-    if (fmt->group) {
-        int first = v->slot[fmt->group_at];
+    if (at >= 0) {
+        int first = v->slot[at];
         for (int i = 1; i < fmt->group && 3 + i < _PyIR_HOMES; i++) {
             v->slot[3 + i] = first < 0 ? -1 : first + i;
-            if (v->read & (1u << fmt->group_at)) {
+            if (v->read & (1u << at)) {
                 v->read |= 1u << (3 + i);
             }
         }
@@ -225,7 +228,8 @@ _PyIR_HomeTouched(const _PyIRHomes *v, int home)
 static inline int
 _PyIR_HomeGroup(const _PyIRHomes *v)
 {
-    return v->fmt->group ? v->slot[v->fmt->group_at] : -1;
+    int at = _PyIR_GroupField(v->fmt);
+    return at < 0 ? -1 : v->slot[at];
 }
 
 /* The word's home operands lie in the frame: a destination below limit or
@@ -238,7 +242,7 @@ _PyIR_HomesInFrame(_PyIRWord word, const _PyIRHomes *v, int nl, int limit)
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     for (int f = 0; f < 4; f++) {
         int role = fmt->roles[f];
-        if (fmt->group && f == fmt->group_at) {
+        if (role == _PyIR_ROLE_GROUP) {
             int first = v->slot[f];
             if (first < nl || first > limit - fmt->group) {
                 return 0;
@@ -254,7 +258,7 @@ _PyIR_HomesInFrame(_PyIRWord word, const _PyIRHomes *v, int nl, int limit)
                 return 0;
             }
         }
-        else if (role >= _PyIR_ROLE_IN0 && fields[f] >= (uint32_t)limit) {
+        else if (role >= _PyIR_ROLE_SRC && fields[f] >= (uint32_t)limit) {
             return 0;
         }
     }
@@ -700,7 +704,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int edge, int nl, int limit,
          * homes: native retirement clears them, and a Python child moves
          * them into its frame, which lies above the parent's.  Only the
          * result's home is rewritten besides, and it is no NULL fact. */
-        if (fmt->roles[0] != _PyIR_ROLE_DST || fmt->roles[1] != _PyIR_ROLE_IN0 ||
+        if (fmt->roles[0] != _PyIR_ROLE_DST || fmt->roles[1] != _PyIR_ROLE_SRC ||
             (IR_A(word) != IR_NO_DST && IR_A(word) >= (uint32_t)limit) ||
             IR_B(word) >= (uint32_t)limit)
         {

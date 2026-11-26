@@ -2306,8 +2306,8 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int base = -1;
     for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] == _PyIR_ROLE_BASE ||
-            (family == IR_FAMILY_ExceptLeave && fmt->roles[f] == _PyIR_ROLE_IN0) ||
+        if (fmt->roles[f] == _PyIR_ROLE_GROUP ||
+            (family == IR_FAMILY_ExceptLeave && fmt->roles[f] == _PyIR_ROLE_SRC) ||
             // The saved exception: ExceptEnter's first destination
             (family == IR_FAMILY_ExceptEnter && fmt->roles[f] == _PyIR_ROLE_DST &&
              base < 0))
@@ -2322,7 +2322,7 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
         {
             local = (int)fields[f];
         }
-        if (fmt->roles[f] == _PyIR_ROLE_IN0) {
+        if (fmt->roles[f] == _PyIR_ROLE_SRC) {
             input = (int)fields[f] - analysis->nl;
         }
     }

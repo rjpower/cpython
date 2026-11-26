@@ -213,17 +213,50 @@ _PyRegOp_CallBorrows(const _PyRegOp *op, int k)
     return k != 1 && !(op->opcode == ROP_OP_CallKw_Generic && k == op->nread - 1);
 }
 
+/* The translator's role of field f of an arm's word format.  A word that
+ * reads its home group and has a destination of its own (ForIter, Send,
+ * CleanupThrow) steps the group as a window from its base (GROUP).  A
+ * word that spends its group reads the parts as inputs after its sources
+ * (IterClose).  A defined group (GROUP_OUT, IterOpen's pair) is the word's
+ * result. */
+static inline int
+_PyRegCfg_ArmRole(const _PyIRFormat *fmt, int f)
+{
+    int role = fmt->roles[f];
+    if (role != _PyIR_ROLE_GROUP) {
+        return role;
+    }
+    if (fmt->flags & _PyIR_GROUP_OUT) {
+        return _PyIR_ROLE_DST;
+    }
+    if (_PyIR_HasDst(fmt)) {
+        return _PyIR_ROLE_GROUP;
+    }
+    int nsrc = 0;
+    for (int g = 0; g < 4; g++) {
+        nsrc += fmt->roles[g] >= _PyIR_ROLE_SRC;
+    }
+    return _PyIR_ROLE_SRC + nsrc;
+}
+
+void _PyRegCfg_ArmFormat(int handler, _PyStackFormat *row);
+
 /* The translator's row of a CFG opcode: a stack op's (_PyStack_Formats), or
- * an arm's (_PyStack_ArmFormats), which the generator derives from the arm's
- * word format */
+ * an arm's, which _PyRegCfg_ArmFormat derives from its word format into
+ * row */
 static inline const _PyStackFormat *
-_PyRegCfg_FormatOf(int opcode)
+_PyRegCfg_FormatInto(int opcode, _PyStackFormat *row)
 {
     if (ROP_CFG_IS_ARM(opcode)) {
-        return &_PyStack_ArmFormats[ROP_CFG_HANDLER(opcode)];
+        _PyRegCfg_ArmFormat(ROP_CFG_HANDLER(opcode), row);
+        return row;
     }
     return &_PyStack_Formats[opcode];
 }
+
+/* The same, into a row that lives as long as the enclosing block */
+#define _PyRegCfg_FormatOf(opcode) \
+    _PyRegCfg_FormatInto((opcode), &(_PyStackFormat){0})
 
 /* The role of the field of row fmt that holds the oparg: IMM or a slot
  * role; NONE if no single field holds it. */

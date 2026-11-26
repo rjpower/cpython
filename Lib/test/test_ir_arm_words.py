@@ -278,7 +278,7 @@ class ForceArmTests(unittest.TestCase):
         row = contract[handlers["Add.Int"]]
         self.assertEqual(row.base, dis.opmap["BINARY_OP"])
         self.assertEqual(row.roles[1:3],
-                         (_opcode.IR_ROLE_IN0, _opcode.IR_ROLE_IN0 + 1))
+                         (_opcode.IR_ROLE_SRC, _opcode.IR_ROLE_SRC + 1))
         self.assertIsNone(row.twin)
         self.assertTrue(contract[handlers["Add.Generic"]].effects & 0x1)
 

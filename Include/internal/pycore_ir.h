@@ -863,7 +863,7 @@ _PyCode_InstrLength(PyCodeObject *co, int i)
 
 /* The opcode of the stack instruction that handler stands for, without
  * specialisation or instrumentation: BINARY_OP for BINARY_OP_ADD, LOAD_ATTR
- * for LOAD_ATTR.  IR_JUMP, which has no stack instruction, is
+ * for LOAD_ATTR.  Jump.Trailing, which has no stack instruction, is
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 

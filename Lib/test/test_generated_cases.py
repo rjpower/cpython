@@ -3177,15 +3177,9 @@ class TestIRCases(unittest.TestCase):
     def test_home_helpers_keep_ordinary_escape_publication(self):
         source = BYTECODES
         analysis = analyzer.analyze_files([str(source)])
-<<<<<<< HEAD
-        expected = {}
-||||||| 166df1ae65e
-        expected = {"BUILD_STRING": "IR_BUILD_STRING"}
-=======
         expected = {"BUILD_STRING": "IR_BUILD_STRING", "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
         text = source.read_text()
         live = self.live_among(text, *expected, "_INSERT_NULL")
->>>>>>> pyjit/rir90
         for name, helper in expected.items():
             if name not in live:
                 continue

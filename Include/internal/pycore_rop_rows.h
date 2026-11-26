@@ -48,9 +48,6 @@ typedef struct {
 } _PyRopSpan;
 
 /* The rows of the Move arms, in ceval.c */
-PyAPI_FUNC(void) _PyFrame_ParallelMove(_PyInterpreterFrame *frame, int n,
-                                       const int32_t *src, const int32_t *dst,
-                                       int stride);
 PyAPI_FUNC(void) _PyFrame_ApplyRecipe(_PyInterpreterFrame *frame,
                                       const int32_t *recipe);
 PyAPI_FUNC(void) _PyRop_MoveInOrder(const _PyRopSpan *d, const _PyRopSpan *s);

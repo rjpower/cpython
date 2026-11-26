@@ -5562,7 +5562,8 @@ _PyRegCfg_Build(_PyRegCfg *cfg)
  * moves before an op and the parallel moves (_PyReg_MOVES) that bind a
  * region's parameters at an edge.  Each set becomes one Move.Transfer
  * word (Python/register_ops/values.rop), whose run is the parallel move
- * that the unwinder's recipes use too (_PyFrame_ParallelMove()).  A
+ * that the unwinder's recipes sequence the same way
+ * (_PyRegCfg_SequenceRecipe()).  A
  * move's target is vacant (NULL) or the source of another move of the
  * set, so no value ever has two owners, and none is left behind.  The
  * set is sequenced here: the pairs that form no cycle are ordered so that
@@ -5641,20 +5642,19 @@ collect_moves(_PyRegCfg *cfg, _PyRegOp *op, move_set *m, int *from,
     return SUCCESS;
 }
 
-/* Sequence the pairs of m, which are a parallel move: the pairs that form
- * no cycle in order, in m itself (a pair runs when no pair that has not run
- * reads its destination), and the cycles after them in cyc[], each as the
- * homes in turn: home i + 1 takes home i's owner, home 0 the last's.
- * *ncyc is the number of homes in cyc[] and cycle_len[] gets each length. */
-static void
-sequence_moves(move_set *m, int *scratch, int *cyc, int *cycle_len,
-               int *ncycles)
+/* Sequence the n pairs src[q] to dst[q], which are a parallel move: the
+ * pairs that form no cycle, in place and in order (a pair runs when no pair
+ * that has not run reads its destination), the number of which is returned,
+ * and the cycles after them in cyc[], each as the homes in turn: home i + 1
+ * takes home i's owner, and home 0 the last's.  cycle_len[] gets the length
+ * of each and *ncycles their number.  scratch has room for 3n ints. */
+int
+_PyRegCfg_SequenceMoves(int n, int *src, int *dst, int *scratch, int *cyc,
+                        int *cycle_len, int *ncycles)
 {
-    int n = m->n;
-    int *src = scratch, *dst = scratch + n;
-    int *ran = scratch + 2 * n;
-    memcpy(src, m->src, n * sizeof(int));
-    memcpy(dst, m->dst, n * sizeof(int));
+    int *src0 = scratch, *dst0 = scratch + n, *ran = scratch + 2 * n;
+    memcpy(src0, src, n * sizeof(int));
+    memcpy(dst0, dst, n * sizeof(int));
     memset(ran, 0, n * sizeof(int));
     int out = 0, left = n, ncyc = 0;
     *ncycles = 0;
@@ -5663,13 +5663,13 @@ sequence_moves(move_set *m, int *scratch, int *cyc, int *cycle_len,
         for (int q = 0; q < n; q++) {
             int blocked = 0;
             for (int p = 0; p < n && !blocked; p++) {
-                blocked = !ran[p] && p != q && src[p] == dst[q];
+                blocked = !ran[p] && p != q && src0[p] == dst0[q];
             }
             if (ran[q] || blocked) {
                 continue;
             }
-            m->src[out] = src[q];
-            m->dst[out] = dst[q];
+            src[out] = src0[q];
+            dst[out] = dst0[q];
             out++;
             ran[q] = 1;
             left--;
@@ -5683,12 +5683,12 @@ sequence_moves(move_set *m, int *scratch, int *cyc, int *cycle_len,
         }
         int len = 0;
         for (int p = q;;) {
-            cyc[ncyc++] = src[p];
+            cyc[ncyc++] = src0[p];
             len++;
             ran[p] = 1;
             int next = -1;
             for (int r = 0; r < n && next < 0; r++) {
-                if (!ran[r] && src[r] == dst[p]) {
+                if (!ran[r] && src0[r] == dst0[p]) {
                     next = r;
                 }
             }
@@ -5699,7 +5699,60 @@ sequence_moves(move_set *m, int *scratch, int *cyc, int *cycle_len,
         }
         cycle_len[(*ncycles)++] = len;
     }
-    m->n = out;
+    return out;
+}
+
+/* The sequenced ingress recipe (pycore_ir_exception.h) of the n pairs of a
+ * source slot and a home, in out[], which has room for 4 * n + 3 entries:
+ * the pairs that form no cycle in order, then the pairs of each cycle in
+ * turn, then the cycles' lengths and the sources that no home takes, which
+ * the unwinder releases.  Returns the entries, or -1 with MemoryError. */
+int
+_PyRegCfg_SequenceRecipe(int n, const int *from, const int *home, int32_t *out)
+{
+    int *buf = PyMem_Malloc(8 * (size_t)n * sizeof(int));
+    if (buf == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    int *src = buf, *dst = buf + n, *scratch = buf + 2 * n;
+    int *cyc = buf + 5 * n, *cycle_len = buf + 6 * n;
+    memcpy(src, from, n * sizeof(int));
+    memcpy(dst, home, n * sizeof(int));
+    int ncycles;
+    int npath = _PyRegCfg_SequenceMoves(n, src, dst, scratch, cyc, cycle_len,
+                                        &ncycles);
+    int at = 0;
+    out[at++] = n;
+    for (int q = 0; q < npath; q++) {
+        out[at++] = src[q];
+        out[at++] = dst[q];
+    }
+    for (int c = 0, first = 0; c < ncycles; first += cycle_len[c++]) {
+        for (int i = 0; i < cycle_len[c]; i++) {
+            out[at++] = cyc[first + i];
+            out[at++] = cyc[first + (i + 1) % cycle_len[c]];
+        }
+    }
+    out[at++] = ncycles;
+    for (int c = 0; c < ncycles; c++) {
+        out[at++] = cycle_len[c];
+    }
+    int nrel_at = at++;
+    int nrel = 0;
+    for (int q = 0; q < npath; q++) {
+        int is_home = 0;
+        for (int p = 0; p < n; p++) {
+            is_home |= home[p] == src[q];
+        }
+        if (!is_home) {
+            out[at++] = src[q];
+            nrel++;
+        }
+    }
+    out[nrel_at] = nrel;
+    PyMem_Free(buf);
+    return at;
 }
 
 /* A resolved move word at the place of op: the slots are operands[at...],
@@ -5785,7 +5838,8 @@ resolve_moves(_PyRegCfg *cfg)
                 }
             }
             int ncycles;
-            sequence_moves(&m, scratch, cyc, cycle_len, &ncycles);
+            m.n = _PyRegCfg_SequenceMoves(m.n, m.src, m.dst, scratch, cyc,
+                                          cycle_len, &ncycles);
             // The first word of the set carries the recipe: the others
             // follow it with no op between
             int first_word = 1;

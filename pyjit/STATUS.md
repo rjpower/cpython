@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `05612771f4c` (pushed) holds:
+`pyjit/rir90` at `18c9f520e3b` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -142,6 +142,19 @@ AR ports.  The id-shifted guard build had stopped importing
 `test.support.ir_dis`, because the handler-name export assumed that every
 id below the shift had a name; an id with no handler now has the name None.
 
+PL is merged.  Each span arm's word length and element positions are
+constants of its declared layout, so no hot path decodes span geometry.
+Unpack writes its items straight into its homes, in target order: the
+heap owner buffer, its reversal and its second pass are deleted.  A tuple
+unpack cannot fail; a list is checked again under its lock before any
+write; the generic and starred forms stage their items in a tuple, so a
+wrong length or a raising iterator leaves every home unchanged.  The arm
+publishes through a C park of 16 homes and holds a longer source by a
+count; frame temporaries reserved at lowering would replace it, which
+needs a language change (on the freeze list).  Measured on CPU 1 (cycles
+of golden87's): unpack_sequence 2.91 to 1.83, nbody 1.91 to 1.53,
+spectral_norm 1.87 to 1.28.
+
 A refleak run (`-R 3:3`, 16 modules) finds no reference leak, and the same
 memory-block growth before and after TB (a backlog item).
 
@@ -194,8 +207,6 @@ nbody 3.18 to 1.85, chaos 1.86 to 1.37, float 1.79 to 1.34; unpack_sequence
 Running, interpreter performance wave 2 (timing recorded, never gated):
 - AR: a mode operand selects its arm (one arm per operator of the integer
   and float families, one per branch sense), from a declared enum;
-- PL: unpack writes its items straight into homes fixed at lowering, and
-  the generator emits span geometry as constants;
 - MV: no parallel move is solved at run time; a generator return runs no
   solver;
 - SP item 4: the remaining specializations with no arm (the native calls,

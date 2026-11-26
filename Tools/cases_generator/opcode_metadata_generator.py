@@ -7,7 +7,7 @@ import argparse
 
 from generators_common import ROOT, write_header
 from cwriter import CWriter
-from stack_opcode_pins import MIN_SPECIALIZED_OPCODE
+from stack_ops import MIN_SPECIALIZED_OPCODE
 from stack_ops import (HAVE_ARGUMENT, PSEUDOS, STACK_OPS, Pseudo, StackOp)
 from typing import TextIO
 

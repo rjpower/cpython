@@ -2,7 +2,7 @@
 
 _opcode.get_ir_contract() exports _PyIR_Formats (Include/internal/pycore_ir.h),
 which Tools/cases_generator/ir_metadata_generator.py writes from
-Python/bytecodes.c.  The compiler passes, the assembler, dis and the
+Tools/cases_generator/stack_ops.py and Python/register_ops.  The compiler passes, the assembler, dis and the
 instrumentation read it.  Each row must agree with the stack effects that the
 compiler uses, with the generator's analysis of the instruction, with the
 feedback layouts and with sys.monitoring.
@@ -26,7 +26,7 @@ import _opcode
 CONTRACT = _opcode.get_ir_contract()
 # The rows of the register instruction arms follow the old handlers and have
 # no stack effect to check (test_ir_arm_words)
-OLD_CONTRACT = CONTRACT[:_opcode.IR_NUM_OLD_HANDLERS]
+OLD_CONTRACT = CONTRACT[:_opcode.IR_FIRST_ARM]
 ROWS = {h: row for h, row in enumerate(OLD_CONTRACT) if row is not None}
 BY_NAME = {opcode._all_opname[h]: row for h, row in ROWS.items()}
 
@@ -49,7 +49,7 @@ FEEDBACK = {
 OPARGS = (0, 1, 2, 3, 7, 0x102)
 
 # Ops that no stack bytecode has as an opcode: the translator_only
-# instructions of Python/bytecodes.c
+# instructions of Tools/cases_generator/stack_ops.py
 TRANSLATOR_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
                 "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
@@ -185,7 +185,7 @@ class ContractTests(unittest.TestCase):
                                            for h in opcode._ir_only_handlers)})
                 self.assertIn(row.shadow, {None, *opcode._stack_opmap.values()})
         for name in (*opcode._specialized_opmap, *opcode._ir_handlers):
-            if (opcode._ir_handlers.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS
+            if (opcode._ir_handlers.get(name, 0) >= _opcode.IR_FIRST_ARM
                     or name in TRANSLATOR_ONLY):
                 continue
             self.assertIn(name, BY_NAME)
@@ -303,7 +303,7 @@ class ContractTests(unittest.TestCase):
                 self.assertNotEqual(BY_NAME[family].fb, _opcode.IR_LOC_NONE)
         # The generic handlers that specialise from their entry
         self.assertLessEqual(
-            {opcode._all_opname[op] for op in range(_opcode.IR_NUM_OLD_HANDLERS)
+            {opcode._all_opname[op] for op in range(_opcode.IR_FIRST_ARM)
              if CONTRACT[op] is not None
              and not opcode._all_opname[op].startswith("INSTRUMENTED_")
              and op not in opcode._ir_only_handlers
@@ -491,330 +491,6 @@ def _code_objects(module):
         co = todo.pop()
         yield co
         todo.extend(c for c in co.co_consts if isinstance(c, types.CodeType))
-
-
-@unittest.skipIf(test_tools.basepath is None, "needs the source tree")
-class AnalyzerTests(unittest.TestCase):
-    """Rows against the cases generator's analysis of Python/bytecodes.c,
-    from which _opcode_metadata's HAS_ERROR, HAS_ESCAPES and HAS_PURE flags
-    also come"""
-
-    @classmethod
-    def setUpClass(cls):
-        test_tools.skip_if_missing("cases_generator")
-        with test_tools.imports_under_tool("cases_generator"):
-            import analyzer
-            import ir_generator
-        source = os.path.join(test_tools.basepath, "Python", "bytecodes.c")
-        if not os.path.exists(source):
-            raise unittest.SkipTest("needs Python/bytecodes.c")
-        cls.ir_generator = ir_generator
-        cls.analysis = analyzer.analyze_files([source])
-        cls.insts = ir_generator.handler_instructions(cls.analysis)
-        cls.ids = ir_generator.handler_ids(cls.analysis)
-        cls._generated = None
-
-    def test_ids(self):
-        for name, h in self.ids.items():
-            self.assertEqual(opcode._all_opname[h], name)
-            self.assertIsNotNone(CONTRACT[h], name)
-
-    def test_properties(self):
-        # The effect bits are a projection of the handler's operation record
-        # (Tools/cases_generator/ir_records.py)
-        formats = self.ir_generator.compute_formats(self.analysis)
-        bits = ("RAISES", "ESCAPES", "RUNS_PYTHON", "DEOPTS", "SUSPENDS",
-                "PUSHES_FRAME", "POLLS", "PURE", "SPECIALIZES", "LEARNED_ONLY")
-        for name, inst in self.insts.items():
-            record = self.ir_generator.build_record(
-                name, inst, formats[name], self.analysis, formats)
-            expected = set(self.ir_generator.handler_effects(record))
-            effects = CONTRACT[self.ids[name]].effects
-            with self.subTest(handler=name):
-                for bit in bits:
-                    self.assertEqual(bool(effects & getattr(_opcode, "IR_" + bit)),
-                                     "_PyIR_" + bit in expected, bit)
-        # A handler that pushes a frame may raise and run Python: the
-        # callee's exception propagates to its word; so may a yield, where
-        # throw() raises
-        for name in present("CALL_KW_PY", "CALL_EX_PY",
-                            "YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            effects = BY_NAME[name].effects
-            self.assertTrue(effects & _opcode.IR_RAISES, name)
-            self.assertTrue(effects & _opcode.IR_ESCAPES, name)
-        if "LOAD_COMMON_CONSTANT" in BY_NAME:
-            self.assertFalse(BY_NAME["LOAD_COMMON_CONSTANT"].effects
-                             & (_opcode.IR_RAISES | _opcode.IR_ESCAPES))
-
-    def test_runs_code(self):
-        # The format's RUNS_CODE is the union of RUNS_PYTHON over the
-        # handlers that share the format
-        formats = self.ir_generator.compute_formats(self.analysis)
-        groups = {}
-        for name in self.insts:
-            groups.setdefault(formats[name].group, []).append(name)
-        for group, names in groups.items():
-            with self.subTest(group=group):
-                rows = [CONTRACT[self.ids[name]] for name in names]
-                union = any(row.effects & _opcode.IR_RUNS_PYTHON for row in rows)
-                for row in rows:
-                    self.assertEqual(bool(row.flags & _opcode.IR_RUNS_CODE),
-                                     union)
-
-    def generated(self):
-        "The generated handlers: the text and the bodies by name"
-        if type(self)._generated is None:
-            source = os.path.join(test_tools.basepath, "Python", "bytecodes.c")
-            gen = self.ir_generator
-            out = io.StringIO()
-            gen.generate_ir([source], self.analysis, out, False)
-            cases = out.getvalue()
-            text = cases.split(gen.INSTRUCTION_START_MARKER)[1]
-            text = text.split(gen.INSTRUCTION_END_MARKER)[0]
-            handlers = dict(re.findall(
-                r"\bTARGET\((\w+)\) \{(.*?)(?=\bTARGET\(\w+\) \{|\Z)", text, re.S))
-            type(self)._generated = cases, handlers
-        return type(self)._generated
-
-    def test_no_value_record(self):
-        # No handler boxes an inline value (handlers81, H3): none declares
-        # or tests a value record, and no macro writes one
-        _, handlers = self.generated()
-        for entry, body in handlers.items():
-            with self.subTest(handler=entry):
-                for name in ("value_temps", "value_owners", "value_boxes",
-                             "_PyValueTemps"):
-                    self.assertNotIn(name, body)
-        path = os.path.join(test_tools.basepath, "Python", "ceval_macros.h")
-        with open(path) as f:
-            self.assertNotIn("value_temps", f.read())
-
-    def test_next_instr_by_value(self):
-        # No handler or dispatch macro takes the address of
-        # next_instr (IR v2 step A2): the executing copy is fixed for the
-        # code object's life, so no helper rebases the PC.
-        cases, _ = self.generated()
-        path = os.path.join(test_tools.basepath, "Python", "ceval_macros.h")
-        with open(path) as f:
-            macros = f.read()
-        for name, text in (("generated_ir_cases.c.h", cases),
-                           ("ceval_macros.h", macros)):
-            with self.subTest(name):
-                lines = [line.strip() for line in text.splitlines()
-                         if re.search(r"&\s*next_instr\b", line)]
-                self.assertEqual(lines, [])
-
-    def test_stack_items(self):
-        # The extents count the instruction's own stack items, for every
-        # handler including those of the instrumented twins
-        for name, inst in self.insts.items():
-            row = CONTRACT[self.ids[name]]
-            inputs, outputs = self.ir_generator.external_io(inst)
-            with self.subTest(handler=name):
-                fixed = [i for i in inputs if not i.is_array()]
-                self.assertGreaterEqual(row.reads[0], 0)
-                if all(not i.is_array() for i in inputs):
-                    self.assertEqual(row.reads,
-                                     (len(fixed), _opcode.IR_EXT_FIXED))
-                if all(not e.item.is_array() for e in outputs):
-                    self.assertEqual(row.writes,
-                                     (len(outputs), _opcode.IR_EXT_FIXED))
-
-
-# A scan of Python/bytecodes.c by regular expressions, which shares no code
-# with the cases generator, for the columns that it can check
-# A definition's stack effect may hold declared contracts, `exact(T)`, and
-# clauses, `effects(...) exits(...)`, may follow it (ir_contract.py)
-_DEFINITION = re.compile(r"\b(?:op|inst)\((\w+),\s*\(")
-_MACRO = re.compile(r"\bmacro\((\w+)\)\s*(?:region\(\w+\)\s*)?=\s*([^;]*);")
-
-
-def _stack_items(text):
-    "The (name, size) of each item of one side of a stack effect"
-    result = []
-    for item in text.split(","):
-        item = item.strip()
-        if item and "/" not in item:    # not a cache entry
-            m = re.fullmatch(r"(\w+)\s*(?:\[(.*?)\])?(?::.*)?", item, re.S)
-            result.append((m.group(1), m.group(2)))
-    return result
-
-
-def _body(text, start):
-    depth = 0
-    for i in range(start, len(text)):
-        depth += {"{": 1, "}": -1}.get(text[i], 0)
-        if depth == 0:
-            return text[start + 1:i]
-    raise ValueError("unbalanced braces")
-
-
-def _scan_definitions(path):
-    """The ops and instructions of path, as (inputs, outputs, body), and the
-    parts of each macro"""
-    with open(path) as f:
-        text = re.sub(r"//[^\n]*|/\*.*?\*/", " ", f.read(), flags=re.S)
-    ops = {}
-    for m in _DEFINITION.finditer(text):
-        depth, end = 1, m.end()
-        while depth:
-            depth += {"(": 1, ")": -1}.get(text[end], 0)
-            end += 1
-        inputs, outputs = text[m.end():end - 1].split("--")
-        ops[m.group(1)] = (_stack_items(inputs), _stack_items(outputs),
-                           _body(text, text.index("{", end)))
-    macros = {}
-    for m in _MACRO.finditer(text):
-        parts = (p.strip() for p in m.group(2).split("+"))
-        macros[m.group(1)] = [p for p in parts if "/" not in p and p != "flush"]
-    return ops, macros
-
-
-def _changed_in(body, name, array):
-    "Whether body assigns, steps or takes the address of item name"
-    n = re.escape(name)
-    assign = r"\s*(?:[-+*/%&|^]?=(?!=)|\+\+|--)"
-    if array:
-        # An element store, or the array passed on, which lets the callee
-        # write the elements
-        return bool(re.search(rf"(?<![\w.>]){n}\s*\[[^\]]*\]{assign}", body)
-                    or re.search(rf"(?<![\w.>]){n}\b(?!\s*\[)", body)
-                    or re.search(rf"&\s*{n}\s*\[", body))
-    if (re.search(rf"(?<![\w.>]){n}{assign}", body)
-            or re.search(rf"(?:\+\+|--)\s*{n}\b", body)):
-        return True
-    for m in re.finditer(rf"&\s*{n}\b", body):
-        # Address-of, not a binary and
-        if not re.search(r"[\w)\]]$", body[:m.start()].rstrip()):
-            return True
-    return False
-
-
-def _scan_stack(ops, macros, name):
-    """The inputs of handler name, from the deepest, and the stack entries
-    that it leaves, as dicts of size (None for one item) and whether the
-    entry is an input that keeps its value.  Both call-invoke markers publish
-    the result themselves, so trailing callee-frame operations are not part
-    of the register IR word."""
-    stack = []
-    inputs = []
-    for part in macros.get(name, [name]):
-        ins, outs, body = ops[part]
-        if len(stack) < len(ins):
-            fresh = [{"size": None, "kept": True}
-                     for _ in range(len(ins) - len(stack))]
-            stack[:0] = fresh
-            inputs[:0] = fresh
-        popped = stack[len(stack) - len(ins):]
-        del stack[len(stack) - len(ins):]
-        for entry, (_, size) in zip(popped, ins):
-            if any(entry is e for e in inputs) and entry["size"] is None:
-                entry["size"] = size
-        for k, (out, size) in enumerate(outs):
-            if (k < len(ins) and ins[k] == (out, size)
-                    and (out == "unused"
-                         or not _changed_in(body, out, size is not None))):
-                stack.append(popped[k])
-            else:
-                stack.append({"size": size, "kept": False})
-        if re.search(r"\bIR_INVOKE_(?:CALL|GUARDED_PYTHON_CALL)\b", body):
-            break
-    return inputs, stack
-
-
-def _scan_count(entries, oparg):
-    "The slots that entries cover for oparg, or None if an array is negative"
-    sizes = [1 if e["size"] is None else eval(e["size"], {"oparg": oparg})
-             for e in entries]
-    return None if min(sizes, default=0) < 0 else sum(sizes)
-
-
-def _scan_through(inputs, outputs):
-    "The deepest inputs that keep their slot and value, up to the first not"
-    through = []
-    for entry, item in zip(inputs, outputs):
-        if entry is not item or not entry["kept"]:
-            break
-        through.append(entry)
-    return through
-
-
-def _stack_counts(path, function):
-    "The return expression of each case of function in path, by opcode name"
-    with open(path) as f:
-        text = f.read()
-    start = text.index(f"int {function}(int opcode, int oparg)")
-    body = _body(text, text.index("{", start))
-    return dict(re.findall(r"case (\w+):\s*return ([^;]*);", body))
-
-
-@unittest.skipIf(test_tools.basepath is None, "needs the source tree")
-class SourceScanTests(unittest.TestCase):
-    """Rows against sources that do not come from ir_generator.py"""
-
-    def source(self, *parts):
-        path = os.path.join(test_tools.basepath, *parts)
-        if not os.path.exists(path):
-            self.skipTest(f"needs {os.path.join(*parts)}")
-        return path
-
-    def scans(self):
-        "The scan of each handler that is an instruction of bytecodes.c"
-        ops, macros = _scan_definitions(self.source("Python", "bytecodes.c"))
-        result = {}
-        for h, row in ROWS.items():
-            name = opcode._all_opname[h]
-            if name in ops or name in macros:
-                result[h] = _scan_stack(ops, macros, name)
-        names = {opcode._all_opname[h] for h in result}
-        self.assertTrue(names)
-        return result
-
-    def test_through(self):
-        for h, (inputs, outputs) in self.scans().items():
-            through = _scan_through(inputs, outputs)
-            for oparg in (2, 3, 7, 0x102):
-                count = _scan_count(through, oparg)
-                if count is None:
-                    continue
-                with self.subTest(handler=opcode._all_opname[h], oparg=oparg):
-                    self.assertEqual(extent(ROWS[h].through, oparg), count)
-
-    def test_stack_counts(self):
-        # reads and writes, each against the scan, and against
-        # _PyOpcode_num_popped() and _pushed(), which
-        # opcode_metadata_generator.py writes, for every handler: the
-        # specialisations and twins too.  Those disagree only for a call
-        # that publishes its result itself.  An IR-only handler has the
-        # counts of the instruction that it is named after.
-        path = self.source("Include", "internal", "pycore_opcode_metadata.h")
-        popped = _stack_counts(path, "_PyOpcode_num_popped")
-        pushed = _stack_counts(path, "_PyOpcode_num_pushed")
-        scans = self.scans()
-        invokes = set()
-        for h, row in ROWS.items():
-            name = opcode._all_opname[h]
-            if name not in popped:
-                shadow = (None if row.shadow is None
-                          else opcode.opname[row.shadow])
-                name = shadow if shadow in popped else opcode.opname[row.base]
-            for oparg in OPARGS:
-                counts = (extent(row.reads, oparg),
-                          extent(row.writes, oparg))
-                expected = (eval(popped[name], {"oparg": oparg}),
-                            eval(pushed[name], {"oparg": oparg}))
-                if min(expected) < 0:
-                    continue
-                with self.subTest(handler=opcode._all_opname[h], oparg=oparg):
-                    scanned = tuple(_scan_count(e, oparg)
-                                    for e in scans.get(h, ()))
-                    if scanned and None not in scanned:
-                        self.assertEqual(counts, scanned)
-                    if counts != expected:
-                        invokes.add(name)
-                        self.assertEqual(counts, (expected[0], expected[1] + 1))
-        self.assertLessEqual(invokes, {
-            "CALL_KW_PY", "CALL_KW_BOUND_METHOD", "CALL_EX_PY"})
 
 
 VERIFY_SCRIPT = textwrap.dedent("""

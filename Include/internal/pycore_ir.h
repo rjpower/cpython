@@ -280,8 +280,8 @@ enum {
 #define _PyIR_ERROR_PROGRAM 0x8000  // actual Storage suffix follows normal events
 
 /* _PyIRFormat.effects: what the handler itself may do, a projection of its
- * operation record (Tools/cases_generator/ir_records.py): the union of its
- * uops' effects, the transfers it has, or a field of the record. */
+ * arm's declaration (Python/register_ops): the effects it declares, the
+ * transfers it has, or a field of its format. */
 #define _PyIR_RAISES        0x1     // may raise: an error exit, or Python
                                     // that it runs (a callee, a throw()
                                     // into a yield) raises at its word

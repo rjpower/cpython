@@ -215,7 +215,6 @@ Objects/typevarobject.c       @JelleZijlstra
 Objects/unionobject.c         @JelleZijlstra
 
 # Byte code interpreter ('the eval loop')
-Python/bytecodes.c            @markshannon
 Python/ceval*                 @markshannon
 Tools/cases_generator/        @markshannon
 

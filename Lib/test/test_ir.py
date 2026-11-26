@@ -3410,7 +3410,7 @@ class UnpackToLocalsTest(unittest.TestCase):
 
 class AppendSourcesTest(unittest.TestCase):
     """LIST_APPEND, SET_ADD and MAP_ADD read the loop variable of an inlined
-    comprehension in place (Python/bytecodes.c)"""
+    comprehension in place (Python/register_ops)"""
 
     def refcounts(self, objs):
         # The specialized call borrows its argument where the cold one holds

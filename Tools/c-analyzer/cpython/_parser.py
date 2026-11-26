@@ -76,14 +76,10 @@ EXCLUDED = format_conf_lines([
     # generated
     'Python/deepfreeze/*.c',
     'Python/frozen_modules/*.h',
-    'Python/generated_ir_cases.c.h',
     'Python/ir_targets.h',
     'Modules/_testinternalcapi/interpreter.c',
     # XXX: Throws errors if PY_VERSION_HEX is not mocked out
     'Modules/clinic/_testclinic_depr.c.h',
-
-    # not actually source
-    'Python/bytecodes.c',
 
     # mimalloc
     'Objects/mimalloc/*.c',
@@ -294,7 +290,7 @@ MACROS = format_tsv_lines([
 
 SAME = {
     _abs('Include/*.h'): [_abs('Include/cpython/')],
-    _abs('Python/ceval.c'): ['Python/generated_ir_cases.c.h'],
+    _abs('Python/ceval.c'): ['Python/ceval_labels.h'],
 }
 
 MAX_SIZES = {

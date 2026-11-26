@@ -1352,7 +1352,7 @@ int _PyRunRemoteDebugger(PyThreadState *tstate)
 * Currently, the eval breaker check happens on back edges in
 * the control flow graph, which pretty much applies to all loops,
 * and most calls.
-* (See bytecodes.c for exact information.)
+* (See Python/register_ops for exact information.)
 *
 * One consequence of this approach is that it might not be obvious
 * how to force any specific thread to pick up the eval breaker,

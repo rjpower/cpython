@@ -399,7 +399,7 @@ Known values:
    64450: rir90 FI and TP: the iteration, text and pattern ports renumber
           the opcodes (stack numbers are computed until PS pins them)
    64451: rir90 PS: stack opcode numbers are pinned to upstream's table at
-          3a440b65695 (Tools/cases_generator/stack_opcode_pins.py); ports
+          3a440b65695 (Tools/cases_generator/stack_ops.py); ports
           no longer change them */
 #define PYC_MAGIC_NUMBER 64451
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes

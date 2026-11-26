@@ -448,8 +448,8 @@ _PyLong_SpanAsInt64AndOverflow(_PyLongSpan a, int *overflow)
     return -1;
 }
 
-/* The overflow paths of the word kernels and of the typed handlers
-   (bytecodes.c): span kernels over the words, no heap operand. */
+/* The overflow paths of the word kernels and of the typed arms
+   (Python/register_ops): span kernels over the words, no heap operand. */
 PyValue
 _PyValue_MultiplyInt64(int64_t a, int64_t b)
 {

@@ -246,7 +246,7 @@ static int
 ordinary_handler_for(int handler, int opcode)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != _PyIR_NO_HANDLER &&
+    if (handler >= IR_FIRST_ARM && fmt->twin != _PyIR_NO_HANDLER &&
         opcode >= MIN_INSTRUMENTED_OPCODE &&
         _PyIR_OpcodeBase[opcode] == _PyIR_HandlerBase[handler])
     {
@@ -312,7 +312,7 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
         tools_observe(co, i, handler))
     {
         int twin = _PyIR_FormatOf(handler)->twin;
-        if (twin != _PyIR_NO_HANDLER && handler >= IR_NUM_OLD_HANDLERS) {
+        if (twin != _PyIR_NO_HANDLER && handler >= IR_FIRST_ARM) {
             return twin;
         }
     }

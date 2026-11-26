@@ -1,4 +1,4 @@
-// Macros and other things needed by ceval.c, and bytecodes.c
+// Macros and other things needed by ceval.c and the generated arms
 
 /* Use macros rather than inline functions, to make it as clear as possible
  * to the C compiler that the tracing check is a simple test then branch.
@@ -214,7 +214,7 @@
  * about 1% more instructions on every kernel than this form (29c4c49c650). */
 #define IR_HOLD_NEXT() __asm__("" : "+r"(next_instr))
 /* A planned arm's uop that may reenter Python: the whole-word completion
- * stub's ESCAPED bit (Python/generated_ir_stubs.c.h); nothing elsewhere */
+ * stub's ESCAPED bit (Python/generated_rop_stubs.c.h); nothing elsewhere */
 #define IR_STUB_ESCAPE() ((void)0)
 /* The word's frame had its control moved while it ran (a debugger's jump:
  * pending_redirect and the continuation in return_pc): commit the jump and
@@ -321,8 +321,7 @@ do { \
         DISPATCH_GOTO(); \
     }
 
-/* The handler of an outlined instruction (Tools/cases_generator/ir_generator.py,
- * rule 4): its body is the function FN, which returns the frame and next word
+/* The handler of an outlined instruction (Python/register_ops, rule 4): its body is the function FN, which returns the frame and next word
  * to run, or no word for an exit that the activation describes.  The handler
  * assigns the state and dispatches, as a helper of rule 13 requires. */
 #define IR_RUN_OUTLINED(FN) \
@@ -476,8 +475,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
  * backoff_counter_triggers() never reports, so nothing after a trigger
  * writes past a header there (asserted where a handler gets its entry,
  * IR_FB()).  Every specializing op tests and advances its
- * counter with these two functions, whose rows are in
- * pycore_ir_components.h. */
+ * counter with these two functions. */
 static inline int
 _PyFb_CounterTriggers(_PyFbHeader *fb)
 {
@@ -514,8 +512,7 @@ _PyFb_TickQuiet(_PyFbHeader *fb)
 
 /* Keep the site's counter from triggering while an instrumented twin runs the
  * word, so that the specializer does not overwrite the instrumentation.  A
- * function, not a macro, so its row (pycore_ir_components.h) is type checked;
- * the name is the one the generator's tables use. */
+ * function, not a macro, so that it is type checked. */
 static inline void
 PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
 {
@@ -543,7 +540,7 @@ PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
 // A callback that redirects the frame (a debugger's f_lineno jump, which
 // retires the temporaries the new word does not keep) makes the word leave
 // for the new word at once, without the rest of its handler: the redirect
-// exit (Tools/cases_generator/ir_contract.py).
+// exit (Python/register_ops).
 #define INSTRUMENTED_JUMP(src, dest, event) \
 do { \
     _PyInstr *_dest = (dest); \
@@ -728,7 +725,7 @@ gen_claim(PyThreadState *tstate, PyGenObject *gen)
     return 1;
 }
 
-/* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
+/* Operands of the register IR handlers (Python/register_ops).
  * F is the value of a field, IR_A(ir_word) and so on.  The result and input
  * macros take the word W and the letter X of the field instead, so that they
  * test the word's slot-class flag. */

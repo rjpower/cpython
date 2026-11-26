@@ -1,6 +1,6 @@
 """The failure, ownership and reentry claims of the arithmetic, compare,
-contains and match rows of Include/internal/pycore_ir_components.h that
-their uops rely on (regions89 G0c, batch 2).  Each test runs the operation
+contains and match rows of Python/register_ops that
+their arms rely on (regions89 G0c, batch 2).  Each test runs the operation
 often enough for the word to specialize, then takes the row's failure path
 at the same site."""
 

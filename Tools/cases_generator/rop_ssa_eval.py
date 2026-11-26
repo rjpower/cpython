@@ -2,7 +2,7 @@
 
 The evaluator runs an `SsaArm` on the homes of a live frame: their words,
 read from the objects a test placed in them, and memory read through ctypes
-(ir_leaf_eval.RealMemory).  It never writes real memory and never runs
+(RealMemory).  It never writes real memory and never runs
 Python.  A primitive row whose C symbol has a spec in rop_primitives.PRIMITIVES runs
 that spec.  A row with a model in MODELS runs the model.  Every other row is
 opaque.  The opaque rows are those that may run Python, read feedback recipes
@@ -30,11 +30,12 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 import rop_primitives
-from rop_primitives import Box, Context, HELPER_MODELS
+from rop_primitives import Box, Context, HELPER_MODELS, RealMemory
 from rop_catalog import AccessMode, FieldKind, Handle, Scalar, Slot
 from rop_check import Program, is_linear
 from rop_model import Cases, EnumType, HandleType, ScalarType, Type, WrapType
 from rop_ssa import BranchTerm, ExitTerm, Jump, OpKind, SsaArm, Switch
+
 
 EMPTY = 0
 PATH_LIMIT = 4096

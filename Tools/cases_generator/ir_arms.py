@@ -1,8 +1,8 @@
 """The register instruction arms as the handler tables list them.
 
-Handler numbers are not stored: the cases generator computes them at each
-build (analyzer.assign_opcodes for the stack opcodes, ir_generator.handler_ids
-for the IR-only handlers, and an arm's id is num_old_handlers + its index).
+Handler numbers are not stored: the generators compute them at each
+build (handler_table.py: the word kinds, then an arm's id is first_arm() + its
+index).
 """
 
 from dataclasses import dataclass
@@ -62,7 +62,7 @@ class ArmFormat:
 @dataclass(frozen=True)
 class ArmEntry:
     """A register instruction arm (Python/register_ops) as the tables of
-    this generator list it: its handler id is num_old_handlers + index.  An
+    this generator list it: its handler id is first_arm() + index.  An
     observed wrapper (a twin) is listed after the arms, with `observes` the
     index of the arm it wraps."""
     name: str                 # the C name: Add_Int

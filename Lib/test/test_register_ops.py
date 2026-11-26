@@ -13,7 +13,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import rop_check
     import rop_print
     import rop_syntax
-    import stack_opcode_pins
+    import stack_ops
     from rop_model import RopError
 
 ROP_DIR = Path(test_tools.basepath) / "Python" / "register_ops"
@@ -802,7 +802,7 @@ class DefinitionTests(unittest.TestCase):
             for decl in rop_syntax.parse(path.read_text(), path.name).decls:
                 if not isinstance(decl, rop_syntax.Family) or not decl.events:
                     continue
-                has_opcode = f"INSTRUMENTED_{decl.ops[0]}" in stack_opcode_pins.PINNED_OPCODES
+                has_opcode = f"INSTRUMENTED_{decl.ops[0]}" in stack_ops.PINNED_OPCODES
                 with self.subTest(decl.name):
                     self.assertEqual(decl.name in marked, not has_opcode)
                 if not has_opcode:

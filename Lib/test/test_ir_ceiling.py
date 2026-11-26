@@ -1,16 +1,10 @@
-"""The register IR's end condition, checked by tests.
+"""The register IR's end condition, checked by tests: the handler table holds
+the arms of the families written in Python/register_ops/*.rop (`Family.Arm`)
+and the word kind that holds operands, and no name of a stack op."""
 
-During the migration the IR handler table holds three kinds of member: arms
-of the families written in Python/register_ops/*.rop (`Family.Arm`),
-inherited register instructions that Python/bytecodes.c still defines, and
-stack-only stubs.  The inherited instructions and the stubs only shrink: the
-generated classification (Lib/_opcode_metadata.py) is checked against
-ir_handler_ceiling.txt, which each port edits, and which is empty at the end.
-"""
-
+from pathlib import Path
 import re
 import unittest
-from pathlib import Path
 
 import opcode
 import _opcode
@@ -18,18 +12,7 @@ import _opcode_metadata as metadata
 
 from test import test_tools
 
-CEILING = Path(__file__).with_name("ir_handler_ceiling.txt")
 FIRST_PSEUDO = 256
-
-
-def read_ceiling() -> dict[str, set[str]]:
-    classes: dict[str, set[str]] = {"inherited": set(), "stub": set()}
-    for line in CEILING.read_text().splitlines():
-        if not line or line.startswith("#"):
-            continue
-        kind, name = line.split()
-        classes[kind].add(name)
-    return classes
 
 
 def arm_names() -> set[str]:
@@ -50,44 +33,6 @@ def handler_table() -> set[str]:
     return names
 
 
-class CeilingTests(unittest.TestCase):
-    def test_every_handler_has_one_class(self):
-        arms = arm_names()
-        inherited = set(metadata._ir_inherited_handlers)
-        stubs = set(metadata._ir_stack_stubs)
-        self.assertFalse(arms & inherited)
-        self.assertFalse(arms & stubs)
-        self.assertFalse(inherited & stubs)
-        unclassified = handler_table() - arms - inherited - stubs
-        self.assertEqual(unclassified, set())
-        self.assertEqual((inherited | stubs) - handler_table(), set())
-
-    def test_no_new_inherited_instruction(self):
-        ceiling = read_ceiling()
-        new = set(metadata._ir_inherited_handlers) - ceiling["inherited"]
-        self.assertEqual(new, set(),
-                         "new register instructions are written in "
-                         "Python/register_ops/*.rop, not in Python/bytecodes.c")
-
-    def test_no_new_stack_only_stub(self):
-        new = set(metadata._ir_stack_stubs) - read_ceiling()["stub"]
-        self.assertEqual(new, set(),
-                         "a stack op's behavior is a family in "
-                         "Python/register_ops/*.rop; a stub is not added")
-
-    def test_ceiling_holds_no_stale_name(self):
-        ceiling = read_ceiling()
-        self.assertEqual(
-            ceiling["inherited"] - set(metadata._ir_inherited_handlers),
-            set(), "a port deletes its names from ir_handler_ceiling.txt")
-        self.assertEqual(
-            ceiling["stub"] - set(metadata._ir_stack_stubs), set(),
-            "a port deletes its names from ir_handler_ceiling.txt")
-
-    def test_ceiling_is_sorted_and_unique(self):
-        lines = [line for line in CEILING.read_text().splitlines()
-                 if line and not line.startswith("#")]
-        self.assertEqual(lines, sorted(set(lines)))
 
 
 class ArmNameTests(unittest.TestCase):
@@ -148,7 +93,7 @@ class HandlerIdTests(unittest.TestCase):
         self.assertEqual(sorted(ids.values()),
                          list(range(_opcode.IR_NUM_HANDLERS - len(ids),
                                     _opcode.IR_NUM_HANDLERS)))
-        old = {name for name, h in ids.items() if h < _opcode.IR_NUM_OLD_HANDLERS}
+        old = {name for name, h in ids.items() if h < _opcode.IR_FIRST_ARM}
         self.assertFalse(old & arm_names())
         self.assertTrue(arm_names() <= set(ids))
 
@@ -190,13 +135,6 @@ class HandlerIdTests(unittest.TestCase):
         self.assertEqual(bad, [])
 
 
-class BannerTests(unittest.TestCase):
-    def test_bytecodes_banner(self):
-        test_tools.skip_if_missing("cases_generator")
-        source = Path(test_tools.basepath) / "Python" / "bytecodes.c"
-        head = source.read_text()[:2000]
-        self.assertIn("inherited register instructions", head)
-        self.assertIn("Python/register_ops/", head)
 
 
 if __name__ == "__main__":

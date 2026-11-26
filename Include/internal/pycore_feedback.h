@@ -33,17 +33,16 @@ extern "C" {
  * show_caches and adaptive.
  *
  * Each entry begins with a 16-byte header.  The entry type of each family,
- * and so its kind and size, is in FEEDBACK_LAYOUTS in
- * Tools/cases_generator/ir_generator.py, from which the instruction
- * contract's fb_kind and fb_size (Include/internal/pycore_ir.h) and the
- * _PyFb_<family> typedefs come.  Entry 0 is a header of kind COUNTER.
+ * and so its kind and size, is the family's schema in
+ * Tools/cases_generator/rop_catalog.py (FB_LAYOUT), from which the
+ * instruction contract's fb_kind and fb_size (Include/internal/pycore_ir.h)
+ * come.  Entry 0 is a header of kind COUNTER.
  *
  * The truth families (Truth, BranchTruth) have UNARY entries: the counter drives
  * adaptation, and no oparg is kept.
  *
- * Fields carry the names of the cache effects in Python/bytecodes.c, which
- * is how the cases generator maps "type_version/2" to fb->type_version.
- * The sizes in the DSL now only describe the reserved units.
+ * Fields carry the names of the cache effects of the stack ops, such as
+ * type_version.
  *
  * Writers: the generic instruction advances the counter, and
  * Python/specialize.c writes everything else.  A specialisation starts its
@@ -287,7 +286,7 @@ _PyFb_PolyOf(_PyFbBlock *block, const _PyFbHeader *h)
 
 /* The entry type and kind of each family (_PyFb_LOAD_ATTR and so on) are
  * in the instruction contract: Include/internal/pycore_ir_metadata.h, from
- * FEEDBACK_LAYOUTS in Tools/cases_generator/ir_generator.py. */
+ * the schemas in Tools/cases_generator/rop_catalog.py. */
 
 /* Free the poly tables of a block whose bytecode copy is being freed. */
 static inline void

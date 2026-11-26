@@ -10,18 +10,10 @@ extern "C" {
 #endif
 
 /* Register handler ids; not stack opcodes */
-#define IR_H_CACHE                                  0
-#define IR_H_RESERVED                               1
-#define IR_H_COPY_FREE_VARS                         2
-#define IR_H_DELETE_DEREF                           3
-#define IR_H_LOAD_DEREF                             4
-#define IR_H_LOAD_FROM_DICT_OR_DEREF                5
-#define IR_H_MAKE_CELL                              6
-#define IR_H_STORE_DEREF                            7
-#define IR_H_IR_OPERANDS                            8
+#define IR_H_IR_OPERANDS                            0
 
-#define IR_NUM_OLD_HANDLERS                      9
-#define IR_NUM_HANDLERS                        302
+#define IR_FIRST_ARM                             1
+#define IR_NUM_HANDLERS                        294
 
 /* What _PyIR_HandlerBase holds for a handler that is no stack op: a number
  * past every stack opcode and pseudo-instruction */

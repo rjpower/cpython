@@ -7,9 +7,9 @@ entry point is in [Python/ceval.c](../Python/ceval.c).
 At a high level, the interpreter consists of a loop that iterates over the
 bytecode instructions, executing each of them via a switch statement that
 has a case implementing each opcode. This switch statement is generated
-from the instruction definitions in [Python/bytecodes.c](../Python/bytecodes.c)
-which are written in [a DSL](../Tools/cases_generator/interpreter_definition.md)
-developed for this purpose.
+from the register instruction arms in [Python/register_ops](../Python/register_ops),
+which are written in a DSL developed for this purpose, and the stack ops in
+[Tools/cases_generator/stack_ops.py](../Tools/cases_generator/stack_ops.py).
 
 Recall that the [Python Compiler](compiler.md) produces a [`CodeObject`](code_objects.md),
 which contains the bytecode instructions along with static data that is required to execute them,
@@ -128,7 +128,7 @@ Although they are represented by code units, cache entries do not conform to the
 `opcode` / `oparg` format.
 
 If an instruction has an inline cache, the layout of its cache is described in
-the instruction's definition in [`Python/bytecodes.c`](../Python/bytecodes.c).
+the stack op's row in [`stack_ops.py`](../Tools/cases_generator/stack_ops.py).
 The structs defined in [`pycore_code.h`](../Include/internal/pycore_code.h)
 allow us to access the cache by casting `next_instr` to a pointer to the relevant
 `struct`.  The size of such a `struct` must be independent of the machine
@@ -294,13 +294,13 @@ It is occasionally necessary to add a new opcode in order to implement
 a new feature or change the way that existing features are compiled.
 This section describes the changes required to do this.
 
-First, you must choose a name for the bytecode, implement it in
-[`Python/bytecodes.c`](../Python/bytecodes.c) and add a documentation
+First, you must choose a name for the bytecode, add it to
+[`stack_ops.py`](../Tools/cases_generator/stack_ops.py), write its register arms and add a documentation
 entry in [`Doc/library/dis.rst`](../Doc/library/dis.rst).
 Then run `make regen-cases` to assign a number for it (see
 [`Include/opcode_ids.h`](../Include/opcode_ids.h)) and regenerate a
 number of files with the actual implementation of the bytecode in
-[`Python/generated_ir_cases.c.h`](../Python/generated_ir_cases.c.h) and
+[`Python/generated_rop_cases.c.h`](../Python/generated_rop_cases.c.h) and
 metadata about it in additional files.
 
 With a new bytecode you must also change what is called the "magic number" for
@@ -313,7 +313,7 @@ will take effect only after running `make regen-importlib`.
 
 > [!NOTE]
 > Running `make regen-importlib` before adding the new bytecode target to
-> [`Python/bytecodes.c`](../Python/bytecodes.c)
+> [`stack_ops.py`](../Tools/cases_generator/stack_ops.py)
 > (followed by `make regen-cases`) will result in an error. You should only run
 > `make regen-importlib` after the new bytecode target has been added.
 
@@ -391,7 +391,7 @@ although these are not fundamental and may change:
 
 ## Example family
 
-The `LOAD_GLOBAL` instruction (in [Python/bytecodes.c](../Python/bytecodes.c))
+The `LOAD_GLOBAL` instruction (in [Python/register_ops](../Python/register_ops))
 already has an adaptive family that serves as a relatively simple example.
 
 The `LOAD_GLOBAL` instruction performs adaptive specialization,

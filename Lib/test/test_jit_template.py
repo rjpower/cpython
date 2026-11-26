@@ -1,6 +1,6 @@
 """The baseline JIT's inline templates: the primitive lowerings
 (Python/jit_lower.c) against their C definitions, and each template
-(Python/jit_templates.c.h) against its handler's function form on one word
+(Python/generated_rop_templates.c.h) against its handler's function form on one word
 of a frame."""
 
 import contextlib
@@ -26,10 +26,8 @@ test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import jit_row_facts
     import rop_primitives
-    import jit_template_generator
 
     import jit_backend
-RECORDS = jit_template_generator.load_records()[1]
 
 from test.test_ir_leaf import (
     FLOATS, INDEX_WORDS, INLINE_WORDS, NAN, OBJECTS, SEPARATE, TAG, WIDE_INTS,
@@ -794,17 +792,8 @@ class TemplateTests(unittest.TestCase):
         self.assertTrue(capi.jit_template_run(f, index, {b: "x", c: 2}, True)[1])
         self.assertTrue(capi.jit_template_run(f, index, {b: 1, c: "y"}, True)[1])
 
-def has_bodies(handler):
-    "Whether every uop of the handler still has a body to build a graph from"
-    return all(u.leaf is not None for u in RECORDS[handler].uops)
 
 
-def graph_of(handler):
-    "The template graph of a handler, simplified as the generator emits it"
-    record = RECORDS[handler]
-    graph = jit_template_generator.Builder(record).build()
-    jit_backend.simplify(graph)
-    return graph
 
 
 def prims_of(graph):
@@ -913,21 +902,7 @@ class TemplateGraphTests(unittest.TestCase):
                  if jit_backend.null_only_from_slow(name)}
         self.assertEqual(found, {"PyValue_FromInt64", "PyValue_FromDouble"})
 
-    def graph_names(self, handler):
-        graph = graph_of(handler)
-        return graph, prims_of(graph)
 
-    def test_without_conjoins_the_guards_stay_two(self):
-        # Any handler whose guards the default declaration fuses
-        handler = next((handler for handler in RECORDS
-                        if has_bodies(handler)
-                        and "PyValue_BothInlineInt" in prims_of(graph_of(handler))), None)
-        if handler is None:
-            self.skipTest("no live handler left; the old generator goes at D")
-        with declared("PyValue_BothInlineInt", conjoins=""):
-            graph, names = self.graph_names(handler)
-        self.assertEqual(names.count("PyValue_IsInlineInt"), 2)
-        self.assertNotIn("PyValue_BothInlineInt", names)
 
     def test_without_a_nonnull_form_the_test_for_null_stays_in_the_primitive(self):
         # The form is chosen where the word is known not NULL
@@ -939,19 +914,6 @@ class TemplateGraphTests(unittest.TestCase):
                 jit_backend.fold_nulls(g)
             self.assertEqual(dup.attr, "PyValue_XDUP" if declare else "PyValue_DUP")
 
-    def test_without_slow_the_box_keeps_its_test_and_has_no_exit(self):
-        for handler, name in ():
-            with self.subTest(handler=handler):
-                def box():
-                    graph = graph_of(handler)
-                    return [op for b in graph.blocks.values() for op in b.ops
-                            if jit_backend.prim_name(op) == name], graph
-                (op,), graph = box()
-                self.assertIsNotNone(op.exit)
-                with declared(name, slow=False):
-                    (op,), graph = box()
-                self.assertIsNone(op.exit)
-                self.assertIn("PyValue_IsNull", prims_of(graph))
 
     def test_without_the_declared_test_for_null_nothing_is_dropped(self):
         # After a test of IsNull that leaves where it holds, a second one is dropped
@@ -1044,58 +1006,8 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(self.cse_home_loads(
             [lambda g, v: TOp("prim", [], [v], "PyValue_CLOSE")]), 2)
 
-    @unittest.skip("ForIter.Range is an arm: its template comes from the arm graph, "
-                   "which RECORDS does not hold (the JIT's step)")
-    def test_range_iterator_reads_its_length_once(self):
-        graph = graph_of("ForIter.Range")
-        loads = [op.attr for b in graph.blocks.values() for op in b.ops if op.kind == "load"]
-        self.assertEqual(loads.count("_PyRangeIterObject.len"), 1)
 
-    def test_no_template_repeats_what_the_passes_remove(self):
-        for handler, record in RECORDS.items():
-            if record.form != "EMITTED" or not record.uops or any(u.leaf is None for u in record.uops):
-                continue
-            try:
-                graph = graph_of(handler)
-            except jit_backend.Refused:
-                continue
-            with self.subTest(handler=handler):
-                self.assertFalse(jit_backend.fold_nulls(graph))
-                self.assertFalse(jit_backend.fuse_guards(graph))
-                self.assertFalse(jit_backend.thread_tests(graph))
-                self.assertFalse(jit_backend.thread_branches(graph))
 
-    def test_an_assumption_is_checked_only_with_assertions(self):
-        # F7: an `assume` op becomes a check that traps, under #ifndef NDEBUG;
-        # without assertions the template is the one with no assumption
-        # Any handler with a leaf body
-        handler = next((handler for handler, record in RECORDS.items()
-                        if any(u.leaf is not None and any(
-                            op.kind == "arg" for op in u.leaf.blocks[0].ops)
-                            for u in record.uops)), None)
-        if handler is None:
-            self.skipTest("no live handler left; the old generator goes at D")
-        record = RECORDS[handler]
-        plain = jit_template_generator.template_of(handler, record)
-        uops = list(record.uops)
-        i, u = next((i, u) for i, u in enumerate(uops)
-                    if u.leaf is not None
-                    and any(op.kind == "arg" for op in u.leaf.blocks[0].ops))
-        leaf = dataclasses.replace(u.leaf, blocks=list(u.leaf.blocks))
-        entry = leaf.blocks[0]
-        arg = next(op for op in entry.ops if op.kind == "arg")
-        ops = list(entry.ops)
-        ops.insert(ops.index(arg) + 1,
-                   rop_primitives.Op("assume", (), arg.results, ("exact", "PyUnicode_Type")))
-        leaf.blocks[0] = dataclasses.replace(entry, ops=ops)
-        uops[i] = dataclasses.replace(u, leaf=leaf)
-        planted = jit_template_generator.template_of(
-            handler, dataclasses.replace(record, uops=uops))
-        start, end = planted.index("#ifndef NDEBUG"), planted.index("#endif")
-        check = "\n".join(planted[start:end])
-        self.assertIn("&PyUnicode_Type", check)
-        self.assertIn("0x0f, 0x0b", check)  # ud2
-        self.assertEqual(planted[:start] + planted[end + 1:], plain)
 
 
 if __name__ == "__main__":

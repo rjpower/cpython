@@ -6,19 +6,19 @@
 #ifndef Py_INTERNAL_ROP_METADATA_H
 #define Py_INTERNAL_ROP_METADATA_H
 
-#include "ir_handler_ids.h"     // IR_NUM_OLD_HANDLERS
+#include "ir_handler_ids.h"     // IR_FIRST_ARM
 #include "pycore_ir.h"          // IR_F_LOCAL_A
 
-/* The arms' handler ids follow the old handlers, in definition order; the
+/* The arms' handler ids follow the word kinds, in definition order; the
  * observed wrappers of the arms of families that declare events follow them */
-#define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
+#define ROP_FIRST_HANDLER IR_FIRST_ARM
 #define ROP_NUM_HANDLERS 293
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 89
 #define ROP_NUM_ARMS 232
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
-              "the handler count is the old handlers, the arms and their wrappers");
+              "the handler count is the word kinds, the arms and their wrappers");
 
 /* Family numbers, in name order */
 enum {

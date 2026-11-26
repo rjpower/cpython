@@ -1698,9 +1698,9 @@ get_hash_info(PyThreadState *tstate)
     }
     hashfunc = PyHash_GetFuncDef();
 
-#define SET_HASH_INFO_ITEM(CALL)                             \
+#define SET_HASH_INFO_ITEM(EXPR)                             \
     do {                                                     \
-        PyObject *item = (CALL);                             \
+        PyObject *item = (EXPR);                             \
         if (item == NULL) {                                  \
             Py_CLEAR(hash_info);                             \
             return NULL;                                     \
@@ -1857,9 +1857,9 @@ sys_getwindowsversion_impl(PyObject *module)
     if (version == NULL)
         return NULL;
 
-#define SET_VERSION_INFO(CALL)                               \
+#define SET_VERSION_INFO(EXPR)                               \
     do {                                                     \
-        PyObject *item = (CALL);                             \
+        PyObject *item = (EXPR);                             \
         if (item == NULL) {                                  \
             goto error;                                      \
         }                                                    \

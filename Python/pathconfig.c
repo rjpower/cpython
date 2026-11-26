@@ -78,7 +78,7 @@ _PyPathConfig_ReadGlobal(PyConfig *config)
 {
     PyStatus status = _PyStatus_OK();
 
-#define COPY(ATTR) \
+#define COPY_FIELD(ATTR) \
     do { \
         if (_Py_path_config.ATTR && !config->ATTR) { \
             status = PyConfig_SetString(config, &config->ATTR, _Py_path_config.ATTR); \
@@ -102,15 +102,15 @@ _PyPathConfig_ReadGlobal(PyConfig *config)
         } \
     } while (0)
 
-    COPY(prefix);
-    COPY(exec_prefix);
-    COPY(stdlib_dir);
-    COPY(program_name);
-    COPY(home);
+    COPY_FIELD(prefix);
+    COPY_FIELD(exec_prefix);
+    COPY_FIELD(stdlib_dir);
+    COPY_FIELD(program_name);
+    COPY_FIELD(home);
     COPY2(executable, program_full_path);
     COPY_INT(_is_python_build);
     // module_search_path must be initialised - not read
-#undef COPY
+#undef COPY_FIELD
 #undef COPY2
 #undef COPY_INT
 
@@ -121,7 +121,7 @@ done:
 PyStatus
 _PyPathConfig_UpdateGlobal(const PyConfig *config)
 {
-#define COPY(ATTR) \
+#define COPY_FIELD(ATTR) \
     do { \
         if (config->ATTR) { \
             _PyMem_DefaultRawFree(_Py_path_config.ATTR); \
@@ -146,14 +146,14 @@ _PyPathConfig_UpdateGlobal(const PyConfig *config)
         } \
     } while (0)
 
-    COPY(prefix);
-    COPY(exec_prefix);
-    COPY(stdlib_dir);
-    COPY(program_name);
-    COPY(home);
+    COPY_FIELD(prefix);
+    COPY_FIELD(exec_prefix);
+    COPY_FIELD(stdlib_dir);
+    COPY_FIELD(program_name);
+    COPY_FIELD(home);
     COPY2(program_full_path, executable);
     COPY_INT(_is_python_build);
-#undef COPY
+#undef COPY_FIELD
 #undef COPY2
 #undef COPY_INT
 

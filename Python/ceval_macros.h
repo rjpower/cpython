@@ -521,33 +521,6 @@ PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
     " in enclosing scope"
 #define NAME_ERROR_MSG "name '%.200s' is not defined"
 
-// If a trace function sets a new f_lineno and
-// *then* raises, we use the destination when searching
-// for an exception handler, displaying the traceback, and so on.
-// A callback that redirects the frame (a debugger's f_lineno jump, which
-// retires the temporaries the new word does not keep) makes the word leave
-// for the new word at once, without the rest of its handler: the redirect
-// exit (Python/register_ops).
-#define INSTRUMENTED_JUMP(src, dest, event) \
-do { \
-    _PyInstr *_dest = (dest); \
-    if (tstate->tracing) {\
-        next_instr = _dest; \
-    } else { \
-        _PyIRObserverResult _jump = _Py_call_instrumentation_jump( \
-            this_instr, tstate, event, frame, src, _dest); \
-        if (_jump.status < 0) { \
-            next_instr = frame->instr_ptr + 1; \
-            PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); \
-        } \
-        next_instr = _jump.next; \
-        if (_jump.status > 0) { \
-            DISPATCH(); \
-        } \
-    } \
-} while (0);
-
-
 static inline int _Py_EnterRecursivePy(PyThreadState *tstate) {
     return (tstate->py_recursion_remaining-- <= 0) &&
         _Py_CheckRecursiveCallPy(tstate);

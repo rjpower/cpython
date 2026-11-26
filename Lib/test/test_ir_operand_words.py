@@ -18,8 +18,7 @@ from test.support.ir_dis import IRCode, encode_words
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
-CALL_BASES = (opcode.opmap["CALL"], opcode.opmap["CALL_KW"],
-              opcode.opmap["CALL_FUNCTION_EX"])
+CALL_FAMILIES = ("Call", "CallKw", "CallEx")
 CONTRACT = _opcode.get_ir_contract()
 EMPTY = 0xFFF
 
@@ -85,10 +84,7 @@ def calls(code):
 
 def is_call_head(name):
     handler, _, _ = name.partition("+")
-    row = CONTRACT[dis._all_opname.index(handler)]
-    return (row.base in CALL_BASES or
-            handler in ("INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW",
-                        "INSTRUMENTED_CALL_FUNCTION_EX"))
+    return handler.split(".")[0] in CALL_FAMILIES
 
 
 class WordLengthTests(unittest.TestCase):
@@ -116,9 +112,7 @@ class WordLengthTests(unittest.TestCase):
                 continue
             name = dis._all_opname[handler]
             with self.subTest(handler=name):
-                is_call = (row.base in CALL_BASES or
-                           name in ("INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW",
-                                    "INSTRUMENTED_CALL_FUNCTION_EX"))
+                is_call = name.split(".")[0] in CALL_FAMILIES
                 word = self.word(name, 0, 0, 7, 0)
                 self.assertEqual(length(word), 3 if is_call else 1)
 

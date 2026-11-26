@@ -393,8 +393,7 @@ _opcode_get_special_method_names_impl(PyObject *module)
     return _PyValue_FromObjectResult(list);
 }
 
-/* The fields of an _opcode.IRContract, in the order of _PyIRFormat, with
- * base after shadow */
+/* The fields of an _opcode.IRContract, in the order of _PyIRFormat */
 static PyStructSequence_Field ir_contract_fields[] = {
     {"flags", "_PyIR_VALID, ...: the format"},
     {"effects", "_PyIR_RAISES, ...: the handler"},
@@ -407,8 +406,6 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"vacant", "bit h: home h may be NULL when the word reads it"},
     {"committed", "bit e: edge e publishes before its callbacks"},
     {"edges", "per normal edge, the IR_HOME_* state of each home: two 6-tuples"},
-    {"shadow", "the instruction that the handler stands for"},
-    {"base", "the opcode that the handler stands for"},
     {"twin", "the handler that instrumentation runs, or None"},
     {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
     {"word_flags", "the canonical word flags the handler admits (IR_F_NO_SELF, IR_F_NO_KW)"},
@@ -463,9 +460,6 @@ ir_contract_row(PyTypeObject *type, int h)
                       home_state(fmt, 1, 0), home_state(fmt, 1, 1),
                       home_state(fmt, 1, 2), home_state(fmt, 1, 3),
                       home_state(fmt, 1, 4), home_state(fmt, 1, 5)),
-        fmt->shadow == _PyIR_NO_OPCODE ? Py_NewRef(Py_None)
-                                       : PyLong_FromLong(fmt->shadow),
-        PyLong_FromLong(_PyIR_BaseOpcode(h)),
         handler_or_none(fmt->twin),
         PyLong_FromUnsignedLong(fmt->events),
         PyLong_FromLong(fmt->word_flags),

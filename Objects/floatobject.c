@@ -105,9 +105,9 @@ PyFloat_GetInfo(void)
         return NULL;
     }
 
-#define SetFlag(CALL) \
+#define SetFlag(EXPR) \
     do {                                                    \
-        PyObject *flag = (CALL);                            \
+        PyObject *flag = (EXPR);                            \
         if (flag == NULL) {                                 \
             Py_CLEAR(floatinfo);                            \
             return NULL;                                    \

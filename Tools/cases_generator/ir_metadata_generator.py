@@ -23,7 +23,6 @@ from handler_table import first_arm, num_handlers
 from stack_ops import PSEUDOS, STACK_OPS, StackFormat, StackOp
 
 DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
-STACK_NAMES = {op.name for op in STACK_OPS} | {p.name for p in PSEUDOS}
 STACK_NUMBERS = {op.name: op.opcode for op in STACK_OPS}
 
 # The role flags that a word of a call family may carry: a handler of the
@@ -40,7 +39,7 @@ OPERANDS_ROW = (
     "{ .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, "
     "_PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
     ".fb_kind = 0, .fb_size = 0, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
-    ".word_flags = 0, .operands = _PyIR_OPERANDS_NONE, .shadow = _PyIR_NO_OPCODE, "
+    ".word_flags = 0, .operands = _PyIR_OPERANDS_NONE, "
     ".twin = _PyIR_NO_HANDLER, .events = 0 }")
 OPERANDS_FLAGS = "_PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_IR_ONLY | _PyIR_H_PRISTINE"
 
@@ -116,13 +115,6 @@ def arm_id(arm: ir_arms.ArmEntry) -> int:
     return first_arm() + arm.index
 
 
-def base_opcode(name: str) -> int:
-    "The opcode that an instrumented op stands for, or the op's own"
-    if name.startswith("INSTRUMENTED_") and name[len("INSTRUMENTED_"):] in STACK_NUMBERS:
-        return STACK_NUMBERS[name[len("INSTRUMENTED_"):]]
-    return STACK_NUMBERS[name]
-
-
 # The events that a word of an instrumented family can carry in tools[]
 # (sys.monitoring's grouped events); C_RETURN and C_RAISE are fired by CALL
 # and have no tools of their own
@@ -191,11 +183,6 @@ def arm_row(arm: ir_arms.ArmEntry) -> str:
         fb_size = f"sizeof(_PyFb{fmt.fb_schema})"
     events = bits([f"(1u << PY_MONITORING_EVENT_{e})" for e in arm.events])
     fixed = f".fixed_words = {fmt.fixed_words}, " if fmt.fixed_words else ""
-    # sys.monitoring sees an observed wrapper as the instrumented form of
-    # its family's stack op, as it sees an old handler's twin
-    shadow = arm.base
-    if arm.observes is not None and f"INSTRUMENTED_{arm.base}" in STACK_NAMES:
-        shadow = f"INSTRUMENTED_{arm.base}"
     # An arm of a call family reads the call-role flags of its word
     word_flags = bits(list(CALL_ROLE_FLAGS.get(arm.base, ())))
     return (
@@ -204,7 +191,6 @@ def arm_row(arm: ir_arms.ArmEntry) -> str:
         f".fb = {fmt.fb}, .target = {fmt.target}, .fb_kind = {fb_kind}, "
         f".fb_size = {fb_size}, .transfer_kind = {fmt.transfer}, "
         f".word_flags = {word_flags}, .operands = {fmt.operands}, {fixed}"
-        f".shadow = {shadow}, "
         f".twin = {twin}, .events = {events}, .group = {fmt.group}, "
         f".group_at = {fmt.group_at}, .normal = {fmt.normal:#x}, .vacant = {fmt.vacant:#x}, "
         f".committed = {fmt.committed:#x}, .edges = {fmt.edges:#x} }}")
@@ -232,17 +218,13 @@ def generate_ir_metadata(
                           ("BRANCH_LEFT", 16384), ("STOP_SLOT", 32768)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
-        for table in ("_PyIR_HandlerFlags", "_PyIR_HandlerBase"):
-            out.emit(f"PyAPI_DATA(const uint16_t) {table}[IR_NUM_HANDLERS];\n")
-            out.emit("#ifdef NEED_IR_METADATA\n")
-            out.emit(f"const uint16_t {table}[IR_NUM_HANDLERS] = {{\n")
-            value = OPERANDS_FLAGS if table == "_PyIR_HandlerFlags" else "IR_HANDLER_ONLY_BASE(IR_H_IR_OPERANDS)"
-            out.emit(f"[IR_H_IR_OPERANDS] = {value}, /* IR_OPERANDS */\n")
-            for arm in arms:
-                value = (arm_flags(arm) if table == "_PyIR_HandlerFlags"
-                         else str(STACK_NUMBERS[arm.base]))
-                out.emit(f"[{arm_id(arm)}] = {value}, /* {arm.dotted} */\n")
-            out.emit("};\n#endif\n\n")
+        out.emit("PyAPI_DATA(const uint16_t) _PyIR_HandlerFlags[IR_NUM_HANDLERS];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const uint16_t _PyIR_HandlerFlags[IR_NUM_HANDLERS] = {\n")
+        out.emit(f"[IR_H_IR_OPERANDS] = {OPERANDS_FLAGS}, /* IR_OPERANDS */\n")
+        for arm in arms:
+            out.emit(f"[{arm_id(arm)}] = {arm_flags(arm)}, /* {arm.dotted} */\n")
+        out.emit("};\n#endif\n\n")
 
         out.emit(f"PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[{n}];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
@@ -273,23 +255,9 @@ def generate_ir_metadata(
         out.emit("#endif\n\n")
 
         none = "_PyIR_NO_HANDLER"
-        out.emit("/* The stack opcode that a handler is, or _PyIR_NO_OPCODE; the "
-                 "handler of a\n * stack opcode, or _PyIR_NO_HANDLER */\n")
-        out.emit("PyAPI_DATA(const uint16_t) _PyIR_HandlerOpcode[IR_NUM_HANDLERS];\n")
+        out.emit("/* The handler of a stack opcode, or _PyIR_NO_HANDLER */\n")
         out.emit("PyAPI_DATA(const uint16_t) _PyIR_OpcodeHandler[256];\n")
-        out.emit("PyAPI_DATA(const uint16_t) _PyIR_OpcodeBase[256];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit("const uint16_t _PyIR_HandlerOpcode[IR_NUM_HANDLERS] = {\n")
-        for i in range(n):
-            out.emit(f"[{i}] = _PyIR_NO_OPCODE,\n")
-        out.emit("};\n")
-        out.emit("const uint16_t _PyIR_OpcodeBase[256] = {\n")
-        by_number = {op.opcode: op.name for op in STACK_OPS}
-        for number in range(256):
-            name = by_number.get(number)
-            base = "_PyIR_NO_OPCODE" if name is None else base_opcode(name)
-            out.emit(f"[{number}] = {base},\n")
-        out.emit("};\n")
         out.emit("const uint16_t _PyIR_OpcodeHandler[256] = {\n")
         for number in range(256):
             # A displacing arm is the handler of its family's one op, the

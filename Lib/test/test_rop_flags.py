@@ -193,7 +193,14 @@ ORACLE_TEXT = """
 
 # (op, flag): the reason the table differs from the oracle.  None are needed
 # today; a stub that lost a transport flag would be listed here.
-EXCEPTIONS: dict[tuple[str, str], str] = {}
+EXCEPTIONS: dict[tuple[str, str], str] = {
+    ("CALL_KW", "EVAL_BREAK"):
+        "CallKw polls at the end of a native call, as Call does",
+    ("INSTRUMENTED_CALL_KW", "EVAL_BREAK"):
+        "the instrumented form of CALL_KW; it lowers to the same arms",
+    ("MATERIALIZE_KWARGS", "ARG"):
+        "MaterializeKwargs names its local by an operand word, not an oparg",
+}
 
 
 def parse_oracle() -> dict[str, frozenset[str]]:

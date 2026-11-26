@@ -29,7 +29,7 @@ class ExceptionAbsenceTests(unittest.TestCase):
         async def foo():
             return ident(val=await Awaitable())
 
-        self.assertTrue(any(row[0] == "CALL_KW+NO_SELF"
+        self.assertTrue(any(row[0] == "CallKw.Generic+NO_SELF"
                             for row in _testinternalcapi.get_ir(foo.__code__)))
         for code in routes(foo.__code__):
             function = types.FunctionType(code, globals(), closure=foo.__closure__)

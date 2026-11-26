@@ -324,7 +324,7 @@ class NativeGenericVMTests(unittest.TestCase):
             self.assertEqual(noargs(), 2147483647)
             self.assertEqual(keyword(4), 8)
         self.assertIn('Call.Generic', executing_handlers(noargs))
-        self.assertIn('CALL_KW_NON_PY', executing_handlers(keyword))
+        self.assertIn('CallKw.Generic', executing_handlers(keyword))
         with self.assertRaises(TypeError):
             _testinternalcapi.native_scope_flat_noargs(1)
         with self.assertRaises(TypeError):
@@ -358,7 +358,7 @@ class NativeGenericVMTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             invoke(lambda: 4)
-        self.assertIn('CALL_KW_NON_PY', executing_handlers(invoke))
+        self.assertIn('CallKw.Generic', executing_handlers(invoke))
         ledger.clear()
         try:
             self.assertEqual(invoke(Value), 2147483647)
@@ -401,7 +401,7 @@ class NativeGenericVMTests(unittest.TestCase):
                     target = _testinternalcapi.native_scope_vector_method()
                     for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
                         call(target)
-                    expected = ('CALL_KW_NON_PY+NO_SELF' if call is keyword
+                    expected = ('CallKw.Generic+NO_SELF' if call is keyword
                                 else 'Call.Generic+NO_SELF')
                     self.assertIn(expected, executing_handlers(call))
                 for target, typename in ((2147483647, 'int'), (3.25, 'float')):
@@ -519,14 +519,14 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
 
     def test_generic_handlers(self):
         self.check_site(positional_site, 'Call.Generic+NO_SELF', cold=True)
-        self.check_site(star_site, 'CALL_FUNCTION_EX+NO_KW', cold=True)
+        self.check_site(star_site, 'CallEx.Generic+NO_KW', cold=True)
 
     def test_specialized_handlers(self):
         native = functools.partial(python_callee)
         for site, target, first, handler in (
                 (positional_site, native, None, 'Call.Generic+NO_SELF'),
-                (keyword_site, native, None, 'CALL_KW_NON_PY+NO_SELF'),
-                (star_site, native, None, 'CALL_EX_NON_PY_GENERAL+NO_KW'),
+                (keyword_site, native, None, 'CallKw.Generic+NO_SELF'),
+                (star_site, native, None, 'CallEx.Generic+NO_KW'),
                 # The warm-up's pending calls to int() do nothing visible.
                 (single_site, _testinternalcapi.simple_pending_call, int,
                  'Call.Generic+NO_SELF')):
@@ -591,7 +591,7 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
         monitoring.register_callback(tool, monitoring.events.CALL,
                                      lambda *args: None)
         for site, handler in ((positional_site, 'Call.Generic.Observed+NO_SELF'),
-                              (star_site, 'INSTRUMENTED_CALL_FUNCTION_EX+NO_KW')):
+                              (star_site, 'CallEx.Generic.Observed+NO_KW')):
             support.reset_code(site)
             monitoring.set_local_events(tool, site.__code__,
                                         monitoring.events.CALL)

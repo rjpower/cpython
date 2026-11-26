@@ -2689,22 +2689,25 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
     _PyCodeExec *exec = code->_co_exec;
     if (exec->first_traceable > 1) {
         /* A generator expression: its code begins with RESUME, a bound
-         * LocalRead of the argument and GET_ITER or GET_AITER, before its
-         * RETURN_GENERATOR, and nothing executes them.  The iterator, and for GET_ITER the
+         * IterOpen of the argument, or a bound LocalRead and GET_AITER,
+         * before its RETURN_GENERATOR, and nothing executes them.  The
+         * iterator, and for IterOpen the
          * index, are the first two slots of the stack, where the loop reads
          * them: iter() of the outermost iterable runs here, at creation, as
          * the language requires, and the code takes any iterable as its
          * argument.  Its errors are those of the call. */
-        int handler = _PyIR_BaseOpcode(IR_HANDLER(exec->words[2]));
-        assert(IR_HANDLER(exec->words[1]) == ROP_HANDLER_LocalRead_Bound);
-        assert(handler == GET_ITER || handler == GET_AITER);
-        assert(IR_A(exec->words[2]) == exec->nfixed);
         PyValue *stack = frame->base + exec->nfixed;
-        if (handler == GET_AITER) {
+        if (IR_HANDLER(exec->words[1]) == ROP_HANDLER_LocalRead_Bound) {
+            assert(_PyIR_BaseOpcode(IR_HANDLER(exec->words[2])) == GET_AITER);
+            assert(IR_A(exec->words[2]) == exec->nfixed);
             stack[0] = _PyEval_GetAIter(tstate, PyValue_DUP(frame->base[0]));
         }
         else {
-            // The row of IterOpen.Generic
+            // A word of IterOpen, whichever arm the site has adapted to: the
+            // argument is its source and its pair is the first two slots of
+            // the stack
+            assert(IR_A(exec->words[1]) == exec->nfixed);
+            assert(IR_B(exec->words[1]) == 0);
             _PyStatusValue opened = _PyRop_OpenIter(
                 frame, PyValue_Borrow(frame->base[0]), ITER_ORDINARY);
             stack[0] = opened.value;

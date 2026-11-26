@@ -5274,15 +5274,22 @@ typedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,
 static const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS];
 #include "ceval_routines.h"
 
+static _PyIRTransfer ir_run_IR_OPERANDS(PyThreadState *, _PyInterpreterFrame *,
+                                        _PyInstr *, _PyIRWord);
+static _PyIRTransfer ir_run_UNKNOWN_OPCODE(PyThreadState *, _PyInterpreterFrame *,
+                                           _PyInstr *, _PyIRWord);
+static _PyIRTransfer ir_start_frame(PyThreadState *, _PyInterpreterFrame *,
+                                    _PyInstr *);
+static _PyIRTransfer ir_throw_error(PyThreadState *, _PyInterpreterFrame *,
+                                    _PyInstr *);
+static const _PyIRForm ir_handler_forms[512];
+
 #define IR_FUNCTION_FORMS
-#include "generated_ir_cases.c.h"
+#include "ceval_labels.h"
 #undef IR_FUNCTION_FORMS
-/* The whole-word completion stubs of the planned arms (regions89 G1a),
- * from the same handler text, with the forms' bindings of the macros they
- * do not bind themselves */
-#include "generated_ir_stubs.c.h"
-/* The forms and stubs of the register instruction arms (Python/register_ops);
- * the tables above list them */
+/* The forms of the register instruction arms (Python/register_ops), the
+ * table of the forms, and the whole-word completion stubs with the plan of
+ * each arm */
 #include "generated_rop_forms.c.h"
 #include "generated_rop_stubs.c.h"
 #pragma GCC diagnostic pop
@@ -5484,7 +5491,7 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
      * it is optimised for size and its closes stay out of line. */
     goto *&&LABEL_start_frame;
 
-#include "generated_ir_cases.c.h"
+#include "ceval_labels.h"
 #include "generated_rop_cases.c.h"
 
     /* A function form returned no word: it raised (ir_execute_forms() has the

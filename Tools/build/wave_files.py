@@ -49,7 +49,6 @@ import sys
 
 NEVER_BATCHED = (
     "Python/ceval.c",
-    "Python/bytecodes.c",
     "Python/ceval_macros.h",
 )
 NEVER_BATCHED_PREFIX = "generated_"

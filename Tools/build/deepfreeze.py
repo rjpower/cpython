@@ -29,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 verbose = False
 
-# This must be kept in sync with Tools/cases_generator/analyzer.py
+# This must be kept in sync with Tools/cases_generator/stack_ops.py
 RESUME = 128
 
 def isprintable(b: bytes) -> bool:

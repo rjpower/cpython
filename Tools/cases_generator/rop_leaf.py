@@ -2,7 +2,7 @@
 
 A template is derived from the arm's SSA expansion (`rop_ssa.SsaArm`), the
 graph the tracer uses and test_rop_ssa runs against C: one graph for both.
-`leaf_of_arm` lowers the expansion into the leaf IR of ir_leaf.py
+`leaf_of_arm` lowers the expansion into the leaf IR
 (`LeafBody`):
 
 - a home read is an `arg`, an immediate operand is folded where it is used
@@ -17,8 +17,8 @@ graph the tracer uses and test_rop_ssa runs against C: one graph for both.
   release) becomes a `PublishPlan`, the same on every path that publishes.
 
 `template_of_arm` joins the body with its publication, the home-class
-conditional detach, load, store and close that jit_template_generator.Builder
-emits for a stack handler, and emits it with jit_template_generator.  An arm
+conditional detach, load, store and close of the word, and emits it with
+jit_backend.  An arm
 that uses anything else keeps the call of its form; `Unsupported` says why.
 """
 
@@ -1018,8 +1018,7 @@ def leaf_of_arm(program: Program, arm: Arm, ssa: SsaArm | None = None) -> ArmLea
     return LeafBuilder(program, arm, ssa or expand(program, arm)).build()
 
 
-# The template: the leaf body joined with its publication, as
-# jit_template_generator.Builder joins the uops of a stack handler
+# The template: the leaf body joined with its publication
 
 @dataclass(frozen=True)
 class Home:

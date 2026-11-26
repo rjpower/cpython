@@ -5,8 +5,8 @@ From the checked `Program` of Python/register_ops/*.rop:
 - the interpreter cases (one computed-goto case per arm),
 - the function forms, with the same signature and completion contract as
   the old `ir_run_*` forms,
-- the completion stubs of the shared arms (the old generator, ir_generator.py,
-  lists the arms in its dispatch, form and stub-plan tables: arm_entries()),
+- the completion stubs of the shared arms, with the plan table of the arms,
+- the dispatch table and the form table, which list the arms (arm_entries()),
 - the metadata: family and arm numbers, the arm-to-handler table, the
   point tables.
 
@@ -31,6 +31,7 @@ import rop_check
 import rop_leaf
 import rop_verify
 from generators_common import root_relative_path, write_header
+from handler_table import first_arm, handler_ids
 from rop_cgen import (ESCAPING, Lowering, Unsupported, inline_rows, lower_arm,
                       outlined_name, pending_blockers, row_signature)
 from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, FieldKind,
@@ -47,6 +48,8 @@ ROP_DIR = ROOT / "Python" / "register_ops"
 # count in the generated metadata) and are dense, in definition order.  They
 # are private: nothing outside the generated files names one.
 HANDLER_LIMIT = 512
+IR_OPERANDS_ID = handler_ids()["IR_OPERANDS"]
+FORM_PARAMETERS = "PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr"
 
 
 class GenerateError(Exception):
@@ -245,8 +248,35 @@ def write_inline_rows(out: TextIO, p: Products) -> None:
     out.write("\n")
 
 
+def emitted_arm_ids(p: Products) -> dict[int, ir_arms.ArmEntry]:
+    "The arms that have a case and a form, by handler id"
+    first = first_arm()
+    return {first + arm.index: arm for arm in arm_entries(p) if arm.emitted}
+
+
+def write_form_table(out: TextIO, p: Products) -> None:
+    """The function form of every handler id, as the target table has its
+    label: ir_handler_forms[IR_HANDLER(word)] runs the word.  Python/ceval.c
+    defines the forms of the operand words and of the unknown ids."""
+    by_arm = emitted_arm_ids(p)
+    out.write(f"\nstatic const _PyIRForm ir_handler_forms[{ir_arms.IR_LIMIT}] = {{\n")
+    for i in range(ir_arms.IR_LIMIT):
+        if i in by_arm:
+            name = f"ir_run_{by_arm[i].name}"
+        elif i == IR_OPERANDS_ID:
+            name = "ir_run_IR_OPERANDS"
+        else:
+            name = "ir_run_UNKNOWN_OPCODE"
+        out.write(f"    [{i}] = {name},\n")
+    out.write("};\n")
+
+
 def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
     write_header(__file__, sources, out)
+    out.write("\n/* Every form, declared before the forms, which call one another */\n")
+    for arm in sorted(emitted_arm_ids(p).values(), key=lambda arm: arm.name):
+        out.write(f"static _PyIRTransfer ir_run_{arm.name}({FORM_PARAMETERS}, "
+                  "_PyIRWord ir_word);\n")
     write_left_out(out, p)
     out.write(MISS_MACRO + "\n")
     write_inline_rows(out, p)
@@ -256,6 +286,7 @@ def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
                   "    PyThreadState *tstate, _PyInterpreterFrame *frame, "
                   "_PyInstr *next_instr, _PyIRWord ir_word)\n{\n")
         out.write("\n".join(handler_text(arm, low, "    ")) + "\n}\n")
+    write_form_table(out, p)
 
 
 # Whole-word completion stubs (regions89 G1a) and the plan of each arm
@@ -263,15 +294,25 @@ def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
 STUB_PREAMBLE = """\
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
- * A release reports ESCAPED exactly when it deallocates. */
-#ifndef _PyIR_STUB_RELEASE
+ * Python/ceval.c includes this file after the function forms, whose
+ * bindings of the other macros the stubs share. */
+
+/* Whether closing V drops a last count, which runs its destructor: then
+ * the path may have reentered Python (ESCAPED) */
+static inline int
+_PyIR_StubDropsLast(PyValue v)
+{
+    return PyValue_RefcountOnObject(v) && Py_REFCNT(BITS_TO_PTR(v)) == 1
+        ? _PyIR_ESCAPED : 0;
+}
+
+/* A release reports ESCAPED exactly when it deallocates */
 #define _PyIR_STUB_RELEASE(CLOSE, V) \\
     do { \\
         PyValue ir_released = (V); \\
         ir_status |= _PyIR_StubDropsLast(ir_released); \\
         (CLOSE)(ir_released); \\
     } while (0)
-#endif
 #pragma push_macro("DISPATCH")
 #undef DISPATCH
 #pragma push_macro("DISPATCH_SAME_OPARG")
@@ -348,6 +389,41 @@ def write_stubs(out: TextIO, p: Products, sources: list[str]) -> None:
         out.write("\n".join(handler_text(arm, p.for_forms(name), "    ")) + "\n}\n")
     write_completions(out, p)
     out.write("\n" + STUB_EPILOGUE)
+    write_stub_plans(out, p)
+
+
+def write_stub_plans(out: TextIO, p: Products) -> None:
+    """The plan of each handler that has one: its region, whether its
+    completions report ESCAPED, its stub (shared), and its family's generic
+    stub, which runs the word after a miss.  Python/jit.c reads it."""
+    out.write("\n/* The plan of each arm; the stubs are defined above */\n")
+    out.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_arms.IR_LIMIT}] = {{\n")
+    for i, arm in sorted(emitted_arm_ids(p).items()):
+        stub = f"(const void *){arm.stub}" if arm.stub else "NULL"
+        generic = f"(const void *){arm.generic}" if arm.generic else "NULL"
+        out.write(f"    [{i}] = {{_PyIR_PLAN_{arm.region.upper()}, "
+                  f"{int(arm.escapes)}, {i}, {stub}, {generic}}},  // {arm.name}\n")
+    out.write("};\n")
+
+
+def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
+    """The dispatch table of the evaluator, which is local to ir_evaluate()
+    and has the addresses of its labels.  Dispatch masks the word with
+    IR_HANDLER_MASK, so the table covers every id the mask yields."""
+    write_header(__file__, sources, out)
+    by_arm = emitted_arm_ids(p)
+    out.write(f"\nstatic void *const opcode_targets[{ir_arms.IR_LIMIT}] = {{\n")
+    for i in range(ir_arms.IR_LIMIT):
+        if i in by_arm:
+            name = by_arm[i].name
+        elif i == IR_OPERANDS_ID:
+            name = "IR_OPERANDS"
+        else:
+            name = "UNKNOWN_OPCODE"
+        out.write(f"[{i}] = &&TARGET_{name},\n")
+    out.write("};\n")
+    out.write("static_assert(Py_ARRAY_LENGTH(opcode_targets) == IR_HANDLER_MASK + 1,\n"
+              '              "dispatch covers every id that IR_HANDLER yields");\n')
 
 
 def completion_name(arm: str) -> str:
@@ -718,8 +794,8 @@ def wrapped_arms(program: Program) -> list[str]:
 def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
     """Every arm, in handler order, for the per-handler tables, then the
     observed wrapper (twin) of each arm of a family that declares events.
-    The old generator's forms, targets and stub plans list the emitted ones
-    after the old handlers (ir_generator.py).  A twin runs its family's
+    The forms, targets and stub plans list the emitted ones after the word
+    kinds.  A twin runs its family's
     observed wrapper (`observes`), whose case and form it names; without one it
     has neither."""
     shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
@@ -786,14 +862,9 @@ def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
     return made, refused
 
 
-def template_arm_names(paths: list[Path] | None = None) -> list[str]:
-    """The C names of the arms that have a template, for the one table of
-    templates that jit_template_generator.py writes"""
-    program = rop_verify.load(paths or sorted(ROP_DIR.glob("*.rop")))
-    if program.diagnostics:
-        raise GenerateError("\n".join(str(d) for d in program.diagnostics))
-    made, _ = template_texts(lower_all(program, number_arms(program)))
-    return [c_name(name) for name in made]
+def write_lowerings(out: TextIO, p: Products, sources: list[str]) -> None:
+    "The prototypes and table of the JIT's lowerings (jit_backend.LOWERINGS)"
+    jit_backend.write_lowerings(out)
 
 
 def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
@@ -806,6 +877,10 @@ def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("\n")
     for lines in made.values():
         out.write("\n".join(lines) + "\n\n")
+    out.write(f"const _PyJitTemplate _PyJit_Templates[{ir_arms.IR_LIMIT}] = {{\n")
+    for name in made:
+        out.write(f"    [ROP_HANDLER_{c_name(name)}] = jit_template_{c_name(name)},\n")
+    out.write("};\n")
 
 
 # Metadata
@@ -872,19 +947,19 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     write_header(__file__, sources, out)
     families = sorted(prog.families)
     out.write("\n#ifndef Py_INTERNAL_ROP_METADATA_H\n#define Py_INTERNAL_ROP_METADATA_H\n")
-    out.write('\n#include "ir_handler_ids.h"     // IR_NUM_OLD_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
+    out.write('\n#include "ir_handler_ids.h"     // IR_FIRST_ARM\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
     wrapped = wrapped_arms(prog)
     twins = len(wrapped)
-    out.write("\n/* The arms' handler ids follow the old handlers, in definition order; the\n"
+    out.write("\n/* The arms' handler ids follow the word kinds, in definition order; the\n"
               " * observed wrappers of the arms of families that declare events follow them */\n")
-    out.write("#define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS\n")
+    out.write("#define ROP_FIRST_HANDLER IR_FIRST_ARM\n")
     out.write(f"#define ROP_NUM_HANDLERS {len(prog.arms) + twins}\n")
     out.write('static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,\n'
               '              "the arms\' handler ids fit the handler field");\n')
     out.write(f"#define ROP_NUM_FAMILIES {len(families)}\n")
     out.write(f"#define ROP_NUM_ARMS {len(prog.arms)}\n")
     out.write("static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,\n"
-              '              "the handler count is the old handlers, the arms and their wrappers");\n\n')
+              '              "the handler count is the word kinds, the arms and their wrappers");\n\n')
     out.write("/* Family numbers, in name order */\nenum {\n")
     for i, f in enumerate(families):
         out.write(f"    ROP_FAMILY_{f} = {i},\n")
@@ -1018,7 +1093,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", help="the interpreter cases")
     parser.add_argument("--forms", help="the function forms")
     parser.add_argument("--stubs", help="the completion stubs")
+    parser.add_argument("--targets", help="the dispatch table of the evaluator")
     parser.add_argument("--templates", help="the baseline templates")
+    parser.add_argument("--lowerings", help="the baseline JIT's lowerings")
     parser.add_argument("--metadata", help="the metadata header")
     parser.add_argument("sources", nargs="*", type=Path)
     args = parser.parse_args(argv)
@@ -1033,8 +1110,9 @@ def main(argv: list[str] | None = None) -> int:
     products = lower_all(program, numbers)
     sources = [root_relative_path(str(s)) for s in paths]
     for option, writer in (("cases", write_cases), ("forms", write_forms),
-                           ("stubs", write_stubs),
+                           ("stubs", write_stubs), ("targets", write_targets),
                            ("templates", write_templates),
+                           ("lowerings", write_lowerings),
                            ("metadata", write_metadata)):
         target = getattr(args, option)
         if target:

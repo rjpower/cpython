@@ -142,7 +142,6 @@ class SitesTests(unittest.TestCase):
 
     def test_excluded_defaults_listed(self):
         self.assertIn("Python/ceval.c", wave_files.NEVER_BATCHED)
-        self.assertIn("Python/bytecodes.c", wave_files.NEVER_BATCHED)
         self.assertIn("Python/ceval_macros.h", wave_files.NEVER_BATCHED)
 
 

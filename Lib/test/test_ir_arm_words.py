@@ -265,7 +265,7 @@ class ForceArmTests(unittest.TestCase):
     def test_names_every_arm(self):
         handlers = capi.arm_handlers()
         self.assertEqual(len(set(handlers.values())), len(handlers))
-        self.assertGreaterEqual(min(handlers.values()), _opcode.IR_NUM_OLD_HANDLERS)
+        self.assertGreaterEqual(min(handlers.values()), _opcode.IR_FIRST_ARM)
         for name in ("Add.Int", "Add.Generic", "GetAttr.Instance"):
             self.assertIn(name, handlers)
 

@@ -2632,7 +2632,7 @@ class CAPITest(unittest.TestCase):
 
 class OwnershipOfAwaitRowsTests(unittest.TestCase):
     # The declared contracts of the generator and await rows
-    # (Include/internal/pycore_ir_components.h) say who owns what on the
+    # (Python/register_ops) say who owns what on the
     # failure paths: a value a failing helper consumed is released, and the
     # helper does not leak it. A leaked value stays alive after its last
     # name goes.

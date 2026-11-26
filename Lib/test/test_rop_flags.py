@@ -230,13 +230,6 @@ class TransportFlagTests(unittest.TestCase):
                 self.assertNotEqual(flag in oracle[op], flag in header[op])
                 self.assertTrue(reason)
 
-    def test_stack_only_ops_declare_no_effects(self):
-        # The stubs' bodies only abort; their flags come from the families'
-        # arms or from nowhere
-        text = (ROOT / "Python" / "bytecodes.c").read_text()
-        self.assertEqual(re.findall(r"effects\([^)]*\)\s*exits\(abort\)", text), [])
-
-
 class ReleaseDeclarationTests(unittest.TestCase):
 
     def test_releasing_a_binding_declares_runs_python(self):

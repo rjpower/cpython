@@ -1,13 +1,14 @@
 """The primitives of the register language: their models, C types, effects and the leaf IR that arms lower into, with the evaluator's memory model (Box, Context, HELPER_MODELS)."""
 
 from dataclasses import dataclass, field
+import ctypes
 import math
 import struct
 from typing import Callable
 
 
 
-# The effect flags of ir_records (CR): reference counts are not heap writes
+# The effect flags: reference counts are not heap writes
 READS_HEAP = "READS_HEAP"
 WRITES_HEAP = "WRITES_HEAP"
 ALLOCATES = "ALLOCATES"
@@ -701,7 +702,7 @@ def _term_text(term: tuple) -> str:
 
 @dataclass(frozen=True)
 class Layout:
-    "The numbers that the specs name: ir_leaf.CONSTANTS, FIELDS, SIZES, SYMBOLS"
+    "The numbers that the specs name: CONSTANTS, FIELDS, SIZES, SYMBOLS"
     constants: dict[str, int]
     offsets: dict[str, int]
     sizes: dict[str, int]
@@ -758,6 +759,68 @@ HELPER_MODELS = {
     # The tests run it with no event pending, or with one that raises nothing
     "_Py_HandlePending": lambda cx: 0,
 }
+
+
+_CTYPES = {
+    "bool": ctypes.c_bool, "i8": ctypes.c_int8, "u8": ctypes.c_uint8,
+    "i16": ctypes.c_int16, "u16": ctypes.c_uint16, "i32": ctypes.c_int32,
+    "u32": ctypes.c_uint32, "i64": ctypes.c_int64, "u64": ctypes.c_uint64,
+    "f64": ctypes.c_double,
+}
+
+
+class RealMemory:
+    "The process's memory, read only"
+
+    def load(self, addr: int, t: str):
+        if addr < 4096:
+            raise MemoryError(f"load of {t} at {addr:#x}")
+        ct = ctypes.c_uint64 if t not in _CTYPES else _CTYPES[t]
+        return ct.from_address(addr).value
+
+    def store(self, addr: int, t: str, x) -> None:
+        raise MemoryError("the evaluator never writes real memory")
+
+
+
+
+class Overlay:
+    """Copy on write over another memory: writes stay here, and reads see
+    them.  writes() lists each written location with its value before the
+    first write and after the last."""
+
+    def __init__(self, base) -> None:
+        self.base = base
+        self.cells: dict[int, tuple[str, object]] = {}
+        self.before: dict[int, object] = {}
+
+    def load(self, addr: int, t: str):
+        if addr in self.cells:
+            ct, x = self.cells[addr]
+            if ct != t:
+                raise MemoryError(f"load of {t} at {addr:#x}, stored as {ct}")
+            return x
+        return self.base.load(addr, t)
+
+    def store(self, addr: int, t: str, x) -> None:
+        if addr not in self.before:
+            self.before[addr] = self.base.load(addr, t)
+        self.cells[addr] = (t, x)
+
+    def writes(self) -> list[tuple[int, str, object, object]]:
+        return [(addr, t, self.before[addr], x)
+                for addr, (t, x) in sorted(self.cells.items())]
+
+SCALARS = ("bool", "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "f64")
+# The numbers that the specs name, which the layout of the running build
+# supplies
+CONSTANTS = (
+    "Py_PTR_LIMIT", "Py_INDEX_BASE", "Py_DOUBLE_OFFSET", "Py_INT_SHIFT",
+    "Py_INT_BASE", "Py_INT_MIN", "Py_INT_MAX", "Py_OWNED_MASK",
+    "Py_TAG_REFCNT", "_PY_EVAL_EVENTS_MASK",
+)
+# Element sizes that pointer arithmetic needs
+SIZES = ("PyValue", "PyDictUnicodeEntry")
 
 
 @dataclass

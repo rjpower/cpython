@@ -58,7 +58,7 @@ PyAPI_FUNC(PyLongObject *) _PyLong_OutObject(_PyLongOut *out);
 #define _PyLong_WORD_LIMIT ((int64_t)1 << (PyLong_SHIFT * _PyLong_WORD_DIGITS))
 
 /* _PyValue_MultiplyInt64() and _PyValue_LshiftInt64() (pycore_value.h,
-   for the typed handlers in bytecodes.c) are the overflow paths, through the
+   for the typed arms of Python/register_ops) are the overflow paths, through the
    span kernels. */
 
 // The word of v, an int value, if it has one.

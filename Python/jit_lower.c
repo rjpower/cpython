@@ -1,7 +1,7 @@
 /* The machine lowerings of the value primitives; see pycore_jit_lower.h.
  *
  * Each lowering is the x86-64 form of one primitive's C definition (the
- * header named in Tools/cases_generator/ir_leaf.py), on the value encoding
+ * C definition named in Tools/cases_generator/rop_primitives.py), on the value encoding
  * of Include/internal/pycore_pyvalue.h.  Lib/test/test_jit_template.py runs
  * every lowering against its C definition (_testinternalcapi.leaf_primitive)
  * on generated values and register assignments. */

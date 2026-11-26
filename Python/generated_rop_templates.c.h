@@ -83,7 +83,7 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 //   CellRead.Get: CellRead.Get: home has no leaf lowering
 //   CellStore.Set: CellStore.Set: home has no leaf lowering
 //   Const.Common: Const.Common: common_constant has no leaf lowering
-//   ForIter.List: ForIter.List: list_step has no leaf lowering
+//   ForIter.List: ForIter.List: exact_list_iter has no leaf lowering
 //   ForIter.Range: ForIter.Range: exact_range_iter has no leaf lowering
 //   ForIter.Tuple: ForIter.Tuple: exact_tuple has no leaf lowering
 //   GetAttr.GetSet: GetAttr.GetSet: home has no leaf lowering

@@ -124,6 +124,18 @@ extern primitive iter_self(v:B) -> Bool
     lowering: "none yet: a type load and a compare",
     test: "test_rop_iter");
 
+// An exact list that this thread may step: with free threading, one that it
+// owns or that is shared (_ITER_CHECK_LIST); otherwise any exact list
+extern primitive exact_list_iter(v:B) -> Bool
+  effects(reads)
+  test(exact<list>(v))
+  c _PyRop_ExactListIter as bool
+  evidence(
+    review: "FI. _ITER_CHECK_LIST (6027eeaedf4): PyList_CheckExact, and under Py_GIL_DISABLED _Py_IsOwnedByCurrentThread or _PyObject_GC_IS_SHARED.",
+    contract: "Reads the type and the owner: no memory, no failure.",
+    lowering: "none yet: a type compare",
+    test: "test_rop_iter");
+
 extern primitive exact_range_iter(v:B) -> Bool
   effects(reads)
   c _PyRop_ExactRangeIter as bool
@@ -308,7 +320,7 @@ macro adapt_before_use_for_iter(f:Fb<Iter>, r:B, c:B)
   Sample():
     branch cursor_is_index(c) -> TryList(), TryRange();
   TryList():
-    branch exact_list(r) -> PickList(), TryTuple();
+    branch exact_list_iter(r) -> PickList(), TryTuple();
   TryTuple():
     branch exact_tuple(r) -> PickTuple(), PickIndexed();
   TryRange():
@@ -503,7 +515,7 @@ arm ForIter.List inline
 {
   entry():
     let r:B = use(pair.receiver);
-    guard exact_list(r) else miss;
+    guard exact_list_iter(r) else miss;
     call list_step(r, use(pair.cursor)) {
       item -> Item();
       end -> Exhausted();

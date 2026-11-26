@@ -1183,7 +1183,7 @@
             }
             goto rop_ForIter_Generic_adapt_before_use_for_iter1_TryRange;
             rop_ForIter_Generic_adapt_before_use_for_iter1_TryList:
-            if (_PyRop_ExactList(adapt_before_use_for_iter1_r)) {
+            if (_PyRop_ExactListIter(adapt_before_use_for_iter1_r)) {
                 goto rop_ForIter_Generic_adapt_before_use_for_iter1_PickList;
             }
             goto rop_ForIter_Generic_adapt_before_use_for_iter1_TryTuple;
@@ -5204,7 +5204,7 @@
             PyValue nc;
             PyValue ev;
             r = PyValue_Borrow(*home_pair_receiver);
-            if (!_PyRop_ExactList(r)) {
+            if (!_PyRop_ExactListIter(r)) {
                 JUMP_TO_PREDICTED(ForIter_Generic);
             }
             ret2 = _PyRop_ListStep(r, PyValue_Borrow(*home_pair_cursor), &out1);

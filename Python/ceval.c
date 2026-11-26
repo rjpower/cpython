@@ -2385,8 +2385,33 @@ _PyRop_IterSelf(PyValueBorrow v)
 static inline bool
 _PyRop_ExactRangeIter(PyValueBorrow v)
 {
-    return PyValue_IsObject(v)
-        && Py_TYPE(PyValue_AsKnownObjectBorrow(v)) == &PyRangeIter_Type;
+    if (!PyValue_IsObject(v)
+        || Py_TYPE(PyValue_AsKnownObjectBorrow(v)) != &PyRangeIter_Type) {
+        return false;
+    }
+#ifdef Py_GIL_DISABLED
+    // Only a range iterator that nothing else references: this thread alone
+    // steps it
+    return _PyObject_IsUniquelyReferenced(PyValue_AsKnownObjectBorrow(v));
+#else
+    return true;
+#endif
+}
+
+static inline bool
+_PyRop_ExactListIter(PyValueBorrow v)
+{
+    if (!PyValue_IsObject(v)
+        || !PyList_CheckExact(PyValue_AsKnownObjectBorrow(v))) {
+        return false;
+    }
+#ifdef Py_GIL_DISABLED
+    // A list another thread owns, and that is not shared, is not stepped here
+    PyObject *list_o = PyValue_AsKnownObjectBorrow(v);
+    return _Py_IsOwnedByCurrentThread(list_o) || _PyObject_GC_IS_SHARED(list_o);
+#else
+    return true;
+#endif
 }
 
 static inline bool

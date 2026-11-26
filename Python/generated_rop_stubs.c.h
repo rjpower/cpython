@@ -1156,7 +1156,7 @@ _PyIR_Rop_Stub_ForIter_Generic(
     }
     goto rop_ForIter_Generic_adapt_before_use_for_iter1_TryRange;
     rop_ForIter_Generic_adapt_before_use_for_iter1_TryList:
-    if (_PyRop_ExactList(adapt_before_use_for_iter1_r)) {
+    if (_PyRop_ExactListIter(adapt_before_use_for_iter1_r)) {
         goto rop_ForIter_Generic_adapt_before_use_for_iter1_PickList;
     }
     goto rop_ForIter_Generic_adapt_before_use_for_iter1_TryTuple;

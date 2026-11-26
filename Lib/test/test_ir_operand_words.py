@@ -111,7 +111,7 @@ class WordLengthTests(unittest.TestCase):
                        _opcode.IR_OPERANDS_EX)
         for handler, row in enumerate(CONTRACT):
             # A span's length follows its count fields, not field C
-            if row.operands == _opcode.IR_OPERANDS_SPANS:
+            if row is None or row.operands == _opcode.IR_OPERANDS_SPANS:
                 continue
             name = dis._all_opname[handler]
             with self.subTest(handler=name):

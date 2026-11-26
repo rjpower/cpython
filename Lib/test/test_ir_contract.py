@@ -95,8 +95,11 @@ class ContractTests(unittest.TestCase):
 
     def test_rows(self):
         self.assertEqual(len(CONTRACT), _opcode.IR_NUM_HANDLERS)
-        self.assertEqual(len(ROWS), len(CONTRACT))
         self.assertEqual(len(dis._all_opname), _opcode.IR_NUM_HANDLERS)
+        # Every named id has a row; a guard build leaves the ids below its
+        # base without either
+        named = {h for h, name in enumerate(dis._all_opname) if name is not None}
+        self.assertEqual(set(ROWS), named)
         for h, row in ROWS.items():
             with self.subTest(handler=dis._all_opname[h]):
                 self.assertTrue(row.flags & _opcode.IR_VALID)

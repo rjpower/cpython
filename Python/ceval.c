@@ -2282,6 +2282,7 @@ static inline bool _PyRop_PythonTarget(PyThreadState *tstate,
 static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
+static PyValue _PyRop_UnaryOp(uint32_t op, PyValue x);
 /* The rows of Function and Intrinsic (Python/register_ops/functions.rop) */
 static PyValue _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
                                    const _PyRopSpan *fields, uint32_t present);
@@ -2291,8 +2292,6 @@ static PyValue _PyRop_IntrinsicImportStar(PyThreadState *tstate, PyValue x);
 static PyValue _PyRop_IntrinsicStopIteration(PyThreadState *tstate, PyValue x);
 static PyValue _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id,
                                       PyValue x, PyValue y);
-static PyValue _PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id,
-                                       PyValue x, PyValue y);
 static PyValue _PyRop_IntrinsicAttr(PyThreadState *tstate, uint32_t id,
                                     PyValue x, PyValue y);
 
@@ -2329,12 +2328,81 @@ _PyRop_JumpEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return _PyRop_EdgeEvent(tstate, frame, site, true, PY_MONITORING_EVENT_JUMP);
 }
 
-/* The backedge's poll (Jump.Poll, Jump.Observed): signals, the GC and other
- * pending events, as _CHECK_PERIODIC */
+/* The poll of a word that is interruptible (the backedge Jump arms, Resume):
+ * signals, the GC and other pending events */
 static inline int
-_PyRop_Poll(PyThreadState *tstate)
+_PyRop_Poll(PyThreadState *tstate, _PyInstr *site)
 {
+    (void)site;
     return check_periodics(tstate);
+}
+
+/* The rows of Resume (Python/register_ops/resume.rop) */
+
+/* The code's instrumentation is current and no event is pending */
+static inline bool
+_PyRop_InstrumentationCurrent(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    return _Py_EvalBreaker(tstate) == FRAME_CODE_INSTRUMENTATION_VERSION();
+}
+
+/* Whether a resume point of this kind polls (the delegation loops and a
+ * generator expression's start do not) */
+static inline bool
+_PyRop_ResumePolls(uint32_t kind)
+{
+    return kind < RESUME_AFTER_YIELD_FROM;
+}
+
+/* Instrument the code if its version is out of date, as _MAYBE_INSTRUMENT.
+ * A positive result means the word runs again: return_pc names it, and it
+ * now has the handler that instrumentation installed. */
+static Py_NO_INLINE int
+_PyRop_InstrumentIfStale(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *site)
+{
+#ifdef Py_GIL_DISABLED
+    // For thread-safety, the instrumentation version is checked even when
+    // tracing: another thread may rewrite the bytecode while this one runs.
+    int check_instrumentation = 1;
+#else
+    int check_instrumentation = (tstate->tracing == 0);
+#endif
+    if (!check_instrumentation) {
+        return 0;
+    }
+    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker)
+                               & ~_PY_EVAL_EVENTS_MASK;
+    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+        _PyFrame_GetCode(frame)->_co_instrumentation_version);
+    if (code_version == global_version) {
+        return 0;
+    }
+    if (_Py_Instrument(_PyFrame_GetCode(frame), tstate->interp)) {
+        return -1;
+    }
+    frame->return_pc = site;
+    return 1;
+}
+
+/* PY_START at a frame's start, PY_RESUME at any other resume point.  A
+ * callback that moves the frame leaves the word to run in return_pc. */
+static Py_NO_INLINE int
+_PyRop_ResumeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *site, uint32_t kind)
+{
+    int err = _Py_call_instrumentation(
+        tstate, kind == RESUME_AT_FUNC_START ? PY_MONITORING_EVENT_PY_START
+                                             : PY_MONITORING_EVENT_PY_RESUME,
+        frame, site);
+    if (err) {
+        return -1;
+    }
+    if (frame->instr_ptr != site) {
+        frame->return_pc = frame->instr_ptr;
+        return 1;
+    }
+    return 0;
 }
 
 /* Whether the jump word at site goes back */
@@ -2354,8 +2422,10 @@ _PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     // An instruction event may have made the word transparent: its target is
     // in the format of the handler it wraps
     const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    // The wrapper's own length is one word; the fall-through continues past
+    // the fixed operand words of the word it wraps
     _PyInstr *dest = taken ? site + 1 + _PyIR_FormatDistance(fmt, *site)
-                           : site + _PyIR_WordLength(*site);
+                           : site + 1 + fmt->fixed_words;
     frame->return_pc = dest;
     _PyIRObserverResult result = _PyIR_ObserveCommittedBranch(
         tstate, frame, site, site, dest, event,
@@ -2800,6 +2870,25 @@ _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home)
     _PyEval_FormatExcCheckArg(
         _PyThreadState_GET(), PyExc_UnboundLocalError, UNBOUNDLOCAL_ERROR_MSG,
         _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, index));
+}
+
+/* AppendText.Text (numeric.rop): the in-place append of `s += t`.  The
+ * string's owner leaves the local before the append, so PyUnicode_Append sees
+ * the local's reference as the only one and may extend the buffer in place;
+ * that keeps a loop of appends linear.  Failure leaves the local vacant and
+ * the string released, as the old handler did. */
+PyValue
+_PyRop_AppendText(PyValue *home, PyValueBorrow right)
+{
+    PyValue held = *home;
+    assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(held)));
+    *home = PyValue_NULL;
+    PyObject *left = value_unicode_append(PyValue_AsKnownObjectSteal(held),
+                                          PyValue_AsKnownObjectBorrow(right));
+    if (left == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromNonNumberSteal(left);
 }
 
 PyValue
@@ -3331,6 +3420,139 @@ done:
     return res;
 }
 
+/* Unpack and UnpackStar (Python/register_ops/displays.rop): the values of
+ * the iterable as owners the publish moves into the homes of the targets,
+ * which are in stack order (the first target is the last element).  The source stays in its home and is held across the call. */
+static int
+rop_unpack(PyValue *source_home, int before, int after, Py_ssize_t count,
+           _PyRopOwners *out)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue seq = PyValue_DUP(PyValue_Borrow(*source_home));
+    int ok = 0;
+    // A number is not iterable
+    if (!PyValue_IsObject(PyValue_Borrow(seq))) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "cannot unpack non-iterable %.200s object",
+                      PyValue_TYPE(PyValue_Borrow(seq))->tp_name);
+        goto done;
+    }
+    PyValue *items = count ? PyMem_Malloc(count * sizeof(PyValue)) : NULL;
+    if (count && items == NULL) {
+        _PyErr_NoMemory(tstate);
+        goto done;
+    }
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(seq));
+    if (!_PyEval_UnpackIterableValue(tstate, seq_o, before, after, items)) {
+        PyMem_Free(items);
+        goto done;
+    }
+    // The outputs are in stack order, bottom first: the first target is last
+    for (Py_ssize_t i = 0, j = count - 1; i < j; i++, j--) {
+        PyValue tmp = items[i];
+        items[i] = items[j];
+        items[j] = tmp;
+    }
+    out->items = items;
+    out->count = count;
+    ok = 1;
+done:
+    PyValue_CLOSE(seq);
+    return ok ? 0 : -1;
+}
+
+int
+_PyRop_UnpackIterable(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    return rop_unpack(source_home, (int)n, -1, n, out);
+}
+
+int
+_PyRop_UnpackStar(PyValue *source_home, Py_ssize_t shape, _PyRopOwners *out)
+{
+    int before = shape & 0xFF, after = shape >> 8;
+    return rop_unpack(source_home, before, after, before + 1 + after, out);
+}
+
+/* The specialized arms: the items of an exact tuple or list of n items,
+ * duplicated, in stack order.  The guard has checked the type and length; the
+ * list's length is checked again under its lock, and a list that changed goes
+ * the generic way. */
+int
+_PyRop_UnpackTuple(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyTuple_CheckExact(seq_o) && PyTuple_GET_SIZE(seq_o) == n);
+    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
+    if (n && items == NULL) {
+        _PyErr_NoMemory(_PyThreadState_GET());
+        return -1;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyTuple_ITEMS(seq_o)[i]));
+    }
+    out->items = items;
+    out->count = n;
+    return 0;
+}
+
+int
+_PyRop_UnpackList(PyValue *source_home, Py_ssize_t n, _PyRopOwners *out)
+{
+    PyObject *seq_o = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*source_home));
+    assert(PyList_CheckExact(seq_o));
+    PyValue *items = n ? PyMem_Malloc(n * sizeof(PyValue)) : NULL;
+    if (n && items == NULL) {
+        _PyErr_NoMemory(_PyThreadState_GET());
+        return -1;
+    }
+    int same = 1;
+    Py_BEGIN_CRITICAL_SECTION(seq_o);
+    if (PyList_GET_SIZE(seq_o) != n) {
+        same = 0;
+    }
+    else {
+        for (Py_ssize_t i = 0; i < n; i++) {
+            items[n - 1 - i] = PyValue_DUP(PyValue_Borrow(_PyList_ITEMS(seq_o)[i]));
+        }
+    }
+    Py_END_CRITICAL_SECTION();
+    if (!same) {
+        PyMem_Free(items);
+        return _PyRop_UnpackIterable(source_home, n, out);
+    }
+    out->items = items;
+    out->count = n;
+    return 0;
+}
+
+bool
+_PyRop_TupleHasLength(PyValueBorrow v, Py_ssize_t n)
+{
+    return (PyValue_IsObject)(v)
+           && PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(v))
+           && PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) == n;
+}
+
+bool
+_PyRop_ListHasLength(PyValueBorrow v, Py_ssize_t n)
+{
+    return (PyValue_IsObject)(v)
+           && PyList_CheckExact(PyValue_AsKnownObjectBorrow(v))
+           && PyList_GET_SIZE(PyValue_AsKnownObjectBorrow(v)) == n;
+}
+
+/* The case of classify_unpack: 0 an exact tuple of n items, 1 an exact list
+ * of n items, 2 any other */
+int
+_PyRop_ClassifyUnpack(PyValueBorrow v, Py_ssize_t n)
+{
+    if (_PyRop_TupleHasLength(v, n)) {
+        return 0;
+    }
+    return _PyRop_ListHasLength(v, n) ? 1 : 2;
+}
+
 void
 _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v)
 {
@@ -3479,7 +3701,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline PyValue
 generator_payload(_PyIRWord payload)
 {
-    return (PyValue){.bits = payload};
+    return _PyValue_FromTransferWord(payload);
 }
 
 static inline uint64_t
@@ -3654,8 +3876,6 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef IR_EXIT
 #pragma push_macro("JUMP_TO_PREDICTED")
 #undef JUMP_TO_PREDICTED
-#pragma push_macro("IR_DEOPT_BINARY_OP")
-#undef IR_DEOPT_BINARY_OP
 #pragma push_macro("IR_OBSERVE_EDGE")
 #undef IR_OBSERVE_EDGE
 #pragma push_macro("IR_HOLD_NEXT")
@@ -3727,12 +3947,6 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
     do { \
         Py_MUSTTAIL return ir_run_##name(tstate, frame, this_instr, ir_word); \
     } while (0)
-#define IR_DEOPT_BINARY_OP(F) \
-    do { \
-        Py_MUSTTAIL return ir_binary_op( \
-            tstate, frame, this_instr, ir_word, \
-            (int)((_PyFbHeader *)IR_FB(F))->arg); \
-    } while (0)
 #define IR_HOLD_NEXT() ((void)0)
 #define IR_STEP_DONE(STEP) return (STEP)
 #define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
@@ -3763,11 +3977,11 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define GEN_DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
     do { \
-        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), (V).bits); \
+        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)); \
     } while (0)
 #define GEN_STEP_EFFECT(REMAINING, IP, V) \
     do { \
-        Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
+        Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), _PyValue_ToTransferWord(V), \
                                                   (REMAINING)); \
     } while (0)
 /* Compiled code runs the forms: it is in its unit already, and leaves it
@@ -4254,7 +4468,6 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("PROCESS_ERROR_AT")
 #pragma pop_macro("IR_EXIT")
 #pragma pop_macro("JUMP_TO_PREDICTED")
-#pragma pop_macro("IR_DEOPT_BINARY_OP")
 #pragma pop_macro("IR_OBSERVE_EDGE")
 #pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
@@ -4288,10 +4501,8 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
     /* The operands of the shared bodies that the labels below read: the
-     * generic BINARY_OP's operation and the VM routines' (Python/
-     * ceval_routines.h), which the transfer macros set.  None is live across
-     * a dispatch. */
-    int binary_op_operation;
+     * VM routines' (Python/ceval_routines.h), which the transfer macros set.
+     * None is live across a dispatch. */
     _PyInstr *process_error_origin;
     uint32_t process_error_entry;
     PyValue gen_value;
@@ -6149,8 +6360,8 @@ call_bind_dict_kwargs(const _CallDict *items)
     int count = 0;
     for (int i = 0; i < items->count; i++) {
         if (items->dests[i] == _Py_CALL_BIND_TO_KWARGS) {
-            keys[count] = (PyValue){items->keys[i].bits};
-            values[count] = (PyValue){items->values[i].bits};
+            keys[count] = _PyIR_AdoptTemp(items->keys[i]);
+            values[count] = _PyIR_AdoptTemp(items->values[i]);
             count++;
         }
     }
@@ -7277,16 +7488,18 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
     return 0;
 }
 
-/* Consume v, iterate argcnt times and store the results via decreasing sp.
-   Return 1 for success, 0 if error.
+/* Iterate v (borrowed) argcnt times and store the results in out[0], out[1],
+   ... in the order they come.  Return 1 for success, 0 if error: the values
+   already stored are closed.
 
    If argcntafter == -1, do a simple unpack. If it is >= 0, do an unpack
-   with a variable target.
+   with a variable target, whose list is stored after the argcnt values,
+   followed by the argcntafter values that end the iterable.
 */
 
 Py_NO_INLINE int
 _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
-                       int argcnt, int argcntafter, PyValue *sp)
+                       int argcnt, int argcntafter, PyValue *out)
 {
     int i = 0, j = 0;
     Py_ssize_t ll = 0;
@@ -7295,12 +7508,6 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     PyObject *l = NULL; /* variable list */
     assert(v != NULL);
     assert(argcnt >= 0 && argcntafter >= -1);
-#ifndef NDEBUG
-    int capacity = argcnt + (argcntafter < 0 ? 0 : argcntafter + 1);
-    _PyInterpreterFrame *frame = tstate->current_frame;
-    assert(sp - frame->base >= capacity);
-    assert(sp <= frame->base + _PyFrame_NumSlots(frame));
-#endif
     int result = 0;
 
     it = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
@@ -7335,8 +7542,8 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
             }
             goto Error;
         }
-        *--sp = step.value;
-        _PyValue_CheckTemp(*sp);
+        out[i] = step.value;
+        _PyValue_CheckTemp(out[i]);
     }
 
     if (argcntafter == -1) {
@@ -7369,8 +7576,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     l = _PyValue_SequenceList(PyValue_FromObjectBorrow(it));
     if (l == NULL)
         goto Error;
-    *--sp = PyValue_FromObjectSteal(l);
-    i++;
+    out[i++] = PyValue_FromObjectSteal(l);
 
     ll = PyList_GET_SIZE(l);
     if (ll < argcntafter) {
@@ -7382,7 +7588,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
 
     /* Pop the "after-variable" args off the list. */
     for (j = argcntafter; j > 0; j--, i++) {
-        *--sp = _PyList_ITEMS(l)[ll - j];
+        out[i] = _PyList_ITEMS(l)[ll - j];
         _PyList_ITEMS(l)[ll - j] = PyValue_NULL;
     }
     /* Resize the list. */
@@ -7391,17 +7597,11 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     goto Done;
 
 Error:
-    /* The slots that the values went to are temporaries, which hold NULL
-       unless live */
-    for (; i > 0; i--, sp++) {
-        // a move: cleared below
-        PyValue ref = *sp;
-        *sp = PyValue_NULL;
-        PyValue_CLOSE(ref);
+    while (i > 0) {
+        PyValue_CLOSE(out[--i]);
     }
 Done:
     Py_XDECREF(it);
-    Py_DECREF(v);
     return result;
 }
 
@@ -8719,10 +8919,40 @@ _PyRop_FunctionMake(_PyInterpreterFrame *frame, PyValue code,
     return PyValue_FromObjectSteal((PyObject *)func_obj);
 }
 
+/* The Unary row (Python/register_ops/numeric.rop): closes x on both outcomes.
+ * Only -Py_INT_MIN leaves the inline int range, and negating a float that is
+ * not NaN gives one that is not. */
+static PyValue
+_PyRop_UnaryOp(uint32_t op, PyValue x)
+{
+    PyValue value = x;
+    PyValue res;
+    if (op == NEGATIVE) {
+        if (PyValue_IsInlineInt(value)) {
+            res = PyValue_FromInt64(-PyValue_InlineInt64(value));
+        }
+        else if (PyValue_IsInlineFloat(value)) {
+            res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
+        }
+        else {
+            res = _PyValue_Negative(value);
+        }
+    }
+    else if (op == POSITIVE) {
+        res = _PyValue_Positive(value);
+    }
+    else {
+        assert(op == INVERT);
+        res = _PyValue_Invert(value);
+    }
+    PyValue_XCLOSE(value);
+    return res;
+}
+
 /* The compiler's number of each member of IntrinsicId, in declaration order */
 static const uint8_t rop_intrinsic_number[] = {
     INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
-    INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
+    INTRINSIC_ASYNC_GEN_WRAP,
     INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
     INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
     INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
@@ -8730,11 +8960,6 @@ static const uint8_t rop_intrinsic_number[] = {
     INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
     INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
     INTRINSIC_MATCH_CLASS_ISINSTANCE,
-    INTRINSIC_COMPARE_OP + 0, INTRINSIC_COMPARE_OP + 1, INTRINSIC_COMPARE_OP + 2,
-    INTRINSIC_COMPARE_OP + 3, INTRINSIC_COMPARE_OP + 4, INTRINSIC_COMPARE_OP + 5,
-    INTRINSIC_COMPARE_OP + 6, INTRINSIC_COMPARE_OP + 7, INTRINSIC_COMPARE_OP + 8,
-    INTRINSIC_COMPARE_OP + 9, INTRINSIC_COMPARE_OP + 10, INTRINSIC_COMPARE_OP + 11,
-    INTRINSIC_CONTAINS_OP, INTRINSIC_CONTAINS_OP + 1,
     INTRINSIC_GETATTR, INTRINSIC_SETATTR,
 };
 
@@ -8742,15 +8967,9 @@ static PyValue
 _PyRop_IntrinsicUnary(PyThreadState *tstate, uint32_t id, PyValue x)
 {
     PyValue value = x;
-    int number = rop_intrinsic_number[id];
-    PyValue res;
-    if (number == INTRINSIC_UNARY_POSITIVE) {
-        res = _PyValue_Positive(value);
-    }
-    else {
-        // The other intrinsics take objects: the helper boxes a number
-        res = _PyEval_CallIntrinsic1(tstate, number, value);
-    }
+    // The intrinsics take objects: the helper boxes a number
+    PyValue res = _PyEval_CallIntrinsic1(tstate, rop_intrinsic_number[id],
+                                         value);
     PyValue_XCLOSE(value);
     return res;
 }
@@ -8785,12 +9004,6 @@ _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
     PyValue_XCLOSE(held1);
     PyValue_XCLOSE(held2);
     return res;
-}
-
-static PyValue
-_PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
-{
-    return _PyRop_IntrinsicBinary(tstate, id, x, y);
 }
 
 static PyValue

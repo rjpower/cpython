@@ -742,8 +742,7 @@ _PyCode_New(struct _PyCodeConstructor *con)
  * the legacy "constructors"
  ******************/
 
-/* Only after structural/feedback-domain admission. Pinned binary handlers
- * encode the operation in their handler number; other FBARG forms use the
+/* Only after structural/feedback-domain admission. FBARG forms use the
  * immutable feedback initializer, never an execution-cache payload. */
 static int
 admitted_word_arg(_PyIRWord word, const uint32_t *table, int nfb)
@@ -752,11 +751,6 @@ admitted_word_arg(_PyIRWord word, const uint32_t *table, int nfb)
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     if (fmt->imm != _PyIR_LOC_FBARG) {
         return _PyIR_FieldOparg(word);
-    }
-    if (handler >= _PyIR_BINARY_OP_FIRST &&
-        handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST)
-    {
-        return handler - _PyIR_BINARY_OP_FIRST;
     }
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int ordinal = _PyIR_FbFind(table, nfb, fields[fmt->fb - _PyIR_LOC_A]);

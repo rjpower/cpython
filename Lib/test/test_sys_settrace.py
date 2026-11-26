@@ -2109,6 +2109,10 @@ class JumpTestCase(unittest.TestCase):
         output = before_locals.get('output')
         before_output = tuple(output) if type(output) is list else None
         inherited = sys.exception()
+        # Immortal objects have no count to compare.
+        before_counts = {name: sys.getrefcount(value)
+                         for name, value in before_locals.items()
+                         if sys.getrefcount(value) < 2**30}
         try:
             raise LookupError('callback-owned exception')
         except LookupError as callback:
@@ -2123,8 +2127,14 @@ class JumpTestCase(unittest.TestCase):
         self.assertIs(frame.f_code, before_code)
         after_locals = dict(frame.f_locals)
         self.assertEqual(after_locals.keys(), before_locals.keys())
-        for name, value in before_locals.items():
-            self.assertIs(after_locals[name], value, name)
+        for name in before_locals:
+            self.assertIs(after_locals[name], before_locals[name], name)
+        # A refusal must not move, leak or release an owner. after_locals
+        # holds one reference that before_counts did not see.
+        after_counts = {name: sys.getrefcount(value) - 1
+                        for name, value in after_locals.items()
+                        if name in before_counts}
+        self.assertEqual(after_counts, before_counts)
         if before_output is not None:
             self.assertEqual(tuple(output), before_output)
 
@@ -2275,7 +2285,10 @@ class JumpTestCase(unittest.TestCase):
             output.append(6)
         output.append(7)
 
-    @async_jump_test(4, 5, [3, 5])
+    # Refused by design (rir90 KF): the survival proof of the outer loop's
+    # iterator does not cover code with an exception table, which async for
+    # has. The jump raises ValueError before any state changes.
+    @async_jump_test(4, 5, [3, 4, 3, 4, 5], refusal=incoming_owner_error)
     @clean_asynciter
     async def test_jump_out_of_async_for_block_forwards(output, asynciter):
         for i in [1]:
@@ -2284,7 +2297,8 @@ class JumpTestCase(unittest.TestCase):
                 output.append(4)
             output.append(5)
 
-    @async_jump_test(5, 2, [2, 4, 2, 4, 5, 6])
+    # Refused by design (rir90 KF), as the forwards test above.
+    @async_jump_test(5, 2, [2, 4, 5, 6], refusal=incoming_owner_error)
     @clean_asynciter
     async def test_jump_out_of_async_for_block_backwards(output, asynciter):
         for i in [1]:
@@ -2319,7 +2333,11 @@ class JumpTestCase(unittest.TestCase):
                 output.append(8)
             output.append(9)
 
-    @jump_test(6, 7, [2, 7], (ZeroDivisionError, ''))
+    # Refused by design (rir90 KF): the origin analysis labels only the saved
+    # handled-exception link, not the in-flight exception of a finally body,
+    # so the jump raises ValueError before any state changes. Unit EX, which
+    # rewrites PUSH_EXC_INFO, may lift this.
+    @jump_test(6, 7, [2, 6, 7], (ZeroDivisionError, ''), refusal=incoming_owner_error)
     def test_jump_in_nested_finally_2(output):
         try:
             output.append(2)
@@ -2330,7 +2348,11 @@ class JumpTestCase(unittest.TestCase):
             output.append(7)
         output.append(8)
 
-    @jump_test(6, 11, [2, 11], (ZeroDivisionError, ''))
+    # Refused by design (rir90 KF): the origin analysis labels only the saved
+    # handled-exception link, not the in-flight exception of a finally body,
+    # so the jump raises ValueError before any state changes. Unit EX, which
+    # rewrites PUSH_EXC_INFO, may lift this.
+    @jump_test(6, 11, [2, 6, 8, 10, 11], (ZeroDivisionError, ''), refusal=incoming_owner_error)
     def test_jump_in_nested_finally_3(output):
         try:
             output.append(2)
@@ -2426,7 +2448,11 @@ class JumpTestCase(unittest.TestCase):
             output.append(5)
             raise
 
-    @jump_test(5, 7, [4, 7, 8])
+
+    # Refused by design (rir90 KF): no path leads from this handler to the
+    # target's, so the target would run on an exception that its own match
+    # never tested. The jump raises ValueError before any state changes.
+    @jump_test(5, 7, [4, 5, 8], refusal=incoming_owner_error)
     def test_jump_between_except_blocks(output):
         try:
             1/0
@@ -2750,7 +2776,11 @@ class JumpTestCase(unittest.TestCase):
         output.append(6)
 
     # 'except' with a variable creates an implicit finally block
-    @jump_test(5, 7, [4, 7, 8], warning=(RuntimeWarning, unbound_locals))
+
+    # Refused by design (rir90 KF): no path leads from this handler to the
+    # target's, so the target would run on an exception that its own match
+    # never tested. The jump raises ValueError before any state changes.
+    @jump_test(5, 7, [4, 5, 8], refusal=incoming_owner_error)
     def test_jump_between_except_blocks_2(output):
         try:
             1/0

@@ -1248,7 +1248,7 @@ class TestRacesDoNotCrash(TestBase):
                 item.clear()
                 item.append(None)
 
-        opname = "UNPACK_SEQUENCE_LIST"
+        opname = "Unpack.List"
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
 class C:
@@ -1435,8 +1435,8 @@ class TestSpecializer(TestBase):
         binary_op_int_wide_inline()
         if int_producers:
             self.assert_specialized(binary_op_int_wide_inline, "Add.Int")
-            self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_SUBTRACT_INT")
-            self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_MULTIPLY_INT")
+            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int")
+            self.assert_specialized(binary_op_int_wide_inline, "Binary.Int")
 
         def binary_op_int_boxed():
             # Outside the inline int51 range, so the int is a box, which the
@@ -1452,8 +1452,8 @@ class TestSpecializer(TestBase):
 
         binary_op_int_boxed()
         self.assert_no_opcode(binary_op_int_boxed, "Add.Int")
-        self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_SUBTRACT_INT")
-        self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_MULTIPLY_INT")
+        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int")
+        self.assert_no_opcode(binary_op_int_boxed, "Binary.Int")
 
         def binary_op_add_unicode():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1512,11 +1512,10 @@ class TestSpecializer(TestBase):
         binary_op_add_extend()
         # Float arithmetic takes an int operand.
         if int_producers:
-            for opname in ("Add.Float", "BINARY_OP_SUBTRACT_FLOAT",
-                           "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
+            for opname in ("Add.Float", "Binary.Float"):
                 self.assert_specialized(binary_op_add_extend, opname)
             self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
-        self.assert_no_opcode(binary_op_add_extend, "BINARY_OP_EXTEND")
+        self.assert_no_opcode(binary_op_add_extend, "Binary.Extended")
 
         def binary_op_add_extend_sequences():
             l1 = [1, 2]
@@ -1548,8 +1547,8 @@ class TestSpecializer(TestBase):
             with self.assertRaises(ZeroDivisionError):
                 float_lhs(0)
 
-            self.assert_no_opcode(compactlong_lhs, "BINARY_OP_EXTEND")
-            self.assert_no_opcode(float_lhs, "BINARY_OP_EXTEND")
+            self.assert_no_opcode(compactlong_lhs, "Binary.Extended")
+            self.assert_no_opcode(float_lhs, "Binary.Extended")
 
         binary_op_zero_division()
 
@@ -1578,8 +1577,8 @@ class TestSpecializer(TestBase):
             for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
                 self.assertTrue(all(filter(lambda x: x is nan, compactlong_rhs(nan))))
 
-            self.assert_no_opcode(compactlong_lhs, "BINARY_OP_EXTEND")
-            self.assert_no_opcode(compactlong_rhs, "BINARY_OP_EXTEND")
+            self.assert_no_opcode(compactlong_lhs, "Binary.Extended")
+            self.assert_no_opcode(compactlong_rhs, "Binary.Extended")
 
         binary_op_nan()
 
@@ -1604,10 +1603,10 @@ class TestSpecializer(TestBase):
 
         binary_op_bitwise_extend()
         if int_producers:
-            for opname in ("BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT"):
+            for opname in ("Binary.Int",):
                 self.assert_specialized(binary_op_bitwise_extend, opname)
             self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
-        self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP_EXTEND")
+        self.assert_no_opcode(binary_op_bitwise_extend, "Binary.Extended")
 
         def binary_op_int_division_and_shifts():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1619,8 +1618,7 @@ class TestSpecializer(TestBase):
 
         binary_op_int_division_and_shifts()
         if int_producers:
-            for opname in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
-                           "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
+            for opname in ("Binary.Int",):
                 self.assert_specialized(binary_op_int_division_and_shifts, opname)
             self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
 
@@ -1673,8 +1671,8 @@ class TestSpecializer(TestBase):
                 self.assertFalse(3 in b)
 
         contains_op_dict()
-        self.assert_specialized(contains_op_dict, "CONTAINS_OP_DICT")
-        self.assert_no_opcode(contains_op_dict, "CONTAINS_OP")
+        self.assert_specialized(contains_op_dict, "Contains.Dict")
+        self.assert_no_opcode(contains_op_dict, "Contains.Generic")
 
         def contains_op_frozen_dict():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1683,8 +1681,8 @@ class TestSpecializer(TestBase):
                 self.assertFalse(3 in b)
 
         contains_op_frozen_dict()
-        self.assert_specialized(contains_op_frozen_dict, "CONTAINS_OP_DICT")
-        self.assert_no_opcode(contains_op_frozen_dict, "CONTAINS_OP")
+        self.assert_specialized(contains_op_frozen_dict, "Contains.Dict")
+        self.assert_no_opcode(contains_op_frozen_dict, "Contains.Generic")
 
         def contains_op_frozen_dict_subclass():
             class MyFrozenDict(frozendict):
@@ -1695,7 +1693,7 @@ class TestSpecializer(TestBase):
                 self.assertFalse(3 in b)
 
         contains_op_frozen_dict_subclass()
-        self.assert_no_opcode(contains_op_frozen_dict_subclass, "CONTAINS_OP_DICT")
+        self.assert_no_opcode(contains_op_frozen_dict_subclass, "Contains.Dict")
 
         def contains_op_set():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1704,8 +1702,8 @@ class TestSpecializer(TestBase):
                 self.assertFalse(3 in b)
 
         contains_op_set()
-        self.assert_specialized(contains_op_set, "CONTAINS_OP_SET")
-        self.assert_no_opcode(contains_op_set, "CONTAINS_OP")
+        self.assert_specialized(contains_op_set, "Contains.Set")
+        self.assert_no_opcode(contains_op_set, "Contains.Generic")
 
     @cpython_only
     @requires_specialization
@@ -1983,8 +1981,8 @@ class TestSpecializer(TestBase):
 
         unpack_sequence_two_tuple()
         self.assert_specialized(unpack_sequence_two_tuple,
-                                "UNPACK_SEQUENCE_TUPLE")
-        self.assert_no_opcode(unpack_sequence_two_tuple, "UNPACK_SEQUENCE")
+                                "Unpack.Tuple")
+        self.assert_no_opcode(unpack_sequence_two_tuple, "Unpack.Generic")
 
         def unpack_sequence_tuple():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1995,8 +1993,8 @@ class TestSpecializer(TestBase):
                 self.assertEqual(d, 4)
 
         unpack_sequence_tuple()
-        self.assert_specialized(unpack_sequence_tuple, "UNPACK_SEQUENCE_TUPLE")
-        self.assert_no_opcode(unpack_sequence_tuple, "UNPACK_SEQUENCE")
+        self.assert_specialized(unpack_sequence_tuple, "Unpack.Tuple")
+        self.assert_no_opcode(unpack_sequence_tuple, "Unpack.Generic")
 
         def unpack_sequence_list():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2005,8 +2003,8 @@ class TestSpecializer(TestBase):
                 self.assertEqual(b, 2)
 
         unpack_sequence_list()
-        self.assert_specialized(unpack_sequence_list, "UNPACK_SEQUENCE_LIST")
-        self.assert_no_opcode(unpack_sequence_list, "UNPACK_SEQUENCE")
+        self.assert_specialized(unpack_sequence_list, "Unpack.List")
+        self.assert_no_opcode(unpack_sequence_list, "Unpack.Generic")
 
     @cpython_only
     @requires_specialization
@@ -2192,8 +2190,8 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_int()
-        self.assert_specialized(compare_op_int, "COMPARE_OP_INT")
-        self.assert_no_opcode(compare_op_int, "COMPARE_OP")
+        self.assert_specialized(compare_op_int, "Compare.Int")
+        self.assert_no_opcode(compare_op_int, "Compare.Generic")
 
         def compare_op_float():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2202,8 +2200,8 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_float()
-        self.assert_specialized(compare_op_float, "COMPARE_OP_FLOAT")
-        self.assert_no_opcode(compare_op_float, "COMPARE_OP")
+        self.assert_specialized(compare_op_float, "Compare.Float")
+        self.assert_no_opcode(compare_op_float, "Compare.Generic")
 
         def compare_op_str():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -2212,8 +2210,8 @@ class TestSpecializer(TestBase):
                 self.assertFalse(c)
 
         compare_op_str()
-        self.assert_specialized(compare_op_str, "COMPARE_OP_STR")
-        self.assert_no_opcode(compare_op_str, "COMPARE_OP")
+        self.assert_specialized(compare_op_str, "Compare.Str")
+        self.assert_no_opcode(compare_op_str, "Compare.Generic")
 
 
     @cpython_only
@@ -2429,9 +2427,8 @@ class TestFeedback(TestBase):
         "RESUME": "COUNTER", "JUMP_BACKWARD": "COUNTER",
         "TO_BOOL": "UNARY", "UNPACK_SEQUENCE": "UNARY", "FOR_ITER": "UNARY",
         "GET_ITER": "UNARY", "SEND": "UNARY",
-        "BINARY_OP": "BINARY", "COMPARE_OP": "BINARY",
-        "CONTAINS_OP": "BINARY", "STORE_SUBSCR": "BINARY",
-        "COMPARE_OP_JUMP": "BINARY", "CONTAINS_OP_JUMP": "BINARY",
+        "BINARY_OP": "BINARY", "COMPARE_OP": "COMPARE",
+        "CONTAINS_OP": "CONTAINS", "STORE_SUBSCR": "BINARY",
         "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",
         "LOAD_GLOBAL": "GLOBAL",
         "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
@@ -2470,6 +2467,18 @@ class TestFeedback(TestBase):
                     # A branch keeps the type version of its operand in a
                     # unary entry, as TO_BOOL does (BranchTruth's Fb<Truth>)
                     name = "POP_JUMP"
+                if (name == "POP_JUMP" and entry is not None
+                        and entry[0] in ("COMPARE", "CONTAINS")):
+                    # A branch that tests a compare or a contains has the
+                    # feedback of the test (TestBranch)
+                    continue
+                if name in ("COMPARE_OP", "CONTAINS_OP"):
+                    # The stack op has no entry of its own: its register
+                    # instruction has one, unless a TestBranch took the test
+                    if entry is not None:
+                        self.assertEqual(entry[0], self.KINDS[name])
+                        seen.add(name)
+                    continue
                 if instr.fb is None or name in no_entry:
                     self.assertIsNone(entry, instr.opname)
                     continue

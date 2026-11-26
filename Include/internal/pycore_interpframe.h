@@ -644,12 +644,12 @@ static inline void
 _PyFrame_ClearSlot(PyValue *sp)
 {
     PyValue ref = *sp;
-    if (ref.bits & Py_OWNED_MASK) {
-        // an inline value or an immortal one: nothing to close
-        *sp = PyValue_NULL;
+    if (PyValue_IsNull(ref)) {
         return;
     }
-    if (PyValue_IsNull(ref)) {
+    if (!PyValue_RefcountOnObject(ref)) {
+        // an inline value or an immortal one: nothing to close
+        *sp = PyValue_NULL;
         return;
     }
     // a move: cleared before the close, which can run a finalizer

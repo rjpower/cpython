@@ -230,8 +230,6 @@ make_frozenset(PyThreadState* Py_UNUSED(ignored), PyObject *set)
 
 #define INTRINSIC_FUNC_ENTRY(N, F) \
     [N] = {F, #N},
-#define INTRINSIC_FUNC_NAMED(N, NAME, F) \
-    [N] = {F, NAME},
 
 const intrinsic_func1_info
 _PyIntrinsics_UnaryFunctions[] = {
@@ -319,61 +317,7 @@ match_class_isinstance(PyThreadState* tstate, PyObject *subject, PyObject *type)
     return res ? Py_True : Py_False;
 }
 
-/* COMPARE_OP and CONTAINS_OP at a site without a feedback entry, and the
- * names that no instruction can hold. */
-#define COMPARE(NAME, OP) \
-static PyObject * \
-compare_##NAME(PyThreadState* Py_UNUSED(ignored), PyObject *a, PyObject *b) \
-{ \
-    PyValue res = _PyValue_RichCompare(PyValue_FromObjectBorrow(a), \
-                                       PyValue_FromObjectBorrow(b), OP); \
-    return PyValue_IsNull(res) ? NULL \
-        : _PyValue_AsObjectStealAt(res, BOX_SITE_COMPARE); \
-} \
-static PyObject * \
-compare_##NAME##_bool(PyThreadState* Py_UNUSED(ignored), PyObject *a, PyObject *b) \
-{ \
-    PyValue res = _PyValue_RichCompare(PyValue_FromObjectBorrow(a), \
-                                       PyValue_FromObjectBorrow(b), OP); \
-    if (PyValue_IsNull(res)) { \
-        return NULL; \
-    } \
-    int truth = _PyValue_IsTrue(res); \
-    PyValue_CLOSE(res); \
-    if (truth < 0) { \
-        return NULL; \
-    } \
-    return truth ? Py_True : Py_False; \
-}
-
-COMPARE(lt, Py_LT)
-COMPARE(le, Py_LE)
-COMPARE(eq, Py_EQ)
-COMPARE(ne, Py_NE)
-COMPARE(gt, Py_GT)
-COMPARE(ge, Py_GE)
-#undef COMPARE
-
-static PyObject *
-contains_in(PyThreadState* Py_UNUSED(ignored), PyObject *item, PyObject *container)
-{
-    int res = _PyValue_Contains(PyValue_FromObjectBorrow(container), PyValue_FromObjectBorrow(item));
-    if (res < 0) {
-        return NULL;
-    }
-    return res ? Py_True : Py_False;
-}
-
-static PyObject *
-contains_not_in(PyThreadState* Py_UNUSED(ignored), PyObject *item, PyObject *container)
-{
-    int res = _PyValue_Contains(PyValue_FromObjectBorrow(container), PyValue_FromObjectBorrow(item));
-    if (res < 0) {
-        return NULL;
-    }
-    return res ? Py_False : Py_True;
-}
-
+/* The names that no instruction can hold. */
 static PyObject *
 get_attr(PyThreadState* Py_UNUSED(ignored), PyObject *owner, PyObject *name)
 {
@@ -414,20 +358,6 @@ _PyIntrinsics_BinaryFunctions[] = {
     INTRINSIC_FUNC_ENTRY(INTRINSIC_SET_TYPEPARAM_DEFAULT, _Py_set_typeparam_default)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_ADD_CONDITIONAL_ANNOTATION, add_conditional_annotation)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_MATCH_CLASS_ISINSTANCE, match_class_isinstance)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 0, "INTRINSIC_COMPARE_LT", compare_lt)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 1, "INTRINSIC_COMPARE_LT_BOOL", compare_lt_bool)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 2, "INTRINSIC_COMPARE_LE", compare_le)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 3, "INTRINSIC_COMPARE_LE_BOOL", compare_le_bool)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 4, "INTRINSIC_COMPARE_EQ", compare_eq)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 5, "INTRINSIC_COMPARE_EQ_BOOL", compare_eq_bool)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 6, "INTRINSIC_COMPARE_NE", compare_ne)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 7, "INTRINSIC_COMPARE_NE_BOOL", compare_ne_bool)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 8, "INTRINSIC_COMPARE_GT", compare_gt)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 9, "INTRINSIC_COMPARE_GT_BOOL", compare_gt_bool)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 10, "INTRINSIC_COMPARE_GE", compare_ge)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 11, "INTRINSIC_COMPARE_GE_BOOL", compare_ge_bool)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_CONTAINS_OP, "INTRINSIC_CONTAINS_IN", contains_in)
-    INTRINSIC_FUNC_NAMED(INTRINSIC_CONTAINS_OP + 1, "INTRINSIC_CONTAINS_NOT_IN", contains_not_in)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_GETATTR, get_attr)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_SETATTR, set_attr)
 };
@@ -449,5 +379,8 @@ _PyCompile_GetBinaryIntrinsicName(int index)
     if (index < 0 || index > MAX_INTRINSIC_2) {
         return NULL;
     }
-    return PyUnicode_FromString(_PyIntrinsics_BinaryFunctions[index].name);
+    // The numbers 8 to 21 are unused (pyc files name GETATTR and SETATTR
+    // by 22 and 23)
+    const char *name = _PyIntrinsics_BinaryFunctions[index].name;
+    return PyUnicode_FromString(name != NULL ? name : "");
 }

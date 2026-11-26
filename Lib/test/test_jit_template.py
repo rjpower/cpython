@@ -509,7 +509,7 @@ class LoweringTests(unittest.TestCase):
 
 # Under a JIT mode the lowering picks these forms of RESUME and
 # JUMP_BACKWARD; a unit compiles them as their base handler (Python/jit.c)
-JIT_FORMS = {"RESUME_JIT": "RESUME", "JUMP_BACKWARD_JIT": "JUMP_BACKWARD"}
+JIT_FORMS = {"JUMP_BACKWARD_JIT": "JUMP_BACKWARD"}
 
 
 def word_of(func, handler, nth=-1):
@@ -655,54 +655,11 @@ TRUTHS = ANY + [[1], -5, big(0), Plain(), "", Shape()]
 BINARY = "def f(a, b):\n    x = 1\n    x = a {op} b\n    return x"
 TEMPS = "def f(a, b):\n    return (a {op} b) {op} (b {op} a)"
 TEMPLATE_CASES = [
-    # RESUME's words compile to RESUME_CHECK's template, whose miss runs
-    # the RESUME form; a frame with cells reaches its RESUME after the
-    # words that make them
-    ("def f(a, b):\n    return a", (1, 2), "RESUME", "", [()]),
-    ("def f(a, b):\n    def g():\n        return a\n    return g", (1, 2), "RESUME", "",
-     [()]),
-    *[(BINARY.format(op=op), (6, 3), handler, "ABC",
+    *[(BINARY.format(op=op), (6, 3), "Add.Int", "ABC",
        [(Plain(), a, b) for a, b in INT_PAIRS])
-      for op, handler in (("+", "Add.Int"), ("-", "BINARY_OP_SUBTRACT_INT"),
-                          ("*", "BINARY_OP_MULTIPLY_INT"), ("&", "BINARY_OP_AND_INT"),
-                          ("|", "BINARY_OP_OR_INT"), ("^", "BINARY_OP_XOR_INT"))],
-    *[(src.format(op=op), (6, 3), handler, fields, [(Plain(), a, b) for a, b in DIV_PAIRS]
-       if fields == "ABC" else DIV_PAIRS)
-      for op, handler in (("//", "BINARY_OP_FLOOR_DIVIDE_INT"), ("%", "BINARY_OP_REMAINDER_INT"))
-      for src, fields in ((BINARY, "ABC"), (TEMPS, "BC"))],
-    # Counts below zero, inside the word, and past it
-    (BINARY.format(op=">>"), (6, 3), "BINARY_OP_RSHIFT_INT", "ABC",
-     [(Plain(), a, b) for a in INTS for b in (0, 1, 5, 62, 63, 64, 1000, -1)] +
-     [(Plain(), a, b) for a, b in INT_PAIRS[-8:]]),
-    (TEMPS.format(op=">>"), (6, 3), "BINARY_OP_RSHIFT_INT", "BC",
-     [(a, b) for a in INTS for b in (0, 5, 63, 64, -1)]),
-    *[(TEMPS.format(op=op), (6, 3), handler, "BC", INT_PAIRS)
-      for op, handler in (("+", "Add.Int"), ("-", "BINARY_OP_SUBTRACT_INT"),
-                          ("*", "BINARY_OP_MULTIPLY_INT"))],
-    ("def f(a, b):\n    return (a * 2**30) * (b * 2**30)", (1, 1), "BINARY_OP_MULTIPLY_INT",
-     "BC", [(2**30, 2**30), (2**25, -2**25), (1, 2**50 - 1), (-2**50, -1), (3, 5)]),
-    *[(BINARY.format(op=op), (6.0, 3.0), handler, "ABC",
-       [(Plain(), a, b) for a, b in FLOAT_PAIRS])
-      # Add.Float is a shared arm: its stub is tested by test_rop_add
-      for op, handler in (("-", "BINARY_OP_SUBTRACT_FLOAT"),
-                          ("*", "BINARY_OP_MULTIPLY_FLOAT"),
-                          ("/", "BINARY_OP_TRUEDIV_FLOAT"))],
-    *[(f"def f(a, b):\n    x = 1\n    x = a {op} b\n    return x", warm, handler, "ABC",
-       [(Plain(), a, b) for a, b in pairs])
-      for op in COMPARE_OPS
-      for warm, handler, pairs in (((1, 2), "COMPARE_OP_INT", INT_PAIRS),
-                                   ((1.0, 2.0), "COMPARE_OP_FLOAT", FLOAT_PAIRS))],
-    *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", warm, handler,
-       "AB", pairs)
-      for op in COMPARE_OPS
-      for warm, handler, pairs in (((1, 2), "COMPARE_OP_JUMP_INT", INT_PAIRS),
-                                   ((1.0, 2.0), "COMPARE_OP_JUMP_FLOAT", FLOAT_PAIRS))],
-    *[(f"def f(a, b):\n    x = 1\n    x = a {op} b\n    return x", (None, None), "IS_OP",
-       "ABC", [(Plain(), a, b) for a in ANY for b in ANY[::2]])
-      for op in ("is", "is not")],
-    *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", (None, None),
-       "IS_OP_JUMP", "AB", [(a, b) for a in ANY for b in ANY[::2]])
-      for op in ("is", "is not")],
+      for op in ("+",)],
+    *[(TEMPS.format(op=op), (6, 3), "Add.Int", "BC", INT_PAIRS)
+      for op in ("+",)],
     ("def f(a, b):\n    if a:\n        return 1\n    return 0", (True, 0),
      "BranchTruth.Bool", "A", [(x,) for x in ANY]),
     ("def f(a, b):\n    if not a:\n        return 1\n    return 0", (True, 0),
@@ -754,70 +711,6 @@ def slot_of(field_slots, field):
     "The slot of a field, or of the slot n after its slot for 'F+n'"
     name, _, n = field.partition("+")
     return field_slots[name] + int(n or 0)
-
-
-class FailedBoxTests(unittest.TestCase):
-    """The failure edge of a box that leaves by the exit (SLOW rows): in
-    compiled code, a failed allocation raises MemoryError at the word, with
-    the inputs still in their homes, and the function works after it"""
-
-    @support.nomemtest
-    def test_box_failure_raises_at_the_word_and_leaves_the_inputs(self):
-        assert_python_ok("-c", """if 1:
-            import gc
-            import _testcapi
-            import _testinternalcapi as capi
-
-            inf = float("inf")
-            nan = float("nan")
-            cases = (
-                # PyValue_FromInt64 in the floor division of two ints
-                ("BINARY_OP_FLOOR_DIVIDE_INT", "a // b", (-2**50, -1), 2**50, (6, 3), 2),
-                # PyValue_FromDouble of a NaN
-                ("BINARY_OP_SUBTRACT_FLOAT", "a - b", (inf, inf), nan, (3.5, 2.5), 1.0),
-            )
-            for handler, expression, args, boxed, safe, safe_result in cases:
-                namespace = {}
-                exec(f"def f(a, b):\\n    return {expression}\\n"
-                     "def g(a, b):\\n    try:\\n        x = f(a, b)\\n"
-                     "    except MemoryError as e:\\n"
-                     "        return ('failed', a, b, e.__traceback__.tb_next.tb_frame.f_code)\\n"
-                     "    return x\\n",
-                     namespace)
-                f, g = namespace["f"], namespace["g"]
-                for _ in range(300):
-                    g(*safe)
-                    g(*args)
-                words = [row[0] for row in capi.get_ir(f.__code__, True)]
-                assert handler in words, words
-                a, b = args
-                failed = 0
-                for skip in range(4):
-                    gc.collect()
-                    gc.disable()
-                    # A boxed float comes from a freelist unless it is empty:
-                    # hold more NaNs than it keeps, so that the box allocates
-                    held = [nan * x for x in (2.0,) * 300]
-                    # skip allocations succeed, then exactly one fails
-                    _testcapi.set_nomemory(skip, skip + 1)
-                    try:
-                        got = g(a, b)
-                    finally:
-                        _testcapi.remove_mem_hooks()
-                        gc.enable()
-                    del held
-                    if isinstance(got, tuple) and got[:1] == ("failed",):
-                        failed += 1
-                        # Raised in f, at its word, with the inputs in their homes
-                        assert got[1] is a and got[2] is b and got[3] is f.__code__, got
-                    else:
-                        assert got == boxed or got != got, got
-                    # The function works after the failure
-                    again = g(a, b)
-                    assert again == boxed or again != again, again
-                    assert g(*safe) == safe_result
-                assert failed, (handler, "no allocation failure reached the box")
-            """, PYTHON_JIT="always")
 
 
 class TemplateTests(unittest.TestCase):
@@ -907,23 +800,6 @@ class TemplateTests(unittest.TestCase):
                                  (handler, "shared", "stub", handler))
                 self.assertEqual(f(*args), result)
 
-    def test_resume_check_misses_when_instrumentation_changes(self):
-        "RESUME_CHECK's template stays on its code until monitoring changes the version"
-        f = self.compile("def f(a, b):\n    return a", (1, 2))
-        index = word_of(f, "RESUME")[0]
-        self.assertFalse(capi.jit_template_run(f, index, {}, True)[1])
-        sys.monitoring.use_tool_id(4, "test_jit_template")
-        try:
-            sys.monitoring.set_events(4, sys.monitoring.events.PY_START)
-            # The code's version is behind the interpreter's: the miss runs
-            # the RESUME form, which instruments the code
-            next_, slow, exc, _ = capi.jit_template_run(f, index, {}, True)
-            self.assertTrue(slow)
-            self.assertIsNone(exc)
-        finally:
-            sys.monitoring.set_events(4, 0)
-            sys.monitoring.free_tool_id(4)
-
     def test_temporaries(self):
         "TEMPS puts the inputs of its last word in temporaries"
         f = self.compile(TEMPS.format(op="+"), (6, 3))
@@ -938,17 +814,6 @@ class TemplateTests(unittest.TestCase):
         self.assertFalse(capi.jit_template_run(f, index, {b: 2**49, c: 2**49}, True)[1])
         self.assertTrue(capi.jit_template_run(f, index, {b: "x", c: 2}, True)[1])
         self.assertTrue(capi.jit_template_run(f, index, {b: 1, c: "y"}, True)[1])
-
-    def test_division_fast_path(self):
-        "Division and remainder by a nonzero inline int stay on the template's code"
-        for op, handler in (("//", "BINARY_OP_FLOOR_DIVIDE_INT"),
-                            ("%", "BINARY_OP_REMAINDER_INT")):
-            f = self.compile(f"def f(a, b):\n    return a {op} b", (7, 2))
-            index, (_, a, b, c, d) = word_of(f, handler)
-            for x, y in ((7, 2), (-7, 2), (7, -2), (-2**50, -1)):
-                self.assertFalse(capi.jit_template_run(f, index, {b: x, c: y}, True)[1])
-            self.assertTrue(capi.jit_template_run(f, index, {b: 7, c: 0}, True)[1])
-
 
 def graph_of(handler):
     "The template graph of a handler, simplified as the generator emits it"
@@ -1069,7 +934,7 @@ class TemplateGraphTests(unittest.TestCase):
 
     def test_without_conjoins_the_guards_stay_two(self):
         with declared("PyValue_BothInlineInt", conjoins=""):
-            graph, names = self.graph_names("BINARY_OP_ADD_INT")
+            graph, names = self.graph_names("COMPARE_OP_INT")
         self.assertEqual(names.count("PyValue_IsInlineInt"), 2)
         self.assertNotIn("PyValue_BothInlineInt", names)
 
@@ -1084,8 +949,7 @@ class TemplateGraphTests(unittest.TestCase):
             self.assertEqual(dup.attr, "PyValue_XDUP" if declare else "PyValue_DUP")
 
     def test_without_slow_the_box_keeps_its_test_and_has_no_exit(self):
-        for handler, name in (("FOR_ITER_RANGE", "PyValue_FromInt64"),
-                              ("BINARY_OP_ADD_FLOAT", "PyValue_FromDouble")):
+        for handler, name in (("FOR_ITER_RANGE", "PyValue_FromInt64"),):
             with self.subTest(handler=handler):
                 def box():
                     graph = graph_of(handler)
@@ -1119,30 +983,6 @@ class TemplateGraphTests(unittest.TestCase):
                                             ("PyValue_IsNull", "leave"))
             jit_template_generator.fold_nulls(g)
             self.assertEqual(second.kind, "prim")
-
-    def test_add_int_has_one_guard_and_tests_the_box_only(self):
-        graph = graph_of("BINARY_OP_ADD_INT")
-        names = prims_of(graph)
-        self.assertEqual(names.count("PyValue_BothInlineInt"), 1)
-        self.assertNotIn("PyValue_IsInlineInt", names)
-        # The overflow edge keeps its test: the box can be NULL, the inline int cannot
-        self.assertEqual(names.count("PyValue_IsNull"), 1)
-        (block,) = [b for b in graph.blocks.values()
-                    if any(jit_template_generator.prim_name(op) == "PyValue_IsNull"
-                           for op in b.ops)]
-        self.assertTrue(any(op.kind == "call" for op in block.ops))
-
-    def test_guards_leave_by_their_exit_without_a_bool(self):
-        "A predicate that only guards leaves by the exit: no result, no branch on one"
-        for handler, name in (("BINARY_OP_ADD_FLOAT", "PyValue_FloatOperandValues"),):
-            with self.subTest(handler=handler):
-                graph = graph_of(handler)
-                ops = [op for block in graph.blocks.values() for op in block.ops
-                       if op.kind == "prim" and jit_template_generator.prim_name(op) == name]
-                self.assertEqual(len(ops), 1)
-                self.assertIsNotNone(ops[0].exit)
-                self.assertEqual(len(ops[0].results),
-                                 len(ir_leaf.PRIMITIVES[name].results) - 1)
 
     def cse_loads(self, middle):
         """A graph that loads a field of one object, runs the ops in middle
@@ -1235,7 +1075,7 @@ class TemplateGraphTests(unittest.TestCase):
     def test_an_assumption_is_checked_only_with_assertions(self):
         # F7: an `assume` op becomes a check that traps, under #ifndef NDEBUG;
         # without assertions the template is the one with no assumption
-        handler = "BINARY_OP_ADD_FLOAT"
+        handler = "COMPARE_OP_FLOAT"
         record = RECORDS[handler]
         plain = jit_template_generator.template_of(handler, record)
         uops = list(record.uops)

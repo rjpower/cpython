@@ -250,7 +250,7 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
 static int
 touches_local(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
 {
-    if (_PyRegOp_WritesLocal(op, z) || written_local(op) == z) {
+    if (_PyRegOp_WritesLocal(cfg, op, z) || written_local(op) == z) {
         return 1;
     }
     // A handler that reads the slot its oparg names
@@ -281,6 +281,16 @@ store_producer(_PyRegCfg *cfg, int region_start, int s)
         const int *out = _PyReg_OUT(cfg, op);
         if (op->nout > 0 && out[op->nout - 1] == value) {
             return op;
+        }
+        // An unpack's outputs are all its targets', in any order
+        if (op->nout > 1
+            && _PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg)))
+        {
+            for (int j = 0; j < op->nout; j++) {
+                if (out[j] == value) {
+                    return op;
+                }
+            }
         }
         // An op that writes a local releases its old value, which may run
         // other code, as STORE_FAST does
@@ -321,6 +331,27 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 continue;
             }
             const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode, p->oparg);
+            if (_PyIR_IsDstSpanFormat(fmt)) {
+                // The store of one of an unpack's outputs names that output
+                // the local: the publish writes it and closes its old
+                // binding with the others', after every target is written
+                int *outs = _PyReg_OUT(cfg, p);
+                int k = 0;
+                while (k < p->nout && outs[k] != _PyReg_IN(cfg, op)[0]) {
+                    k++;
+                }
+                int twice = 0;
+                for (int j = 0; j < p->nout; j++) {
+                    twice |= outs[j] == op->oparg;
+                }
+                if (k == p->nout || twice) {
+                    continue;
+                }
+                outs[k] = op->oparg;
+                op->opcode = _PyReg_DEAD;
+                op->flags |= _PyReg_STORE_FOLDED;
+                continue;
+            }
             if (!(fmt->flags & _PyIR_STORE_DST) || fmt->dst == _PyIR_NO_DST) {
                 continue;
             }
@@ -331,6 +362,14 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 continue;
             }
             p->dst = op->oparg;
+            // `s += t` into the local that holds s: the word starts on the
+            // family that appends in place (numeric.rop AppendText)
+            if (p->opcode == ROP_HANDLER_Binary_Generic
+                && p->oparg == NB_INPLACE_ADD
+                && _PyReg_IN(cfg, p)[0] == p->dst)
+            {
+                p->opcode = ROP_HANDLER_AppendText_Generic;
+            }
             // A jump's outputs stay canonical for its target, where the
             // handler leaves the slot of the result NULL
             if (!(p->target >= 0)) {
@@ -341,96 +380,6 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
         }
     }
     return SUCCESS;
-}
-
-
-/* Unpacks to locals (pass b2).
- *
- * An UNPACK_SEQUENCE or UNPACK_EX whose n live successors are STORE_FASTs
- * of its outputs on its own line, in element order, into n consecutive
- * locals t, t+1, ..., becomes a word whose dst field is t: the handler
- * stores the element i to local t+i and the STORE_FASTs die.  Any other
- * targets keep the stores. */
-
-static _PyRegOp *live_neighbour(_PyRegCfg *cfg, int start, int end, int i,
-                                int step);
-
-enum {
-    UNPACK_OK, UNPACK_NOT_STORE_FAST, UNPACK_OTHER_LINE, UNPACK_WRONG_ORDER,
-    UNPACK_NOT_CONSECUTIVE
-};
-
-static int
-unpack_locals_site(_PyRegCfg *cfg, int start, int end, _PyRegOp *op,
-                   _PyRegOp **stores)
-{
-    int n = op->nout;
-    const int *out = _PyReg_OUT(cfg, op);
-    _PyRegOp *prev = op;
-    int first = -1;
-    for (int k = 0; k < n; k++) {
-        _PyRegOp *s = live_neighbour(cfg, start, end, (int)(prev - cfg->ops), 1);
-        if (s == NULL || s->opcode != ROP_HANDLER_LocalWrite_Store) {
-            return UNPACK_NOT_STORE_FAST;
-        }
-        if (s->loc.lineno != op->loc.lineno) {
-            return UNPACK_OTHER_LINE;
-        }
-        if (_PyReg_IN(cfg, s)[0] != out[n - 1 - k]) {
-            return UNPACK_WRONG_ORDER;
-        }
-        if (k == 0) {
-            first = s->oparg;
-        }
-        else if (s->oparg != first + k) {
-            return UNPACK_NOT_CONSECUTIVE;
-        }
-        stores[k] = s;
-        prev = s;
-    }
-    return UNPACK_OK;
-}
-
-static int
-unpack_locals_region(_PyRegCfg *cfg, int start, int end)
-{
-    _PyRegOp **stores = NULL;
-    int astores = 0;
-    for (int i = start; i < end; i++) {
-        _PyRegOp *op = &cfg->ops[i];
-        if ((op->opcode != UNPACK_SEQUENCE && op->opcode != UNPACK_EX)
-            || op->dst >= 0 || op->nout < 1)
-        {
-            continue;
-        }
-        if (op->nout > astores) {
-            PyMem_Free(stores);
-            astores = op->nout;
-            stores = PyMem_Malloc(astores * sizeof(_PyRegOp *));
-            if (stores == NULL) {
-                PyErr_NoMemory();
-                return ERROR;
-            }
-        }
-        int why = unpack_locals_site(cfg, start, end, op, stores);
-        if (why != UNPACK_OK) {
-            continue;
-        }
-        op->dst = stores[0]->oparg;
-        op->flags |= _PyReg_UNPACK_LOCALS;
-        for (int k = 0; k < op->nout; k++) {
-            stores[k]->opcode = _PyReg_DEAD;
-            stores[k]->flags |= _PyReg_STORE_FOLDED;
-        }
-    }
-    PyMem_Free(stores);
-    return SUCCESS;
-}
-
-int
-_PyRegPass_UnpackLocals(_PyRegCfg *cfg)
-{
-    return for_each_region_backward(cfg, unpack_locals_region);
 }
 
 
@@ -894,78 +843,6 @@ error:
     PyMem_Free(key_value);
     PyMem_Free(fold_slot);
     return ERROR;
-}
-
-
-/* Fusing a compare with the jump on its result.
- *
- * COMPARE_OP, CONTAINS_OP or IS_OP followed by POP_JUMP_IF_FALSE or _TRUE
- * on its result can run as one word (the fused handlers of
- * Python/bytecodes.c).  This pass only marks the compare: the CFG, its
- * liveness and the verifier keep seeing the pair, and the assembler decides
- * after it has placed the words whether the target is near enough.  The pair
- * is left alone where
- *
- *   - the jump is not the next live op of the block, or does not read the
- *     compare's only output, or that output is read again (the jump is not
- *     its last reader);
- *   - a store is folded into the compare (it has a local dst);
- *   - the two are on different lines, or in different exception ranges: a
- *     fused word has one location, the compare's;
- *   - the compare is a COMPARE_OP whose result is not converted to a bool
- *     (its oparg lacks 16): the jump would test an arbitrary object.
- */
-int
-_PyRegPass_FuseJump(_PyRegCfg *cfg)
-{
-    _PyRegLiveness lv;
-    int have_liveness = 0;
-    for (int b = 0; b < cfg->nblocks; b++) {
-        _PyRegBlock *blk = &cfg->blocks[b];
-        if (!blk->reachable) {
-            continue;
-        }
-        for (int i = blk->start; i < blk->end; i++) {
-            _PyRegOp *cmp = &cfg->ops[i];
-            if (cmp->opcode != COMPARE_OP && cmp->opcode != CONTAINS_OP
-                && cmp->opcode != IS_OP)
-            {
-                continue;
-            }
-            if (cmp->opcode == COMPARE_OP && !(cmp->oparg & 16)) {
-                continue;
-            }
-            if (cmp->dst >= 0 || cmp->nread != 2 || cmp->npop != 2
-                || cmp->nout != 1)
-            {
-                continue;
-            }
-            _PyRegOp *jump = live_neighbour(cfg, blk->start, blk->end, i, 1);
-            if (jump == NULL
-                || plain_branch_sense(jump) < 0
-                || jump->nread != 1 || jump->npop != 1 || jump->nimplicit != 0
-                || jump->target < 0
-                || jump->loc.lineno != cmp->loc.lineno
-                || jump->except != cmp->except
-                || _PyReg_IN(cfg, jump)[0] != _PyReg_OUT(cfg, cmp)[0])
-            {
-                continue;
-            }
-            if (!have_liveness) {
-                if (_PyRegCfg_Liveness(cfg, &lv) < 0) {
-                    return -1;
-                }
-                have_liveness = 1;
-            }
-            if (lv.last[jump->in]) {
-                cmp->fuse = (int)(jump - cfg->ops);
-            }
-        }
-    }
-    if (have_liveness) {
-        _PyRegCfg_FreeLiveness(&lv);
-    }
-    return 0;
 }
 
 

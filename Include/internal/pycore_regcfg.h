@@ -59,8 +59,6 @@ extern "C" {
 #define _PyReg_LOAD_FOLDED      1   // a load that its consumer reads in place
 #define _PyReg_STORE_FOLDED     2   // a store that its producer does
 #define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps
-#define _PyReg_FUSED            8   // set by the assembler: a compare that
-                                    // runs as one word with its fuse jump
 #define _PyReg_DISCARD          64  // a call whose result nothing reads: its
                                     // dst field is IR_NO_DST
 #define _PyReg_ELIDED           16  // a PUSH_NULL that has no word: the NULL
@@ -68,7 +66,6 @@ extern "C" {
 #define _PyReg_ELIDED_NOP       32  // ... but a NOP stands for it, because it
                                     // alone holds its line
 
-#define _PyReg_UNPACK_LOCALS    128 // an unpack whose elements go to the run
                                     // of locals from dst; out[] stay as the
                                     // window's scratch registers
 #define _PyReg_KWNAMES         4096 // an elided LOAD_CONST of the names of
@@ -109,10 +106,6 @@ typedef struct _PyRegOp {
     int flags;
     int reader;             // a folded load: the op that reads the local,
     int reader_k;           // and its input index
-    int fuse;               // a compare whose result only the conditional
-                            // jump at this op index reads, on the same line
-                            // (_PyRegPass_FuseJump); the assembler may fuse
-                            // the pair.  0: none.
     int completion;         // index + 1 of the frontend END_SEND whose
                             // allocated recipient this semantic producer owns
     int noperands;          // a call: the number of operand fields, set by
@@ -218,18 +211,26 @@ _PyRegOp_CallBorrows(const _PyRegOp *op, int k)
     return k != 1 && !(op->opcode == CALL_KW && k == op->nread - 1);
 }
 
-/* Whether op writes local z through its dst (a run of nout locals for an
- * unpack) */
+const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
+
+/* Whether op writes local z through its dst, or, for a word whose outputs
+ * are a destination span (Unpack), as one of its outputs */
 static inline int
-_PyRegOp_WritesLocal(const _PyRegOp *op, int z)
+_PyRegOp_WritesLocal(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
 {
-    if (op->dst < 0) {
+    if (op->dst >= 0) {
+        return z == op->dst;
+    }
+    if (op->nout == 0 || !_PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg))) {
         return 0;
     }
-    if (op->flags & _PyReg_UNPACK_LOCALS) {
-        return z >= op->dst && z < op->dst + op->nout;
+    const int *out = _PyReg_OUT(cfg, op);
+    for (int j = 0; j < op->nout; j++) {
+        if (out[j] == z) {
+            return 1;
+        }
     }
-    return z == op->dst;
+    return 0;
 }
 
 /* Building: blocks in layout order, each with its stack instructions,
@@ -330,7 +331,6 @@ void _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
 /* The format of the stack instruction of an op: the generic handler's,
  * which its family shares. */
 struct _PyIRFormat;
-const struct _PyIRFormat *_PyRegCfg_FormatOf(int opcode, int oparg);
 
 /* Internal to Python/regcfg.c and Python/regcfg_passes.c */
 
@@ -352,7 +352,6 @@ int _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical);
 /* The passes, in the order the driver runs them */
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
-int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);
 int _PyRegPass_KwNames(_PyRegCfg *cfg);
 int _PyRegPass_ElideNull(_PyRegCfg *cfg);
 int _PyRegPass_CallRoles(_PyRegCfg *cfg);
@@ -361,7 +360,6 @@ int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 /* Returns the number of constant slots, or -1 */
 int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts);
 void _PyRegPass_DiscardSlot(_PyRegCfg *cfg);
-int _PyRegPass_FuseJump(_PyRegCfg *cfg);
 
 /* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if
  * keep is set, copy propagation keeps a pending load across an op that may

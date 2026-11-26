@@ -55,7 +55,7 @@ SSA, FAILED = rop_ssa.expand_all(PROGRAM)
 class ExpansionTests(unittest.TestCase):
     def test_every_arm_expands(self):
         self.assertEqual({n: d.message for n, d in FAILED.items()}, {})
-        self.assertEqual(set(SSA), set(PROGRAM.arms))
+        self.assertEqual(set(SSA), set(PROGRAM.arms) | set(PROGRAM.completions))
 
     def test_exits_are_declared_and_name_their_frame_state(self):
         for name, arm in SSA.items():
@@ -274,6 +274,17 @@ PAIRS = [(3, 4), (2**50, 2**50), (2**60, 5), (-2**50, -2**50), (1.5, 2), (2, 0.2
          (RaisesAdd(), 1), (1, "a"), (b"x", b"y")]
 
 
+SMALL_PAIRS = [(3, 4), (2, 70), (-2, 3), (2, -1), (0, 0), (1.5, 2), (2, 0.25),
+               ("a", "b"), ([1], [2]), (7, 0)]
+
+
+COMPARE_PAIRS = PAIRS + [(2**60, 2**60), (float("nan"), float("nan")), (1, 1), ("a", "a"),
+                         ("a", 1), (Plain(), Plain()), (None, None)]
+CONTAINS_PAIRS = [(1, {1, 2}), (3, {1, 2}), (1, frozenset({1})), ([1], {1}), (1, {1: 2}),
+                  (3, {1: 2}), ("a", {"a": 1}), (1, [1, 2]), (3, [1, 2]), (1, (1, 2)),
+                  ("a", "abc"), ("z", "abc"), (1, "abc"), (1, 5), (1, Plain()),
+                  (1, range(3)), (b"a", b"abc"), (1.5, {1.5})]
+
 @dataclass
 class Scenario:
     """A family's words: one function per source (the operands are locals
@@ -317,6 +328,10 @@ class Scenario:
 
     def inputs_of(self, source):
         return self.inputs_by_source.get(source, self.inputs)
+
+
+class Args(tuple):
+    "The arguments of one warming call, where a bare object is one argument"
 
 
 def truth_inputs(operand):
@@ -366,6 +381,12 @@ MODULE_SOURCE = ("import types\n"
                  "f = types.FunctionType(compile(%r, 'm', 'exec'), globals())\n")
 
 # The code of a generic function's scope, which makes its type parameters
+TYPEVAR_SOURCE = (
+    "import types\n"
+    "m = compile('def g[T](): pass', 'm', 'exec')\n"
+    "scope = next(c for c in m.co_consts if hasattr(c, 'co_code'))\n"
+    "f = types.FunctionType(scope, globals())\n")
+
 PAIR_SOURCE = (
     "import types\n"
     "m = compile('def g[T: int](): pass', 'm', 'exec')\n"
@@ -379,6 +400,31 @@ SCENARIOS = {
         "temporaries": "def f(a, b):\n    return (a * 1) + (b * 1)\n",
         "alias": "def f(a, b):\n    a = a + b\n    return a\n"},
         [{"x": x, "y": y} for x, y in PAIRS], warm=([1], [2])),
+    "Binary": Scenario("Binary", {
+        "subtract": "def f(a, b):\n    return a - b\n",
+        "multiply": "def f(a, b):\n    return [a][0] * [b][0]\n",
+        "floor_divide": "def f(a, b):\n    return a // b\n",
+        "remainder": "def f(a, b):\n    return a % b\n",
+        "power": "def f(a, b):\n    return a ** b\n",
+        "shift": "def f(a, b):\n    return a << b\n",
+        "bits": "def f(a, b):\n    return (a & b) | (a ^ b)\n",
+        "true_divide": "def f(a, b):\n    return a / b\n",
+        "in_place": "def f(a, b):\n    a -= b\n    return a\n",
+        "alias": "def f(a, b):\n    a *= b\n    return a\n"},
+        [{"x": x, "y": y} for x, y in PAIRS + [(7, 0), (7, -2), (2, 70), (7.5, 0)]],
+        warm=(3, 4),
+        # Powers and shifts of the large pairs would build huge numbers
+        inputs_by_source={
+            "power": [{"x": x, "y": y} for x, y in SMALL_PAIRS],
+            "shift": [{"x": x, "y": y} for x, y in SMALL_PAIRS]}),
+    "Unary": Scenario("Unary", {
+        "negative": "def f(a):\n    return -a\n",
+        "temporary": "def f(a):\n    return -(a * 1)\n",
+        "invert": "def f(a):\n    return ~a\n",
+        "positive": "def f(a):\n    return +a\n"},
+        [{"value": v} for v in (1, -2**50, 2**50 - 1, 0, 1.5, -0.0, float("nan"), 2**70,
+                                True, "s", Plain(), [1])],
+        warm=(1,)),
     "Truth": Scenario("Truth", {
         "locals": "def f(a):\n    return not a\n",
         "temporaries": "def f(a):\n    return not (a * 1)\n"},
@@ -451,6 +497,10 @@ SCENARIOS = {
     "ImportFrom": Scenario("ImportFrom", {
         "from": "def f(a):\n    from os import path, sep\n    return a\n"},
         [{"module": __import__("os")}], warm=(1,)),
+    "Resume": Scenario("Resume", {
+        "entry": "def f(a):\n    return a\n",
+        "monitored": "def f(a):\n    return a\n"},
+        [{}], warm=(0,), monitored=("monitored",)),
     "Jump": Scenario("Jump", {
         "loop": "def f(n):\n    while n:\n        n -= 1\n    return n\n",
         "forward": "def f(a):\n    x = 1 if a else 2\n    y = (x, x)\n    return y\n",
@@ -607,24 +657,76 @@ SCENARIOS = {
                          for v in ((1,), (), (None, 2))],
             "all": [{"code": identity.__code__, "fields": [(1,), {"k": 2}, {"k": int}]}]}),
     "Intrinsic": Scenario("Intrinsic", {
-        "unary": "def f(a):\n    return +a\n",
+        "unary": TYPEVAR_SOURCE,
         "stopiteration": "def f(a):\n    yield a\n",
         "import_star": MODULE_SOURCE % "from sys import *"},
         [{"x": v} for v in (1, 1.5, 2**70, "s", Plain(), [1])], warm=(1,),
         inputs_by_source={
+            "unary": [{"x": v} for v in ("T", "name")],
             # (A StopIteration becomes a new error that holds it, which the
             # count check cannot see; test_rop_functions runs that case)
             "stopiteration": [{"x": v} for v in (ValueError(1), KeyError("k"))],
             "import_star": [{"x": v} for v in (sys, capi, {"a": 1})]},
         skip={"Intrinsic.StopIteration": STOPITERATION_WHY}),
     "IntrinsicPair": Scenario("IntrinsicPair", {
-        "binary": PAIR_SOURCE,
-        "compare": "def f(a, b):\n" + "    a < b\n" * 1100},
+        "binary": PAIR_SOURCE},
         [{"x": x, "y": y} for x, y in PAIRS], warm=(1, 2), per_arm=True,
         inputs_by_source={
             # TYPEVAR_WITH_BOUND (a name, the bound's evaluator): the new
             # typevar holds the evaluator, so it is immortal
             "binary": [{"x": x, "y": None} for x in ("T", "U")]}),
+    "Compare": Scenario("Compare", {
+        "rich": "def f(a, b):\n    return a < b\n",
+        "equal": "def f(a, b):\n    return a == b\n",
+        "truth": "def f(a, b):\n    return not (a <= b)\n",
+        "int": "def f(a, b):\n    return a >= b\n",
+        "float": "def f(a, b):\n    return a > b\n",
+        "str": "def f(a, b):\n    return a != b\n"},
+        [{"x": x, "y": y} for x, y in COMPARE_PAIRS],
+        warm_by_source={"rich": (Args((1, 2)), Args(("a", "b"))), "equal": (Args((1, 2)),),
+                        "truth": (Args((1, 2)),), "int": (Args((1, 2)),),
+                        "float": (Args((1.5, 2.5)),), "str": (Args(("a", "b")),)},
+        warmups=200, coherent=True),
+    "Identity": Scenario("Identity", {
+        "is": "def f(a, b):\n    return a is b\n",
+        "is_not": "def f(a, b):\n    return a is not b\n"},
+        [{"x": x, "y": y} for x, y in COMPARE_PAIRS], warm=(1, 2)),
+    "Contains": Scenario("Contains", {
+        "in": "def f(a, b):\n    return a in b\n",
+        "not_in": "def f(a, b):\n    return a not in b\n",
+        "set": "def f(a, b):\n    return a in b\n",
+        "dict": "def f(a, b):\n    return a in b\n"},
+        [{"item": x, "container": y} for x, y in CONTAINS_PAIRS],
+        warm_by_source={"in": (Args((1, [1, 2])),), "not_in": (Args((1, (1, 2))),),
+                        "set": (Args((1, {1, 2})),), "dict": (Args((1, {1: 2})),)},
+        warmups=200, coherent=True),
+    "TestBranch": Scenario("TestBranch", {
+        "compare": "def f(a, b):\n    if a < b:\n        return 1\n    return 2\n",
+        "compare_not": "def f(a, b):\n    if not (a == b):\n        return 1\n    return 2\n",
+        "int": "def f(a, b):\n    if a >= b:\n        return 1\n    return 2\n",
+        "float": "def f(a, b):\n    if a > b:\n        return 1\n    return 2\n",
+        "str": "def f(a, b):\n    if a != b:\n        return 1\n    return 2\n",
+        "is": "def f(a, b):\n    if a is b:\n        return 1\n    return 2\n",
+        "is_not": "def f(a, b):\n    if a is not b:\n        return 1\n    return 2\n",
+        "in": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        "not_in": "def f(a, b):\n    if a not in b:\n        return 1\n    return 2\n",
+        "set": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        "dict": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        "sequence": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n",
+        "monitored": "def f(a, b):\n    if a < b:\n        return 1\n    return 2\n",
+        "monitored_is": "def f(a, b):\n    if a is b:\n        return 1\n    return 2\n",
+        "monitored_in": "def f(a, b):\n    if a in b:\n        return 1\n    return 2\n"},
+        [{"x": x, "y": y} for x, y in COMPARE_PAIRS + CONTAINS_PAIRS],
+        warm_by_source={"compare": (Args((1, 2)),), "compare_not": (Args((1, 2)),),
+                        "int": (Args((1, 2)),), "float": (Args((1.5, 2.5)),),
+                        "str": (Args(("a", "b")),), "is": (Args((1, 2)),),
+                        "is_not": (Args((1, 2)),), "in": (Args((1, [1, 2])),),
+                        "not_in": (Args((1, (1, 2))),), "set": (Args((1, {1, 2})),),
+                        "dict": (Args((1, {1: 2})),), "sequence": (Args(("a", "abc")),),
+                        "monitored": (Args((1, 2)),), "monitored_is": (Args((1, 2)),),
+                        "monitored_in": (Args((1, [1, 2])),)},
+        warmups=200, coherent=True,
+        monitored=("monitored", "monitored_is", "monitored_in")),
 }
 
 
@@ -660,7 +762,7 @@ def compiled(scenario, source, arm=None):
     f = namespace["f"]
     if source in scenario.monitored:
         monitor(f.__code__)
-    phases = ([(o,) for o in scenario.warm_by_source[source]]
+    phases = ([o if isinstance(o, Args) else (o,) for o in scenario.warm_by_source[source]]
               if source in scenario.warm_by_source else [scenario.warm])
     for warm in phases:
         for _ in range(max(1, scenario.warmups)):
@@ -787,7 +889,8 @@ def prepare(arm_name, scenario, source, inputs):
         return None
     f, index, length, words = built
     current = capi.get_ir(f.__code__, True)[index][0].split("+")[0]
-    if scenario.coherent and current != arm_name and not is_generic(arm):
+    if (scenario.coherent and current != arm_name and not is_generic(arm)
+            and not arm.observes):
         return None
     site = ev.decode_site(PROGRAM, arm.family, words, index, length)
     ssa = SSA[arm_name]
@@ -843,7 +946,7 @@ def one_run(cx, arm, ssa, f, index, length, site, slots, homes, before, constant
     arm_name = arm.name
     handler = capi.arm_handlers()[arm_name]
     run = CRun(f, index, slots, mode, handler)
-    jump_kind = "jump" if arm.family == "Jump" else "branch"
+    jump_kind = "jump" if arm.family in ("Jump", "Resume") else "branch"
     exit = classify(run, mode, index, length, jump_kind)
     if arm.family == "NamespaceWrite" and "value" in inputs and exit == "next":
         # The value's new owner is the globals dict, which the count of the
@@ -914,6 +1017,8 @@ def cx():
 
 
 # The arms no scenario runs, and why.  Each expands.
+UNPACK_WHY = ("the evaluator's publish writes one home; the Span<O> publish of "
+              "`publish [dsts[] = vals]` is not modeled; test_rop_displays runs the arm")
 NOT_RUN = {
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
@@ -926,6 +1031,13 @@ NOT_RUN = {
     "CellMapRead.Lookup": "LOAD_FROM_DICT_OR_DEREF occurs in class code",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
+    "Unpack.Generic": UNPACK_WHY,
+    "Unpack.Tuple": UNPACK_WHY,
+    "Unpack.List": UNPACK_WHY,
+    "UnpackStar.Iterable": UNPACK_WHY,
+    "AppendText.Text": "no scenario yet: the tracer's view is deferred, and the arm "
+                       "takes the string out of its own destination local",
+    "AppendText.Generic": "no scenario yet: the tracer's view is deferred",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",
     "Import.Lazy": "`lazy import` is a module-level statement",
     # select(jit_on) and select(jit_off): the word is the one the JIT's
@@ -936,6 +1048,8 @@ NOT_RUN = {
                           "to one on a word",
     "Jump.Poll" if sys._jit.is_enabled() else "Jump.Warm": "the JIT's state selects the "
                                                            "other loop jump",
+    "Resume.Poll" if sys._jit.is_enabled() else "Resume.Warm": "the JIT's state selects "
+                                                               "the other resume",
 }
 
 

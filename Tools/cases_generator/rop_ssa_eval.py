@@ -698,7 +698,9 @@ def decode_site(program: Program, family: str, words: list[int], index: int,
         if p.kind is FieldKind.target:
             if value >> (p.bits - 1):
                 value -= 1 << p.bits
-            value += index + length
+            # A distance counts from the word after the head, which an
+            # operand word may follow
+            value += index + 1
         if p.kind is FieldKind.vector:
             # The count; the span's elements follow the earlier spans'
             slots, flags = [], []

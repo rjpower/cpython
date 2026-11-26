@@ -180,116 +180,23 @@ dummy_func(
             ERROR_IF(err != 0);
         }
 
-        op(_CHECK_PERIODIC_IF_NOT_YIELD_FROM, (--))
-            effects(runs_python, polls) exits(next, raise)
+        /* Stack ops only: RESUME is the Resume family (Python/register_ops/resume.rop);
+         * its instrumented form runs Resume.Observed. */
+        eval_break tier1 inst(RESUME, (unused/1 --))
+            exits(abort)
         {
-            if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
-                int err = check_periodics(tstate);
-                ERROR_IF(err != 0);
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        // After instrumenting the code it runs its word again, now with its
-        // instrumented handler: a jump to the word
-        tier1 op(_MAYBE_INSTRUMENT, (--))
-            effects(runs_python) exits(next, jump, raise)
+        eval_break tier1 inst(INSTRUMENTED_RESUME, (unused/1 --))
+            exits(abort)
         {
-            #ifdef Py_GIL_DISABLED
-            // For thread-safety, we need to check instrumentation version
-            // even when tracing. Otherwise, another thread may concurrently
-            // re-write the bytecode while we are executing this function.
-            int check_instrumentation = 1;
-            #else
-            int check_instrumentation = (tstate->tracing == 0);
-            #endif
-            if (check_instrumentation) {
-                uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
-                uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                if (code_version != global_version) {
-                    int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-                    if (err) {
-                        ERROR_NO_POP();
-                    }
-                    next_instr = this_instr;
-                    DISPATCH_SAME_OPARG();
-                }
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        // A frame that starts or resumes at a RESUME skips it when it has
-        // nothing to do (IR_SKIP_RESUME); it runs only after the words that
-        // make cells and copy free variables, at a generator's first start,
-        // and when the eval breaker or instrumentation needs it.
-        // The family's generic arm: compiled code runs it as a stub after
-        // RESUME_CHECK's miss
-        macro(RESUME) region(shared) =
-            unused/1 +
-            _MAYBE_INSTRUMENT +
-            _CHECK_PERIODIC_IF_NOT_YIELD_FROM;
-
-        // The baseline JIT's check at a frame's entry (g3/design.md section
-        // 1): a RESUME has nothing to do while no event is pending and the
-        // code is instrumented as the interpreter is.  Otherwise it misses,
-        // and the generic RESUME polls or instruments.
-        leaf ir_only op(_RESUME_CHECK, (--))
-            effects(reads) exits(next, miss)
-        {
-            EXIT_IF(_Py_EvalBreaker(tstate) != FRAME_CODE_INSTRUMENTATION_VERSION(),
-                    "an event is pending, or the code's instrumentation is out of date");
-        }
-
-        // The arm that the baseline compiles for RESUME's words; the
-        // interpreter never writes it (it skips RESUME, IR_SKIP_RESUME())
-        macro(RESUME_CHECK) region(inline) =
-            unused/1 +
-            _RESUME_CHECK;
-
-        // Under -X jit=on and always the lowering gives every RESUME and
-        // JUMP_BACKWARD the form that ends in _JIT_EVENT
-        // (Python/ir_assemble.c): a warm-up event of the code, which enters
-        // the code's compiled unit at the next word once it has one
-        // (IR_JIT_EVENT(), Python/jit.c).  Compiled code runs the forms,
-        // where the event does nothing.
-        // Contract (G0d1): IR_JIT_EVENT's row (EFFECTS(... runs_python),
-        // EXITS(redirect, raise, exit)): the unit it starts runs this frame's
-        // words, which enter and leave frames by their own records; the frame
-        // goes on where the unit stopped (redirect). Otherwise the word
-        // continues (next).
-        ir_only op(_JIT_EVENT, (--))
-            effects(runs_python) exits(next, redirect, raise, exit)
-        {
-            IR_JIT_EVENT();
-        }
-
-        family(RESUME, 1) baseline(RESUME_CHECK) = {
-            RESUME_JIT,
-            RESUME_CHECK,
-        };
-
-        macro(RESUME_JIT) =
-            unused/1 +
-            _MAYBE_INSTRUMENT +
-            _CHECK_PERIODIC_IF_NOT_YIELD_FROM +
-            _JIT_EVENT;
-
-        op(_MONITOR_RESUME, (--))
-            effects(runs_python) exits(next, raise, redirect)
-        {
-            int err = _Py_call_instrumentation(
-                    tstate, oparg == 0 ? PY_MONITORING_EVENT_PY_START : PY_MONITORING_EVENT_PY_RESUME, frame, this_instr);
-            RELOAD_STACK();
-            ERROR_IF(err);
-            if (frame->instr_ptr != this_instr) {
-                /* Instrumentation has jumped */
-                DISPATCH_REDIRECT();
-            }
-        }
-
-        macro(INSTRUMENTED_RESUME) =
-            unused/1 +
-            _MAYBE_INSTRUMENT +
-            _CHECK_PERIODIC_IF_NOT_YIELD_FROM +
-            _MONITOR_RESUME;
 
         pseudo(LOAD_CLOSURE, (-- unused)) = {
             LOAD_FAST,
@@ -463,28 +370,11 @@ dummy_func(
             val = held;
         }
 
-        macro(UNARY_NEGATIVE) = _UNARY_NEGATIVE + _POP_TOP_ANY;
-
-        // Inline values are negated without a box. Only -Py_INT_MIN leaves
-        // the inline range; negating a float that is not NaN gives one that
-        // is not.
-        inline_ok op(_UNARY_NEGATIVE, (value: taken -- res: owned, v: moved(value)))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(UNARY_NEGATIVE, (value: consumed -- res: owned))
+            exits(abort)
         {
-            if (PyValue_IsInlineInt(value)) {
-                res = PyValue_FromInt64(-PyValue_InlineInt64(value));
-            }
-            else if (PyValue_IsInlineFloat(value)) {
-                res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
-            }
-            else {
-                res = _PyValue_Negative(value);
-            }
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            v = value;
-            DEAD(value);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* Stack ops only: rule_truth, rule_branch and rule_jump (Python/regcfg.c)
@@ -532,39 +422,16 @@ dummy_func(
             EXIT_IF(!PyUnicode_CheckExact(value_o));
         }
 
-        macro(UNARY_INVERT) = _UNARY_INVERT + _POP_TOP_ANY;
-
-        op(_UNARY_INVERT, (value: taken -- res: owned, v: moved(value)))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(UNARY_INVERT, (value: consumed -- res: owned))
+            exits(abort)
         {
-            res = _PyValue_Invert(value);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            v = value;
-            DEAD(value);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        family(BINARY_OP, INLINE_CACHE_ENTRIES_BINARY_OP) = {
-            BINARY_OP_MULTIPLY_INT,
-            BINARY_OP_ADD_INT,
-            BINARY_OP_SUBTRACT_INT,
-            BINARY_OP_FLOOR_DIVIDE_INT,
-            BINARY_OP_REMAINDER_INT,
-            BINARY_OP_AND_INT,
-            BINARY_OP_OR_INT,
-            BINARY_OP_XOR_INT,
-            BINARY_OP_LSHIFT_INT,
-            BINARY_OP_RSHIFT_INT,
-            BINARY_OP_MULTIPLY_FLOAT,
-            BINARY_OP_ADD_FLOAT,
-            BINARY_OP_SUBTRACT_FLOAT,
-            BINARY_OP_TRUEDIV_FLOAT,
-            BINARY_OP_ADD_UNICODE,
-            BINARY_OP_INPLACE_ADD_UNICODE,
-            BINARY_OP_EXTEND,
-        };
-
+        /* Stack ops only: UNARY_NEGATIVE, UNARY_INVERT and BINARY_OP are the Unary
+         * and Binary families (Python/register_ops/numeric.rop), and Add and
+         * GetItem for their selectors. */
         // The int guards accept an inline int only: a boxed exact int is
         // outside the inline range (canonical construction). The uops after
         // them read the value with PyValue_InlineInt64() or scaled.
@@ -580,259 +447,6 @@ dummy_func(
             EXIT_IF(!PyValue_IsInlineInt(value));
         }
 
-        // Int arithmetic on inline operands, on scaled values (see
-        // _PyValue_IntScaled()): int64 overflow is exactly a result outside
-        // the inline range, which is boxed.
-        leaf inline_ok pure op(_BINARY_OP_MULTIPLY_INT,
-                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
-                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
-            effects(allocates, raises) exits(next, raise)
-        {
-            int64_t a = _PyValue_IntScaled(left);
-            int64_t b = PyValue_InlineInt64(right);
-            int64_t product;
-            STAT_INC(BINARY_OP, hit);
-            if (__builtin_mul_overflow(a, b, &product)) {
-                res = _PyValue_MultiplyInt64(PyValue_InlineInt64(left), b);
-            }
-            else {
-                res = _PyValue_FromIntScaled(product);
-            }
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        leaf inline_ok pure op(_BINARY_OP_ADD_INT,
-                (left: taken inline_int, right: taken inline_int
-                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
-            effects(allocates, raises) exits(next, raise)
-        {
-            int64_t a = _PyValue_IntScaled(left);
-            int64_t b = _PyValue_IntScaled(right);
-            int64_t sum;
-            STAT_INC(BINARY_OP, hit);
-            if (__builtin_add_overflow(a, b, &sum)) {
-                res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + PyValue_InlineInt64(right));
-            }
-            else {
-                res = _PyValue_FromIntScaled(sum);
-            }
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        leaf inline_ok pure op(_BINARY_OP_SUBTRACT_INT,
-                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
-                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
-            effects(allocates, raises) exits(next, raise)
-        {
-            int64_t a = _PyValue_IntScaled(left);
-            int64_t b = _PyValue_IntScaled(right);
-            int64_t difference;
-            STAT_INC(BINARY_OP, hit);
-            if (__builtin_sub_overflow(a, b, &difference)) {
-                res = _PyValue_BoxInt64(PyValue_InlineInt64(left) - PyValue_InlineInt64(right));
-            }
-            else {
-                res = _PyValue_FromIntScaled(difference);
-            }
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        macro(BINARY_OP_MULTIPLY_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_MULTIPLY_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(BINARY_OP_ADD_INT) region(inline) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_ADD_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(BINARY_OP_SUBTRACT_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_SUBTRACT_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        // Python's // rounds the quotient towards minus infinity and % takes
-        // the sign of the divisor, where C truncates. Division by zero
-        // exits, and BINARY_OP raises. The operands are int51, so int64
-        // division does not trap; only Py_INT_MIN // -1 leaves the inline
-        // range, and PyValue_FromInt64() boxes it.
-        leaf inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT,
-                (left: taken inline_int, right: taken inline_int
-                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
-            effects(allocates, raises) exits(next, miss, raise)
-        {
-            int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b == 0, "the divisor is zero");
-            int64_t a = PyValue_InlineInt64(left);
-            STAT_INC(BINARY_OP, hit);
-            // One division: the quotient is inexact when it does not
-            // multiply back, and the operands differ in sign
-            int64_t quotient = a / b;
-            if (quotient * b != a && (a ^ b) < 0) {
-                quotient--;
-            }
-            res = PyValue_FromInt64(quotient);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        // The remainder is smaller than the divisor in magnitude, so it is
-        // inline.
-        leaf inline_ok pure op(_BINARY_OP_REMAINDER_INT,
-                (left: taken inline_int, right: taken inline_int
-                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
-            effects(raises) exits(next, miss, raise)
-        {
-            int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b == 0, "the divisor is zero");
-            int64_t a = PyValue_InlineInt64(left);
-            STAT_INC(BINARY_OP, hit);
-            int64_t remainder = a % b;
-            if (remainder != 0 && (remainder ^ b) < 0) {
-                remainder += b;
-            }
-            res = PyValue_FromInlineInt(remainder);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        // Ints behave as infinite two's complement under &, | and ^, so the
-        // result for int51 operands is the int51 result.
-        inline_ok pure op(_BINARY_OP_AND_INT,
-                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
-                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
-            effects(raises) exits(next, raise)
-        {
-            STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromInlineInt(PyValue_InlineInt64(left) & PyValue_InlineInt64(right));
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        inline_ok pure op(_BINARY_OP_OR_INT,
-                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
-                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
-            effects(raises) exits(next, raise)
-        {
-            STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromInlineInt(PyValue_InlineInt64(left) | PyValue_InlineInt64(right));
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        inline_ok pure op(_BINARY_OP_XOR_INT,
-                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
-                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
-            effects(raises) exits(next, raise)
-        {
-            STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromInlineInt(PyValue_InlineInt64(left) ^ PyValue_InlineInt64(right));
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        // A negative shift count exits, and BINARY_OP raises. A shift whose
-        // result fits in int64 is made there, and PyValue_FromInt64() boxes
-        // it if it leaves the inline range; a longer shift of anything but 0
-        // makes a long int.
-        inline_ok pure op(_BINARY_OP_LSHIFT_INT,
-                (left: taken inline_int, right: taken inline_int
-                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
-            effects(allocates, raises) exits(next, miss, raise)
-        {
-            int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b < 0, "the shift count is negative");
-            int64_t a = PyValue_InlineInt64(left);
-            STAT_INC(BINARY_OP, hit);
-            int64_t shifted = b < 63 ? (int64_t)((uint64_t)a << b) : 0;
-            if (a == 0) {
-                res = PyValue_FromInlineInt(0);
-            }
-            else if (b < 63 && Py_ARITHMETIC_RIGHT_SHIFT(int64_t, shifted, b) == a) {
-                res = PyValue_FromInt64(shifted);
-            }
-            else {
-                res = _PyValue_LshiftInt64(a, b);
-            }
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        // Python's >> rounds towards minus infinity, as an arithmetic shift
-        // does; shifting an int51 by 63 places or more leaves its sign.
-        inline_ok pure op(_BINARY_OP_RSHIFT_INT,
-                (left: taken inline_int, right: taken inline_int
-                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
-            effects(raises) exits(next, miss, raise)
-        {
-            int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b < 0, "the shift count is negative");
-            int64_t a = PyValue_InlineInt64(left);
-            STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromInlineInt(Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, b < 63 ? b : 63));
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        macro(BINARY_OP_FLOOR_DIVIDE_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_FLOOR_DIVIDE_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(BINARY_OP_REMAINDER_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_REMAINDER_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(BINARY_OP_AND_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_AND_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(BINARY_OP_OR_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_OR_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(BINARY_OP_XOR_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_XOR_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(BINARY_OP_LSHIFT_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_LSHIFT_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(BINARY_OP_RSHIFT_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_RSHIFT_INT + _POP_TOP_INT + _POP_TOP_INT;
-
         // The float guards accept an inline float only: a boxed exact float
         // is a NaN (canonical construction). The uops after them read the
         // value with PyValue_InlineFloat().
@@ -847,207 +461,6 @@ dummy_func(
         {
             EXIT_IF(!PyValue_IsInlineFloat(value));
         }
-
-        // Float arithmetic takes two inline floats, or an inline float and
-        // an inline int (see PyValue_FloatOperandsCheck()). The test and the
-        // reads are one step, so that two floats get a path of their own.
-        // The result is inline unless it is NaN.
-        leaf inline_ok pure op(_BINARY_OP_MULTIPLY_FLOAT,
-                (left: taken, right: taken
-                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
-            effects(allocates, raises) exits(next, miss, raise)
-        {
-            double a, b;
-            EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
-            STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromDouble(a * b);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        leaf inline_ok pure op(_BINARY_OP_ADD_FLOAT,
-                (left: taken, right: taken
-                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
-            effects(allocates, raises) exits(next, miss, raise)
-        {
-            double a, b;
-            EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
-            STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromDouble(a + b);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        leaf inline_ok pure op(_BINARY_OP_SUBTRACT_FLOAT,
-                (left: taken, right: taken
-                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
-            effects(allocates, raises) exits(next, miss, raise)
-        {
-            double a, b;
-            EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
-            STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromDouble(a - b);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        // Division by zero exits, and BINARY_OP raises.
-        leaf inline_ok pure op(_BINARY_OP_TRUEDIV_FLOAT,
-                (left: taken, right: taken
-                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
-            effects(allocates, raises) exits(next, miss, raise)
-        {
-            double a, b;
-            EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
-            EXIT_IF(b == 0.0, "the divisor is zero");
-            STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromDouble(a / b);
-            if (PyValue_IsNull(res)) {
-                ERROR_NO_POP();
-            }
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        macro(BINARY_OP_MULTIPLY_FLOAT) =
-            unused/5 + _BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
-        macro(BINARY_OP_ADD_FLOAT) region(inline) =
-            unused/5 + _BINARY_OP_ADD_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
-        macro(BINARY_OP_SUBTRACT_FLOAT) =
-            unused/5 + _BINARY_OP_SUBTRACT_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
-        macro(BINARY_OP_TRUEDIV_FLOAT) =
-            unused/5 + _BINARY_OP_TRUEDIV_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
-
-        pure op(_BINARY_OP_ADD_UNICODE,
-                (left: taken object, right: taken object
-                 -- res: owned, l: moved(left), r: moved(right)))
-            effects(reads, allocates, raises) exits(next, raise)
-        {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-            assert(PyUnicode_CheckExact(left_o));
-            assert(PyUnicode_CheckExact(right_o));
-
-            STAT_INC(BINARY_OP, hit);
-            PyObject *res_o = PyUnicode_Concat(left_o, right_o);
-            if (res_o == NULL) {
-                ERROR_NO_POP();
-            }
-            res = PyValue_FromNonNumberSteal(res_o);
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        macro(BINARY_OP_ADD_UNICODE) =
-            _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_ADD_UNICODE + _POP_TOP_UNICODE + _POP_TOP_UNICODE;
-
-        // This is a subtle one. We write NULL to the local that dst
-        // names, the target of the STORE_FAST folded into the word, and
-        // leave the result for IR_STORE_RESULT to store.
-        op(_BINARY_OP_INPLACE_ADD_UNICODE,
-                (left: consumed exact(PyUnicode_Type), right: consumed exact(PyUnicode_Type)
-                 -- res: owned))
-            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, miss, raise)
-        {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            assert(PyUnicode_CheckExact(left_o));
-            assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(right)));
-
-            assert(IR_IS_LOCAL(IR_DST));
-            assert(PyUnicode_CheckExact(left_o));
-            // The local may hold any word (an inline number, None, NULL):
-            // compare the words, not an object read from it.  `held` is a
-            // copy; the local keeps its owner until it is cleared below
-            PyValue held = IR_SLOT(IR_DST);
-            EXIT_IF(!PyValue_Is(held, left),
-                    "the next word stores the result to the left operand's local");
-            STAT_INC(BINARY_OP, hit);
-            /* Handle `left = left + right` or `left += right` for str.
-             *
-             * When possible, extend `left` in place rather than
-             * allocating a new PyUnicodeObject. This attempts to avoid
-             * quadratic behavior when one neglects to use str.join().
-             *
-             * If `left` has only two references remaining (one from
-             * the stack, one in the locals), DECREFing `left` leaves
-             * only the locals reference, so PyUnicode_Append knows
-             * that the string is safe to mutate.  A `left` read in place
-             * from the local holds no reference of its own, and the
-             * generator does not release it (pyjit/design/pyvalue.md D4).
-             */
-            /* gh-143403: It's critical to close this reference *before*
-             * we append. Otherwise, append can move the underlying
-             * unicode object, which will cause a use after free!
-             * It is also closed before the local is stolen, because
-             * `left` may be a borrow of that local (gh-131527).
-             */
-            PyValue_CLOSE_SPECIALIZED(left, _PyUnicode_ExactDealloc);
-            DEAD(left);
-            // The local still holds the string; its owner moves to `held`,
-            // which the guard showed is left's string
-            assert(Py_REFCNT(left_o) >= 1);
-            IR_SLOT(IR_DST) = PyValue_NULL;
-            PyObject *temp = PyValue_AsKnownObjectSteal(held);
-            PyObject *right_o = PyValue_AsKnownObjectSteal(right);
-            temp = value_unicode_append(temp, right_o);
-            _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
-            ERROR_IF(temp == NULL);
-            res = PyValue_FromNonNumberSteal(temp);
-        }
-
-       // These legacy descriptors guard objects. Decline canonical inline
-       // operands before creating a C bridge; the generic operation handles
-       // them without carrying private box owners through a deopt.
-       inline_ok op(_BINARY_OP_EXTEND,
-               (descr/4, left: taken, right: taken
-                -- res: owned, l: moved(left) object, r: moved(right) object))
-           effects(runs_python) exits(next, miss, raise)
-       {
-            EXIT_IF(!PyValue_IsObject(left) || !PyValue_IsObject(right));
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-            assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
-            _PyBinaryOpSpecializationDescr *d = _PyBinaryOp_ExtendDescr(descr);
-            assert(d != NULL);
-            EXIT_IF(Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type,
-                    "the operand types are not the descriptor's");
-
-            STAT_INC(BINARY_OP, hit);
-
-            binaryopactionfunc action = d->action;
-            PyObject *res_o = action(left_o, right_o);
-            if (res_o == NULL) {
-                ERROR_NO_POP();
-            }
-            assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
-            assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
-
-            res = PyValue_FromObjectSteal(res_o);
-            l = left;
-            r = right;
-            DEAD(left);
-            DEAD(right);
-        }
-
-        macro(BINARY_OP_EXTEND) =
-            unused/1 + _BINARY_OP_EXTEND + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        macro(BINARY_OP_INPLACE_ADD_UNICODE) =
-            _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_INPLACE_ADD_UNICODE;
 
         /* Stack ops only: BINARY_SLICE and STORE_SLICE are the SliceRead and
          * SliceWrite families (Python/register_ops/items.rop). */
@@ -1670,95 +1083,23 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        family(UNPACK_SEQUENCE, INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE) = {
-            UNPACK_SEQUENCE_TUPLE,
-            UNPACK_SEQUENCE_LIST,
-        };
-
-        specializing op(_SPECIALIZE_UNPACK_SEQUENCE, (seq -- seq))
-            effects(runs_python) exits(next, jump)
-            feedback(read(entry), write(entry), write(handler))
+        /* A stack op only: UNPACK_SEQUENCE is the Unpack family (Python/register_ops/displays.rop). */
+        tier1 inst(UNPACK_SEQUENCE,
+                (unused/1, seq: consumed -- unused[oparg], top[0]: owned))
+            exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-            (void)seq;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        window op(_UNPACK_SEQUENCE, (seq: consumed -- unused[oparg], top[0]: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            // A number is not iterable
-            if (!PyValue_IsObject(seq)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "cannot unpack non-iterable %.200s object",
-                              PyValue_TYPE(seq)->tp_name);
-                DEAD(seq);
-                ERROR_IF(true);
-            }
-            PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
-            int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
-            ERROR_IF(res == 0);
-        }
-
-        macro(UNPACK_SEQUENCE) region(shared) = unused/1 + _SPECIALIZE_UNPACK_SEQUENCE + _UNPACK_SEQUENCE;
-
-        macro(UNPACK_SEQUENCE_TUPLE) region(shared) =
-            _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TUPLE;
-
-        op(_UNPACK_SEQUENCE_TUPLE, (seq: consumed exact(PyTuple_Type) -- values[oparg]: owned))
-            effects(reads, releases) exits(next, miss)
-        {
-            PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
-            assert(PyTuple_CheckExact(seq_o));
-            EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
-            STAT_INC(UNPACK_SEQUENCE, hit);
-            IR_UNPACK_ITEMS(values, _PyTuple_ITEMS(seq_o), oparg);
-            DECREF_INPUTS();
-        }
-
-        macro(UNPACK_SEQUENCE_LIST) region(shared) =
-            _GUARD_TOS_LIST + unused/1 + _UNPACK_SEQUENCE_LIST;
-
-        op(_UNPACK_SEQUENCE_LIST, (seq: consumed exact(PyList_Type) -- values[oparg]: owned))
-            effects(reads, releases) exits(next, deopt)
-        {
-            PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
-            assert(PyList_CheckExact(seq_o));
-            DEOPT_IF(!LOCK_OBJECT(seq_o));
-            if (PyList_GET_SIZE(seq_o) != oparg) {
-                UNLOCK_OBJECT(seq_o);
-                DEOPT_IF(true);
-            }
-            STAT_INC(UNPACK_SEQUENCE, hit);
-            IR_UNPACK_ITEMS(values, _PyList_ITEMS(seq_o), oparg);
-            UNLOCK_OBJECT(seq_o);
-            DECREF_INPUTS();
-        }
-
-        outlined window inst(UNPACK_EX,
+        /* A stack op only: UNPACK_EX is the UnpackStar family (Python/register_ops/displays.rop). */
+        tier1 inst(UNPACK_EX,
                 (seq: consumed
                  -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0]: owned))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
-            // A number is not iterable
-            if (!PyValue_IsObject(seq)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "cannot unpack non-iterable %.200s object",
-                              PyValue_TYPE(seq)->tp_name);
-                DEAD(seq);
-                ERROR_IF(true);
-            }
-            PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
-            int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
-            ERROR_IF(res == 0);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         family(STORE_ATTR, INLINE_CACHE_ENTRIES_STORE_ATTR) = {
@@ -2505,340 +1846,35 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _STORE_ATTR_SLOT;
 
-        family(COMPARE_OP, INLINE_CACHE_ENTRIES_COMPARE_OP) = {
-            COMPARE_OP_FLOAT,
-            COMPARE_OP_INT,
-            COMPARE_OP_STR,
-        };
-
-        specializing op(_SPECIALIZE_COMPARE_OP, (left, right -- left, right))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        /* A stack op only: COMPARE_OP is the Compare family (Python/register_ops/tests.rop). */
+        tier1 inst(COMPARE_OP,
+                (unused/1, left: consumed, right: consumed -- res: owned))
+            exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_CompareOp(left, right, next_instr, oparg);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(COMPARE_OP);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        op(_COMPARE_OP, (left: consumed, right: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: IS_OP is the Identity family (Python/register_ops/tests.rop). */
+        tier1 inst(IS_OP,
+                (left: consumed, right: consumed -- b: owned))
+            exits(abort)
         {
-            assert((oparg >> 5) <= Py_GE);
-            PyValue cmp = _PyValue_RichCompare(left, right, oparg >> 5);
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(cmp));
-            if (oparg & 16) {
-                int res_bool = _PyValue_IsTrue(cmp);
-                PyValue_CLOSE(cmp);
-                ERROR_IF(res_bool < 0);
-                res = res_bool ? PyValue_True : PyValue_False;
-            }
-            else {
-                res = cmp;
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        macro(COMPARE_OP) = unused/1 + _SPECIALIZE_COMPARE_OP + _COMPARE_OP;
-
-        macro(COMPARE_OP_FLOAT) =
-            _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + unused/1 + _COMPARE_OP_FLOAT + _POP_TOP_FLOAT + _POP_TOP_FLOAT;
-
-        macro(COMPARE_OP_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/1 + _COMPARE_OP_INT + _POP_TOP_INT + _POP_TOP_INT;
-
-        macro(COMPARE_OP_STR) =
-            _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/1 + _COMPARE_OP_STR + _POP_TOP_UNICODE + _POP_TOP_UNICODE;
-
-        leaf inline_ok op(_COMPARE_OP_FLOAT,
-                (left: consumed exact(PyFloat_Type) inline inline_float, right: consumed exact(PyFloat_Type) inline inline_float
-                 -- res: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
-            effects() exits(next)
+        /* A stack op only: CONTAINS_OP is the Contains family (Python/register_ops/tests.rop). */
+        tier1 inst(CONTAINS_OP,
+                (unused/1, left: consumed, right: consumed -- b: owned))
+            exits(abort)
         {
-            STAT_INC(COMPARE_OP, hit);
-            double dleft = PyValue_InlineFloat(left);
-            double dright = PyValue_InlineFloat(right);
-            // 1 if NaN, 2 if <, 4 if >, 8 if ==; this matches low four bits of the oparg
-            int sign_ish = COMPARISON_BIT(dleft, dright);
-            l = left;
-            r = right;
-            DEAD(left);
-            DEAD(right);
-            res = (sign_ish & oparg) ? PyValue_True : PyValue_False;
-            // It's always a bool, so we don't care about oparg & 16.
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        // Similar to COMPARE_OP_FLOAT
-        leaf inline_ok op(_COMPARE_OP_INT,
-                (left: consumed exact(PyLong_Type) inline inline_int, right: consumed exact(PyLong_Type) inline inline_int
-                 -- res: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
-            effects() exits(next)
-        {
-            STAT_INC(COMPARE_OP, hit);
-            // Scaled values compare as the values do.
-            int64_t ileft = _PyValue_IntScaled(left);
-            int64_t iright = _PyValue_IntScaled(right);
-            // 2 if <, 4 if >, 8 if ==; this matches the low 4 bits of the oparg
-            int sign_ish = COMPARISON_BIT(ileft, iright);
-            l = left;
-            r = right;
-            DEAD(left);
-            DEAD(right);
-            res =  (sign_ish & oparg) ? PyValue_True : PyValue_False;
-            // It's always a bool, so we don't care about oparg & 16.
-        }
-
-        // Similar to COMPARE_OP_FLOAT, but for ==, != only
-        op(_COMPARE_OP_STR,
-                (left: consumed object, right: consumed object
-                 -- res: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
-            effects(reads) exits(next)
-        {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-
-            STAT_INC(COMPARE_OP, hit);
-            int eq = _PyUnicode_Equal(left_o, right_o);
-            assert((oparg >> 5) == Py_EQ || (oparg >> 5) == Py_NE);
-            l = left;
-            r = right;
-            DEAD(left);
-            DEAD(right);
-            assert(eq == 0 || eq == 1);
-            assert((oparg & 0xf) == COMPARISON_NOT_EQUALS || (oparg & 0xf) == COMPARISON_EQUALS);
-            assert(COMPARISON_NOT_EQUALS + 1 == COMPARISON_EQUALS);
-            res = ((COMPARISON_NOT_EQUALS + eq) & oparg) ? PyValue_True : PyValue_False;
-            // It's always a bool, so we don't care about oparg & 16.
-        }
-
-        macro(IS_OP) = _IS_OP + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        // A bit compare: the operands are canonical (see "Value identity"
-        // in pycore_value.h).
-        leaf inline_ok op(_IS_OP,
-                (left: consumed, right: consumed
-                 -- b: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
-            effects() exits(next)
-        {
-            int res = PyValue_Is(left, right) ^ oparg;
-            b = res ? PyValue_True : PyValue_False;
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        family(CONTAINS_OP, INLINE_CACHE_ENTRIES_CONTAINS_OP) = {
-            CONTAINS_OP_SET,
-            CONTAINS_OP_DICT,
-        };
-
-        op(_CONTAINS_OP,
-                (left: taken, right: taken
-                 -- b: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
-            effects(runs_python) exits(next, raise)
-        {
-            int res = _PyValue_Contains(right, left);
-            if (res < 0) {
-                ERROR_NO_POP();
-            }
-            b = (res ^ oparg) ? PyValue_True : PyValue_False;
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        specializing op(_SPECIALIZE_CONTAINS_OP, (left, right -- left, right))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
-        {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_ContainsOp(left, right, next_instr);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(CONTAINS_OP);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-        }
-
-        macro(CONTAINS_OP) = unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        op(_GUARD_TOS_ANY_SET, (tos: object -- tos: exact(PyAnySet_Type)))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *o = PyValue_AsKnownObjectBorrow(tos);
-            EXIT_IF(!PyAnySet_CheckExact(o));
-        }
-
-        macro(CONTAINS_OP_SET) = _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        // inline_ok: left is tested as a value, so nothing is boxed.
-        inline_ok op(_CONTAINS_OP_SET,
-                (left: taken, right: taken object
-                 -- b: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-
-            assert(PyAnySet_CheckExact(right_o));
-            STAT_INC(CONTAINS_OP, hit);
-            // Note: both set and frozenset use the same seq_contains method!
-            int res = _PySet_Contains((PySetObject *)right_o, left);
-            if (res < 0) {
-                ERROR_NO_POP();
-            }
-            b = (res ^ oparg) ? PyValue_True : PyValue_False;
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        macro(CONTAINS_OP_DICT) = _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + _POP_TOP_ANY + _POP_TOP_ANY;
-
-        op(_CONTAINS_OP_DICT,
-                (left: taken, right: taken object
-                 -- b: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-
-            assert(PyAnyDict_CheckExact(right_o));
-            STAT_INC(CONTAINS_OP, hit);
-            // The key is looked up as a value: an inline key needs no box.
-            int res = _PyDict_ContainsValue((PyDictObject *)right_o, left);
-            if (res < 0) {
-                ERROR_NO_POP();
-            }
-            b = (res ^ oparg) ? PyValue_True : PyValue_False;
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        /* A compare and the conditional jump that tests it, in one word of
-         * the register IR (Python/assemble.c fuses the pair where both are on
-         * one line and the target is within IR_MAX_FORWARD).  The word is
-         * {lhs, rhs, fb, D}: D is the signed distance from the next word, and
-         * the arg of the entry holds the operation in bits 0 to 7 (the oparg
-         * of the compare) and IR_FUSED_IF_FALSE.  There is no backward form, so
-         * the handlers never poll the eval breaker.  The handlers stand for the
-         * compare (their shadow, see ir_metadata_generator.py), and the
-         * specialisations are those of the compare, in families of their own. */
-        // Contract (G0d1): cond is the compare's result, which _COMPARE_OP does not
-        // declare an exact bool, so the skeleton closes it (closed); the sense and
-        // the distance are fixed bits of the entry and the word; the branch jumps.
-        leaf ir_only op(_JUMP_IF_COND, (cond: closed -- ))
-            effects() exits(next, branch)
-        {
-            assert(PyValue_BoolCheck(cond));
-            int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-            DEAD(cond);
-            IR_REPORT_EDGE(flag);
-            if (flag) {
-                JUMPBY(IR_FUSED_DISTANCE());
-            }
-        }
-
-        // Contract (seed, reviewed G0d1): cond as _JUMP_IF_COND's; the branch event
-        // (IR_OBSERVE_COMMITTED_BRANCH) runs tools and may raise.
-        ir_only op(_INSTRUMENTED_JUMP_IF_COND, (cond: closed -- ))
-            effects(runs_python) exits(next, branch, raise)
-        {
-            assert(PyValue_BoolCheck(cond));
-            int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-            DEAD(cond);
-            if (flag) {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
-            }
-            else {
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
-            }
-        }
-
-        family(COMPARE_OP_JUMP, INLINE_CACHE_ENTRIES_COMPARE_OP) = {
-            COMPARE_OP_JUMP_FLOAT,
-            COMPARE_OP_JUMP_INT,
-            COMPARE_OP_JUMP_STR,
-        };
-
-        macro(COMPARE_OP_JUMP) =
-            unused/1 + _SPECIALIZE_COMPARE_OP + _COMPARE_OP + _JUMP_IF_COND;
-
-        macro(COMPARE_OP_JUMP_FLOAT) =
-            _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + unused/1 + _COMPARE_OP_FLOAT + _POP_TOP_FLOAT + _POP_TOP_FLOAT + _JUMP_IF_COND;
-
-        macro(COMPARE_OP_JUMP_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/1 + _COMPARE_OP_INT + _POP_TOP_INT + _POP_TOP_INT + _JUMP_IF_COND;
-
-        macro(COMPARE_OP_JUMP_STR) =
-            _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/1 + _COMPARE_OP_STR + _POP_TOP_UNICODE + _POP_TOP_UNICODE + _JUMP_IF_COND;
-
-        macro(INSTRUMENTED_COMPARE_OP_JUMP) =
-            unused/1 + _COMPARE_OP + _INSTRUMENTED_JUMP_IF_COND;
-
-        /* An exact str, tuple or list container: the type's contains
-         * function is called by value from the handler, with no slot lookup
-         * and no dispatcher. The guard is the exact type, so a subclass that
-         * overrides __contains__ takes the generic handler. Only the fused
-         * words have this form. */
-        op(_GUARD_TOS_STR_TUPLE_LIST,
-                (tos: object -- tos: exact(PyList_Type | PyTuple_Type | PyUnicode_Type)))
-            effects(reads) exits(next, miss)
-        {
-            PyObject *o = PyValue_AsKnownObjectBorrow(tos);
-            EXIT_IF(!PyUnicode_CheckExact(o) && !PyTuple_CheckExact(o)
-                    && !PyList_CheckExact(o), "not an exact str, tuple or list");
-        }
-
-        op(_CONTAINS_OP_SEQUENCE,
-                (left: taken, right: taken object
-                 -- b: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-            STAT_INC(CONTAINS_OP, hit);
-            _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(right_o), contains);
-            int res = contains_slot(right_o, PyValue_Borrow(left));
-            if (res < 0) {
-                ERROR_NO_POP();
-            }
-            b = (res ^ oparg) ? PyValue_True : PyValue_False;
-            l = left;
-            r = right;
-            INPUTS_DEAD();
-        }
-
-        family(CONTAINS_OP_JUMP, INLINE_CACHE_ENTRIES_CONTAINS_OP) = {
-            CONTAINS_OP_JUMP_DICT,
-            CONTAINS_OP_JUMP_SET,
-            CONTAINS_OP_JUMP_SEQUENCE,
-        };
-
-        macro(CONTAINS_OP_JUMP) =
-            unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
-
-        macro(CONTAINS_OP_JUMP_SET) =
-            _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
-
-        macro(CONTAINS_OP_JUMP_DICT) =
-            _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
-
-        macro(CONTAINS_OP_JUMP_SEQUENCE) =
-            _GUARD_TOS_STR_TUPLE_LIST + unused/1 + _CONTAINS_OP_SEQUENCE + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
-
-        macro(INSTRUMENTED_CONTAINS_OP_JUMP) =
-            unused/1 + _CONTAINS_OP + _POP_TOP_ANY + _POP_TOP_ANY + _INSTRUMENTED_JUMP_IF_COND;
-
-        macro(IS_OP_JUMP) = _IS_OP + _POP_TOP_ANY + _POP_TOP_ANY + _JUMP_IF_COND;
-
-        macro(INSTRUMENTED_IS_OP_JUMP) =
-            _IS_OP + _POP_TOP_ANY + _POP_TOP_ANY + _INSTRUMENTED_JUMP_IF_COND;
 
         outlined inst(CHECK_EG_MATCH,
                 (exc_value_st: consumed assumed(object) by exception_unwind, match_type_st: consumed
@@ -3767,7 +2803,7 @@ dummy_func(
             tstate->py_recursion_remaining--;
             RELOAD_STACK();
             LOAD_IP(0);
-            IR_SKIP_RESUME();
+            ROP_ENTER_GATE();
             DTRACE_FUNCTION_ENTRY();
             LLTRACE_RESUME_FRAME();
         }
@@ -4136,33 +3172,14 @@ dummy_func(
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs))
-            effects(runs_python) exits(next, jump)
-            feedback(read(entry), write(entry), write(handler))
+        tier1 inst(BINARY_OP, (unused/5, lhs: consumed, rhs: consumed -- res: owned))
+            exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                next_instr = this_instr;
-                _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(BINARY_OP);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
-            assert(NB_ADD <= oparg);
-            assert(oparg <= NB_OPARG_LAST);
+            /* The selector is the oparg, as dis shows it */
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        inline_ok op(_BINARY_OP, (lhs: consumed, rhs: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            res = value_binary_op(oparg, lhs, rhs);
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(res));
-        }
-
-        macro(BINARY_OP) region(shared) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;
 
         inst(INSTRUMENTED_LINE, ( -- ))
             effects(runs_python) exits(next, jump, raise) feedback(write(counter))
@@ -4490,7 +3507,7 @@ dummy_func(
             }
             DTRACE_FUNCTION_ENTRY();
             next_instr = frame->instr_ptr;
-            IR_SKIP_RESUME();
+            ROP_ENTER_GATE();
         #ifdef Py_DEBUG
             int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
             if (lltrace < 0) {

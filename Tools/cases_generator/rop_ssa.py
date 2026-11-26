@@ -24,12 +24,13 @@ the primitive rows that have them.
 """
 
 import enum
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from rop_catalog import (ENVIRONMENT, DebtKind, Fact, Scalar, ExcRole,
                          FieldKind, FrameRole, Handle, PcRole, Wrap)
 from rop_cgen import Unsupported, flatten, is_transfer
-from rop_check import (CANDIDATE, COUNT, PRIMITIVES, UNWRAP, Program, field_kind, select_facts)
+from rop_check import (CANDIDATE, COUNT, PART, PRIMITIVES, UNWRAP, Program, expand_debts,
+                       expand_group, field_kind, home_params, select_facts)
 from rop_model import (Arm, BoolLit, Branch, Call, CallTerm, Cases, Diagnostic,
                        Each, EnumType, Exit, Expr, Family, Goto, Guard, HandleType, Let, Name, Nat,
                        Null, Publish, ScalarType, SpanLit, SrcSpan, Type,
@@ -215,7 +216,11 @@ class Expander:
         self.types: dict[int, Type] = {}
         self.names: dict[int, str] = {}
         self.env: dict[str, int] = {}
-        self.operands = {p.name: field_kind(p.type) for p in self.family.params}
+        # A home group is its projections, each a home of its own
+        self.params = home_params(self.family.params)
+        self.groups = {p.name: p.type for p in self.family.params}
+        self.operands = {p.name: FieldKind.home if p.type == PART else field_kind(p.type)
+                         for p in self.params}
         self.blocks: dict[str, SsaBlock] = {}
         self.cur: SsaBlock
         # The homes and the last checkpoint on entry to each block
@@ -263,7 +268,7 @@ class Expander:
         if n in self.env:
             return self.env[n]
         kind = self.operands.get(n)
-        param = next((p for p in self.family.params if p.name == n), None)
+        param = next((p for p in self.params if p.name == n), None)
         if param is not None:
             op = OpKind.home if kind in (FieldKind.home, FieldKind.vector) else OpKind.operand
             v = self.emit(op, param.type, (), n, n)
@@ -366,6 +371,7 @@ class Expander:
     def publish(self, s: Publish) -> None:
         """Change 21's four steps: take the spent inputs (a vector move's
         sources among them), read the olds, write, then close"""
+        s = replace(s, debts=expand_debts(s.debts, self.groups))
         owners = WrapType(Wrap.Span, O_TYPE)
         values: list[tuple[str, int]] = []
         taken: dict[str, int] = {}
@@ -441,9 +447,10 @@ class Expander:
     def point_state(self, point: str, span, frame=None, pc=None) -> FrameState:
         p = self.program.points[point]
         homes = dict(self.current_homes())
-        for h in p.spent:
+        defs = {h for n in p.defs for h in expand_group(n, self.groups)}
+        for h in (h for n in p.spent for h in expand_group(n, self.groups)):
             # A home both spent and defined (a local deleted) is defined
-            if homes[h].state not in ("spent",) and h not in p.defs:
+            if homes[h].state not in ("spent",) and h not in defs:
                 homes[h] = HomeState("spent")
         return FrameState(frame or p.frame.value, pc or p.pc.value, p.exc.value,
                           tuple(homes.items()), point)
@@ -478,7 +485,9 @@ class Expander:
         if kind == "return":
             return FrameState("value", "value", ExcRole.clear.value, self.current_homes(),
                               None, ())
-        if kind in ("redirect", "yield"):
+        if kind == "yield":
+            return _with(self.point_state(t.resume, t.span), args)
+        if kind == "redirect":
             return FrameState(FrameRole.current.value, "value", ExcRole.clear.value,
                               self.current_homes(), self.point, args)
         if kind == "exit":
@@ -558,6 +567,12 @@ class Expander:
                 params.append(self.value(p.type, p.name))
             self.blocks[label] = SsaBlock(label, tuple(params))
         self.states["entry"] = ({}, None)
+        if self.arm.completion is not None:
+            # A completion starts from its resume point's homes, with the
+            # child's value as the entry's parameter
+            p = self.program.points[self.arm.completion]
+            spent = [h for n in p.spent for h in expand_group(n, self.groups)]
+            self.states["entry"] = ({h: HomeState("spent") for h in spent}, p.name)
         for label in flat.order:
             b = flat.blocks[label]
             self.cur = self.blocks[label]
@@ -631,7 +646,7 @@ def expand_all(program: Program) -> tuple[dict[str, SsaArm], dict[str, Diagnosti
     "Every arm's expansion, and the diagnostic of each arm that has none"
     done: dict[str, SsaArm] = {}
     failed: dict[str, Diagnostic] = {}
-    for name, arm in program.arms.items():
+    for name, arm in [*program.arms.items(), *program.completions.items()]:
         try:
             done[name] = expand(program, arm)
         except SsaError as e:

@@ -63,6 +63,8 @@ typedef enum {
     FB_ATTR,
     FB_GLOBAL,
     FB_CALL,
+    FB_COMPARE,
+    FB_CONTAINS,
 } _PyFbKind;
 
 typedef enum {
@@ -93,7 +95,7 @@ typedef struct {
     uint32_t _pad;
 } _PyFbUnary;
 
-// BINARY_OP, COMPARE_OP, CONTAINS_OP, STORE_SUBSCR
+// BINARY_OP, STORE_SUBSCR
 typedef struct {
     _PyFbHeader h;
     uint32_t lhs_version;           // operand types, recorded but not guarded
@@ -205,6 +207,20 @@ typedef struct {
     uint32_t callable_type_version; // recorded but not guarded
     _PyBindPlan plan;
 } _PyFbCall;
+
+// COMPARE_OP: the arm the operand types selected (Python/register_ops/tests.rop)
+typedef struct {
+    _PyFbHeader h;
+    uint32_t kind;
+    uint32_t _pad;
+} _PyFbCompare;
+
+// CONTAINS_OP: the arm the container's type selected, and that type's version
+typedef struct {
+    _PyFbHeader h;
+    uint32_t kind;
+    uint32_t type_version;
+} _PyFbContains;
 
 static_assert(sizeof(_PyFbCall) == sizeof(_PyFbHeader) + 24,
               "call feedback size changed");

@@ -75,11 +75,7 @@ class HandlerRecordTests(unittest.TestCase):
 
     def test_effects(self):
         expected = {
-            "_BINARY_OP_ADD_INT": {ALLOCATES, MAY_RAISE},
-            "_COMPARE_OP_INT": set(),
             "_GUARD_TYPE_VERSION": {READS_HEAP},
-            # A close whose deallocator cannot run Python only frees
-            "_POP_TOP_INT": {WRITES_HEAP},
             "_POP_TOP_ANY": {MAY_RELEASE},
             "_STORE_ATTR_SLOT": {READS_HEAP, WRITES_HEAP, MAY_RELEASE},
         }
@@ -87,28 +83,6 @@ class HandlerRecordTests(unittest.TestCase):
             effects = expected[name]
             with self.subTest(uop=name):
                 self.assertEqual(ir_records.uop_record_effects(uops[name]), effects)
-
-    def test_result_facts(self):
-        def results(handler, uop):
-            record = records[handler]
-            [found] = [u for u in record.uops if u.name == uop]
-            return {(f.kind, f.arg) for f in found.results}
-
-        integer = ("EXACT_TYPE", "PyLong_Type")
-        cases_ = (
-                ("BINARY_OP_ADD_INT", "_BINARY_OP_ADD_INT", {integer}),
-                ("BINARY_OP_AND_INT", "_BINARY_OP_AND_INT", {integer, ("ENCODING", "inline_int")}),
-                ("BINARY_OP_ADD_FLOAT", "_BINARY_OP_ADD_FLOAT",
-                 {("EXACT_TYPE", "PyFloat_Type")}),
-                ("COMPARE_OP_INT", "_COMPARE_OP_INT", {("EXACT_TYPE", "PyBool_Type")}),
-                # A rich comparison may return any object
-                ("COMPARE_OP", "_COMPARE_OP", set()))
-        present([handler for handler, _, _ in cases_], records)
-        for handler, uop, facts in cases_:
-            if handler not in records:
-                continue
-            with self.subTest(uop=uop):
-                self.assertEqual(results(handler, uop), facts)
 
     def test_type_version_facts(self):
         def facts(handler, uop):
@@ -172,8 +146,8 @@ class HandlerRecordTests(unittest.TestCase):
         def transfers(handler):
             return {(t.kind, t.target) for u in records[handler].uops for t in u.transfers}
         # A specializer that rewrote the word runs it again
-        if "UNPACK_SEQUENCE" in records:
-            self.assertIn((ir_records.JUMP, "self"), transfers("UNPACK_SEQUENCE"))
+        if "FOR_ITER" in records:
+            self.assertIn((ir_records.JUMP, "self"), transfers("FOR_ITER"))
         # The monitor runs the word with the handler that it chose
         if "INSTRUMENTED_INSTRUCTION" in records:
             self.assertIn((ir_records.JUMP, "self:handler"), transfers("INSTRUMENTED_INSTRUCTION"))

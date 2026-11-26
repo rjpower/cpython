@@ -137,11 +137,11 @@ A refleak run (`-R 3:3`, 16 modules) finds no reference leak, and the same
 memory-block growth before and after TB (a backlog item).
 
 No word runs an inherited handler. The last merge check passed the smoke set
-on release and assert, and the verifier reports no error over 108,949 code
-objects (108,927 at the last merge). The full suites at `0a81f42d9bf` (release and assert, JIT off)
+on release and assert, and the verifier reports no error over 108,927 code
+objects. The full suites at `0a81f42d9bf` (release and assert, JIT off)
 failed only the three stale specialization tests PAR then fixed, and the
-id-shifted guard build passes at `d8cb2109192`. Ports keep the old handlers' object locks and turn every old
-specialization into an arm.
+id-shifted guard build passes at `d8cb2109192`. Ports keep the old
+handlers' object locks and turn every old specialization into an arm.
 
 Interpreter first (user, 2026-11-25): port every op, reach test parity, then
 interpreter performance parity with golden87 (within 5% on the timed

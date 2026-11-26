@@ -438,32 +438,33 @@ enum {
 #define ROP_POINT_Return_Delivered 100
 #define ROP_POINT_Return_EventFailed 101
 #define ROP_POINT_SaveLocal_Done 102
-#define ROP_POINT_Send_Closed 103
-#define ROP_POINT_Send_Completed 104
-#define ROP_POINT_Send_ExitEvent 105
-#define ROP_POINT_Send_Failed 106
-#define ROP_POINT_Send_Stepped 107
-#define ROP_POINT_Send_Yielded 108
-#define ROP_POINT_SetItem_Done 109
-#define ROP_POINT_SetItem_Failed 110
-#define ROP_POINT_SetupAnnotations_Done 111
-#define ROP_POINT_SetupAnnotations_Failed 112
-#define ROP_POINT_SliceRead_Done 113
-#define ROP_POINT_SliceRead_Failed 114
-#define ROP_POINT_SliceWrite_Done 115
-#define ROP_POINT_SliceWrite_Failed 116
-#define ROP_POINT_TestBranch_Event 117
-#define ROP_POINT_TestBranch_Failed 118
-#define ROP_POINT_TestBranch_Fell 119
-#define ROP_POINT_TestBranch_Jumped 120
-#define ROP_POINT_Truth_Done 121
-#define ROP_POINT_Truth_Failed 122
-#define ROP_POINT_UpdateContainer_Done 123
-#define ROP_POINT_UpdateContainer_Failed 124
-#define ROP_POINT_Yield_EventFailed 125
-#define ROP_POINT_Yield_Resumed 126
-#define ROP_POINT_YieldFrom_EventFailed 127
-#define ROP_POINT_YieldFrom_Resumed 128
+#define ROP_POINT_Send_Abandoned 103
+#define ROP_POINT_Send_Closed 104
+#define ROP_POINT_Send_Completed 105
+#define ROP_POINT_Send_ExitEvent 106
+#define ROP_POINT_Send_Failed 107
+#define ROP_POINT_Send_Stepped 108
+#define ROP_POINT_Send_Yielded 109
+#define ROP_POINT_SetItem_Done 110
+#define ROP_POINT_SetItem_Failed 111
+#define ROP_POINT_SetupAnnotations_Done 112
+#define ROP_POINT_SetupAnnotations_Failed 113
+#define ROP_POINT_SliceRead_Done 114
+#define ROP_POINT_SliceRead_Failed 115
+#define ROP_POINT_SliceWrite_Done 116
+#define ROP_POINT_SliceWrite_Failed 117
+#define ROP_POINT_TestBranch_Event 118
+#define ROP_POINT_TestBranch_Failed 119
+#define ROP_POINT_TestBranch_Fell 120
+#define ROP_POINT_TestBranch_Jumped 121
+#define ROP_POINT_Truth_Done 122
+#define ROP_POINT_Truth_Failed 123
+#define ROP_POINT_UpdateContainer_Done 124
+#define ROP_POINT_UpdateContainer_Failed 125
+#define ROP_POINT_Yield_EventFailed 126
+#define ROP_POINT_Yield_Resumed 127
+#define ROP_POINT_YieldFrom_EventFailed 128
+#define ROP_POINT_YieldFrom_Resumed 129
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -1231,7 +1232,7 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Move.Copy", ROP_HANDLER_Move_Copy, ROP_FAMILY_Move, 1},
 };
 
-static const _PyRopPoint _PyRop_Points[128] = {
+static const _PyRopPoint _PyRop_Points[129] = {
     {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0},
     {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0)},
     {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0},
@@ -1334,32 +1335,33 @@ static const _PyRopPoint _PyRop_Points[128] = {
     {"Return.Delivered", ROP_FAMILY_Return, 100, 1, 3, 0, 0, (1 << 0), 0},
     {"Return.EventFailed", ROP_FAMILY_Return, 101, 0, 0, 1, 0, (1 << 0), 0},
     {"SaveLocal.Done", ROP_FAMILY_SaveLocal, 102, 0, 1, 0, 0, (1 << 1), (1 << 0)},
-    {"Send.Closed", ROP_FAMILY_Send, 103, 0, 0, 1, (1 << 1), (1 << 1), 0},
-    {"Send.Completed", ROP_FAMILY_Send, 104, 0, 1, 0, 0, (1 << 1), (1 << 0)},
-    {"Send.ExitEvent", ROP_FAMILY_Send, 105, 0, 0, 1, 0, (1 << 1), (1 << 0)},
-    {"Send.Failed", ROP_FAMILY_Send, 106, 0, 0, 1, (1 << 1), 0, 0},
-    {"Send.Stepped", ROP_FAMILY_Send, 107, 0, 1, 0, (1 << 1), (1 << 1), (1 << 1)},
-    {"Send.Yielded", ROP_FAMILY_Send, 108, 1, 1, 0, (1 << 1), (1 << 1), (1 << 1)},
-    {"SetItem.Done", ROP_FAMILY_SetItem, 109, 0, 1, 0, 0, (1 << 1) | (1 << 0) | (1 << 2), 0},
-    {"SetItem.Failed", ROP_FAMILY_SetItem, 110, 0, 0, 1, 0, (1 << 1) | (1 << 0) | (1 << 2), 0},
-    {"SetupAnnotations.Done", ROP_FAMILY_SetupAnnotations, 111, 0, 1, 0, 0, 0, 0},
-    {"SetupAnnotations.Failed", ROP_FAMILY_SetupAnnotations, 112, 0, 0, 1, 0, 0, 0},
-    {"SliceRead.Done", ROP_FAMILY_SliceRead, 113, 0, 1, 0, 0, (1 << 3) | (1 << 2) | (1 << 1), (1 << 0)},
-    {"SliceRead.Failed", ROP_FAMILY_SliceRead, 114, 0, 0, 1, 0, (1 << 3) | (1 << 2) | (1 << 1), 0},
-    {"SliceWrite.Done", ROP_FAMILY_SliceWrite, 115, 0, 1, 0, 0, (1 << 2) | (1 << 1) | (1 << 0) | (1 << 3), 0},
-    {"SliceWrite.Failed", ROP_FAMILY_SliceWrite, 116, 0, 0, 1, 0, (1 << 2) | (1 << 1) | (1 << 0) | (1 << 3), 0},
-    {"TestBranch.Event", ROP_FAMILY_TestBranch, 117, 0, 0, 1, 0, (1 << 1) | (1 << 0), 0},
-    {"TestBranch.Failed", ROP_FAMILY_TestBranch, 118, 0, 0, 1, 0, (1 << 1) | (1 << 0), 0},
-    {"TestBranch.Fell", ROP_FAMILY_TestBranch, 119, 0, 1, 0, 0, (1 << 1) | (1 << 0), 0},
-    {"TestBranch.Jumped", ROP_FAMILY_TestBranch, 120, 0, 2, 0, 0, (1 << 1) | (1 << 0), 0},
-    {"Truth.Done", ROP_FAMILY_Truth, 121, 0, 1, 0, 0, (1 << 1), (1 << 0)},
-    {"Truth.Failed", ROP_FAMILY_Truth, 122, 0, 0, 1, 0, (1 << 1), 0},
-    {"UpdateContainer.Done", ROP_FAMILY_UpdateContainer, 123, 0, 1, 0, (1 << 0), (1 << 1), 0},
-    {"UpdateContainer.Failed", ROP_FAMILY_UpdateContainer, 124, 0, 0, 1, (1 << 0) | (1 << 1), 0, 0},
-    {"Yield.EventFailed", ROP_FAMILY_Yield, 125, 0, 0, 1, (1 << 0), 0, 0},
-    {"Yield.Resumed", ROP_FAMILY_Yield, 126, 0, 1, 0, 0, (1 << 0), (1 << 1)},
-    {"YieldFrom.EventFailed", ROP_FAMILY_YieldFrom, 127, 0, 0, 1, (1 << 0), 0, 0},
-    {"YieldFrom.Resumed", ROP_FAMILY_YieldFrom, 128, 0, 1, 0, 0, (1 << 0), (1 << 1)},
+    {"Send.Abandoned", ROP_FAMILY_Send, 103, 0, 0, 1, 0, (1 << 1), 0},
+    {"Send.Closed", ROP_FAMILY_Send, 104, 0, 0, 1, (1 << 1), (1 << 1), 0},
+    {"Send.Completed", ROP_FAMILY_Send, 105, 0, 1, 0, 0, (1 << 1), (1 << 0)},
+    {"Send.ExitEvent", ROP_FAMILY_Send, 106, 0, 0, 1, 0, (1 << 1), (1 << 0)},
+    {"Send.Failed", ROP_FAMILY_Send, 107, 0, 0, 1, (1 << 1), 0, 0},
+    {"Send.Stepped", ROP_FAMILY_Send, 108, 0, 1, 0, (1 << 1), (1 << 1), (1 << 1)},
+    {"Send.Yielded", ROP_FAMILY_Send, 109, 1, 1, 0, (1 << 1), (1 << 1), (1 << 1)},
+    {"SetItem.Done", ROP_FAMILY_SetItem, 110, 0, 1, 0, 0, (1 << 1) | (1 << 0) | (1 << 2), 0},
+    {"SetItem.Failed", ROP_FAMILY_SetItem, 111, 0, 0, 1, 0, (1 << 1) | (1 << 0) | (1 << 2), 0},
+    {"SetupAnnotations.Done", ROP_FAMILY_SetupAnnotations, 112, 0, 1, 0, 0, 0, 0},
+    {"SetupAnnotations.Failed", ROP_FAMILY_SetupAnnotations, 113, 0, 0, 1, 0, 0, 0},
+    {"SliceRead.Done", ROP_FAMILY_SliceRead, 114, 0, 1, 0, 0, (1 << 3) | (1 << 2) | (1 << 1), (1 << 0)},
+    {"SliceRead.Failed", ROP_FAMILY_SliceRead, 115, 0, 0, 1, 0, (1 << 3) | (1 << 2) | (1 << 1), 0},
+    {"SliceWrite.Done", ROP_FAMILY_SliceWrite, 116, 0, 1, 0, 0, (1 << 2) | (1 << 1) | (1 << 0) | (1 << 3), 0},
+    {"SliceWrite.Failed", ROP_FAMILY_SliceWrite, 117, 0, 0, 1, 0, (1 << 2) | (1 << 1) | (1 << 0) | (1 << 3), 0},
+    {"TestBranch.Event", ROP_FAMILY_TestBranch, 118, 0, 0, 1, 0, (1 << 1) | (1 << 0), 0},
+    {"TestBranch.Failed", ROP_FAMILY_TestBranch, 119, 0, 0, 1, 0, (1 << 1) | (1 << 0), 0},
+    {"TestBranch.Fell", ROP_FAMILY_TestBranch, 120, 0, 1, 0, 0, (1 << 1) | (1 << 0), 0},
+    {"TestBranch.Jumped", ROP_FAMILY_TestBranch, 121, 0, 2, 0, 0, (1 << 1) | (1 << 0), 0},
+    {"Truth.Done", ROP_FAMILY_Truth, 122, 0, 1, 0, 0, (1 << 1), (1 << 0)},
+    {"Truth.Failed", ROP_FAMILY_Truth, 123, 0, 0, 1, 0, (1 << 1), 0},
+    {"UpdateContainer.Done", ROP_FAMILY_UpdateContainer, 124, 0, 1, 0, (1 << 0), (1 << 1), 0},
+    {"UpdateContainer.Failed", ROP_FAMILY_UpdateContainer, 125, 0, 0, 1, (1 << 0) | (1 << 1), 0, 0},
+    {"Yield.EventFailed", ROP_FAMILY_Yield, 126, 0, 0, 1, (1 << 0), 0, 0},
+    {"Yield.Resumed", ROP_FAMILY_Yield, 127, 0, 1, 0, 0, (1 << 0), (1 << 1)},
+    {"YieldFrom.EventFailed", ROP_FAMILY_YieldFrom, 128, 0, 0, 1, (1 << 0), 0, 0},
+    {"YieldFrom.Resumed", ROP_FAMILY_YieldFrom, 129, 0, 1, 0, 0, (1 << 0), (1 << 1)},
 };
 
 /* Static selection (rop_catalog.Select): the members of each dimension */

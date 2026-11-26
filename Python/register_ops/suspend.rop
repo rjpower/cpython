@@ -249,6 +249,8 @@ point Send.Failed(current, site, pending)
 // generator returned: only the receiver and the cursor remain
 point Send.Closed(current, site, pending)
   keep(send.receiver, send.cursor) spent(send.value) defs();
+// A callback moved the frame before the completion: the operands are retired
+point Send.Abandoned(current, site, pending) keep() spent(send) defs();
 // A callback of the completion raised after the operands were retired
 point Send.ExitEvent(current, site, pending) keep() spent(send) defs(completed);
 
@@ -402,7 +404,19 @@ arm Send.Observed split observes
     let saved:Err = retire_failed_call(a, [], e);
     exit raise(Send.Failed, saved);
   Done(rv:O):
-    publish [completed = rv] retire [roots(a), spent(send), old(completed)] at Send.Completed;
+    call send_stop_event(thread, frame, site, arg(a, 0), rv) {
+      ok -> Commit();
+      moved -> Moved();
+      err -> StopFailed();
+    }
+  StopFailed(se:Err):
+    let sfail:Err = retire_failed_call(a, [], se);
+    exit raise(Send.Failed, sfail);
+  Moved(mr:Route):
+    publish [] retire [roots(a), spent(send)] at Send.Abandoned;
+    exit redirect(mr);
+  Commit(w:O):
+    publish [completed = w] retire [roots(a), spent(send), old(completed)] at Send.Completed;
     call send_exit_event(thread, frame, site) {
       ok -> Exit();
       moved -> ExitMoved();

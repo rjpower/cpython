@@ -983,7 +983,7 @@
             rop_SetItem_Generic_setitem_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}});
-            PROCESS_ERROR_AT(RAISE, 110, this_instr);
+            PROCESS_ERROR_AT(RAISE, 111, this_instr);
             rop_SetItem_Generic_setitem_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_RetireAbandoned(&a);
@@ -1593,7 +1593,7 @@
             rop_TestBranch_Generic_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-            PROCESS_ERROR_AT(RAISE, 118, this_instr);
+            PROCESS_ERROR_AT(RAISE, 119, this_instr);
             rop_TestBranch_Generic_compare_test_at_origin2_No:
             if (!_PyRop_RedirectPending(frame)) {
                 compare_test_at_origin2_hit = false;
@@ -1825,7 +1825,7 @@
             rop_Truth_Generic_truth_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-            PROCESS_ERROR_AT(RAISE, 122, this_instr);
+            PROCESS_ERROR_AT(RAISE, 123, this_instr);
             rop_Truth_Generic_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 truth_at_origin1_hit = false;
@@ -3047,7 +3047,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Extend_Failed:
-            PROCESS_ERROR_AT(RAISE, 124, this_instr);
+            PROCESS_ERROR_AT(RAISE, 125, this_instr);
         }
 
         TARGET(UpdateContainer_Union) {
@@ -3075,7 +3075,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Union_Failed:
-            PROCESS_ERROR_AT(RAISE, 124, this_instr);
+            PROCESS_ERROR_AT(RAISE, 125, this_instr);
         }
 
         TARGET(UpdateContainer_Overlay) {
@@ -3103,7 +3103,7 @@
             PyValue_XCLOSE(own_source);
             DISPATCH();
             rop_UpdateContainer_Overlay_Failed:
-            PROCESS_ERROR_AT(RAISE, 124, this_instr);
+            PROCESS_ERROR_AT(RAISE, 125, this_instr);
         }
 
         TARGET(MergeKeywords_Merge) {
@@ -4244,7 +4244,7 @@
             rop_SliceRead_Generic_binary_slice_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_D), !!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_stop, home_start, home_obj}});
-            PROCESS_ERROR_AT(RAISE, 114, this_instr);
+            PROCESS_ERROR_AT(RAISE, 115, this_instr);
             rop_SliceRead_Generic_binary_slice_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_DiscardResult(binary_slice_at_origin1_dropped);
@@ -4303,7 +4303,7 @@
             rop_SliceWrite_Generic_store_slice_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 4, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_D)}, {home_stop, home_start, home_obj, home_value}});
-            PROCESS_ERROR_AT(RAISE, 116, this_instr);
+            PROCESS_ERROR_AT(RAISE, 117, this_instr);
             rop_SliceWrite_Generic_store_slice_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_RetireAbandoned(&a);
@@ -4786,7 +4786,7 @@
             rop_SetItem_Dict_dict_store_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}});
-            PROCESS_ERROR_AT(RAISE, 110, this_instr);
+            PROCESS_ERROR_AT(RAISE, 111, this_instr);
             rop_SetItem_Dict_dict_store_at_origin1_Moved:
             IR_STUB_ESCAPE();
             _PyRop_RetireAbandoned(&a);
@@ -5392,7 +5392,7 @@
             }
             DISPATCH();
             rop_SetupAnnotations_Setup_Failed:
-            PROCESS_ERROR_AT(RAISE, 112, this_instr);
+            PROCESS_ERROR_AT(RAISE, 113, this_instr);
         }
 
         TARGET(Import_Eager) {
@@ -5733,7 +5733,7 @@
             v = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
             ROP_YIELD(v, IR_B(ir_word));
             rop_Yield_Observed_Failed:
-            PROCESS_ERROR_AT(RAISE, 125, this_instr);
+            PROCESS_ERROR_AT(RAISE, 126, this_instr);
             rop_Yield_Observed_Moved:
             IR_REDIRECT();
         }
@@ -5764,7 +5764,7 @@
             v = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
             ROP_YIELD_FROM(v, IR_B(ir_word));
             rop_YieldFrom_Observed_Failed:
-            PROCESS_ERROR_AT(RAISE, 127, this_instr);
+            PROCESS_ERROR_AT(RAISE, 128, this_instr);
             rop_YieldFrom_Observed_Moved:
             IR_REDIRECT();
         }
@@ -5841,7 +5841,7 @@
             rop_Send_Generic_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
-            PROCESS_ERROR_AT(RAISE, 106, this_instr);
+            PROCESS_ERROR_AT(RAISE, 107, this_instr);
             rop_Send_Generic_Done:
             own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
             own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
@@ -5854,7 +5854,7 @@
             PyValue_XCLOSE(old_completed);
             IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 40) & 0xfff) ^ 0x800) - 0x800)));
             rop_Send_Generic_EnterFailed:
-            PROCESS_ERROR_AT(RAISE, 103, this_instr);
+            PROCESS_ERROR_AT(RAISE, 104, this_instr);
         }
 
         TARGET(Send_Observed) {
@@ -5880,15 +5880,17 @@
             PyValue arg5;
             PyValue old_send_cursor;
             PyValue old_send_value;
+            _PyStatusValue ret6;
             PyValue own_send_receiver = PyValue_NULL;
             PyValue own_send_cursor = PyValue_NULL;
             PyValue old_completed;
             PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
-            int ret6;
+            int ret7;
             _PyInterpreterFrame * c;
             PyValue y;
             PyValue nc;
             PyValue rv;
+            PyValue w;
             if (_PyRop_ClaimableGenerator(tstate, PyValue_Borrow(*home_send_receiver), PyValue_Borrow(*home_send_value))) {
                 goto rop_Send_Observed_Claim;
             }
@@ -5930,32 +5932,52 @@
             rop_Send_Observed_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
-            PROCESS_ERROR_AT(RAISE, 106, this_instr);
+            PROCESS_ERROR_AT(RAISE, 107, this_instr);
             rop_Send_Observed_Done:
+            IR_STUB_ESCAPE();
+            ret6 = _PyRop_SendStopEvent(tstate, frame, this_instr, _PyRop_AnchorArg(&a, 0), rv);
+            if (ret6.status > 0) {
+                goto rop_Send_Observed_Moved;
+            }
+            if (ret6.status < 0) {
+                goto rop_Send_Observed_StopFailed;
+            }
+            w = ret6.value;
             own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
             own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
             old_completed = *home_completed;
-            _PyFrame_WriteHome(frame, home_completed, rv);
+            _PyFrame_WriteHome(frame, home_completed, w);
             _PyValue_CheckHome(*home_completed);
             _PyRop_CloseAnchors(&a);
             PyValue_XCLOSE(own_send_receiver);
             PyValue_XCLOSE(own_send_cursor);
             PyValue_XCLOSE(old_completed);
             IR_STUB_ESCAPE();
-            ret6 = _PyRop_SendExitEvent(tstate, frame, this_instr);
-            if (ret6 > 0) {
+            ret7 = _PyRop_SendExitEvent(tstate, frame, this_instr);
+            if (ret7 > 0) {
                 goto rop_Send_Observed_ExitMoved;
             }
-            if (ret6 < 0) {
+            if (ret7 < 0) {
                 goto rop_Send_Observed_ExitFailed;
             }
             IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 40) & 0xfff) ^ 0x800) - 0x800)));
+            rop_Send_Observed_StopFailed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
+            PROCESS_ERROR_AT(RAISE, 107, this_instr);
+            rop_Send_Observed_Moved:
+            own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
+            own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(own_send_receiver);
+            PyValue_XCLOSE(own_send_cursor);
+            IR_REDIRECT();
             rop_Send_Observed_ExitFailed:
-            PROCESS_ERROR_AT(RAISE, 105, this_instr);
+            PROCESS_ERROR_AT(RAISE, 106, this_instr);
             rop_Send_Observed_ExitMoved:
             IR_REDIRECT();
             rop_Send_Observed_EnterFailed:
-            PROCESS_ERROR_AT(RAISE, 103, this_instr);
+            PROCESS_ERROR_AT(RAISE, 104, this_instr);
         }
 
         TARGET(Compare_Int) {
@@ -6516,7 +6538,7 @@
             rop_TestBranch_Set_set_test_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-            PROCESS_ERROR_AT(RAISE, 118, this_instr);
+            PROCESS_ERROR_AT(RAISE, 119, this_instr);
             rop_TestBranch_Set_set_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 set_test_at_origin1_hit = false;
@@ -6602,7 +6624,7 @@
             rop_TestBranch_Dict_dict_test_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-            PROCESS_ERROR_AT(RAISE, 118, this_instr);
+            PROCESS_ERROR_AT(RAISE, 119, this_instr);
             rop_TestBranch_Dict_dict_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 dict_test_at_origin1_hit = false;
@@ -6688,7 +6710,7 @@
             rop_TestBranch_Sequence_sequence_test_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-            PROCESS_ERROR_AT(RAISE, 118, this_instr);
+            PROCESS_ERROR_AT(RAISE, 119, this_instr);
             rop_TestBranch_Sequence_sequence_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 sequence_test_at_origin1_hit = false;
@@ -6844,7 +6866,7 @@
             rop_TestBranch_Observed_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-            PROCESS_ERROR_AT(RAISE, 118, this_instr);
+            PROCESS_ERROR_AT(RAISE, 119, this_instr);
             rop_TestBranch_Observed_compare_test_at_origin2_No:
             if (!_PyRop_RedirectPending(frame)) {
                 compare_test_at_origin2_hit = false;
@@ -6890,7 +6912,7 @@
             }
             DISPATCH();
             rop_TestBranch_Observed_EventFailed:
-            PROCESS_ERROR_AT(RAISE, 117, this_instr);
+            PROCESS_ERROR_AT(RAISE, 118, this_instr);
             rop_TestBranch_Observed_Moved:
             IR_REDIRECT();
             rop_TestBranch_Observed_IdentityFall:
@@ -6912,7 +6934,7 @@
             }
             DISPATCH();
             rop_TestBranch_Observed_IdentityEventFailed:
-            PROCESS_ERROR_AT(RAISE, 117, this_instr);
+            PROCESS_ERROR_AT(RAISE, 118, this_instr);
             rop_TestBranch_Observed_IdentityMoved:
             IR_REDIRECT();
         }
@@ -7169,7 +7191,7 @@
             rop_Truth_Slot_slot_truth_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-            PROCESS_ERROR_AT(RAISE, 122, this_instr);
+            PROCESS_ERROR_AT(RAISE, 123, this_instr);
             rop_Truth_Slot_slot_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 slot_truth_at_origin1_hit = false;

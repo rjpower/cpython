@@ -927,7 +927,7 @@ _PyIR_Rop_Stub_SetItem_Generic(
     rop_SetItem_Generic_setitem_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}});
-    PROCESS_ERROR_AT(RAISE, 110, this_instr);
+    PROCESS_ERROR_AT(RAISE, 111, this_instr);
     rop_SetItem_Generic_setitem_at_origin1_Moved:
     IR_STUB_ESCAPE();
     _PyRop_RetireAbandoned(&a);
@@ -1565,7 +1565,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     rop_TestBranch_Generic_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-    PROCESS_ERROR_AT(RAISE, 118, this_instr);
+    PROCESS_ERROR_AT(RAISE, 119, this_instr);
     rop_TestBranch_Generic_compare_test_at_origin2_No:
     if (!_PyRop_RedirectPending(frame)) {
         compare_test_at_origin2_hit = false;
@@ -1804,7 +1804,7 @@ _PyIR_Rop_Stub_Truth_Generic(
     rop_Truth_Generic_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 122, this_instr);
+    PROCESS_ERROR_AT(RAISE, 123, this_instr);
     rop_Truth_Generic_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         truth_at_origin1_hit = false;
@@ -2626,7 +2626,7 @@ _PyIR_Rop_Stub_UpdateContainer_Extend(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Extend_Failed:
-    PROCESS_ERROR_AT(RAISE, 124, this_instr);
+    PROCESS_ERROR_AT(RAISE, 125, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -2661,7 +2661,7 @@ _PyIR_Rop_Stub_UpdateContainer_Union(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Union_Failed:
-    PROCESS_ERROR_AT(RAISE, 124, this_instr);
+    PROCESS_ERROR_AT(RAISE, 125, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -2696,7 +2696,7 @@ _PyIR_Rop_Stub_UpdateContainer_Overlay(
     PyValue_XCLOSE(own_source);
     DISPATCH();
     rop_UpdateContainer_Overlay_Failed:
-    PROCESS_ERROR_AT(RAISE, 124, this_instr);
+    PROCESS_ERROR_AT(RAISE, 125, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -2852,7 +2852,7 @@ _PyIR_Rop_Stub_SliceRead_Generic(
     rop_SliceRead_Generic_binary_slice_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_D), !!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_stop, home_start, home_obj}});
-    PROCESS_ERROR_AT(RAISE, 114, this_instr);
+    PROCESS_ERROR_AT(RAISE, 115, this_instr);
     rop_SliceRead_Generic_binary_slice_at_origin1_Moved:
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(binary_slice_at_origin1_dropped);
@@ -2918,7 +2918,7 @@ _PyIR_Rop_Stub_SliceWrite_Generic(
     rop_SliceWrite_Generic_store_slice_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 4, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_D)}, {home_stop, home_start, home_obj, home_value}});
-    PROCESS_ERROR_AT(RAISE, 116, this_instr);
+    PROCESS_ERROR_AT(RAISE, 117, this_instr);
     rop_SliceWrite_Generic_store_slice_at_origin1_Moved:
     IR_STUB_ESCAPE();
     _PyRop_RetireAbandoned(&a);
@@ -3322,7 +3322,7 @@ _PyIR_Rop_Stub_SetupAnnotations_Setup(
     }
     DISPATCH();
     rop_SetupAnnotations_Setup_Failed:
-    PROCESS_ERROR_AT(RAISE, 112, this_instr);
+    PROCESS_ERROR_AT(RAISE, 113, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -4195,7 +4195,7 @@ _PyIR_Rop_Stub_TestBranch_Set(
     rop_TestBranch_Set_set_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-    PROCESS_ERROR_AT(RAISE, 118, this_instr);
+    PROCESS_ERROR_AT(RAISE, 119, this_instr);
     rop_TestBranch_Set_set_test_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         set_test_at_origin1_hit = false;
@@ -4288,7 +4288,7 @@ _PyIR_Rop_Stub_TestBranch_Dict(
     rop_TestBranch_Dict_dict_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-    PROCESS_ERROR_AT(RAISE, 118, this_instr);
+    PROCESS_ERROR_AT(RAISE, 119, this_instr);
     rop_TestBranch_Dict_dict_test_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         dict_test_at_origin1_hit = false;
@@ -4381,7 +4381,7 @@ _PyIR_Rop_Stub_TestBranch_Sequence(
     rop_TestBranch_Sequence_sequence_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}});
-    PROCESS_ERROR_AT(RAISE, 118, this_instr);
+    PROCESS_ERROR_AT(RAISE, 119, this_instr);
     rop_TestBranch_Sequence_sequence_test_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         sequence_test_at_origin1_hit = false;
@@ -4474,7 +4474,7 @@ _PyIR_Rop_Stub_Truth_Slot(
     rop_Truth_Slot_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 122, this_instr);
+    PROCESS_ERROR_AT(RAISE, 123, this_instr);
     rop_Truth_Slot_slot_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         slot_truth_at_origin1_hit = false;
@@ -4863,12 +4863,12 @@ _PyRop_Complete_Send_CompleteObserved(
     rop_Send_CompleteObserved_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 0, {}, {}});
-    PROCESS_ERROR_AT(RAISE, 103, this_instr);
+    PROCESS_ERROR_AT(RAISE, 104, this_instr);
     rop_Send_CompleteObserved_Moved:
     _PyRop_CloseAnchors(&a);
     IR_REDIRECT();
     rop_Send_CompleteObserved_ExitFailed:
-    PROCESS_ERROR_AT(RAISE, 105, this_instr);
+    PROCESS_ERROR_AT(RAISE, 106, this_instr);
     rop_Send_CompleteObserved_ExitMoved:
     IR_REDIRECT();
 }

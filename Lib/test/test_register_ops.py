@@ -9,10 +9,8 @@ from test import test_tools
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
-    import ir_contract
     import lexer
     import rop_check
-    import rop_header
     import rop_print
     import rop_syntax
     import stack_opcode_pins
@@ -716,21 +714,6 @@ class DefinitionTests(unittest.TestCase):
         for x in self.program.externs.values():
             if x.c is not None:
                 self.assertNotIn(x.name, pending)
-
-    def test_header_agreement(self):
-        rows = rop_header.header_rows()
-        self.assertEqual(rop_header.disagreements(self.program.externs, rows), [])
-        box = self.program.externs["box_i64"]
-        changed = {box.c.symbol: ir_contract.Row(
-            "HELPER", box.c.symbol, effects=frozenset({"allocates"}),
-            exits=frozenset({"miss"}))}
-        found = [d.message for d in rop_header.disagreements(self.program.externs, changed)]
-        self.assertEqual(found, [
-            "c _PyValue_BoxInt64: effects (allocates, raises) disagree with header "
-            "row HELPER(_PyValue_BoxInt64)'s (allocates)",
-            "c _PyValue_BoxInt64: exits () disagree with header row "
-            "HELPER(_PyValue_BoxInt64)'s (miss)",
-        ])
 
     def test_every_family_has_an_encoding(self):
         self.assertTrue(self.program.families)

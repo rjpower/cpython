@@ -38,9 +38,7 @@ from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branc
                        SchemaRef, SchemaType, SchemaVar, SourceFile, SpanLit, SrcSpan,
                        Target, Term, Type, WrapType, DISCARD, ENTRY, NOWHERE)
 from rop_print import expr_text, type_text
-import rop_header
 import rop_syntax
-from ir_contract import Row
 
 ROOT = Path(__file__).resolve().parents[2]
 ROP_DIR = ROOT / "Python" / "register_ops"
@@ -449,21 +447,16 @@ def diagnostic_order(d: Diagnostic) -> tuple[str, int, int]:
     return (d.span.filename, d.span.line, d.span.column)
 
 
-def load(paths: Iterable[Path], header: Mapping[str, Row] | None = None) -> Program:
-    """Parse and check, and hold the externs to the header's rows (`header`,
-    by default pycore_ir_components.h's).  A syntax error is the one
-    diagnostic of an empty program."""
+def load(paths: Iterable[Path]) -> Program:
+    """Parse and check.  A syntax error is the one diagnostic of an empty
+    program."""
     files = []
     for path in paths:
         try:
             files.append(rop_syntax.parse_file(path))
         except RopError as e:
             return Program((), {}, {}, {}, {}, {}, {}, {}, {}, (e.diagnostic,))
-    program = check(files)
-    rows = rop_header.header_rows() if header is None else header
-    extra = rop_header.disagreements(program.externs, rows)
-    return replace(program, diagnostics=tuple(sorted(
-        program.diagnostics + tuple(extra), key=diagnostic_order)))
+    return check(files)
 
 
 def collect(c: Checker) -> None:

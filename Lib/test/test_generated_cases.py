@@ -802,7 +802,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValueBorrow left;
@@ -1922,7 +1922,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             int oparg = (int)IR_C(ir_word);
@@ -2227,7 +2227,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP);
+            INSTRUCTION_STATS(opcode);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
@@ -2266,7 +2266,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP_SPECIALIZED);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
@@ -2339,7 +2339,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(OP);
+            INSTRUCTION_STATS(opcode);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_D(ir_word));
@@ -2425,7 +2425,7 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(IR_PASS);
+            INSTRUCTION_STATS(opcode);
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -2516,8 +2516,8 @@ class TestIRCases(unittest.TestCase):
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
-            ".through = { 0, _PyIR_EXT_FIXED }, .shadow = 0, "
-            ".twin = 0, .events = 0 },  /* IR_PASS */",
+            ".through = { 0, _PyIR_EXT_FIXED }, .shadow = _PyIR_NO_OPCODE, "
+            ".twin = _PyIR_NO_HANDLER, .events = 0 },  /* IR_PASS */",
             f'[{ids["IR_BACON"]}] = "IR_BACON",',
             f'[{ids["IR_PASS"]}] = "IR_PASS",',
         ]:

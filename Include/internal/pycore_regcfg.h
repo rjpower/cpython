@@ -267,6 +267,10 @@ int _PyRegTr_Fresh(_PyRegTr *t, int *id);
 int _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
                   const int *uses, int nuses, const int *defs, int ndefs,
                   _PyRegOp **op);
+/* The same for an op that takes only the last ntaken of its inputs */
+int _PyRegTr_EmitTaking(_PyRegTr *t, const _PyRegOp *src, int opcode,
+                        const int *uses, int nuses, int ntaken,
+                        const int *defs, int ndefs, _PyRegOp **op);
 /* The rule of an unported stack op: its old handler op */
 int _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *src);
 

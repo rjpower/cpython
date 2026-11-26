@@ -873,6 +873,20 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
               const int *uses, int nuses, const int *defs, int ndefs,
               _PyRegOp **result)
 {
+    return _PyRegTr_EmitTaking(t, src, opcode, uses, nuses, nuses, defs, ndefs,
+                               result);
+}
+
+/* Emit, for an op that takes only the last ntaken of its nuses inputs and
+ * leaves the others where they are.  The parameters that it holds and takes
+ * (note_op) follow the taken inputs: an op that only reads a parameter
+ * keeps it held, so that no later rename gives its home to another
+ * identity. */
+int
+_PyRegTr_EmitTaking(_PyRegTr *t, const _PyRegOp *src, int opcode,
+                    const int *uses, int nuses, int ntaken, const int *defs,
+                    int ndefs, _PyRegOp **result)
+{
     _PyRegCfg *cfg = t->cfg;
 #ifndef NDEBUG
     for (int k = 0; k < nuses; k++) {
@@ -892,7 +906,8 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
         RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, nrec, &op->recipe));
     }
     op->opcode = opcode;
-    op->nread = op->npop = (int16_t)nuses;
+    op->nread = (int16_t)nuses;
+    op->npop = (int16_t)ntaken;
     int *in = _PyReg_IN(cfg, op);
     if (nuses > 0) {
         memcpy(in, uses, nuses * sizeof(int));
@@ -1277,9 +1292,8 @@ rule_copy(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_Move_copy,
-                                  &v, 1, &dst, 1, &op));
-    op->npop = 0;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, ROP_SELECT_Move_copy,
+                                        &v, 1, 0, &dst, 1, &op));
     op->oparg = 0;
     RETURN_IF_ERROR(grow((void **)&t->copies, &t->acopies, t->ncopies + 1,
                          sizeof(int)));
@@ -2496,9 +2510,9 @@ rule_import_from(_PyRegTr *t, const _PyRegOp *src)
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_ImportFrom_module_kept,
-                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
-    op->npop = 0;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, ROP_SELECT_ImportFrom_module_kept,
+                                        &t->stack[t->sp - 1], 1, 0, &dst, 1,
+                                        &op));
     op->oparg = src->oparg;
     return _PyRegTr_Push(t, dst);
 }
@@ -2605,9 +2619,8 @@ rule_insert(_PyRegTr *t, const _PyRegOp *src)
     for (int k = 0; k < popped; k++) {
         uses[n++] = t->stack[t->sp - popped + k];
     }
-    _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, uses, n, NULL, 0, &op));
-    op->npop = (int16_t)popped;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, handler, uses, n, popped, NULL,
+                                        0, NULL));
     return _PyRegTr_Pop(t, popped, NULL);
 }
 
@@ -2700,10 +2713,10 @@ peek_rule(_PyRegTr *t, const _PyRegOp *src, int handler, int nuses, int npop,
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - nuses],
-                                  nuses, &dst, 1, &op));
     // What the word leaves on the stack it only reads
-    op->npop = (int16_t)npop;
+    RETURN_IF_ERROR(_PyRegTr_EmitTaking(t, src, handler,
+                                        &t->stack[t->sp - nuses], nuses, npop,
+                                        &dst, 1, &op));
     op->oparg = imm;
     if (npop > 0) {
         RETURN_IF_ERROR(_PyRegTr_Pop(t, npop, NULL));

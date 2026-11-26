@@ -3,7 +3,10 @@ MATCH_KEYS and MATCH_CLASS (Python/register_ops/patterns.rop)."""
 
 import collections.abc
 import sys
+import textwrap
 import unittest
+
+from test.support import import_helper, script_helper
 
 
 class Point:
@@ -117,6 +120,41 @@ class Behavior(unittest.TestCase):
         for _ in range(3):
             with self.assertRaises(TypeError):
                 f(Point(1, 2))
+
+
+class Lowering(unittest.TestCase):
+    # A word that only reads a stack position leaves its parameter held, so
+    # that a later edge does not rename another identity into its home.  A
+    # mapping pattern whose sequence value is bound under SWAPs lowered to
+    # a register that an edge move had already taken.
+    def test_mapping_with_nested_sequence(self):
+        import_helper.import_module("_testinternalcapi")
+        script = textwrap.dedent("""
+            import _testinternalcapi
+
+            def one(x):
+                match x:
+                    case {'a': [p], 'b': 1}:
+                        return p
+
+            def two(x):
+                match x:
+                    case {'a': [p], 'b': [q]}:
+                        return p, q
+
+            def classes(x):
+                match x:
+                    case {'a': str(p), 'b': str(q)}:
+                        return p, q
+
+            for f in (one, two, classes):
+                _testinternalcapi.get_ir(f.__code__, True)
+            print(one({'a': [7], 'b': 1}), two({'a': [1], 'b': [2]}),
+                  classes({'a': 'x', 'b': 'y'}), one({'a': [7], 'b': 2}))
+        """)
+        rc, out, err = script_helper.assert_python_ok(
+            "-c", script, PYTHONREGCFGVERIFY="1")
+        self.assertEqual(out.strip(), b"7 (1, 2) ('x', 'y') None")
 
 
 class Observation(unittest.TestCase):

@@ -13,12 +13,12 @@ extern "C" {
 
 #ifdef Py_STATS
 
-/* STAT_INC() counts for a handler id, FAMILY_STAT_INC() for the stack opcode
- * of an instruction family (the two are separate number spaces) */
+/* STAT_INC() counts for a handler id, FAMILY_STAT_INC() for an
+ * IR_FAMILY_ number (the two are separate number spaces) */
 #define STAT_INC(handler, name) _Py_STATS_EXPR(opcode_stats[handler].specialization.name++)
 #define STAT_DEC(handler, name) _Py_STATS_EXPR(opcode_stats[handler].specialization.name--)
-#define FAMILY_STAT_INC(stack_opcode, name) _Py_STATS_EXPR(family_stats[stack_opcode].name++)
-#define FAMILY_STAT_DEC(stack_opcode, name) _Py_STATS_EXPR(family_stats[stack_opcode].name--)
+#define FAMILY_STAT_INC(family, name) _Py_STATS_EXPR(family_stats[family].name++)
+#define FAMILY_STAT_DEC(family, name) _Py_STATS_EXPR(family_stats[family].name--)
 #define OPCODE_EXE_INC(opname) _Py_STATS_EXPR(opcode_stats[opname].execution_count++)
 #define BOX_STAT_INC(opname) _Py_STATS_EXPR(opcode_stats[opname].boxes++)
 #define CALL_STAT_INC(name) _Py_STATS_EXPR(call_stats.name++)
@@ -28,8 +28,6 @@ extern "C" {
 #define EVAL_CALL_STAT_INC_IF_FUNCTION(name, callable) _Py_STATS_COND_EXPR(PyFunction_Check(callable), call_stats.eval_calls[name]++)
 #define GC_STAT_ADD(gen, name, n) _Py_STATS_EXPR(gc_stats[(gen)].name += (n))
 #define RARE_EVENT_STAT_INC(name) _Py_STATS_EXPR(rare_event_stats.name++)
-// In a handler body, where opcode is the handler id
-#define OPCODE_DEFERRED_INC(family) _Py_STATS_COND_EXPR(_PyIR_BaseOpcode(opcode)==family, family_stats[family].deferred++)
 
 #ifdef Py_GIL_DISABLED
 #define FT_STAT_MUTEX_SLEEP_INC() _Py_STATS_EXPR(ft_stats.mutex_sleeps++)
@@ -47,8 +45,8 @@ PyAPI_FUNC(PyObject*) _Py_GetSpecializationStats(void);
 #else
 #define STAT_INC(handler, name) ((void)0)
 #define STAT_DEC(handler, name) ((void)0)
-#define FAMILY_STAT_INC(stack_opcode, name) ((void)0)
-#define FAMILY_STAT_DEC(stack_opcode, name) ((void)0)
+#define FAMILY_STAT_INC(family, name) ((void)0)
+#define FAMILY_STAT_DEC(family, name) ((void)0)
 #define OPCODE_EXE_INC(opname) ((void)0)
 #define BOX_STAT_INC(opname) ((void)0)
 #define CALL_STAT_INC(name) ((void)0)
@@ -58,7 +56,6 @@ PyAPI_FUNC(PyObject*) _Py_GetSpecializationStats(void);
 #define EVAL_CALL_STAT_INC_IF_FUNCTION(name, callable) ((void)0)
 #define GC_STAT_ADD(gen, name, n) ((void)0)
 #define RARE_EVENT_STAT_INC(name) ((void)0)
-#define OPCODE_DEFERRED_INC(opname) ((void)0)
 #define FT_STAT_MUTEX_SLEEP_INC()
 #define FT_STAT_QSBR_POLL_INC()
 #define FT_STAT_WORLD_STOP_INC()

@@ -278,6 +278,28 @@ def generate_ir_metadata(
         out.emit("};\n")
         out.emit("#endif\n\n")
 
+        # The statistics of specialisation are kept per family (the dotted
+        # name's head) and, in opcode_stats, per arm.  IR_OPERANDS has the
+        # family of its own name.
+        families = sorted({"IR_OPERANDS"} | {arm.dotted.split(".")[0] for arm in arms})
+        out.emit("/* The families, in name order: the index of family_stats */\nenum {\n")
+        for number, family in enumerate(families):
+            out.emit(f"    IR_FAMILY_{family} = {number},\n")
+        out.emit(f"    IR_NUM_FAMILIES = {len(families)}\n}};\n")
+        out.emit('static_assert(IR_NUM_FAMILIES <= 256, "family_stats is sized 256");\n\n')
+        out.emit("PyAPI_DATA(const uint8_t) _PyIR_HandlerFamily[IR_NUM_HANDLERS];\n")
+        out.emit("PyAPI_DATA(const char *const) _PyIR_FamilyNames[IR_NUM_FAMILIES];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const uint8_t _PyIR_HandlerFamily[IR_NUM_HANDLERS] = {\n")
+        out.emit("[IR_H_IR_OPERANDS] = IR_FAMILY_IR_OPERANDS,\n")
+        for arm in arms:
+            out.emit(f"[{arm_id(arm)}] = IR_FAMILY_{arm.dotted.split('.')[0]}, /* {arm.dotted} */\n")
+        out.emit("};\n")
+        out.emit("const char *const _PyIR_FamilyNames[IR_NUM_FAMILIES] = {\n")
+        for family in families:
+            out.emit(f'[IR_FAMILY_{family}] = "{family}",\n')
+        out.emit("};\n#endif\n\n")
+
         out.emit("PyAPI_DATA(const char *const) _PyIR_OnlyNames[IR_NUM_HANDLERS];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit("const char *const _PyIR_OnlyNames[IR_NUM_HANDLERS] = {\n")

@@ -5518,7 +5518,9 @@ handler_name(int h)
 
 /* How the newest unit compiled each head word: {index: (arm, how)}, the arm
  * that the word named at the compile, how being "stencil" (a copy of the
- * arm's stencil) or "gap" (no stencil: the word runs in the evaluator) */
+ * arm's stencil), "diverted" (a copy that goes to the evaluator since the
+ * word changed its arm) or "gap" (no stencil: the word runs in the
+ * evaluator) */
 static PyObject *
 unit_plans(PyCodeObject *code, _PyJitUnit *unit)
 {
@@ -5530,7 +5532,8 @@ unit_plans(PyCodeObject *code, _PyJitUnit *unit)
     for (uint32_t i = 0; i < unit->nwords; i += _PyIR_WordLength(unit->words[i])) {
         /* A gap's word has no copy and no arm recorded (ids start at 1) */
         int arm = unit->arms[i] ? unit->arms[i] : IR_HANDLER(unit->words[i]);
-        const char *how = unit->arms[i] ? "stencil" : "gap";
+        const char *how = !unit->arms[i] ? "gap"
+                          : _PyJit_IsDiverted(unit, i) ? "diverted" : "stencil";
         PyObject *item = Py_BuildValue("(ss)", handler_name(arm), how);
         PyObject *key = PyLong_FromUnsignedLong(i);
         if (item == NULL || key == NULL || PyDict_SetItem(plans, key, item) < 0) {
@@ -5548,7 +5551,8 @@ unit_plans(PyCodeObject *code, _PyJitUnit *unit)
 
 /* The baseline JIT's unit of a code object: None if it has none, else a
  * dict of its words, its code bytes and pages, whether it is valid, the
- * code's compiles, the length of its chain of units, the ranges of their
+ * code's compiles, the length of its chain of units, their copies diverted
+ * to the evaluator (_PyJit_IsDiverted()), the ranges of their
  * code, the newest unit's unwind info and how it compiled each head word
  * ("plans", unit_plans()). */
 static PyObject *
@@ -5565,9 +5569,13 @@ jit_unit(PyObject *self, PyObject *code_object)
         Py_RETURN_NONE;
     }
     _PyJitUnit *unit = exec->jit_unit;
-    int units = 0;
+    /* The chain's length, and its copies diverted to the evaluator */
+    int units = 0, diverted = 0;
     for (_PyJitUnit *u = unit; u != NULL; u = u->older) {
         units++;
+        for (uint32_t i = 0; i < u->nwords; i += _PyIR_WordLength(u->words[i])) {
+            diverted += _PyJit_IsDiverted(u, i);
+        }
     }
     /* Head words, and those whose handler compiled code checks */
     int heads = 0, guarded = 0;
@@ -5617,7 +5625,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         Py_DECREF(plans);
         return NULL;
     }
-    PyObject *result = Py_BuildValue("{sIsisisnsnsIsIsisIsisNsNsy#sNsN}",
+    PyObject *result = Py_BuildValue("{sIsisisnsnsIsIsisIsisisNsNsy#sNsN}",
         "nwords", unit->nwords,
         "heads", heads,
         "guarded", guarded,
@@ -5628,6 +5636,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         "invalid", (int)unit->invalid,
         "compiles", exec->jit_compiles,
         "units", units,
+        "diverted", diverted,
         "ranges", ranges,
         "published", PyBool_FromLong(exec->jit_entries == unit->entries),
         "eh_frame", (const char *)unit->unwind.eh_frame,

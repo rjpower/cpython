@@ -19,11 +19,13 @@ extern "C" {
 
    Blocks are whole pages.  A page is never writable and executable at the
    same time, and a page is only made writable while it belongs to one block
-   that is being filled and no thread can be running code in it.  Because no
-   block shares a page with another, this needs no argument about which
-   threads or interpreters run which code: writing a block never touches a
-   page that holds live code.  The cost is the unused tail of a block's last
-   page.
+   that is being filled, or while a live block is patched
+   (_PyJitMemory_Patch()), and no thread can be running code in it.  Because
+   no block shares a page with another, filling a block never touches a page
+   that holds live code.  A patch writes live code, under the GIL: a thread
+   runs compiled code only while it holds the GIL, and one that released it
+   in a call from compiled code takes it again before it returns there.  The
+   cost is the unused tail of a block's last page.
 
    The JIT is supported on Linux x86-64 in the GIL build only. */
 
@@ -64,6 +66,10 @@ PyAPI_FUNC(int) _PyJitMemory_Alloc(size_t size, _PyJitCode *code);
 
 /* Make an allocated block read-execute.  Returns -1 if the system refuses. */
 PyAPI_FUNC(int) _PyJitMemory_Seal(const _PyJitCode *code);
+
+/* Write n bytes at `at`, in a sealed block, and seal its pages again.  The
+   caller holds the GIL (see above).  Returns -1 if the system refuses. */
+PyAPI_FUNC(int) _PyJitMemory_Patch(uint8_t *at, const void *bytes, size_t n);
 
 /* Return the pages of a block, sealed or not, to the reservation. */
 PyAPI_FUNC(void) _PyJitMemory_Free(_PyJitCode *code);

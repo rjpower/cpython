@@ -5,7 +5,9 @@ Python/generated_jit_stencils.h."""
 
 import platform
 import re
+import shutil
 import struct
+import subprocess
 import sys
 import sysconfig
 import unittest
@@ -80,6 +82,23 @@ class TableTests(unittest.TestCase):
         self.assertGreater(len(arms), 300)
         self.assertEqual(self.by_name.keys() | stencils.GAPS.keys(), arms)
         self.assertFalse(self.by_name.keys() & stencils.GAPS.keys())
+
+    @unittest.skipIf(shutil.which("objdump") is None, "needs objdump")
+    def test_no_branch_into_the_diversion(self):
+        # A copy whose word changes its arm is diverted by a jmp rel32 over
+        # the five bytes after its endbr64 (Python/jit.c, divert_copy()): no
+        # branch of a stencil may land inside them
+        out = subprocess.run(["objdump", "-d", "--no-show-raw-insn", str(OBJECT)],
+                             capture_output=True, text=True, check=True).stdout
+        starts = re.findall(r"^[0-9a-f]+ <(%s\w+)>:" % stencils.STENCIL, out, re.M)
+        self.assertTrue(starts)
+        inside = re.findall(r"\bj\w+\s+[0-9a-f]+ <(%s\w+)\+0x([4-8])>"
+                            % stencils.STENCIL, out)
+        self.assertEqual(inside, [])
+        table = stencils.read_stencils(object_bytes())
+        for st in table.stencils:
+            with self.subTest(arm=st.name):
+                self.assertTrue(st.parts[0].data.startswith(stencils.ENDBR64))
 
     def test_holes_are_declared(self):
         for s in self.table.stencils:

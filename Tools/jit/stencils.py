@@ -265,6 +265,9 @@ class Table:
     plt: dict[str, int] = field(default_factory=dict)
 
 
+ENDBR64 = b"\xF3\x0F\x1E\xFA"
+
+
 class Refused(Exception):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("\n".join(problems))
@@ -563,6 +566,11 @@ class Reader:
         return Table(stencils, support, holes, items, dict(self.plt))
 
     def stencil(self, name: str, decl, hot: Section) -> Stencil:
+        # The emitter diverts a copy to the evaluator by a jmp rel32 over the
+        # bytes after its endbr64 (Python/jit.c, divert_copy())
+        if not hot.data.startswith(ENDBR64) or len(hot.data) < len(ENDBR64) + 5:
+            self.refuse(name, "the hot part does not start with endbr64 and "
+                        "five more bytes")
         cold = self.elf.by_name.get(".text.unlikely." + STENCIL + name)
         tables = [(sec, start, end) for sec, runs in self.jump_tables.items()
                   for start, end, arm in runs if arm == hot.index]

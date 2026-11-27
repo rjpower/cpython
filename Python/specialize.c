@@ -307,12 +307,12 @@ set_opcode(_PyInstr *instr, int opcode)
     return 1;
 #else
     _PyIR_SetHandler(instr, _PyIR_LocalsArm(opcode, *instr));
-    /* A unit of the code compiled the word's old arm: the next warm-up event
-     * recompiles it (Python/jit.c).  The word is the current frame's. */
+    /* The units of the code compiled the word's old arm (Python/jit.c).  The
+     * word is the current frame's. */
 #ifdef _PY_JIT_SUPPORTED
     _PyCodeExec *exec = _PyFrame_Exec(current_frame());
     if (exec->jit_unit != NULL) {
-        _PyJit_MarkWordChanged(exec);
+        _PyJit_MarkWordChanged(exec, instr);
     }
 #endif
     return 1;

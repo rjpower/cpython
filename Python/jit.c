@@ -547,13 +547,69 @@ mark_stale(_PyJitUnit *unit)
     }
 }
 
-/* A word of exec's code changed its arm (set_opcode() in
- * Python/specialize.c): the newest unit compiled the old arm, so it is stale
- * and the next warm-up event recompiles the code.  A unit at the recompile
- * cap is never marked: it runs on, as the arms' entry checks allow. */
-void
-_PyJit_MarkWordChanged(_PyCodeExec *exec)
+/* The bytes that start every copy: the stencils are functions, and GCC opens
+ * each with endbr64 */
+static const uint8_t ENDBR64[4] = {0xF3, 0x0F, 0x1E, 0xFA};
+
+/* Send each entry to word i's copy in unit to the evaluator: a jmp to
+ * _PyEval_JitInterpret(), which runs the word under the arm that it names,
+ * over the copy's first instruction after its endbr64.  Every way into the
+ * copy (an entry, the copy before it, a branch) arrives at its start with
+ * next_instr at the word.  A thread that is inside the copy, at a call that
+ * changed the word, returns to a later instruction: no branch of a stencil
+ * goes to the bytes that the jmp takes (test_jit_stencils). */
+static void
+divert_copy(_PyJitUnit *unit, uint32_t i)
 {
+    uint8_t *start = (uint8_t *)unit->entries[i];
+    assert(start >= unit->code.start && start < unit->code.start + unit->code.size);
+    assert(memcmp(start, ENDBR64, sizeof(ENDBR64)) == 0);
+    uint8_t *at = start + sizeof(ENDBR64);
+    uint8_t jmp[5] = {0xE9};
+    int64_t rel = (int64_t)((uintptr_t)_PyEval_JitInterpret - (uintptr_t)(at + 5));
+    /* The unit's exits reach the evaluator by rel32 (patch()) */
+    assert(rel == (int32_t)rel);
+    int32_t rel32 = (int32_t)rel;
+    memcpy(jmp + 1, &rel32, sizeof(rel32));
+    if (memcmp(at, jmp, sizeof(jmp)) == 0) {
+        return;
+    }
+    if (_PyJitMemory_Patch(at, jmp, sizeof(jmp)) < 0) {
+        Py_FatalError("baseline JIT: a changed word's copy cannot be diverted");
+    }
+}
+
+int
+_PyJit_IsDiverted(const _PyJitUnit *unit, uint32_t i)
+{
+    if (unit->arms[i] == 0) {
+        return 0;
+    }
+    const uint8_t *at = (const uint8_t *)unit->entries[i] + sizeof(ENDBR64);
+    int32_t rel32;
+    memcpy(&rel32, at + 1, sizeof(rel32));
+    return at[0] == 0xE9 &&
+           (uintptr_t)(at + 5) + (intptr_t)rel32 == (uintptr_t)_PyEval_JitInterpret;
+}
+
+/* Word instr of exec's code changed its arm (set_opcode() in
+ * Python/specialize.c).  Every unit of the code compiled the old arm, whose
+ * copy reads the feedback as the old arm left it: the copy goes to the
+ * evaluator from now on, in the units that frames may still be running too.
+ * The newest unit is stale and the next warm-up event recompiles the code.
+ * A unit at the recompile cap is never marked: it runs on, its changed words
+ * in the evaluator. */
+void
+_PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr)
+{
+    assert(instr >= exec->words && instr < exec->words + exec->nwords);
+    uint32_t i = (uint32_t)(instr - exec->words);
+    for (_PyJitUnit *u = exec->jit_unit; u != NULL; u = u->older) {
+        /* No arm is 0: a word without a copy (a gap) has nothing to divert */
+        if (u->arms[i] != 0 && u->arms[i] != IR_HANDLER(*instr)) {
+            divert_copy(u, i);
+        }
+    }
     _PyJitUnit *unit = exec->jit_unit;
     if (unit != NULL && !(unit->invalid & _PyJIT_STALE) &&
         exec->jit_compiles < _PyJIT_MAX_COMPILES)

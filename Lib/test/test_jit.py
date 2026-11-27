@@ -792,6 +792,38 @@ class TestEntries(JitTestCase):
         """, "jit=always")
         self.assertEqual(out.split(), ["True", "0", "1", "True", "0", "True"])
 
+    def test_a_frame_in_a_stale_copy_leaves_at_the_changed_word(self):
+        # The outer frame's loop runs o.x's copy for A.  Its inner call
+        # runs the same word on B's until it specialises for B: the copy
+        # that the outer frame goes on in now reads feedback that A's arm
+        # did not write, so it goes to the evaluator at the word
+        # (Python/jit.c, divert_copy()), and the outer loop's results stay
+        # the interpreter's
+        out = self.check_same("""
+            import sys, _testinternalcapi as t
+            class A:
+                def __init__(self, x):
+                    self.x = x
+            class B:
+                __slots__ = ("x",)
+                def __init__(self, x):
+                    self.x = x
+            def f(objs, inner):
+                total = 0
+                for o in objs:
+                    total += o.x
+                    if o is objs[10] and inner is not None:
+                        total += f(inner, None)
+                return total
+            outer = [A(i) for i in range(20)]
+            inner = [B(i) for i in range(1000)]
+            print(f(outer, inner))
+            u = t.jit_unit(f.__code__)
+            print(sys._jit.is_active() == (u is not None and u["diverted"] > 0))
+        """, modes=("always",))
+        self.assertEqual(out.split(), [str(sum(range(20)) + sum(range(1000))),
+                                       "True"])
+
     def test_a_compiled_head_moves_its_frame_to_the_observing_evaluator(self):
         # f is compiled and off the stack when LINE events start, so its
         # unit is still published: the frame start enters it, and its
@@ -2209,6 +2241,29 @@ class TestUnwind(unittest.TestCase):
         in_unit, python = map(int, out.split())
         self.assertGreaterEqual(in_unit, 11)    # build(10) down to build(0)
         self.assertGreaterEqual(python, 10)
+
+    def test_faulthandler_walks_through_units(self):
+        """faulthandler's C stack dump goes through every compiled frame,
+        which has no symbol, down to the program's entry."""
+        out = run("""
+            import faulthandler, operator, sys
+            def build(n, dump):
+                if n == 0:
+                    if dump:
+                        faulthandler.dump_c_stack(sys.stdout)
+                    return
+                return operator.call(build, n - 1, dump)
+            # Until specialisation settles, a frame may go on in the
+            # evaluator
+            for i in range(3):
+                build(3, False)
+            build(3, True)
+        """, "jit=always")
+        lines = out.splitlines()
+        units = [i for i, line in enumerate(lines) if "'<unknown>'" in line]
+        self.assertGreaterEqual(len(units), 4, out)  # build(3) to build(0)
+        self.assertTrue(any("Py_BytesMain" in line
+                            for line in lines[units[-1] + 1:]), out)
 
     def test_backtrace_in_one_activation(self):
         """Direct recursion ten compiled frames deep runs in one native

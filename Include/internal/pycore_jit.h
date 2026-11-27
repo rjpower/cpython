@@ -37,9 +37,11 @@ extern "C" {
    A guard miss runs the family's generic arm in the evaluator at the word,
    and an error the evaluator's process_error; the frame then goes on in the
    evaluator until a warm-up event or a switch enters the unit again.  A
-   word whose arm specialisation rewrites marks the unit stale
-   (_PyJit_MarkWordChanged()); compiled code tests nothing, since the arms'
-   own entry checks keep a stale copy correct, and the next warm-up event
+   word whose arm specialisation rewrites marks the unit stale, and its copy
+   in each of the code's units now leaves for the evaluator at its start
+   (_PyJit_MarkWordChanged()): an arm reads the feedback of the arm that it
+   was compiled for, which a frame still in the copy, as a loop is, must not
+   meet.  Compiled code tests nothing, and the next warm-up event
    recompiles.
 
    A unit outlives its code while a thread may still run it.  A departing
@@ -220,10 +222,14 @@ extern void _PyJit_Reclaim(PyInterpreterState *interp);
 /* Free the dead list: interp is being cleared and runs no code. */
 extern void _PyJit_FiniInterpreter(PyInterpreterState *interp);
 
-/* A word of exec's code now names another arm (set_opcode(),
- * Python/specialize.c): its newest unit, unless at the recompile cap, is
- * stale. */
-extern void _PyJit_MarkWordChanged(_PyCodeExec *exec);
+/* Word instr of exec's code now names another arm (set_opcode(),
+ * Python/specialize.c): its copy in every unit of the code goes to the
+ * evaluator, and the newest unit, unless at the recompile cap, is stale. */
+extern void _PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr);
+
+/* Whether word i's copy in unit goes to the evaluator, which
+ * _PyJit_MarkWordChanged() makes it do */
+PyAPI_FUNC(int) _PyJit_IsDiverted(const _PyJitUnit *unit, uint32_t i);
 
 /* The arm that a miss of a word naming handler runs: its family's generic
  * arm (the stencil table's), or handler itself if it is that arm */
@@ -242,7 +248,8 @@ PyAPI_FUNC(const void *const *) _PyEval_HandlerForms(void);
 
 static inline void _PyJit_Retire(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_FreeUnits(_PyCodeExec *Py_UNUSED(exec)) {}
-static inline void _PyJit_MarkWordChanged(_PyCodeExec *Py_UNUSED(exec)) {}
+static inline void _PyJit_MarkWordChanged(_PyCodeExec *Py_UNUSED(exec),
+                                          const _PyInstr *Py_UNUSED(instr)) {}
 static inline void _PyJit_Reclaim(PyInterpreterState *Py_UNUSED(interp)) {}
 static inline void _PyJit_FiniInterpreter(PyInterpreterState *Py_UNUSED(interp)) {}
 

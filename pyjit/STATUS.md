@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `a620c74c5a0` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS and J2 merged, below) holds:
+`pyjit/rir90` at `592f194f11f` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2 and J3 merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -537,7 +537,27 @@ closed, declared set, and a refusal fails the build.  All 364 arms have a
 stencil.  Their hot parts total 0.71 of the interpreter arms' static
 instructions (`Add.Int_TLL` 31 against 41, `Binary.Float` multiply 31
 against 55, `Jump.Poll` 14 against 18).  The interpreter's object is
-unchanged.  Nothing reads the table yet: J3, the emitter, is running.
+unchanged.
+
+**J3, merged at `592f194f11f`**: the baseline JIT compiles only by copying
+stencils.  A unit is its words' stencils in order, with the holes patched
+from one binding table.  Compiled code runs on the evaluator's own frame:
+the evaluator enters a unit by a tail call through the code's entries, and
+compiled code leaves by tail-calling the evaluator's routines (the miss to
+the family's generic arm, errors to `process_error`).  The JIT's driver
+loop, prologue and exit are deleted.  Calls to libc functions out of rel32
+reach go through a generated PLT in the support image, and each unit has
+one FDE, so gdb and faulthandler walk through compiled code.  When a word
+changes arm, a `jmp` to the evaluator is patched over the start of its
+copies in every unit.  The entry checks alone did not keep a stale copy
+correct: the assert build caught an old arm reading a newer arm's
+feedback.  With the JIT always on, the nine kernels run **0.83-1.00 of the
+interpreter's instructions** (nbody 0.828, spectral_norm 0.891, richards
+0.939, pickle 0.999), from 1.117.  A compiled word takes about 600 hot
+bytes, and unpack_sequence takes 1.63 times the interpreter's cycles from
+branch misses.  The forms, stubs and templates are no longer selected
+anywhere.  J4 deletes them, and J5 shrinks the hot code; both are running.
+Full suites at the join are running.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

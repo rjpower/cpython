@@ -585,6 +585,52 @@ class ArmKindTests(unittest.TestCase):
         self.assertTrue(any(m.startswith("a trailing arm belongs to the instruction "
                                          "before it") for m in self.messages(src)))
 
+    # The roles of a delegation chain: only YieldFrom's and Send's arms, and a
+    # send arm only by the walking row
+    def test_chain_resume_is_yield_from(self):
+        src = ("family F() exits(next);\n"
+               "arm F.A split chain(resume) effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n")
+        self.assertIn("chain(resume) is an arm of family YieldFrom", self.messages(src))
+
+    def test_chain_send_is_send(self):
+        src = ("family F() exits(next);\n"
+               "arm F.A split chain(send) effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n")
+        self.assertIn("chain(send) is an arm of family Send", self.messages(src))
+
+    def test_chain_send_enters_by_the_walking_row(self):
+        src = ("family Send() exits(next);\n"
+               "arm Send.A split chain(send) effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n")
+        self.assertIn("chain(send): the arm enters a generator by enter_generator "
+                      "(exit enter ... complete)", self.messages(src))
+
+    def test_chain_resume_suspends(self):
+        src = ("family YieldFrom() exits(next);\n"
+               "arm YieldFrom.A split chain(resume) effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n")
+        self.assertIn("chain(resume): the arm suspends its generator (exit yield)",
+                      self.messages(src))
+
+    def test_chain_role_is_known(self):
+        src = ("family Send() exits(next);\n"
+               "arm Send.A split chain(other) effects() feedback() exits(next)\n"
+               "{ entry(): exit next(); }\n")
+        self.assertIn("chain(other): a chain role is one of resume, send",
+                      self.messages(src))
+
+    def test_chain_role_has_one_arm(self):
+        arm = ("arm YieldFrom.{} split chain(resume) effects() feedback() exits(next)\n"
+               "{{ entry(): exit next(); }}\n")
+        src = "family YieldFrom() exits(next);\n" + arm.format("A") + arm.format("B")
+        self.assertIn("chain(resume) is YieldFrom.A's already", self.messages(src))
+
+    def test_chain_roles_declared(self):
+        program = rop_check.load(rop_files())
+        roles = {a.name: a.chain for a in program.arms.values() if a.chain}
+        self.assertEqual(roles, {"YieldFrom.Delegated": "resume", "Send.Gen": "send"})
+
 
 class CheckTests(unittest.TestCase):
     def test_base_is_clean(self):

@@ -2305,4 +2305,10 @@ enum { ROP_SELECT_PRESENT, ROP_SELECT_ABSENT };  /* operand */
     ((update) == ROP_SELECT_OVERLAY) ? ROP_ARM(UpdateContainer_Overlay) : \
     -1)
 
+/* The arms of the delegation chain's roles (`chain(...)`): the word
+ * before a resume head that resumes at its loop's Send, and the Send
+ * whose entry a chain entry runs for each level */
+#define _PyRop_ChainResumes(H) ((H) == ROP_HANDLER_YieldFrom_Delegated)
+#define _PyRop_ChainSends(H) ((H) == ROP_HANDLER_Send_Gen)
+
 #endif

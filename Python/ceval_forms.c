@@ -101,8 +101,7 @@ ir_frame_observed(_PyInterpreterFrame *frame)
 #define DISPATCH_INLINED(NEW_FRAME) \
     do { \
         assert(!IS_PEP523_HOOKED(tstate)); \
-        assert((NEW_FRAME)->previous == frame || \
-               (NEW_FRAME)->previous->previous == frame); \
+        assert(_PyRop_EntersBelow((NEW_FRAME), frame)); \
         frame = tstate->current_frame = (NEW_FRAME); \
         CALL_STAT_INC(inlined_py_calls); \
         Py_MUSTTAIL return ir_start_frame(tstate, frame, next_instr, ir_word); \

@@ -504,6 +504,12 @@ class Arm:
     # `member` naming its member, and the rest arm, with neither.
     over: Over | None = None
     member: str | None = None
+    # The arm's role in a delegation chain (`chain(resume)`, `chain(send)`),
+    # which one transfer moves (pyjit G4): a chain entry runs a `send` arm's
+    # entry for each level, and a frame whose resume head follows a
+    # `resume` arm resumes at that loop's Send; a suspension goes on up
+    # through every consumer whose resume word is a `resume` arm
+    chain: str | None = None
 
     @property
     def family(self) -> str:

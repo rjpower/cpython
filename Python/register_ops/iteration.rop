@@ -104,7 +104,9 @@ extern helper claimable_for_generator(t:Thread, g:B) -> Bool
 
 // Claim the generator and link its frame under this one, with None as the
 // value it resumes with.  Free-threaded, another thread can claim it first:
-// that is the ValueError of an executing generator.
+// that is the ValueError of an executing generator.  A chain entry, as
+// enter_generator (Python/register_ops/suspend.rop) is, with None sent; the
+// free-threaded build enters one level, for enter_generator's reason.
 extern helper enter_for_generator(t:Thread, f:Frame, g:B)
   cases(entered(c:NewFrame), err(e:Err))
   effects(reads, writes, raises)
@@ -112,11 +114,12 @@ extern helper enter_for_generator(t:Thread, f:Frame, g:B)
   c _PyRop_EnterForGenerator as pointer_or_raised
   evidence(
     review: "FI. bytecodes.c _FOR_ITER_GEN_FRAME: gen_claim and IR_ENTER_GENERATOR,"
-            "as _PyRop_EnterGenerator does for SEND_GEN, with None for the resume value.",
-    contract: "The receiver is claimed (FRAME_EXECUTING) and its frame returned, whose"
-              "previous is f. The exception chain of the generator hangs off"
-              "tstate->exc_info. The recursion debit and the resume are the frame"
-              "start's.");
+            "as _PyRop_EnterGenerator does for SEND_GEN, with None for the resume value,"
+            "and its chain entry (_PyRop_EnterChain).",
+    contract: "The receiver is claimed (FRAME_EXECUTING). The frame returned is the deepest"
+              "of the chain that starts at the receiver's frame, whose previous is f, as"
+              "enter_generator states. None is its resume value. The deepest frame's"
+              "recursion debit and resume are the frame start's.");
 
 // The claim of the generic step: the guards of claimable_for_generator and
 // gen_try_set_executing.  A receiver that is not claimed, because it is of

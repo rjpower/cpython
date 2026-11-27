@@ -385,12 +385,24 @@ do { \
     IR_STEP_DONE(_PyEval_ir_event_edge(tstate, frame, this_instr, \
                                        (SOURCE), (NEXT), (EVENT), (EDGE)))
 
+/* Whether NEW, the frame that an arm enters, is linked below frame: its
+ * child, the child of an __init__ call's cleanup frame, or the deepest
+ * frame of a delegation chain (_PyRop_EnterChain) */
+static inline bool
+_PyRop_EntersBelow(_PyInterpreterFrame *new_frame, _PyInterpreterFrame *frame)
+{
+    for (_PyInterpreterFrame *f = new_frame->previous; f != NULL; f = f->previous) {
+        if (f == frame) {
+            return true;
+        }
+    }
+    return false;
+}
+
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \
-        /* An __init__ call enters above its cleanup frame */    \
-        assert((NEW_FRAME)->previous == frame ||                 \
-               (NEW_FRAME)->previous->previous == frame);        \
+        assert(_PyRop_EntersBelow((NEW_FRAME), frame));          \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
         IR_START_FRAME();                                        \
@@ -910,14 +922,43 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
 #else
 #  define ROP_ENTER_GATE_TLBC() 1
 #endif
-/* The observing evaluator never skips: RESUME's observer reports PY_START,
- * and the RESUME of code that is not observed sends the frame back to the
- * normal evaluator. */
+/* Whether the start of frame skips the word at RESUME, its instr_ptr: a
+ * Resume.Poll that would do nothing.  One test per fact, each a predicted
+ * branch, not arithmetic on the loads: dispatch from the next word does not
+ * wait on them.  The frame start (ROP_ENTER_GATE()) and a delegation chain's
+ * entry (_PyRop_EnterChain, Python/ceval_shared.h), which runs a level's
+ * words only where its start would skip them, both test it.  The observing
+ * evaluator never skips: RESUME's observer reports PY_START, and the RESUME
+ * of code that is not observed sends the frame back to the normal
+ * evaluator. */
+static inline bool
+_PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  const _PyInstr *resume)
+{
 #if IR_OBSERVING
-#  define ROP_ENTER_GATE() ((void)0)
+    (void)tstate;
+    (void)frame;
+    (void)resume;
+    return false;
 #else
-#  define ROP_ENTER_GATE() ROP_ENTER_GATE_IF(IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Poll)
+    if (IR_HANDLER(*resume) != ROP_HANDLER_Resume_Poll) {
+        return false;
+    }
+    if (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) !=
+        FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+            _PyFrame_GetCode(frame)->_co_instrumentation_version)) {
+        return false;
+    }
+    return ROP_ENTER_GATE_TLBC() && ROP_ENTER_GATE_EMSCRIPTEN();
 #endif
+}
+#define ROP_ENTER_GATE() \
+    do { \
+        assert(next_instr == frame->instr_ptr); \
+        if (_PyRop_StartSkips(tstate, frame, next_instr)) { \
+            next_instr++; \
+        } \
+    } while (0)
 /* The start of frame, which has just become the current frame: its
  * recursion debit, which raises RecursionError in the frame before its
  * first word runs, then its first word, past a RESUME that would do nothing
@@ -948,22 +989,6 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
         IR_START_FRAME_LLTRACE(); \
         int opcode; \
         DISPATCH(); \
-    } while (0)
-
-/* IS_RESUME: the word at next_instr is a RESUME to skip */
-#define ROP_ENTER_GATE_IF(IS_RESUME) \
-    do { \
-        assert(next_instr == frame->instr_ptr); \
-        /* A predicted branch, not arithmetic on the three loads: dispatch \
-         * from the next word does not wait on them. */ \
-        if ((IS_RESUME) && \
-            _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
-                FT_ATOMIC_LOAD_UINTPTR_ACQUIRE( \
-                    _PyFrame_GetCode(frame)->_co_instrumentation_version) && \
-            ROP_ENTER_GATE_TLBC() && ROP_ENTER_GATE_EMSCRIPTEN()) \
-        { \
-            next_instr++; \
-        } \
     } while (0)
 
 /* After a frame switch, V goes to the slot of the frame that control came

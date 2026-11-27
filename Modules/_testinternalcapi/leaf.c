@@ -16,6 +16,7 @@
 #include "pycore_object.h"        // _PyObject_ValueSlot()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_range.h"         // _PyRangeIterObject
+#include "pycore_rop_metadata.h"  // for ceval_macros.h
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"
 /* The evaluator's macros give the frame primitives their definitions; the

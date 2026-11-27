@@ -324,10 +324,15 @@ class Parser:
         observes = self.accept("observes") is not None
         trailing = self.accept("trailing") is not None
         gates = self.accept("gates") is not None
+        chain: str | None = None
+        if self.accept("chain"):
+            self.expect("(")
+            chain = self.ident("a chain role").text
+            self.expect(")")
         contract = self.contract(exits=True)
         graph = self.graph()
         return Arm(name.text, region, contract, graph, start.span, select, entry, observes,
-                   completion, trailing, gates, over)
+                   completion, trailing, gates, over, chain=chain)
 
     def over(self) -> Over:
         """`over(operand: M1, M2[; rest])`"""

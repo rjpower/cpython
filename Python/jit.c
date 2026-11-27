@@ -1,11 +1,11 @@
 /* The baseline JIT: units, warm-up and frame switches
- * (Include/internal/pycore_jit.h, pyjit/design/proposals/tiers87.md Phase 2).
+ * (Include/internal/pycore_jit.h).
  *
- * B1 compiles every word as a call of the function form of the handler that
- * the word names at compile time (ir_handler_forms in Python/ceval.c), and
- * continues natively when the form's transfer is the same frame and a word
- * known at compile time.  The machine code goes through the assembler and
- * code memory of Python/jit_asm.c and Python/jit_memory.c. */
+ * A unit is a copy of each head word's stencil, the interpreter's own arm
+ * compiled once more with the word's fields and the arm's exits as holes
+ * (Python/jit_stencils.c), in word order, with the holes patched
+ * (bind_hole()).  The copies run in the evaluator's tail-call convention on
+ * the driver's frame; code memory is Python/jit_memory.c's. */
 
 #include "Python.h"
 #include "pycore_ceval.h"           // _PyEvalActivation
@@ -102,30 +102,16 @@ _PyJit_IsAvailable(void)
 
 #else
 
-#include "pycore_jit_asm.h"
-#include "pycore_jit_lower.h"       // _PyJit_Templates
-
 int
 _PyJit_IsAvailable(void)
 {
     return _PyJitMemory_Init() == 0;
 }
 
-/* Where an operand word's entry leads (no transfer names one), and in a
- * debug build a frame whose base moved. */
-static void
-bad_entry(void)
-{
-    Py_FatalError("baseline JIT: an operand word entered, a frame's base moved, "
-                  "or a switch named a frame that is not current");
-}
-
-/* What compiled code tests after a word: RETIRED after a word that may run
- * Python (which may have enabled monitoring), anything at a backward jump,
- * where a stale unit is replaced. */
-#define MAY_RUN_PYTHON \
-    (_PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_PUSHES_FRAME | \
-     _PyIR_POLLS)
+/* The baseline JIT's word copies: the interpreter's arms, compiled once more
+ * as stencils (Python/jit_stencils.c, Tools/jit/stencils.py) */
+#include "ceval_tail.h"             // _PyEval_JitDispatch() and the other exits
+#include "generated_jit_stencils.h" // _PyJit_Stencils, the support image
 
 /* The static target of the word at i, a head word, or -1 */
 static int
@@ -145,355 +131,352 @@ static_target(const _PyIRWord *words, uint32_t i)
     return -1;
 }
 
-#define R(X) _PyJitReg_##X
-#define AT(B, D) _PyJitMem_At(R(B), (D))
-#define WORD_AT(I) AT(R14, (int32_t)((I) * sizeof(_PyIRWord)))
-
-/* The registers that a unit's frame saves below rbp, in push order, and
- * their DWARF numbers. */
-static const struct {
-    _PyJitReg reg;
-    unsigned dwarf;
-} saved_regs[] = {
-    {R(RBX), DWRF_REG_BX}, {R(R12), DWRF_REG_12}, {R(R13), DWRF_REG_13},
-    {R(R14), DWRF_REG_14}, {R(R15), DWRF_REG_15},
-};
-#define NSAVED ((int)Py_ARRAY_LENGTH(saved_regs))
-
-/* Where the frame's rules change: labels after the instructions of the
- * prologue and of the shared exit (emit_frame), for build_unwind(). */
-typedef struct {
-    _PyJitLabel pushed_rbp;
-    _PyJitLabel framed;                 // after mov rbp, rsp
-    _PyJitLabel pushed[NSAVED];
-    _PyJitLabel popped[NSAVED];
-    _PyJitLabel popped_rbp;             // at the ret
-    _PyJitLabel returned;               // after the ret
-} _PyJitFrameMarks;
-
-/* The state of one unit's compilation: the words, a label per head word
- * (-1 for the operand words) and the unit's shared exits.  Every piece
- * below may be emitted anywhere in the code, hot or cold: none falls
- * through to what follows it. */
-typedef struct {
-    _PyJitAsm *a;
-    PyCodeObject *code;
-    _PyJitUnit *unit;
-    const _PyIRWord *words;
-    uint32_t nwords;
-    _PyJitLabel *labels;
-    _PyJitLabel leave;      // leave the unit with the transfer in rax:rdx
-    _PyJitLabel backedge;   // a backward jump of an invalid unit, in its frame
-    _PyJitLabel live;       // call the live handler of the word at rdx
-    _PyJitLabel trap;       // an operand word's entry, a broken invariant
-    _PyJitFrameMarks marks;
-    _PyJitLabel eh_frame;   // the unwind info, after the code
-    /* The code has no compile left after this one: its unit is never marked
-     * stale, so its code carries no mark */
-    int capped;
-} _PyJitCompiler;
-
-/* A label here */
-static _PyJitLabel
-mark(_PyJitAsm *a)
+int
+_PyJit_GenericOf(int handler)
 {
-    _PyJitLabel label = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Bind(a, label);
-    return label;
+    int generic = _PyJit_Stencils[handler].generic;
+    /* A word that the family's generic arm names runs that arm */
+    return generic >= 0 ? generic : handler;
 }
 
-#ifdef Py_DEBUG
-/* A frame that lltrace traces at level 5 runs in the evaluator, as
- * jit_unit_of() in Python/ceval.c decides (emit_other_frame()) */
+/* The call or jump rel32 whose field is at p: e8, e9 or 0f 8x before it */
 static int
-frame_traced(_PyInterpreterFrame *frame)
+is_branch_at(const uint8_t *p)
 {
-    return frame->lltrace >= 5;
+    return p[-1] == 0xE8 || p[-1] == 0xE9 || (p[-2] == 0x0F && (p[-1] & 0xF0) == 0x80);
 }
-#endif
 
-/* The entry, the shared exits and the stubs.  Registers at a word boundary:
- * r12 tstate, r13 frame, r14 word 0, r15 frame->base, rbx the unit; rsp is
- * 16-byte aligned.
- *
- * The frame is the one rule that the unwind info of build_unwind() states:
- * rbp, set by the prologue, points at the saved rbp, so from there to the
- * shared exit's pops the CFA is rbp + 16, the return address is at CFA - 8,
- * and rbp and the registers of saved_regs are at CFA - 16, - 24 and below.
- * The unit's code may change rsp freely (the stubs push; calls go below it),
- * but nothing between the prologue and the exit may write rbp or the save
- * slots, or run the exit's pops and ret anywhere else: the unwinder would
- * read the wrong frame.  A template that needs rbp, or that leaves the unit
- * by another path, must change the marks and the rows with it. */
-static void
-emit_frame(_PyJitCompiler *c)
+/* Write hole h of a part copied to base, bound to S.  Returns -1 if a rel32
+ * does not reach or an immediate does not fit. */
+static int
+patch(uint8_t *base, const _PyJitHole *h, uintptr_t S)
 {
-    _PyJitAsm *a = c->a;
-    _PyJitFrameMarks *m = &c->marks;
-    /* enter(tstate, frame, address of the word's block) */
-    _PyJitAsm_Push(a, R(RBP));
-    m->pushed_rbp = mark(a);
-    _PyJitAsm_MovRR(a, R(RBP), R(RSP));
-    m->framed = mark(a);
-    for (int i = 0; i < NSAVED; i++) {
-        _PyJitAsm_Push(a, saved_regs[i].reg);
-        m->pushed[i] = mark(a);
+    uint8_t *at = base + h->offset;
+    int64_t value;
+    switch (h->patch) {
+        case _PyJit_PATCH_REL32:
+            value = (int64_t)(S - (uintptr_t)at) + h->addend;
+            if (value != (int32_t)value) {
+                return -1;
+            }
+            break;
+        case _PyJit_PATCH_VALUE32:
+            value = (int32_t)(uint32_t)(S + (uintptr_t)(intptr_t)h->addend - (uintptr_t)at);
+            break;
+        case _PyJit_PATCH_IMM32:
+            value = (int64_t)S;
+            if (value != (int32_t)value) {
+                return -1;
+            }
+            break;
+        case _PyJit_PATCH_ABS64: {
+            uint64_t v = (uint64_t)S + (uint64_t)(int64_t)h->addend;
+            memcpy(at, &v, sizeof(v));
+            return 0;
+        }
+        default:
+            Py_UNREACHABLE();
     }
-    _PyJitAsm_AluRI(a, _PyJitAlu_SUB, R(RSP), _PyJIT_SPILL_BYTES);
-    _PyJitAsm_MovRR(a, R(R12), R(RDI));
-    _PyJitAsm_MovRR(a, R(R13), R(RSI));
-    _PyJitAsm_MovRM(a, R(R14), AT(R13, offsetof(_PyInterpreterFrame, ir_words)));
-    _PyJitAsm_MovRM(a, R(R15), AT(R13, offsetof(_PyInterpreterFrame, base)));
-    _PyJitAsm_MovImm(a, R(RBX), (int64_t)(uintptr_t)c->unit);
-    _PyJitAsm_JmpR(a, R(RDX));
-
-    _PyJitAsm_Bind(a, c->leave);
-    _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), _PyJIT_SPILL_BYTES);
-    for (int i = NSAVED - 1; i >= 0; i--) {
-        _PyJitAsm_Pop(a, saved_regs[i].reg);
-        m->popped[i] = mark(a);
-    }
-    _PyJitAsm_Pop(a, R(RBP));
-    m->popped_rbp = mark(a);
-    _PyJitAsm_Ret(a);
-    m->returned = mark(a);
-
-    /* The stubs are cold */
-    _PyJitAsm_Section(a, _PyJitSection_COLD);
-
-    /* A warm-up event, which may recompile; then leave with the transfer,
-     * whose frame is the unit's. */
-    _PyJitAsm_Bind(a, c->backedge);
-    _PyJitAsm_Push(a, R(RDX));
-    _PyJitAsm_AluRI(a, _PyJitAlu_SUB, R(RSP), 8);
-    _PyJitAsm_MovRR(a, R(RDI), R(R12));
-    _PyJitAsm_MovRR(a, R(RSI), R(R13));
-    _PyJitAsm_CallAbs(a, (const void *)_PyJit_Event);
-    _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), 8);
-    _PyJitAsm_Pop(a, R(RDX));
-    _PyJitAsm_MovRR(a, R(RAX), R(R13));
-    _PyJitAsm_Jmp(a, c->leave);
-
-    _PyJitAsm_Bind(a, c->trap);
-    _PyJitAsm_CallAbs(a, (const void *)bad_entry);
-
-    /* Called with rdx at a word whose handler is no longer the one compiled:
-     * runs the word's live handler by its form, as the word's own call
-     * would. */
-    _PyJitAsm_Bind(a, c->live);
-    _PyJitAsm_MovRM(a, R(RCX), AT(RDX, 0));
-    _PyJitAsm_MovRR(a, R(RAX), R(RCX));
-    _PyJitAsm_AluRI(a, _PyJitAlu_AND, R(RAX), IR_HANDLER_MASK);
-    _PyJitAsm_MovRR(a, R(RDI), R(R12));
-    _PyJitAsm_MovRR(a, R(RSI), R(R13));
-    _PyJitAsm_MovImm(a, R(R8), (int64_t)(uintptr_t)_PyEval_HandlerForms());
-    _PyJitAsm_JmpM(a, _PyJitMem_Indexed(R(R8), R(RAX), 3, 0));
-    _PyJitAsm_Section(a, _PyJitSection_HOT);
+    int32_t v32 = (int32_t)value;
+    memcpy(at, &v32, sizeof(v32));
+    return 0;
 }
 
-/* Advance the unwind info's location to the offset of label. */
-static void
-advance_to(const _PyJitAsm *a, _PyJitUnwind *u, size_t *at, _PyJitLabel label)
+/* The support image of the stencils, copied once per process into the JIT's
+ * region (support_init()), so that every copy reaches it by rel32, and the
+ * thread-local offsets of the TPOFF holes */
+static struct {
+    PyMutex lock;
+    int state;                      // 0 not tried, 1 ready, -1 failed
+    _PyJitCode code;
+    _PyJitUnwindEntry unwind;
+    intptr_t tpoff[_PyJit_STENCIL_TLS_COUNT + 1];
+} support;
+
+/* The thread pointer, which the TPOFF holes count from */
+static uintptr_t
+thread_pointer(void)
 {
-    size_t offset = _PyJitAsm_LabelOffset(a, label);
-    assert(offset >= *at);
-    _PyJitUnwind_Advance(u, (uint32_t)(offset - *at));
-    *at = offset;
+    uintptr_t tp;
+    __asm__("mov %%fs:0, %0" : "=r"(tp));
+    return tp;
 }
 
-/* The unit's .eh_frame, in buffer, for code_size bytes of code: the frame
- * of emit_frame, row by row (the rule that holds up to the first row is the
- * CIE's: CFA = rsp + 8, the return address at CFA - 8).
- *
- *   after push rbp          CFA = rsp + 16, rbp at CFA - 16
- *   after mov rbp, rsp      CFA = rbp + 16: the body's rule, which holds
- *                           through both sections
- *   after each push         that register at CFA - 24, - 32, ...
- *   the shared exit         remember the body's rule, then undo it pop by
- *                           pop: each register is restored, and after pop
- *                           rbp the CFA is rsp + 8
- *   after ret               the body's rule again: the code that follows
- *                           is the first word's block, then the cold stubs
- *
- * Returns the size with libgcc's terminator. */
+/* The address of PLT entry of symbol, or 0 if the image has none */
+static uintptr_t
+plt_entry(uint16_t symbol)
+{
+    int32_t at = _PyJit_StencilPlt[symbol];
+    return at < 0 ? 0 : (uintptr_t)support.code.start + (uintptr_t)at;
+}
+
+/* Bind an EXTERN hole of a part at base: the symbol, or for a call or a jump
+ * that does not reach it, the symbol's PLT entry.  Returns -1 if neither
+ * reaches; *via_plt counts the PLT's uses. */
+static int
+patch_extern(uint8_t *base, const _PyJitHole *h, uint64_t *via_plt)
+{
+    uintptr_t S = (uintptr_t)_PyJit_StencilSymbols[h->symbol];
+    if (patch(base, h, S) == 0) {
+        return 0;
+    }
+    uintptr_t plt = plt_entry(h->symbol);
+    if (h->patch != _PyJit_PATCH_REL32 || plt == 0 || !is_branch_at(base + h->offset)) {
+        return -1;
+    }
+    (*via_plt)++;
+    return patch(base, h, plt);
+}
+
+/* One part's rows of call frame information, from the stencil's own, at
+ * offset base of the code, up to limit bytes of it (a trimmed copy).  Each
+ * part's rows start from the CIE's rule; the registers that the parts
+ * before left saved are restored first.  saved is the set of those, by
+ * DWARF number. */
+static void
+part_rows(_PyJitUnwind *u, size_t *at, uint32_t *saved, size_t base,
+          const _PyJitPart *part, uint32_t limit)
+{
+    if (part->ncfa == 0) {
+        return;
+    }
+    assert(base >= *at);
+    _PyJitUnwind_Advance(u, (uint32_t)(base - *at));
+    *at = base;
+    for (unsigned reg = 0; reg < 32; reg++) {
+        /* The return address's rule is the CIE's, which the part restates */
+        if (reg != DWRF_REG_RA && (*saved & (1u << reg))) {
+            _PyJitUnwind_Restore(u, reg);
+        }
+    }
+    *saved = 0;
+    for (uint16_t k = 0; k < part->ncfa; k++) {
+        const _PyJitCfaOp *op = &part->cfa[k];
+        if (op->pc >= limit) {
+            break;
+        }
+        _PyJitUnwind_Advance(u, (uint32_t)(base + op->pc - *at));
+        *at = base + op->pc;
+        switch (op->op) {
+            case DWRF_CFA_def_cfa:
+                _PyJitUnwind_DefCfa(u, op->reg, (uint32_t)op->value);
+                break;
+            case DWRF_CFA_def_cfa_register:
+                _PyJitUnwind_DefCfaRegister(u, op->reg);
+                break;
+            case DWRF_CFA_def_cfa_offset:
+                _PyJitUnwind_DefCfaOffset(u, (uint32_t)op->value);
+                break;
+            case DWRF_CFA_offset:
+                _PyJitUnwind_Offset(u, op->reg, (uint32_t)(-op->value / 8));
+                *saved |= 1u << op->reg;
+                break;
+            case DWRF_CFA_restore:
+                _PyJitUnwind_Restore(u, op->reg);
+                *saved &= ~(1u << op->reg);
+                break;
+            case 0x0A:
+                _PyJitUnwind_RememberState(u);
+                break;
+            case 0x0B:
+                _PyJitUnwind_RestoreState(u);
+                break;
+            default:
+                Py_UNREACHABLE();
+        }
+    }
+}
+
+/* The bytes of a frame for parts with ncfa ops in all */
 static size_t
-build_unwind(const _PyJitCompiler *c, size_t code_size, uint8_t *buffer)
+frame_bound(size_t nparts, size_t ncfa)
 {
-    const _PyJitAsm *a = c->a;
-    const _PyJitFrameMarks *m = &c->marks;
+    return 128 + nparts * 24 + ncfa * 16;
+}
+
+static int
+support_init_locked(void)
+{
+    const _PyJitPart *part = &_PyJit_SupportPart;
+    size_t frame_offset = _Py_SIZE_ROUND_UP(part->size, 8);
+    size_t bound = frame_bound(1, part->ncfa);
+    uint8_t *frame = PyMem_RawMalloc(bound);
+    if (frame == NULL) {
+        return -1;
+    }
     _PyJitUnwind u;
     size_t at = 0;
-    _PyJitUnwind_Begin(&u, buffer, code_size);
-    advance_to(a, &u, &at, m->pushed_rbp);
-    _PyJitUnwind_DefCfaOffset(&u, 16);
-    _PyJitUnwind_Offset(&u, DWRF_REG_BP, 2);
-    advance_to(a, &u, &at, m->framed);
-    _PyJitUnwind_DefCfaRegister(&u, DWRF_REG_BP);
-    for (int i = 0; i < NSAVED; i++) {
-        advance_to(a, &u, &at, m->pushed[i]);
-        _PyJitUnwind_Offset(&u, saved_regs[i].dwarf, 3 + i);
-    }
-    advance_to(a, &u, &at, c->leave);
-    _PyJitUnwind_RememberState(&u);
-    for (int i = NSAVED - 1; i >= 0; i--) {
-        advance_to(a, &u, &at, m->popped[i]);
-        _PyJitUnwind_Restore(&u, saved_regs[i].dwarf);
-    }
-    advance_to(a, &u, &at, m->popped_rbp);
-    _PyJitUnwind_DefCfa(&u, DWRF_REG_SP, 8);
-    _PyJitUnwind_Restore(&u, DWRF_REG_BP);
-    advance_to(a, &u, &at, m->returned);
-    _PyJitUnwind_RestoreState(&u);
+    uint32_t saved = 0;
+    _PyJitUnwind_Begin(&u, frame, part->size);
+    part_rows(&u, &at, &saved, 0, part, part->size);
     _PyJitUnwind_End(&u);
-    return _PyJitUnwind_Terminate(&u);
+    size_t frame_size = _PyJitUnwind_Terminate(&u);
+    assert(frame_size <= bound);
+    if (_PyJitMemory_Alloc(frame_offset + frame_size, &support.code) < 0) {
+        PyMem_RawFree(frame);
+        return -1;
+    }
+    uint8_t *base = support.code.start;
+    memcpy(base, part->bytes, part->size);
+    memcpy(base + frame_offset, frame, frame_size);
+    PyMem_RawFree(frame);
+    uintptr_t tp = thread_pointer();
+    for (int i = 0; i < _PyJit_STENCIL_TLS_COUNT; i++) {
+        support.tpoff[i] = (intptr_t)((uintptr_t)_PyJit_StencilTls(i) - tp);
+    }
+    uint64_t via_plt = 0;
+    for (int k = 0; k < _PyJit_SUPPORT_HOLES; k++) {
+        const _PyJitHole *h = &_PyJit_SupportHoles[k];
+        int rc;
+        if (h->kind == _PyJit_HOLE_EXTERN) {
+            rc = patch_extern(base, h, &via_plt);
+        }
+        else {
+            assert(h->kind == _PyJit_HOLE_TPOFF);
+            rc = patch(base, h, (uintptr_t)support.tpoff[h->symbol]);
+        }
+        if (rc < 0) {
+            _PyJitMemory_Free(&support.code);
+            return -1;
+        }
+    }
+    if (_PyJitMemory_Seal(&support.code) < 0) {
+        _PyJitMemory_Free(&support.code);
+        return -1;
+    }
+    _PyJitUnwind_Register(&support.unwind, &support.code, frame_offset,
+                          "py::jit:support");
+    return 0;
 }
 
-/* The cold path of a switch to frame, whose code publishes no entries but
- * has a unit, which is invalid: the warm-up event recompiles a stale unit
- * (or clears STALE at the cap) and refuses a retired one.  Returns the
- * entries that the event published, or NULL to leave for the driver. */
-static const void *const *
-switch_event(PyThreadState *tstate, _PyInterpreterFrame *frame)
+/* Copy the support image, once per process; returns 0 when it is there */
+static int
+support_init(void)
 {
-    _PyJitUnit *unit = _PyJit_Event(tstate, frame);
-    return unit != NULL ? unit->entries : NULL;
+    PyMutex_Lock(&support.lock);
+    if (support.state == 0) {
+        support.state = support_init_locked() == 0 ? 1 : -1;
+    }
+    int ok = support.state;
+    PyMutex_Unlock(&support.lock);
+    return ok > 0 ? 0 : -1;
 }
 
-/* A form's transfer to another frame, cold: the frame switch of a call, a
- * return, a yield or a resume.  It goes to the frame's word through the
- * entry table that the frame's code publishes (publish()), which names a
- * valid unit, after the warm-up event if the code's unit is invalid
- * (switch_event()); one that raised or exited, one to the switch word
- * (which no unit has an entry for: the evaluator's switch handler resolves
- * it), and one to a frame whose code has no unit to run leave the unit with
- * the transfer, for the driver.  The frame's instr_ptr stays the word that
- * ran last in it, as in the evaluator.  The form has made the frame
- * current. */
-static void
-emit_other_frame(_PyJitCompiler *c, _PyJitLabel other)
-{
-    _PyJitAsm *a = c->a;
-    const int32_t header = -(int32_t)sizeof(_PyCodeExec);
-    _PyJitLabel unpublished = _PyJitAsm_NewLabel(a);
-    _PyJitLabel entries = _PyJitAsm_NewLabel(a);
-    _PyJitSection section = a->current;
-    _PyJitAsm_Section(a, _PyJitSection_COLD);
-    _PyJitAsm_Bind(a, other);
-    _PyJitAsm_TestRR(a, R(RDX), R(RDX));
-    _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
-#ifndef NDEBUG
-    _PyJitAsm_AluRM(a, _PyJitAlu_CMP, R(RAX),
-                    AT(R12, offsetof(PyThreadState, current_frame)));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, c->trap);
-#endif
-    _PyJitAsm_MovImm(a, R(RCX), (int64_t)(uintptr_t)&_PyEval_SwitchWord);
-    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-    _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
-#ifdef Py_DEBUG
-    _PyJitAsm_Push(a, R(RAX));
-    _PyJitAsm_Push(a, R(RDX));
-    _PyJitAsm_MovRR(a, R(RDI), R(RAX));
-    _PyJitAsm_CallAbs(a, (const void *)frame_traced);
-    _PyJitAsm_TestRR32(a, R(RAX), R(RAX));
-    _PyJitAsm_Pop(a, R(RDX));
-    _PyJitAsm_Pop(a, R(RAX));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);
-#endif
-    /* The executing copy's header lies before its words (_PyFrame_Exec()) */
-    _PyJitAsm_MovRM(a, R(RCX), AT(RAX, offsetof(_PyInterpreterFrame, ir_words)));
-    _PyJitAsm_MovRM(a, R(RSI), AT(RCX, header + (int32_t)offsetof(_PyCodeExec, jit_entries)));
-    _PyJitAsm_TestRR(a, R(RSI), R(RSI));
-    _PyJitAsm_Jcc(a, _PyJitCond_E, unpublished);
-    _PyJitAsm_Bind(a, entries);
-    _PyJitAsm_MovRR(a, R(R13), R(RAX));
-    _PyJitAsm_MovRR(a, R(R14), R(RCX));
-    _PyJitAsm_MovRM(a, R(R15), AT(R13, offsetof(_PyInterpreterFrame, base)));
-    _PyJitAsm_MovRM(a, R(RBX), AT(R14, header + (int32_t)offsetof(_PyCodeExec, jit_unit)));
-    /* Words and entries are both 8 bytes: the word's offset indexes both */
-    static_assert(sizeof(_PyIRWord) == sizeof(void *), "a word is an entry's size");
-    _PyJitAsm_AluRR(a, _PyJitAlu_SUB, R(RDX), R(R14));
-#ifndef NDEBUG
-    /* A word out of the frame's words is a broken invariant (an operand
-     * word's entry is trap in every build) */
-    _PyJitAsm_MovRM32(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, nwords)));
-    _PyJitAsm_ShiftRI(a, _PyJitShift_SHL, R(RCX), 3);
-    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-    _PyJitAsm_Jcc(a, _PyJitCond_AE, c->trap);
-#endif
-#ifdef Py_STATS
-    _PyJitAsm_MovRM(a, R(RCX), AT(R12, offsetof(PyThreadState, interp)));
-    _PyJitAsm_UnaryM(a, _PyJitUnary_INC,
-                     AT(RCX, offsetof(PyInterpreterState, ceval.jit_switches)));
-#endif
-    /* The unit that departed, if a departing word ran, is left: the
-     * thread's departure window closes (_PyJit_Reclaim()) */
-    _PyJitAsm_MovMI8(a, AT(R12, offsetof(_PyThreadStateImpl, jit_departing)), 0);
-    _PyJitAsm_JmpM(a, _PyJitMem_Indexed(R(RSI), R(RDX), 0, 0));
+/* Where each head word's copy goes in the unit, by word index */
+typedef struct {
+    const _PyJitStencil *stencil;   // NULL: the word has no copy
+    uint32_t hot;                   // offsets in the block
+    uint32_t cold;
+    uint32_t data;
+    uint32_t hot_size;              // the hot part as copied (trimmed)
+} word_copy;
 
-    /* No entries: none to run if the code has no unit; otherwise the
-     * warm-up event, with the transfer kept (rsp stays 16-byte aligned) */
-    _PyJitAsm_Bind(a, unpublished);
-    _PyJitAsm_MovRM(a, R(RSI), AT(RCX, header + (int32_t)offsetof(_PyCodeExec, jit_unit)));
-    _PyJitAsm_TestRR(a, R(RSI), R(RSI));
-    _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
-    _PyJitAsm_Push(a, R(RAX));
-    _PyJitAsm_Push(a, R(RDX));
-    _PyJitAsm_MovRR(a, R(RDI), R(R12));
-    _PyJitAsm_MovRR(a, R(RSI), R(RAX));
-    _PyJitAsm_CallAbs(a, (const void *)switch_event);
-    _PyJitAsm_MovRR(a, R(RSI), R(RAX));
-    _PyJitAsm_Pop(a, R(RDX));
-    _PyJitAsm_Pop(a, R(RAX));
-    _PyJitAsm_TestRR(a, R(RSI), R(RSI));
-    _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
-    _PyJitAsm_MovRM(a, R(RCX), AT(RAX, offsetof(_PyInterpreterFrame, ir_words)));
-    _PyJitAsm_Jmp(a, entries);
-    _PyJitAsm_Section(a, section);
+/* The hot part of stencil ends in jmp _JIT_CONTINUE: a copy that the next
+ * word's copy follows leaves the jump out */
+static int
+ends_in_continue(const _PyJitStencil *st)
+{
+    const _PyJitPart *hot = &st->parts[_PyJit_PART_HOT];
+    for (uint16_t k = 0; k < st->nholes; k++) {
+        const _PyJitHole *h = &st->holes[k];
+        if (h->part == _PyJit_PART_HOT && h->kind == _PyJit_HOLE_CONTINUE &&
+            h->offset + 4 == hot->size && hot->bytes[h->offset - 1] == 0xE9)
+        {
+            return 1;
+        }
+    }
+    return 0;
 }
 
-/* The continuation of word i, with its transfer in rax:rdx: the next word or
- * the word's static target in the same frame by a native jump, another
- * frame through its entries (emit_other_frame()), anything else by leaving.  The unit's invalid
- * byte is tested after a word that may run Python (RETIRED: monitoring went
- * on) and at a backward jump (either: the backedge stub may recompile).  A
- * word that writes a home releases the home's old value, whose finalizer may
- * run Python: a template tests that release itself, a form here. */
-static void
-emit_continuation(_PyJitCompiler *c, uint32_t i)
+/* The state of one unit's compilation */
+typedef struct {
+    const _PyIRWord *words;
+    uint32_t nwords;
+    word_copy *copies;
+    uint8_t *base;                  // the block
+    uint64_t via_plt;
+} _PyJitCompiler;
+
+/* The address of word j's copy, or 0 if it has none */
+static uintptr_t
+copy_of(const _PyJitCompiler *c, int64_t j)
 {
-    _PyJitAsm *a = c->a;
+    if (j < 0 || j >= c->nwords || c->copies[j].stencil == NULL) {
+        return 0;
+    }
+    return (uintptr_t)(c->base + c->copies[j].hot);
+}
+
+/* What hole h of word i's copy is bound to (the plan's section 2): the
+ * word's fields, the copies of its successors, the support image and
+ * libpython, and the exits into the normal evaluator
+ * (Python/ceval_evaluator.h), each of which closes the departure window.
+ * Returns 0 for a hole that patch_extern() binds. */
+static uintptr_t
+bind_hole(const _PyJitCompiler *c, uint32_t i, const _PyJitHole *h)
+{
     _PyIRWord w = c->words[i];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
-    uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
-    _PyJitLabel other = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RAX), R(R13));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, other);
-    emit_other_frame(c, other);
-    int target = static_target(c->words, i);
-    if (target >= 0 && ((uint32_t)target >= c->nwords || c->labels[target] < 0)) {
-        target = -1;
+    const word_copy *wc = &c->copies[i];
+    uintptr_t dispatch = (uintptr_t)_PyEval_JitDispatch;
+    switch ((_PyJitHoleKind)h->kind) {
+        case _PyJit_HOLE_FIELD_A: return IR_A(w);
+        case _PyJit_HOLE_FIELD_B: return IR_B(w);
+        case _PyJit_HOLE_FIELD_C: return IR_C(w);
+        case _PyJit_HOLE_FIELD_D: return IR_D(w);
+        case _PyJit_HOLE_CONTINUE: {
+            uintptr_t next = copy_of(c, (int64_t)i + _PyIR_WordLength(w));
+            return next ? next : dispatch;
+        }
+        case _PyJit_HOLE_TARGET: {
+            uintptr_t target = copy_of(c, static_target(c->words, i));
+            return target ? target : dispatch;
+        }
+        case _PyJit_HOLE_SWITCH: return dispatch;
+        case _PyJit_HOLE_REDIRECT:
+        case _PyJit_HOLE_AGAIN: return (uintptr_t)_PyEval_JitInterpret;
+        case _PyJit_HOLE_MISS: return (uintptr_t)_PyEval_JitMiss;
+        case _PyJit_HOLE_PROCESS_ERROR: return (uintptr_t)_PyEval_JitProcessError;
+        case _PyJit_HOLE_CLOSE_DISPATCH: return (uintptr_t)_PyEval_JitCloseDispatch;
+        case _PyJit_HOLE_GEN_RETURN: return (uintptr_t)_PyEval_JitGenReturn;
+        case _PyJit_HOLE_EXTERN: return 0;
+        case _PyJit_HOLE_TPOFF: return (uintptr_t)support.tpoff[h->symbol];
+        case _PyJit_HOLE_PART: {
+            uint32_t at = h->target == _PyJit_PART_HOT ? wc->hot
+                        : h->target == _PyJit_PART_COLD ? wc->cold : wc->data;
+            return (uintptr_t)(c->base + at);
+        }
+        case _PyJit_HOLE_SUPPORT: return (uintptr_t)support.code.start;
     }
-    if (target >= 0 && (uint32_t)target <= i) {
-        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
-        _PyJitAsm_TestRR(a, R(RCX), R(RCX));
-        _PyJitAsm_Jcc(a, _PyJitCond_NE, c->backedge);
+    Py_UNREACHABLE();
+}
+
+/* Copy word i's parts into the block and patch their holes; -1 if a hole
+ * does not reach */
+static int
+copy_word(_PyJitCompiler *c, uint32_t i)
+{
+    const word_copy *wc = &c->copies[i];
+    const _PyJitStencil *st = wc->stencil;
+    uint8_t *at[3] = {c->base + wc->hot, c->base + wc->cold, c->base + wc->data};
+    memcpy(at[_PyJit_PART_HOT], st->parts[_PyJit_PART_HOT].bytes, wc->hot_size);
+    for (int p = _PyJit_PART_COLD; p <= _PyJit_PART_DATA; p++) {
+        if (st->parts[p].bytes != NULL) {
+            memcpy(at[p], st->parts[p].bytes, st->parts[p].size);
+        }
     }
-    else if ((fmt->effects & MAY_RUN_PYTHON) || _PyIR_HasDst(fmt)) {
-        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
-        _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
-        _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);
+    for (uint16_t k = 0; k < st->nholes; k++) {
+        const _PyJitHole *h = &st->holes[k];
+        if (h->part == _PyJit_PART_HOT && h->offset >= wc->hot_size) {
+            continue;       // the left-out jump to the next copy
+        }
+        int rc = h->kind == _PyJit_HOLE_EXTERN
+            ? patch_extern(at[h->part], h, &c->via_plt)
+            : patch(at[h->part], h, bind_hole(c, i, h));
+        if (rc < 0) {
+            return -1;
+        }
     }
-    if (target >= 0) {
-        _PyJitAsm_Lea(a, R(RCX), WORD_AT((uint32_t)target));
-        _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-        _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[target]);
-    }
-    if (!(fmt->flags & _PyIR_JUMP_ALWAYS) && next < c->nwords) {
-        _PyJitAsm_Lea(a, R(RCX), WORD_AT(next));
-        _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-        _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[next]);
-    }
-    _PyJitAsm_Jmp(a, c->leave);
+    return 0;
 }
 
 /* The executing copy whose words unit compiled: its header lies before
@@ -564,63 +547,20 @@ mark_stale(_PyJitUnit *unit)
     }
 }
 
-/* mark_stale() of the unit, at a word boundary; nothing in a capped unit.
- * Clobbers the caller-saved registers. */
-static void
-emit_mark_stale(_PyJitCompiler *c)
+/* A word of exec's code changed its arm (set_opcode() in
+ * Python/specialize.c): the newest unit compiled the old arm, so it is stale
+ * and the next warm-up event recompiles the code.  A unit at the recompile
+ * cap is never marked: it runs on, as the arms' entry checks allow. */
+void
+_PyJit_MarkWordChanged(_PyCodeExec *exec)
 {
-    if (c->capped) {
-        return;
-    }
-    _PyJitAsm *a = c->a;
-    _PyJitAsm_MovRR(a, R(RDI), R(RBX));
-    _PyJitAsm_CallAbs(a, (const void *)mark_stale);
-}
-
-/* Leave the unit for word dest of the frame */
-static void
-emit_leave_at(_PyJitCompiler *c, uint32_t dest)
-{
-    _PyJitAsm *a = c->a;
-    _PyJitAsm_Lea(a, R(RDX), WORD_AT(dest));
-    _PyJitAsm_MovRR(a, R(RAX), R(R13));
-    _PyJitAsm_Jmp(a, c->leave);
-}
-
-/* The jump to word dest's block, or the leave when it has none */
-static void
-emit_goto(_PyJitCompiler *c, uint32_t dest)
-{
-    if (dest < c->nwords && c->labels[dest] >= 0) {
-        _PyJitAsm_Jmp(c->a, c->labels[dest]);
-    }
-    else {
-        emit_leave_at(c, dest);
+    _PyJitUnit *unit = exec->jit_unit;
+    if (unit != NULL && !(unit->invalid & _PyJIT_STALE) &&
+        exec->jit_compiles < _PyJIT_MAX_COMPILES)
+    {
+        mark_stale(unit);
     }
 }
-
-/* If RETIRED is set, go to leave_dest.  Clobbers rcx. */
-static void
-emit_retired_test(_PyJitCompiler *c, _PyJitLabel leave_dest)
-{
-    _PyJitAsm *a = c->a;
-    _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
-    _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, leave_dest);
-}
-
-/* A call of the completion stub fn on word i: its status in eax */
-static void
-emit_stub_call(_PyJitCompiler *c, uint32_t i, const void *fn)
-{
-    _PyJitAsm *a = c->a;
-    _PyJitAsm_MovRR(a, R(RDI), R(R12));
-    _PyJitAsm_MovRR(a, R(RSI), R(R13));
-    _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
-    _PyJitAsm_CallAbs(a, fn);
-}
-
-typedef int (*completion_stub)(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 
 /* The plan that word w compiles to.  A unit at the recompile cap is never
  * marked or recompiled, so it plans nothing: each word keeps its handler
@@ -633,421 +573,126 @@ _PyJit_PlanOf(_PyIRWord w, int capped)
     return capped ? &none : &_PyIR_StubPlans[_PyJit_CompiledHandler(w)];
 }
 
-static const _PyIRStubPlan *
-plan_of(_PyJitCompiler *c, _PyIRWord w)
+
+/* The unit's code: each head word's copy, in word order (hot parts, then
+ * cold parts, then jump tables), the entry table, then the unwind info.
+ * Fills unit->code, entries and the byte counts; returns the frame's offset
+ * in the block, or 0 if the unit cannot be placed or a hole does not
+ * reach. */
+static size_t
+emit_unit(_PyJitCompiler *c, _PyJitUnit *unit)
 {
-    return _PyJit_PlanOf(w, c->capped);
-}
-
-/* r8 of resolve_status(): the word's handler bits as compiled */
-#define COMPILED_HANDLER_BITS 0xFFFF
-
-/* What resolve_status() decides, in rax:rdx as the unit's transfers are */
-typedef struct {
-    _PyInterpreterFrame *frame;
-    _PyIRWord *next;
-} resolved_status;
-
-/* The cold path of a planned word's nonzero status (g1a/abi.md), shared by
- * every site: a miss runs the family's generic stub on the word, then the
- * plan-change test (staleness by execution, rd/design.md section 6: the
- * unit is marked only if the word's handler is no longer the one compiled;
- * RETIRED is kept; a unit at the cap has no planned words).  Returns a
- * frame and the word to leave for (no word: the error route, whose exit
- * the stub has set), or no frame to go on in the unit at the word
- * returned: the next word, or the same word again after a redispatch.  A
- * status with ESCAPED tests RETIRED before its successor.  No planned arm
- * branches except by the BRANCH status of a conditional register arm. */
-static resolved_status
-resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site,
-               int status, uint32_t compiled, _PyJitUnit *unit)
-{
-    if (status & _PyIR_MISS) {
-        assert(status == _PyIR_MISS);
-        int handler = _PyJit_CompiledHandler((_PyIRWord)(compiled & COMPILED_HANDLER_BITS));
-        completion_stub generic = (completion_stub)_PyIR_StubPlans[handler].generic;
-        /* The generator plans no arm that can miss without one */
-        assert(generic != NULL);
-        status = generic(tstate, frame, site);
-        assert(!(status & _PyIR_MISS));
-    }
-    /* The word's handler is not the one the unit compiled: a guard miss
-     * or a specialisation found it (MISS, AGAIN), or a generic arm, which
-     * never misses, ran on a word that specialised elsewhere */
-    if ((*site & 0xFFFF) != (compiled & COMPILED_HANDLER_BITS)) {
-        mark_stale(unit);
-    }
-    if (status & _PyIR_RAISED) {
-        return (resolved_status){frame, NULL};
-    }
-    if (status & _PyIR_REDIRECT) {
-        /* As in the evaluator (IR_REDIRECT()): a poll or an instrumentation
-         * check that moves the frame names the switch word there */
-        return (resolved_status){frame, frame->return_pc};
-    }
-    /* The length is that of the word as compiled: a stub that ran Python may
-     * have specialised the word elsewhere, which keeps its other fields, and
-     * a span word's length depends on its format */
-    _PyIRWord as_compiled = (*site & ~(_PyIRWord)COMPILED_HANDLER_BITS)
-                            | (compiled & COMPILED_HANDLER_BITS);
-    _PyIRWord *next = (status & _PyIR_AGAIN) ? site
-                                             : site + _PyIR_WordLength(as_compiled);
-    if (status & _PyIR_BRANCH) {
-        /* The word completed at its static target (a conditional branch
-         * arm: BranchTruth's shared arms) */
-        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
-        assert(fmt->flags & _PyIR_FORWARD);
-        next = site + 1 + _PyIR_FormatDistance(fmt, *site);
-    }
-    if ((status & _PyIR_ESCAPED) && (unit->invalid & _PyJIT_RETIRED)) {
-        return (resolved_status){frame, next};
-    }
-    return (resolved_status){NULL, next};
-}
-
-/* The cold path of planned word i, in the cold section: status (or -1),
- * entered with a stub's nonzero status in eax, or miss (or -1), entered
- * when the arm's guard failed with the word untouched.  resolve_status()
- * decides; the unit leaves with its transfer, or goes on at the next word
- * or the word again. */
-static void
-emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel miss)
-{
-    _PyJitAsm *a = c->a;
-    _PyIRWord w = c->words[i];
-    uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
-    _PyJitLabel resolve = _PyJitAsm_NewLabel(a);
-    if (miss >= 0) {
-        _PyJitAsm_Bind(a, miss);
-        _PyJitAsm_MovImm(a, R(RCX), _PyIR_MISS);
-        if (status >= 0) {
-            _PyJitAsm_Jmp(a, resolve);
-        }
-    }
-    if (status >= 0) {
-        _PyJitAsm_Bind(a, status);
-        if (_PyIR_StubPlans[_PyJit_CompiledHandler(w)].escapes &&
-            next < c->nwords && c->labels[next] >= 0) {
-            /* ESCAPED alone, the status of every completion of an arm that
-             * declares it may run Python (a generic arm): the RETIRED
-             * test and the plan-change test inline, the resolver only for a
-             * retired unit or a changed handler.  Only the status's low
-             * bits are defined. */
-            _PyJitLabel general = _PyJitAsm_NewLabel(a);
-            _PyJitAsm_TestRI(a, R(RAX),
-                             _PyIR_MISS | _PyIR_RAISED | _PyIR_BRANCH | _PyIR_AGAIN |
-                             _PyIR_REDIRECT);
-            _PyJitAsm_Jcc(a, _PyJitCond_NE, general);
-            _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
-            _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
-            _PyJitAsm_Jcc(a, _PyJitCond_NE, general);
-            _PyJitAsm_TestMI(a, AT(RBX, offsetof(_PyJitUnit, invalid)), _PyJIT_RETIRED);
-            _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[next]);
-            _PyJitAsm_Bind(a, general);
-        }
-        _PyJitAsm_MovRR(a, R(RCX), R(RAX));
-    }
-    _PyJitAsm_Bind(a, resolve);
-    _PyJitAsm_MovRR(a, R(RDI), R(R12));
-    _PyJitAsm_MovRR(a, R(RSI), R(R13));
-    _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
-    _PyJitAsm_MovImm(a, R(R8), (int64_t)(w & COMPILED_HANDLER_BITS));
-    _PyJitAsm_MovRR(a, R(R9), R(RBX));
-    _PyJitAsm_CallAbs(a, (const void *)resolve_status);
-    _PyJitAsm_TestRR(a, R(RAX), R(RAX));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);
-    _PyJitAsm_Lea(a, R(RCX), WORD_AT(i));
-    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-    _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[i]);
-    int target = static_target(c->words, i);
-    if (target >= 0 && ((uint32_t)target >= c->nwords || c->labels[target] < 0)) {
-        /* A branch to a word the unit has no block for: it leaves there */
-        if (next < c->nwords && c->labels[next] >= 0) {
-            _PyJitAsm_Lea(a, R(RCX), WORD_AT(next));
-            _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-            _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[next]);
-        }
-        _PyJitAsm_MovRR(a, R(RAX), R(R13));
-        _PyJitAsm_Jmp(a, c->leave);
-        return;
-    }
-    if (target >= 0) {
-        _PyJitAsm_Lea(a, R(RCX), WORD_AT((uint32_t)target));
-        _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-        _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[target]);
-    }
-    emit_goto(c, next);
-}
-
-/* Word i of a shared arm: a call of its stub, one branch on the status, the
- * fall-through to the next word; the rest is cold.  The arm reads no
- * feedback that another member writes with another meaning (its family's
- * generic serves every member's entry), so the site has no handler check. */
-static void
-emit_stub_word(_PyJitCompiler *c, uint32_t i, const _PyIRStubPlan *plan)
-{
-    _PyJitAsm *a = c->a;
-    uint32_t next = i + (uint32_t)_PyIR_WordLength(c->words[i]);
-    _PyJitLabel status = _PyJitAsm_NewLabel(a);
-    emit_stub_call(c, i, plan->stub);
-    _PyJitAsm_TestRR32(a, R(RAX), R(RAX));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, status);
-    if (!(next < c->nwords && c->labels[next] >= 0)) {
-        emit_leave_at(c, next);
-    }
-    _PyJitSection section = a->current;
-    _PyJitAsm_Section(a, _PyJitSection_COLD);
-    emit_status_cold(c, i, status, -1);
-    _PyJitAsm_Section(a, section);
-}
-
-/* Word i as a call of its handler's function form, with the word's address
- * and bits as immediates, then its continuation.  Specialisation rewrites a
- * word's handler and its feedback entry together, and a handler's guards are
- * only sound against the entry that its own specialisation wrote, so on a
- * word that specialisation can rewrite the compiled handler runs only while
- * the word still names it; otherwise the word's live handler runs.  B2's
- * slow path for a word is this code. */
-static void
-emit_form_word(_PyJitCompiler *c, uint32_t i)
-{
-    _PyJitAsm *a = c->a;
-    _PyIRWord w = c->words[i];
-    _PyJitLabel changed = _PyJitAsm_NewLabel(a);
-    _PyJitLabel called = _PyJitAsm_NewLabel(a);
-#ifndef NDEBUG
-    /* base is fixed while a frame runs */
-    _PyJitLabel base_ok = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_AluRM(a, _PyJitAlu_CMP, R(R15),
-                    AT(R13, offsetof(_PyInterpreterFrame, base)));
-    _PyJitAsm_Jcc(a, _PyJitCond_E, base_ok);
-    _PyJitAsm_Jmp(a, c->trap);
-    _PyJitAsm_Bind(a, base_ok);
-#endif
-    int guarded = _PyJit_HandlerMayChange(c->code, (int)i);
-    if (guarded) {
-        _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
-        _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
-        _PyJitAsm_Jcc(a, _PyJitCond_NE, changed);
-    }
-    _PyJitAsm_MovRR(a, R(RDI), R(R12));
-    _PyJitAsm_MovRR(a, R(RSI), R(R13));
-    _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
-    _PyJitAsm_MovImm(a, R(RCX), (int64_t)w);
-    _PyJitAsm_CallAbs(a, _PyEval_HandlerForms()[_PyJit_CompiledHandler(w)]);
-    _PyJitAsm_Bind(a, called);
-    emit_continuation(c, i);
-    if (!guarded) {
-        return;
-    }
-
-    _PyJitSection section = a->current;
-    _PyJitAsm_Section(a, _PyJitSection_COLD);
-    _PyJitAsm_Bind(a, changed);
-    /* An executed plan change: the next warm-up event recompiles */
-    emit_mark_stale(c);
-    _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
-    _PyJitAsm_LeaLabel(a, R(RAX), c->live);
-    _PyJitAsm_CallR(a, R(RAX));
-    _PyJitAsm_Jmp(a, called);
-    _PyJitAsm_Section(a, section);
-}
-
-/* Word i, a template's, goes on to word dest of its frame by a native jump
- * (dest > i: the next word or a forward target), with the unit's tests that
- * emit_continuation() makes.  The tests are in a stub at stub when the word
- * needs them; the hot jump to dest is the caller's.  A word whose dest has
- * no block leaves with the transfer. */
-static void
-emit_template_stub(_PyJitCompiler *c, uint32_t i, uint32_t dest, _PyJitLabel stub)
-{
-    _PyJitAsm *a = c->a;
-    _PyJitAsm_Bind(a, stub);
-    _PyJitAsm_Lea(a, R(RDX), WORD_AT(dest));
-    _PyJitAsm_MovRR(a, R(RAX), R(R13));
-    _PyJitAsm_Jmp(a, dest <= i ? c->backedge : c->leave);
-}
-
-/* The tests on the way from word i to dest: a backward jump tests the
- * invalid byte, the hot path of a word that may run Python tests RETIRED.
- * A set bit goes to stub. */
-static void
-emit_template_tests(_PyJitCompiler *c, uint32_t i, uint32_t dest, int may_run_python,
-                    _PyJitLabel stub)
-{
-    _PyJitAsm *a = c->a;
-    if (dest <= i) {
-        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
-        _PyJitAsm_TestRR(a, R(RCX), R(RCX));
-        _PyJitAsm_Jcc(a, _PyJitCond_NE, stub);
-    }
-    else if (may_run_python) {
-        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
-        _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
-        _PyJitAsm_Jcc(a, _PyJitCond_NE, stub);
-    }
-}
-
-static int
-has_block(_PyJitCompiler *c, uint32_t dest)
-{
-    return dest < c->nwords && c->labels[dest] >= 0;
-}
-
-/* Word i by its handler's inline template (B2): the handler check of a
- * word that specialisation may rewrite, the template, and the exits.  The
- * template's hot path falls through to the next word, whose block follows,
- * or jumps to its static target.  Its failed guards go, in the cold
- * section, to the family's generic stub when the arm is planned inline
- * (emit_status_cold()), else to the word as emit_form_word() runs it.  The
- * hot path does not run the form, so it may run Python only through the
- * effects that the handler has besides its deopts, and through its
- * releases: a release that is the template's last code tests RETIRED on
- * its slow path, after the destructor, and leaves for the next word; any
- * other release puts the test on the fall-through. */
-static void
-emit_template_word(_PyJitCompiler *c, uint32_t i, int arm, _PyJitTemplate template)
-{
-    _PyJitAsm *a = c->a;
-    _PyIRWord w = c->words[i];
-    /* The effects are the arm's, whose template runs: RESUME_CHECK's for a
-     * RESUME_JIT word, which itself may run Python */
-    const _PyIRFormat *fmt = _PyIR_FormatOf(arm);
-    int planned = plan_of(c, w)->region == _PyIR_PLAN_INLINE;
-    int may_run_python = (fmt->effects & (MAY_RUN_PYTHON & ~_PyIR_DEOPTS)) != 0;
-    uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
-    int target = static_target(c->words, i);
-    int may_change = _PyJit_HandlerMayChange(c->code, (int)i);
-    _PyJitWordCx cx = {
-        .a = a, .words = c->words, .word = w, .index = i,
-        .target = -1, .slow = _PyJitAsm_NewLabel(a), .leave = c->leave,
-        /* A planned word has no handler check of its own; a template that
-         * reads the feedback entry makes it */
-        .check_handler = planned && may_change,
-    };
-    _PyJitLabel target_stub = -1;
-    if (target >= 0) {
-        if ((uint32_t)target > i && !may_run_python && has_block(c, (uint32_t)target)) {
-            cx.target = c->labels[target];
-        }
-        else {
-            cx.target = _PyJitAsm_NewLabel(a);
-            target_stub = _PyJitAsm_NewLabel(a);
-        }
-    }
-    /* A planned arm whose template reads no feedback entry is sound
-     * whatever the word's handler is now (its guards test the operands): no
-     * handler check here.  One that reads the entry tests the handler
-     * itself (cx.check_handler). */
-    if (!planned && may_change) {
-        _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
-        _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
-        _PyJitAsm_Jcc(a, _PyJitCond_NE, cx.slow);
-    }
-    template(&cx);
-    assert(cx.cold_depth == 0);
-    /* One release, the template's last code: its slow path tests RETIRED */
-    int release_exit = cx.nreleases == 1 &&
-        cx.release_end == a->sections[_PyJitSection_HOT].size;
-    if (cx.nreleases > 0 && !release_exit) {
-        may_run_python = 1;
-    }
-    /* The fall-through to the next word, whose block follows */
-    _PyJitLabel next_stub = -1;
-    if (may_run_python || !has_block(c, next)) {
-        next_stub = _PyJitAsm_NewLabel(a);
-        emit_template_tests(c, i, next, may_run_python, next_stub);
-        if (!has_block(c, next)) {
-            _PyJitAsm_Jmp(a, next_stub);
-        }
-    }
-    _PyJitSection section = a->current;
-    _PyJitAsm_Section(a, _PyJitSection_COLD);
-    if (next_stub >= 0) {
-        emit_template_stub(c, i, next, next_stub);
-    }
-    if (target_stub >= 0) {
-        /* The jump to the target, with its tests */
-        _PyJitAsm_Bind(a, cx.target);
-        emit_template_tests(c, i, (uint32_t)target, may_run_python, target_stub);
-        if (has_block(c, (uint32_t)target)) {
-            _PyJitAsm_Jmp(a, c->labels[target]);
-        }
-        else {
-            _PyJitAsm_Jmp(a, target_stub);
-        }
-        emit_template_stub(c, i, (uint32_t)target, target_stub);
-    }
-    for (int k = 0; k < cx.nreleases && k < _PyJit_MAX_RELEASES; k++) {
-        _PyJitAsm_Bind(a, cx.release_tail[k]);
-        if (!release_exit) {
-            _PyJitAsm_Jmp(a, cx.release_back[k]);
+    const _PyIRWord *words = c->words;
+    uint32_t nwords = c->nwords;
+    size_t hot = 0, ncfa = 0, nparts = 0;
+    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+        word_copy *wc = &c->copies[i];
+        const _PyJitStencil *st = &_PyJit_Stencils[IR_HANDLER(words[i])];
+        if (st->name == NULL) {
+            /* A declared gap: holes and entries that name the word go to
+             * the evaluator, which runs it */
             continue;
         }
-        _PyJitLabel leave_next = _PyJitAsm_NewLabel(a);
-        emit_retired_test(c, leave_next);
-        _PyJitAsm_Jmp(a, cx.release_back[k]);
-        _PyJitAsm_Bind(a, leave_next);
-        emit_leave_at(c, next);
-    }
-    if (planned) {
-        emit_status_cold(c, i, -1, cx.slow);
-    }
-    else {
-        _PyJitAsm_Bind(a, cx.slow);
-        emit_form_word(c, i);
-    }
-    _PyJitAsm_Section(a, section);
-}
-
-/* The unit's code: the frame, a block per head word and the entry table,
- * then its unwind info.  Returns the label of the table. */
-static _PyJitLabel
-emit_unit(_PyJitCompiler *c)
-{
-    _PyJitAsm *a = c->a;
-    c->leave = _PyJitAsm_NewLabel(a);
-    c->backedge = _PyJitAsm_NewLabel(a);
-    c->live = _PyJitAsm_NewLabel(a);
-    c->trap = _PyJitAsm_NewLabel(a);
-    for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
-        c->labels[i] = _PyJitAsm_NewLabel(a);
-    }
-    emit_frame(c);
-    for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
-        _PyJitAsm_Bind(a, c->labels[i]);
-        const _PyIRStubPlan *plan = plan_of(c, c->words[i]);
-        int arm = _PyJit_ArmOf(plan, c->words[i]);
-        _PyJitTemplate template = _PyJit_Templates[arm];
-        if (plan->region == _PyIR_PLAN_SHARED) {
-            emit_stub_word(c, i, plan);
+        wc->stencil = st;
+        unit->arms[i] = (uint16_t)IR_HANDLER(words[i]);
+        wc->hot = (uint32_t)hot;
+        wc->hot_size = st->parts[_PyJit_PART_HOT].size;
+        uint32_t next = i + (uint32_t)_PyIR_WordLength(words[i]);
+        if (next < nwords && _PyJit_Stencils[IR_HANDLER(words[next])].name != NULL &&
+            ends_in_continue(st))
+        {
+            wc->hot_size -= 5;
         }
-        else if (template != NULL) {
-            emit_template_word(c, i, arm, template);
-        }
-        else {
-            emit_form_word(c, i);
+        hot += wc->hot_size;
+        for (int p = _PyJit_PART_HOT; p <= _PyJit_PART_COLD; p++) {
+            ncfa += st->parts[p].ncfa;
+            nparts += st->parts[p].bytes != NULL;
         }
     }
-    _PyJitLabel table = _PyJitAsm_NewLabel(a);
-    _PyJitAsm_Section(a, _PyJitSection_COLD);
-    _PyJitAsm_Align(a, 8);
-    _PyJitAsm_Bind(a, table);
-    for (uint32_t i = 0; i < c->nwords; i++) {
-        _PyJitAsm_QuadLabel(a, c->labels[i] >= 0 ? c->labels[i] : c->trap);
+    size_t cold = _Py_SIZE_ROUND_UP(hot, 16), cold_start = cold;
+    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+        word_copy *wc = &c->copies[i];
+        if (wc->stencil != NULL && wc->stencil->parts[_PyJit_PART_COLD].bytes != NULL) {
+            wc->cold = (uint32_t)cold;
+            cold += wc->stencil->parts[_PyJit_PART_COLD].size;
+        }
+    }
+    size_t data = _Py_SIZE_ROUND_UP(cold, 4);
+    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+        word_copy *wc = &c->copies[i];
+        if (wc->stencil != NULL && wc->stencil->parts[_PyJit_PART_DATA].bytes != NULL) {
+            data = _Py_SIZE_ROUND_UP(data, 4);
+            wc->data = (uint32_t)data;
+            data += wc->stencil->parts[_PyJit_PART_DATA].size;
+        }
+    }
+    size_t entries = _Py_SIZE_ROUND_UP(data, 8);
+    size_t code_size = entries + nwords * sizeof(void *);
+    if (code_size > UINT32_MAX) {
+        return 0;
     }
 
-    /* The unwind info lies in the unit's block, at the next multiple of 8
-     * after the code, where its FDE expects it. */
-    uint8_t frame[256];
-    size_t code_size = _PyJitAsm_Size(a);
-    _PyJitAsm_Align(a, 8);
-    c->eh_frame = mark(a);
-    assert(_PyJitAsm_LabelOffset(a, c->eh_frame) == _Py_SIZE_ROUND_UP(code_size, 8));
-    size_t frame_size = build_unwind(c, code_size, frame);
-    assert(frame_size <= sizeof(frame));
-    _PyJitAsm_Data(a, frame, frame_size);
-    return table;
+    /* The unwind info: every part's own rows, at its place */
+    size_t bound = frame_bound(nparts, ncfa);
+    uint8_t *frame = PyMem_RawMalloc(bound);
+    if (frame == NULL) {
+        return 0;
+    }
+    _PyJitUnwind u;
+    size_t at = 0;
+    uint32_t saved = 0;
+    _PyJitUnwind_Begin(&u, frame, code_size);
+    for (int p = _PyJit_PART_HOT; p <= _PyJit_PART_COLD; p++) {
+        for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+            const word_copy *wc = &c->copies[i];
+            if (wc->stencil == NULL || wc->stencil->parts[p].bytes == NULL) {
+                continue;
+            }
+            const _PyJitPart *part = &wc->stencil->parts[p];
+            if (p == _PyJit_PART_HOT) {
+                part_rows(&u, &at, &saved, wc->hot, part, wc->hot_size);
+            }
+            else {
+                part_rows(&u, &at, &saved, wc->cold, part, part->size);
+            }
+        }
+    }
+    _PyJitUnwind_End(&u);
+    size_t frame_size = _PyJitUnwind_Terminate(&u);
+    assert(frame_size <= bound);
+    size_t frame_offset = _Py_SIZE_ROUND_UP(code_size, 8);
+
+    if (_PyJitMemory_Alloc(frame_offset + frame_size, &unit->code) < 0) {
+        PyMem_RawFree(frame);
+        return 0;
+    }
+    c->base = unit->code.start;
+    memset(c->base, 0xCC, frame_offset);
+    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+        if (c->copies[i].stencil != NULL && copy_word(c, i) < 0) {
+            PyMem_RawFree(frame);
+            _PyJitMemory_Free(&unit->code);
+            return 0;
+        }
+    }
+    const void **table = (const void **)(c->base + entries);
+    for (uint32_t i = 0; i < nwords; i++) {
+        table[i] = (const void *)_PyEval_JitBadEntry;
+    }
+    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+        uintptr_t copy = copy_of(c, i);
+        table[i] = copy ? (const void *)copy : (const void *)_PyEval_JitInterpret;
+    }
+    memcpy(c->base + frame_offset, frame, frame_size);
+    PyMem_RawFree(frame);
+    if (_PyJitMemory_Seal(&unit->code) < 0) {
+        _PyJitMemory_Free(&unit->code);
+        return 0;
+    }
+    unit->entries = (const void *const *)table;
+    unit->hot_bytes = (uint32_t)hot;
+    unit->cold_bytes = (uint32_t)(data - cold_start);
+    return frame_offset;
 }
 
 static void
@@ -1056,6 +701,7 @@ free_unit(_PyJitUnit *unit)
     /* The unwinder reads the frame to forget it: deregister before freeing */
     _PyJitUnwind_Deregister(&unit->unwind);
     _PyJitMemory_Free(&unit->code);
+    PyMem_RawFree(unit->arms);
     PyMem_RawFree(unit);
 }
 
@@ -1074,18 +720,24 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     if (interp->ceval.jit_dead != NULL) {
         _PyJit_Reclaim(interp);
     }
+    if (support_init() < 0) {
+        /* No code memory, or the support image does not reach: no unit
+         * will compile */
+        exec->jit_compiles = _PyJIT_MAX_COMPILES;
+        return NULL;
+    }
     const _PyIRWord *words = exec->words;
     uint32_t nwords = exec->nwords;
     _PyJitUnit *unit = PyMem_RawCalloc(1, sizeof(_PyJitUnit));
-    _PyJitLabel *labels = PyMem_RawMalloc(nwords * sizeof(_PyJitLabel));
-    if (unit == NULL || labels == NULL) {
+    word_copy *copies = PyMem_RawCalloc(nwords, sizeof(word_copy));
+    uint16_t *arms = PyMem_RawCalloc(nwords, sizeof(uint16_t));
+    if (unit == NULL || copies == NULL || arms == NULL) {
         PyMem_RawFree(unit);
-        PyMem_RawFree(labels);
+        PyMem_RawFree(copies);
+        PyMem_RawFree(arms);
         return NULL;
     }
-    for (uint32_t i = 0; i < nwords; i++) {
-        labels[i] = -1;
-    }
+    unit->arms = arms;
     unit->nwords = nwords;
     unit->words = words;
     /* The unit compiles the heads as Resume.Poll, as they are while its
@@ -1095,23 +747,16 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     unpublish(exec);
     unit->warm_heads = rewrite_heads(exec, ROP_HANDLER_Resume_Warm,
                                      ROP_HANDLER_Resume_Poll) > 0;
-    _PyJitAsm a;
-    _PyJitAsm_Init(&a);
-    _PyJitCompiler c = {.a = &a, .code = code, .unit = unit, .words = words, .nwords = nwords,
-                        .labels = labels,
-                        .capped = exec->jit_compiles + 1 >= _PyJIT_MAX_COMPILES};
-    _PyJitLabel table = emit_unit(&c);
-    int placed = _PyJitAsm_Place(&a, &unit->code);
-    size_t table_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, table);
-    size_t frame_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, c.eh_frame);
-    _PyJitAsm_Fini(&a);
-    PyMem_RawFree(labels);
+    _PyJitCompiler c = {.words = words, .nwords = nwords, .copies = copies};
+    size_t frame_offset = emit_unit(&c, unit);
+    PyMem_RawFree(copies);
     exec->jit_compiles++;
     interp->ceval.jit_compiled_codes += exec->jit_compiles == 1;
     interp->ceval.jit_compiles++;
     interp->ceval.jit_compiled_words += nwords;
-    if (placed < 0) {
-        /* Out of code memory: do not try this code again */
+    if (frame_offset == 0) {
+        /* Out of code memory, or a hole that does not reach: do not try
+         * this code again */
         exec->jit_compiles = _PyJIT_MAX_COMPILES;
         if (unit->warm_heads) {
             rewrite_heads(exec, ROP_HANDLER_Resume_Poll, ROP_HANDLER_Resume_Warm);
@@ -1119,10 +764,13 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
         if (live != NULL) {
             publish(exec, live);
         }
+        PyMem_RawFree(unit->arms);
         PyMem_RawFree(unit);
         return NULL;
     }
-    unit->entries = (const void *const *)(unit->code.start + table_offset);
+    interp->ceval.jit_hot_bytes += unit->hot_bytes;
+    interp->ceval.jit_cold_bytes += unit->cold_bytes;
+    interp->ceval.jit_plt_holes += c.via_plt;
     unit->older = exec->jit_unit;
     exec->jit_unit = unit;
     publish(exec, unit);

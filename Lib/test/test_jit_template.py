@@ -762,8 +762,8 @@ class TemplateTests(unittest.TestCase):
             with self.subTest(source=source, handler=handler):
                 self.assertGreater(fast, 0, "no case stayed on the template's code")
 
-    def test_move_is_a_shared_stub(self):
-        "A Move word calls its function form through the shared stub"
+    def test_move_is_a_stencil(self):
+        "A Move word compiles to the copy of its arm's stencil"
         # The resolver renames most moves away.  A chained comparison retires
         # its middle operand when the first test fails.
         for source, args, handler, result in (
@@ -774,7 +774,7 @@ class TemplateTests(unittest.TestCase):
                 index = word_of(f, handler)[0]
                 self.assertTrue(capi.jit_compile(f.__code__))
                 self.assertEqual(capi.jit_unit(f.__code__)["plans"][index],
-                                 (handler, "shared", "stub", handler))
+                                 (handler, "stencil"))
                 self.assertEqual(f(*args), result)
 
     def test_temporaries(self):

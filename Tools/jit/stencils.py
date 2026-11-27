@@ -224,6 +224,9 @@ class Hole:
     addend: int
     symbol: str = ""        # EXTERN, TPOFF: the symbol's name
     target: int = 0         # PART: the part it refers to
+    # SUPPORT: the item (section, start) whose place in the image read()
+    # adds to the addend, which counts from the item's start until then
+    item: tuple[int, int] | None = None
 
 
 @dataclass
@@ -257,6 +260,9 @@ class Table:
     support_holes: list[Hole]
     # (name, offset, size) of each item of the support image
     support_items: list[tuple[str, int, int]]
+    # The offset in the support image of the PLT entry of each symbol that
+    # a call or a jump names
+    plt: dict[str, int] = field(default_factory=dict)
 
 
 class Refused(Exception):
@@ -270,6 +276,12 @@ class Refused(Exception):
 def is_lea_rip(code: bytes, at: int) -> bool:
     """lea disp32(%rip), %reg with disp32 at `at`"""
     return at >= 2 and code[at - 2] == 0x8D and code[at - 1] & 0xC7 == 0x05
+
+
+def is_call_or_branch(code: bytes, at: int) -> bool:
+    """call rel32, jmp rel32 or jcc rel32 with rel32 at `at`"""
+    return (at >= 1 and code[at - 1] in (0xE8, 0xE9)) or (
+        at >= 2 and code[at - 2] == 0x0F and 0x80 <= code[at - 1] <= 0x8F)
 
 
 def is_branch(code: bytes, at: int) -> bool:
@@ -487,6 +499,12 @@ class Reader:
         # GOT would
         self.got: dict[str, int] = {}
         self.got_base = 0
+        # The symbols that a call or a jump names, each of which gets a PLT
+        # entry in the support image (`jmp *slot(%rip)` through its GOT
+        # slot), as a linker makes for a symbol of another object: the
+        # emitter takes it when the symbol is out of rel32 reach of the code
+        # (libc's, from the JIT's region near libpython)
+        self.plt: dict[str, int] = {}
         self.jump_tables = self.find_jump_tables()
 
     def refuse(self, where: str, why: str) -> None:
@@ -538,9 +556,11 @@ class Reader:
         for h in [h for st in stencils for h in st.holes] + holes:
             if h.kind is Kind.SUPPORT and h.symbol.startswith(GOT):
                 h.addend += self.got_base + 8 * self.got[h.symbol[len(GOT):]]
+            elif h.kind is Kind.SUPPORT:
+                h.addend += self.support_at[h.item]
         if self.problems:
             raise Refused(self.problems)
-        return Table(stencils, support, holes, items)
+        return Table(stencils, support, holes, items, dict(self.plt))
 
     def stencil(self, name: str, decl, hot: Section) -> Stencil:
         cold = self.elf.by_name.get(".text.unlikely." + STENCIL + name)
@@ -595,6 +615,14 @@ class Reader:
         return Hole(part, r.offset, Kind.SUPPORT, Patch.REL32, r.addend,
                     symbol=GOT + r.symbol.name)
 
+    def extern_hole(self, code: bytearray, part: int, at: int, addend: int,
+                    name: str) -> Hole:
+        """A rel32 to a symbol of another object; a call or a jump also
+        gets the symbol a PLT entry"""
+        if is_call_or_branch(code, at):
+            self.plt.setdefault(name, 0)
+        return Hole(part, at, Kind.EXTERN, Patch.REL32, addend, name)
+
     def offset_in(self, r: Rela) -> int:
         """The relocation's addend, counted from the start of the symbol's
         section"""
@@ -630,13 +658,13 @@ class Reader:
             # A symbol of libpython, which this object may define too (the rows
             # that ceval_normal.c defines are the same functions there)
             if t in (Reloc.R_X86_64_PC32, Reloc.R_X86_64_PLT32):
-                return Hole(part, r.offset, Kind.EXTERN, Patch.REL32, r.addend, sym.name)
+                return self.extern_hole(code, part, r.offset, r.addend, sym.name)
             if t in (Reloc.R_X86_64_GOTPCRELX, Reloc.R_X86_64_REX_GOTPCRELX):
                 relaxed = relax_gotpcrelx(code, r.offset)
                 if relaxed is None:
                     return self.got_hole(part, r)
                 at, _ = relaxed
-                return Hole(part, at, Kind.EXTERN, Patch.REL32, r.addend, sym.name)
+                return self.extern_hole(code, part, at, r.addend, sym.name)
             if t == Reloc.R_X86_64_GOTPCREL:
                 return self.got_hole(part, r)
             if t == Reloc.R_X86_64_GOTTPOFF and sym.type == STT_TLS:
@@ -670,7 +698,7 @@ class Reader:
             return None
         sec, start = item
         return Hole(part, r.offset, Kind.SUPPORT, Patch.REL32, offset - start,
-                    symbol=f"{self.elf.sections[sec].name}+{start:#x}")
+                    symbol=f"{self.elf.sections[sec].name}+{start:#x}", item=(sec, start))
 
     def support_item(self, where: str, target: Section, guess: int,
                      sym: Symbol) -> tuple[int, int] | None:
@@ -710,6 +738,7 @@ class Reader:
     def layout_support(self) -> tuple[Part, list[Hole], list[tuple[str, int, int]]]:
         image = bytearray()
         at: dict[tuple[int, int], int] = {}
+        self.support_at = at
         items = []
         for (sec, start), size in sorted(self.support_wanted.items()):
             s = self.elf.sections[sec]
@@ -729,6 +758,10 @@ class Reader:
                 if ops is None:
                     self.refuse(f"support {s.name}", "no FDE")
                 else:
+                    # One program for the whole image: each function starts
+                    # from the CIE's rule (its ops begin with it), so the
+                    # registers that the one before saved are restored first
+                    part.cfa += cfa_boundary(part.cfa, base)
                     part.cfa += [dataclasses.replace(op, pc=op.pc + base) for op in ops]
             for r in self.elf.relocations.get(sec, []):
                 if not start <= r.offset < start + size:
@@ -759,7 +792,10 @@ class Reader:
                     struct.pack_into("<i", image, p, value)
                 else:
                     self.refuse(where, f"{reloc_name(r.type)} against {sym.name or target.name}")
-        # The GOT: one slot per symbol, which the emitter fills
+        # The GOT: one slot per symbol, which the emitter fills, the PLT's
+        # symbols' too
+        for name in self.plt:
+            self.got.setdefault(name, len(self.got))
         while len(image) % 8:
             image.append(0)
         self.got_base = len(image)
@@ -768,17 +804,27 @@ class Reader:
             image += bytes(8)
         if self.got:
             items.append(("GOT", self.got_base, 8 * len(self.got)))
+        # The PLT: jmp *slot(%rip), padded to 8 bytes, with the CIE's rule
+        plt_base = len(image)
+        part.cfa += cfa_boundary(part.cfa, plt_base)
+        for name in self.plt:
+            at = len(image)
+            self.plt[name] = at
+            slot = self.got_base + 8 * self.got[name]
+            image += b"\xFF\x25" + struct.pack("<i", slot - (at + 6)) + b"\xCC\xCC"
+        if self.plt:
+            items.append(("PLT", plt_base, len(image) - plt_base))
         holes.sort(key=lambda h: h.offset)
         return part, holes, items
 
     def code_hole_extern(self, where: str, image: bytearray, p: int, r: Rela) -> Hole | None:
         t, sym = r.type, r.symbol
         if t in (Reloc.R_X86_64_PC32, Reloc.R_X86_64_PLT32):
-            return Hole(0, p, Kind.EXTERN, Patch.REL32, r.addend, sym.name)
+            return self.extern_hole(image, 0, p, r.addend, sym.name)
         if t in (Reloc.R_X86_64_GOTPCRELX, Reloc.R_X86_64_REX_GOTPCRELX):
             relaxed = relax_gotpcrelx(image, p)
             if relaxed is not None:
-                return Hole(0, relaxed[0], Kind.EXTERN, Patch.REL32, r.addend, sym.name)
+                return self.extern_hole(image, 0, relaxed[0], r.addend, sym.name)
             return dataclasses.replace(self.got_hole(0, r), offset=p)
         if t == Reloc.R_X86_64_GOTPCREL:
             return dataclasses.replace(self.got_hole(0, r), offset=p)
@@ -786,6 +832,20 @@ class Reader:
             return Hole(0, p, Kind.TPOFF, Patch.IMM32, 0, sym.name)
         self.refuse(where, f"{reloc_name(t)} against {sym.name}")
         return None
+
+
+def cfa_boundary(ops: list[CfaOp], pc: int) -> list[CfaOp]:
+    """The ops that end a program's last function at pc: the CFA and every
+    register that it left saved back to the CIE's rule"""
+    saved: set[int] = set()
+    for op in ops:
+        if op.op == 0x80:
+            saved.add(op.reg)
+        elif op.op == 0xC0:
+            saved.discard(op.reg)
+    if not ops:
+        return []
+    return [CfaOp(pc, 0x0C, 7, 8)] + [CfaOp(pc, 0xC0, reg) for reg in sorted(saved)]
 
 
 def reloc_name(t: int) -> str:
@@ -853,8 +913,7 @@ def write_table(table: Table, out: io.StringIO) -> None:
     index |= {name: i for i, name in enumerate(tls)}
     out.write("// The symbols of libpython that the holes name\n")
     for i, name in enumerate(externs):
-        out.write(f'extern char _PyJitSym_{i}[] __asm__("{name}") '
-                  '__attribute__((visibility("hidden")));\n')
+        out.write(f'extern char _PyJitSym_{i}[] __asm__("{name}");\n')
     for i, name in enumerate(tls):
         out.write(f'extern __thread char _PyJitTls_{i} __asm__("{name}") '
                   '__attribute__((visibility("hidden")));\n')
@@ -862,6 +921,12 @@ def write_table(table: Table, out: io.StringIO) -> None:
     for i, name in enumerate(externs):
         out.write(f"    _PyJitSym_{i},  // {name}\n")
     out.write("};\n")
+    out.write("/* The offset of each symbol's PLT entry in the support image, or -1 */\n")
+    out.write(f"static const int32_t _PyJit_StencilPlt[{max(len(externs), 1)}] = {{\n")
+    for name in externs:
+        out.write(f"    {table.plt.get(name, -1)},  // {name}\n")
+    out.write("};\n")
+    out.write(f"#define _PyJit_STENCIL_SYMBOL_COUNT {len(externs)}\n")
     out.write(f"#define _PyJit_STENCIL_TLS_COUNT {len(tls)}\n")
     out.write("/* The address of thread-local i in this thread, from which the\n"
               " * emitter derives its offset from the thread pointer */\n"

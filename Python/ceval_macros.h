@@ -94,9 +94,12 @@
  * the activation, as for the function forms. */
 #define IR_ROUTINE(NAME) IR_TAIL_FN(NAME)
 #define IR_ROUTINE_OPERAND(NAME) (IR_ACTIVATION()->NAME)
+/* A routine's dispatch follows a frame switch (a generator's return to its
+ * resumer): in the frame's unit if its code has live entries */
 #define GEN_DISPATCH() \
     do { \
         int opcode; \
+        IR_JIT_SWITCH(); \
         DISPATCH(); \
     } while (0)
 #define GEN_STEP_JUMP(NAME, F, IP, V) \
@@ -1007,15 +1010,35 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
         IR_JIT_SWITCH(); \
     } while (0)
 
-/* The baseline JIT's hand-offs from the evaluator (Python/jit.c), which
- * jit_run() and jit_switch() in Python/ceval.c drive.  IR_JIT_EVENT(), the
+/* The baseline JIT's hand-offs from the evaluator (Python/jit.c): a tail
+ * call of the copy of the word at next_instr in the code's unit, through the
+ * entries that the code publishes, with the evaluator's own state.  Compiled
+ * code runs on the driver's frame, as the arms do, and leaves by a tail call
+ * of an interpreter function, so no hand-off returns.  IR_JIT_EVENT(), the
  * end of Resume.Warm and Jump.Warm, is a warm-up event of the frame's code;
- * once the code has a unit, the frame goes on in it at next_instr.
+ * once the code has a valid unit, the frame goes on in it at NEXT.
  * IR_JIT_SWITCH(): control has switched to frame at next_instr, and the
- * frame goes on in its code's unit if the code has live entries, as a
- * switch in compiled code does.  The function forms, which compiled code
- * calls, bind both to nothing. */
-#ifdef _PY_JIT_SUPPORTED
+ * frame goes on in its code's unit if the code has live entries.  The
+ * switch word lies in no executing copy and has no entry: it stays with the
+ * evaluator (_PyEval_SwitchWord).  A debug build keeps a frame that lltrace
+ * traces in the evaluator.  Each hand-off counts in jit_handoffs, which
+ * measures how often compiled code falls back to the evaluator.  The
+ * observing evaluator hands nothing to a unit: compiled code leaves into the
+ * normal evaluator, which would run an observed frame that a unit returns or
+ * yields to unobserved.  The stencils (Python/jit_stencils.c) and the
+ * function forms bind both to nothing. */
+#if defined(_PY_JIT_SUPPORTED) && !IR_OBSERVING
+#ifdef Py_DEBUG
+#  define IR_JIT_TRACED() (frame->lltrace >= 5)
+#else
+#  define IR_JIT_TRACED() 0
+#endif
+#define IR_JIT_ENTER(ENTRIES, NEXT) \
+    do { \
+        tstate->interp->ceval.jit_handoffs++; \
+        Py_MUSTTAIL return ((_PyIRTailFn)(ENTRIES)[(NEXT) - frame->ir_words])( \
+            tstate, frame, (NEXT), ir_word); \
+    } while (0)
 #define IR_JIT_EVENT() IR_JIT_EVENT_AT(next_instr)
 #define IR_JIT_EVENT_AT(NEXT) \
     do { \
@@ -1028,15 +1051,17 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
         } \
         else { \
             _PyJitUnit *ir_unit = _PyJit_Event(tstate, frame); \
-            if (ir_unit != NULL) { \
-                IR_STEP_DONE(jit_run(tstate, ir_unit, frame, (NEXT))); \
+            if (ir_unit != NULL && !IR_JIT_TRACED()) { \
+                IR_JIT_ENTER(ir_unit->entries, (NEXT)); \
             } \
         } \
     } while (0)
 #define IR_JIT_SWITCH() \
     do { \
-        if (_PyFrame_JitEntries(frame) != NULL) { \
-            IR_STEP_DONE(jit_switch(tstate, frame, next_instr)); \
+        const void *const *ir_entries = _PyFrame_JitEntries(frame); \
+        if (ir_entries != NULL && next_instr != &_PyEval_SwitchWord && \
+            !IR_JIT_TRACED()) { \
+            IR_JIT_ENTER(ir_entries, next_instr); \
         } \
     } while (0)
 #else
@@ -1057,7 +1082,8 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* A departing arm opens the thread's departure window after its last guard
  * (Python/jit.c, _PyJit_Reclaim()).  The evaluator runs in no unit: nothing
- * to mark.  The function forms bind it to the thread's flag. */
+ * to mark.  The stencils (Python/jit_stencils.c) and the function forms bind
+ * it to the thread's flag. */
 #define IR_MARK_DEPARTURE() ((void)0)
 
 /* The feedback entry of another instruction of the frame. */

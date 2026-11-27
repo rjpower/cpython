@@ -179,6 +179,7 @@ class TableTests(unittest.TestCase):
             for h in s.holes:
                 if h.kind is Kind.SUPPORT:
                     with self.subTest(arm=s.name, hole=h):
+                        # The addend places the item in the image
                         self.assertTrue(-8 <= h.addend < size + 8)
 
 
@@ -271,7 +272,27 @@ class RelaxationTests(unittest.TestCase):
                if h.kind is Kind.SUPPORT and h.symbol.startswith(stencils.GOT)]
         self.assertTrue(got)
         slots = [h for h in table.support_holes if h.patch is stencils.Patch.ABS64]
-        self.assertEqual(len(slots), len({h.symbol for h in got}))
+        # One slot per symbol, for the loads and for the PLT's jumps
+        self.assertEqual(len(slots), len({h.symbol[len(stencils.GOT):] for h in got}
+                                         | table.plt.keys()))
+
+    def test_plt(self):
+        # Every symbol that a call or a jump names has a PLT entry, a jmp
+        # through its GOT slot, so that a copy reaches it from anywhere
+        table = stencils.read_stencils(object_bytes())
+        image = table.support.data
+        slots = {h.symbol: h.offset for h in table.support_holes
+                 if h.patch is stencils.Patch.ABS64}
+        called = {h.symbol for s in table.stencils for h in s.holes
+                  if h.kind is Kind.EXTERN and h.part != 2
+                  and stencils.is_call_or_branch(s.parts[h.part].data, h.offset)}
+        self.assertIn("__stack_chk_fail", called)
+        self.assertLessEqual(called, table.plt.keys())
+        for name, at in table.plt.items():
+            with self.subTest(symbol=name):
+                self.assertEqual(image[at:at + 2], b"\xff\x25")
+                rel = struct.unpack_from("<i", image, at + 2)[0]
+                self.assertEqual(at + 6 + rel, slots[name])
 
 
 if __name__ == "__main__":

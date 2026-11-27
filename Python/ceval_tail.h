@@ -112,6 +112,19 @@ extern Py_IR_TAIL_CC PyValue _PyEval_EnterObserving(Py_IR_TAIL_PARAMS);
  * a frame thrown into (generator.throw()) */
 extern Py_IR_TAIL_CC PyValue _PyEval_StartFrame(Py_IR_TAIL_PARAMS);
 extern Py_IR_TAIL_CC PyValue _PyEval_ThrowFrame(Py_IR_TAIL_PARAMS);
+
+#ifdef _PY_JIT_SUPPORTED
+/* The baseline JIT's exits from compiled code into the normal evaluator
+ * (Python/ceval_evaluator.h; Python/jit.c binds the stencils' holes to
+ * them) */
+extern Py_IR_TAIL_CC PyValue _PyEval_JitDispatch(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_JitInterpret(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_JitMiss(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_JitProcessError(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_JitCloseDispatch(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_JitGenReturn(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_JitBadEntry(Py_IR_TAIL_PARAMS);
+#endif
 #if IR_OBSERVING
 #  define IR_THIS_EVALUATOR _PyEval_EnterObserving
 #  define IR_OTHER_EVALUATOR _PyEval_EnterNormal

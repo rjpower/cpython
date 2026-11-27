@@ -12,57 +12,49 @@ extern "C" {
 #include "pycore_jit_memory.h"      // _PyJitCode, _PY_JIT_SUPPORTED
 #include "pycore_jit_unwind.h"      // _PyJitUnwindEntry
 
-/* The baseline JIT (pyjit/design/proposals/tiers87.md, Phase 2; Python/jit.c).
+/* The baseline JIT (Python/jit.c).
 
-   A unit is the machine code of one executing copy (_PyCodeExec): every word
-   is a call of the function form of the handler that the word named when the
-   unit was compiled, followed by a native jump when the form's transfer is
-   the same frame and a word known at compile time (the next word or the
-   word's jump target).
+   A unit is the machine code of one executing copy (_PyCodeExec): each head
+   word is a copy of the stencil of the arm that the word named when the
+   unit was compiled (Python/jit_stencils.c), with the word's fields patched
+   in and the arm's exits bound: the next word's copy follows, or is jumped
+   to; a branch goes to its target's copy; every other exit is a tail call
+   of the normal evaluator (_PyEval_JitDispatch() and the others,
+   Python/ceval_evaluator.h).  Copies run in the evaluator's tail-call
+   convention on the driver's native frame, as the arms do: a unit has no
+   frame, prologue or exit of its own.
 
    The transfer protocol is one rule: a frame switch goes to the target
    frame's word through its executing copy's entry table,
    _PyCodeExec.jit_entries, which is the entry table of the code's newest
    unit while that unit is valid, else NULL (Python/jit.c, publish()).  So
-   a frame runs compiled whenever its code has live entries.  A switch in
-   compiled code jumps through the table on the same native frame
-   (emit_other_frame()); one whose code publishes none, or that names the
-   switch word, leaves the unit with the transfer, and the driver (jit_run()
-   in Python/ceval.c) recompiles a stale unit, refuses a retired one, or
-   returns the transfer to the evaluator, ir_evaluate(), the cold tier.  The
-   evaluator tests the table at its own switches, a return, a yield and an
-   exception handled in a frame (IR_JIT_SWITCH()), and hands the frame to
-   the unit; Resume.Warm and Jump.Warm, which the lowering gives a code
-   under a mode other than off, count a warm-up event and enter the unit
-   once the code has one.
+   a frame runs compiled whenever its code has live entries.  Compiled code
+   switches through _PyEval_JitDispatch(); the evaluator tests the table at
+   its own switches (IR_JIT_SWITCH()) and its warm-up events (Resume.Warm,
+   Jump.Warm: IR_JIT_EVENT()), and enters the unit by a tail call of the
+   word's entry.  The switch word has no entry and stays with the evaluator.
 
-   A unit is entered by calling its code as
-
-       _PyIRTransfer enter(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                           const void *entry);
-
-   where entry is entries[word index].  At every word boundary of the code
-   r12 holds tstate, r13 frame, r14 word 0 of the frame's executing copy, r15
-   frame->base and rbx the unit; the stack is 16-byte aligned; every value
-   is in the frame.  A word that specialisation can rewrite runs the handler
-   it named at compile time only while the word still names it, since
-   specialisation rewrites the handler and its feedback entry together.
+   A guard miss runs the family's generic arm in the evaluator at the word,
+   and an error the evaluator's process_error; the frame then goes on in the
+   evaluator until a warm-up event or a switch enters the unit again.  A
+   word whose arm specialisation rewrites marks the unit stale
+   (_PyJit_MarkWordChanged()); compiled code tests nothing, since the arms'
+   own entry checks keep a stale copy correct, and the next warm-up event
+   recompiles.
 
    A unit outlives its code while a thread may still run it.  A departing
    word (a return or a yield) clears its frame, which may drop the code's
-   last reference, and the unit runs on until its next frame switch: the
+   last reference, and the copy runs on until it leaves the unit: the
    thread is in a departure window.  The word opens it by setting the
-   thread's jit_departing flag (IR_MARK_DEPARTURE() in the forms); the
-   compiled switch and the driver close it.  A dead code's units wait on
-   the interpreter's dead list (_PyJit_FreeUnits()), which is freed once no
+   thread's jit_departing flag (IR_MARK_DEPARTURE() in the stencils); every
+   exit into the evaluator closes it.  A dead code's units wait on the
+   interpreter's dead list (_PyJit_FreeUnits()), which is freed once no
    thread is in a window (_PyJit_Reclaim()): at a compile, when a thread
    leaves its outermost activation, and at finalization.  A thread that
    releases the GIL is quiescent for this purpose only once it has left the
    unit's code, which its cleared flag records.  On a free-threaded build
    the list would be a QSBR deferral (Python/qsbr.c) whose detaches and
-   polls count as quiescent only while the flag is clear: QSBR alone counts
-   a thread that detaches inside its window, in a finalizer of the frame it
-   clears, as quiescent with a return address into the unit live.
+   polls count as quiescent only while the flag is clear.
 
    The JIT runs in the GIL build on Linux x86-64 (_PY_JIT_SUPPORTED). */
 
@@ -132,24 +124,30 @@ enum {
 #define _PyJIT_MAX_COMPILES 8
 
 typedef struct _PyJitUnit {
-    /* 0 or _PyJIT_STALE | _PyJIT_RETIRED.  Compiled code tests it at
-     * offset 0: RETIRED after each word that may run Python, both at each
-     * backward jump. */
+    /* 0 or _PyJIT_STALE | _PyJIT_RETIRED, which _PyJit_Event() reads;
+     * compiled code reads neither */
     uint8_t invalid;
     /* Its compile rewrote the code's Resume.Warm heads to Resume.Poll, which
      * publish() and unpublish() keep in step with the entries
      * (Python/jit.c) */
     uint8_t warm_heads;
     uint32_t nwords;
-    const _PyIRWord *words;         // word 0 of the exec, r14 in the code
+    const _PyIRWord *words;         // word 0 of the exec
+    /* The bytes of the copies' hot parts, and of their cold parts and jump
+     * tables */
+    uint32_t hot_bytes;
+    uint32_t cold_bytes;
+    /* The arm that each head word's copy is a copy of, by word index */
+    uint16_t *arms;
 #ifdef _PY_JIT_SUPPORTED
-    _PyJitCode code;                // the entry at code.start
-    /* The unit's .eh_frame, in the code block after the code, and its
-     * registrations: backtrace() and gdb walk through the unit
-     * (Python/jit.c, build_unwind) */
+    _PyJitCode code;                // the copies, the entries, the unwind info
+    /* The unit's .eh_frame, in the code block after the code: the stencils'
+     * own rows, and its registrations: backtrace() and gdb walk through the
+     * unit (Python/jit.c, emit_unit()) */
     _PyJitUnwindEntry unwind;
 #endif
-    /* An address per word, in the code block; an operand word's traps */
+    /* An address per word, in the code block: a head word's copy, an
+     * operand word's trap */
     const void *const *entries;
     struct _PyJitUnit *older;       // the unit this one replaced, or NULL
 } _PyJitUnit;
@@ -222,6 +220,15 @@ extern void _PyJit_Reclaim(PyInterpreterState *interp);
 /* Free the dead list: interp is being cleared and runs no code. */
 extern void _PyJit_FiniInterpreter(PyInterpreterState *interp);
 
+/* A word of exec's code now names another arm (set_opcode(),
+ * Python/specialize.c): its newest unit, unless at the recompile cap, is
+ * stale. */
+extern void _PyJit_MarkWordChanged(_PyCodeExec *exec);
+
+/* The arm that a miss of a word naming handler runs: its family's generic
+ * arm (the stencil table's), or handler itself if it is that arm */
+extern int _PyJit_GenericOf(int handler);
+
 /* Compile the code of exec now, whatever its warm-up: the new unit, or NULL
  * if the code cannot be compiled (monitored, or no code memory).  For
  * _testinternalcapi. */
@@ -235,6 +242,7 @@ PyAPI_FUNC(const void *const *) _PyEval_HandlerForms(void);
 
 static inline void _PyJit_Retire(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_FreeUnits(_PyCodeExec *Py_UNUSED(exec)) {}
+static inline void _PyJit_MarkWordChanged(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_Reclaim(PyInterpreterState *Py_UNUSED(interp)) {}
 static inline void _PyJit_FiniInterpreter(PyInterpreterState *Py_UNUSED(interp)) {}
 

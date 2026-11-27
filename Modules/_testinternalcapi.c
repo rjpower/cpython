@@ -5516,27 +5516,22 @@ handler_name(int h)
     return _PyIR_HandlerName(h);
 }
 
-/* How the newest unit compiled each head word, as emit_unit() decides:
- * {index: (handler, how, arm)}, how being "stub" (a SHARED plan's call),
- * "template" or "form" */
+/* How the newest unit compiled each head word: {index: (arm, how)}, the arm
+ * that the word named at the compile, how being "stencil" (a copy of the
+ * arm's stencil) or "gap" (no stencil: the word runs in the evaluator) */
 static PyObject *
 unit_plans(PyCodeObject *code, _PyJitUnit *unit)
 {
-    static const char *const regions[] = {"none", "inline", "shared"};
-    /* The newest unit was compiled at the cap if no compile is left */
-    int capped = code->_co_exec->jit_compiles >= _PyJIT_MAX_COMPILES;
+    (void)code;
     PyObject *plans = PyDict_New();
     if (plans == NULL) {
         return NULL;
     }
     for (uint32_t i = 0; i < unit->nwords; i += _PyIR_WordLength(unit->words[i])) {
-        _PyIRWord w = unit->words[i];
-        const _PyIRStubPlan *plan = _PyJit_PlanOf(w, capped);
-        int arm = _PyJit_ArmOf(plan, w);
-        const char *how = plan->region == _PyIR_PLAN_SHARED ? "stub"
-            : _PyJit_Templates[arm] != NULL ? "template" : "form";
-        PyObject *item = Py_BuildValue("(ssss)", handler_name(IR_HANDLER(w)),
-                                       regions[plan->region], how, handler_name(arm));
+        /* A gap's word has no copy and no arm recorded (ids start at 1) */
+        int arm = unit->arms[i] ? unit->arms[i] : IR_HANDLER(unit->words[i]);
+        const char *how = unit->arms[i] ? "stencil" : "gap";
+        PyObject *item = Py_BuildValue("(ss)", handler_name(arm), how);
         PyObject *key = PyLong_FromUnsignedLong(i);
         if (item == NULL || key == NULL || PyDict_SetItem(plans, key, item) < 0) {
             Py_XDECREF(item);
@@ -5603,12 +5598,33 @@ jit_unit(PyObject *self, PyObject *code_object)
         Py_DECREF(ranges);
         return NULL;
     }
-    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsNsy#sN}",
+    /* Each head word's entry, as an offset in the unit's block */
+    PyObject *entries = PyDict_New();
+    for (uint32_t i = 0; entries != NULL && i < unit->nwords;
+         i += _PyIR_WordLength(unit->words[i]))
+    {
+        PyObject *key = PyLong_FromUnsignedLong(i);
+        PyObject *value = PyLong_FromSsize_t(
+            (const uint8_t *)unit->entries[i] - unit->code.start);
+        if (key == NULL || value == NULL || PyDict_SetItem(entries, key, value) < 0) {
+            Py_CLEAR(entries);
+        }
+        Py_XDECREF(key);
+        Py_XDECREF(value);
+    }
+    if (entries == NULL) {
+        Py_DECREF(ranges);
+        Py_DECREF(plans);
+        return NULL;
+    }
+    PyObject *result = Py_BuildValue("{sIsisisnsnsIsIsisIsisNsNsy#sNsN}",
         "nwords", unit->nwords,
         "heads", heads,
         "guarded", guarded,
         "code_bytes", (Py_ssize_t)unit->code.size,
         "pages", (Py_ssize_t)((unit->code.size + 4095) / 4096),
+        "hot_bytes", unit->hot_bytes,
+        "cold_bytes", unit->cold_bytes,
         "invalid", (int)unit->invalid,
         "compiles", exec->jit_compiles,
         "units", units,
@@ -5616,7 +5632,8 @@ jit_unit(PyObject *self, PyObject *code_object)
         "published", PyBool_FromLong(exec->jit_entries == unit->entries),
         "eh_frame", (const char *)unit->unwind.eh_frame,
         (Py_ssize_t)(unit->code.size - frame_offset),
-        "plans", plans);
+        "plans", plans,
+        "entries", entries);
     return result;
 #else
     (void)code;
@@ -5626,7 +5643,9 @@ jit_unit(PyObject *self, PyObject *code_object)
 
 /* Code objects compiled, compiles, words compiled and the driver's native
  * calls of units since startup, and with Py_STATS the frame switches made
- * in compiled code */
+ * in compiled code.  "handoffs": the evaluator's hand-offs into units;
+ * "hot_bytes", "cold_bytes": the copies' bytes; "plt_holes": holes bound to
+ * a PLT entry; "memory_in_use": the JIT region's live blocks. */
 static PyObject *
 jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
 {
@@ -5636,11 +5655,21 @@ jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
     for (_PyJitUnit *u = interp->ceval.jit_dead; u != NULL; u = u->older) {
         dead++;
     }
-    PyObject *stats = Py_BuildValue("{sKsKsKsKsn}",
+    size_t in_use = 0;
+#ifdef _PY_JIT_SUPPORTED
+    _PyJitMemoryStats memory;
+    _PyJitMemory_GetStats(&memory);
+    in_use = memory.bytes_in_use;
+#endif
+    PyObject *stats = Py_BuildValue("{sKsKsKsKsKsKsKsnsn}",
         "codes", (unsigned long long)interp->ceval.jit_compiled_codes,
         "compiles", (unsigned long long)interp->ceval.jit_compiles,
         "words", (unsigned long long)interp->ceval.jit_compiled_words,
-        "turns", (unsigned long long)interp->ceval.jit_turns,
+        "handoffs", (unsigned long long)interp->ceval.jit_handoffs,
+        "hot_bytes", (unsigned long long)interp->ceval.jit_hot_bytes,
+        "cold_bytes", (unsigned long long)interp->ceval.jit_cold_bytes,
+        "plt_holes", (unsigned long long)interp->ceval.jit_plt_holes,
+        "memory_in_use", (Py_ssize_t)in_use,
         "dead", dead);
 #ifdef Py_STATS
     PyObject *switches = PyLong_FromUnsignedLongLong(interp->ceval.jit_switches);

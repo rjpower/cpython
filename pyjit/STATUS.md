@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `592f194f11f` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2 and J3 merged, below) holds:
+`pyjit/rir90` at `36856b2389b` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3 and J4 merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -556,8 +556,26 @@ interpreter's instructions** (nbody 0.828, spectral_norm 0.891, richards
 0.939, pickle 0.999), from 1.117.  A compiled word takes about 600 hot
 bytes, and unpack_sequence takes 1.63 times the interpreter's cycles from
 branch misses.  The forms, stubs and templates are no longer selected
-anywhere.  J4 deletes them, and J5 shrinks the hot code; both are running.
-Full suites at the join are running.
+anywhere.  Full suites at the join (175,941 tests each) pass with the JIT
+off on release and assert.  With the JIT always on, one test fails on both:
+`test_tracemalloc.test_get_traced_memory`, which sees about 1.5 KB
+allocated inside its measured window.  It passes before J3.  Unit TR is
+finding the cause.
+
+**J4, merged at `36856b2389b`**: the old word kinds are deleted (56,394
+lines removed, 988 added).  That removes the function forms and
+`-X ir_forms`, the completion stubs and plans, the templates, the
+assembler, the lowerings and the generator's SsaArm lowering.  SsaArm was
+tested only through the templates, so the tracing tier will need a new
+lowering from the families.  The four completion arms that `gen_return`
+calls stay, generated into `ceval_steps.c`, and the JIT memory pool keeps
+its tests.
+
+J5 is shrinking the hot code.  The generator prints each arm's rare paths
+as functions of their own: the arm tail-calls a path that ends in an exit,
+and calls a path that rejoins through a convention that clobbers nothing.
+The fast path then pays nothing for them.  Each such function exists once
+in the binary, not in every compiled copy.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

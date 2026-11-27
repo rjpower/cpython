@@ -974,7 +974,9 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
 /* The start of frame, which has just become the current frame: its
  * recursion debit, which raises RecursionError in the frame before its
  * first word runs, then its first word, past a RESUME that would do nothing
- * (ROP_ENTER_GATE()).  An arm that enters a frame runs it in place
+ * (ROP_ENTER_GATE()), in its code's unit if the code has live entries
+ * (IR_JIT_SWITCH(): a compiled code's heads are Resume.Poll, which no longer
+ * counts the event that entered the unit).  An arm that enters a frame runs it in place
  * (DISPATCH_INLINED); the start_frame label runs it for the C entry and the
  * function forms (Python/ceval_labels.h). */
 #ifdef Py_DEBUG
@@ -999,6 +1001,7 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
         next_instr = frame->instr_ptr; \
         ROP_ENTER_GATE(); \
         IR_START_FRAME_LLTRACE(); \
+        IR_JIT_SWITCH(); \
         int opcode; \
         DISPATCH(); \
     } while (0)

@@ -1905,7 +1905,9 @@ _PyRop_ChainThreadPlain(void)
  * level's recursion debit cannot fail, so a RecursionError is raised in the
  * level that raises it now; and level's start would skip its Resume
  * (_PyRop_StartSkips: no observed code, no stale instrumentation, no
- * pending event, no Resume.Warm of code lowered for the JIT).  The start's
+ * pending event, no Resume.Warm of code lowered for the JIT that has no
+ * live entries: compile rewrites the heads of compiled code to Resume.Poll,
+ * so the walk passes compiled levels).  The start's
  * test runs last: it counts a signal check under Emscripten, as the start
  * does.  A created generator, an ordinary yield, a relaxed loop, a Send of
  * another arm and a non-generator receiver end the walk. */

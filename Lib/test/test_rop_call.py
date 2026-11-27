@@ -934,7 +934,9 @@ class ObservationTests(unittest.TestCase):
         monitor = Monitor(self, snapshot=sample)
         monitor.run(sample)
         self.assertTrue(monitor.observed)
-        self.assertEqual(monitor.words, names)
+        # Under the JIT the head is Resume.Poll while the code's unit
+        # publishes its entries, and Resume.Warm once monitoring retires it
+        self.assertEqual(monitor.words[1:], names[1:])
         calls = [n for n in monitor.words if n.startswith("Call.")]
         self.assertEqual(len(calls), 9)
 

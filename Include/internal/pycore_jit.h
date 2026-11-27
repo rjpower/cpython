@@ -57,8 +57,9 @@ extern "C" {
  * raise checkpoint in force; BRANCH the word completed at its static
  * target; AGAIN the word is untouched and runs again under its current
  * handler (a specialisation's redispatch); REDIRECT the word completed and
- * the frame's control moved while it ran (a debugger's jump): the word's
- * successor is frame->instr_ptr, not the next word. */
+ * the frame's control moved while it ran (a debugger's jump, or a switch
+ * of evaluator, which names the switch word): the word's successor is
+ * frame->return_pc, not the next word. */
 #define _PyIR_MISS      1
 #define _PyIR_ESCAPED   2
 #define _PyIR_RAISED    4
@@ -119,6 +120,10 @@ typedef struct _PyJitUnit {
      * offset 0: RETIRED after each word that may run Python, both at each
      * backward jump. */
     uint8_t invalid;
+    /* Its compile rewrote the code's Resume.Warm heads to Resume.Poll, which
+     * publish() and unpublish() keep in step with the entries
+     * (Python/jit.c) */
+    uint8_t warm_heads;
     uint32_t nwords;
     const _PyIRWord *words;         // word 0 of the exec, r14 in the code
 #ifdef _PY_JIT_SUPPORTED

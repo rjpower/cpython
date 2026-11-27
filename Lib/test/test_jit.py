@@ -792,6 +792,98 @@ class TestEntries(JitTestCase):
         """, "jit=always")
         self.assertEqual(out.split(), ["True", "0", "1", "True", "0", "True"])
 
+    def test_a_compiled_head_moves_its_frame_to_the_observing_evaluator(self):
+        # f is compiled and off the stack when LINE events start, so its
+        # unit is still published: the frame start enters it, and its
+        # Resume.Poll head instruments f and names the switch word in
+        # return_pc (a REDIRECT status).  The frame goes on there and leaves
+        # no entry in the thread's switch list.
+        out = run("""
+            import sys, _testinternalcapi as t
+            m = sys.monitoring
+            def f(x):
+                y = x + 1
+                return y
+            for i in range(5):
+                f(i)
+            print(t.jit_unit(f.__code__)["published"])
+            lines = []
+            def line(code, n):
+                if code is f.__code__:
+                    lines.append(n - code.co_firstlineno)
+            m.use_tool_id(3, "test")
+            m.register_callback(3, m.events.LINE, line)
+            m.set_events(3, m.events.LINE)
+            base = t.eval_switch_count()
+            f(1)
+            f(2)
+            after = t.eval_switch_count()
+            m.set_events(3, 0)
+            print(lines, after - base)
+        """, "jit=always")
+        self.assertEqual(out.splitlines(), ["True", "[1, 2, 1, 2] 0"])
+
+    def test_heads_are_resume_poll_while_published(self):
+        # Compile rewrites the code's Resume.Warm heads (the frame start and
+        # each yield-from loop's resume) to Resume.Poll; a retire gives them
+        # back, so that frame starts count warm-up events again
+        out = run("""
+            import sys, _testinternalcapi as t
+            def g(it):
+                yield from it
+            def heads():
+                return sorted({w[0] for w in t.get_ir(g.__code__, True)
+                               if w[0].startswith("Resume.")})
+            print(*heads())
+            list(g(range(3)))
+            print(*heads(), t.jit_unit(g.__code__)["published"])
+            sys.monitoring.use_tool_id(3, "test")
+            sys.monitoring.set_local_events(3, g.__code__,
+                                            sys.monitoring.events.LINE)
+            print(*heads(), t.jit_unit(g.__code__)["published"])
+            sys.monitoring.set_local_events(3, g.__code__, 0)
+            sys.monitoring.free_tool_id(3)
+            for i in range(3):
+                list(g(range(3)))
+            print(*heads(), t.jit_unit(g.__code__)["published"])
+        """, "jit=always")
+        self.assertEqual(out.splitlines(), [
+            "Resume.Warm", "Resume.Poll True", "Resume.Warm False",
+            "Resume.Poll True"])
+
+    def test_a_delegation_chain_through_compiled_levels(self):
+        # GN's chains move a yield-from chain in one transfer, through
+        # compiled levels too (their heads are Resume.Poll): items, a throw
+        # that the leaf handles and a close reach every level
+        out = run("""
+            import sys
+            log = []
+            def leaf(n):
+                try:
+                    for i in range(n):
+                        try:
+                            yield i, sys._jit.is_active()
+                        except KeyError:
+                            log.append("leaf caught")
+                finally:
+                    log.append("leaf closed")
+            def mid(n):
+                yield from leaf(n)
+            def top(n):
+                yield from mid(n)
+            for k in range(3):
+                g = top(100)
+                items = [next(g) for i in range(50)]
+                print(sum(i for i, _ in items), all(a for _, a in items))
+                print(g.throw(KeyError))
+                g.close()
+                print(log)
+                log.clear()
+        """, "jit=always")
+        self.assertEqual(out.splitlines()[-3:], [
+            str(sum(range(50))) + " True", "(50, True)",
+            "['leaf caught', 'leaf closed']"])
+
 
 @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
 class TestPins(unittest.TestCase):

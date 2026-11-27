@@ -15,6 +15,7 @@
 #include "pycore_jit.h"
 #include "pycore_jit_unwind.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
+#include "pycore_rop_metadata.h"    // ROP_HANDLER_Resume_Warm
 
 #include <ctype.h>                  // isdigit()
 #include <errno.h>
@@ -514,21 +515,51 @@ exec_of(const _PyJitUnit *unit)
     return (_PyCodeExec *)unit->words - 1;
 }
 
+/* Rewrite every head of exec whose handler is from to the handler to, which
+ * has the same format; returns how many.  Resume.Warm and Resume.Poll are
+ * the only pair: a code lowered for the JIT has Resume.Warm heads (the frame
+ * start and each yield-from loop's resume), and no specialisation rewrites
+ * them. */
+static int
+rewrite_heads(_PyCodeExec *exec, int from, int to)
+{
+    int n = 0;
+    for (uint32_t i = 0; i < exec->nwords; i += _PyIR_WordLength(exec->words[i])) {
+        if (IR_HANDLER(exec->words[i]) == from) {
+            _PyIR_SetHandler(&exec->words[i], to);
+            n++;
+        }
+    }
+    return n;
+}
+
 /* Every frame switch to the words of exec goes through the entries of its
  * valid newest unit, which a compile or a stale unit's reprieve at the cap
- * publishes. */
+ * publishes.  While they are published, the code's Resume.Warm heads are
+ * Resume.Poll: the code has nothing left to warm up, so a frame start and a
+ * delegation chain skip them as they skip any Resume.Poll that would do
+ * nothing (_PyRop_StartSkips()), and the start goes on through the entries
+ * (IR_JIT_SWITCH() in IR_START_FRAME(), or the unit's own switch). */
 static void
 publish(_PyCodeExec *exec, _PyJitUnit *unit)
 {
     assert(exec->jit_unit == unit && unit->invalid == 0);
+    if (unit->warm_heads) {
+        rewrite_heads(exec, ROP_HANDLER_Resume_Warm, ROP_HANDLER_Resume_Poll);
+    }
     exec->jit_entries = unit->entries;
 }
 
-/* The newest unit of exec is invalid (retired, stale): switches to its
- * words go through the warm-up event (_PyJit_Event()). */
+/* The newest unit of exec is invalid (retired, stale) or replaced: switches
+ * to its words go to the driver, which decides by the warm-up event
+ * (_PyJit_Event()), and its heads are Resume.Warm again, so that frame
+ * starts count warm-up events and recompile. */
 static void
 unpublish(_PyCodeExec *exec)
 {
+    if (exec->jit_entries != NULL && exec->jit_unit->warm_heads) {
+        rewrite_heads(exec, ROP_HANDLER_Resume_Poll, ROP_HANDLER_Resume_Warm);
+    }
     exec->jit_entries = NULL;
 }
 
@@ -661,7 +692,9 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
         return (resolved_status){frame, NULL};
     }
     if (status & _PyIR_REDIRECT) {
-        return (resolved_status){frame, frame->instr_ptr};
+        /* As in the evaluator (IR_REDIRECT()): a poll or an instrumentation
+         * check that moves the frame names the switch word there */
+        return (resolved_status){frame, frame->return_pc};
     }
     /* The length is that of the word as compiled: a stub that ran Python may
      * have specialised the word elsewhere, which keeps its other fields, and
@@ -1060,6 +1093,13 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     }
     unit->nwords = nwords;
     unit->words = words;
+    /* The unit compiles the heads as Resume.Poll, as they are while its
+     * entries are published; a live unit that this compile replaces gives
+     * its heads back first */
+    _PyJitUnit *live = exec->jit_entries != NULL ? exec->jit_unit : NULL;
+    unpublish(exec);
+    unit->warm_heads = rewrite_heads(exec, ROP_HANDLER_Resume_Warm,
+                                     ROP_HANDLER_Resume_Poll) > 0;
     _PyJitAsm a;
     _PyJitAsm_Init(&a);
     _PyJitCompiler c = {.a = &a, .code = code, .unit = unit, .words = words, .nwords = nwords,
@@ -1079,6 +1119,12 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     if (placed < 0) {
         /* Out of code memory: do not try this code again */
         exec->jit_compiles = _PyJIT_MAX_COMPILES;
+        if (unit->warm_heads) {
+            rewrite_heads(exec, ROP_HANDLER_Resume_Poll, ROP_HANDLER_Resume_Warm);
+        }
+        if (live != NULL) {
+            publish(exec, live);
+        }
         PyMem_RawFree(unit);
         return NULL;
     }
@@ -1159,7 +1205,8 @@ void
 _PyJit_FreeUnits(_PyCodeExec *exec)
 {
     _PyJitUnit *unit = exec->jit_unit;
-    unpublish(exec);
+    /* The words go with the exec: no head to give back */
+    exec->jit_entries = NULL;
     exec->jit_unit = NULL;
     while (unit != NULL) {
         _PyJitUnit *older = unit->older;

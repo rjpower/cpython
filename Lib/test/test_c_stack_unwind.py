@@ -8,6 +8,7 @@ than a single unwind mechanism. GDB integration tests live in test_gdb.
 """
 
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -182,7 +183,7 @@ def _compare_unwinders(unwinder_name=None):
                        "entry": entry})
 
 
-def _run_unwind_helper(helper_name, unwinder_name):
+def _run_unwind_helper(helper_name, unwinder_name, env=None):
     code = (
         f"from test.test_c_stack_unwind import {helper_name}; "
         f"print({helper_name}({unwinder_name!r}));"
@@ -191,6 +192,7 @@ def _run_unwind_helper(helper_name, unwinder_name):
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
+        env=env,
     )
     # Surface the output for debugging/visibility when running this test
     if proc.stdout:
@@ -252,7 +254,11 @@ class ManualStackUnwindTests(unittest.TestCase):
             self.skipTest("frame pointers are not expected to unwind")
         if sys.platform != "linux":
             self.skipTest("compares with GNU backtrace()")
-        result = _run_unwind_helper("_compare_unwinders", None)
+        # The property is the interpreter's: JIT-compiled frames report
+        # call sites that backtrace() does not (with or without frameless
+        # handlers), so the helper runs with the JIT off.
+        env = dict(os.environ, PYTHON_JIT="off")
+        result = _run_unwind_helper("_compare_unwinders", None, env=env)
         chain, backtrace = result["chain"], result["backtrace"]
         self.assertIsNotNone(result["entry"])
         # The chain is a subsequence of the backtrace

@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `05acd1caa12` (pushed; OB, JX, TI, EP, LR, CO and GN merged, below) holds:
+`pyjit/rir90` at `6f54a4f5c04` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM and LY merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -384,23 +384,52 @@ now decides what timings mean: LY designs it now (pack the hot code onto
 few pages, judged over many copies of each binary), and it lands after OM
 and FP.  Until then root times several copies of each binary.
 
-Running:
-- OM: operand modes as member arms.  Every word tests its sources' local
-  flags at run time (about 118M instructions on LR's 13 kernels); golden87
-  had a handler per mode.  A generated `locals` operand lets `over(...)`
-  state the hot arms' dominant modes as members.
-- FP: frame pointers in the arms' tail functions (255M instructions on
-  LR's kernels).  Each arm sets up a frame because the build keeps frame
-  pointers for native profilers; an arm reached by a tail call may need
-  none if it leaves the frame-pointer register untouched.  FP measures the
-  bound and checks perf, gdb and faulthandler stacks under each variant.
-  The bound is 1.094 to 1.076 of golden87's instructions on seven
-  kernels; arms that set up no frame and leave the register untouched
-  reach 1.079 with perf, gdb and faulthandler stacks whole (frame-pointer
-  walkers lose only the three-instruction driver).
-- LY: one layout rule for the evaluators' tail functions, judged by its
-  stability: adding an arm must not move any kernel's cycles by more than
-  3%.
+**FP, merged at `8624ee9d7b5`**: the arms set up no frame.  Each arm's
+tail function pushed and restored a frame pointer, because the build keeps
+frame pointers for native profilers.  The normal evaluator and the C rows
+its arms inline now live in `Python/ceval_normal.c`, and both evaluator
+units are compiled without frame pointers and with the frame-pointer
+register reserved, so an arm reached by a tail call leaves it holding the
+driver's frame.  perf, gdb and faulthandler stacks still reach every
+activation's caller; frame-pointer walkers lose the three-instruction
+driver, and the arm below a row the compiler left out of line.  Seven
+kernels: 1.095 to 1.080 of golden87's instructions.
+
+**OM, merged at `9db88900b0d`**: operand modes as member arms.  An arm may
+state members over the slot classes of its home operands
+(`over(locals: ...)`, temporary or local per operand); a member has the
+flags as constants, so it drops the run-time flag tests and, for a
+temporary destination, the load and close of a value that is vacant by
+construction.  The handler writer picks the member from a generated row
+by the word's flags, as V8 picks a handler per operand scale.  61 members
+on the hot arms (365 handlers).  Seven kernels on OM's branch: 1.11 to
+1.069 of golden87's instructions; nbody runs 0.92.
+
+**LY, merged at `599ed3be25d`**: one layout rule.  Nineteen families
+declare `hot`; their arms come first in each evaluator's section, in an
+order the generator states once, so an arm added later moves none of
+them.  On four copies of each binary logging_silent runs 19% fewer
+cycles than before.  About one binary file in twenty to thirty still lands
+on unlucky pages; only a startup remap of the hot code onto huge pages
+removes that (described, not built).
+
+Three tests compared the raw handler name a word runs, which OM's members
+qualify (`Add.Int_TLL`); they now compare the declared arm
+(`6f54a4f5c04`).
+
+Interpreter timing with FP, OM and LY (`599ed3be25d`, all-29, CPU 15, JIT
+off): **1.021 of golden87's time**, so the interpreter meets its goal of
+parity within 5%.  21 benchmarks are within 5% and 26 within 10%.
+xml_etree_process (1.17), deepcopy_reduce and deepcopy (1.10-1.11) and
+chaos (1.09) are furthest; nbody (0.86) and deltablue (0.90) are fastest.
+The timed binary drew a good page placement: logging_silent takes 0.91M
+instruction-fetch misses, as golden87 does (0.9M).
+
+Next: the full suites at this join (release and assert, JIT off and
+always), then the baseline JIT, starting from one timing of the JIT
+against this interpreter and golden87.  HS, a unit to shrink the arms that
+still run more instructions than golden87's, is held until the JIT plan
+says whether it comes first.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

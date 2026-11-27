@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `6f54a4f5c04` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM and LY merged, below) holds:
+`pyjit/rir90` at `ef79703336b` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY and JT merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -463,13 +463,27 @@ yet measured.  The choice is the user's.
 
 JA also found a crash from plain Python under `PYTHON_JIT=always`: a test
 method that sets `sys.settrace`, then `test_patma` in the same process,
-enters a compiled frame at a word that is not an entry.  It first appears
-with OB.  The full suites miss it, because each module runs in its own
+enters a compiled frame at a word that is not an entry.  The full suites
+with the JIT always then showed the same fault in ten modules (the
+debugger, tracing and evaluator-switch tests), each crashing in its own
 worker.
 
+**JT, merged at `ef79703336b`**: no compiled unit enters a frame at the
+switch word.  Turning tracing or monitoring off redirects every waiting
+frame to the switch word, which lies in no executing copy; a compiled
+callee that returned to such a frame indexed the caller's entry table by
+it.  The transfer now goes to the evaluator's switch handler, with the
+frame's `instr_ptr` still the word that ran last.  OB had assumed only
+frames that last ran in their unit meet that word.  The ten modules,
+`test_remote_pdb` and the same path through `sys.setprofile` and
+`sys.monitoring` pass under `always` on release and assert.
+
 Running:
-- the full suites at this join with the JIT always (release and assert);
-- JT: the cause and fix of that crash.
+- J1: the frame-transfer protocol that every JIT design needs.  A switch
+  jumps through the target code's entry table; the resume flag, the switch
+  routine and pins go (deferred reclamation of dead units replaces pins);
+  `Resume.Warm` becomes `Resume.Poll` when a code compiles; GN's chains
+  pass compiled frames.
 
 HS, a unit to shrink the arms that still run more instructions than
 golden87's, is held until the JIT plan says whether it comes first.

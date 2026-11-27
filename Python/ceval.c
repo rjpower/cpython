@@ -2868,11 +2868,15 @@ _PyEval_JitRun(PyThreadState *tstate, _PyJitUnit *unit,
 
 /* Control has come back to frame, which ran in its code's unit, at next in
  * the evaluator (IR_JIT_RESUME()): it goes back to the unit if the code has
- * one to run; otherwise it stays in the evaluator, and is no longer marked. */
+ * one to run; otherwise it stays in the evaluator, and is no longer marked.
+ * At the switch word it stays in the evaluator, still marked. */
 Py_NO_INLINE _PyIRTransfer
 _PyEval_JitResume(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   _PyInstr *next)
 {
+    if (next == &_PyEval_SwitchWord) {
+        return (_PyIRTransfer){frame, next};
+    }
     _PyJitUnit *unit = jit_unit_of(tstate, frame);
     if (unit == NULL) {
         frame->jit_flags &= ~_PyFrame_JIT_RESUME;

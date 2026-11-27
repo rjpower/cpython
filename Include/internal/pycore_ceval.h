@@ -445,6 +445,17 @@ PyAPI_FUNC(PyValue) _PyEval_FrameClearAndPopGeneralWithResult(
 /* Error/close paths carry no detached result. */
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate,
                                         _PyInterpreterFrame *frame);
+/* The switch word, whose handler id is IR_H_SWITCH: a frame's resume point
+ * (return_pc) is redirected to it, and the thread's list of switches
+ * (_PyThreadStateImpl.eval_switches) keeps the word that the frame goes on
+ * at, in the evaluator that its code asks for (Python/ceval_shared.h).  It
+ * lies in no executing copy, so no compiled unit has an entry for it: a
+ * transfer that names it goes to an evaluator, whose switch handler resolves
+ * it, whichever frame the transfer leaves and wherever that frame ran.  The
+ * baseline JIT's two entries that take a transfer's word, its switch routine
+ * (Python/jit.c) and _PyEval_JitResume(), hand it back. */
+extern _PyInstr _PyEval_SwitchWord;
+
 /* Distinct semantic outcomes share one completion/ownership protocol. */
 enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND };
 enum _PyIRStepStatus {

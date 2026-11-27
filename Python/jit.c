@@ -259,6 +259,11 @@ emit_switch_routine(_PyJitCompiler *c)
     _PyJitAsm_TestRR32(a, R(RAX), R(RAX));
     _PyJitAsm_Jcc(a, _PyJitCond_NE, none);
 #endif
+    /* The switch word, in no executing copy, is the evaluator's */
+    _PyJitAsm_MovImm(a, R(RCX), (int64_t)(uintptr_t)&_PyEval_SwitchWord);
+    _PyJitAsm_AluRM(a, _PyJitAlu_CMP, R(RCX),
+                    AT(R13, offsetof(_PyInterpreterFrame, instr_ptr)));
+    _PyJitAsm_Jcc(a, _PyJitCond_E, none);
     /* The executing copy's header lies before its words (_PyFrame_Exec()) */
     _PyJitAsm_MovRM(a, R(R14), AT(R13, offsetof(_PyInterpreterFrame, ir_words)));
     _PyJitAsm_MovRM(a, R(RAX), AT(R14, (int32_t)offsetof(_PyCodeExec, jit_unit) -

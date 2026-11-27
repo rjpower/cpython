@@ -1064,16 +1064,13 @@ _PyRop_Polls(uint32_t interrupt)
 }
 
 /* The two evaluators (Python/ceval_evaluator.h) and their switch.  A frame
- * moves to the other evaluator at the switch word, whose handler id is
- * IR_H_SWITCH: a frame's resume point (return_pc) is redirected to it, and
- * the thread's list of switches (_PyThreadStateImpl.eval_switches) keeps the
- * word that the frame goes on at.  The redirections happen where a frame
+ * moves to the other evaluator at the switch word (_PyEval_SwitchWord,
+ * Include/internal/pycore_ceval.h).  The redirections happen where a frame
  * starts or resumes (RESUME), at a poll after a monitoring change, and for
  * the frames already on a stack, during the stop-the-world change
  * (_PyEval_RedirectFrames()).  Each evaluator's entry
  * (_PyEval_EnterNormal(), _PyEval_EnterObserving()) is declared with the
  * interpreter's functions (Python/ceval_tail.h). */
-extern _PyInstr _PyEval_SwitchWord;
 
 /* Whether frame, which runs in the evaluator that observing names, goes on
  * in the other one: the one that its code's observed mark asks for.  A
@@ -1100,8 +1097,9 @@ _PyEval_SwitchesLoop(_PyInterpreterFrame *frame, int observing)
 
 /* A frame that runs in its code's compiled unit goes back to the unit when
  * its child returns (IR_JIT_RESUME()), and the unit runs only code that is
- * not observed: the frame needs no switch, and the unit has no entry for
- * the switch word.  Monitoring retires the unit of code that it observes. */
+ * not observed: the frame needs no switch.  Monitoring retires the unit of
+ * code that it observes.  Any other frame may still be resumed by a unit's
+ * transfer, which hands the switch word to an evaluator. */
 static inline bool
 _PyEval_SwitchSkips(_PyInterpreterFrame *frame)
 {

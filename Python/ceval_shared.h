@@ -1864,9 +1864,23 @@ _PyRop_LinkGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return resumed;
 }
 
-Py_NO_INLINE _PyInterpreterFrame *
+/* Send.Gen: claim the generator that _PyRop_ClaimableGenerator accepted, as
+ * SEND_GEN did, and link its frame.  Free-threaded, another thread can claim
+ * it first, and the send raises what the generic send raises for an
+ * executing generator. */
+static inline _PyInterpreterFrame *
 _PyRop_EnterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                      PyValueBorrow receiver, PyValue sent);
+                      PyValueBorrow receiver, PyValue sent)
+{
+    PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+    if (!gen_claim(tstate, gen)) {
+        PyObject *error = PyErr_GetRaisedException();
+        PyValue_XCLOSE(sent);
+        PyErr_SetRaisedException(error);
+        return NULL;
+    }
+    return _PyRop_LinkGenerator(tstate, frame, gen, sent);
+}
 
 Py_NO_INLINE bool
 _PyRop_ClaimGenerator(PyThreadState *tstate, PyValueBorrow receiver,

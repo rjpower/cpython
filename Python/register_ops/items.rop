@@ -253,7 +253,6 @@ arm GetItem.Getitem split
   entry():
     guard default_eval_frame(thread) else miss;
     guard getitem_frame_ready(thread, use(obj)) else miss;
-    guard recursion_budget(thread) else miss;
     let c:NewFrame = push_getitem(thread, frame, site, obj, key);
     exit enter(c) resume GetItem.Returned;
 }

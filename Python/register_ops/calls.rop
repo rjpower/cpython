@@ -868,7 +868,6 @@ arm Call.Exact split
     guard function_version(use(fn), fb) else miss;
     guard exact_positional(frame, use(fn), args) else miss;
     guard frame_space(thread, use(fn)) else miss;
-    guard recursion_budget(thread) else miss;
     let c:NewFrame = push_exact(thread, frame, fn, args);
     exit enter(c) resume Call.Returned;
 }
@@ -885,7 +884,6 @@ arm Call.BoundExact split
     guard no_weakrefs(use(fn)) else miss;
     guard exact_positional_bound(frame, use(fn), args) else miss;
     guard frame_space_bound(thread, use(fn)) else miss;
-    guard recursion_budget(thread) else miss;
     let c:NewFrame = push_bound_exact(thread, frame, fn, args);
     exit enter(c) resume Call.Returned;
 }
@@ -900,6 +898,9 @@ arm Call.Init split
     guard self_absent(frame, args) else miss;
     guard class_version(use(fn), fb) else miss;
     guard init_frame_ready(thread, use(fn)) else miss;
+    // The cleanup frame takes a unit of the budget before the __init__
+    // frame's start takes its own: at the last unit the call deopts, so the
+    // limit falls where the generic call puts it
     guard recursion_budget(thread) else miss;
     call push_init(thread, frame, fn, args) {
       entered -> Enter();
@@ -1476,7 +1477,6 @@ arm CallKw.Plan split
   entry():
     guard default_eval_frame(thread) else miss;
     guard function_version(use(fn), fb) else miss;
-    guard recursion_budget(thread) else miss;
     branch plan_fits(thread, frame, use(fn), args, fb) -> Planned(), General();
   Planned():
     call push_plan(thread, frame, fn, args, fb) {
@@ -1505,7 +1505,6 @@ arm Call.PyGeneral split
   entry():
     guard default_eval_frame(thread) else miss;
     guard function_version(use(fn), fb) else miss;
-    guard recursion_budget(thread) else miss;
     branch plan_fits(thread, frame, use(fn), args, fb) -> Planned(), General();
   Planned():
     call push_plan(thread, frame, fn, args, fb) {
@@ -1572,7 +1571,6 @@ arm Call.BoundGeneral split
     guard default_eval_frame(thread) else miss;
     guard self_absent(frame, args) else miss;
     guard method_version(use(fn), fb) else miss;
-    guard recursion_budget(thread) else miss;
     branch python_target(thread, frame, fn, args) -> Python(), Created();
   Python():
     call push_python(thread, frame, fn, args) {

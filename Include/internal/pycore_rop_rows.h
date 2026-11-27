@@ -53,6 +53,20 @@ static_assert(ROP_NUMERIC_NB_INPLACE_SUBTRACT == NB_INPLACE_SUBTRACT, "Numeric N
 static_assert(ROP_NUMERIC_NB_INPLACE_TRUE_DIVIDE == NB_INPLACE_TRUE_DIVIDE, "Numeric NB_INPLACE_TRUE_DIVIDE");
 static_assert(ROP_NUMERIC_NB_INPLACE_XOR == NB_INPLACE_XOR, "Numeric NB_INPLACE_XOR");
 
+/* An arm's operand (a B) is an object exactly when it is in pointer space:
+ * it is never NULL, and the other words below Py_PTR_LIMIT that
+ * PyValue_IsObject() rejects are a debug build's PyValue_Wrap() pointers,
+ * which no operand holds.  The rows test their B operands with this, as the
+ * is_object primitive does (Python/register_ops/core.rop). */
+static inline bool
+_PyRop_IsObject(PyValueBorrow v)
+{
+    assert(!PyValue_IsNull(v));
+    assert(PyValue_IsPointerSpace(v) == (bool)PyValue_IsObject(v));
+    return PyValue_IsPointerSpace(v);
+}
+#define _PyRop_IsObject(V0) (_PyRop_IsObject)(PyValue_Borrow(V0))
+
 /* The C bodies of the call-boundary rows of Python/register_ops/core.rop.
  * The generated handlers build the arguments from the word: a `Span<Src>`
  * is the homes and local flags of the listed operands, in order. */
@@ -411,7 +425,7 @@ _PyRop_AddFloats(double x, double y)
 static inline bool
 _PyRop_BothExactStr(PyValueBorrow a, PyValueBorrow b)
 {
-    return PyValue_IsObject(a) && PyValue_IsObject(b) &&
+    return _PyRop_IsObject(a) && _PyRop_IsObject(b) &&
            PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(a)) &&
            PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(b));
 }
@@ -433,7 +447,7 @@ _PyRop_ExtensionApplies(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
     const _PyBinaryOpSpecializationDescr *d =
         _PyBinaryOp_ExtendDescr((PyObject *)fb->descr);
     // The descriptors guard objects: inline operands go to the generic arm
-    return d != NULL && PyValue_IsObject(a) && PyValue_IsObject(b) &&
+    return d != NULL && _PyRop_IsObject(a) && _PyRop_IsObject(b) &&
            Py_TYPE(PyValue_AsKnownObjectBorrow(a)) == d->lhs_type &&
            Py_TYPE(PyValue_AsKnownObjectBorrow(b)) == d->rhs_type;
 }
@@ -845,7 +859,7 @@ _PyRop_IntNonzero(PyValueBorrow v)
 static inline bool
 _PyRop_ExactList(PyValueBorrow v)
 {
-    return PyValue_IsObject(v) && PyList_CheckExact(PyValue_AsKnownObjectBorrow(v));
+    return _PyRop_IsObject(v) && PyList_CheckExact(PyValue_AsKnownObjectBorrow(v));
 }
 
 static inline bool
@@ -857,7 +871,7 @@ _PyRop_ListNonempty(PyValueBorrow v)
 static inline bool
 _PyRop_ExactStr(PyValueBorrow v)
 {
-    return PyValue_IsObject(v) && PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(v));
+    return _PyRop_IsObject(v) && PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(v));
 }
 
 static inline bool
@@ -871,7 +885,7 @@ _PyRop_StrNonempty(PyValueBorrow v)
 static inline bool
 _PyRop_HasEntryVersion(const _PyFbUnary *fb, PyValueBorrow v)
 {
-    if (!PyValue_IsObject(v) || fb->type_version == 0) {
+    if (!_PyRop_IsObject(v) || fb->type_version == 0) {
         return false;
     }
     PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
@@ -1010,19 +1024,19 @@ _PyRop_CompareTruth(int relation, PyValueBorrow a, PyValueBorrow b)
 static inline bool
 _PyRop_ExactAnySet(PyValueBorrow c)
 {
-    return PyValue_IsObject(c) && PyAnySet_CheckExact(PyValue_AsKnownObjectBorrow(c));
+    return _PyRop_IsObject(c) && PyAnySet_CheckExact(PyValue_AsKnownObjectBorrow(c));
 }
 
 static inline bool
 _PyRop_ExactAnyDict(PyValueBorrow c)
 {
-    return PyValue_IsObject(c) && PyAnyDict_CheckExact(PyValue_AsKnownObjectBorrow(c));
+    return _PyRop_IsObject(c) && PyAnyDict_CheckExact(PyValue_AsKnownObjectBorrow(c));
 }
 
 static inline bool
 _PyRop_ExactSequence(PyValueBorrow c)
 {
-    if (!PyValue_IsObject(c)) {
+    if (!_PyRop_IsObject(c)) {
         return false;
     }
     PyObject *o = PyValue_AsKnownObjectBorrow(c);

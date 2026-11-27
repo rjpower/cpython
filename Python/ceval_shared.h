@@ -884,7 +884,7 @@ _PyRop_DefaultEvalFrame(PyThreadState *tstate)
 static inline bool
 _PyRop_FunctionVersion(PyValueBorrow fn, const _PyFbCall *fb)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyObject *object = PyValue_AsKnownObjectBorrow(fn);
@@ -959,7 +959,7 @@ _PyRop_SelfAbsent(_PyInterpreterFrame *frame, const _PyIRWord *head)
 static inline bool
 _PyRop_MethodVersion(PyValueBorrow fn, const _PyFbCall *fb)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyObject *object = PyValue_AsKnownObjectBorrow(fn);
@@ -1011,7 +1011,7 @@ _PyRop_PushBoundExact(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline bool
 _PyRop_ClassVersion(PyValueBorrow fn, const _PyFbCall *fb)
 {
-    if (!PyValue_IsObject(fn) || fb->type_version == 0) {
+    if (!_PyRop_IsObject(fn) || fb->type_version == 0) {
         return false;
     }
     PyObject *object = PyValue_AsKnownObjectBorrow(fn);
@@ -1264,7 +1264,7 @@ _PyRop_SuperBuiltinReady(const _PyRopSpan *parts)
 {
     PyValueBorrow sup = rop_super_part(parts, 0);
     PyValueBorrow cls = rop_super_part(parts, 1);
-    return PyValue_IsObject(sup) && PyValue_IsObject(cls)
+    return _PyRop_IsObject(sup) && _PyRop_IsObject(cls)
         && PyValue_AsKnownObjectBorrow(sup) == (PyObject *)&PySuper_Type
         && PyType_Check(PyValue_AsKnownObjectBorrow(cls));
 }
@@ -1441,7 +1441,7 @@ _PyRop_IterSelf(PyValueBorrow v)
 static inline bool
 _PyRop_ExactRangeIter(PyValueBorrow v)
 {
-    if (!PyValue_IsObject(v)
+    if (!_PyRop_IsObject(v)
         || Py_TYPE(PyValue_AsKnownObjectBorrow(v)) != &PyRangeIter_Type) {
         return false;
     }
@@ -1457,7 +1457,7 @@ _PyRop_ExactRangeIter(PyValueBorrow v)
 static inline bool
 _PyRop_ExactListIter(PyValueBorrow v)
 {
-    if (!PyValue_IsObject(v)
+    if (!_PyRop_IsObject(v)
         || !PyList_CheckExact(PyValue_AsKnownObjectBorrow(v))) {
         return false;
     }
@@ -1485,7 +1485,7 @@ _PyRop_CursorIsVacant(PyValueBorrow c)
 static inline bool
 _PyRop_HasIternextValue(PyValueBorrow v)
 {
-    return PyValue_IsObject(v)
+    return _PyRop_IsObject(v)
         && _PyType_VALUE_SLOT(Py_TYPE(PyValue_AsKnownObjectBorrow(v)), iternext) != NULL;
 }
 
@@ -1494,7 +1494,7 @@ _PyRop_HasIternextValue(PyValueBorrow v)
 static inline bool
 _PyRop_IterGenMethod(PyValueBorrow v)
 {
-    if (!PyValue_IsObject(v)) {
+    if (!_PyRop_IsObject(v)) {
         return false;
     }
     PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
@@ -1838,7 +1838,7 @@ static inline bool
 _PyRop_ClaimableGenerator(PyThreadState *tstate, PyValueBorrow receiver,
                           PyValueBorrow sent)
 {
-    if (IS_PEP523_HOOKED(tstate) || !PyValue_IsObject(receiver)) {
+    if (IS_PEP523_HOOKED(tstate) || !_PyRop_IsObject(receiver)) {
         return false;
     }
     PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
@@ -2059,7 +2059,7 @@ _PyRop_EnterClaimed(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline bool
 _PyRop_GeneratorReceiver(PyValueBorrow receiver)
 {
-    if (!PyValue_IsObject(receiver) ||
+    if (!_PyRop_IsObject(receiver) ||
         !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
     {
         return false;
@@ -2074,7 +2074,7 @@ _PyRop_GeneratorReceiver(PyValueBorrow receiver)
 static inline bool
 _PyRop_ExactGeneratorIter(PyValueBorrow receiver)
 {
-    return PyValue_IsObject(receiver) &&
+    return _PyRop_IsObject(receiver) &&
         _PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) &&
         Py_TYPE(PyValue_AsKnownObjectBorrow(receiver)) == &PyGen_Type;
 }
@@ -2082,7 +2082,7 @@ _PyRop_ExactGeneratorIter(PyValueBorrow receiver)
 static inline bool
 _PyRop_ClaimableForGenerator(PyThreadState *tstate, PyValueBorrow receiver)
 {
-    if (IS_PEP523_HOOKED(tstate) || !PyValue_IsObject(receiver)) {
+    if (IS_PEP523_HOOKED(tstate) || !_PyRop_IsObject(receiver)) {
         return false;
     }
     PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
@@ -2095,7 +2095,7 @@ _PyRop_ClaimableForGenerator(PyThreadState *tstate, PyValueBorrow receiver)
 static inline bool
 _PyRop_ClaimForGenerator(PyThreadState *tstate, PyValueBorrow receiver)
 {
-    if (IS_PEP523_HOOKED(tstate) || !PyValue_IsObject(receiver)) {
+    if (IS_PEP523_HOOKED(tstate) || !_PyRop_IsObject(receiver)) {
         return false;
     }
     PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
@@ -2143,14 +2143,14 @@ _PyRop_CloseCompletedReceiver(PyValue receiver)
 static inline bool
 _PyRop_HasIterItem(PyValueBorrow receiver)
 {
-    return PyValue_IsObject(receiver) &&
+    return _PyRop_IsObject(receiver) &&
            Py_TYPE(PyValue_AsKnownObjectBorrow(receiver))->_tp_iteritem != NULL;
 }
 
 static inline bool
 _PyRop_IsAsyncGenASend(PyValueBorrow receiver)
 {
-    return PyValue_IsObject(receiver) &&
+    return _PyRop_IsObject(receiver) &&
            PyAsyncGenASend_CheckExact(PyValue_AsKnownObjectBorrow(receiver));
 }
 
@@ -2392,19 +2392,19 @@ _PyRop_StoreSlice(PyValueBorrow container, PyValueBorrow start, PyValueBorrow st
 static inline bool
 _PyRop_ExactTuple(PyValueBorrow v)
 {
-    return PyValue_IsObject(v) && PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(v));
+    return _PyRop_IsObject(v) && PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(v));
 }
 
 static inline bool
 _PyRop_ExactSlice(PyValueBorrow v)
 {
-    return PyValue_IsObject(v) && PySlice_Check(PyValue_AsKnownObjectBorrow(v));
+    return _PyRop_IsObject(v) && PySlice_Check(PyValue_AsKnownObjectBorrow(v));
 }
 
 static inline bool
 _PyRop_CompactAsciiStr(PyValueBorrow v)
 {
-    if (!PyValue_IsObject(v)) {
+    if (!_PyRop_IsObject(v)) {
         return false;
     }
     PyObject *o = PyValue_AsKnownObjectBorrow(v);
@@ -2477,7 +2477,7 @@ _PyRop_UnicodeAsciiChar(PyValueBorrow v, PyValueBorrow k)
 static inline bool
 _PyRop_DictSubscriptSlot(PyValueBorrow v)
 {
-    if (!PyValue_IsObject(v)) {
+    if (!_PyRop_IsObject(v)) {
         return false;
     }
     PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
@@ -2488,7 +2488,7 @@ _PyRop_DictSubscriptSlot(PyValueBorrow v)
 static inline bool
 _PyRop_DictAssignSlot(PyValueBorrow v)
 {
-    if (!PyValue_IsObject(v)) {
+    if (!_PyRop_IsObject(v)) {
         return false;
     }
     PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
@@ -3438,7 +3438,7 @@ _PyRop_CalleeIsListAppend(PyThreadState *tstate, PyValueBorrow fn)
 static inline bool
 _PyRop_BuiltinClass(PyValueBorrow fn)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
@@ -3450,7 +3450,7 @@ static inline bool
 _PyRop_BuiltinOCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
                         const _PyIRWord *head)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
@@ -3463,7 +3463,7 @@ static inline bool
 _PyRop_BuiltinFastCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
                            const _PyIRWord *head)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
@@ -3484,7 +3484,7 @@ _PyRop_BuiltinFastCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
 static inline bool
 _PyRop_BuiltinFastKeywordsCallable(PyValueBorrow fn)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
@@ -3508,7 +3508,7 @@ static inline bool
 _PyRop_DescriptorOCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
                            const _PyIRWord *head)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyMethodDescrObject *method =
@@ -3523,7 +3523,7 @@ static inline bool
 _PyRop_DescriptorNoargsCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
                                 const _PyIRWord *head)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyMethodDescrObject *method =
@@ -3538,7 +3538,7 @@ static inline bool
 _PyRop_DescriptorFastCallable(_PyInterpreterFrame *frame, PyValueBorrow fn,
                               const _PyIRWord *head)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyMethodDescrObject *method =
@@ -3563,7 +3563,7 @@ static inline bool
 _PyRop_DescriptorFastKeywordsCallable(_PyInterpreterFrame *frame,
                                       PyValueBorrow fn, const _PyIRWord *head)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyMethodDescrObject *method =
@@ -3585,7 +3585,7 @@ static inline bool
 _PyRop_ListReceiver(_PyInterpreterFrame *frame, const _PyIRWord *head)
 {
     PyValue self = _PyFrame_Slots(frame)[_PyIR_CallOperand(head, 0)];
-    if (!PyValue_IsObject(self) ||
+    if (!_PyRop_IsObject(self) ||
         !PyList_CheckExact(PyValue_AsKnownObjectBorrow(self))) {
         return false;
     }
@@ -3657,7 +3657,7 @@ _PyAttr_PushGetattribute(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline bool
 _PyAttr_FrameClaimable(PyThreadState *tstate, PyValueBorrow owner, PyObject *name)
 {
-    if (!PyValue_IsObject(owner) || IS_PEP523_HOOKED(tstate) ||
+    if (!_PyRop_IsObject(owner) || IS_PEP523_HOOKED(tstate) ||
         !_PyRop_RecursionBudget(tstate))
     {
         return false;
@@ -3941,7 +3941,7 @@ _PyRop_PlanGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static inline bool
 _PyRop_NotPythonCallable(PyValueBorrow fn)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return true;
     }
     PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
@@ -3951,7 +3951,7 @@ _PyRop_NotPythonCallable(PyValueBorrow fn)
 static inline bool
 _PyRop_PyCallableEx(PyValueBorrow fn)
 {
-    if (!PyValue_IsObject(fn)) {
+    if (!_PyRop_IsObject(fn)) {
         return false;
     }
     PyObject *func = PyValue_AsKnownObjectBorrow(fn);

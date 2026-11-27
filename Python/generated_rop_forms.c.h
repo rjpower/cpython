@@ -2933,7 +2933,7 @@ ir_run_IterOpen_Generic(
     rop_IterOpen_Generic_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_IterOpen_Generic_adapt_before_use_iter1_Sample:
-    if (PyValue_IsObject(PyValue_Borrow(*home_source))) {
+    if (PyValue_IsPointerSpace(PyValue_Borrow(*home_source))) {
         goto rop_IterOpen_Generic_adapt_before_use_iter1_TryIndexed;
     }
     goto rop_IterOpen_Generic_adapt_before_use_iter1_Backoff;
@@ -4899,7 +4899,7 @@ ir_run_Truth_Generic(
     }
     goto rop_Truth_Generic_adapt_before_use_truth2_Run;
     rop_Truth_Generic_adapt_before_use_truth2_TryObject:
-    if (PyValue_IsObject(PyValue_Borrow(*home_value))) {
+    if (PyValue_IsPointerSpace(PyValue_Borrow(*home_value))) {
         goto rop_Truth_Generic_adapt_before_use_truth2_TryPlain;
     }
     goto rop_Truth_Generic_adapt_before_use_truth2_Backoff;
@@ -5114,7 +5114,7 @@ ir_run_BranchTruth_Generic(
     }
     goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Run;
     rop_BranchTruth_Generic_adapt_before_use_branch_truth2_TryObject:
-    if (PyValue_IsObject(PyValue_Borrow(*home_value))) {
+    if (PyValue_IsPointerSpace(PyValue_Borrow(*home_value))) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_TryPlain;
     }
     goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Backoff;
@@ -5676,7 +5676,7 @@ ir_run_AttrWrite_Instance(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -5801,7 +5801,7 @@ ir_run_AttrWrite_Shape_TT(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -5860,7 +5860,7 @@ ir_run_AttrWrite_Shape_LL(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -5910,7 +5910,7 @@ ir_run_AttrWrite_Shape(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -5970,7 +5970,7 @@ ir_run_AttrWrite_ShapeAdd_LL(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -6015,7 +6015,7 @@ ir_run_AttrWrite_ShapeAdd(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -6078,7 +6078,7 @@ ir_run_AttrWrite_Hint(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -6216,7 +6216,7 @@ ir_run_AttrWrite_Slot_LT(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -6324,7 +6324,7 @@ ir_run_AttrWrite_Slot_TT(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -6447,7 +6447,7 @@ ir_run_AttrWrite_Slot(
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(AttrWrite_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11189,7 +11189,7 @@ ir_run_GetAttr_Instance_TL(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11239,7 +11239,7 @@ ir_run_GetAttr_Instance(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11312,7 +11312,7 @@ ir_run_GetAttr_GetSet(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11398,7 +11398,7 @@ ir_run_GetAttr_Property(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11441,7 +11441,7 @@ ir_run_GetAttr_GetattributeOverridden(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11486,7 +11486,7 @@ ir_run_GetAttr_Shape_TL(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11531,7 +11531,7 @@ ir_run_GetAttr_Shape(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11586,7 +11586,7 @@ ir_run_GetAttr_PolyShape_TL(
     _PyAttrRecipe r;
     assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B)) == (IR_F_LOCAL_B));
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11625,7 +11625,7 @@ ir_run_GetAttr_PolyShape(
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     _PyAttrRecipe r;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11684,7 +11684,7 @@ ir_run_GetAttr_Module(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11746,7 +11746,7 @@ ir_run_GetAttr_Hint(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11807,7 +11807,7 @@ ir_run_GetAttr_ValueSlot_TL(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11854,7 +11854,7 @@ ir_run_GetAttr_ValueSlot(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11916,7 +11916,7 @@ ir_run_GetAttr_PointerSlot(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -11977,7 +11977,7 @@ ir_run_GetAttr_Class_TT(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12024,7 +12024,7 @@ ir_run_GetAttr_Class(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12081,7 +12081,7 @@ ir_run_GetAttr_NonDescriptorValues(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12141,7 +12141,7 @@ ir_run_GetAttr_NonDescriptorNoDict(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12199,7 +12199,7 @@ ir_run_GetMethod_MethodValues_TTL(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12250,7 +12250,7 @@ ir_run_GetMethod_MethodValues(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12314,7 +12314,7 @@ ir_run_GetMethod_Module(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12380,7 +12380,7 @@ ir_run_GetMethod_PolyMethod_TTL(
     _PyAttrRecipe r;
     assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_C));
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12428,7 +12428,7 @@ ir_run_GetMethod_PolyMethod(
     PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
     _PyAttrRecipe r;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12491,7 +12491,7 @@ ir_run_GetMethod_NoDict_TTL(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12539,7 +12539,7 @@ ir_run_GetMethod_NoDict(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12599,7 +12599,7 @@ ir_run_GetMethod_LazyDict(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -12663,7 +12663,7 @@ ir_run_GetMethod_ClassMethod(
     }
     r = out1;
     v = PyValue_Borrow(*home_obj);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(GetMethod_Generic);
     }
     o = PyValue_AsKnownObjectBorrow(v);
@@ -14608,7 +14608,7 @@ ir_run_IterOpen_Self(
     PyValue old_pair_cursor;
     PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
     v = PyValue_Borrow(*home_source);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(IterOpen_Generic);
     }
     if (!_PyRop_IterSelf(v)) {
@@ -14656,7 +14656,7 @@ ir_run_IterOpen_Indexed(
     PyValue old_pair_cursor;
     PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
     v = PyValue_Borrow(*home_source);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(IterOpen_Generic);
     }
     if (!_PyRop_IterByIndex(v)) {
@@ -14955,7 +14955,7 @@ ir_run_ForIter_Range(
     PyValue iv;
     PyValue ev;
     r = PyValue_Borrow(*home_pair_receiver);
-    if (!PyValue_IsObject(r)) {
+    if (!PyValue_IsPointerSpace(r)) {
         JUMP_TO_PREDICTED(ForIter_Generic);
     }
     if (!_PyRop_ExactRangeIter(r)) {
@@ -15189,7 +15189,7 @@ ir_run_ForIter_Slot(
     if (!_PyRop_CursorIsVacant(PyValue_Borrow(*home_pair_cursor))) {
         JUMP_TO_PREDICTED(ForIter_Generic);
     }
-    if (!PyValue_IsObject(PyValue_Borrow(*home_pair_receiver))) {
+    if (!PyValue_IsPointerSpace(PyValue_Borrow(*home_pair_receiver))) {
         JUMP_TO_PREDICTED(ForIter_Generic);
     }
     if (!_PyRop_HasIternextValue(PyValue_Borrow(*home_pair_receiver))) {
@@ -22705,7 +22705,7 @@ ir_run_Truth_Slot(
     PyValue z;
     bool slot_truth_at_origin1_hit;
     v = PyValue_Borrow(*home_value);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(Truth_Generic);
     }
     if (!_PyRop_SlotApplies(((_PyFbUnary *)IR_FB(IR_D(ir_word))), v)) {
@@ -23371,7 +23371,7 @@ ir_run_BranchTruth_Slot_BRANCH_IF_FALSE(
     bool hit;
     bool slot_truth_at_origin1_hit;
     v = PyValue_Borrow(*home_value);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     if (!_PyRop_SlotApplies(((_PyFbUnary *)IR_FB(IR_B(ir_word))), v)) {
@@ -23482,7 +23482,7 @@ ir_run_BranchTruth_Slot_BRANCH_IF_TRUE(
     bool hit;
     bool slot_truth_at_origin1_hit;
     v = PyValue_Borrow(*home_value);
-    if (!PyValue_IsObject(v)) {
+    if (!PyValue_IsPointerSpace(v)) {
         JUMP_TO_PREDICTED(BranchTruth_Generic);
     }
     if (!_PyRop_SlotApplies(((_PyFbUnary *)IR_FB(IR_B(ir_word))), v)) {

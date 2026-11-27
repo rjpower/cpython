@@ -16,13 +16,14 @@ enum Numeric(NB_ADD, NB_AND, NB_FLOOR_DIVIDE, NB_LSHIFT, NB_MATRIX_MULTIPLY,
 extern primitive is_object(v:B) -> Bool
   effects()
   test(object(v))
-  c PyValue_IsObject as int_as_bool
+  c PyValue_IsPointerSpace as bool
   evidence(
-    review: "Reviewed G0c batch 1 (pycore_pyvalue.h): bits > 2, bits < Py_PTR_LIMIT"
-            "and bit 1 clear.",
+    review: "pycore_value.h: bits < Py_PTR_LIMIT. Of PyValue_IsObject's other tests,"
+            "bits > 2 excludes NULL, which a B never is, and bit 1 is a debug"
+            "build's PyValue_Wrap() pointer, which no B holds (_PyRop_IsObject).",
     contract: "A comparison of the word: no memory, no callee, no failure. A B is"
               "never NULL, which the C row requires.",
-    lowering: "jit_lower.c LOWERING(PyValue_IsObject)",
+    lowering: "jit_lower.c LOWERING(PyValue_IsPointerSpace)",
     test: "test_ir_leaf CASES");
 
 extern primitive as_object(v:B) -> Obj

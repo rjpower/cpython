@@ -416,9 +416,7 @@ extern primitive inline_int_key(k:B) -> Bool
   c PyValue_IsInlineInt as bool
   evidence(
     review: "Reviewed IT. pycore_value.h: the word is an inline int.",
-    contract: "A comparison of the word: no memory, no failure, no callback.",
-    lowering: "jit_lower.c LOWERING(PyValue_IsInlineInt)",
-    test: "test_ir_leaf CASES");
+    contract: "A comparison of the word: no memory, no failure, no callback.");
 
 extern primitive exact_tuple(v:B) -> Bool
   effects()
@@ -426,9 +424,7 @@ extern primitive exact_tuple(v:B) -> Bool
   c _PyRop_ExactTuple as bool
   evidence(
     review: "Reviewed IT. The old _GUARD_ELEMENT_TUPLE: PyTuple_CheckExact.",
-    contract: "Reads the word and the type: no memory, no failure.",
-    lowering: "none yet: PyValue_IsObject and a type test",
-    test: "test_rop_items");
+    contract: "Reads the word and the type: no memory, no failure.");
 
 extern primitive exact_slice(v:B) -> Bool
   effects()
@@ -436,9 +432,7 @@ extern primitive exact_slice(v:B) -> Bool
   c _PyRop_ExactSlice as bool
   evidence(
     review: "Reviewed IT. The old _GUARD_TOS_SLICE: a slice object.",
-    contract: "Reads the word and the type: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "Reads the word and the type: no memory, no failure.");
 
 // An exact str that is compact ASCII (claims the type; the row that reads it
 // relies on the layout)
@@ -448,9 +442,7 @@ extern primitive compact_ascii_str(v:B) -> Bool
   c _PyRop_CompactAsciiStr as bool
   evidence(
     review: "Reviewed IT. The old _GUARD_NOS_COMPACT_ASCII.",
-    contract: "Reads the type and the string's state: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "Reads the type and the string's state: no memory, no failure.");
 
 // Index tests: the fact is in_bounds(k, v).  A list index folds from the
 // end; a tuple's and a str's must be nonnegative.
@@ -461,9 +453,7 @@ extern primitive list_in_bounds(v:B, k:B) -> Bool
   c _PyRop_ListInBounds as bool
   evidence(
     review: "Reviewed IT. The old IR_GUARD_ELEMENT_INDEX(FROM_END).",
-    contract: "Reads the list's size: no memory, no failure, no callback.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "Reads the list's size: no memory, no failure, no callback.");
 
 extern primitive tuple_in_bounds(v:B, k:B) -> Bool
   effects(reads)
@@ -472,9 +462,7 @@ extern primitive tuple_in_bounds(v:B, k:B) -> Bool
   c _PyRop_TupleInBounds as bool
   evidence(
     review: "Reviewed IT. The old IR_GUARD_ELEMENT_INDEX(NONNEGATIVE).",
-    contract: "Reads the tuple's size: no memory, no failure, no callback.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "Reads the tuple's size: no memory, no failure, no callback.");
 
 extern primitive str_in_bounds(v:B, k:B) -> Bool
   effects(reads)
@@ -483,9 +471,7 @@ extern primitive str_in_bounds(v:B, k:B) -> Bool
   c _PyRop_StrInBounds as bool
   evidence(
     review: "Reviewed IT. The old _BINARY_OP_SUBSCR_STR_INT bounds test.",
-    contract: "Reads the string's length: no memory, no failure, no callback.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "Reads the string's length: no memory, no failure, no callback.");
 
 extern primitive list_item(v:B, k:B) -> B
   effects(reads)
@@ -493,9 +479,7 @@ extern primitive list_item(v:B, k:B) -> B
   c _PyRop_ListItem as borrow
   evidence(
     review: "Reviewed IT. The old IR_DUP_CANONICAL_ELEMENT, without the count.",
-    contract: "The element as a borrow: the list is held by the word's operand.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "The element as a borrow: the list is held by the word's operand.");
 
 extern primitive tuple_item(v:B, k:B) -> B
   effects(reads)
@@ -503,9 +487,7 @@ extern primitive tuple_item(v:B, k:B) -> B
   c _PyRop_TupleItem as borrow
   evidence(
     review: "Reviewed IT. The old IR_DUP_CANONICAL_ELEMENT, without the count.",
-    contract: "The element as a borrow: the tuple is held by the word's operand.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "The element as a borrow: the tuple is held by the word's operand.");
 
 // The cached one-character string of an ASCII character
 extern primitive ascii_char(v:B, k:B) -> B
@@ -515,9 +497,7 @@ extern primitive ascii_char(v:B, k:B) -> B
   evidence(
     review: "Reviewed IT. The old _BINARY_OP_SUBSCR_STR_INT: the singleton for"
             "the byte, which the compact ASCII guard proved below 128.",
-    contract: "An immortal singleton, a borrow with no count.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "An immortal singleton, a borrow with no count.");
 
 extern primitive unicode_ascii_char(v:B, k:B) -> Maybe<B>
   effects(reads)
@@ -526,27 +506,21 @@ extern primitive unicode_ascii_char(v:B, k:B) -> Maybe<B>
   evidence(
     review: "Reviewed IT. The old _BINARY_OP_SUBSCR_USTR_INT: absent for a"
             "character that is not ASCII.",
-    contract: "An immortal singleton or NULL: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "An immortal singleton or NULL: no memory, no failure.");
 
 extern primitive dict_subscript_slot(v:B) -> Bool
   effects(reads)
   c _PyRop_DictSubscriptSlot as bool
   evidence(
     review: "Reviewed IT. The old _GUARD_NOS_DICT_SUBSCRIPT: mp_subscript is dict's.",
-    contract: "Reads the type's slots: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "Reads the type's slots: no memory, no failure.");
 
 extern primitive dict_assign_slot(v:B) -> Bool
   effects(reads)
   c _PyRop_DictAssignSlot as bool
   evidence(
     review: "Reviewed IT. The old _GUARD_NOS_DICT_STORE_SUBSCRIPT.",
-    contract: "Reads the type's slots: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_items");
+    contract: "Reads the type's slots: no memory, no failure.");
 
 // The first probe of an exact dict by an inline int, which runs no Python
 extern helper dict_first_probe(v:B, k:B)

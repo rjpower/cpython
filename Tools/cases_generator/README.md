@@ -8,13 +8,11 @@ register instructions.
 What's currently here:
 
 - `rop_syntax.py`, `rop_model.py`, `rop_check.py`, `rop_verify.py`,
-  `rop_ssa.py`, `rop_catalog.py`, `rop_primitives.py`: the definition language,
+  `rop_catalog.py`, `rop_primitives.py`: the definition language,
   its checker and the declared catalogs
-- `rop_cgen.py`, `rop_leaf.py`, `jit_backend.py`, `jit_row_facts.py`: lowerings of
-  the checked definitions to C and to the baseline JIT's templates
+- `rop_cgen.py`: lowering of the checked definitions to C
 - `rop_generator.py`: writes the interpreter cases, the function forms, the
-  completion stubs and their plans, the dispatch and form tables, the JIT
-  templates and lowerings, and `Include/internal/pycore_rop_metadata.h`
+  completion stubs and their plans, the dispatch and form tables, and `Include/internal/pycore_rop_metadata.h`
 - `ir_metadata_generator.py`: writes the handler formats and other tables of
   the register IR to `Include/internal/pycore_ir_metadata.h`
 - `regcfg_metadata_generator.py`: writes the translator's rows of the stack

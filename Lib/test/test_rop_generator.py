@@ -18,7 +18,6 @@ with test_tools.imports_under_tool("cases_generator"):
     import rop_catalog
     import rop_check
     import rop_generator
-    import rop_leaf
     import rop_model
     import rop_print
     import rop_syntax
@@ -59,41 +58,6 @@ class AddCheckedScaledTests(unittest.TestCase):
                     self.assertEqual(out, exact << shift if fits else exact)
 
 
-def hot_sequence(lines):
-    """The calls of a template's hot path, by name: up to the cold section,
-    without labels, register choices or arguments"""
-    names = []
-    for line in lines:
-        line = line.strip()
-        if line.startswith("_PyJitLower_ColdBegin"):
-            break
-        if m := re.match(r"(?:int c\d+ = )?(_PyJit\w+)\(", line):
-            if "NewLabel" not in m[1] and "Bind" not in m[1]:
-                names.append(m[1])
-        elif line.startswith("if ("):
-            names.append(line.rstrip(" {"))
-    return names
-
-
-class AddIntTemplateTests(unittest.TestCase):
-    def test_hot_path(self):
-        # The old BINARY_OP_ADD_INT template's hot path, with its add and the
-        # branch on overflow spelled as the primitive that is both
-        prog = products().program
-        arm = prog.arms["Add.Int"]
-        new = rop_leaf.template_of_arm(prog, arm, "Add_Int")
-        self.assertEqual(hot_sequence(new), [
-            "_PyJitAsm_MovRM", "_PyJitAsm_MovRM",
-            "_PyJitLower_PyValue_BothInlineInt", "_PyJitAsm_Jcc",
-            "_PyJitLower__PyValue_IntScaled", "_PyJitLower__PyValue_IntScaled",
-            "_PyJitLower__PyValue_AddCheckedScaled",
-            "_PyJitLower__PyValue_FromIntScaled",
-            "if (!(ir_word & IR_F_LOCAL_B))", "_PyJitAsm_MovMI",
-            "if (!(ir_word & IR_F_LOCAL_C))", "_PyJitAsm_MovMI",
-            "if ((ir_word & IR_F_LOCAL_A))", "_PyJitAsm_MovRM", "_PyJitAsm_MovMR",
-            "if ((ir_word & IR_F_LOCAL_A))", "_PyJitLower_PyValue_XCLOSE"])
-
-
 SHARED = """\
 family F(dst:Dst, x:Src) exits(next, miss) generic(Any);
 point F.Done(current, next_head, clear) keep() spent(x) defs(dst);
@@ -101,7 +65,7 @@ extern primitive is_int(v:B) -> Bool
   effects()
   test(inline_int(v))
   c PyValue_IsInlineInt as bool
-  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+  evidence(review: "r", contract: "c");
 arm F.Copy shared effects(writes, releases) feedback() exits(next, miss)
 {
   entry():
@@ -470,7 +434,7 @@ extern primitive is_int(v:B) -> Bool
   effects()
   test(inline_int(v))
   c PyValue_IsInlineInt as bool
-  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+  evidence(review: "r", contract: "c");
 family F(dst:Dst, x:Src, fb:Fb<Call>) exits(next, miss)
   events(CALL, C_RETURN);
 family G(dst:Dst, x:Src) exits(next, miss);
@@ -702,7 +666,7 @@ family F(x:Src, op:Enum<Op>) exits(next, miss);
 extern primitive op_ok(op:Enum<Op>, v:B) -> Bool
   effects()
   c op_ok_c as bool
-  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+  evidence(review: "r", contract: "c");
 arm F.Fast shared OVER effects() feedback() exits(next, miss)
 {
   entry():
@@ -814,7 +778,7 @@ family F(dst:Dst, x:Src, y:Src, op:Enum<Op>) exits(next, miss);
 extern primitive op_ok(op:Enum<Op>, v:B) -> Bool
   effects()
   c op_ok_c as bool
-  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+  evidence(review: "r", contract: "c");
 arm F.Fast shared OVERS effects() feedback() exits(next, miss)
 {
   entry():
@@ -1069,14 +1033,13 @@ def c_function(text: str, symbol: str) -> tuple[str, str] | None:
     return m.group(1), text[m.end():i]
 
 
-class TemplateLayoutTests(unittest.TestCase):
-    """Templates read feedback entries through rop_catalog.FB_LAYOUT, the
+class LayoutTests(unittest.TestCase):
+    """The arms read feedback entries through rop_catalog.FB_LAYOUT, the
     one statement of each field's C member and type"""
 
     @classmethod
     def setUpClass(cls):
         cls.products = products()
-        cls.made, cls.refused = rop_generator.template_texts(cls.products)
 
     def test_the_layout_states_every_schema_field(self):
         for schema, layout in rop_catalog.FB_LAYOUT.items():
@@ -1141,32 +1104,6 @@ class TemplateLayoutTests(unittest.TestCase):
                     self.assertIn(f"entry.{field}", declared, f"{x.c.symbol} reads {member}")
             checked += 1
         self.assertGreater(checked, 5)
-
-    def test_a_template_that_reads_its_entry_checks_its_handler(self):
-        for name in ("GetAttr.Shape", "GetAttr.Instance"):
-            self.assertIn(name, self.made)
-        for name, lines in self.made.items():
-            text = "\n".join(lines)
-            with self.subTest(name):
-                self.assertEqual("_PyJitTemplate_CheckHandler(cx);" in text,
-                                 "&fb->" in text)
-
-    def test_reading_an_undeclared_field_refuses(self):
-        prog = self.products.program
-        arm = prog.arms["GetAttr.Shape"]
-        feedback = tuple(a for a in arm.contract.feedback if a.field != "entry.shape")
-        narrowed = dataclasses.replace(
-            arm, contract=dataclasses.replace(arm.contract, feedback=feedback))
-        with self.assertRaisesRegex(rop_generator.Unsupported, "entry.shape"):
-            rop_leaf.leaf_of_arm(prog, narrowed)
-
-    def test_templates_file_is_current(self):
-        out = io.StringIO()
-        sources = sorted(f"Python/register_ops/{p.name}"
-                         for p in (ROOT / "Python" / "register_ops").glob("*.rop"))
-        rop_generator.write_templates(out, self.products, sources)
-        self.assertEqual((ROOT / "Python/generated_rop_templates.c.h").read_text(),
-                         out.getvalue())
 
 
 if __name__ == "__main__":

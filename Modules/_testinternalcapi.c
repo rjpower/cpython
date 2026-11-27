@@ -33,7 +33,6 @@
 #include "pycore_rop_metadata.h"  // _PyRop_Arms
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_jit.h"           // _PyJitUnit
-#include "pycore_jit_lower.h"     // _PyJit_Templates
 #include "pycore_rop_metadata.h"  // _PyRop_Arms
 #include "pycore_rop_rows.h"      // _PyFrame_ApplyRecipe()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
@@ -5976,10 +5975,7 @@ module_exec(PyObject *module)
     if (_PyTestInternalCapi_Init_Leaf(module) < 0) {
         return 1;
     }
-    if (_PyTestInternalCapi_Init_JitAsm(module) < 0) {
-        return 1;
-    }
-    if (_PyTestInternalCapi_Init_JitTemplate(module) < 0) {
+    if (_PyTestInternalCapi_Init_JitMemory(module) < 0) {
         return 1;
     }
 

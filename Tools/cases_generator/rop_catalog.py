@@ -880,11 +880,8 @@ TRANSFER_EXITS = {
 
 
 # The evidence an extern with a C body carries (root, 2026-11-24): the
-# review note and why its effects and exits hold; a primitive also names
-# its leaf lowering and the differential test of that lowering.
-EVIDENCE_REQUIRED = ("review", "contract")
-EVIDENCE_PRIMITIVE = ("lowering", "test")
-EVIDENCE_KEYS = EVIDENCE_REQUIRED + EVIDENCE_PRIMITIVE
+# review note and why its effects and exits hold.
+EVIDENCE_KEYS = ("review", "contract")
 
 
 __all__ = [n for n in dir() if not n.startswith("_")]

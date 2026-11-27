@@ -21,8 +21,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from rop_catalog import (HEAD_FLAG_ENUMS, CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
-                         EVIDENCE_REQUIRED, FEEDBACK_ROOTS, HOME_GROUP_PARTS, HOME_GROUPS, INDEX_BITS, HomePart, LINEAR_HANDLES,
+from rop_catalog import (HEAD_FLAG_ENUMS, CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS,
+                         FEEDBACK_ROOTS, HOME_GROUP_PARTS, HOME_GROUPS, INDEX_BITS, HomePart, LINEAR_HANDLES,
                          TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
                          OPTIONAL, SELECT_DIMENSIONS, SELECT_FACTS, SLOT_ORDER,
@@ -1148,9 +1148,7 @@ def check_extern(c: Checker, x: Extern) -> None:
                      f"{', '.join(EVIDENCE_KEYS)}")
     if len(set(keys)) != len(keys):
         c.report(x.c.span, x.name, "an evidence item is given twice")
-    required = EVIDENCE_REQUIRED + (EVIDENCE_PRIMITIVE if x.kind == RowKind.primitive
-                                    else ())
-    missing = [k for k in required if k not in keys]
+    missing = [k for k in EVIDENCE_KEYS if k not in keys]
     if missing:
         c.report(x.c.span, x.name, f"c {x.c.symbol} needs evidence: "
                  f"{', '.join(missing)}")

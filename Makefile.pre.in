@@ -494,9 +494,6 @@ PYTHON_OBJS=	\
 		Python/index_pool.o \
 		Python/initconfig.o \
 		Python/jit.o \
-		Python/jit_asm.o \
-		Python/jit_lower.o \
-		Python/jit_template.o \
 		Python/jit_memory.o \
 		Python/jit_unwind.o \
 		Python/interpconfig.o \
@@ -1460,8 +1457,6 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_rop_rows.h \
 		$(srcdir)/Include/internal/pycore_iterobject.h \
 		$(srcdir)/Include/internal/pycore_jit.h \
-		$(srcdir)/Include/internal/pycore_jit_asm.h \
-		$(srcdir)/Include/internal/pycore_jit_lower.h \
 		$(srcdir)/Include/internal/pycore_jit_memory.h \
 		$(srcdir)/Include/internal/pycore_jit_unwind.h \
 		$(srcdir)/Include/internal/pycore_lazyimportobject.h \
@@ -2255,8 +2250,6 @@ regen-rop:
 	    --stubs $(srcdir)/Python/generated_rop_stubs.c.h.new \
 	    --inline $(srcdir)/Python/generated_rop_inline.h.new \
 	    --targets $(srcdir)/Python/ir_targets.h.new \
-	    --templates $(srcdir)/Python/generated_rop_templates.c.h.new \
-	    --lowerings $(srcdir)/Python/jit_lowerings.h.new \
 	    --metadata $(srcdir)/Include/internal/pycore_rop_metadata.h.new \
 	    --stencil-decls $(srcdir)/Python/generated_jit_stencil_decls.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_cases.c.h $(srcdir)/Python/generated_rop_cases.c.h.new
@@ -2264,14 +2257,8 @@ regen-rop:
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_stubs.c.h $(srcdir)/Python/generated_rop_stubs.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_inline.h $(srcdir)/Python/generated_rop_inline.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/ir_targets.h $(srcdir)/Python/ir_targets.h.new
-	$(UPDATE_FILE) --create $(srcdir)/Python/jit_lowerings.h $(srcdir)/Python/jit_lowerings.h.new
-	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_templates.c.h $(srcdir)/Python/generated_rop_templates.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Include/internal/pycore_rop_metadata.h $(srcdir)/Include/internal/pycore_rop_metadata.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_jit_stencil_decls.h $(srcdir)/Python/generated_jit_stencil_decls.h.new
-
-Python/jit_lower.o: $(srcdir)/Python/jit_lowerings.h
-Python/jit_template.o: $(srcdir)/Python/jit_lowerings.h \
-		$(srcdir)/Python/generated_rop_templates.c.h $(srcdir)/Include/internal/pycore_rop_metadata.h
 
 .PHONY: regen-ir-metadata
 regen-ir-metadata:

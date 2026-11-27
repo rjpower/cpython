@@ -288,18 +288,6 @@ _PyEval_HandlerForms(void)
     return (const void *const *)ir_handler_forms;
 }
 
-/* The raise exit of a baseline JIT template (Python/jit_template.c): its
- * handler's PROCESS_ERROR_AT(RAISE, 0, this_instr), where the template
- * published this_instr as frame->instr_ptr.  Machine code calls it and
- * takes the transfer in rax:rdx. */
-static _PyIRTransfer
-jit_raise_exit(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    _PyInstr *this_instr = frame->instr_ptr;
-    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-}
-
-const void *const _PyEval_JitRaiseExit = (const void *)jit_raise_exit;
 #endif
 
 /* The LINE or INSTRUCTION event before a word moved the frame (status 1) or

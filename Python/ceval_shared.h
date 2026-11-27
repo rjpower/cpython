@@ -11,7 +11,6 @@
 #include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
-#include "pycore_jit_lower.h"     // _PyEval_JitRaiseExit
 #include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_interpolation.h" // _PyInterpolation_BuildValue()
 #include "pycore_list.h"          // PyList_AppendValue()

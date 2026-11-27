@@ -268,9 +268,7 @@ extern primitive polls(i:Enum<Interrupt>) -> Bool
   c _PyRop_Polls as bool
   evidence(
     review: "ceval.c: the word's interrupt flag is INTERRUPTIBLE, as `with` skips the poll after its __enter__ and __exit__ lookups' call.",
-    contract: "A comparison of an immediate: no memory, no failure.",
-    lowering: "none yet: the flag is a constant of the word",
-    test: "test_rop_call");
+    contract: "A comparison of an immediate: no memory, no failure.");
 
 // The poll after a call returns (CALL_PERIODIC): signals and the GC.  After
 // a monitoring change the frame may move to the other evaluator, where it

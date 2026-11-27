@@ -30,9 +30,7 @@ extern primitive exact_bool(v:B) -> Bool
   c PyValue_BoolCheck as bool
   evidence(
     review: "Reviewed P5. bytecodes.c _GUARD_TOS_BOOL: PyValue_BoolCheck.",
-    contract: "A comparison of the word and the type: no memory, no failure.",
-    lowering: "jit_lower.c LOWERING(PyValue_BoolCheck)",
-    test: "test_ir_leaf CASES");
+    contract: "A comparison of the word and the type: no memory, no failure.");
 
 extern primitive bool_is_true(v:B) -> Bool
   effects()
@@ -40,9 +38,7 @@ extern primitive bool_is_true(v:B) -> Bool
   c PyValue_IsTrue as bool
   evidence(
     review: "Reviewed P5. bytecodes.c _POP_JUMP_IF_TRUE: PyValue_IsTrue of a bool.",
-    contract: "A comparison of the word with True: no memory, no failure.",
-    lowering: "jit_lower.c LOWERING(PyValue_IsTrue)",
-    test: "test_ir_leaf CASES");
+    contract: "A comparison of the word with True: no memory, no failure.");
 
 extern primitive exact_none(v:B) -> Bool
   effects()
@@ -50,18 +46,14 @@ extern primitive exact_none(v:B) -> Bool
   c PyValue_IsNone as bool
   evidence(
     review: "Reviewed P5. bytecodes.c _TO_BOOL_NONE and _IS_NONE: PyValue_IsNone.",
-    contract: "A comparison of the word with None: no memory, no failure.",
-    lowering: "jit_lower.c LOWERING(PyValue_IsNone)",
-    test: "test_ir_leaf CASES");
+    contract: "A comparison of the word with None: no memory, no failure.");
 
 extern primitive not_none(v:B) -> Bool
   effects()
   c _PyRop_NotNone as bool
   evidence(
     review: "Reviewed P5. bytecodes.c _TRUTH_NONE_OR_PLAIN: None is false.",
-    contract: "A comparison of the word with None: no memory, no failure.",
-    lowering: "none yet: PyValue_IsNone negated; add a lowering when a template needs it",
-    test: "test_rop_truth");
+    contract: "A comparison of the word with None: no memory, no failure.");
 
 extern primitive exact_int(v:B) -> Bool
   effects()
@@ -70,10 +62,7 @@ extern primitive exact_int(v:B) -> Bool
   evidence(
     review: "Reviewed P5. bytecodes.c _GUARD_TOS_EXACT_INT: an inline int, or an object of"
             "exact type int.",
-    contract: "Reads the word and, for an object, its type: no memory, no failure.",
-    lowering: "none yet: PyValue_IsInlineInt or PyValue_LongCheckExact; add a lowering when"
-              "a template needs it",
-    test: "test_rop_truth");
+    contract: "Reads the word and, for an object, its type: no memory, no failure.");
 
 extern primitive int_nonzero(v:B) -> Bool
   effects()
@@ -81,9 +70,7 @@ extern primitive int_nonzero(v:B) -> Bool
   c _PyRop_IntNonzero as bool
   evidence(
     review: "Reviewed P5. bytecodes.c _TO_BOOL_INT: inline int != 0, or _PyLong_IsZero.",
-    contract: "Reads the word or the object's size tag: no memory, no failure.",
-    lowering: "none yet: PyValue_InlineInt64 and _PyLong_IsZero",
-    test: "test_rop_truth");
+    contract: "Reads the word or the object's size tag: no memory, no failure.");
 
 extern primitive exact_list(v:B) -> Bool
   effects()
@@ -91,9 +78,7 @@ extern primitive exact_list(v:B) -> Bool
   c _PyRop_ExactList as bool
   evidence(
     review: "Reviewed P5. bytecodes.c _GUARD_TOS_LIST: PyList_CheckExact.",
-    contract: "Reads the word and the type: no memory, no failure.",
-    lowering: "none yet: PyValue_IsObject and a type test",
-    test: "test_rop_truth");
+    contract: "Reads the word and the type: no memory, no failure.");
 
 extern primitive list_nonempty(v:B) -> Bool
   effects(reads)
@@ -101,9 +86,7 @@ extern primitive list_nonempty(v:B) -> Bool
   c _PyRop_ListNonempty as bool
   evidence(
     review: "Reviewed P5. bytecodes.c _TO_BOOL_LIST: PyList_GET_SIZE(value) != 0.",
-    contract: "Reads the list's current length: no memory, no failure.",
-    lowering: "none yet: PyList_GET_SIZE",
-    test: "test_rop_truth");
+    contract: "Reads the list's current length: no memory, no failure.");
 
 extern primitive exact_str(v:B) -> Bool
   effects()
@@ -111,9 +94,7 @@ extern primitive exact_str(v:B) -> Bool
   c _PyRop_ExactStr as bool
   evidence(
     review: "Reviewed P5. bytecodes.c _GUARD_TOS_UNICODE: PyUnicode_CheckExact.",
-    contract: "Reads the word and the type: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_truth");
+    contract: "Reads the word and the type: no memory, no failure.");
 
 extern primitive str_nonempty(v:B) -> Bool
   effects()
@@ -122,9 +103,7 @@ extern primitive str_nonempty(v:B) -> Bool
   evidence(
     review: "Reviewed P5. bytecodes.c _TO_BOOL_STR: the empty string is the one object"
             "of length 0.",
-    contract: "Compares the object with the empty string: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_truth");
+    contract: "Compares the object with the empty string: no memory, no failure.");
 
 // None, or an instance of the heap type whose version the entry holds and
 // whose type has no __bool__ or __len__: None is false, the instance true
@@ -171,9 +150,7 @@ extern primitive truth_object(t:Bool, invert:Bool) -> O
   c _PyRop_TruthObject as value
   evidence(
     review: "Reviewed P5. bytecodes.c _TO_BOOL and UNARY_NOT: PyValue_True or False.",
-    contract: "True and False are immortal: no count, no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_truth");
+    contract: "True and False are immortal: no count, no memory, no failure.");
 
 // A branch: whether the test sends control to the target, and whether the
 // jump edge leaves the owner in its home
@@ -182,27 +159,21 @@ extern primitive branch_taken(mode:Enum<BranchMode>, t:Bool) -> Bool
   c _PyRop_BranchTaken as bool
   evidence(
     review: "Reviewed P5. POP_JUMP_IF_x jumps when the test is x.",
-    contract: "A function of the immediate and the test: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_truth");
+    contract: "A function of the immediate and the test: no memory, no failure.");
 
 extern primitive branch_keeps(mode:Enum<BranchMode>) -> Bool
   effects()
   c _PyRop_BranchKeeps as bool
   evidence(
     review: "Reviewed P5. JUMP_IF_x_OR_POP keeps the owner where it jumps.",
-    contract: "A function of the immediate: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_truth");
+    contract: "A function of the immediate: no memory, no failure.");
 
 extern primitive same_bool(a:Bool, b:Bool) -> Bool
   effects()
   c _PyRop_SameBool as bool
   evidence(
     review: "Reviewed P5. POP_JUMP_IF_NONE jumps when the test is its sense.",
-    contract: "A comparison of two bools: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_truth");
+    contract: "A comparison of two bools: no memory, no failure.");
 
 // The branch event of an observed word: BRANCH_RIGHT where the jump is
 // taken, BRANCH_LEFT where it falls through.  The callbacks run Python,
@@ -1007,9 +978,7 @@ extern primitive events_pending(t:Thread) -> Bool
     review: "TB. ceval_macros.h check_periodics: _Py_EvalBreakerHasEvents, the"
             "relaxed load of the eval breaker and its _PY_EVAL_EVENTS_MASK test.",
     contract: "One load of the thread's eval breaker: no memory, no failure, no"
-              "callback. False means check_periodics would do nothing.",
-    lowering: "rop_leaf ROW_LOWERINGS: _Py_EvalBreakerHasEvents",
-    test: "test_rop_truth");
+              "callback. False means check_periodics would do nothing.");
 
 // _CHECK_PERIODIC: signals, the GC and other pending events.  After a
 // monitoring change the frame may move to the other evaluator: the word runs
@@ -1054,9 +1023,7 @@ extern primitive goes_back(at:Site, to:Head) -> Bool
   c _PyRop_GoesBack as bool
   evidence(
     review: "Reviewed P5. The target word precedes the jump's.",
-    contract: "A comparison of two addresses.",
-    lowering: "none: the arm that tests it is observed, so it has no template",
-    test: "test_rop_truth");
+    contract: "A comparison of two addresses.");
 
 arm Jump.Direct inline select(uninterrupted)
   effects()

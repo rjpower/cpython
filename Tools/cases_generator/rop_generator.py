@@ -26,9 +26,7 @@ from pathlib import Path
 from typing import TextIO
 
 import ir_arms
-import jit_backend
 import rop_check
-import rop_leaf
 import rop_verify
 from generators_common import root_relative_path, write_header
 from handler_table import first_arm, handler_ids
@@ -39,7 +37,6 @@ from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, Fi
 from rop_check import Program, enum_c_name, select_dimension
 from rop_model import Arm, Encoding, HandleType, Param, WrapType
 from rop_print import type_text
-from rop_ssa import SsaError
 
 ROOT = Path(__file__).resolve().parents[2]
 ROP_DIR = ROOT / "Python" / "register_ops"
@@ -231,6 +228,8 @@ def write_inline_declarations(out: TextIO, p: Products, sources: list[str]) -> N
     (Python/ceval_shared.h).  Every translation unit that runs the arms
     includes this file, so that each inlines the row."""
     write_header(__file__, sources, out)
+    out.write("\n")
+    write_layout_checks(out)
     out.write("\n/* Rows declared inline: always inlined into every arm that calls them */\n")
     for x in inline_rows(p.program):
         assert x.c is not None
@@ -936,46 +935,6 @@ def load_arm_entries(paths: list[Path] | None = None) -> list[ir_arms.ArmEntry]:
     return arm_entries(lower_all(program, number_arms(program)))
 
 
-# Baseline templates, from the leaf graphs of the inline arms
-
-def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
-    made: dict[str, list[str]] = {}
-    refused: dict[str, str] = {}
-    for name, arm in p.program.arms.items():
-        if arm.region.name != "inline":
-            continue
-        try:
-            leaf = rop_leaf.leaf_of_arm(p.program, arm)
-            lines = rop_leaf.template_of_arm(p.program, arm, c_name(name), leaf)
-        except (Unsupported, SsaError, jit_backend.Refused) as e:
-            refused[name] = str(e)
-            continue
-        made[name] = ["// The leaf graph of " + name + ":"] + [
-            "//   " + line for line in leaf.body.dump()] + lines
-    return made, refused
-
-
-def write_lowerings(out: TextIO, p: Products, sources: list[str]) -> None:
-    "The prototypes and table of the JIT's lowerings (jit_backend.LOWERINGS)"
-    jit_backend.write_lowerings(out)
-
-
-def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
-    made, refused = template_texts(p)
-    write_header(__file__, sources, out)
-    write_layout_checks(out)
-    out.write(f"//\n// {len(made)} templates.  Inline arms that keep the call of their form:\n")
-    for name, why in sorted(refused.items()):
-        out.write(f"//   {name}: {why}\n")
-    out.write("\n")
-    for lines in made.values():
-        out.write("\n".join(lines) + "\n\n")
-    out.write(f"const _PyJitTemplate _PyJit_Templates[{ir_arms.IR_LIMIT}] = {{\n")
-    for name in made:
-        out.write(f"    [ROP_HANDLER_{c_name(name)}] = jit_template_{c_name(name)},\n")
-    out.write("};\n")
-
-
 # Metadata
 
 HOME_ROLES = {Handle.Src: "SRC", Handle.Dst: "DST", Handle.Local: "LOCAL",
@@ -1261,8 +1220,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stubs", help="the completion stubs")
     parser.add_argument("--inline", help="the declarations of the inline rows")
     parser.add_argument("--targets", help="the dispatch table of the evaluator")
-    parser.add_argument("--templates", help="the baseline templates")
-    parser.add_argument("--lowerings", help="the baseline JIT's lowerings")
     parser.add_argument("--metadata", help="the metadata header")
     parser.add_argument("--stencil-decls", help="the declarations of the JIT's stencils")
     parser.add_argument("sources", nargs="*", type=Path)
@@ -1280,8 +1237,6 @@ def main(argv: list[str] | None = None) -> int:
     for option, writer in (("cases", write_cases), ("forms", write_forms),
                            ("stubs", write_stubs), ("inline", write_inline_declarations),
                            ("targets", write_targets),
-                           ("templates", write_templates),
-                           ("lowerings", write_lowerings),
                            ("metadata", write_metadata),
                            ("stencil_decls", write_stencil_decls)):
         target = getattr(args, option)

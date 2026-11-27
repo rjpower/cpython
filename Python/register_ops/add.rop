@@ -16,9 +16,7 @@ extern primitive both_inline_int(a:B, b:B) -> Bool
   evidence(
     review: "Reviewed G0c2. pycore_value.h: (a & b) >= Py_INT_BASE on the two words.",
     contract: "No memory, no failure, no callback; true exactly when both words are"
-              "inline ints (the AND has the top Py_INT_SHIFT bits set only if both do).",
-    lowering: "jit_lower.c LOWERING(PyValue_BothInlineInt)",
-    test: "test_ir_leaf CASES[PyValue_BothInlineInt]");
+              "inline ints (the AND has the top Py_INT_SHIFT bits set only if both do).");
 
 extern primitive int_scaled(v:B) -> Scaled51
   effects()
@@ -26,9 +24,7 @@ extern primitive int_scaled(v:B) -> Scaled51
   c _PyValue_IntScaled as scalar
   evidence(
     review: "Reviewed G0c2. pycore_value.h: the word shifted left by Py_INT_SHIFT.",
-    contract: "Inline int required (asserted); pure bit arithmetic.",
-    lowering: "jit_lower.c LOWERING(_PyValue_IntScaled)",
-    test: "test_ir_leaf CASES");
+    contract: "Inline int required (asserted); pure bit arithmetic.");
 
 extern primitive from_int_scaled(s:Scaled51) -> O
   effects()
@@ -37,9 +33,7 @@ extern primitive from_int_scaled(s:Scaled51) -> O
   evidence(
     review: "Reviewed G0c2. pycore_value.h: ((uint64_t)s >> Py_INT_SHIFT) | Py_INT_BASE.",
     contract: "s is a multiple of 2**Py_INT_SHIFT (asserted). Never NULL, owns no"
-              "count, no memory.",
-    lowering: "jit_lower.c LOWERING(_PyValue_FromIntScaled)",
-    test: "test_ir_leaf CASES[_PyValue_FromIntScaled]");
+              "count, no memory.");
 
 // The scaled sum: fits(s) when a + b does not overflow 64 bits; else
 // overflow(w) with w the unscaled sum of the two int51s, which fits in 64
@@ -54,11 +48,7 @@ extern primitive add_checked_scaled(a:Scaled51, b:Scaled51)
     review: "F2. pycore_value.h: __builtin_add_overflow on the scaled words; the"
             "overflow case arithmetic-shifts each word back by Py_INT_SHIFT and adds.",
     contract: "Pure: no memory, no failure. false: *out is the scaled sum. true: *out"
-              "is the exact sum of the two int51 values, which lies outside int51.",
-    lowering: "jit_lower.c LOWERING(_PyValue_AddCheckedScaled): the add and a branch"
-              "on overflow; the cold path leaves with the exact sum",
-    test: "test_ir_leaf CASES[_PyValue_AddCheckedScaled] and test_jit_template"
-          "test_add_checked_scaled, at the int51 boundaries");
+              "is the exact sum of the two int51 values, which lies outside int51.");
 
 extern helper box_i64(v:I64)
   cases(ok(z:O), err(e:Err))
@@ -130,9 +120,7 @@ extern primitive number_as_double(v:B) -> F64
   evidence(
     review: "TB. pycore_value.h: the inline float's double, or the inline int's"
             "value converted to double.",
-    contract: "Reads the word: no memory, no failure, no callback.",
-    lowering: "none: the arms that use it are shared and are not compiled inline",
-    test: "test_rop_add");
+    contract: "Reads the word: no memory, no failure, no callback.");
 
 // The sum of an admitted pair's doubles, boxed only when it is NaN
 extern helper add_floats(a:F64, b:F64)
@@ -154,9 +142,7 @@ extern primitive both_exact_str(a:B, b:B) -> Bool
   c _PyRop_BothExactStr as bool
   evidence(
     review: "Reviewed P2. pycore_rop_rows.h: both words are objects of exact type str.",
-    contract: "Reads the two type words: no memory, no failure, no callback.",
-    lowering: "none: the arm that uses it is shared and is not compiled inline",
-    test: "test_rop_add");
+    contract: "Reads the two type words: no memory, no failure, no callback.");
 
 extern helper concat_text(a:B, b:B)
   cases(ok(z:O), err(e:Err))

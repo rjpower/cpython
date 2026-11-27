@@ -123,17 +123,15 @@ extern primitive number_as_double(v:B) -> F64
             "value converted to double.",
     contract: "Reads the word: no memory, no failure, no callback.");
 
-// The sum of an admitted pair's doubles, boxed only when it is NaN
-extern helper add_floats(a:F64, b:F64)
-  cases(ok(z:O), err(e:Err))
-  effects(allocates, raises)
-  ensures(ok.exact<float>(z))
-  c _PyRop_AddFloats as value_or_null inline
+// The sum of an admitted pair's doubles, which float_word or, for NaN,
+// box_float makes a float
+extern primitive add_doubles(a:F64, b:F64) -> F64
+  effects()
+  c _PyRop_AddDoubles as scalar
   evidence(
-    review: "Reviewed P2. pycore_rop_rows.h: PyValue_FromDouble of the sum, which"
-            "allocates only for NaN.",
-    contract: "NULL with MemoryError only if the NaN box fails. No finalizer, no"
-              "Python.");
+    review: "J5. pycore_rop_rows.h: C's + on the doubles, as floatobject.c's"
+            "float_add.",
+    contract: "Arithmetic on doubles: no memory, no failure.");
 
 // Text rows
 
@@ -322,7 +320,13 @@ arm Add.Float shared over(locals: TTT; rest)
     guard float_operands(l, r) else miss;
     let a:F64 = number_as_double(l);
     let b:F64 = number_as_double(r);
-    call add_floats(a, b) {
+    let s:F64 = add_doubles(a, b);
+    call float_word(s) {
+      hit -> Finish();
+      absent -> NaN();
+    }
+  NaN():
+    call box_float(s) {
       ok -> Finish();
       err -> Failed();
     }

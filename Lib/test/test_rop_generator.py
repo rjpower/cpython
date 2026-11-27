@@ -443,6 +443,18 @@ class ColdRegionTests(unittest.TestCase):
         self.assertIn("_PyFrame_WriteHome(frame, home_dst, z);", body)
         self.assertIn("DISPATCH();", body)
 
+    def test_a_float_arm_boxes_nan_out_of_line(self):
+        # float_word's absent case (NaN) is cold: the arm writes the word
+        # of any other double and leaves the box to the outlined copy
+        for name in ("Binary.Float_NB_MULTIPLY_TLL", "Add.Float"):
+            with self.subTest(name):
+                arm = "\n".join(self.p.lowered[name].body)
+                c = self.region(name, "NaN")
+                self.assertIn("_PyValue_FloatWord(", arm)
+                self.assertNotIn("PyValue_FromDouble", arm)
+                self.assertEqual(len(c.live), 1)
+                self.assertIn("PyValue_FromDouble(", "\n".join(c.body))
+
     def test_the_cases_print_the_outlined_functions_before_their_arm(self):
         out = io.StringIO()
         rop_generator.write_cases(out, self.p, [])

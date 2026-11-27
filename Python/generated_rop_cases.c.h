@@ -7873,6 +7873,51 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_Overflow)
             IR_OUTLINE_GOTO(Cold_Add_Int_Overflow);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    double s;
+} rop_in_Cold_Add_Float_TTT_NaN;
+static_assert(sizeof(rop_in_Cold_Add_Float_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Float_TTT_NaN) {
+    // Add.Float_TTT: the cold region from rop_Add_Float_TTT_NaN
+    int opcode = ROP_HANDLER_Add_Float_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double s;
+    PyValue out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Add_Float_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Float_TTT_NaN);
+      s = ir_in->s;
+    }
+    goto rop_Add_Float_TTT_NaN;
+    rop_Add_Float_TTT_Finish:
+    _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Add_Float_TTT_NaN:
+    ret2 = PyValue_FromDouble(s);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Add_Float_TTT_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 1, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Float_TTT_NaN)
+#endif
+
         TARGET(Add_Float_TTT) {
             // Add.Float_TTT (shared)
             int opcode = ROP_HANDLER_Add_Float_TTT;
@@ -7888,8 +7933,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_Overflow)
             PyValueBorrow r;
             double a;
             double b;
-            PyValue ret1;
+            double s;
+            PyValue out1;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (0));
             l = PyValue_Borrow(*home_x);
@@ -7899,20 +7946,77 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_Overflow)
             }
             a = PyValue_NumberAsDouble(l);
             b = PyValue_NumberAsDouble(r);
-            ret1 = _PyRop_AddFloats(a, b);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Add_Float_TTT_Failed;
+            s = _PyRop_AddDoubles(a, b);
+            if (!_PyValue_FloatWord(s, &out1)) {
+                goto rop_Add_Float_TTT_NaN;
             }
-            z = ret1;
+            z = out1;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Add_Float_TTT_Failed:
-            PROCESS_ERROR_AT(RAISE, 1, this_instr);
+            rop_Add_Float_TTT_NaN:
+            { rop_in_Cold_Add_Float_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Float_TTT_NaN);
+              ir_in->s = s;
+            }
+            IR_OUTLINE_GOTO(Cold_Add_Float_TTT_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double s;
+} rop_in_Cold_Add_Float_NaN;
+static_assert(sizeof(rop_in_Cold_Add_Float_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Float_NaN) {
+    // Add.Float: the cold region from rop_Add_Float_NaN
+    int opcode = ROP_HANDLER_Add_Float;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double s;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Add_Float_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Float_NaN);
+      s = ir_in->s;
+    }
+    goto rop_Add_Float_NaN;
+    rop_Add_Float_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Add_Float_Tail0_0);
+    DISPATCH();
+    rop_Add_Float_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Add_Float_NaN:
+    ret2 = PyValue_FromDouble(s);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Add_Float_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 1, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Float_NaN)
+#endif
 
         TARGET(Add_Float) {
             // Add.Float (shared)
@@ -7929,9 +8033,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_Overflow)
             PyValueBorrow r;
             double a;
             double b;
-            PyValue ret1;
+            double s;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -7940,11 +8046,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_Overflow)
             }
             a = PyValue_NumberAsDouble(l);
             b = PyValue_NumberAsDouble(r);
-            ret1 = _PyRop_AddFloats(a, b);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Add_Float_Failed;
+            s = _PyRop_AddDoubles(a, b);
+            if (!_PyValue_FloatWord(s, &out1)) {
+                goto rop_Add_Float_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -7959,8 +8065,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_Overflow)
             rop_Add_Float_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Add_Float_Failed:
-            PROCESS_ERROR_AT(RAISE, 1, this_instr);
+            rop_Add_Float_NaN:
+            { rop_in_Cold_Add_Float_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Float_NaN);
+              ir_in->s = s;
+            }
+            IR_OUTLINE_GOTO(Cold_Add_Float_NaN);
         }
 
         TARGET(Add_Text) {
@@ -22950,6 +23059,51 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             PROCESS_ERROR_AT(RAISE, 21, this_instr);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN) {
+    // Binary.Float_NB_INPLACE_ADD_TTT: the cold region from rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_ADD_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN;
+    rop_Binary_Float_NB_INPLACE_ADD_TTT_Finish:
+    _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_ADD_TTT_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN)
+#endif
+
         TARGET(Binary_Float_NB_INPLACE_ADD_TTT) {
             // Binary.Float_NB_INPLACE_ADD_TTT (shared)
             int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_ADD_TTT;
@@ -22966,8 +23120,9 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (0));
             l = PyValue_Borrow(*home_x);
@@ -22981,20 +23136,72 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_ADD, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_INPLACE_ADD_TTT_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN;
             }
-            z = ret1;
+            z = out1;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_INPLACE_ADD_TTT_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) {
+    // Binary.Float_NB_INPLACE_ADD_LTT: the cold region from rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_ADD_LTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN;
+    rop_Binary_Float_NB_INPLACE_ADD_LTT_Finish:
+    _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_ADD_LTT_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_INPLACE_ADD_LTT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_ADD_LTT_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN)
+#endif
 
         TARGET(Binary_Float_NB_INPLACE_ADD_LTT) {
             // Binary.Float_NB_INPLACE_ADD_LTT (shared)
@@ -23012,9 +23219,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_A));
             l = PyValue_Borrow(*home_x);
@@ -23028,11 +23236,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_ADD, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_INPLACE_ADD_LTT_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN;
             }
-            z = ret1;
+            z = out1;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             old_dst = *home_dst;
@@ -23043,9 +23250,66 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_INPLACE_ADD_LTT_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_ADD_LTT_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_NaN) {
+    // Binary.Float_NB_INPLACE_ADD: the cold region from rop_Binary_Float_NB_INPLACE_ADD_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_ADD;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_INPLACE_ADD_NaN;
+    rop_Binary_Float_NB_INPLACE_ADD_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_ADD_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_INPLACE_ADD_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_INPLACE_ADD_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_ADD_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_NaN)
+#endif
 
         TARGET(Binary_Float_NB_INPLACE_ADD) {
             // Binary.Float_NB_INPLACE_ADD (shared)
@@ -23063,9 +23327,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23078,11 +23343,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_ADD, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_INPLACE_ADD_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_INPLACE_ADD_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23097,9 +23361,57 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_INPLACE_ADD_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_ADD_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_INPLACE_ADD_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_SUBTRACT_TTT_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_SUBTRACT_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_TTT_NaN) {
+    // Binary.Float_NB_SUBTRACT_TTT: the cold region from rop_Binary_Float_NB_SUBTRACT_TTT_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_SUBTRACT_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_SUBTRACT_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_TTT_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_SUBTRACT_TTT_NaN;
+    rop_Binary_Float_NB_SUBTRACT_TTT_Finish:
+    _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Binary_Float_NB_SUBTRACT_TTT_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_SUBTRACT_TTT_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_TTT_NaN)
+#endif
 
         TARGET(Binary_Float_NB_SUBTRACT_TTT) {
             // Binary.Float_NB_SUBTRACT_TTT (shared)
@@ -23117,8 +23429,9 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (0));
             l = PyValue_Borrow(*home_x);
@@ -23132,20 +23445,70 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_SUBTRACT, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_SUBTRACT_TTT_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_SUBTRACT_TTT_NaN;
             }
-            z = ret1;
+            z = out1;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_SUBTRACT_TTT_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_SUBTRACT_TTT_NaN:
+            { rop_in_Cold_Binary_Float_NB_SUBTRACT_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_TTT_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_SUBTRACT_TTT_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) {
+    // Binary.Float_NB_SUBTRACT_LLL: the cold region from rop_Binary_Float_NB_SUBTRACT_LLL_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_SUBTRACT_LLL;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_SUBTRACT_LLL_NaN;
+    rop_Binary_Float_NB_SUBTRACT_LLL_Finish:
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_SUBTRACT_LLL_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_SUBTRACT_LLL_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_SUBTRACT_LLL_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_SUBTRACT_LLL_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
+#endif
 
         TARGET(Binary_Float_NB_SUBTRACT_LLL) {
             // Binary.Float_NB_SUBTRACT_LLL (shared)
@@ -23163,9 +23526,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C));
             l = PyValue_Borrow(*home_x);
@@ -23179,11 +23543,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_SUBTRACT, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_SUBTRACT_LLL_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_SUBTRACT_LLL_NaN;
             }
-            z = ret1;
+            z = out1;
             old_dst = *home_dst;
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
@@ -23192,9 +23555,66 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_SUBTRACT_LLL_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_SUBTRACT_LLL_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_SUBTRACT_LLL_NaN:
+            { rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_SUBTRACT_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_SUBTRACT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_NaN) {
+    // Binary.Float_NB_SUBTRACT: the cold region from rop_Binary_Float_NB_SUBTRACT_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_SUBTRACT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_SUBTRACT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_SUBTRACT_NaN;
+    rop_Binary_Float_NB_SUBTRACT_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_SUBTRACT_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_SUBTRACT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_SUBTRACT_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_SUBTRACT_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_NaN)
+#endif
 
         TARGET(Binary_Float_NB_SUBTRACT) {
             // Binary.Float_NB_SUBTRACT (shared)
@@ -23212,9 +23632,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23227,11 +23648,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_SUBTRACT, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_SUBTRACT_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_SUBTRACT_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23246,9 +23666,66 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_SUBTRACT_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_SUBTRACT_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_SUBTRACT_NaN:
+            { rop_in_Cold_Binary_Float_NB_SUBTRACT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_SUBTRACT_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN) {
+    // Binary.Float_NB_INPLACE_SUBTRACT: the cold region from rop_Binary_Float_NB_INPLACE_SUBTRACT_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_SUBTRACT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_INPLACE_SUBTRACT_NaN;
+    rop_Binary_Float_NB_INPLACE_SUBTRACT_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_SUBTRACT_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_INPLACE_SUBTRACT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_INPLACE_SUBTRACT_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_SUBTRACT_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN)
+#endif
 
         TARGET(Binary_Float_NB_INPLACE_SUBTRACT) {
             // Binary.Float_NB_INPLACE_SUBTRACT (shared)
@@ -23266,9 +23743,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23281,11 +23759,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_SUBTRACT, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_INPLACE_SUBTRACT_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_INPLACE_SUBTRACT_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23300,9 +23777,55 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_INPLACE_SUBTRACT_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_SUBTRACT_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_INPLACE_SUBTRACT_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_SUBTRACT_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN) {
+    // Binary.Float_NB_MULTIPLY_TLL: the cold region from rop_Binary_Float_NB_MULTIPLY_TLL_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_MULTIPLY_TLL;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_MULTIPLY_TLL_NaN;
+    rop_Binary_Float_NB_MULTIPLY_TLL_Finish:
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Binary_Float_NB_MULTIPLY_TLL_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_MULTIPLY_TLL_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN)
+#endif
 
         TARGET(Binary_Float_NB_MULTIPLY_TLL) {
             // Binary.Float_NB_MULTIPLY_TLL (shared)
@@ -23320,8 +23843,9 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_B | IR_F_LOCAL_C));
             l = PyValue_Borrow(*home_x);
@@ -23335,18 +23859,65 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_MULTIPLY, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_MULTIPLY_TLL_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_MULTIPLY_TLL_NaN;
             }
-            z = ret1;
+            z = out1;
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_MULTIPLY_TLL_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_MULTIPLY_TLL_NaN:
+            { rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_MULTIPLY_TTT_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTT_NaN) {
+    // Binary.Float_NB_MULTIPLY_TTT: the cold region from rop_Binary_Float_NB_MULTIPLY_TTT_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_MULTIPLY_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_MULTIPLY_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTT_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_MULTIPLY_TTT_NaN;
+    rop_Binary_Float_NB_MULTIPLY_TTT_Finish:
+    _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Binary_Float_NB_MULTIPLY_TTT_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_MULTIPLY_TTT_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTT_NaN)
+#endif
 
         TARGET(Binary_Float_NB_MULTIPLY_TTT) {
             // Binary.Float_NB_MULTIPLY_TTT (shared)
@@ -23364,8 +23935,9 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (0));
             l = PyValue_Borrow(*home_x);
@@ -23379,20 +23951,66 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_MULTIPLY, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_MULTIPLY_TTT_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_MULTIPLY_TTT_NaN;
             }
-            z = ret1;
+            z = out1;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_MULTIPLY_TTT_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_MULTIPLY_TTT_NaN:
+            { rop_in_Cold_Binary_Float_NB_MULTIPLY_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTT_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_MULTIPLY_TTT_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN) {
+    // Binary.Float_NB_MULTIPLY_TTL: the cold region from rop_Binary_Float_NB_MULTIPLY_TTL_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_MULTIPLY_TTL;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_MULTIPLY_TTL_NaN;
+    rop_Binary_Float_NB_MULTIPLY_TTL_Finish:
+    _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Binary_Float_NB_MULTIPLY_TTL_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_MULTIPLY_TTL_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
+#endif
 
         TARGET(Binary_Float_NB_MULTIPLY_TTL) {
             // Binary.Float_NB_MULTIPLY_TTL (shared)
@@ -23410,8 +24028,9 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_C));
             l = PyValue_Borrow(*home_x);
@@ -23425,19 +24044,75 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_MULTIPLY, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_MULTIPLY_TTL_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_MULTIPLY_TTL_NaN;
             }
-            z = ret1;
+            z = out1;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_MULTIPLY_TTL_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_MULTIPLY_TTL_NaN:
+            { rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_MULTIPLY_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_NaN) {
+    // Binary.Float_NB_MULTIPLY: the cold region from rop_Binary_Float_NB_MULTIPLY_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_MULTIPLY;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_MULTIPLY_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_MULTIPLY_NaN;
+    rop_Binary_Float_NB_MULTIPLY_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_MULTIPLY_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_MULTIPLY_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_MULTIPLY_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_MULTIPLY_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_NaN)
+#endif
 
         TARGET(Binary_Float_NB_MULTIPLY) {
             // Binary.Float_NB_MULTIPLY (shared)
@@ -23455,9 +24130,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23470,11 +24146,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_MULTIPLY, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_MULTIPLY_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_MULTIPLY_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23489,9 +24164,66 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_MULTIPLY_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_MULTIPLY_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_MULTIPLY_NaN:
+            { rop_in_Cold_Binary_Float_NB_MULTIPLY_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_MULTIPLY_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN) {
+    // Binary.Float_NB_INPLACE_MULTIPLY: the cold region from rop_Binary_Float_NB_INPLACE_MULTIPLY_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_MULTIPLY;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_INPLACE_MULTIPLY_NaN;
+    rop_Binary_Float_NB_INPLACE_MULTIPLY_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_MULTIPLY_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_INPLACE_MULTIPLY_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_INPLACE_MULTIPLY_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_MULTIPLY_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN)
+#endif
 
         TARGET(Binary_Float_NB_INPLACE_MULTIPLY) {
             // Binary.Float_NB_INPLACE_MULTIPLY (shared)
@@ -23509,9 +24241,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23524,11 +24257,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_MULTIPLY, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_INPLACE_MULTIPLY_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_INPLACE_MULTIPLY_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23543,9 +24275,56 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_INPLACE_MULTIPLY_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_MULTIPLY_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_INPLACE_MULTIPLY_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_MULTIPLY_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN) {
+    // Binary.Float_NB_TRUE_DIVIDE_TLT: the cold region from rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_TRUE_DIVIDE_TLT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN;
+    rop_Binary_Float_NB_TRUE_DIVIDE_TLT_Finish:
+    _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
+#endif
 
         TARGET(Binary_Float_NB_TRUE_DIVIDE_TLT) {
             // Binary.Float_NB_TRUE_DIVIDE_TLT (shared)
@@ -23563,8 +24342,9 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_B));
             l = PyValue_Borrow(*home_x);
@@ -23578,19 +24358,75 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_TRUE_DIVIDE, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN;
             }
-            z = ret1;
+            z = out1;
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_TRUE_DIVIDE_TLT_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN:
+            { rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_NaN) {
+    // Binary.Float_NB_TRUE_DIVIDE: the cold region from rop_Binary_Float_NB_TRUE_DIVIDE_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_TRUE_DIVIDE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_TRUE_DIVIDE_NaN;
+    rop_Binary_Float_NB_TRUE_DIVIDE_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_TRUE_DIVIDE_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_TRUE_DIVIDE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_TRUE_DIVIDE_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_TRUE_DIVIDE_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_NaN)
+#endif
 
         TARGET(Binary_Float_NB_TRUE_DIVIDE) {
             // Binary.Float_NB_TRUE_DIVIDE (shared)
@@ -23608,9 +24444,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23623,11 +24460,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_TRUE_DIVIDE, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_TRUE_DIVIDE_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_TRUE_DIVIDE_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23642,9 +24478,66 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_TRUE_DIVIDE_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_TRUE_DIVIDE_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_TRUE_DIVIDE_NaN:
+            { rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_TRUE_DIVIDE_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN) {
+    // Binary.Float_NB_INPLACE_TRUE_DIVIDE: the cold region from rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_TRUE_DIVIDE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN;
+    rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN)
+#endif
 
         TARGET(Binary_Float_NB_INPLACE_TRUE_DIVIDE) {
             // Binary.Float_NB_INPLACE_TRUE_DIVIDE (shared)
@@ -23662,9 +24555,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23677,11 +24571,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_TRUE_DIVIDE, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23696,9 +24589,66 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_POWER_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_POWER_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_POWER_NaN) {
+    // Binary.Float_NB_POWER: the cold region from rop_Binary_Float_NB_POWER_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_POWER;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_POWER_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_POWER_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_POWER_NaN;
+    rop_Binary_Float_NB_POWER_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_POWER_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_POWER_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_POWER_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_POWER_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_POWER_NaN)
+#endif
 
         TARGET(Binary_Float_NB_POWER) {
             // Binary.Float_NB_POWER (shared)
@@ -23716,9 +24666,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23731,11 +24682,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_POWER, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_POWER_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_POWER_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23750,9 +24700,66 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_POWER_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_POWER_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_POWER_NaN:
+            { rop_in_Cold_Binary_Float_NB_POWER_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_POWER_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_POWER_NaN);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    double v;
+} rop_in_Cold_Binary_Float_NB_INPLACE_POWER_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_POWER_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_POWER_NaN) {
+    // Binary.Float_NB_INPLACE_POWER: the cold region from rop_Binary_Float_NB_INPLACE_POWER_NaN
+    int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_POWER;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    double a;
+    double b;
+    double v;
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_POWER_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_POWER_NaN);
+      v = ir_in->v;
+    }
+    goto rop_Binary_Float_NB_INPLACE_POWER_NaN;
+    rop_Binary_Float_NB_INPLACE_POWER_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_POWER_Tail0_0);
+    DISPATCH();
+    rop_Binary_Float_NB_INPLACE_POWER_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Float_NB_INPLACE_POWER_NaN:
+    ret2 = PyValue_FromDouble(v);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_POWER_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_POWER_NaN)
+#endif
 
         TARGET(Binary_Float_NB_INPLACE_POWER) {
             // Binary.Float_NB_INPLACE_POWER (shared)
@@ -23770,9 +24777,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             double a;
             double b;
             double v;
-            PyValue ret1;
+            PyValue out1;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue ret2;
             PyValue z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -23785,11 +24793,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             if (!_PyRop_FloatOpAdmits(ROP_NUMERIC_NB_INPLACE_POWER, a, b, v)) {
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
-            ret1 = PyValue_FromDouble(v);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Float_NB_INPLACE_POWER_Failed;
+            if (!_PyValue_FloatWord(v, &out1)) {
+                goto rop_Binary_Float_NB_INPLACE_POWER_NaN;
             }
-            z = ret1;
+            z = out1;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -23804,8 +24811,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
             rop_Binary_Float_NB_INPLACE_POWER_Tail0_0:
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_POWER_Failed:
-            PROCESS_ERROR_AT(RAISE, 21, this_instr);
+            rop_Binary_Float_NB_INPLACE_POWER_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_POWER_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_POWER_NaN);
+              ir_in->v = v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_POWER_NaN);
         }
 
         TARGET(Binary_Text) {

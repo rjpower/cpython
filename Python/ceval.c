@@ -5045,8 +5045,10 @@ _PyRop_PushPlan(PyThreadState *tstate, _PyInterpreterFrame *frame,
     assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
     _PyCallResult pushed = _PyEval_call_bind_positional(tstate, frame, head, *fn,
                                                 PyValue_NULL, &fb->plan);
-    /* plan_fits proved every test of the binding: it does not decline */
-    assert(pushed.status <= 0);
+    if (pushed.status > 0) {
+        /* The plan does not fit this call, and the binder changed nothing */
+        return _PyRop_PushPython(tstate, frame, fn, head);
+    }
     if (pushed.status < 0) {
         _PyEval_rop_call_retire_operands(frame, head);
         return NULL;

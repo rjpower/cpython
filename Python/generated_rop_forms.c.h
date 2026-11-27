@@ -6165,7 +6165,6 @@ ir_run_CallKw_Plan(
     INSTRUCTION_STATS(ROP_HANDLER_CallKw_Plan);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
     void * ret1;
-    void * ret2;
     _PyInterpreterFrame * c;
     if (!_PyRop_DefaultEvalFrame(tstate)) {
         JUMP_TO_PREDICTED(CallKw_Generic);
@@ -6173,26 +6172,13 @@ ir_run_CallKw_Plan(
     if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
         JUMP_TO_PREDICTED(CallKw_Generic);
     }
-    if (_PyRop_PlanFits_Outlined(tstate, frame, PyValue_Borrow(*home_fn), this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-        goto rop_CallKw_Plan_Planned;
-    }
-    goto rop_CallKw_Plan_General;
-    rop_CallKw_Plan_Planned:
     IR_STUB_ESCAPE();
     ret1 = _PyRop_PushPlan(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
     if (ret1 == NULL) {
         goto rop_CallKw_Plan_Failed;
     }
     c = ret1;
-    rop_CallKw_Plan_Enter:
     ROP_ENTER(c, IR_A(ir_word));
-    rop_CallKw_Plan_General:
-    IR_STUB_ESCAPE();
-    ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
-    if (ret2 != NULL) {
-        c = ret2;
-        goto rop_CallKw_Plan_Enter;
-    }
     rop_CallKw_Plan_Failed:
     PROCESS_ERROR_AT(RAISE, 48, this_instr);
 }
@@ -6211,7 +6197,6 @@ ir_run_Call_PyGeneral(
     INSTRUCTION_STATS(ROP_HANDLER_Call_PyGeneral);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
     void * ret1;
-    void * ret2;
     _PyInterpreterFrame * c;
     if (!_PyRop_DefaultEvalFrame(tstate)) {
         JUMP_TO_PREDICTED(Call_Generic);
@@ -6219,26 +6204,13 @@ ir_run_Call_PyGeneral(
     if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
-    if (_PyRop_PlanFits_Outlined(tstate, frame, PyValue_Borrow(*home_fn), this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-        goto rop_Call_PyGeneral_Planned;
-    }
-    goto rop_Call_PyGeneral_General;
-    rop_Call_PyGeneral_Planned:
     IR_STUB_ESCAPE();
     ret1 = _PyRop_PushPlan(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
     if (ret1 == NULL) {
         goto rop_Call_PyGeneral_Failed;
     }
     c = ret1;
-    rop_Call_PyGeneral_Enter:
     ROP_ENTER(c, IR_A(ir_word));
-    rop_Call_PyGeneral_General:
-    IR_STUB_ESCAPE();
-    ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
-    if (ret2 != NULL) {
-        c = ret2;
-        goto rop_Call_PyGeneral_Enter;
-    }
     rop_Call_PyGeneral_Failed:
     PROCESS_ERROR_AT(RAISE, 40, this_instr);
 }

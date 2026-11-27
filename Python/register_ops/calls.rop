@@ -1373,7 +1373,8 @@ extern helper plan_fits(t:Thread, f:Frame, fn:B, a:Args, fb:Fb<Call>) -> Bool
               "no failure.");
 
 // The child frame of a call that the plan binds: the function and the
-// operands move to it (a temporary moves, a local is counted)
+// operands move to it (a temporary moves, a local is counted).  A call that
+// the plan does not fit binds as push_python does.
 extern helper push_plan(t:Thread, f:Frame, fn:Src, a:Args, fb:Fb<Call>)
   cases(entered(c:NewFrame), err(e:Err))
   effects(reads, writes, allocates, releases, raises)
@@ -1382,11 +1383,11 @@ extern helper push_plan(t:Thread, f:Frame, fn:Src, a:Args, fb:Fb<Call>)
   requires(exact<function>(fn))
   c _PyRop_PushPlan as pointer_or_raised
   evidence(
-    review: "2A. ceval.c: _PyEval_call_bind_positional with the site's plan, after"
-            "plan_fits.",
-    contract: "Declines nothing (plan_fits proved the tests).  The **kwargs dict and"
-              "the *args tuple allocate, and a failure closes the operands with the"
-              "exception set aside.");
+    review: "2A. ceval.c: _PyEval_call_bind_positional with the site's plan; on its"
+            "decline, which precedes any change, _PyRop_PushPython.",
+    contract: "The binder's tests decide: a decline changes nothing and the call binds"
+              "generally.  The **kwargs dict and the *args tuple allocate, and a"
+              "failure closes the operands with the exception set aside.");
 
 // The callable is neither a function nor a bound method: CallKw.NonPy
 extern helper not_python_callable(fn:B) -> Bool
@@ -1477,14 +1478,7 @@ arm CallKw.Plan split
   entry():
     guard default_eval_frame(thread) else miss;
     guard function_version(use(fn), fb) else miss;
-    branch plan_fits(thread, frame, use(fn), args, fb) -> Planned(), General();
-  Planned():
     call push_plan(thread, frame, fn, args, fb) {
-      entered -> Enter();
-      err -> Failed();
-    }
-  General():
-    call push_python(thread, frame, fn, args) {
       entered -> Enter();
       err -> Failed();
     }
@@ -1505,14 +1499,7 @@ arm Call.PyGeneral split
   entry():
     guard default_eval_frame(thread) else miss;
     guard function_version(use(fn), fb) else miss;
-    branch plan_fits(thread, frame, use(fn), args, fb) -> Planned(), General();
-  Planned():
     call push_plan(thread, frame, fn, args, fb) {
-      entered -> Enter();
-      err -> Failed();
-    }
-  General():
-    call push_python(thread, frame, fn, args) {
       entered -> Enter();
       err -> Failed();
     }

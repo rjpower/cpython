@@ -3684,12 +3684,12 @@ _PyRop_CallDescriptorNoargs(PyThreadState *tstate, _PyInterpreterFrame *frame,
         tstate, method->d_method->ml_meth, rop_call_arg(frame, head, 0));
 }
 
-/* The rows of CallKw.Plan (Python/register_ops/calls.rop): a call of a
- * function whose keyword names the site's plan places.  plan_fits is every
- * test that call_bind_core makes before it changes anything, so that
- * push_plan has no decline: the plan is valid for this call's self slot, the
- * frame fits the arena, the function's own defaults cover what the plan
- * leaves to them, and its keyword-only defaults are there. */
+/* The row of the generator-creating plan arms (Python/register_ops/calls.rop):
+ * plan_fits is every test that call_bind_core makes before it changes
+ * anything, so that plan_generator has no decline: the plan is valid for this
+ * call's self slot, the frame fits the arena, the function's own defaults
+ * cover what the plan leaves to them, and its keyword-only defaults are
+ * there.  (push_plan takes the binder's own decline instead.) */
 static inline bool
 _PyRop_PlanFits(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 PyValueBorrow fn, const _PyIRWord *head, const _PyFbCall *fb)

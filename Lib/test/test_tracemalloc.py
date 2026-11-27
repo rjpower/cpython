@@ -237,11 +237,17 @@ class TestTracemallocEnabled(unittest.TestCase):
         # a small difference between the expected size and the real usage
         max_error = 2048
 
-        # A function is lowered to the register IR the first time it runs,
-        # which allocates; run the assertions before they are measured
-        self.assertGreaterEqual(0, 0)
-        self.assertLessEqual(0, 0)
-        self.assertLess(0, 1)
+        # A function allocates until it is in steady state: it is lowered to
+        # the register IR at its first call, and the JIT compiles it, then
+        # recompiles it once specialisation changes its words, and each unit
+        # is traced memory.  Under PYTHON_JIT=always that is calls 1 to 3;
+        # under on it is _PyJIT_WARMUP (32, Include/internal/pycore_jit.h)
+        # calls, then two more.  Run the assertions past both before they are
+        # measured.
+        for _ in range(40):
+            self.assertGreaterEqual(0, 0)
+            self.assertLessEqual(0, 0)
+            self.assertLess(0, 1)
 
         # allocate one object
         obj_size = 1024 * 1024

@@ -1,8 +1,10 @@
 """The inline policy of the register instruction rows holds in the binary:
 the interpreter makes no call to a row declared `inline`, and the forms and
 stubs share one out-of-line copy of it (Tools/cases_generator/rop_cgen.py).
-An arm whose closes leave it by a tail call (lower_tail_closes) makes no
-call and allocates no stack frame.
+An arm whose closes leave it by a tail call (lower_tail_closes) and whose
+name operands are read unchecked makes no call and allocates no stack frame.
+An arm that publishes a span lets no address of its frame escape, so it needs
+no stack protector.
 The interpreter is ir_evaluate() and, when it tail-calls, the function of
 each handler, label and routine (ir_tail_*, Python/ceval_tail.h)."""
 
@@ -39,6 +41,21 @@ TAIL_CLOSE_ONLY = [
     "ForIter_List",
 ]
 
+# Arms whose other call was the release-build check of a name operand, which
+# the generator reads through _PyRop_NameAt() unchecked
+NAME_READ_ONLY = [
+    "GetAttr_Shape", "GetAttr_Shape_TL", "GetAttr_ValueSlot",
+    "GetAttr_ValueSlot_TL", "GetAttr_Instance", "GetAttr_Module",
+    "GetMethod_MethodValues", "GetMethod_MethodValues_TTL",
+    "GetMethod_NoDict", "GetMethod_NoDict_TTL", "GetMethod_Module",
+    "AttrWrite_Shape", "AttrWrite_Shape_LL", "AttrWrite_ShapeAdd",
+    "AttrWrite_ShapeAdd_LL",
+]
+
+# Arms that publish a span (`d[] = v`); _PyRop_PublishItemsRest() takes the
+# span and the items by value
+SPAN_PUBLISH = ["Unpack_Tuple", "Unpack_List"]
+
 
 def run(*argv: str) -> str:
     return subprocess.run(argv, capture_output=True, text=True, check=True).stdout
@@ -59,6 +76,13 @@ def interpreter_code(text: str) -> str:
     blocks = re.split(r"^(?=[0-9a-f]+ <)", dump, flags=re.M)
     return "".join(b for b in blocks
                    if re.match(r"[0-9a-f]+ <(ir_evaluate|ir_tail_\w+)>:", b))
+
+
+def arm_body(code: str, arm: str) -> str | None:
+    """The disassembly of the function of the arm, from interpreter_code()"""
+    match = re.search(rf"^[0-9a-f]+ <ir_tail_{arm}>:\n(.*?)(?=^[0-9a-f]+ <|\Z)",
+                      code, re.M | re.S)
+    return match and match.group(1)
 
 
 @unittest.skipUnless(shutil.which("nm") and shutil.which("objdump"),
@@ -91,14 +115,23 @@ class InlineRowBinaryTests(unittest.TestCase):
             self.skipTest("the free-threaded build closes in place")
         if "-DNDEBUG" not in sysconfig.get_config_var("PY_CFLAGS").split():
             self.skipTest("an assert() is a call")
-        for arm in TAIL_CLOSE_ONLY:
+        for arm in TAIL_CLOSE_ONLY + NAME_READ_ONLY:
             with self.subTest(arm=arm):
-                match = re.search(rf"^[0-9a-f]+ <ir_tail_{arm}>:\n(.*?)(?=^[0-9a-f]+ <|\Z)",
-                                  self.calls, re.M | re.S)
-                self.assertIsNotNone(match)
-                body = match.group(1)
+                body = arm_body(self.calls, arm)
+                self.assertIsNotNone(body)
                 self.assertNotRegex(body, r"\scall\s")
                 self.assertNotRegex(body, r"\ssub\s+\$0x[0-9a-f]+,%rsp")
+
+    def test_span_publishes_need_no_stack_protector(self):
+        if "-DNDEBUG" not in sysconfig.get_config_var("PY_CFLAGS").split():
+            self.skipTest("a row that asserts is not inlined, so its "
+                          "out-parameter (Unpack.List's items) escapes")
+        for arm in SPAN_PUBLISH:
+            with self.subTest(arm=arm):
+                body = arm_body(self.calls, arm)
+                self.assertIsNotNone(body)
+                # the canary read of -fstack-protector
+                self.assertNotIn("%fs:0x28", body)
 
     def test_each_row_has_one_outlined_copy_and_no_other(self):
         for symbol in self.symbols:

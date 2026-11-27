@@ -874,7 +874,7 @@ class ArmLowerer:
         if p.kind in (FieldKind.imm, FieldKind.flag):
             return self.immediate(operand)
         if p.kind is FieldKind.name:
-            return f"GETITEM(FRAME_CO_NAMES, {self.field(operand)})"
+            return f"_PyRop_NameAt(frame, {self.field(operand)})"
         if p.kind is FieldKind.feedback:
             param = next(x for x in self.family.params if x.name == operand)
             schema = param.type.schema

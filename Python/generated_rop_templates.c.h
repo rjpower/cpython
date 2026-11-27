@@ -382,7 +382,7 @@ jit_template_Add_Int(_PyJitWordCx *cx)
 //     br %9, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %16:value = arg obj
-//     %17:bool = prim PyValue_IsObject %16
+//     %17:bool = prim PyValue_IsPointerSpace %16
 //     %18:bool = lnot %17
 //     exit_if EXIT %18
 //     %19:PyObject* = prim PyValue_AsKnownObjectBorrow %16
@@ -423,6 +423,7 @@ jit_template_GetAttr_Instance_TL(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
@@ -435,7 +436,9 @@ jit_template_GetAttr_Instance_TL(_PyJitWordCx *cx)
     int c12 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c12), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDI}, (const void *)(intptr_t)(cx->slow + 1));
+    int c19 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c19), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_R8, _PyJitReg_RDI}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_R8, _PyJitMem_At(_PyJitReg_R8, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -487,7 +490,7 @@ jit_template_GetAttr_Instance_TL(_PyJitWordCx *cx)
 //     br %9, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %16:value = arg obj
-//     %17:bool = prim PyValue_IsObject %16
+//     %17:bool = prim PyValue_IsPointerSpace %16
 //     %18:bool = lnot %17
 //     exit_if EXIT %18
 //     %19:PyObject* = prim PyValue_AsKnownObjectBorrow %16
@@ -528,6 +531,7 @@ jit_template_GetAttr_Instance(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
@@ -540,7 +544,9 @@ jit_template_GetAttr_Instance(_PyJitWordCx *cx)
     int c12 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c12), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDI}, (const void *)(intptr_t)(cx->slow + 1));
+    int c19 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c19), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_R8, _PyJitReg_RDI}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_R8, _PyJitMem_At(_PyJitReg_R8, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -594,7 +600,7 @@ jit_template_GetAttr_Instance(_PyJitWordCx *cx)
 //     br %9, b4, b3
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %18:value = arg obj
-//     %19:bool = prim PyValue_IsObject %18
+//     %19:bool = prim PyValue_IsPointerSpace %18
 //     %20:bool = lnot %19
 //     exit_if EXIT %20
 //     %21:PyObject* = prim PyValue_AsKnownObjectBorrow %18
@@ -632,6 +638,7 @@ jit_template_GetAttr_Shape_TL(_PyJitWordCx *cx)
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L8 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
@@ -652,7 +659,9 @@ jit_template_GetAttr_Shape_TL(_PyJitWordCx *cx)
     _PyJitAsm_TestRR(a, _PyJitReg_RDI, _PyJitReg_RDI);
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
     _PyJitAsm_Bind(a, L6);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c21 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c21), cx->slow);
+    _PyJitAsm_Bind(a, L8);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RDX}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_RDI, _PyJitMem_At(_PyJitReg_RDI, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -702,7 +711,7 @@ jit_template_GetAttr_Shape_TL(_PyJitWordCx *cx)
 //     br %9, b4, b3
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %18:value = arg obj
-//     %19:bool = prim PyValue_IsObject %18
+//     %19:bool = prim PyValue_IsPointerSpace %18
 //     %20:bool = lnot %19
 //     exit_if EXIT %20
 //     %21:PyObject* = prim PyValue_AsKnownObjectBorrow %18
@@ -740,6 +749,7 @@ jit_template_GetAttr_Shape(_PyJitWordCx *cx)
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L8 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
@@ -760,7 +770,9 @@ jit_template_GetAttr_Shape(_PyJitWordCx *cx)
     _PyJitAsm_TestRR(a, _PyJitReg_RDI, _PyJitReg_RDI);
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitCond_NE), cx->slow);
     _PyJitAsm_Bind(a, L6);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c21 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c21), cx->slow);
+    _PyJitAsm_Bind(a, L8);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RDX}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_RDI, _PyJitMem_At(_PyJitReg_RDI, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -809,7 +821,7 @@ jit_template_GetAttr_Shape(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -863,6 +875,7 @@ jit_template_GetAttr_Module(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L13 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L15 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
@@ -882,7 +895,9 @@ jit_template_GetAttr_Module(_PyJitWordCx *cx)
     int c16 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c16), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c22 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c22), cx->slow);
+    _PyJitAsm_Bind(a, L13);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
     int c25 = _PyJitLower_PyModule_CheckExact(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RSI}, NULL);
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c25), cx->slow);
@@ -948,7 +963,7 @@ jit_template_GetAttr_Module(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -983,6 +998,7 @@ jit_template_GetAttr_ValueSlot_TL(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
@@ -997,7 +1013,9 @@ jit_template_GetAttr_ValueSlot_TL(_PyJitWordCx *cx)
     int c14 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c14), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c20 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c20), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RSI, _PyJitReg_RDX}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_RSI, _PyJitMem_At(_PyJitReg_RSI, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -1044,7 +1062,7 @@ jit_template_GetAttr_ValueSlot_TL(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -1079,6 +1097,7 @@ jit_template_GetAttr_ValueSlot(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
@@ -1093,7 +1112,9 @@ jit_template_GetAttr_ValueSlot(_PyJitWordCx *cx)
     int c14 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c14), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c20 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c20), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RSI, _PyJitReg_RDX}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_RSI, _PyJitMem_At(_PyJitReg_RSI, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -1140,7 +1161,7 @@ jit_template_GetAttr_ValueSlot(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -1200,6 +1221,7 @@ jit_template_GetAttr_Class_TT(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L16 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L13 = _PyJitAsm_NewLabel(a);
@@ -1216,7 +1238,9 @@ jit_template_GetAttr_Class_TT(_PyJitWordCx *cx)
     int c17 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c17), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, (const void *)(intptr_t)(cx->slow + 1));
+    int c23 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c23), cx->slow);
+    _PyJitAsm_Bind(a, L16);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RSI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_R9, _PyJitReg_RSI}, NULL);
     _PyJitAsm_MovRM(a, _PyJitReg_R10, _PyJitMem_At(_PyJitReg_R9, (int32_t)offsetof(PyTypeObject, tp_flags)));
@@ -1271,7 +1295,7 @@ jit_template_GetAttr_Class_TT(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -1331,6 +1355,7 @@ jit_template_GetAttr_Class(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L16 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L13 = _PyJitAsm_NewLabel(a);
@@ -1347,7 +1372,9 @@ jit_template_GetAttr_Class(_PyJitWordCx *cx)
     int c17 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c17), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, (const void *)(intptr_t)(cx->slow + 1));
+    int c23 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c23), cx->slow);
+    _PyJitAsm_Bind(a, L16);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RSI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_R9, _PyJitReg_RSI}, NULL);
     _PyJitAsm_MovRM(a, _PyJitReg_R10, _PyJitMem_At(_PyJitReg_R9, (int32_t)offsetof(PyTypeObject, tp_flags)));
@@ -1406,7 +1433,7 @@ jit_template_GetAttr_Class(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -1441,6 +1468,7 @@ jit_template_GetAttr_NonDescriptorValues(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
@@ -1455,7 +1483,9 @@ jit_template_GetAttr_NonDescriptorValues(_PyJitWordCx *cx)
     int c14 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c14), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, (const void *)(intptr_t)(cx->slow + 1));
+    int c20 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c20), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RSI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_R8, _PyJitReg_RSI}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_R8, _PyJitMem_At(_PyJitReg_R8, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -1504,7 +1534,7 @@ jit_template_GetAttr_NonDescriptorValues(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -1533,6 +1563,7 @@ jit_template_GetAttr_NonDescriptorNoDict(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
     _PyJitAsm_Bind(a, L0);
@@ -1546,7 +1577,9 @@ jit_template_GetAttr_NonDescriptorNoDict(_PyJitWordCx *cx)
     int c14 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c14), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c20 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c20), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RDX}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_RDX, _PyJitMem_At(_PyJitReg_RDX, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -1588,7 +1621,7 @@ jit_template_GetAttr_NonDescriptorNoDict(_PyJitWordCx *cx)
 //     br %9, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %16:value = arg obj
-//     %17:bool = prim PyValue_IsObject %16
+//     %17:bool = prim PyValue_IsPointerSpace %16
 //     %18:bool = lnot %17
 //     exit_if EXIT %18
 //     %19:PyObject* = prim PyValue_AsKnownObjectBorrow %16
@@ -1625,6 +1658,7 @@ jit_template_GetMethod_MethodValues_TTL(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
@@ -1636,7 +1670,9 @@ jit_template_GetMethod_MethodValues_TTL(_PyJitWordCx *cx)
     int c13 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c13), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDI}, (const void *)(intptr_t)(cx->slow + 1));
+    int c20 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c20), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_R8, _PyJitReg_RDI}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_R8, _PyJitMem_At(_PyJitReg_R8, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -1690,7 +1726,7 @@ jit_template_GetMethod_MethodValues_TTL(_PyJitWordCx *cx)
 //     br %9, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %16:value = arg obj
-//     %17:bool = prim PyValue_IsObject %16
+//     %17:bool = prim PyValue_IsPointerSpace %16
 //     %18:bool = lnot %17
 //     exit_if EXIT %18
 //     %19:PyObject* = prim PyValue_AsKnownObjectBorrow %16
@@ -1727,6 +1763,7 @@ jit_template_GetMethod_MethodValues(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
@@ -1738,7 +1775,9 @@ jit_template_GetMethod_MethodValues(_PyJitWordCx *cx)
     int c13 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c13), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDI}, (const void *)(intptr_t)(cx->slow + 1));
+    int c20 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c20), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_R8, _PyJitReg_RDI}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_R8, _PyJitMem_At(_PyJitReg_R8, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -1795,7 +1834,7 @@ jit_template_GetMethod_MethodValues(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -1826,6 +1865,7 @@ jit_template_GetMethod_NoDict_TTL(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
     _PyJitAsm_Bind(a, L0);
@@ -1839,7 +1879,9 @@ jit_template_GetMethod_NoDict_TTL(_PyJitWordCx *cx)
     int c15 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c15), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c21 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c21), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RDX}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_RDX, _PyJitMem_At(_PyJitReg_RDX, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -1888,7 +1930,7 @@ jit_template_GetMethod_NoDict_TTL(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -1919,6 +1961,7 @@ jit_template_GetMethod_NoDict(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
     _PyJitAsm_Bind(a, L0);
@@ -1932,7 +1975,9 @@ jit_template_GetMethod_NoDict(_PyJitWordCx *cx)
     int c15 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c15), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c21 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c21), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RDX}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_RDX, _PyJitMem_At(_PyJitReg_RDX, (int32_t)offsetof(PyTypeObject, tp_version_tag)));
@@ -1983,7 +2028,7 @@ jit_template_GetMethod_NoDict(_PyJitWordCx *cx)
 //     br %11, b3, b4
 //   b1(%0:u32, %1:u32, %2:u32, %3:u32, %4:u32, %5:bool, %6:value):
 //     %17:value = arg obj
-//     %18:bool = prim PyValue_IsObject %17
+//     %18:bool = prim PyValue_IsPointerSpace %17
 //     %19:bool = lnot %18
 //     exit_if EXIT %19
 //     %20:PyObject* = prim PyValue_AsKnownObjectBorrow %17
@@ -2023,6 +2068,7 @@ jit_template_GetMethod_LazyDict(_PyJitWordCx *cx)
     (void)fb;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L4 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
     _PyJitTemplate_CheckHandler(cx);
@@ -2038,7 +2084,9 @@ jit_template_GetMethod_LazyDict(_PyJitWordCx *cx)
     int c15 = _PyJitCond_NE;
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c15), cx->slow);
     _PyJitAsm_Bind(a, L4);
-    _PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, (const void *)(intptr_t)(cx->slow + 1));
+    int c21 = _PyJitLower_PyValue_IsPointerSpace(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c21), cx->slow);
+    _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RSI, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_R9, _PyJitReg_RSI}, NULL);
     _PyJitAsm_MovRM32(a, _PyJitReg_R9, _PyJitMem_At(_PyJitReg_R9, (int32_t)offsetof(PyTypeObject, tp_version_tag)));

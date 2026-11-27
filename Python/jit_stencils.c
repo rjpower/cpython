@@ -1,0 +1,140 @@
+/* The stencils of the baseline JIT: the interpreter's arms
+ * (Python/generated_rop_cases.c.h), compiled once more, with the C rows
+ * that the normal evaluator inlines (Python/ceval_normal.c), under the
+ * bindings below.  The build compiles this unit with the evaluator's flags
+ * and the interpreter's code model (CFLAGS_JIT_STENCILS, Makefile.pre.in)
+ * and never links it: Tools/jit/stencils.py reads the object and writes
+ * the table of stencils, Python/generated_jit_stencils.h, in the build
+ * tree.
+ *
+ * A stencil is its arm as a function _JIT_STENCIL_<arm> of the evaluator's
+ * type (Python/ceval_tail.h), with the word's fields and the arm's exits
+ * left as relocations against the hole symbols _JIT_*, which the emitter
+ * patches where it copies the stencil:
+ *
+ *   the fields A to D of the word: _JIT_A to _JIT_D, hidden symbols whose
+ *   address is the field's value.  The arm reads a field as
+ *   (uint32_t)(uintptr_t)_JIT_A, which GCC computes as lea _JIT_A(%rip)
+ *   into a 32-bit register: the patched displacement is the value less the
+ *   end of the instruction, modulo 2^32.  The reader refuses a field hole
+ *   in any other instruction;
+ *
+ *   the exits: tail calls of the code holes below, each with the arm's
+ *   state.  The declared cold exits are tail calls of functions declared
+ *   cold, which is what makes GCC move the paths that lead to them into
+ *   the stencil's .cold part.
+ *
+ * The word's own address is next_instr on entry, which compiled code keeps
+ * in its register as the interpreter does; the other reads of the word
+ * itself (its slot-class flags, flag immediates and branch distances) load
+ * it from there.
+ *
+ * Every arm's holes must be among those that its declaration
+ * (Python/generated_jit_stencil_decls.h, from the .rop sources) allows:
+ * the reader checks each one. */
+
+#define IR_JIT_STENCILS 1
+#include "ceval_normal.c"   // the shared headers and the inlined rows
+#include "ir_targets.h"
+#include "ceval_tail.h"
+
+/* The holes.  The names, kinds and coldness are those of the reader's
+ * table (Tools/jit/stencils.py, HOLES). */
+#define IR_JIT_FIELD_HOLE(X) \
+    extern char _JIT_##X[] __attribute__((visibility("hidden")))
+IR_JIT_FIELD_HOLE(A);
+IR_JIT_FIELD_HOLE(B);
+IR_JIT_FIELD_HOLE(C);
+IR_JIT_FIELD_HOLE(D);
+
+#define IR_JIT_EXIT(NAME) \
+    extern Py_IR_TAIL_CC __attribute__((visibility("hidden"))) \
+    PyValue NAME(Py_IR_TAIL_PARAMS)
+#define IR_JIT_COLD_EXIT(NAME) \
+    extern Py_IR_TAIL_CC __attribute__((visibility("hidden"), cold)) \
+    PyValue NAME(Py_IR_TAIL_PARAMS)
+IR_JIT_EXIT(_JIT_CONTINUE);         // the next word
+IR_JIT_EXIT(_JIT_TARGET);           // the word's branch or jump target
+IR_JIT_EXIT(_JIT_SWITCH);           // next_instr of frame, after a transfer
+IR_JIT_COLD_EXIT(_JIT_REDIRECT);    // next_instr of frame, after a redirect
+IR_JIT_COLD_EXIT(_JIT_AGAIN);       // the word again, under its new arm
+IR_JIT_COLD_EXIT(_JIT_MISS);        // the family's generic arm, at the word
+/* The VM routines (Python/ceval_routines.h, Python/ceval_evaluator.h) that
+ * arms leave through: an arm that reaches any other does not compile. */
+IR_JIT_COLD_EXIT(_JIT_LABEL_process_error);
+IR_JIT_COLD_EXIT(_JIT_LABEL_close_dispatch);
+IR_JIT_EXIT(_JIT_LABEL_gen_return);
+
+/* The arguments of an exit: the arm's state, and the word for the
+ * interpreter's arms (the generic arm, the arm the word now names), which
+ * decode it.  Every other exit takes an unspecified word, which costs no
+ * instruction. */
+#define IR_JIT_NO_WORD() \
+    ({ _PyIRWord ir_jit_word; __asm__("" : "=r"(ir_jit_word)); ir_jit_word; })
+#define IR_JIT_GOTO(HOLE, WORD) \
+    do { \
+        Py_MUSTTAIL return HOLE(tstate, frame, next_instr, (WORD)); \
+    } while (0)
+
+/* The bindings of the arms */
+#undef TARGET
+#define TARGET(op) \
+    Py_IR_TAIL_CC PyValue _JIT_STENCIL_##op( \
+        PyThreadState *tstate, _PyInterpreterFrame *frame, \
+        _PyInstr *next_instr, _PyIRWord ir_jit_word_in)
+
+#undef IR_A
+#undef IR_B
+#undef IR_C
+#undef IR_D
+#define IR_A(W) ((uint32_t)(uintptr_t)_JIT_A)
+#define IR_B(W) ((uint32_t)(uintptr_t)_JIT_B)
+#define IR_C(W) ((uint32_t)(uintptr_t)_JIT_C)
+#define IR_D(W) ((uint32_t)(uintptr_t)_JIT_D)
+#define ir_word FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr)
+
+#undef DISPATCH
+#define DISPATCH() IR_JIT_GOTO(_JIT_CONTINUE, IR_JIT_NO_WORD())
+#undef IR_BRANCH
+#define IR_BRANCH(T) \
+    do { \
+        next_instr = (T); \
+        IR_JIT_GOTO(_JIT_TARGET, IR_JIT_NO_WORD()); \
+    } while (0)
+#undef IR_DISPATCH_SWITCHED
+#define IR_DISPATCH_SWITCHED() IR_JIT_GOTO(_JIT_SWITCH, IR_JIT_NO_WORD())
+#undef IR_DISPATCH_REDIRECTED
+#define IR_DISPATCH_REDIRECTED() IR_JIT_GOTO(_JIT_REDIRECT, IR_JIT_NO_WORD())
+#undef DISPATCH_SAME_OPARG
+#define DISPATCH_SAME_OPARG() IR_JIT_GOTO(_JIT_AGAIN, ir_word)
+#undef JUMP_TO_PREDICTED
+#define JUMP_TO_PREDICTED(name) \
+    do { \
+        Py_MUSTTAIL return _JIT_MISS(tstate, frame, this_instr, ir_word); \
+    } while (0)
+#undef JUMP_TO_LABEL
+#define JUMP_TO_LABEL(name) IR_JIT_GOTO(_JIT_LABEL_##name, IR_JIT_NO_WORD())
+/* Compiled code is the unit: no warm-up event, no switch into it */
+#undef IR_JIT_EVENT_AT
+#define IR_JIT_EVENT_AT(NEXT) ((void)(NEXT))
+#undef IR_JIT_SWITCH
+#define IR_JIT_SWITCH() ((void)0)
+
+/* Each arm's declaration, in the object for the reader:
+ * "name generic|fields|exits" */
+#define IR_JIT_DECL(NAME, GENERIC, FIELDS, EXITS) \
+    __attribute__((section(".jit_decls"), used)) \
+    static const char ir_jit_decl_##NAME[] = #NAME " " #GENERIC "|" FIELDS "|" EXITS;
+#include "generated_jit_stencil_decls.h"
+
+/* As for the evaluator (Python/ceval_evaluator.h) */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmaybe-musttail-local-addr"
+#endif
+#include "generated_rop_cases.c.h"
+#pragma GCC diagnostic pop

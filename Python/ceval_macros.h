@@ -122,7 +122,7 @@
             JUMP_TO_LABEL(process_error); \
         } \
         int opcode; \
-        DISPATCH(); \
+        IR_DISPATCH_SWITCHED(); \
     } while (0)
 #define IR_GEN_JUMP(NAME, F, IP, V) \
     IR_STEP_DONE(_PyEval_ir_##NAME(tstate, (F), (IP), _PyValue_ToTransferWord(V)))
@@ -163,7 +163,7 @@
         next_instr = (HEAD); \
         IR_JIT_SWITCH(); \
         LLTRACE_RESUME_FRAME(); \
-        DISPATCH(); \
+        IR_DISPATCH_SWITCHED(); \
     } while (0)
 #define ROP_GEN_RETURN(CALLER, V, DYING) \
     do { \
@@ -207,7 +207,7 @@
         next_instr = frame->return_pc; \
         LLTRACE_RESUME_FRAME(); \
         IR_STORE_RETURN(rop_yielded); \
-        DISPATCH(); \
+        IR_DISPATCH_SWITCHED(); \
     } while (0)
 #define ROP_YIELD(V, SLOT) ROP_SUSPEND((V), (SLOT), FRAME_SUSPENDED)
 #define ROP_YIELD_FROM(V, SLOT) ROP_SUSPEND((V), (SLOT), FRAME_SUSPENDED_YIELD_FROM)
@@ -229,7 +229,7 @@
             _PyFrame_CompleteRedirect(frame); \
         } \
         next_instr = frame->return_pc; \
-        DISPATCH(); \
+        IR_DISPATCH_REDIRECTED(); \
     } while (0)
 /* A register instruction's branch or jump: go on at the word its target
  * operand names (a stub reports BRANCH instead, Tools/cases_generator/rop_generator.py) */
@@ -369,7 +369,7 @@ do { \
 #define DISPATCH_REDIRECT() \
     do { \
         next_instr = frame->instr_ptr; \
-        DISPATCH(); \
+        IR_DISPATCH_REDIRECTED(); \
     } while (0)
 
 #define DISPATCH_SAME_OPARG() \
@@ -992,7 +992,7 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
         IR_START_FRAME_LLTRACE(); \
         IR_JIT_SWITCH(); \
         int opcode; \
-        DISPATCH(); \
+        IR_DISPATCH_SWITCHED(); \
     } while (0)
 
 /* After a frame switch, V goes to the slot of the frame that control came
@@ -1064,3 +1064,13 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
     ((void)(HANDLER), \
      _PyIR_InstrFeedback(_PyFrame_GetCode(FRAME), _PyFrame_Exec(FRAME), (INSTR)))
+
+/* The two dispatches that do not go to the word after this one or to the
+ * word's own target: after a frame transfer (an entry, a return, a
+ * suspension, an outlined body's result), control goes to a word of
+ * another frame or one that a callee chose; after a redirect, to the word
+ * that a debugger's jump named.  Each evaluator dispatches both through its
+ * table; the stencils of the baseline JIT (Python/jit_stencils.c) bind them
+ * apart from DISPATCH(), which there goes on at the next word. */
+#define IR_DISPATCH_SWITCHED() DISPATCH()
+#define IR_DISPATCH_REDIRECTED() DISPATCH()

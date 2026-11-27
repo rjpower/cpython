@@ -1225,6 +1225,33 @@ def write_chain_roles(out: TextIO, prog: Program) -> None:
     out.write("\n")
 
 
+# The stencils of the baseline JIT (Python/jit_stencils.c): the arms of the
+# interpreter cases, compiled once more under their own bindings.  Each arm
+# declares the head fields that its family's operands take and the exits
+# that its contract allows; Tools/jit/stencils.py checks every hole of the
+# compiled stencil against them.
+
+def stencil_fields(program: Program, arm: Arm) -> list[str]:
+    """The head fields (A to D) that the family's operands take"""
+    return sorted({s.name for p in program.encodings[arm.family].placements
+                   if p.kind is not FieldKind.flag
+                   for s in p.slots if s.word == 0})
+
+
+def write_stencil_decls(out: TextIO, p: Products, sources: list[str]) -> None:
+    write_header(__file__, sources, out)
+    out.write("// Each arm of Python/generated_rop_cases.c.h: its family's generic\n"
+              "// arm (- for none), the head fields of its operands and its\n"
+              "// declared exits\n\n")
+    for name in p.lowered:
+        arm = p.program.arms[name]
+        generic = p.generic[arm.family]
+        fields = " ".join(stencil_fields(p.program, arm))
+        exits = " ".join(sorted(arm.contract.exits))
+        out.write(f'IR_JIT_DECL({c_name(name)}, {c_name(generic) if generic else "-"}, '
+                  f'"{fields}", "{exits}")\n')
+
+
 # Entry point
 
 def main(argv: list[str] | None = None) -> int:
@@ -1237,6 +1264,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--templates", help="the baseline templates")
     parser.add_argument("--lowerings", help="the baseline JIT's lowerings")
     parser.add_argument("--metadata", help="the metadata header")
+    parser.add_argument("--stencil-decls", help="the declarations of the JIT's stencils")
     parser.add_argument("sources", nargs="*", type=Path)
     args = parser.parse_args(argv)
     paths = args.sources or sorted(ROP_DIR.glob("*.rop"))
@@ -1254,7 +1282,8 @@ def main(argv: list[str] | None = None) -> int:
                            ("targets", write_targets),
                            ("templates", write_templates),
                            ("lowerings", write_lowerings),
-                           ("metadata", write_metadata)):
+                           ("metadata", write_metadata),
+                           ("stencil_decls", write_stencil_decls)):
         target = getattr(args, option)
         if target:
             with open(target, "w") as out:

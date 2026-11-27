@@ -2257,7 +2257,8 @@ regen-rop:
 	    --targets $(srcdir)/Python/ir_targets.h.new \
 	    --templates $(srcdir)/Python/generated_rop_templates.c.h.new \
 	    --lowerings $(srcdir)/Python/jit_lowerings.h.new \
-	    --metadata $(srcdir)/Include/internal/pycore_rop_metadata.h.new
+	    --metadata $(srcdir)/Include/internal/pycore_rop_metadata.h.new \
+	    --stencil-decls $(srcdir)/Python/generated_jit_stencil_decls.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_cases.c.h $(srcdir)/Python/generated_rop_cases.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_forms.c.h $(srcdir)/Python/generated_rop_forms.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_stubs.c.h $(srcdir)/Python/generated_rop_stubs.c.h.new
@@ -2266,6 +2267,7 @@ regen-rop:
 	$(UPDATE_FILE) --create $(srcdir)/Python/jit_lowerings.h $(srcdir)/Python/jit_lowerings.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_templates.c.h $(srcdir)/Python/generated_rop_templates.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Include/internal/pycore_rop_metadata.h $(srcdir)/Include/internal/pycore_rop_metadata.h.new
+	$(UPDATE_FILE) --create $(srcdir)/Python/generated_jit_stencil_decls.h $(srcdir)/Python/generated_jit_stencil_decls.h.new
 
 Python/jit_lower.o: $(srcdir)/Python/jit_lowerings.h
 Python/jit_template.o: $(srcdir)/Python/jit_lowerings.h \
@@ -2291,7 +2293,8 @@ Python/compile.o Python/codegen.o Python/assemble.o Python/ir_assemble.o Python/
                 $(srcdir)/Include/internal/pycore_opcode_utils.h \
                 $(srcdir)/Include/internal/pycore_regcfg.h
 
-Python/ceval.o Python/ceval_forms.o Python/ceval_normal.o Python/ceval_observing.o: \
+Python/ceval.o Python/ceval_forms.o Python/ceval_normal.o Python/ceval_observing.o \
+		Python/jit_stencils.o: \
 		$(srcdir)/Include/internal/pycore_native_scope.h \
 		$(srcdir)/Python/ceval_evaluator.h \
 		$(srcdir)/Python/ceval_shared.h \
@@ -2327,7 +2330,8 @@ Include/pydtrace_probes.h: $(srcdir)/Include/pydtrace.d
 	sed 's/PYTHON_/PyDTrace_/' $@ > $@.tmp
 	mv $@.tmp $@
 
-Python/ceval.o Python/ceval_forms.o Python/ceval_normal.o Python/ceval_observing.o: $(srcdir)/Include/pydtrace.h
+Python/ceval.o Python/ceval_forms.o Python/ceval_normal.o Python/ceval_observing.o \
+		Python/jit_stencils.o: $(srcdir)/Include/pydtrace.h
 Python/gc.o: $(srcdir)/Include/pydtrace.h
 Python/import.o: $(srcdir)/Include/pydtrace.h $(srcdir)/Include/internal/pycore_magic_number.h
 
@@ -3285,6 +3289,24 @@ Python/ceval_normal.o: Python/ceval_normal.c
 
 Python/ceval_observing.o: Python/ceval_observing.c
 	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_CEVAL) $(CFLAGS_EVALUATOR) -o $@ $<
+
+# The baseline JIT's stencils (Python/jit_stencils.c): the arms compiled
+# again, under the evaluator's flags and the interpreter's own code model
+# (position-independent, as python is), one section per function so that
+# each arm's cold part is its own, and no identical-code folding, which
+# would make one arm a jump to its twin.  The object is never linked; the
+# reader writes the table of stencils from it, and refuses any relocation
+# outside its declared kinds, which fails the build.
+CFLAGS_JIT_STENCILS=-fpie -ffunction-sections -fno-ipa-icf
+
+Python/jit_stencils.o: Python/jit_stencils.c Python/ceval_normal.c \
+		$(srcdir)/Python/generated_jit_stencil_decls.h
+	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_CEVAL) $(CFLAGS_EVALUATOR) $(CFLAGS_JIT_STENCILS) -o $@ $<
+
+Python/generated_jit_stencils.h: Python/jit_stencils.o $(srcdir)/Tools/jit/stencils.py
+	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/jit/stencils.py Python/jit_stencils.o -o $@
+
+Python/jit.o: Python/generated_jit_stencils.h
 
 # Run reindent on the library
 .PHONY: reindent

@@ -1,5 +1,5 @@
 /* The tail-calling binding of the interpreter (Python/ceval_evaluator.h),
- * which Python/ceval.c compiles for the normal evaluator and
+ * which Python/ceval_normal.c compiles for the normal evaluator and
  * Python/ceval_observing.c, with IR_OBSERVING set, for the observing one.
  *
  * Every handler, label and VM routine is a function of one type,
@@ -35,7 +35,23 @@
  * no_callee_saved_registers (x86-64) gives the first property: the arguments
  * stay in the SysV registers.  Only the driver, ir_evaluate(), saves its
  * caller's registers, once per activation.  configure requires a compiler
- * with musttail (GCC 15 or clang). */
+ * with musttail (GCC 15 or clang).
+ *
+ * Frames: a function reached by a tail call has no caller to return to, so
+ * it needs no frame record of its own for a frame-pointer unwinder (perf,
+ * the perf trampoline).  The two units of the evaluator hold its functions
+ * and, in the normal one, the C rows that its arms inline
+ * (Python/ceval_normal.c).  A build with frame pointers compiles both
+ * without frames and with the frame pointer reserved (CFLAGS_EVALUATOR,
+ * Makefile.pre.in): no function of theirs writes rbp, which keeps the
+ * record of the driver's frame.  The record of a C function that an arm
+ * calls links, through the arm's return address, to the frame below the
+ * driver, _PyEval_EvalFrameLoop().  A frame-pointer unwinder shows the arm
+ * and leaves out only the driver, which called the first function; below a
+ * row that an arm calls out of line, it leaves out the arm as well.
+ * Unwinders that read the call frame information (gdb, faulthandler) show
+ * every frame.  The driver and every function outside the two units keep
+ * their frames. */
 
 #if defined(__clang__) && __has_attribute(preserve_none)
 #  define Py_IR_TAIL_CC __attribute__((preserve_none))
@@ -77,6 +93,11 @@ typedef PyValue (Py_IR_TAIL_CC *_PyIRTailFn)(Py_IR_TAIL_PARAMS);
  * error that unwinds into a frame of the other evaluator) */
 extern Py_IR_TAIL_CC PyValue _PyEval_EnterNormal(Py_IR_TAIL_PARAMS);
 extern Py_IR_TAIL_CC PyValue _PyEval_EnterObserving(Py_IR_TAIL_PARAMS);
+
+/* The driver's entries into the normal evaluator: a frame from its start,
+ * a frame thrown into (generator.throw()) */
+extern Py_IR_TAIL_CC PyValue _PyEval_StartFrame(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_ThrowFrame(Py_IR_TAIL_PARAMS);
 #if IR_OBSERVING
 #  define IR_THIS_EVALUATOR _PyEval_EnterObserving
 #  define IR_OTHER_EVALUATOR _PyEval_EnterNormal

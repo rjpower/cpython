@@ -158,6 +158,30 @@ def _annotate_unwind(unwinder_name="manual_frame_pointer_unwind"):
     return json.dumps(_summarize_unwind(stack, unwinder_name))
 
 
+def _compare_unwinders(unwinder_name=None):
+    """Both unwinders from one C call site in one Python frame, under
+    STACK_DEPTH activations of the interpreter: the frame-pointer chain and
+    GNU backtrace() (DWARF call frame information), which differ only in
+    the frames above that call site."""
+    def both():
+        return (_testinternalcapi.manual_frame_pointer_unwind(),
+                _testinternalcapi.gnu_backtrace_unwind())
+
+    chain, backtrace = _build_stack_and_unwind(both)
+    labels = _testinternalcapi.classify_stack_addresses(backtrace)
+    # The innermost Python frame of the C runtime's entry: the last address
+    # in the interpreter before the C library frames that the main thread
+    # starts in
+    entry = None
+    for addr, tag in zip(backtrace, labels):
+        if tag == "python":
+            entry = addr
+        elif entry is not None:
+            break
+    return json.dumps({"chain": chain, "backtrace": backtrace,
+                       "entry": entry})
+
+
 def _run_unwind_helper(helper_name, unwinder_name):
     code = (
         f"from test.test_c_stack_unwind import {helper_name}; "
@@ -216,6 +240,32 @@ class ManualStackUnwindTests(unittest.TestCase):
             raise
         self.machine = machine
         self.manual_unwind_expected = expected
+
+    def test_frame_pointer_chain_follows_backtrace(self):
+        # The interpreter's handlers keep no frame record of their own
+        # (Python/ceval_tail.h): a C callee's record links, through the
+        # handler's return address, to the record of the frame below the
+        # activation's driver.  The chain must still be the DWARF stack
+        # with at most the driver of each activation left out, down to the
+        # C runtime's entry.
+        if not self.manual_unwind_expected:
+            self.skipTest("frame pointers are not expected to unwind")
+        if sys.platform != "linux":
+            self.skipTest("compares with GNU backtrace()")
+        result = _run_unwind_helper("_compare_unwinders", None)
+        chain, backtrace = result["chain"], result["backtrace"]
+        self.assertIsNotNone(result["entry"])
+        # The chain is a subsequence of the backtrace
+        rest = iter(backtrace)
+        self.assertTrue(all(addr in rest for addr in chain),
+                        "a frame-pointer return address is not on the stack")
+        self.assertIn(result["entry"], chain)
+        start = backtrace.index(chain[0])
+        end = backtrace.index(result["entry"])
+        missing = len(backtrace[start:end + 1]) - chain.index(result["entry"]) - 1
+        # one driver per activation: STACK_DEPTH calls, the helper's and
+        # the module's
+        self.assertLessEqual(missing, STACK_DEPTH + 2)
 
     def test_manual_unwind_finds_expected_frames(self):
         result = _unwind_result("manual_frame_pointer_unwind")

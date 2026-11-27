@@ -1,7 +1,7 @@
 // Macros and other things needed by ceval.c and the generated arms
 
 /* The compilation of the evaluator (Python/ceval_evaluator.h): 0 for the
- * normal one in Python/ceval.c, 1 for the observing evaluator in
+ * normal one in Python/ceval_normal.c, 1 for the observing evaluator in
  * Python/ceval_observing.c.  The function forms (Python/ceval_forms.c) are
  * compiled once, with 0, and their executor picks a word's form by the
  * observed mark of its code. */

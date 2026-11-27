@@ -290,7 +290,7 @@ MACROS = format_tsv_lines([
 
 SAME = {
     _abs('Include/*.h'): [_abs('Include/cpython/')],
-    _abs('Python/ceval.c'): ['Python/ceval_labels.h'],
+    _abs('Python/ceval_normal.c'): ['Python/ceval_labels.h'],
 }
 
 MAX_SIZES = {

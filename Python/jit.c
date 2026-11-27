@@ -66,10 +66,7 @@ _PyJit_InitInterpreter(PyInterpreterState *interp)
             }
         }
     }
-    /* -X ir_forms, a test of the function forms, runs no unit: the JIT is
-     * off under it */
-    if (mode != _PyJIT_OFF &&
-        (interp->ceval.ir_forms || !_PyJit_IsAvailable())) {
+    if (mode != _PyJIT_OFF && !_PyJit_IsAvailable()) {
         mode = _PyJIT_OFF;
     }
     interp->ceval.jit = mode;
@@ -617,18 +614,6 @@ _PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr)
         mark_stale(unit);
     }
 }
-
-/* The plan that word w compiles to.  A unit at the recompile cap is never
- * marked or recompiled, so it plans nothing: each word keeps its handler
- * check and runs the live handler's form after the handler changes, as a
- * planned arm, which is compiled for one handler, cannot. */
-const _PyIRStubPlan *
-_PyJit_PlanOf(_PyIRWord w, int capped)
-{
-    static const _PyIRStubPlan none = {_PyIR_PLAN_NONE};
-    return capped ? &none : &_PyIR_StubPlans[_PyJit_CompiledHandler(w)];
-}
-
 
 /* The unit's code: each head word's copy, in word order (hot parts, then
  * cold parts, then jump tables), the entry table, then the unwind info.

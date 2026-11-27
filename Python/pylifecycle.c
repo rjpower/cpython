@@ -636,11 +636,6 @@ init_interp_settings(PyInterpreterState *interp,
         return _PyStatus_ERR("invalid interpreter config 'gil' value");
     }
 
-    /* -X ir_forms: run every frame by calling its words' function forms
-       (ir_execute_forms() in Python/ceval.c), a test of the forms */
-    interp->ceval.ir_forms =
-        _Py_get_xoption(&interp->config.xoptions, L"ir_forms") != NULL;
-
     return _PyJit_InitInterpreter(interp);
 }
 

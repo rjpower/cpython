@@ -726,20 +726,6 @@ class TestHandOff(JitTestCase):
                 self.assertEqual(run(src, f"jit={mode}").strip(),
                                  "['Jump.Warm', 'Resume.Warm']")
 
-    def test_ir_forms_turns_the_jit_off(self):
-        # The forms executor runs no unit, so a JIT mode under -X ir_forms
-        # is off
-        src = """
-            import sys, _testinternalcapi as t
-            def f(): return 1
-            for i in range(100): f()
-            print(sys._jit.is_enabled(), t.jit_stats()["compiles"])
-        """
-        for mode in ("on", "always"):
-            with self.subTest(mode=mode):
-                self.assertEqual(run(src, "ir_forms", f"jit={mode}").split(),
-                                 ["False", "0"])
-
 
 class TestEntries(JitTestCase):
     """A frame switch goes to the target frame's word through its code's
@@ -925,8 +911,8 @@ class TestReclamation(unittest.TestCase):
     until no thread is in a window (Python/jit.c, _PyJit_Reclaim()).  Freed
     unit memory is inaccessible, so a premature free crashes."""
 
-    # The interpreter, the function forms and both JIT modes
-    MODES = (("jit=off",), ("ir_forms",)) + (
+    # The interpreter and both JIT modes
+    MODES = (("jit=off",),) + (
         (("jit=on",), ("jit=always",)) if AVAILABLE else ())
 
     def check_modes(self, source):
@@ -1862,40 +1848,6 @@ class TestFrameTransfers(JitTestCase):
                     print(type(e).__name__)
             sys.setrecursionlimit(1000)
         """)
-
-    @unittest.skip("Resume.Warm has no template yet: the interpreter comes first")
-    def test_plans_per_word(self):
-        # Every compiled frame is entered at word 0: RESUME's words compile
-        # to the inline RESUME_CHECK template, and the calls and returns
-        # that switch are the forms' calls (G3a plans no transfer stub)
-        outs = self.check_transfers("""
-            def callee(x):
-                return x + 1
-            def caller(n):
-                return callee(n) + callee(n + 1)
-            for i in range(3):
-                caller(i)
-            before = stats()
-            print(caller(5))
-            report("plans", before)
-            for f in (callee, caller):
-                unit = t.jit_unit(f.__code__)
-                if unit is not None:
-                    for i, plan in sorted(unit["plans"].items()):
-                        print("jit plan", f.__name__, i, *plan)
-        """)
-        plans = [line.split()[2:] for line in outs["always"].splitlines()
-                 if line.startswith("jit plan ")]
-        resumes = [p for p in plans if p[2].startswith("RESUME")]
-        self.assertEqual({tuple(p[0:1]) + tuple(p[3:]) for p in resumes},
-                         {("callee", "inline", "template", "RESUME_CHECK"),
-                          ("caller", "inline", "template", "RESUME_CHECK")}, plans)
-        self.assertEqual([p[1] for p in resumes], ["0", "0"], plans)
-        transfers = [p for p in plans if p[2].startswith(("Call.", "Return."))]
-        self.assertTrue(any(p[2] == "Call.Exact" for p in transfers), plans)
-        for p in transfers:
-            self.assertEqual(p[4], "form", p)
-        self.assert_switched(outs["always"], "plans", 4)
 
     def test_monitoring_turned_on_in_compiled_callees(self):
         # Events turned on inside a compiled callee, a callee that

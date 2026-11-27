@@ -117,11 +117,8 @@ struct _ceval_state {
     struct _gil_runtime_state *gil;
     int own_gil;
     struct _pending_calls pending;
-    /* -X ir_forms: the evaluation loop runs frames by the function forms of
-       their words (Python/ceval.c, ir_execute_forms()) */
-    int ir_forms;
     /* -X jit, PYTHON_JIT: the baseline JIT's mode (_PyJIT_OFF, _PyJIT_ON,
-       _PyJIT_ALWAYS in pycore_jit.h); off under ir_forms.  Code lowered
+       _PyJIT_ALWAYS in pycore_jit.h).  Code lowered
        under a mode other than off holds the JIT's forms of RESUME and
        JUMP_BACKWARD (Python/ir_assemble.c). */
     int jit;

@@ -11,8 +11,9 @@ What's currently here:
   `rop_catalog.py`, `rop_primitives.py`: the definition language,
   its checker and the declared catalogs
 - `rop_cgen.py`: lowering of the checked definitions to C
-- `rop_generator.py`: writes the interpreter cases, the function forms, the
-  completion stubs and their plans, the dispatch and form tables, and `Include/internal/pycore_rop_metadata.h`
+- `rop_generator.py`: writes the interpreter cases, the completion arms of
+  `gen_return`, the dispatch tables, the stencil declarations, and
+  `Include/internal/pycore_rop_metadata.h`
 - `ir_metadata_generator.py`: writes the handler formats and other tables of
   the register IR to `Include/internal/pycore_ir_metadata.h`
 - `regcfg_metadata_generator.py`: writes the translator's rows of the stack

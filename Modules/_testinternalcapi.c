@@ -5576,11 +5576,10 @@ jit_unit(PyObject *self, PyObject *code_object)
             diverted += _PyJit_IsDiverted(u, i);
         }
     }
-    /* Head words, and those whose handler compiled code checks */
-    int heads = 0, guarded = 0;
+    /* Head words */
+    int heads = 0;
     for (uint32_t i = 0; i < unit->nwords; i += _PyIR_WordLength(unit->words[i])) {
         heads++;
-        guarded += _PyJit_HandlerMayChange(code, (int)i);
     }
     /* The code of every unit in the chain, newest first, as (address, size);
      * a unit's unwind info lies after its code in its block */
@@ -5624,10 +5623,9 @@ jit_unit(PyObject *self, PyObject *code_object)
         Py_DECREF(plans);
         return NULL;
     }
-    PyObject *result = Py_BuildValue("{sIsisisnsnsIsIsisIsisisNsNsy#sNsN}",
+    PyObject *result = Py_BuildValue("{sIsisnsnsIsIsisIsisisNsNsy#sNsN}",
         "nwords", unit->nwords,
         "heads", heads,
-        "guarded", guarded,
         "code_bytes", (Py_ssize_t)unit->code.size,
         "pages", (Py_ssize_t)((unit->code.size + 4095) / 4096),
         "hot_bytes", unit->hot_bytes,

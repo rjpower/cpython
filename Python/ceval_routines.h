@@ -1,16 +1,12 @@
 /* The VM routines (tiers87, C2): the shared paths of the interpreter that a
  * handler's transfer enters, the error routine and the plain generator
  * transfers (rule 13 keeps the others in the steps of
- * Python/ceval_generator.h).  Each routine is one definition with two
- * bindings, the evaluator's (Python/ceval_macros.h) and the function
- * forms' (Python/ceval_forms.c).  IR_ROUTINE() opens the routine's
- * function, of the one type of every function of the interpreter or the
- * forms (a tail call needs caller and callee of one type): the
- * interpreter's IR_TAIL_FN(NAME), the form ir_NAME.  The
- * routine's operands, IR_ROUTINE_OPERAND(NAME), are the fields of the same
- * names of the activation, which the transfer that enters the routine
- * writes.  A routine leaves only through the macros that its binding
- * defines:
+ * Python/ceval_generator.h).  Each routine is a function of the
+ * interpreter, IR_TAIL_FN(NAME) (a tail call needs caller and callee of one
+ * type), bound by the macros of Python/ceval_macros.h.  The routine's
+ * operands, IR_ROUTINE_OPERAND(NAME), are the fields of the same names of
+ * the activation, which the transfer that enters the routine writes.  A
+ * routine leaves only through the macros that its binding defines:
  *
  *   GEN_DISPATCH()               run the word at next_instr in frame;
  *   GEN_STEP_JUMP(NAME, F, IP, V)

@@ -1,5 +1,5 @@
-/* The state that Python/ceval.c, the evaluator, and Python/ceval_forms.c,
- * the function forms, share: the includes, the types and macros of the
+/* The state that Python/ceval.c, the evaluator, and Python/ceval_steps.c,
+ * its out-of-line steps, share: the includes, the types and macros of the
  * register rows, the helpers that both inline, and the prototypes of the
  * out-of-line helpers that Python/ceval.c defines. */
 #ifndef Py_CEVAL_SHARED_H
@@ -4603,23 +4603,29 @@ PyValue _PyRop_SuperMethodExplicitObserved(PyThreadState *tstate, _PyInterpreter
 /* The rows that the register arms always inline, wherever the arms run */
 #include "generated_rop_inline.h"
 
-/* The whole-word completion of each arm (Python/ceval_forms.c) */
+/* The completion of the word that entered a generator, an arm that runs in
+ * the consumer's frame with the generator's value (Python/ceval_steps.c).
+ * It returns 0, the word completed and goes on at the next one, or: RAISED
+ * the word raised, its raise checkpoint in force; BRANCH it completed at
+ * its static target; REDIRECT it completed and the frame's control moved
+ * while it ran (a debugger's jump, or a switch of evaluator), so its
+ * successor is frame->return_pc. */
+#define _PyIR_RAISED    1
+#define _PyIR_BRANCH    2
+#define _PyIR_REDIRECT  4
 typedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,
                                 _PyIRWord *, PyValue);
 extern const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS];
 /* The observing evaluator's: an observer's for each arm of an event family */
 extern const _PyRopCompletion _PyRop_ObservingCompletions[ROP_NUM_HANDLERS];
 
-/* The event of an instrumented branch (Python/ceval_forms.c), which the
- * evaluator calls, and the function-form executor, which it runs under
- * -X ir_forms */
+/* The event of an instrumented branch (Python/ceval_steps.c), which the
+ * evaluator calls */
 Py_NO_INLINE _PyIRTransfer
 _PyEval_ir_event_edge(PyThreadState *tstate, _PyInterpreterFrame *frame,
               _PyInstr *this_instr, _PyInstr *source, _PyInstr *next,
               int event, int edge);
 _PyIRTransfer _PyEval_ir_GEN_REDIRECT_EFFECT(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                      _PyInstr *next_instr, _PyIRWord ir_word);
-PyValue _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                             int throwflag);
 
 #endif /* Py_CEVAL_SHARED_H */

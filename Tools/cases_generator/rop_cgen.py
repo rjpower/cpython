@@ -1,9 +1,10 @@
 """Interpreter C of register instruction arms (F2).
 
 `lower_arm` turns one checked arm graph into the statements of a handler
-body.  The same text is the arm's function in the tail-calling interpreter
-(Python/ceval_evaluator.h) and the body of the arm's function form: the transfer macros (`DISPATCH`,
-`PROCESS_ERROR_AT`, `JUMP_TO_PREDICTED`) differ, the statements do not.
+body: the arm's function in the tail-calling interpreter
+(Python/ceval_evaluator.h) and, with the transfer macros (`DISPATCH`,
+`PROCESS_ERROR_AT`, `JUMP_TO_PREDICTED`) of the baseline JIT's stencils
+(Python/jit_stencils.c), its stencil.
 
 Operands are decoded from the family's derived encoding, a call lowers
 through its extern's C convention (rop_catalog.CONVENTIONS, as data),
@@ -171,11 +172,6 @@ def row_signature(x: Extern) -> tuple[str, list[str]]:
     else:
         ret = RETURN_C[conv.returns]
     return ret, params
-
-
-def outlined_name(x: Extern) -> str:
-    assert x.c is not None
-    return f"{x.c.symbol}_Outlined"
 
 
 @dataclass(frozen=True)
@@ -524,12 +520,8 @@ class Lowering:
 
 class ArmLowerer:
     def __init__(self, program: Program, arm: Arm, numbers: Mapping[str, int],
-                 points: Mapping[str, int], generic: Mapping[str, str | None],
-                 outline: bool = False) -> None:
+                 points: Mapping[str, int], generic: Mapping[str, str | None]) -> None:
         self.program = program
-        # The function forms and stubs call the out-of-line copy of a row
-        # declared inline; the interpreter calls the row's own symbol
-        self.outline = outline
         self.arm = arm
         self.info: FlatGraph = flatten(program, arm)
         self.family = program.families[arm.family]
@@ -783,7 +775,7 @@ class ArmLowerer:
 
     def row_symbol(self, x: Extern) -> str:
         assert x.c is not None
-        return outlined_name(x) if self.outline and x.c.inline else x.c.symbol
+        return x.c.symbol
 
     def c_args(self, args, params) -> list[str]:
         """The C arguments of a row call: a token has no value, an anchor
@@ -1395,8 +1387,7 @@ class ArmLowerer:
         close_dispatch, which closes them in order and dispatches.  So the
         arm makes no call on any path to its exit, and finalizers run after
         its last decrement instead of between two.  The bindings
-        (Python/ceval_macros.h, Python/ceval_forms.c) say what the macros
-        do; the forms and stubs close in place."""
+        (Python/ceval_macros.h) say what the macros do."""
         closes, self.pending_closes = self.pending_closes, []
         if len(closes) > TAIL_CLOSES:
             raise ValueError(f"{self.arm.name}: {len(closes)} tail closes, more "
@@ -1460,6 +1451,5 @@ def cname(operand: str) -> str:
 
 
 def lower_arm(program: Program, arm: Arm, numbers: Mapping[str, int],
-              points: Mapping[str, int], generic: Mapping[str, str | None],
-              outline: bool = False) -> Lowering:
-    return ArmLowerer(program, arm, numbers, points, generic, outline).lower()
+              points: Mapping[str, int], generic: Mapping[str, str | None]) -> Lowering:
+    return ArmLowerer(program, arm, numbers, points, generic).lower()

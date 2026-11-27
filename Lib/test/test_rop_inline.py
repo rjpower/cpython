@@ -89,6 +89,8 @@ class InlineRowBinaryTests(unittest.TestCase):
     def test_tail_closes_leave_no_call_and_no_frame(self):
         if sysconfig.get_config_var("Py_GIL_DISABLED"):
             self.skipTest("the free-threaded build closes in place")
+        if "-DNDEBUG" not in sysconfig.get_config_var("PY_CFLAGS").split():
+            self.skipTest("an assert() is a call")
         for arm in TAIL_CLOSE_ONLY:
             with self.subTest(arm=arm):
                 match = re.search(rf"^[0-9a-f]+ <ir_tail_{arm}>:\n(.*?)(?=^[0-9a-f]+ <|\Z)",

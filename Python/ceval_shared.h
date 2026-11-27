@@ -1107,7 +1107,7 @@ _PyEval_SwitchSkips(_PyInterpreterFrame *frame)
 {
 #ifdef _PY_JIT_SUPPORTED
     return frame->owner != FRAME_OWNED_BY_INTERPRETER &&
-           _PyFrame_Exec(frame)->jit_entries != NULL;
+           _PyFrame_JitEntries(frame) != NULL;
 #else
     (void)frame;
     return false;

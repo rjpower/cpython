@@ -1043,7 +1043,7 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
     } while (0)
 #define IR_JIT_SWITCH() \
     do { \
-        if (_PyFrame_Exec(frame)->jit_entries != NULL) { \
+        if (_PyFrame_JitEntries(frame) != NULL) { \
             IR_STEP_DONE(jit_switch(tstate, frame, next_instr)); \
         } \
     } while (0)

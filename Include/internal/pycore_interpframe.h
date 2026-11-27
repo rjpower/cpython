@@ -34,6 +34,16 @@ _PyFrame_Exec(_PyInterpreterFrame *f)
     return exec;
 }
 
+/* The entries that frame switches to f go through (Python/jit.c,
+ * publish()), or NULL.  Every copy has a header, the entry frame's too,
+ * whose entries are NULL, so the frame's own pointer finds it for any frame
+ * that control switches to. */
+static inline const void *const *
+_PyFrame_JitEntries(_PyInterpreterFrame *f)
+{
+    return ((_PyCodeExec *)f->ir_words - 1)->jit_entries;
+}
+
 /* What monitoring observes at the word at instr of f's executing copy
  * (_PyIR_OBSERVE_*).  Every copy has a header, the entry frame's too, so
  * the frame's own pointer finds it. */

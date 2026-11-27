@@ -358,7 +358,7 @@ do { \
                (NEW_FRAME)->previous->previous == frame);        \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
-        JUMP_TO_LABEL(start_frame);                              \
+        IR_START_FRAME();                                        \
     } while (0)
 
 /* Tuple access macros */
@@ -883,6 +883,38 @@ shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
 #else
 #  define ROP_ENTER_GATE() ROP_ENTER_GATE_IF(IR_HANDLER(*next_instr) == ROP_HANDLER_Resume_Poll)
 #endif
+/* The start of frame, which has just become the current frame: its
+ * recursion debit, which raises RecursionError in the frame before its
+ * first word runs, then its first word, past a RESUME that would do nothing
+ * (ROP_ENTER_GATE()).  An arm that enters a frame runs it in place
+ * (DISPATCH_INLINED); the start_frame label runs it for the C entry and the
+ * function forms (Python/ceval_labels.h). */
+#ifdef Py_DEBUG
+#  define IR_START_FRAME_LLTRACE() \
+    do { \
+        int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS()); \
+        if (lltrace < 0) { \
+            PROCESS_ERROR_AT(EXIT, 0, frame->instr_ptr); \
+        } \
+        frame->lltrace = lltrace; \
+        assert(!_PyErr_Occurred(tstate)); \
+    } while (0)
+#else
+#  define IR_START_FRAME_LLTRACE() ((void)0)
+#endif
+#define IR_START_FRAME() \
+    do { \
+        if (_Py_EnterRecursivePy(tstate)) { \
+            PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr); \
+        } \
+        DTRACE_FUNCTION_ENTRY(); \
+        next_instr = frame->instr_ptr; \
+        ROP_ENTER_GATE(); \
+        IR_START_FRAME_LLTRACE(); \
+        int opcode; \
+        DISPATCH(); \
+    } while (0)
+
 /* IS_RESUME: the word at next_instr is a RESUME to skip */
 #define ROP_ENTER_GATE_IF(IS_RESUME) \
     do { \

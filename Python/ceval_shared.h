@@ -2124,6 +2124,18 @@ _PyRop_EnterForGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return child;
 }
 
+/* ForIter.Complete's receiver, whose generator the return cleared:
+ * golden87's gen_try_close_completed, else a close */
+static inline void
+_PyRop_CloseCompletedReceiver(PyValue receiver)
+{
+    if (PyValue_RefcountOnObject(PyValue_Borrow(receiver)) &&
+        _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(receiver))) {
+        return;
+    }
+    PyValue_XCLOSE(receiver);
+}
+
 static inline bool
 _PyRop_HasIterItem(PyValueBorrow receiver)
 {

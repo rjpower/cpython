@@ -704,13 +704,29 @@ arm ForIter.Gen split
     exit raise(ForIter.Failed, e);
 }
 
+// The receiver of a loop whose generator has returned, which the return
+// cleared: when the loop holds its last count, it is freed without its
+// finalizer, which has nothing left to do (_PyGen_TryCloseClearedNoReentry),
+// as golden87's gen_return closed it; otherwise it is closed
+extern helper close_completed_receiver(r:O) -> Unit
+  effects(releases)
+  c _PyRop_CloseCompletedReceiver as unit
+  evidence(
+    review: "ceval_shared.h _PyRop_CloseCompletedReceiver: golden87 ceval.c"
+            "gen_try_close_completed, then PyValue_XCLOSE.",
+    contract: "Consumes r. A cleared plain generator with no other count is freed"
+              "with no callback; anything else is closed, which may run Python.");
+
 // The completion of the generator that ForIter.Gen entered: its return value
-// is closed, and the loop is retired as at any exhaustion
+// is closed, and the loop is retired as at any exhaustion, its receiver by
+// close_completed_receiver
 arm ForIter.Complete completion(ForIter.Entered) split
   effects(writes, releases) feedback() exits(branch)
 {
   entry(v:O):
-    publish [] retire [spent(pair), owned(v)] at ForIter.Exhausted;
+    let rcv:O = acquire(pair.receiver);
+    let _:Unit = close_completed_receiver(rcv);
+    publish [] retire [spent(pair.cursor), owned(v)] at ForIter.Exhausted;
     exit branch(done);
 }
 

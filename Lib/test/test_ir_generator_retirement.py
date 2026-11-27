@@ -218,6 +218,62 @@ class ClearedReceiverTests(unittest.TestCase):
         self.assertEqual(observed, [True] * ROUNDS)
 
 
+@unittest.skipIf(support.Py_GIL_DISABLED, "generator placement requires the GIL")
+class CompletedLoopReceiverTests(unittest.TestCase):
+    """ForIter.Complete closes the generator its loop ran to the end by
+    close_completed_receiver: a generator only the loop holds is freed at
+    the loop's exit, before the next statement; one held elsewhere stays,
+    exhausted."""
+
+    def test_unique_generator_is_freed_at_the_loop_exit(self):
+        log = []
+
+        def gen():
+            yield 1
+            return Result()
+
+        def make():
+            iterator = gen()
+            refs.append(weakref.ref(iterator, lambda ref: log.append("freed")))
+            return iterator
+
+        for _ in range(ROUNDS):
+            refs = []
+            log.clear()
+            for x in make():
+                log.append(x)
+            log.append("after")
+            self.assertEqual(log, [1, "freed", "after"])
+
+    def test_unique_generator_and_its_result_are_freed(self):
+        results = []
+
+        def gen():
+            yield 1
+            value = Result()
+            results.append(weakref.ref(value))
+            return value
+
+        for _ in range(ROUNDS):
+            results.clear()
+            for x in gen():
+                pass
+            gc.collect()
+            self.assertIsNone(results[0]())
+
+    def test_shared_generator_stays_exhausted(self):
+        def gen():
+            yield 1
+            return 2
+
+        for _ in range(ROUNDS):
+            g = gen()
+            for x in g:
+                pass
+            self.assertIsNone(g.gi_frame)
+            self.assertEqual(list(g), [])
+
+
 class Noted:
     def __init__(self, log, name):
         self.log = log

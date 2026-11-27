@@ -10512,31 +10512,27 @@ _PyRop_Complete_ForIter_Complete(
     _PyIRWord *const this_instr = site;
     (void)this_instr;
     PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
-    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue rcv;
     PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
     PyValue own_pair_cursor = PyValue_NULL;
     PyValue v;
     v = ir_value;
-    own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
+    rcv = _PyFrame_TakeHome(frame, home_pair_receiver);
+    IR_STUB_ESCAPE();
+    _PyRop_CloseCompletedReceiver(rcv);
     own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
-    ROP_TAIL_CLOSE(own_pair_receiver, rop_ForIter_Complete_Tail0_0);
-    ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_Complete_Tail0_1);
-    ROP_TAIL_CLOSE(v, rop_ForIter_Complete_Tail0_2);
+    ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_Complete_Tail0_0);
+    ROP_TAIL_CLOSE(v, rop_ForIter_Complete_Tail0_1);
     IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_ForIter_Complete_Tail0_0:
-    ROP_TAIL_PARK_FIRST(own_pair_receiver);
+    ROP_TAIL_PARK_FIRST(own_pair_cursor);
     goto rop_ForIter_Complete_Tail0_Rest1;
     rop_ForIter_Complete_Tail0_1:
-    ROP_TAIL_PARK_FIRST(own_pair_cursor);
-    goto rop_ForIter_Complete_Tail0_Rest2;
-    rop_ForIter_Complete_Tail0_2:
     ROP_TAIL_PARK_FIRST(v);
-    goto rop_ForIter_Complete_Tail0_Rest3;
+    goto rop_ForIter_Complete_Tail0_Rest2;
     rop_ForIter_Complete_Tail0_Rest1:
-    ROP_TAIL_PARK(own_pair_cursor);
-    rop_ForIter_Complete_Tail0_Rest2:
     ROP_TAIL_PARK(v);
-    rop_ForIter_Complete_Tail0_Rest3:
+    rop_ForIter_Complete_Tail0_Rest2:
     ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 

@@ -7580,6 +7580,50 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Moved)
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    int64_t full;
+} rop_in_Cold_Add_Int_TLL_Overflow;
+static_assert(sizeof(rop_in_Cold_Add_Int_TLL_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Int_TLL_Overflow) {
+    // Add.Int_TLL: the cold region from rop_Add_Int_TLL_Overflow
+    int opcode = ROP_HANDLER_Add_Int_TLL;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    int64_t a;
+    int64_t b;
+    int64_t out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    int64_t s;
+    int64_t full;
+    PyValue z;
+    { const rop_in_Cold_Add_Int_TLL_Overflow *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Int_TLL_Overflow);
+      full = ir_in->full;
+    }
+    goto rop_Add_Int_TLL_Overflow;
+    rop_Add_Int_TLL_Finish:
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Add_Int_TLL_Overflow:
+    ret2 = _PyValue_BoxInt64(full);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Add_Int_TLL_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 1, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_TLL_Overflow)
+#endif
+
         TARGET(Add_Int_TLL) {
             // Add.Int_TLL (inline)
             int opcode = ROP_HANDLER_Add_Int_TLL;
@@ -7615,19 +7659,61 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Moved)
             }
             s = out1;
             z = _PyValue_FromIntScaled(s);
-            rop_Add_Int_TLL_Finish:
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
             rop_Add_Int_TLL_Overflow:
-            ret2 = _PyValue_BoxInt64(full);
-            if (!PyValue_IsNull(ret2)) {
-                z = ret2;
-                goto rop_Add_Int_TLL_Finish;
+            { rop_in_Cold_Add_Int_TLL_Overflow *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Int_TLL_Overflow);
+              ir_in->full = full;
             }
-            PROCESS_ERROR_AT(RAISE, 1, this_instr);
+            IR_OUTLINE_GOTO(Cold_Add_Int_TLL_Overflow);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    int64_t full;
+} rop_in_Cold_Add_Int_TTL_Overflow;
+static_assert(sizeof(rop_in_Cold_Add_Int_TTL_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Int_TTL_Overflow) {
+    // Add.Int_TTL: the cold region from rop_Add_Int_TTL_Overflow
+    int opcode = ROP_HANDLER_Add_Int_TTL;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    int64_t a;
+    int64_t b;
+    int64_t out1;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    int64_t s;
+    int64_t full;
+    PyValue z;
+    { const rop_in_Cold_Add_Int_TTL_Overflow *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Int_TTL_Overflow);
+      full = ir_in->full;
+    }
+    goto rop_Add_Int_TTL_Overflow;
+    rop_Add_Int_TTL_Finish:
+    _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    assert(PyValue_IsNull(*home_dst));
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    DISPATCH();
+    rop_Add_Int_TTL_Overflow:
+    ret2 = _PyValue_BoxInt64(full);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Add_Int_TTL_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 1, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_TTL_Overflow)
+#endif
 
         TARGET(Add_Int_TTL) {
             // Add.Int_TTL (inline)
@@ -7664,20 +7750,72 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Moved)
             }
             s = out1;
             z = _PyValue_FromIntScaled(s);
-            rop_Add_Int_TTL_Finish:
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
             rop_Add_Int_TTL_Overflow:
-            ret2 = _PyValue_BoxInt64(full);
-            if (!PyValue_IsNull(ret2)) {
-                z = ret2;
-                goto rop_Add_Int_TTL_Finish;
+            { rop_in_Cold_Add_Int_TTL_Overflow *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Int_TTL_Overflow);
+              ir_in->full = full;
             }
-            PROCESS_ERROR_AT(RAISE, 1, this_instr);
+            IR_OUTLINE_GOTO(Cold_Add_Int_TTL_Overflow);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    int64_t full;
+} rop_in_Cold_Add_Int_Overflow;
+static_assert(sizeof(rop_in_Cold_Add_Int_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Int_Overflow) {
+    // Add.Int: the cold region from rop_Add_Int_Overflow
+    int opcode = ROP_HANDLER_Add_Int;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    int64_t a;
+    int64_t b;
+    int64_t out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    int64_t s;
+    int64_t full;
+    PyValue z;
+    { const rop_in_Cold_Add_Int_Overflow *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Int_Overflow);
+      full = ir_in->full;
+    }
+    goto rop_Add_Int_Overflow;
+    rop_Add_Int_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Add_Int_Tail0_0);
+    DISPATCH();
+    rop_Add_Int_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
+    rop_Add_Int_Overflow:
+    ret2 = _PyValue_BoxInt64(full);
+    if (!PyValue_IsNull(ret2)) {
+        z = ret2;
+        goto rop_Add_Int_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 1, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_Overflow)
+#endif
 
         TARGET(Add_Int) {
             // Add.Int (inline)
@@ -7714,7 +7852,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Moved)
             }
             s = out1;
             z = _PyValue_FromIntScaled(s);
-            rop_Add_Int_Finish:
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -7730,12 +7867,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Moved)
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
             rop_Add_Int_Overflow:
-            ret2 = _PyValue_BoxInt64(full);
-            if (!PyValue_IsNull(ret2)) {
-                z = ret2;
-                goto rop_Add_Int_Finish;
+            { rop_in_Cold_Add_Int_Overflow *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Int_Overflow);
+              ir_in->full = full;
             }
-            PROCESS_ERROR_AT(RAISE, 1, this_instr);
+            IR_OUTLINE_GOTO(Cold_Add_Int_Overflow);
         }
 
         TARGET(Add_Float_TTT) {
@@ -25548,9 +25683,6 @@ typedef struct __attribute__((__may_alias__)) {
     PyValue a_owned0;
     PyValue a_owned1;
     PyValue a_owned2;
-    PyValue own_send_receiver;
-    PyValue own_send_cursor;
-    PyValue own_send_value;
 } rop_in_Cold_Send_Observed_Moved;
 static_assert(sizeof(rop_in_Cold_Send_Observed_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
@@ -25599,9 +25731,6 @@ IR_OUTLINED_FN(Cold_Send_Observed_Moved) {
       a_owned0 = ir_in->a_owned0;
       a_owned1 = ir_in->a_owned1;
       a_owned2 = ir_in->a_owned2;
-      own_send_receiver = ir_in->own_send_receiver;
-      own_send_cursor = ir_in->own_send_cursor;
-      own_send_value = ir_in->own_send_value;
     }
     goto rop_Send_Observed_Moved;
     rop_Send_Observed_Moved:
@@ -25786,9 +25915,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_Send_Observed_Moved)
               ir_in->a_owned0 = a_owned0;
               ir_in->a_owned1 = a_owned1;
               ir_in->a_owned2 = a_owned2;
-              ir_in->own_send_receiver = own_send_receiver;
-              ir_in->own_send_cursor = own_send_cursor;
-              ir_in->own_send_value = own_send_value;
             }
             IR_OUTLINE_GOTO(Cold_Send_Observed_Moved);
             rop_Send_Observed_ExitFailed:

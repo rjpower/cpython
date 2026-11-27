@@ -162,10 +162,13 @@ class Param:
 
 @dataclass(frozen=True, slots=True)
 class CaseDecl:
-    """A named outcome of a row or macro, and its payload."""
+    """A named outcome of a row or macro, and its payload.  A `cold` case
+    is rare: an arm runs the blocks it leads to out of line (rule J5-R2,
+    rop_cgen.cold_case_heads)."""
     name: str
     params: tuple[Param, ...]
     span: SrcSpan = _span()
+    cold: bool = False
 
 
 @dataclass(frozen=True, slots=True)

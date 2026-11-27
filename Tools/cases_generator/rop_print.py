@@ -68,7 +68,8 @@ def _fact(f: FactUse) -> str:
 def _result(r: Result) -> str:
     if isinstance(r, Returns):
         return f"-> {type_text(r.type)}"
-    return "cases(" + ", ".join(f"{c.name}{_params(c.params)}" for c in r.cases) + ")"
+    return "cases(" + ", ".join(f"{'cold ' if c.cold else ''}{c.name}{_params(c.params)}"
+                                for c in r.cases) + ")"
 
 
 def effect_text(e: EffectDecl) -> str:

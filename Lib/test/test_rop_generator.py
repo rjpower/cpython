@@ -404,6 +404,70 @@ arm F.Observed shared observes effects() feedback() exits(next)
 """
 
 
+class ColdRegionTests(unittest.TestCase):
+    """The arms' cold regions are functions of their own
+    (rop_cgen.ArmLowerer.outline_cold)"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.p = products()
+
+    def region(self, arm, head):
+        (c,) = [c for c in self.p.lowered[arm].cold if c.head.endswith("_" + head)]
+        return c
+
+    def test_a_raise_region_is_a_function_the_arm_tail_calls(self):
+        # Add.Generic's failed call retires its anchors, then raises: the
+        # arm passes the anchors and leaves by a tail call
+        arm = "\n".join(self.p.lowered["Add.Generic"].body)
+        c = self.region("Add.Generic", "binary_at_origin1_Failed")
+        self.assertEqual(c.name, "Cold_Add_Generic_binary_at_origin1_Failed")
+        self.assertNotIn("_PyRop_RetireFailedCall", arm)
+        self.assertIn(f"IR_OUTLINE_GOTO({c.name});", arm)
+        self.assertEqual([n for _, n in c.live],
+                         ["a_view0", "a_owned0", "a_view1", "a_owned1"])
+        body = "\n".join(c.body)
+        self.assertTrue(body.startswith(f"goto {c.head};"))
+        self.assertIn("_PyRop_RetireFailedCall(", body)
+        self.assertIn("PROCESS_ERROR_AT(RAISE,", body)
+
+    def test_a_cold_case_runs_the_rest_of_the_arm_out_of_line(self):
+        # add_checked_scaled's overflow case is cold: the box and the
+        # publish after it run in the outlined copy, given the full sum
+        arm = "\n".join(self.p.lowered["Add.Int_TLL"].body)
+        c = self.region("Add.Int_TLL", "Overflow")
+        self.assertNotIn("_PyValue_BoxInt64", arm)
+        self.assertEqual(c.live, [("int64_t", "full")])
+        body = "\n".join(c.body)
+        self.assertIn("_PyValue_BoxInt64(full)", body)
+        self.assertIn("_PyFrame_WriteHome(frame, home_dst, z);", body)
+        self.assertIn("DISPATCH();", body)
+
+    def test_the_cases_print_the_outlined_functions_before_their_arm(self):
+        out = io.StringIO()
+        rop_generator.write_cases(out, self.p, [])
+        text = out.getvalue()
+        name = "Cold_Add_Int_TLL_Overflow"
+        self.assertLess(text.index(f"IR_OUTLINED_FN({name})"),
+                        text.index("TARGET(Add_Int_TLL)"))
+        self.assertIn(f"}} rop_in_{name};", text)
+        self.assertIn(f"IR_OUTLINED_JIT_ENTRY({name})", text)
+
+    def test_a_completion_keeps_its_cold_regions(self):
+        for name, low in self.p.completions.items():
+            with self.subTest(name):
+                self.assertEqual(low.cold, [])
+                self.assertNotIn("IR_OUTLINE_GOTO", "\n".join(low.body))
+
+    def test_a_cold_case_prints_as_parsed(self):
+        source = ("extern primitive split(a:I64) cases(fits(s:I64), cold big(w:I64))\n"
+                  "  effects()\n  c _PyRop_Split as bool_out;\n")
+        (x,) = rop_syntax.parse(source, "c.rop").decls
+        self.assertEqual([c.cold for c in x.result.cases], [False, True])
+        self.assertIn("cases(fits(s:I64), cold big(w:I64))",
+                      "\n".join(rop_print.decl_lines(x)))
+
+
 class HomeStateTests(unittest.TestCase):
     """The homes of a family's word and their state on each normal edge,
     from the points its arms publish there (rop_generator.family_homes)"""

@@ -38,9 +38,10 @@ extern primitive from_int_scaled(s:Scaled51) -> O
 // The scaled sum: fits(s) when a + b does not overflow 64 bits; else
 // overflow(w) with w the unscaled sum of the two int51s, which fits in 64
 // bits and lies outside the int51 range.  The case carries the value its
-// fact is about, so the fact stays unary.
+// fact is about, so the fact stays unary.  Overflow is cold: an arm boxes
+// the sum and goes on out of line.
 extern primitive add_checked_scaled(a:Scaled51, b:Scaled51)
-  cases(fits(s:Scaled51), overflow(w:I64))
+  cases(fits(s:Scaled51), cold overflow(w:I64))
   effects()
   ensures(overflow.outside_i51(w))
   c _PyValue_AddCheckedScaled as bool_out

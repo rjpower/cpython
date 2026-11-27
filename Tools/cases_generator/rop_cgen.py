@@ -528,6 +528,42 @@ def cold_region_heads(program: Program, blocks, skip: set[str]) -> set[str]:
     return heads
 
 
+def cold_case_heads(program: Program, blocks, skip: set[str]) -> set[str]:
+    """Rule J5-R2: the blocks that only a row's `cold` case leads to.  The
+    arm runs such a block, and every block that it reaches, out of line
+    (ArmLowerer.outline_cold), as for a cold region: the rare path that
+    rejoins the arm, such as an overflow that boxes its result, leaves by
+    the outlined copy of the arm's rest, so the hot path keeps no frame or
+    register for it.  As for a cold region, a block counts only if its
+    region makes a call."""
+    into: dict[str, list[bool]] = {label: [] for label in blocks}
+    for b in blocks.values():
+        t = b.term
+        x = program.externs.get(t.callee) if isinstance(t, CallTerm) else None
+        if x is not None and isinstance(x.result, Cases):
+            cold_cases = {c.name for c in x.result.cases if c.cold}
+            for e in t.edges:
+                into[e.target.label].append(e.case in cold_cases)
+            continue
+        for target, _ in edges_of(program, blocks, b):
+            into[target.label].append(False)
+    succs = {label: [t.label for t, _ in edges_of(program, blocks, b)]
+             for label, b in blocks.items()}
+    heads = set()
+    for label, marks in into.items():
+        if label in skip or label == "entry" or not marks or not all(marks):
+            continue
+        region, todo = set(), [label]
+        while todo:
+            lb = todo.pop()
+            if lb not in region:
+                region.add(lb)
+                todo.extend(succs[lb])
+        if any(block_calls(program, blocks[lb]) for lb in region):
+            heads.add(label)
+    return heads
+
+
 def is_transfer(program: Program, callee: str) -> bool:
     x = program.externs.get(callee)
     return (x is not None and x.c is not None
@@ -1084,8 +1120,10 @@ class ArmLowerer:
             st.name: len(st.value.args[0].items)
             for b in self.blocks.values() for st in b.stmts if is_span_anchor(st)}
         order = [label for label in self.layout() if label not in self.transfer_blocks]
-        self.cold_heads = (cold_region_heads(self.program, self.blocks, self.transfer_blocks)
-                           if self.outline_cold_regions else set())
+        self.cold_heads = (
+            cold_region_heads(self.program, self.blocks, self.transfer_blocks)
+            | cold_case_heads(self.program, self.blocks, self.transfer_blocks)
+            if self.outline_cold_regions else set())
         spans: dict[str, tuple[int, int]] = {}
         if self.fixed_local:
             # The member's word: an install that bypassed the generated row
@@ -1161,9 +1199,10 @@ class ArmLowerer:
                 continue
             region = reach(label, set())
             body = [line for lb in order if lb in region for line in text(lb)]
-            used = set(c_names(body))
+            needed = live_in(label, region, succs, {lb: text(lb) for lb in region},
+                             self.label)
             live = [(types[n], n) for n in types
-                    if n in used and n in hot_names and not types[n].endswith("const")]
+                    if n in needed and n in hot_names and not types[n].endswith("const")]
             name = f"Cold_{self.prefix.removeprefix('rop_')}_{label}"
             body = [f"goto {self.label(label)};"] + body
             self.cold.append(ColdRegion(name, self.label(label), live,
@@ -1637,6 +1676,61 @@ class Decl:
 def c_names(lines: list[str]) -> list[str]:
     """The identifiers in some lines of C"""
     return re.findall(r"\b[A-Za-z_]\w*\b", "\n".join(lines))
+
+
+def block_uses_defs(lines: list[str]) -> tuple[set[str], set[str], dict[str, set[str]]]:
+    """For a block's C: the names it reads before it sets them; the names
+    it sets on every path through it (an assignment at its top level,
+    before any label of its own); and for each label that a goto in a
+    braced group leaves for, the names the group set before the goto (a
+    jump's payload)"""
+    uses: set[str] = set()
+    defs: set[str] = set()
+    edge: dict[str, set[str]] = {}
+    group: list[str] = []
+    depth = 0
+    straight = True
+    for line in lines[1:] if lines and lines[0].endswith(":") else lines:
+        text = line.strip()
+        if depth == 0 and text.endswith(":"):
+            straight = False
+        m = re.match(r"([A-Za-z_]\w*) = (.*);$", text)
+        g = re.match(r"goto ([A-Za-z_]\w*);$", text)
+        if m:
+            uses |= {n for n in c_names([m.group(2)]) if n not in defs and n not in group}
+            if depth == 0 and straight:
+                defs.add(m.group(1))
+            else:
+                group.append(m.group(1))
+        elif g:
+            edge.setdefault(g.group(1), set()).update(group if depth else ())
+        else:
+            uses |= {n for n in c_names([text]) if n not in defs and n not in group}
+        if text.endswith("{") or text == "}":
+            group = []
+        depth += text.count("{") - text.count("}")
+    return uses, defs, edge
+
+
+def live_in(head: str, region: set[str], succs: Mapping[str, list[str]],
+            texts: Mapping[str, list[str]], label) -> set[str]:
+    """The names that some path from head reads before it sets them"""
+    ud = {lb: block_uses_defs(texts[lb]) for lb in region}
+    live = {lb: set(ud[lb][0]) for lb in region}
+    changed = True
+    while changed:
+        changed = False
+        for lb in region:
+            uses, defs, edge = ud[lb]
+            out: set[str] = set()
+            for s_ in succs[lb]:
+                if s_ in region:
+                    out |= live[s_] - edge.get(label(s_), set())
+            new = uses | (out - defs)
+            if new != live[lb]:
+                live[lb] = new
+                changed = True
+    return live[head]
 
 
 def cname(operand: str) -> str:

@@ -107,6 +107,7 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 //   GetItem.TupleIndex: GetItem.TupleIndex: exact_tuple has no leaf lowering
 //   GetItem.UnicodeAsciiChar: GetItem.UnicodeAsciiChar: str_in_bounds has no leaf lowering
 //   GetMethod.ClassMethod: GetMethod.ClassMethod: builtin_metaclass has no leaf lowering
+//   GetMethod.Module: GetMethod.Module: null has no leaf lowering
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: poly_method has no leaf lowering
 //   IterOpen.Indexed: IterOpen.Indexed: iter_by_index has no leaf lowering
 //   IterOpen.Self: IterOpen.Self: iter_self has no leaf lowering

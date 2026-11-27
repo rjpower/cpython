@@ -24,6 +24,7 @@
 #include "pycore_rop_rows.h"      // _PyRop_Install()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_unicodeobject.h" // _PyUnicodeASCIIIter_Type
+#include "pycore_typecache.h"     // _PyTypeCache_Lookup()
 #include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue()
 #include "pycore_value_slots.h"   // _PyType_VALUE_SLOT()
 
@@ -1698,6 +1699,7 @@ static const attr_arm attr_arms[] = {
     {ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1, -1},
     {ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2, -1},
     {ATTR_CLASSMETHOD, ROP_HANDLER_GetMethod_ClassMethod, -1, 3, -1},
+    {ATTR_MODULE, ROP_HANDLER_GetMethod_Module, -1, 4, -1},
     {ATTR_STORE_INSTANCE_VALUE, ROP_HANDLER_AttrWrite_Instance, -1, -1, 0},
     {ATTR_STORE_SHAPE, ROP_HANDLER_AttrWrite_Shape, -1, -1, 1},
     {ATTR_STORE_SHAPE_ADD, ROP_HANDLER_AttrWrite_ShapeAdd, -1, -1, 2},
@@ -1757,8 +1759,7 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
     }
     attr_collect = NULL;
     // The last case of each row is "none"
-    int none = family == ATTR_FAMILY_GETATTR ? 12
-             : family == ATTR_FAMILY_GETMETHOD ? 4 : 5;
+    int none = family == ATTR_FAMILY_GETATTR ? 12 : 5;
     const attr_arm *chosen = attr_arm_of(nominated.kind, family);
     if (chosen == NULL) {
         attr_restore_entry((_PyFbAttr *)fb, &before);
@@ -2282,6 +2283,36 @@ function_pushes_frame(PyObject *func, int argcount)
     return f->vectorcall == _PyFunction_Vectorcall &&
         function_signature(code) == SIMPLE_SIGNATURE &&
         code->co_argcount == argcount && prepare_function_for_inline(code);
+}
+
+/* A necessary condition of _PyAttr_FrameTarget finding a function, cheap
+ * enough for every execution of the generic load.  It mirrors
+ * analyze_descriptor_load and may accept more than it, never fewer:
+ * - a type whose tp_getattro is a slot hook may have a Python
+ *   __getattribute__, and is accepted without a lookup;
+ * - any other type must read attributes with the generic value getattr
+ *   (else GETSET_OVERRIDDEN), and the result must be a property, which
+ *   classify_descriptor takes only for exactly PyProperty_Type.  The lookup
+ *   is the type cache's, borrowed: a hit that is not such a property
+ *   rejects; a miss (nothing cached yet, or a name the cache does not hold)
+ *   accepts and leaves the decision to the full analysis. */
+bool
+_PyAttr_FrameTargetPossible(PyObject *owner, PyObject *name)
+{
+    PyTypeObject *type = Py_TYPE(owner);
+    getattrofunc slot = type->tp_getattro;
+    if (slot == _Py_slot_tp_getattr_hook || slot == _Py_slot_tp_getattro) {
+        return true;
+    }
+    if (_PyType_VALUE_SLOT(type, getattro) != _PyObject_GenericGetAttrValue) {
+        return false;
+    }
+    PyValueBorrow hit;
+    if (_PyTypeCache_Lookup(type, name, &hit) == 0) {
+        return true;
+    }
+    return PyValue_IsObject(hit) &&
+        Py_IS_TYPE(PyValue_AsKnownObjectBorrow(hit), &PyProperty_Type);
 }
 
 /* The function that a load of name from owner runs in a frame of its own:

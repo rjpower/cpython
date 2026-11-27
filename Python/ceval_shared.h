@@ -3417,6 +3417,7 @@ _PyRop_ListReceiver(_PyInterpreterFrame *frame, const _PyIRWord *head)
  * the function is the recipe's class value, its version the recipe's aux word */
 extern PyObject *_PyAttr_FrameTarget(PyObject *owner, PyObject *name,
                                      bool *getattribute);
+extern bool _PyAttr_FrameTargetPossible(PyObject *owner, PyObject *name);
 
 static inline bool
 _PyAttr_FrameReady(PyThreadState *tstate, _PyAttrRecipe r)
@@ -3482,9 +3483,14 @@ _PyAttr_FrameClaimable(PyThreadState *tstate, PyValueBorrow owner, PyObject *nam
     {
         return false;
     }
+    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
     bool getattribute;
-    PyObject *func = _PyAttr_FrameTarget(PyValue_AsKnownObjectBorrow(owner), name,
-                                         &getattribute);
+    if (!_PyAttr_FrameTargetPossible(owner_o, name)) {
+        // The full analysis is for the sites that can have a target
+        assert(_PyAttr_FrameTarget(owner_o, name, &getattribute) == NULL);
+        return false;
+    }
+    PyObject *func = _PyAttr_FrameTarget(owner_o, name, &getattribute);
     return func != NULL && _PyThreadState_HasStackSpace(
         tstate, ((PyCodeObject *)((PyFunctionObject *)func)->func_code)->co_framesize);
 }

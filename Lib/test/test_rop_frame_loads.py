@@ -147,6 +147,51 @@ class PropertyTests(unittest.TestCase):
             force(force_fails, "LOAD_ATTR", "GetAttr.Generic")
             force_fails(WithProperty())
 
+    def test_a_site_without_a_getter_loads_as_the_lookup(self):
+        # The generic arm claims a frame only where a property or a
+        # __getattribute__ can be: these owners have neither, so the first
+        # loads (generic, then adapted) give the value of the lookup.
+        class Slotted:
+            __slots__ = ("a",)
+
+            def __init__(self):
+                self.a = 3
+
+        class Plain:
+            attr = 4
+
+            def __init__(self):
+                self.inst = 5
+
+        for owner, name, expected in (
+            (Slotted(), "a", 3),
+            (Plain(), "attr", 4),
+            (Plain(), "inst", 5),
+            (sys._getframe(), "f_lineno", sys._getframe().f_lineno),
+            (sys, "maxsize", sys.maxsize),
+            (5, "real", 5),
+        ):
+            with self.subTest(name=name):
+                f = eval("lambda o: o." + name)
+                force(f, "LOAD_ATTR", "GetAttr.Generic")
+                for _ in range(3):
+                    result = f(owner)
+                if name != "f_lineno":
+                    self.assertEqual(result, expected)
+
+        # The first load of a name that the type cache has not seen yet
+        # still reaches the property.
+        class Fresh:
+            @property
+            def late(self):
+                return 11
+
+        f = lambda o: o.late
+        force(f, "LOAD_ATTR", "GetAttr.Generic")
+        self.assertEqual(f(Fresh()), 11)
+        Fresh.late = 12
+        self.assertEqual(f(Fresh()), 12)
+
     def test_a_property_with_a_getattr_hook_is_not_entered(self):
         class Hooked(WithProperty):
             def __getattr__(self, name):

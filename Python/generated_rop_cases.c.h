@@ -1834,17 +1834,19 @@
             int ret12;
             int adapt_before_use_getmethod2_cp;
             int ret13;
-            int adapt_before_use_getmethod2_cLClassMethod;
+            int adapt_before_use_getmethod2_cLModule;
             int ret14;
-            int adapt_before_use_getmethod2_cLLazyDict;
+            int adapt_before_use_getmethod2_cLClassMethod;
             int ret15;
-            int adapt_before_use_getmethod2_cLNoDict;
+            int adapt_before_use_getmethod2_cLLazyDict;
             int ret16;
-            int adapt_before_use_getmethod2_cm;
+            int adapt_before_use_getmethod2_cLNoDict;
             int ret17;
-            _PyRopAnchors a_all18;
-            _PyRopSrcs srcs19;
-            _PyRopAnchors a_all20;
+            int adapt_before_use_getmethod2_cm;
+            int ret18;
+            _PyRopAnchors a_all19;
+            _PyRopSrcs srcs20;
+            _PyRopAnchors a_all21;
             PyValue f;
             PyValue s;
             PyValue getmethod_at_origin1_callable;
@@ -1859,6 +1861,7 @@
             _PyAttrRecipe adapt_before_use_getmethod2_rNoDict;
             _PyAttrRecipe adapt_before_use_getmethod2_rLazyDict;
             _PyAttrRecipe adapt_before_use_getmethod2_rClassMethod;
+            _PyAttrRecipe adapt_before_use_getmethod2_rModule;
             if (!_PyFb_TickQuiet(&((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h)) {
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Sample;
             }
@@ -1939,6 +1942,10 @@
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_LClassMethod;
             }
             if (ret12 == 4) {
+                adapt_before_use_getmethod2_rModule = out11;
+                goto rop_GetMethod_Generic_adapt_before_use_getmethod2_LModule;
+            }
+            if (ret12 == 5) {
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Other;
             }
             adapt_before_use_getmethod2_rr = out11;
@@ -1962,9 +1969,9 @@
             rop_GetMethod_Generic_adapt_before_use_getmethod2_Other:
             _PyRop_Backoff(&((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
             goto rop_GetMethod_Generic_Run;
-            rop_GetMethod_Generic_adapt_before_use_getmethod2_LClassMethod:
-            adapt_before_use_getmethod2_cLClassMethod = ROP_HANDLER_GetMethod_ClassMethod;
-            ret14 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLClassMethod);
+            rop_GetMethod_Generic_adapt_before_use_getmethod2_LModule:
+            adapt_before_use_getmethod2_cLModule = ROP_HANDLER_GetMethod_Module;
+            ret14 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLModule);
             if (ret14 > 0) {
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
             }
@@ -1972,13 +1979,23 @@
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
             }
             goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
-            rop_GetMethod_Generic_adapt_before_use_getmethod2_LLazyDict:
-            adapt_before_use_getmethod2_cLLazyDict = ROP_HANDLER_GetMethod_LazyDict;
-            ret15 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLLazyDict);
+            rop_GetMethod_Generic_adapt_before_use_getmethod2_LClassMethod:
+            adapt_before_use_getmethod2_cLClassMethod = ROP_HANDLER_GetMethod_ClassMethod;
+            ret15 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLClassMethod);
             if (ret15 > 0) {
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
             }
             if (ret15 == 0) {
+                goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
+            }
+            goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
+            rop_GetMethod_Generic_adapt_before_use_getmethod2_LLazyDict:
+            adapt_before_use_getmethod2_cLLazyDict = ROP_HANDLER_GetMethod_LazyDict;
+            ret16 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLLazyDict);
+            if (ret16 > 0) {
+                goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
+            }
+            if (ret16 == 0) {
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
             }
             goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
@@ -1988,17 +2005,7 @@
             }
             adapt_before_use_getmethod2_rNoDict = adapt_before_use_getmethod2_rn;
             adapt_before_use_getmethod2_cLNoDict = ROP_HANDLER_GetMethod_NoDict;
-            ret16 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLNoDict);
-            if (ret16 > 0) {
-                goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
-            }
-            if (ret16 == 0) {
-                goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
-            }
-            goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
-            rop_GetMethod_Generic_adapt_before_use_getmethod2_Mono:
-            adapt_before_use_getmethod2_cm = ROP_HANDLER_GetMethod_MethodValues;
-            ret17 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cm);
+            ret17 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLNoDict);
             if (ret17 > 0) {
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
             }
@@ -2006,11 +2013,21 @@
                 goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
             }
             goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
+            rop_GetMethod_Generic_adapt_before_use_getmethod2_Mono:
+            adapt_before_use_getmethod2_cm = ROP_HANDLER_GetMethod_MethodValues;
+            ret18 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cm);
+            if (ret18 > 0) {
+                goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
+            }
+            if (ret18 == 0) {
+                goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
+            }
+            goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
             rop_GetMethod_Generic_getmethod_at_origin1_Failed:
             IR_STUB_ESCAPE();
-            a_all18 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs19 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
-            _PyRop_RetireFailedCall(&a_all18, &srcs19);
+            a_all19 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+            srcs20 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
+            _PyRop_RetireFailedCall(&a_all19, &srcs20);
             PROCESS_ERROR_AT(RAISE, 101, this_instr);
             rop_GetMethod_Generic_getmethod_at_origin1_Moved:
             IR_STUB_ESCAPE();
@@ -2018,8 +2035,8 @@
             IR_STUB_ESCAPE();
             _PyRop_DiscardMaybe(getmethod_at_origin1_self_dropped);
             IR_STUB_ESCAPE();
-            a_all20 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all20);
+            a_all21 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+            _PyRop_RetireAbandoned(&a_all21);
             IR_REDIRECT();
         }
 
@@ -10271,6 +10288,75 @@
             rop_GetMethod_MethodValues_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_GetMethod_MethodValues_Miss:
+            JUMP_TO_PREDICTED(GetMethod_Generic);
+        }
+
+        TARGET(GetMethod_Module) {
+            // GetMethod.Module (inline)
+            int opcode = ROP_HANDLER_GetMethod_Module;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_GetMethod_Module);
+            _PyAttrRecipe out1;
+            PyValue *const home_obj = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow v;
+            PyObject * o;
+            PyValueBorrow item;
+            PyValue method;
+            PyValue own_obj = PyValue_NULL;
+            PyValue old_callable;
+            PyValue *const home_callable = &IR_SLOT(IR_A(ir_word));
+            PyValue old_self_dst;
+            PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
+            _PyAttrRecipe r;
+            if (!_PyAttr_AdmittedRecipe(((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out1)) {
+                goto rop_GetMethod_Module_Miss;
+            }
+            r = out1;
+            v = PyValue_Borrow(*home_obj);
+            if (!PyValue_IsObject(v)) {
+                JUMP_TO_PREDICTED(GetMethod_Generic);
+            }
+            o = PyValue_AsKnownObjectBorrow(v);
+            if (!_PyAttr_IsModule(o)) {
+                JUMP_TO_PREDICTED(GetMethod_Generic);
+            }
+            item = _PyAttr_ModuleEntry(o, r);
+            if (!_PyValue_BorrowPresent(item)) {
+                JUMP_TO_PREDICTED(GetMethod_Generic);
+            }
+            method = PyValue_DUP(item);
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            old_callable = *home_callable;
+            old_self_dst = *home_self_dst;
+            _PyFrame_WriteHome(frame, home_callable, method);
+            _PyValue_CheckHome(*home_callable);
+            _PyFrame_WriteHome(frame, home_self_dst, PyValue_NULL);
+            ROP_TAIL_CLOSE(own_obj, rop_GetMethod_Module_Tail0_0);
+            ROP_TAIL_CLOSE(old_callable, rop_GetMethod_Module_Tail0_1);
+            ROP_TAIL_CLOSE(old_self_dst, rop_GetMethod_Module_Tail0_2);
+            DISPATCH();
+            rop_GetMethod_Module_Tail0_0:
+            ROP_TAIL_PARK_FIRST(own_obj);
+            goto rop_GetMethod_Module_Tail0_Rest1;
+            rop_GetMethod_Module_Tail0_1:
+            ROP_TAIL_PARK_FIRST(old_callable);
+            goto rop_GetMethod_Module_Tail0_Rest2;
+            rop_GetMethod_Module_Tail0_2:
+            ROP_TAIL_PARK_FIRST(old_self_dst);
+            goto rop_GetMethod_Module_Tail0_Rest3;
+            rop_GetMethod_Module_Tail0_Rest1:
+            ROP_TAIL_PARK(old_callable);
+            rop_GetMethod_Module_Tail0_Rest2:
+            ROP_TAIL_PARK(old_self_dst);
+            rop_GetMethod_Module_Tail0_Rest3:
+            ROP_TAIL_DISPATCH();
+            rop_GetMethod_Module_Miss:
             JUMP_TO_PREDICTED(GetMethod_Generic);
         }
 

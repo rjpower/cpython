@@ -923,7 +923,7 @@ extern helper discard_maybe_result(z:Maybe<O>) -> Unit
 
 extern helper classify_getmethod(v:B, at:Site, f:Fb<Attr>, n:Name)
   cases(method_values(r:Recipe<Attr>), no_dict(r:Recipe<Attr>), lazy_dict(r:Recipe<Attr>),
-        classmethod(r:Recipe<Attr>), none())
+        classmethod(r:Recipe<Attr>), module(r:Recipe<Attr>), none())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
   c _PyAttr_ClassifyGetMethod as case_index
@@ -955,6 +955,7 @@ macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
       no_dict -> NoDictCheck();
       lazy_dict -> LLazyDict();
       classmethod -> LClassMethod();
+      module -> LModule();
       none -> Other();
     }
   Method(rr:Recipe<Attr>):
@@ -992,6 +993,13 @@ macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
   LClassMethod(rClassMethod:Recipe<Attr>):
     let cLClassMethod:Candidate<Attr> = candidate(GetMethod.ClassMethod, rClassMethod);
     call install(site, f, cLClassMethod) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LModule(rModule:Recipe<Attr>):
+    let cLModule:Candidate<Attr> = candidate(GetMethod.Module, rModule);
+    call install(site, f, cLModule) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();
@@ -1059,6 +1067,33 @@ arm GetMethod.Generic shared
   Gone(route:Route):
     let current_route:Route = retire_abandoned(a, route);
     exit redirect(current_route);
+}
+
+// A module receiver (LOAD_ATTR_MODULE with the method bit): the attribute is
+// the callable and there is no self
+arm GetMethod.Module inline entry(module)
+  effects(reads, writes, releases on (callable, self_dst))
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard is_module(o) else miss;
+    let item:Maybe<B> = module_entry(o, r);
+    guard present(item) else miss;
+    let method:O = dup(unwrap(item));
+    publish [callable = method, self_dst = null]
+      retire [spent(obj), old(callable), old(self_dst)] at GetMethod.Done;
+    exit next();
+  Miss():
+    exit miss();
 }
 
 // Two to four method rows of one site: the row of the receiver's type, with

@@ -371,13 +371,18 @@ Interpreter timing with CO and GN (`05acd1caa12`, all-29, CPU 15, JIT
 off): **1.106 of golden87's time**, against 1.086 before them.
 generators runs 0.98 (from 1.29) and logging_format 1.09 (from 1.23), but
 deltablue (+21%), logging_silent (+25%), coroutines, spectral_norm,
-comprehensions and go (+10-12%) are slower at unchanged instructions.  CO
-added one handler, which moved every later function: logging_silent takes
-29M L1 instruction-fetch misses per run against 1.0M without that arm
-(golden87 0.9M), raytrace 100M against 25M.  The arms' tail functions are
-spread over 7.4 MB of `.text`, so which hot arms share cache sets is an
-accident of what precedes them.  The layout rule, planned last, now
-decides the timings; LY designs it now and it lands after OM and FP.
+comprehensions and go (+10-12%) are slower at unchanged instructions.
+The cause is not the code: logging_silent takes 29M L1 instruction-fetch
+misses per run in the timed binary, and 0.9M in each of four bit-identical
+copies of it (golden87 0.9M).  About one binary file in ten to fifteen
+lands on physical pages that make its hot code miss, deterministically
+per file, and runs 10-25% slower on call-heavy kernels.  The hot loop
+touches only about 7 KB of code, but on 169 pages spread over several
+megabytes of `.text`.  So single-binary timings carry this lottery, and the
+1.086 and 1.106 above are not comparable.  The layout rule, planned last,
+now decides what timings mean: LY designs it now (pack the hot code onto
+few pages, judged over many copies of each binary), and it lands after OM
+and FP.  Until then root times several copies of each binary.
 
 Running:
 - OM: operand modes as member arms.  Every word tests its sources' local

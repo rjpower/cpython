@@ -214,9 +214,11 @@ _PyValue_RestoreLast(PyValue ref)
 }
 
 /* The rest of a publish whose element i displaced last, a value that
- * _PyValue_DropNoDealloc() left with no count (in ceval.c) */
-PyAPI_FUNC(void) _PyRop_PublishItemsRest(const _PyRopSpan *d, _PyRopItems *v,
-                                         int i, PyValue last);
+ * _PyValue_DropNoDealloc() left with no count; it takes the hold (in
+ * ceval.c).  The span and the items come by value, so that no address of
+ * the arm's frame escapes and the arm needs no stack protector. */
+PyAPI_FUNC(void) _PyRop_PublishItemsRest(_PyRopSpan d, const PyValue *items,
+                                         PyObject *hold, int i, PyValue last);
 
 /* The publish `d[] = v` of a Span<O>: item i goes to home i of d, straight
  * through the word's element fields with the arm's constant layout (the
@@ -243,7 +245,8 @@ _PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
         PyValue old = *home;
         _PyFrame_WriteHome(d->frame, home, PyValue_DUP(PyValue_Borrow(v->items[i])));
         if (_PyValue_DropNoDealloc(old)) {
-            _PyRop_PublishItemsRest(d, v, i, old);
+            _PyRop_PublishItemsRest(*d, v->items, v->hold, i, old);
+            v->hold = NULL;
             return;
         }
     }
@@ -267,7 +270,8 @@ _PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
         PyValue old = *home;
         _PyFrame_WriteHome(d->frame, home, PyValue_DUP(PyValue_Borrow(v->items[i])));
         if (_PyValue_DropNoDealloc(old)) {
-            _PyRop_PublishItemsRest(d, v, i, old);
+            _PyRop_PublishItemsRest(*d, v->items, v->hold, i, old);
+            v->hold = NULL;
             return;
         }
     }

@@ -2604,30 +2604,29 @@ done:
  * displaced is closed, so no code runs until the park is published (a
  * longer span's items are a held tuple's). */
 Py_NO_INLINE void
-_PyRop_PublishItemsRest(const _PyRopSpan *d, _PyRopItems *v, int i,
-                        PyValue last)
+_PyRop_PublishItemsRest(_PyRopSpan d, const PyValue *items, PyObject *hold,
+                        int i, PyValue last)
 {
     _PyValue_RestoreLast(last);
     PyValue park[_PY_ROP_PARK];
     int parked = 0;
     park[parked++] = last;
-    for (i++; i < d->count; i++) {
+    for (i++; i < d.count; i++) {
         if (parked == _PY_ROP_PARK) {
             for (int p = 0; p < parked; p++) {
                 PyValue_XCLOSE(park[p]);
             }
             parked = 0;
         }
-        PyValue *home = &d->frame->base[_PyRopSpan_Slot(d, i)];
-        park[parked++] = _PyFrame_TakeHome(d->frame, home);
-        _PyFrame_WriteHome(d->frame, home,
-                           PyValue_DUP(PyValue_Borrow(v->items[i])));
+        PyValue *home = &d.frame->base[_PyRopSpan_Slot(&d, i)];
+        park[parked++] = _PyFrame_TakeHome(d.frame, home);
+        _PyFrame_WriteHome(d.frame, home,
+                           PyValue_DUP(PyValue_Borrow(items[i])));
     }
     for (int p = 0; p < parked; p++) {
         PyValue_XCLOSE(park[p]);
     }
-    Py_XDECREF(v->hold);
-    v->hold = NULL;
+    Py_XDECREF(hold);
 }
 
 /* All descriptors are local to this reached cold scope; no successful handler

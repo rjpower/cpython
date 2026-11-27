@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `605de9c1891` (pushed; OB, JX and TI merged, below) holds:
+`pyjit/rir90` at `cc9cebf5e6a` (pushed; OB, JX, TI, EP and LR merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -304,13 +304,58 @@ when its family's generic is split, and the generator refuses a planned
 miss with no generic stub.  `test_rop_ssa` judges a declared jump by its
 target, which removes a JIT-always failure that predated SP.
 
+**EP, merged at `4e30a01dc66`**: the frame entry and generator send do
+only what the design needs.  A gdb trace of each path against golden87
+found the C entry and `Return.Empty` at parity; the excess was elsewhere:
+- frame start was a separate tail function, so it is now inline in each
+  arm that enters a frame, from one shared body;
+- the recursion budget was checked twice per call, so it is now checked
+  once, in the frame start, with an identical `RecursionError`;
+- `Send.Gen` entered its generator through an out-of-line routine, so it
+  now enters in place;
+- `Call.PyGeneral` repeated the binder's fit test, so it now takes the
+  binder's refusal.
+generators runs 1.353 of golden87's instructions (from 1.469) and
+logging_silent 1.132 (from 1.187).
+
+**LR, merged at `cc9cebf5e6a`**: lowering rules for the arms' fast
+paths, each stated once in the generator and applied to every arm it fits:
+- a span publish is written straight through the arm's constant layout;
+  a displaced count that reaches zero hands the rest to an out-of-line
+  routine, so no code runs before the publish is complete;
+- a close whose count reaches zero before a dispatching exit leaves the
+  arm by a tail call to one routine, so 53 hot arms have no call frame;
+- a signed branch target is decoded by two shifts.
+On seven kernels the interpreter runs 1.144 of golden87's instructions
+(from 1.233); unpack_sequence runs 0.96 (from 1.47).  A fourth rule, in
+which a rare constructor fallback leaves by re-running the word, cost
+instructions (GCC moved the interpreter state around the call) and was
+dropped.
+
+Interpreter timing with EP and LR (`cc9cebf5e6a`, all-29, CPU 15, JIT
+off): **1.086 of golden87's time**, from 1.126.  Ten benchmarks are within
+5% and seventeen within 10%.  unpack_sequence runs 0.93 (from 1.57),
+nbody 1.01, float 1.09 and spectral_norm 1.10; generators (1.20 to 1.29)
+and deepcopy_memo (1.10 to 1.18) are slower at fewer instructions
+(generators runs 1.33 of golden87's instructions), as layout moved them
+before.  The logging benchmarks (1.22) and the deepcopy family (1.16 to
+1.18) are furthest.
+
 Running:
-- LR: lowering rules for the arms' fast paths.  An accounting of the
-  instructions each arm runs against golden87's cost for the same work,
-  then generator rules applied to every arm they fit: exits off the fast
-  path as cold tail functions (no frame in a hot arm), fixed small spans
-  straight-line, results in registers rather than out-parameters, guards
-  that test only what their declared facts need.
+- CO: sites that stay generic where golden87 specializes.  One cause was
+  found and fixed (module functions called as methods; the logging
+  benchmarks run 4% fewer instructions).  The other generic sites are
+  generic in golden87 too, but an unadapted attribute read runs the
+  specializer's descriptor analysis on every execution, about 700
+  instructions, to decide whether to enter a getter's frame; CO is making
+  that test cheap.
+- GN: a delegation chain (`yield from`, `await`) sent to or yielded from
+  in one transfer, as golden87 did, declared in the rows' contracts; and
+  generator completion.
+- OM: operand modes as member arms.  Every word tests its sources' local
+  flags at run time (about 118M instructions on LR's 13 kernels); golden87
+  had a handler per mode.  A generated `locals` operand lets `over(...)`
+  state the hot arms' dominant modes as members.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

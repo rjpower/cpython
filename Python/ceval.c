@@ -3003,6 +3003,37 @@ done:
     return res;
 }
 
+/* The rest of the publish `d[] = v` (_PyRop_PublishItems()) from element
+ * i, whose home displaced last, a value that holds its last count: up to a
+ * park of homes at a time, every home is written before any value it
+ * displaced is closed, so no code runs until the park is published (a
+ * longer span's items are a held tuple's). */
+Py_NO_INLINE void
+_PyRop_PublishItemsRest(const _PyRopSpan *d, _PyRopItems *v, int i,
+                        PyValue last)
+{
+    PyValue park[_PY_ROP_PARK];
+    int parked = 0;
+    park[parked++] = last;
+    for (i++; i < d->count; i++) {
+        if (parked == _PY_ROP_PARK) {
+            for (int p = 0; p < parked; p++) {
+                PyValue_XCLOSE(park[p]);
+            }
+            parked = 0;
+        }
+        PyValue *home = &d->frame->base[_PyRopSpan_Slot(d, i)];
+        park[parked++] = _PyFrame_TakeHome(d->frame, home);
+        _PyFrame_WriteHome(d->frame, home,
+                           PyValue_DUP(PyValue_Borrow(v->items[i])));
+    }
+    for (int p = 0; p < parked; p++) {
+        PyValue_XCLOSE(park[p]);
+    }
+    Py_XDECREF(v->hold);
+    v->hold = NULL;
+}
+
 /* Unpack and UnpackStar (Python/register_ops/displays.rop): the values of
  * the iterable, in target order, staged in a new tuple that the items hold,
  * so that a failure part-way leaves every home as it was.  The source stays

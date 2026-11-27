@@ -1075,8 +1075,9 @@ class ArmLowerer:
         spent = sorted((d for d in s.debts if d.kind is DebtKind.spent),
                        key=lambda d: order.index(d.subject))
         olds = [d for d in s.debts if d.kind is DebtKind.old]
-        # d[] = v: the items of v are written into d's homes before the
-        # values they displace are closed (_PyRop_PublishItems), which
+        # d[] = v: the items of v are written straight into d's homes with
+        # the arm's constant span geometry, and no displaced value is
+        # deallocated before the last write (_PyRop_PublishItems), which
         # discharges old(d) too; the debts after it close what it read from
         stored = {b.target: b.value.name for b in s.bindings if b.owners}
         vectors = [b for b in s.bindings if b.vector and not b.owners]

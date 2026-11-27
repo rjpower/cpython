@@ -4,6 +4,7 @@ the span operands of Build read back by the runtime's accessors, and what
 each kind does on its success and error paths."""
 
 import gc
+import sys
 import unittest
 
 from test.support import import_helper
@@ -332,6 +333,51 @@ class Unpack(unittest.TestCase):
         for _ in range(300):
             f([1, 2])
         self.assertEqual(f((9, 10)), (9, 10))
+
+    def test_finalizers_see_the_publish_done(self):
+        # The values the destinations held die only after every destination
+        # is written (_PyRop_PublishItems): each finalizer sees all the new
+        # values, and one that empties the source list changes none of them.
+        # Six targets: the head's element and two operand words.
+        seen = []
+        class Old:
+            def __init__(self, source):
+                self.source = source
+            def __del__(self):
+                f_locals = sys._getframe(1).f_locals
+                seen.append(tuple(f_locals[n] for n in "abcdef"))
+                if isinstance(self.source, list):
+                    self.source[:] = ["x"] * len(self.source)
+        for make, arm in ((tuple, "Unpack.Tuple"), (list, "Unpack.List")):
+            def f(p):
+                d = f = 0
+                a, b, c, e = Old(p), Old(p), Old(p), Old(p)
+                a, b, c, d, e, f = p
+                return a, b, c, d, e, f
+            for _ in range(300):
+                seen.clear()
+                p = make(range(6))
+                self.assertEqual(f(p), tuple(range(6)))
+                self.assertEqual(seen[-4:], [tuple(range(6))] * 4)
+            self.assertIn(arm, self.arms(f))
+
+    def test_a_destination_displaces_the_source(self):
+        def f(t):
+            t, b = t
+            return t, b
+        def g(n):
+            # A span longer than a park, every displaced value dying
+            (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
+             a14, a15, a16, a17, a18, a19) = [object() for _ in range(20)]
+            (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
+             a14, a15, a16, a17, a18, a19) = tuple(range(n, n + 20))
+            return a0, a10, a19
+        for _ in range(300):
+            self.assertEqual(f((1, 2)), (1, 2))
+            self.assertEqual(f(([3], 4)), ([3], 4))
+            self.assertEqual(g(5), (5, 15, 24))
+        self.assertIn("Unpack.Tuple", self.arms(f))
+        self.assertIn("Unpack.Tuple", self.arms(g))
 
     def test_errors(self):
         def f(p):

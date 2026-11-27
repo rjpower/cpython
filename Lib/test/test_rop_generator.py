@@ -465,6 +465,19 @@ class ColdRegionTests(unittest.TestCase):
         self.assertIn(f"}} rop_in_{name};", text)
         self.assertIn(f"IR_OUTLINED_JIT_ENTRY({name})", text)
 
+    def test_arms_share_a_region_of_the_same_text(self):
+        # Every outlined function is printed once, with the first arm that
+        # has it, and every arm that tail-calls one names a printed one
+        defined = []
+        for name, low in self.p.lowered.items():
+            defined += [c.name for c in low.cold]
+            for called in re.findall(r"IR_OUTLINE_GOTO\((\w+)\)", "\n".join(low.body)):
+                self.assertIn(called, defined, name)
+        self.assertEqual(len(defined), len(set(defined)))
+        sub = "\n".join(self.p.lowered["Binary.Float_NB_SUBTRACT_TTT"].body)
+        self.assertEqual(self.p.lowered["Binary.Float_NB_SUBTRACT_TTT"].cold, [])
+        self.assertIn("IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);", sub)
+
     def test_a_completion_keeps_its_cold_regions(self):
         for name, low in self.p.completions.items():
             with self.subTest(name):

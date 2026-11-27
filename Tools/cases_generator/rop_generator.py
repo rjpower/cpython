@@ -112,6 +112,7 @@ def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
         if is_generic(program, arm):
             generic[arm.family] = c_name(arm.name)
             generic_arms[arm.family] = arm.name
+    share_cold_regions(program, lowered)
     completions: dict[str, Lowering] = {}
     for arm in program.completions.values():
         try:
@@ -184,6 +185,35 @@ def cold_region_text(arm: Arm, low: Lowering, c: ColdRegion) -> list[str]:
     out.append(f"IR_OUTLINED_JIT_ENTRY({c.name})")
     out.append("#endif")
     return out
+
+
+def share_cold_regions(program: Program, lowered: Mapping[str, Lowering]) -> None:
+    """Arms whose cold regions are the same text, but for the arm's labels
+    and handler id (which nothing in a region reads before it sets it),
+    share one function: the first, in the order the cases are printed"""
+    first: dict[str, str] = {}
+    for name, low in lowered.items():
+        arm = program.arms[name]
+        own = f"rop_{c_name(name)}_"
+        kept, renames = [], {}
+        for c in low.cold:
+            text = cold_region_text(arm, low, c)[:-2]
+            key = "\n".join(line.replace(c.name, "NAME").replace(own, "rop_ARM_")
+                            for line in text if "int opcode = " not in line
+                            and "// " not in line)
+            shared = first.setdefault(key, c.name)
+            if shared == c.name:
+                kept.append(c)
+            else:
+                renames[c.name] = shared
+        if not renames:
+            continue
+        low.cold = kept
+        for old, new in renames.items():
+            low.body = [line.replace(f"rop_in_{old} ", f"rop_in_{new} ")
+                            .replace(f"rop_in_{old})", f"rop_in_{new})")
+                            .replace(f"IR_OUTLINE_GOTO({old})", f"IR_OUTLINE_GOTO({new})")
+                        for line in low.body]
 
 
 def indented(lines: list[str], by: str) -> list[str]:

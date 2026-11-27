@@ -57,7 +57,7 @@ class JitBacktraceTests(unittest.TestCase):
         # A callee whose unit is invalid (monitoring retired it) is entered
         # by its compiled caller's switch routine, whose cold path calls
         # _PyJit_Event(): the walk goes through the caller's unit to
-        # jit_run() and the evaluation loop (g3/design.md section 5)
+        # _PyEval_JitRun() and the evaluation loop (g3/design.md section 5)
         source = textwrap.dedent("""
             import sys, _testinternalcapi
 
@@ -88,7 +88,7 @@ class JitBacktraceTests(unittest.TestCase):
                  for line in frames]
         unit = next(i for i, name in enumerate(names)
                     if name.startswith("py::jit:caller:"))
-        self.assertEqual(names[unit + 1], "jit_run", out)
+        self.assertEqual(names[unit + 1], "_PyEval_JitRun", out)
         self.assertTrue(
             any(name.startswith("_PyEval_EvalFrame") for name in names[unit + 2:]),
             out)

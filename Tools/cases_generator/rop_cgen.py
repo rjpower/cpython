@@ -872,9 +872,13 @@ class ArmLowerer:
         p = self.placements[operand]
         first = p.slots[0]
         assert [s.offset for s in p.slots] == [first.offset + 12 * i for i in range(len(p.slots))]
-        sign = 1 << (p.bits - 1)
-        raw = f"((uint32_t)(ir_word >> {first.offset}) & {(1 << p.bits) - 1:#x})"
-        return f"(this_instr + 1 + ((int)({raw} ^ {sign:#x}) - {sign:#x}))"
+        # Shift the field's top bit to the word's, then shift arithmetically
+        # down: two instructions decode and sign-extend it
+        top = first.offset + p.bits
+        assert top <= 64
+        field = (f"Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << {64 - top}), "
+                 f"{64 - p.bits})")
+        return f"(this_instr + 1 + {field})"
 
     def call_expr(self, e: Call) -> str:
         if e.callee == "use":

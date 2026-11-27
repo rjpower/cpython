@@ -340,6 +340,13 @@ class StubTests(unittest.TestCase):
         self.assertIn("ROP_TAIL_CLOSE(a_owned0, rop_Binary_Generic_Tail0_0);\n"
                       "ROP_TAIL_CLOSE(a_owned1, rop_Binary_Generic_Tail0_1);", hot)
 
+    def test_a_target_is_decoded_by_two_shifts(self):
+        # Jump.Poll's signed 24-bit distance at bit 16: shifted up to the
+        # word's top bit, then arithmetically down
+        text = "\n".join(products().lowered["Jump.Poll"].body)
+        self.assertIn("this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, "
+                      "(int64_t)(ir_word << 24), 40)", text)
+
     def test_unwind_enters_the_unwinder_without_a_raise_event(self):
         program = rop_check.check([rop_syntax.parse(UNWIND, "t.rop")])
         self.assertEqual(program.diagnostics, ())

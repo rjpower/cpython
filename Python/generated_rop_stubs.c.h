@@ -2336,7 +2336,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     }
     ROP_TAIL_CLOSE(own_y, rop_TestBranch_Generic_Tail0_0);
     ROP_TAIL_CLOSE(own_x, rop_TestBranch_Generic_Tail0_1);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Generic_Tail0_0:
     ROP_TAIL_PARK_FIRST(own_y);
     goto rop_TestBranch_Generic_Tail0_Rest1;
@@ -2346,7 +2346,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     rop_TestBranch_Generic_Tail0_Rest1:
     ROP_TAIL_PARK(own_x);
     rop_TestBranch_Generic_Tail0_Rest2:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Generic_Adapt:
     if (!_PyFb_TickQuiet(&((_PyFbCompare *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h)) {
         goto rop_TestBranch_Generic_adapt_before_use_test3_Sample;
@@ -2398,7 +2398,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Generic_Tail1_1);
     ROP_TAIL_CLOSE(own_y, rop_TestBranch_Generic_Tail1_2);
     ROP_TAIL_CLOSE(own_x, rop_TestBranch_Generic_Tail1_3);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Generic_Tail1_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
     goto rop_TestBranch_Generic_Tail1_Rest1;
@@ -2418,7 +2418,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     rop_TestBranch_Generic_Tail1_Rest3:
     ROP_TAIL_PARK(own_x);
     rop_TestBranch_Generic_Tail1_Rest4:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Generic_adapt_before_use_test3_Sample:
     if (_PyRop_TestIsContains((((uint32_t)IR_C(ir_word) >> 0) & 0x7))) {
         goto rop_TestBranch_Generic_adapt_before_use_test3_Contained;
@@ -2933,10 +2933,10 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     goto rop_BranchTruth_Generic_Dropped;
     rop_BranchTruth_Generic_Kept:
     ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Generic_Tail0_0);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Generic_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Tick:
     if (_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h)) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Run;
@@ -3094,7 +3094,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     }
     ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Generic_Tail2_0);
     ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Generic_Tail2_1);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Generic_Tail2_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
     goto rop_BranchTruth_Generic_Tail2_Rest1;
@@ -3104,7 +3104,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     rop_BranchTruth_Generic_Tail2_Rest1:
     ROP_TAIL_PARK(own_value);
     rop_BranchTruth_Generic_Tail2_Rest2:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE int
@@ -8394,7 +8394,7 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_LT(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_LT_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8443,7 +8443,7 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_LE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_LE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8492,7 +8492,7 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_EQ(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_EQ_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8541,7 +8541,7 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_NE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_NE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8590,7 +8590,7 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_GT(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_GT_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8639,7 +8639,7 @@ _PyIR_Rop_Stub_TestBranch_Int_TEST_GE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_GE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8688,7 +8688,7 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_LT(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_LT_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8737,7 +8737,7 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_LE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_LE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8786,7 +8786,7 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_EQ(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_EQ_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8835,7 +8835,7 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_NE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_NE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8884,7 +8884,7 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_GT(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_GT_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8933,7 +8933,7 @@ _PyIR_Rop_Stub_TestBranch_Float_TEST_GE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_GE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -8986,7 +8986,7 @@ _PyIR_Rop_Stub_TestBranch_Str_TEST_EQ(
     }
     ROP_TAIL_CLOSE(own_y, rop_TestBranch_Str_TEST_EQ_Tail0_0);
     ROP_TAIL_CLOSE(own_x, rop_TestBranch_Str_TEST_EQ_Tail0_1);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Str_TEST_EQ_Tail0_0:
     ROP_TAIL_PARK_FIRST(own_y);
     goto rop_TestBranch_Str_TEST_EQ_Tail0_Rest1;
@@ -8996,7 +8996,7 @@ _PyIR_Rop_Stub_TestBranch_Str_TEST_EQ(
     rop_TestBranch_Str_TEST_EQ_Tail0_Rest1:
     ROP_TAIL_PARK(own_x);
     rop_TestBranch_Str_TEST_EQ_Tail0_Rest2:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Str_TEST_EQ_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_x = _PyFrame_TakeHome(frame, home_x);
@@ -9061,7 +9061,7 @@ _PyIR_Rop_Stub_TestBranch_Str_TEST_NE(
     }
     ROP_TAIL_CLOSE(own_y, rop_TestBranch_Str_TEST_NE_Tail0_0);
     ROP_TAIL_CLOSE(own_x, rop_TestBranch_Str_TEST_NE_Tail0_1);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Str_TEST_NE_Tail0_0:
     ROP_TAIL_PARK_FIRST(own_y);
     goto rop_TestBranch_Str_TEST_NE_Tail0_Rest1;
@@ -9071,7 +9071,7 @@ _PyIR_Rop_Stub_TestBranch_Str_TEST_NE(
     rop_TestBranch_Str_TEST_NE_Tail0_Rest1:
     ROP_TAIL_PARK(own_x);
     rop_TestBranch_Str_TEST_NE_Tail0_Rest2:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Str_TEST_NE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_x = _PyFrame_TakeHome(frame, home_x);
@@ -9166,7 +9166,7 @@ _PyIR_Rop_Stub_TestBranch_Set(
     ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Set_Tail0_1);
     ROP_TAIL_CLOSE(own_y, rop_TestBranch_Set_Tail0_2);
     ROP_TAIL_CLOSE(own_x, rop_TestBranch_Set_Tail0_3);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Set_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
     goto rop_TestBranch_Set_Tail0_Rest1;
@@ -9186,7 +9186,7 @@ _PyIR_Rop_Stub_TestBranch_Set(
     rop_TestBranch_Set_Tail0_Rest3:
     ROP_TAIL_PARK(own_x);
     rop_TestBranch_Set_Tail0_Rest4:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Set_set_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -9312,7 +9312,7 @@ _PyIR_Rop_Stub_TestBranch_Dict(
     ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Dict_Tail0_1);
     ROP_TAIL_CLOSE(own_y, rop_TestBranch_Dict_Tail0_2);
     ROP_TAIL_CLOSE(own_x, rop_TestBranch_Dict_Tail0_3);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Dict_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
     goto rop_TestBranch_Dict_Tail0_Rest1;
@@ -9332,7 +9332,7 @@ _PyIR_Rop_Stub_TestBranch_Dict(
     rop_TestBranch_Dict_Tail0_Rest3:
     ROP_TAIL_PARK(own_x);
     rop_TestBranch_Dict_Tail0_Rest4:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Dict_dict_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -9458,7 +9458,7 @@ _PyIR_Rop_Stub_TestBranch_Sequence(
     ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Sequence_Tail0_1);
     ROP_TAIL_CLOSE(own_y, rop_TestBranch_Sequence_Tail0_2);
     ROP_TAIL_CLOSE(own_x, rop_TestBranch_Sequence_Tail0_3);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Sequence_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
     goto rop_TestBranch_Sequence_Tail0_Rest1;
@@ -9478,7 +9478,7 @@ _PyIR_Rop_Stub_TestBranch_Sequence(
     rop_TestBranch_Sequence_Tail0_Rest3:
     ROP_TAIL_PARK(own_x);
     rop_TestBranch_Sequence_Tail0_Rest4:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Sequence_sequence_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -10095,7 +10095,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_FALSE(
     }
     ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_0);
     ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_1);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
     goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest1;
@@ -10105,7 +10105,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_FALSE(
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest1:
     ROP_TAIL_PARK(own_value);
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest2:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -10210,7 +10210,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_TRUE(
     }
     ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_0);
     ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_1);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
     goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest1;
@@ -10220,7 +10220,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_TRUE(
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest1:
     ROP_TAIL_PARK(own_value);
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest2:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -10522,7 +10522,7 @@ _PyRop_Complete_ForIter_Complete(
     ROP_TAIL_CLOSE(own_pair_receiver, rop_ForIter_Complete_Tail0_0);
     ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_Complete_Tail0_1);
     ROP_TAIL_CLOSE(v, rop_ForIter_Complete_Tail0_2);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_ForIter_Complete_Tail0_0:
     ROP_TAIL_PARK_FIRST(own_pair_receiver);
     goto rop_ForIter_Complete_Tail0_Rest1;
@@ -10537,7 +10537,7 @@ _PyRop_Complete_ForIter_Complete(
     rop_ForIter_Complete_Tail0_Rest2:
     ROP_TAIL_PARK(v);
     rop_ForIter_Complete_Tail0_Rest3:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE int
@@ -10585,7 +10585,7 @@ _PyRop_Complete_ForIter_CompleteObserved(
     if (ret2 < 0) {
         goto rop_ForIter_CompleteObserved_ExitEventFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_ForIter_CompleteObserved_StopFailed:
     PyValue_XCLOSE(a_owned0);
     PROCESS_ERROR_AT(RAISE, 81, this_instr);
@@ -10626,7 +10626,7 @@ _PyRop_Complete_Send_Complete(
     ROP_TAIL_CLOSE(own_send_receiver, rop_Send_Complete_Tail0_0);
     ROP_TAIL_CLOSE(own_send_cursor, rop_Send_Complete_Tail0_1);
     ROP_TAIL_CLOSE(old_completed, rop_Send_Complete_Tail0_2);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_Send_Complete_Tail0_0:
     ROP_TAIL_PARK_FIRST(own_send_receiver);
     goto rop_Send_Complete_Tail0_Rest1;
@@ -10641,7 +10641,7 @@ _PyRop_Complete_Send_Complete(
     rop_Send_Complete_Tail0_Rest2:
     ROP_TAIL_PARK(old_completed);
     rop_Send_Complete_Tail0_Rest3:
-    ROP_TAIL_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE int
@@ -10699,7 +10699,7 @@ _PyRop_Complete_Send_CompleteObserved(
     if (ret2 < 0) {
         goto rop_Send_CompleteObserved_ExitFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_Send_CompleteObserved_Failed:
     IR_STUB_ESCAPE();
     a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};

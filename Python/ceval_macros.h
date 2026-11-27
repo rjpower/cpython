@@ -173,7 +173,10 @@
  * it must forward).  The generator suspends and V goes to its consumer's
  * return slot, as the consumer's frame, which the generator's return_slot
  * and its next word record for the resumption: SLOT is the home that the
- * value sent in takes when it resumes, P's definition. */
+ * value sent in takes when it resumes, P's definition.  The suspension is a
+ * delegation chain's (pyjit G4): every plain consumer that would run its
+ * yield-from loop's chain(resume) word suspends too, and V goes to the last
+ * consumer (_PyRop_SuspendChain, Python/ceval_shared.h). */
 #define ROP_SUSPEND(V, SLOT, STATE) \
     do { \
         PyValue rop_yielded = (V); \
@@ -192,6 +195,7 @@
         rop_suspended->previous = NULL; \
         ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD; \
         FT_ATOMIC_STORE_INT8_RELEASE(rop_gen->gi_frame_state, (STATE)); \
+        frame = _PyRop_SuspendChain(tstate, frame); \
         next_instr = frame->return_pc; \
         LLTRACE_RESUME_FRAME(); \
         IR_STORE_RETURN(rop_yielded); \

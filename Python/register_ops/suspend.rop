@@ -170,7 +170,9 @@ arm Yield.Ordinary split
 // The resume role of a delegation chain: the generator's resume head is a
 // Resume word, then Jump.Direct back to the Send whose value home is this
 // word's value and resume.  A chain entry (enter_generator) resumes such a
-// frame at its Send without running its words.
+// frame at its Send without running its words, and a suspension goes on up
+// through every plain consumer whose resume word is this arm (ROP_SUSPEND,
+// Python/ceval_macros.h; _PyRop_SuspendChain).
 arm YieldFrom.Delegated split chain(resume)
   effects(runs_python, reads, writes, releases, switches_frame)
   feedback()

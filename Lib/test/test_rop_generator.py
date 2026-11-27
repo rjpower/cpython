@@ -154,6 +154,28 @@ INLINE = SHARED.replace(
     "  c PyValue_IsInlineInt as bool inline\n")
 
 
+class LayoutOrderTests(unittest.TestCase):
+    """`hot` on a family: its arms, less the generic arm, come first in the
+    evaluator's layout (IR_TARGET_LAYOUT), the others after"""
+
+    def lowered(self, text):
+        program = rop_check.check([rop_syntax.parse(text, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        return program, rop_generator.lower_all(program, rop_generator.number_arms(program))
+
+    def test_hot_family_arms_come_first_and_its_generic_last(self):
+        hot = SHARED.replace("generic(Any);", "generic(Any) hot;")
+        program, p = self.lowered(hot)
+        self.assertTrue(program.families["F"].hot)
+        self.assertEqual(rop_generator.layout_order(p), ["F_Copy", "F_Any"])
+        self.assertIn(" hot;", "\n".join(rop_print.decl_lines(program.families["F"])))
+
+    def test_without_hot_the_source_order_stays(self):
+        program, p = self.lowered(SHARED)
+        self.assertFalse(program.families["F"].hot)
+        self.assertEqual(rop_generator.layout_order(p), list(map(rop_generator.c_name, p.lowered)))
+
+
 class InlineRowTests(unittest.TestCase):
     """`c SYMBOL as CONVENTION inline`: the interpreter calls the row's own
     symbol, the forms and stubs one out-of-line copy"""

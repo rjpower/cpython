@@ -79,8 +79,22 @@ typedef PyValue (Py_IR_TAIL_CC *_PyIRTailFn)(Py_IR_TAIL_PARAMS);
 #define IR_TAIL_CAT(A, B) IR_TAIL_CAT_(A, B)
 #define IR_TAIL_ID(NAME) IR_TAIL_CAT(IR_TAIL_PREFIX, NAME)
 
+/* The layout rule: the functions of one evaluator form one section, in the
+ * order of their first declaration (no_reorder), which Python/ceval_evaluator.h
+ * gives by IR_TARGET_LAYOUT: the arms of the families declared `hot` in the
+ * .rop sources first, then the others (Tools/cases_generator/rop_generator.py).
+ * The normal evaluator's functions are contiguous and its hot arms share few
+ * pages, and an arm added after them moves none of them; the observing
+ * evaluator's functions have a section of their own.  (A function that names
+ * its section is not split into hot and cold parts by the compiler.) */
+#if IR_OBSERVING
+#  define IR_TAIL_SECTION ".text.ir_observing"
+#else
+#  define IR_TAIL_SECTION ".text.ir_normal"
+#endif
 #define IR_TAIL_HEAD(FN) \
-    static Py_NO_INLINE Py_IR_TAIL_CC PyValue FN(Py_IR_TAIL_PARAMS)
+    static Py_NO_INLINE __attribute__((section(IR_TAIL_SECTION), no_reorder)) \
+    Py_IR_TAIL_CC PyValue FN(Py_IR_TAIL_PARAMS)
 #define IR_TAIL_FN(NAME) IR_TAIL_HEAD(IR_TAIL_ID(NAME))
 
 #define IR_TAIL_GOTO(NAME) \

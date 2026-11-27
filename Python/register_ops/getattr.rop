@@ -3,7 +3,7 @@
 // release of the receiver.
 
 family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>)
-  exits(next, miss, again, enter, raise, redirect) generic(Generic);
+  exits(next, miss, again, enter, raise, redirect) generic(Generic) hot;
 
 point GetAttr.Failed(current, site, pending) keep() spent(obj) defs();
 point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst);
@@ -831,7 +831,7 @@ arm GetAttr.NonDescriptorNoDict inline entry(nondescriptor_no_dict)
 // and, in its own home, the receiver or an absent self.
 
 family GetMethod(callable:Dst, self_dst:Maybe<Dst>, obj:Src, name:Name, fb:Fb<Attr>)
-  exits(next, miss, again, raise, redirect) generic(Generic);
+  exits(next, miss, again, raise, redirect) generic(Generic) hot;
 
 point GetMethod.Failed(current, site, pending) keep() spent(obj) defs();
 point GetMethod.Done(current, next_head, clear) keep() spent(obj) defs(callable, self_dst);

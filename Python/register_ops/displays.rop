@@ -336,7 +336,7 @@ arm MergeKeywords.Merge shared
 // fail does so before the publish, so a failure leaves every home as it was.
 
 family Unpack(dsts:Span<Dst>, source:Src, fb:Fb<Unpack>)
-  exits(next, raise, miss, again) generic(Generic);
+  exits(next, raise, miss, again) generic(Generic) hot;
 
 point Unpack.Failed(current, site, pending) keep(source) spent() defs();
 point Unpack.Done(current, next_head, clear) keep() spent(source) defs(dsts);

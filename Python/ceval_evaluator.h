@@ -25,7 +25,12 @@
 
 /* Every function of the interpreter, declared before the table and the
  * functions, which tail-call one another (an id without a handler repeats
- * its declaration) */
+ * its declaration).  The first declaration fixes the function's place in its
+ * section (IR_TAIL_HEAD): the arms in IR_TARGET_LAYOUT's order come first,
+ * hot families before the rest. */
+#define IR_TAIL_LAYOUT(NAME) IR_TAIL_FN(NAME);
+IR_TARGET_LAYOUT(IR_TAIL_LAYOUT)
+#undef IR_TAIL_LAYOUT
 #define IR_TAIL_DECLARE(ID, NAME) IR_TAIL_FN(NAME);
 IR_TARGETS(IR_TAIL_DECLARE)
 #undef IR_TAIL_DECLARE

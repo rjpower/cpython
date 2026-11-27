@@ -129,7 +129,7 @@ arm AsyncIterNext.Next shared
 // home.
 
 family Yield(value:Src, resume:Dst)
-  exits(yield, raise, redirect) events(PY_YIELD);
+  exits(yield, raise, redirect) events(PY_YIELD) hot;
 
 family YieldFrom(value:Src, resume:Dst)
   exits(yield, raise, redirect) events(PY_YIELD);
@@ -236,7 +236,7 @@ arm YieldFrom.Observed split observes
 // place; when its frame returns, the completion arm runs in this frame.
 family Send(completed:Dst, send:SendWindow, fb:Fb<Iter>, done:NearHead)
   exits(next, branch, enter, raise, redirect, miss, again) generic(Generic)
-  events(STOP_ITERATION, BRANCH_LEFT) vacant(send.cursor);
+  events(STOP_ITERATION, BRANCH_LEFT) vacant(send.cursor) hot;
 
 // The receiver, entered in place, has yielded: the sent value moved into its
 // frame, and the yielded value is the send's value

@@ -430,6 +430,20 @@ def target_name(i: int, by_arm: Mapping[int, ir_arms.ArmEntry], observing: bool)
     return "UNKNOWN_OPCODE"
 
 
+def layout_order(p: Products) -> list[str]:
+    """The arms in the order the evaluator's functions are laid out (the
+    functions of a section follow the order of their first declaration,
+    Python/ceval_evaluator.h): the arms of the families declared `hot`, less
+    their generic arms, which a miss reaches, first; each group in source
+    order."""
+    def is_hot(name: str) -> bool:
+        fam = p.program.families[p.program.arms[name].family]
+        return fam.hot and name != f"{fam.name}.{fam.generic}"
+    names = list(p.lowered)
+    return [c_name(n) for n in names if is_hot(n)] + \
+           [c_name(n) for n in names if not is_hot(n)]
+
+
 def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
     """The dispatch targets of the two tables of the tail-calling
     interpreter (Python/ceval_evaluator.h), X(ID, NAME) for every handler
@@ -447,6 +461,10 @@ def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
         for i in range(ir_arms.IR_LIMIT):
             out.write(f"    X({i}, {target_name(i, by_arm, observing)}) \\\n")
         out.write("\n")
+    out.write("\n#define IR_TARGET_LAYOUT(X) \\\n")
+    for name in layout_order(p):
+        out.write(f"    X({name}) \\\n")
+    out.write("\n")
 
 
 def completion_name(arm: str) -> str:

@@ -1430,7 +1430,7 @@
     <ClCompile Include="..\Python\ceval.c">
       <Filter>Python</Filter>
     </ClCompile>
-    <ClCompile Include="..\Python\ceval_forms.c">
+    <ClCompile Include="..\Python\ceval_steps.c">
       <Filter>Python</Filter>
     </ClCompile>
     <ClCompile Include="..\Python\ceval_normal.c">

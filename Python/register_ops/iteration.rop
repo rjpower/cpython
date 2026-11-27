@@ -168,9 +168,7 @@ extern primitive iter_by_index(v:B) -> Bool
   c _PyRop_IterByIndex as bool
   evidence(
     review: "FI. specialize.c _Py_Specialize_GetIter and _GUARD_ITER_VIRTUAL: _PyType_IteratesByIndex.",
-    contract: "Reads the type's slots: no memory, no failure.",
-    lowering: "none yet: a type load and a compare",
-    test: "test_rop_iter");
+    contract: "Reads the type's slots: no memory, no failure.");
 
 // Whether the type is its own iterator
 extern primitive iter_self(v:B) -> Bool
@@ -179,9 +177,7 @@ extern primitive iter_self(v:B) -> Bool
   c _PyRop_IterSelf as bool
   evidence(
     review: "FI. _GUARD_ITERATOR: tp_iter == PyObject_SelfIter.",
-    contract: "Reads the type's slot: no memory, no failure.",
-    lowering: "none yet: a type load and a compare",
-    test: "test_rop_iter");
+    contract: "Reads the type's slot: no memory, no failure.");
 
 // An exact list that this thread may step: with free threading, one that it
 // owns or that is shared (_ITER_CHECK_LIST); otherwise any exact list
@@ -191,18 +187,14 @@ extern primitive exact_list_iter(v:B) -> Bool
   c _PyRop_ExactListIter as bool
   evidence(
     review: "FI. _ITER_CHECK_LIST (6027eeaedf4): PyList_CheckExact, and under Py_GIL_DISABLED _Py_IsOwnedByCurrentThread or _PyObject_GC_IS_SHARED.",
-    contract: "Reads the type and the owner: no memory, no failure.",
-    lowering: "none yet: a type compare",
-    test: "test_rop_iter");
+    contract: "Reads the type and the owner: no memory, no failure.");
 
 extern primitive exact_range_iter(v:B) -> Bool
   effects(reads)
   c _PyRop_ExactRangeIter as bool
   evidence(
     review: "FI. _ITER_CHECK_RANGE: the type is range_iterator.",
-    contract: "Reads the type: no memory, no failure.",
-    lowering: "none yet: a type load and a compare",
-    test: "test_rop_iter");
+    contract: "Reads the type: no memory, no failure.");
 
 // The cursor's kind: a tagged index or nothing
 extern primitive cursor_is_index(c:B) -> Bool
@@ -210,18 +202,14 @@ extern primitive cursor_is_index(c:B) -> Bool
   c _PyRop_CursorIsIndex as bool
   evidence(
     review: "FI. _FOR_ITER_VIRTUAL: PyValue_IsTaggedIndex(index).",
-    contract: "A comparison of the word: no memory, no failure.",
-    lowering: "none yet: a type load and a compare",
-    test: "test_rop_iter");
+    contract: "A comparison of the word: no memory, no failure.");
 
 extern primitive cursor_is_vacant(c:B) -> Bool
   effects()
   c _PyRop_CursorIsVacant as bool
   evidence(
     review: "FI. _FOR_ITER_VIRTUAL: PyValue_IsNull(index).",
-    contract: "A comparison of the word: no memory, no failure.",
-    lowering: "none yet: a type load and a compare",
-    test: "test_rop_iter");
+    contract: "A comparison of the word: no memory, no failure.");
 
 // Whether the receiver is exactly a generator, while specialization is enabled
 extern primitive exact_generator_iter(v:B) -> Bool
@@ -229,9 +217,7 @@ extern primitive exact_generator_iter(v:B) -> Bool
   c _PyRop_ExactGeneratorIter as bool
   evidence(
     review: "FI. specialize.c _Py_Specialize_ForIter (684a98eb30e): tp == &PyGen_Type with no PEP 523 hook.",
-    contract: "Reads the type: no memory, no failure.",
-    lowering: "none yet: a type load and a compare",
-    test: "test_rop_iter");
+    contract: "Reads the type: no memory, no failure.");
 
 // Whether the type has the iternext value slot
 extern primitive has_iternext_value(v:B) -> Bool
@@ -239,9 +225,7 @@ extern primitive has_iternext_value(v:B) -> Bool
   c _PyRop_HasIternextValue as bool
   evidence(
     review: "FI. specialize.c _Py_Specialize_ForIter: _PyType_VALUE_SLOT(tp, iternext) != NULL.",
-    contract: "Reads the type's slot: no memory, no failure.",
-    lowering: "none yet: a type load and a compare",
-    test: "test_rop_iter");
+    contract: "Reads the type's slot: no memory, no failure.");
 
 // The step of an exact list or tuple at its tagged cursor: the item and the
 // next cursor, or the end (None).  The receiver is borrowed and not changed.
@@ -299,9 +283,7 @@ extern helper iter_gen_method(v:B) -> Bool
   c _PyRop_IterGenMethod as bool
   evidence(
     review: "FI. _GUARD_ITER_PY_GENERATOR: a heap type whose cached __iter__ is at its version.",
-    contract: "Reads the type's cache: no memory, no failure.",
-    lowering: "none yet: loads and a compare",
-    test: "test_ir_generator_create");
+    contract: "Reads the type's cache: no memory, no failure.");
 
 extern helper validate_gen_method(v:B)
   cases(hit(), absent())

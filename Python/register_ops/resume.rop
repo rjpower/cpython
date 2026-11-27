@@ -26,9 +26,7 @@ extern primitive instrumentation_current(t:Thread, f:Frame) -> Bool
   evidence(
     review: "RS. bytecodes.c _RESUME_CHECK: _Py_EvalBreaker(tstate) !="
             "FRAME_CODE_INSTRUMENTATION_VERSION().",
-    contract: "Two relaxed or acquire loads and a compare: no failure, no callback.",
-    lowering: "none yet",
-    test: "test_rop_resume");
+    contract: "Two relaxed or acquire loads and a compare: no failure, no callback.");
 
 // The same for the observing evaluator: the code also carries the observed
 // mark (_PyCode_OBSERVED_MARK), which the eval breaker never holds
@@ -38,9 +36,7 @@ extern primitive observing_current(t:Thread, f:Frame) -> Bool
   evidence(
     review: "OB. instrumentation_current with the observed mark of the code's"
             "version.",
-    contract: "Two relaxed or acquire loads, an or and a compare: no failure, no callback.",
-    lowering: "none yet",
-    test: "test_rop_resume");
+    contract: "Two relaxed or acquire loads, an or and a compare: no failure, no callback.");
 
 // Whether the kind of resume point polls: not the delegation loops or a
 // generator expression's start
@@ -50,9 +46,7 @@ extern primitive resume_polls(kind:Enum<ResumeKind>) -> Bool
   evidence(
     review: "RS. bytecodes.c _CHECK_PERIODIC_IF_NOT_YIELD_FROM: the location is below"
             "RESUME_AFTER_YIELD_FROM.",
-    contract: "A function of the immediate: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_resume");
+    contract: "A function of the immediate: no memory, no failure.");
 
 // _MAYBE_INSTRUMENT: when the code's version is not the global one and the
 // thread is not tracing, instrument the code.  A thread that is tracing never

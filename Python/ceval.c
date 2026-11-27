@@ -2962,9 +2962,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         /* Because this avoids the RESUME, we need to update instrumentation */
         _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
     }
-    result = tstate->interp->ceval.ir_forms
-        ? _PyEval_ExecuteForms(tstate, frame, throwflag)
-        : ir_evaluate(tstate, frame, throwflag);
+    result = ir_evaluate(tstate, frame, throwflag);
     /* The handler that returned, Return.External or exit_unwind_notrace,
      * left the entry frame */
     assert(tstate_impl->eval_activation == &activation);

@@ -558,8 +558,7 @@ class CBinding:
     convention: str
     evidence: tuple[EvidenceItem, ...]
     span: SrcSpan = _span()
-    # The interpreter product always inlines the body; the function forms and
-    # stubs call one out-of-line copy
+    # The arms always inline the body
     inline: bool = False
 
 

@@ -189,25 +189,6 @@ class FloatPowerTests(unittest.TestCase):
                         self.assertTrue(same(want, outcome(function, a, b)), (want,))
                     self.assertEqual(binary_arm(function), binary_arm(self.trained(op)))
 
-    def test_the_member_arm_admits_or_misses(self):
-        if not hasattr(self.capi, "jit_template_run"):
-            self.skipTest("needs the template probe")
-        from test.test_jit_template import slot_of, word_of
-        stub, missed = 2, 1
-        function = self.trained("**")
-        handler = self.capi.arm_handlers()["Binary.Float_NB_POWER"]
-        index, _ = word_of(function, "Binary.Float_NB_POWER")
-        fields = dict(zip("ABCD", self.capi.get_ir(function.__code__, True)[index][1:]))
-        for a, b, admits in POWER_CASES:
-            with self.subTest(a=a, b=b):
-                slots = {slot_of(fields, "B"): a, slot_of(fields, "C"): b}
-                result = self.capi.jit_template_run(function, index, slots, stub, handler)
-                # (the probe shows an inline result as its raw word: the values
-                # are the test above's)
-                self.assertEqual(not result[0] & missed, admits, result)
-                self.assertIsNone(result[2])
-
-
 @support.cpython_only
 class IntMemberTests(unittest.TestCase):
     """Binary.Int has an arm per operator of its hot set; the other operators

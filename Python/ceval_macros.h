@@ -2,9 +2,7 @@
 
 /* The compilation of the evaluator (Python/ceval_evaluator.h): 0 for the
  * normal one in Python/ceval_normal.c, 1 for the observing evaluator in
- * Python/ceval_observing.c.  The function forms (Python/ceval_forms.c) are
- * compiled once, with 0, and their executor picks a word's form by the
- * observed mark of its code. */
+ * Python/ceval_observing.c. */
 #ifndef IR_OBSERVING
 #  define IR_OBSERVING 0
 #endif
@@ -79,19 +77,16 @@
  * deoptimises to its family head does, tail-calls it with ir_word
  * unchanged, so the other handler finds the same fields.
  *
- * Every handler also has a function form, ir_run_X(tstate, frame,
- * next_instr, ir_word), which returns a _PyIRTransfer (tiers87, C2).  The
- * bodies leave only through the transfer macros below, which this file binds
- * for the evaluator and Python/ceval_forms.c binds for the function forms;
- * the evaluator's shared paths are the VM routines of
- * Python/ceval_routines.h, bound the same way. */
+ * The bodies leave only through the transfer macros below, which this file
+ * binds for the evaluator; the evaluator's shared paths are the VM routines
+ * of Python/ceval_routines.h. */
 
 #define TARGET(op) IR_TAIL_FN(op)
 
 /* The evaluator's binding of the VM routines (Python/ceval_routines.h): a
  * routine is a function of the interpreter, and its operands
  * (IR_ROUTINE_OPERAND), and the error routine's origin and entry, travel in
- * the activation, as for the function forms. */
+ * the activation. */
 #define IR_ROUTINE(NAME) IR_TAIL_FN(NAME)
 #define IR_ROUTINE_OPERAND(NAME) (IR_ACTIVATION()->NAME)
 /* A routine's dispatch follows a frame switch (a generator's return to its
@@ -143,8 +138,8 @@
     } while (0)
 
 /* The frame transfers of the register instructions (Python/register_ops),
- * over the bindings of DISPATCH_INLINED, DISPATCH and IR_GEN_RETURN that the
- * evaluator and the function forms each make.
+ * over the evaluator's bindings of DISPATCH_INLINED, DISPATCH and
+ * IR_GEN_RETURN.
  *
  * ROP_ENTER: `exit enter(NEW) resume P`.  The caller goes on at next_instr
  * with the child's value in SLOT, P's definition, when NEW returns.
@@ -215,13 +210,11 @@
 #define ROP_YIELD(V, SLOT) ROP_SUSPEND((V), (SLOT), FRAME_SUSPENDED)
 #define ROP_YIELD_FROM(V, SLOT) ROP_SUSPEND((V), (SLOT), FRAME_SUSPENDED_YIELD_FROM)
 
-/* A call that the function forms make in place of a jump, which must not
- * grow the C stack: a chain of deoptimisations or frame entries stays one
- * C frame deep. */
+/* A call in place of a jump, which must not grow the C stack: a chain of
+ * deoptimisations or frame entries stays one C frame deep. */
 #define Py_MUSTTAIL __attribute__((musttail))
 
-/* A planned arm's uop that may reenter Python: the whole-word completion
- * stub's ESCAPED bit (Python/generated_rop_stubs.c.h); nothing elsewhere */
+/* A uop that may reenter Python: nothing to record */
 #define IR_STUB_ESCAPE() ((void)0)
 /* The word's frame had its control moved while it ran (a debugger's jump:
  * pending_redirect and the continuation in return_pc): commit the jump and
@@ -381,17 +374,6 @@ do { \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
     }
-
-/* The handler of an outlined instruction (Python/register_ops, rule 4): its body is the function FN, which returns the frame and next word
- * to run, or no word for an exit that the activation describes.  The handler
- * assigns the state and dispatches, as a helper of rule 13 requires. */
-#define IR_RUN_OUTLINED(FN) IR_STEP_DONE(FN(tstate, frame, next_instr, ir_word))
-
-/* A conditional jump of an outlined handler reports whether it jumped, which
- * its instrumented twin needs for its event and cannot tell from the word it
- * is to run when the jump is of no distance (rule 12).  The evaluator's own
- * handlers do not report. */
-#define IR_REPORT_EDGE(TAKEN) ((void)(TAKEN))
 
 /* The event of an instrumented instruction that follows its effect (rule 12)
  * runs in a cold function, _PyEval_ir_event_edge(), which returns the word to run or
@@ -969,8 +951,8 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * (ROP_ENTER_GATE()), in its code's unit if the code has live entries
  * (IR_JIT_SWITCH(): a compiled code's heads are Resume.Poll, which no longer
  * counts the event that entered the unit).  An arm that enters a frame runs it in place
- * (DISPATCH_INLINED); the start_frame label runs it for the C entry and the
- * function forms (Python/ceval_labels.h). */
+ * (DISPATCH_INLINED); the start_frame label runs it for the C entry
+ * (Python/ceval_labels.h). */
 #ifdef Py_DEBUG
 #  define IR_START_FRAME_LLTRACE() \
     do { \
@@ -1025,8 +1007,8 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * measures how often compiled code falls back to the evaluator.  The
  * observing evaluator hands nothing to a unit: compiled code leaves into the
  * normal evaluator, which would run an observed frame that a unit returns or
- * yields to unobserved.  The stencils (Python/jit_stencils.c) and the
- * function forms bind both to nothing. */
+ * yields to unobserved.  The stencils (Python/jit_stencils.c) bind both to
+ * nothing. */
 #if defined(_PY_JIT_SUPPORTED) && !IR_OBSERVING
 #ifdef Py_DEBUG
 #  define IR_JIT_TRACED() (frame->lltrace >= 5)
@@ -1082,8 +1064,8 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* A departing arm opens the thread's departure window after its last guard
  * (Python/jit.c, _PyJit_Reclaim()).  The evaluator runs in no unit: nothing
- * to mark.  The stencils (Python/jit_stencils.c) and the function forms bind
- * it to the thread's flag. */
+ * to mark.  The stencils (Python/jit_stencils.c) bind it to the thread's
+ * flag. */
 #define IR_MARK_DEPARTURE() ((void)0)
 
 /* The feedback entry of another instruction of the frame. */
@@ -1093,7 +1075,7 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The two dispatches that do not go to the word after this one or to the
  * word's own target: after a frame transfer (an entry, a return, a
- * suspension, an outlined body's result), control goes to a word of
+ * suspension), control goes to a word of
  * another frame or one that a callee chose; after a redirect, to the word
  * that a debugger's jump named.  Each evaluator dispatches both through its
  * table; the stencils of the baseline JIT (Python/jit_stencils.c) bind them

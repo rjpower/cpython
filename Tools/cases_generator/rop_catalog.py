@@ -472,9 +472,8 @@ ENVIRONMENT = {
     "next_head": Handle.Head,
 }
 
-# The C expression of each implicit name in every product.  The prologue of
-# a case, a function form and a stub binds the same names: `this_instr` is
-# the head's address (the stub's `site`), `next_instr` the head after the
+# The C expression of each implicit name.  The prologue of a case binds the
+# names: `this_instr` is the head's address, `next_instr` the head after the
 # instruction.  The activation has no C value yet and is not listed.
 ENVIRONMENT_C = {
     "thread": "tstate",
@@ -880,11 +879,8 @@ TRANSFER_EXITS = {
 
 
 # The evidence an extern with a C body carries (root, 2026-11-24): the
-# review note and why its effects and exits hold; a primitive also names
-# its leaf lowering and the differential test of that lowering.
-EVIDENCE_REQUIRED = ("review", "contract")
-EVIDENCE_PRIMITIVE = ("lowering", "test")
-EVIDENCE_KEYS = EVIDENCE_REQUIRED + EVIDENCE_PRIMITIVE
+# review note and why its effects and exits hold.
+EVIDENCE_KEYS = ("review", "contract")
 
 
 __all__ = [n for n in dir() if not n.startswith("_")]

@@ -81,18 +81,14 @@ extern primitive globals_current(fr:Frame, r:Recipe<Global>) -> Bool
   c _PyGlobal_GlobalsCurrent as bool
   evidence(
     review: "pycore_global_recipe.h: the keys version of the frame's globals is the recipe's.",
-    contract: "Two loads, no memory write, no callee.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_globalread row tests");
+    contract: "Two loads, no memory write, no callee.");
 
 extern primitive builtins_current(fr:Frame, r:Recipe<Global>) -> Bool
   effects(reads)
   c _PyGlobal_BuiltinsCurrent as bool
   evidence(
     review: "pycore_global_recipe.h: the frame's builtins are an exact dict whose keys version is the recipe's.",
-    contract: "A type test and two loads, no memory write, no callee.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_globalread row tests");
+    contract: "A type test and two loads, no memory write, no callee.");
 
 // The value at the recipe's index; vacant, or past the entries, is absent
 extern primitive global_slot(fr:Frame, r:Recipe<Global>) -> Maybe<B>
@@ -100,18 +96,14 @@ extern primitive global_slot(fr:Frame, r:Recipe<Global>) -> Maybe<B>
   c _PyGlobal_GlobalsSlot as borrow
   evidence(
     review: "pycore_global_recipe.h: the entry of the globals' keys at the recipe's index.",
-    contract: "Requires that globals_current held on this path. A read; NULL is absent.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_globalread row tests");
+    contract: "Requires that globals_current held on this path. A read; NULL is absent.");
 
 extern primitive builtin_slot(fr:Frame, r:Recipe<Global>) -> Maybe<B>
   effects(reads)
   c _PyGlobal_BuiltinsSlot as borrow
   evidence(
     review: "pycore_global_recipe.h: the entry of the builtins' keys at the recipe's index.",
-    contract: "Requires that builtins_current held on this path. A read; NULL is absent.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_globalread row tests");
+    contract: "Requires that builtins_current held on this path. A read; NULL is absent.");
 
 // Adaptation policy (addendum section 2): sample when the counter is due,
 // nominate by evidence.

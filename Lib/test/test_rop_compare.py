@@ -2,8 +2,7 @@
 (Python/register_ops/tests.rop): what each stack instruction lowers to, that
 the answers are the language's, how a test and the jump on its answer become
 one word, the far targets that word relaxes, the arms that adaptation picks,
-and the branch events that monitoring sees.  Each arm against the C arm is
-run by test_rop_ssa."""
+and the branch events that monitoring sees."""
 
 import operator
 import sys

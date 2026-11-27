@@ -9,23 +9,20 @@
  * its own register allocation and no dispatch grows the C stack.  The
  * bodies are the generated arms (Python/generated_rop_cases.c.h), the labels
  * (Python/ceval_labels.h) and the routines (Python/ceval_routines.h); the
- * macros through which they leave are bound in Python/ceval_macros.h
- * (Python/ceval_forms.c rebinds them for the function forms):
+ * macros through which they leave are bound in Python/ceval_macros.h:
  *
  *   dispatch, a deoptimisation, a frame entry, an error, a routine, a switch
  *   to the other evaluator
  *       a tail call (Py_MUSTTAIL), of a function of the same type;
  *   the end of the activation (IR_EXIT)
  *       a return of the value, to the driver, ir_evaluate();
- *   a call that returns a transfer (a generator step, an outlined form, an
- *   observed edge, the baseline JIT's jit_run())
+ *   a call that returns a transfer (a generator step, an observed edge)
  *       an ordinary call, which has returned before the arm dispatches its
  *       result.
  *
  * A routine's operands, and the error routine's origin and entry, travel in
- * the activation (IR_ROUTINE_OPERAND), as for the function forms.  The
- * functions of the normal evaluator are ir_tail_<name>, those of the
- * observing one ir_observe_<name>.
+ * the activation (IR_ROUTINE_OPERAND).  The functions of the normal
+ * evaluator are ir_tail_<name>, those of the observing one ir_observe_<name>.
  *
  * The functions save no register for their caller, which is what keeps an
  * arm from saving registers it uses at its entry.  Clang

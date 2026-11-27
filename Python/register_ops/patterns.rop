@@ -82,9 +82,7 @@ extern primitive type_has_flag(kind:Enum<PatternKind>, v:B) -> Bool
   c _PyRop_TypeHasFlag as bool
   evidence(
     review: "ceval.c _PyRop_TypeHasFlag: the type's Py_TPFLAGS_MAPPING or Py_TPFLAGS_SEQUENCE, as MATCH_MAPPING and MATCH_SEQUENCE tested.",
-    contract: "A read of the type of the word: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_patterns");
+    contract: "A read of the type of the word: no memory, no failure.");
 
 arm Pattern.Flag inline
   effects(reads, writes, releases on (dst))

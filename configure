@@ -831,6 +831,7 @@ OPENSSL_LDFLAGS
 OPENSSL_LIBS
 OPENSSL_INCLUDES
 ENSUREPIP
+CFLAGS_EVALUATOR
 CFLAGS_CEVAL
 SRCDIRS
 THREADHEADERS
@@ -9042,6 +9043,7 @@ printf "%s\n" "no" >&6; } ;;
 esac
 fi
 
+
 # A pystats build is the build that gate R27 runs (Tools/build/check_r27.py):
 # it attributes each box to the code that made it, from return addresses.
 # Cross-unit inlining, a shared libpython and per-thread statistics would
@@ -11027,6 +11029,69 @@ fi
 
 printf "%s\n" "#define _Py_WITH_FRAME_POINTERS 1" >>confdefs.h
 
+                        case $host_cpu in #(
+  x86_64) :
+
+        case $ac_cv_cc_name in #(
+  gcc) :
+    evaluator_cflags="-fomit-frame-pointer -ffixed-rbp" ;; #(
+  clang) :
+    evaluator_cflags="-fomit-frame-pointer -Xclang -mframe-pointer=reserved" ;; #(
+  *) :
+    evaluator_cflags="" ;;
+esac
+        if test -n "$evaluator_cflags"
+then :
+
+          as_CACHEVAR=`printf "%s\n" "ax_cv_check_cflags_-Werror_$evaluator_cflags" | sed "$as_sed_sh"`
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts $evaluator_cflags" >&5
+printf %s "checking whether C compiler accepts $evaluator_cflags... " >&6; }
+if eval test \${$as_CACHEVAR+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$CFLAGS
+  CFLAGS="$CFLAGS -Werror $evaluator_cflags"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  eval "$as_CACHEVAR=yes"
+else case e in #(
+  e) eval "$as_CACHEVAR=no" ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CFLAGS=$ax_check_save_flags ;;
+esac
+fi
+eval ac_res=\$$as_CACHEVAR
+	       { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+printf "%s\n" "$ac_res" >&6; }
+if eval test \"x\$"$as_CACHEVAR"\" = x"yes"
+then :
+  CFLAGS_EVALUATOR="$evaluator_cflags"
+else case e in #(
+  e) : ;;
+esac
+fi
+
+
+fi
+       ;; #(
+  *) :
+     ;;
+esac
     fi
 
     CFLAGS_NODIST="$CFLAGS_NODIST -std=c11"
@@ -35072,6 +35137,7 @@ if test "$have_glibc_memmove_bug" = yes; then
 printf "%s\n" "#define HAVE_GLIBC_MEMMOVE_BUG 1" >>confdefs.h
 
 fi
+
 
 
 

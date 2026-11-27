@@ -1,5 +1,5 @@
 /* The evaluator, a tail-calling interpreter (Python/ceval_tail.h), which
- * Python/ceval.c compiles as the normal evaluator and
+ * Python/ceval_normal.c compiles as the normal evaluator and
  * Python/ceval_observing.c compiles again, with IR_OBSERVING set, as the
  * observing one: the same handlers, labels and routines, each a function,
  * over the dispatch table of each (Python/ir_targets.h).  The observing
@@ -16,6 +16,12 @@
 
 #include "ir_targets.h"
 #include "ceval_tail.h"
+
+#ifdef _PY_JIT_SUPPORTED
+/* The baseline JIT's hand-offs (Python/ceval_shared.h) */
+#define jit_run _PyEval_JitRun
+#define jit_resume _PyEval_JitResume
+#endif
 
 /* Every function of the interpreter, declared before the table and the
  * functions, which tail-call one another (an id without a handler repeats
@@ -123,6 +129,22 @@ IR_TAIL_FN(switch_loop)
     int opcode;
     DISPATCH();
 }
+
+#if !IR_OBSERVING
+/* The driver's entries (ir_evaluate(), Python/ceval.c): run frame from its
+ * start, or throw into it */
+Py_IR_TAIL_CC PyValue
+_PyEval_StartFrame(Py_IR_TAIL_PARAMS)
+{
+    IR_TAIL_GOTO(start_frame);
+}
+
+Py_IR_TAIL_CC PyValue
+_PyEval_ThrowFrame(Py_IR_TAIL_PARAMS)
+{
+    IR_TAIL_GOTO(throw_error);
+}
+#endif
 
 /* The entry of this evaluator, which the other one switched frame to: go on
  * at next_instr */

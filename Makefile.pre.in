@@ -133,6 +133,12 @@ PY_CORE_EXE_LDFLAGS:= $(if $(CONFIGURE_EXE_LDFLAGS), $(CONFIGURE_EXE_LDFLAGS) $(
 CFLAGS_ALIASING=@CFLAGS_ALIASING@
 # Compilation flags only for ceval.c.
 CFLAGS_CEVAL=@CFLAGS_CEVAL@
+# The units of the evaluator, which hold its tail-calling functions and the
+# C rows that they inline, are compiled without frames, with the frame
+# pointer reserved, where frame pointers are on: the driver's frame record
+# stays intact below them (Python/ceval_tail.h).  configure picks the flags
+# for the compiler.
+CFLAGS_EVALUATOR=@CFLAGS_EVALUATOR@
 
 
 # Machine-dependent subdirectories
@@ -457,6 +463,7 @@ PYTHON_OBJS=	\
 		Python/brc.o \
 		Python/ceval.o \
 		Python/ceval_forms.o \
+		Python/ceval_normal.o \
 		Python/ceval_observing.o \
 		Python/codecs.o \
 		Python/codegen.o \
@@ -631,7 +638,7 @@ LINK_PYTHON_OBJS=@LINK_PYTHON_OBJS@
 # On some systems, object files that reference DTrace probes need to be modified
 # in-place by dtrace(1).
 DTRACE_DEPS = \
-	Python/ceval.o Python/ceval_forms.o Python/ceval_observing.o Python/gc.o Python/import.o Python/sysmodule.o
+	Python/ceval.o Python/ceval_forms.o Python/ceval_normal.o Python/ceval_observing.o Python/gc.o Python/import.o Python/sysmodule.o
 
 ##########################################################################
 # pyexpat's expat library
@@ -2284,7 +2291,7 @@ Python/compile.o Python/codegen.o Python/assemble.o Python/ir_assemble.o Python/
                 $(srcdir)/Include/internal/pycore_opcode_utils.h \
                 $(srcdir)/Include/internal/pycore_regcfg.h
 
-Python/ceval.o Python/ceval_forms.o Python/ceval_observing.o: \
+Python/ceval.o Python/ceval_forms.o Python/ceval_normal.o Python/ceval_observing.o: \
 		$(srcdir)/Include/internal/pycore_native_scope.h \
 		$(srcdir)/Python/ceval_evaluator.h \
 		$(srcdir)/Python/ceval_shared.h \
@@ -2320,7 +2327,7 @@ Include/pydtrace_probes.h: $(srcdir)/Include/pydtrace.d
 	sed 's/PYTHON_/PyDTrace_/' $@ > $@.tmp
 	mv $@.tmp $@
 
-Python/ceval.o Python/ceval_forms.o Python/ceval_observing.o: $(srcdir)/Include/pydtrace.h
+Python/ceval.o Python/ceval_forms.o Python/ceval_normal.o Python/ceval_observing.o: $(srcdir)/Include/pydtrace.h
 Python/gc.o: $(srcdir)/Include/pydtrace.h
 Python/import.o: $(srcdir)/Include/pydtrace.h $(srcdir)/Include/internal/pycore_magic_number.h
 
@@ -3273,8 +3280,11 @@ Python/ceval.o: Python/ceval.c
 Python/ceval_forms.o: Python/ceval_forms.c
 	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_CEVAL) -o $@ $<
 
+Python/ceval_normal.o: Python/ceval_normal.c
+	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_CEVAL) $(CFLAGS_EVALUATOR) -o $@ $<
+
 Python/ceval_observing.o: Python/ceval_observing.c
-	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_CEVAL) -o $@ $<
+	$(CC) -c $(PY_CORE_CFLAGS) $(CFLAGS_CEVAL) $(CFLAGS_EVALUATOR) -o $@ $<
 
 # Run reindent on the library
 .PHONY: reindent

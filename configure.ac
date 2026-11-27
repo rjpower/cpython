@@ -2902,6 +2902,20 @@ AS_VAR_IF([ac_cv_gcc_compat], [yes], [
       AC_DEFINE([_Py_WITH_FRAME_POINTERS], [1],
                 [Define to 1 if frame unwinding via pointers is expected
                  to work, 0 if not. Leave undefined if unknown.])
+      dnl The units of the evaluator (Python/ceval_tail.h) keep no frames
+      dnl and never write rbp, which holds the driver's frame record: GCC
+      dnl reserves the register, clang reserves the frame pointer.
+      AS_CASE([$host_cpu], [x86_64], [
+        AS_CASE([$ac_cv_cc_name],
+          [gcc], [evaluator_cflags="-fomit-frame-pointer -ffixed-rbp"],
+          [clang], [evaluator_cflags="-fomit-frame-pointer -Xclang -mframe-pointer=reserved"],
+          [evaluator_cflags=""])
+        AS_IF([test -n "$evaluator_cflags"], [
+          AX_CHECK_COMPILE_FLAG([$evaluator_cflags],
+                                [CFLAGS_EVALUATOR="$evaluator_cflags"], [],
+                                [-Werror])
+        ])
+      ])
     fi
 
     CFLAGS_NODIST="$CFLAGS_NODIST -std=c11"
@@ -8097,6 +8111,7 @@ if test "$have_glibc_memmove_bug" = yes; then
 fi
 
 AC_SUBST([CFLAGS_CEVAL])
+AC_SUBST([CFLAGS_EVALUATOR])
 
 if test "$ac_cv_gcc_asm_for_x87" = yes; then
     # Some versions of gcc miscompile inline asm:

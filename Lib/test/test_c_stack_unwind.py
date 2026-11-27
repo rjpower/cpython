@@ -269,9 +269,11 @@ class ManualStackUnwindTests(unittest.TestCase):
         start = backtrace.index(chain[0])
         end = backtrace.index(result["entry"])
         missing = len(backtrace[start:end + 1]) - chain.index(result["entry"]) - 1
-        # one driver per activation: STACK_DEPTH calls, the helper's and
-        # the module's
-        self.assertLessEqual(missing, STACK_DEPTH + 2)
+        # Per activation (STACK_DEPTH calls, the helper's and the module's)
+        # the driver, and the arm when it reaches the callee through a row
+        # the compiler left out of line (an assert build leaves more of
+        # them): both keep no frame record.
+        self.assertLessEqual(missing, 2 * (STACK_DEPTH + 2))
 
     def test_manual_unwind_finds_expected_frames(self):
         result = _unwind_result("manual_frame_pointer_unwind")

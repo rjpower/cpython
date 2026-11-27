@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `30e57cf2207` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT and J1 merged, below) holds:
+`pyjit/rir90` at `f9b6d112cb6` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1 and HS merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -495,10 +495,25 @@ runs 1.117 of the interpreter's instructions (from 1.276); generators 1.02
 and nbody and unpack_sequence do not move: the rest is in the forms and
 stubs the compiled words call.
 
-Running:
-- HS: an accounting of the hot arms that still run more instructions than
-  golden87's, then generator rules for the largest causes.  Under JA's
-  stencil design the arms are also the compiled words.
+**HS, merged at `f9b6d112cb6`**: three generator rules shrink the hot
+arms.  A name operand is read without a release-build check; a B
+operand's object test is its pointer-space test, through one helper that
+asserts the full test in assert and debug builds; a span publish hands
+its rest values, so the unpack arms keep no stack protector or frame.  All
+29 benchmarks run 1.055 of golden87's instructions (from 1.083); every
+benchmark falls but pickle and unpickle (+0.1-0.3%).  Left: the admitted-
+entry tests (about 75M on 18 kernels), which need a change to how
+adaptation installs an arm, and the call and return protocol.
+
+Timing at `f9b6d112cb6` (all-29, CPU 15, against golden87 with its JIT
+off; the binary drew a good page placement): the interpreter runs 1.026,
+level with 1.021 before HS at 2.6% fewer instructions.  20 benchmarks are
+within 5% and 24 within 10%; single benchmarks moved both ways by 5-12%
+(nbody and logging_simple slower, richards, go and logging_silent faster),
+as layout moves them.  The JIT under `always` runs 1.187 cold / 1.174
+warm (from 1.338 / 1.326), so **1.14 of the interpreter's time** (from
+1.30); generators runs 1.05 of the interpreter (from 2.42), and
+unpack_sequence (1.55) and nbody (1.30) are furthest.
 
 The stencil design and the templates wait for the user's decision.
 

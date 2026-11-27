@@ -8,6 +8,7 @@ import unittest
 from test.support import import_helper
 
 capi = import_helper.import_module("_testinternalcapi")
+from test.support.ir_dis import executing_arms
 
 
 class PyValueTests(unittest.TestCase):
@@ -218,8 +219,7 @@ class PyValueTests(unittest.TestCase):
                 self.assertEqual(local(3, 2), temporary(3, 2))
                 discard(3, 2)
             for function in (local, temporary, discard):
-                self.assertIn(handler, [word[0] for word in
-                              capi.get_ir(function.__code__, True)])
+                self.assertIn(handler, executing_arms(function.__code__))
             for left, right, expected in values:
                 with self.subTest(operation=local.__name__, left=left, right=right):
                     self.assertEqual(local(left, right), expected)

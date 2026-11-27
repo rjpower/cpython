@@ -9,11 +9,11 @@ from test import support
 from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
+from test.support.ir_dis import executing_arms
 
 
 def handlers(function):
-    return [word[0] for word in
-            _testinternalcapi.get_ir(function.__code__, True)]
+    return executing_arms(function.__code__)
 
 
 class PyValueDictVMTests(unittest.TestCase):

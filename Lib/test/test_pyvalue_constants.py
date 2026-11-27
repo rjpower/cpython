@@ -6,6 +6,7 @@ from test import support
 from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
+from test.support.ir_dis import executing_arms
 
 
 class PyValueConstantTests(unittest.TestCase):
@@ -21,9 +22,7 @@ class PyValueConstantTests(unittest.TestCase):
 
         for _ in range(20):
             self.assertEqual(constant(), [-1])
-        handlers = [word[0] for word in
-                    _testinternalcapi.get_ir(constant.__code__, True)]
-        self.assertIn('Const.Common', handlers)
+        self.assertIn('Const.Common', executing_arms(constant.__code__))
 
     def test_owned_compile_fold_and_constant_results(self):
         for source, expected in [

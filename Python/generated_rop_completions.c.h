@@ -85,11 +85,9 @@ _PyRop_Complete_ForIter_CompleteObserved(
     }
     IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_ForIter_CompleteObserved_StopFailed:
-    IR_COLD();
     PyValue_XCLOSE(a_owned0);
     PROCESS_ERROR_AT(RAISE, 81, this_instr);
     rop_ForIter_CompleteObserved_StopMoved:
-    IR_COLD();
     PyValue_XCLOSE(a_owned0);
     IR_REDIRECT();
     rop_ForIter_CompleteObserved_ExitEventFailed:
@@ -199,14 +197,12 @@ _PyRop_Complete_Send_CompleteObserved(
     }
     IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_Send_CompleteObserved_Failed:
-    IR_COLD();
     IR_STUB_ESCAPE();
     a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs4 = (_PyRopSrcs){frame, 0, {}, {}};
     _PyRop_RetireFailedCall(&a_all3, &srcs4);
     PROCESS_ERROR_AT(RAISE, 163, this_instr);
     rop_Send_CompleteObserved_Moved:
-    IR_COLD();
     PyValue_XCLOSE(a_owned0);
     IR_REDIRECT();
     rop_Send_CompleteObserved_ExitFailed:

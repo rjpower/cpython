@@ -12,6 +12,125 @@
     Py_FatalError("register instruction family " #FAMILY " has no generic arm")
 #endif
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Add_Generic_binary_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Add_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Generic_binary_at_origin1_Failed) {
+    // Add.Generic: the cold region from rop_Add_Generic_binary_at_origin1_Failed
+    int opcode = ROP_HANDLER_Add_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_add2_c;
+    int ret2;
+    int adapt_before_use_add2_cf;
+    int ret3;
+    int adapt_before_use_add2_ct;
+    int ret4;
+    int adapt_before_use_add2_ce;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    _PyRopAnchors a_all8;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    { const rop_in_Cold_Add_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Generic_binary_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Add_Generic_binary_at_origin1_Failed;
+    rop_Add_Generic_binary_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all6, &srcs7);
+    PROCESS_ERROR_AT(RAISE, 3, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Generic_binary_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue binary_at_origin1_dropped;
+} rop_in_Cold_Add_Generic_binary_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Add_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Generic_binary_at_origin1_Moved) {
+    // Add.Generic: the cold region from rop_Add_Generic_binary_at_origin1_Moved
+    int opcode = ROP_HANDLER_Add_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_add2_c;
+    int ret2;
+    int adapt_before_use_add2_cf;
+    int ret3;
+    int adapt_before_use_add2_ct;
+    int ret4;
+    int adapt_before_use_add2_ce;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    _PyRopAnchors a_all8;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    { const rop_in_Cold_Add_Generic_binary_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Generic_binary_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      binary_at_origin1_dropped = ir_in->binary_at_origin1_dropped;
+    }
+    goto rop_Add_Generic_binary_at_origin1_Moved;
+    rop_Add_Generic_binary_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(binary_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all8 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all8);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Generic_binary_at_origin1_Moved)
+#endif
+
         TARGET(Add_Generic) {
             // Add.Generic (shared)
             int opcode = ROP_HANDLER_Add_Generic;
@@ -172,21 +291,281 @@
             _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
             goto rop_Add_Generic_Run;
             rop_Add_Generic_binary_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all6, &srcs7);
-            PROCESS_ERROR_AT(RAISE, 3, this_instr);
+            { rop_in_Cold_Add_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Generic_binary_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Add_Generic_binary_at_origin1_Failed);
             rop_Add_Generic_binary_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(binary_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all8 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all8);
-            IR_REDIRECT();
+            { rop_in_Cold_Add_Generic_binary_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Generic_binary_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->binary_at_origin1_dropped = binary_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_Add_Generic_binary_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow d_view0;
+    PyValue d_owned0;
+} rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Generic_delattr_at_origin1_Failed) {
+    // AttrWrite.Generic: the cold region from rop_AttrWrite_Generic_delattr_at_origin1_Failed
+    int opcode = ROP_HANDLER_AttrWrite_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow d_view0;
+    PyValue d_owned0;
+    int ret2;
+    _PyRopAnchors d_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors d_all5;
+    _PyAttrRecipe out6;
+    int ret7;
+    int adapt_before_use_setattr3_cInstance;
+    int ret8;
+    int adapt_before_use_setattr3_cSlot;
+    int ret9;
+    int adapt_before_use_setattr3_cHint;
+    int ret10;
+    int adapt_before_use_setattr3_cShapeAdd;
+    int ret11;
+    int adapt_before_use_setattr3_cShape;
+    int ret12;
+    _PyRopAnchors a_all13;
+    _PyRopSrcs srcs14;
+    _PyRopAnchors a_all15;
+    _PyAttrRecipe adapt_before_use_setattr3_rInstance;
+    _PyAttrRecipe adapt_before_use_setattr3_rShape;
+    _PyAttrRecipe adapt_before_use_setattr3_rShapeAdd;
+    _PyAttrRecipe adapt_before_use_setattr3_rHint;
+    _PyAttrRecipe adapt_before_use_setattr3_rSlot;
+    { const rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed);
+      d_view0 = ir_in->d_view0;
+      d_owned0 = ir_in->d_owned0;
+    }
+    goto rop_AttrWrite_Generic_delattr_at_origin1_Failed;
+    rop_AttrWrite_Generic_delattr_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    d_all3 = (_PyRopAnchors){1, {d_view0}, {d_owned0}};
+    srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_obj}};
+    _PyRop_RetireFailedCall(&d_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 16, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_delattr_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow d_view0;
+    PyValue d_owned0;
+} rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Generic_delattr_at_origin1_Moved) {
+    // AttrWrite.Generic: the cold region from rop_AttrWrite_Generic_delattr_at_origin1_Moved
+    int opcode = ROP_HANDLER_AttrWrite_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow d_view0;
+    PyValue d_owned0;
+    int ret2;
+    _PyRopAnchors d_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors d_all5;
+    _PyAttrRecipe out6;
+    int ret7;
+    int adapt_before_use_setattr3_cInstance;
+    int ret8;
+    int adapt_before_use_setattr3_cSlot;
+    int ret9;
+    int adapt_before_use_setattr3_cHint;
+    int ret10;
+    int adapt_before_use_setattr3_cShapeAdd;
+    int ret11;
+    int adapt_before_use_setattr3_cShape;
+    int ret12;
+    _PyRopAnchors a_all13;
+    _PyRopSrcs srcs14;
+    _PyRopAnchors a_all15;
+    _PyAttrRecipe adapt_before_use_setattr3_rInstance;
+    _PyAttrRecipe adapt_before_use_setattr3_rShape;
+    _PyAttrRecipe adapt_before_use_setattr3_rShapeAdd;
+    _PyAttrRecipe adapt_before_use_setattr3_rHint;
+    _PyAttrRecipe adapt_before_use_setattr3_rSlot;
+    { const rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved);
+      d_view0 = ir_in->d_view0;
+      d_owned0 = ir_in->d_owned0;
+    }
+    goto rop_AttrWrite_Generic_delattr_at_origin1_Moved;
+    rop_AttrWrite_Generic_delattr_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    d_all5 = (_PyRopAnchors){1, {d_view0}, {d_owned0}};
+    _PyRop_RetireAbandoned(&d_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_delattr_at_origin1_Moved)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Generic_setattr_at_origin2_Failed) {
+    // AttrWrite.Generic: the cold region from rop_AttrWrite_Generic_setattr_at_origin2_Failed
+    int opcode = ROP_HANDLER_AttrWrite_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow d_view0;
+    PyValue d_owned0;
+    int ret2;
+    _PyRopAnchors d_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors d_all5;
+    _PyAttrRecipe out6;
+    int ret7;
+    int adapt_before_use_setattr3_cInstance;
+    int ret8;
+    int adapt_before_use_setattr3_cSlot;
+    int ret9;
+    int adapt_before_use_setattr3_cHint;
+    int ret10;
+    int adapt_before_use_setattr3_cShapeAdd;
+    int ret11;
+    int adapt_before_use_setattr3_cShape;
+    int ret12;
+    _PyRopAnchors a_all13;
+    _PyRopSrcs srcs14;
+    _PyRopAnchors a_all15;
+    _PyAttrRecipe adapt_before_use_setattr3_rInstance;
+    _PyAttrRecipe adapt_before_use_setattr3_rShape;
+    _PyAttrRecipe adapt_before_use_setattr3_rShapeAdd;
+    _PyAttrRecipe adapt_before_use_setattr3_rHint;
+    _PyAttrRecipe adapt_before_use_setattr3_rSlot;
+    { const rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Generic_setattr_at_origin2_Failed;
+    rop_AttrWrite_Generic_setattr_at_origin2_Failed:
+    IR_STUB_ESCAPE();
+    a_all13 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs14 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all13, &srcs14);
+    PROCESS_ERROR_AT(RAISE, 18, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_setattr_at_origin2_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Generic_setattr_at_origin2_Moved) {
+    // AttrWrite.Generic: the cold region from rop_AttrWrite_Generic_setattr_at_origin2_Moved
+    int opcode = ROP_HANDLER_AttrWrite_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow d_view0;
+    PyValue d_owned0;
+    int ret2;
+    _PyRopAnchors d_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors d_all5;
+    _PyAttrRecipe out6;
+    int ret7;
+    int adapt_before_use_setattr3_cInstance;
+    int ret8;
+    int adapt_before_use_setattr3_cSlot;
+    int ret9;
+    int adapt_before_use_setattr3_cHint;
+    int ret10;
+    int adapt_before_use_setattr3_cShapeAdd;
+    int ret11;
+    int adapt_before_use_setattr3_cShape;
+    int ret12;
+    _PyRopAnchors a_all13;
+    _PyRopSrcs srcs14;
+    _PyRopAnchors a_all15;
+    _PyAttrRecipe adapt_before_use_setattr3_rInstance;
+    _PyAttrRecipe adapt_before_use_setattr3_rShape;
+    _PyAttrRecipe adapt_before_use_setattr3_rShapeAdd;
+    _PyAttrRecipe adapt_before_use_setattr3_rHint;
+    _PyAttrRecipe adapt_before_use_setattr3_rSlot;
+    { const rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Generic_setattr_at_origin2_Moved;
+    rop_AttrWrite_Generic_setattr_at_origin2_Moved:
+    IR_STUB_ESCAPE();
+    a_all15 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all15);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_setattr_at_origin2_Moved)
+#endif
 
         TARGET(AttrWrite_Generic) {
             // AttrWrite.Generic (shared)
@@ -313,18 +692,17 @@
             rop_AttrWrite_Generic_Tail1_Rest2:
             ROP_TAIL_DISPATCH();
             rop_AttrWrite_Generic_delattr_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            d_all3 = (_PyRopAnchors){1, {d_view0}, {d_owned0}};
-            srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_obj}};
-            _PyRop_RetireFailedCall(&d_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 16, this_instr);
+            { rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed);
+              ir_in->d_view0 = d_view0;
+              ir_in->d_owned0 = d_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Generic_delattr_at_origin1_Failed);
             rop_AttrWrite_Generic_delattr_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            d_all5 = (_PyRopAnchors){1, {d_view0}, {d_owned0}};
-            _PyRop_RetireAbandoned(&d_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved);
+              ir_in->d_view0 = d_view0;
+              ir_in->d_owned0 = d_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Generic_delattr_at_origin1_Moved);
             rop_AttrWrite_Generic_adapt_before_use_setattr3_Sample:
             ret7 = _PyAttr_ClassifySetAttr(PyValue_Borrow(*home_obj), this_instr, ((_PyFbAttr *)IR_FB(IR_D(ir_word))), _PyRop_NameAt(frame, IR_B(ir_word)), &out6);
             if (ret7 == 1) {
@@ -402,18 +780,21 @@
             }
             goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
             rop_AttrWrite_Generic_setattr_at_origin2_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all13 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs14 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all13, &srcs14);
-            PROCESS_ERROR_AT(RAISE, 18, this_instr);
+            { rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Generic_setattr_at_origin2_Failed);
             rop_AttrWrite_Generic_setattr_at_origin2_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all15 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all15);
-            IR_REDIRECT();
+            { rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Generic_setattr_at_origin2_Moved);
         }
 
         TARGET(SuperAttr_Generic) {
@@ -699,6 +1080,75 @@
             rop_SuperMethodExplicit_Generic_Failed:
             PROCESS_ERROR_AT(RAISE, 186, this_instr);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Generic_NativeFailed) {
+    // Call.Generic: the cold region from rop_Call_Generic_NativeFailed
+    int opcode = ROP_HANDLER_Call_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    void * ret1;
+    int ret2;
+    int adapt_before_use_call1_ce;
+    int ret3;
+    int adapt_before_use_call1_cdescriptor_noargs;
+    int ret4;
+    int adapt_before_use_call1_cdescriptor_fast_keywords;
+    int ret5;
+    int adapt_before_use_call1_cdescriptor_fast;
+    int ret6;
+    int adapt_before_use_call1_cdescriptor_o;
+    int ret7;
+    int adapt_before_use_call1_clist_append;
+    int ret8;
+    int adapt_before_use_call1_cisinstance;
+    int ret9;
+    int adapt_before_use_call1_clen;
+    int ret10;
+    int adapt_before_use_call1_cbuiltin_fast_keywords;
+    int ret11;
+    int adapt_before_use_call1_cbuiltin_fast;
+    int ret12;
+    int adapt_before_use_call1_cbuiltin_o;
+    int ret13;
+    int adapt_before_use_call1_cbuiltin_class;
+    int ret14;
+    int adapt_before_use_call1_ctuple_1;
+    int ret15;
+    int adapt_before_use_call1_cstr_1;
+    int ret16;
+    int adapt_before_use_call1_ctype_1;
+    int ret17;
+    int adapt_before_use_call1_cbg;
+    int ret18;
+    int adapt_before_use_call1_cpg;
+    int ret19;
+    int adapt_before_use_call1_cp;
+    int ret20;
+    int adapt_before_use_call1_cg;
+    int ret21;
+    int adapt_before_use_call1_ci;
+    int ret22;
+    int adapt_before_use_call1_cb;
+    int ret23;
+    PyValue ret24;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret25;
+    _PyInterpreterFrame * c;
+    PyValue z;
+    goto rop_Call_Generic_NativeFailed;
+    rop_Call_Generic_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_Generic_NativeFailed)
+#endif
 
         TARGET(Call_Generic) {
             // Call.Generic (split)
@@ -1089,10 +1539,7 @@
             rop_Call_Generic_Next:
             DISPATCH();
             rop_Call_Generic_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_Generic_NativeFailed);
             rop_Call_Generic_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_Generic_PollSwitched:
@@ -1100,6 +1547,41 @@
             rop_Call_Generic_Failed:
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_Generic_NativeFailed) {
+    // CallKw.Generic: the cold region from rop_CallKw_Generic_NativeFailed
+    int opcode = ROP_HANDLER_CallKw_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    void * ret1;
+    int ret2;
+    int adapt_before_use_call_kw1_cp;
+    int ret3;
+    int adapt_before_use_call_kw1_cn;
+    int ret4;
+    int adapt_before_use_call_kw1_cb;
+    int ret5;
+    int adapt_before_use_call_kw1_cg;
+    int ret6;
+    PyValue ret7;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret8;
+    _PyInterpreterFrame * c;
+    PyValue z;
+    goto rop_CallKw_Generic_NativeFailed;
+    rop_CallKw_Generic_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 48, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallKw_Generic_NativeFailed)
+#endif
 
         TARGET(CallKw_Generic) {
             // CallKw.Generic (split)
@@ -1229,10 +1711,7 @@
             }
             DISPATCH();
             rop_CallKw_Generic_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
+            IR_OUTLINE_GOTO(Cold_CallKw_Generic_NativeFailed);
             rop_CallKw_Generic_PollFailed:
             PROCESS_ERROR_AT(RAISE, 49, this_instr);
             rop_CallKw_Generic_PollSwitched:
@@ -1240,6 +1719,127 @@
             rop_CallKw_Generic_Failed:
             PROCESS_ERROR_AT(RAISE, 48, this_instr);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue tfo;
+    PyValue tko;
+} rop_in_Cold_CallEx_Generic_TupleFailed;
+static_assert(sizeof(rop_in_Cold_CallEx_Generic_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Generic_TupleFailed) {
+    // CallEx.Generic: the cold region from rop_CallEx_Generic_TupleFailed
+    int opcode = ROP_HANDLER_CallEx_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    void * ret13;
+    int ret14;
+    int adapt_before_use_call_ex1_cp;
+    int ret15;
+    int adapt_before_use_call_ex1_cn;
+    int ret16;
+    PyValue ret17;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret18;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    { const rop_in_Cold_CallEx_Generic_TupleFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_Generic_TupleFailed);
+      tfo = ir_in->tfo;
+      tko = ir_in->tko;
+    }
+    goto rop_CallEx_Generic_TupleFailed;
+    rop_CallEx_Generic_TupleFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Generic_TupleFailed)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Generic_NativeFailed) {
+    // CallEx.Generic: the cold region from rop_CallEx_Generic_NativeFailed
+    int opcode = ROP_HANDLER_CallEx_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    void * ret13;
+    int ret14;
+    int adapt_before_use_call_ex1_cp;
+    int ret15;
+    int adapt_before_use_call_ex1_cn;
+    int ret16;
+    PyValue ret17;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret18;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    goto rop_CallEx_Generic_NativeFailed;
+    rop_CallEx_Generic_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Generic_NativeFailed)
+#endif
 
         TARGET(CallEx_Generic) {
             // CallEx.Generic (split)
@@ -1368,10 +1968,11 @@
             }
             goto rop_CallEx_Generic_adapt_before_use_call_ex1_Run;
             rop_CallEx_Generic_TupleFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            { rop_in_Cold_CallEx_Generic_TupleFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_Generic_TupleFailed);
+              ir_in->tfo = tfo;
+              ir_in->tko = tko;
+            }
+            IR_OUTLINE_GOTO(Cold_CallEx_Generic_TupleFailed);
             rop_CallEx_Generic_Native:
             IR_STUB_ESCAPE();
             ret17 = _PyRop_CallNativeEx(tstate, frame, nfo, nko, ntup, this_instr);
@@ -1398,10 +1999,7 @@
             }
             DISPATCH();
             rop_CallEx_Generic_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            IR_OUTLINE_GOTO(Cold_CallEx_Generic_NativeFailed);
             rop_CallEx_Generic_PollFailed:
             PROCESS_ERROR_AT(RAISE, 45, this_instr);
             rop_CallEx_Generic_PollSwitched:
@@ -1489,6 +2087,177 @@
             rop_Unpack_Generic_Failed:
             PROCESS_ERROR_AT(RAISE, 196, this_instr);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetAttr_Generic_getattr_at_origin1_Failed) {
+    // GetAttr.Generic: the cold region from rop_GetAttr_Generic_getattr_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetAttr_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    _PyInterpreterFrame * c;
+    _PyAttrRecipe out1;
+    int ret2;
+    int adapt_before_use_getattr2_ci;
+    int ret3;
+    int adapt_before_use_getattr2_cLGetattribute;
+    int ret4;
+    int adapt_before_use_getattr2_cLProperty;
+    int ret5;
+    int adapt_before_use_getattr2_cLGetSet;
+    int ret6;
+    int adapt_before_use_getattr2_cLNonDescriptorNoDict;
+    int ret7;
+    int adapt_before_use_getattr2_cLNonDescriptorValues;
+    int ret8;
+    int adapt_before_use_getattr2_cLClass;
+    int ret9;
+    int adapt_before_use_getattr2_cLPointerSlot;
+    int ret10;
+    int adapt_before_use_getattr2_cLValueSlot;
+    int ret11;
+    int adapt_before_use_getattr2_cLHint;
+    int ret12;
+    int adapt_before_use_getattr2_cLModule;
+    int ret13;
+    int adapt_before_use_getattr2_cp;
+    int ret14;
+    int adapt_before_use_getattr2_cm;
+    int ret15;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue ret16;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all17;
+    _PyRopSrcs srcs18;
+    _PyRopAnchors a_all19;
+    PyValue z;
+    PyValue getattr_at_origin1_value;
+    PyValue getattr_at_origin1_kept;
+    PyValue getattr_at_origin1_dropped;
+    _PyAttrRecipe adapt_before_use_getattr2_ri;
+    _PyAttrRecipe adapt_before_use_getattr2_rs;
+    _PyAttrRecipe adapt_before_use_getattr2_rm;
+    _PyAttrRecipe adapt_before_use_getattr2_rModule;
+    _PyAttrRecipe adapt_before_use_getattr2_rHint;
+    _PyAttrRecipe adapt_before_use_getattr2_rValueSlot;
+    _PyAttrRecipe adapt_before_use_getattr2_rPointerSlot;
+    _PyAttrRecipe adapt_before_use_getattr2_rClass;
+    _PyAttrRecipe adapt_before_use_getattr2_rNonDescriptorValues;
+    _PyAttrRecipe adapt_before_use_getattr2_rNonDescriptorNoDict;
+    _PyAttrRecipe adapt_before_use_getattr2_rGetSet;
+    _PyAttrRecipe adapt_before_use_getattr2_rProperty;
+    _PyAttrRecipe adapt_before_use_getattr2_rGetattribute;
+    { const rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_GetAttr_Generic_getattr_at_origin1_Failed;
+    rop_GetAttr_Generic_getattr_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all17 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs18 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_obj}};
+    _PyRop_RetireFailedCall(&a_all17, &srcs18);
+    PROCESS_ERROR_AT(RAISE, 95, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetAttr_Generic_getattr_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue getattr_at_origin1_dropped;
+} rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetAttr_Generic_getattr_at_origin1_Moved) {
+    // GetAttr.Generic: the cold region from rop_GetAttr_Generic_getattr_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetAttr_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    _PyInterpreterFrame * c;
+    _PyAttrRecipe out1;
+    int ret2;
+    int adapt_before_use_getattr2_ci;
+    int ret3;
+    int adapt_before_use_getattr2_cLGetattribute;
+    int ret4;
+    int adapt_before_use_getattr2_cLProperty;
+    int ret5;
+    int adapt_before_use_getattr2_cLGetSet;
+    int ret6;
+    int adapt_before_use_getattr2_cLNonDescriptorNoDict;
+    int ret7;
+    int adapt_before_use_getattr2_cLNonDescriptorValues;
+    int ret8;
+    int adapt_before_use_getattr2_cLClass;
+    int ret9;
+    int adapt_before_use_getattr2_cLPointerSlot;
+    int ret10;
+    int adapt_before_use_getattr2_cLValueSlot;
+    int ret11;
+    int adapt_before_use_getattr2_cLHint;
+    int ret12;
+    int adapt_before_use_getattr2_cLModule;
+    int ret13;
+    int adapt_before_use_getattr2_cp;
+    int ret14;
+    int adapt_before_use_getattr2_cm;
+    int ret15;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue ret16;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all17;
+    _PyRopSrcs srcs18;
+    _PyRopAnchors a_all19;
+    PyValue z;
+    PyValue getattr_at_origin1_value;
+    PyValue getattr_at_origin1_kept;
+    PyValue getattr_at_origin1_dropped;
+    _PyAttrRecipe adapt_before_use_getattr2_ri;
+    _PyAttrRecipe adapt_before_use_getattr2_rs;
+    _PyAttrRecipe adapt_before_use_getattr2_rm;
+    _PyAttrRecipe adapt_before_use_getattr2_rModule;
+    _PyAttrRecipe adapt_before_use_getattr2_rHint;
+    _PyAttrRecipe adapt_before_use_getattr2_rValueSlot;
+    _PyAttrRecipe adapt_before_use_getattr2_rPointerSlot;
+    _PyAttrRecipe adapt_before_use_getattr2_rClass;
+    _PyAttrRecipe adapt_before_use_getattr2_rNonDescriptorValues;
+    _PyAttrRecipe adapt_before_use_getattr2_rNonDescriptorNoDict;
+    _PyAttrRecipe adapt_before_use_getattr2_rGetSet;
+    _PyAttrRecipe adapt_before_use_getattr2_rProperty;
+    _PyAttrRecipe adapt_before_use_getattr2_rGetattribute;
+    { const rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      getattr_at_origin1_dropped = ir_in->getattr_at_origin1_dropped;
+    }
+    goto rop_GetAttr_Generic_getattr_at_origin1_Moved;
+    rop_GetAttr_Generic_getattr_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(getattr_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all19 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all19);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetAttr_Generic_getattr_at_origin1_Moved)
+#endif
 
         TARGET(GetAttr_Generic) {
             // GetAttr.Generic (split)
@@ -1799,21 +2568,182 @@
             rop_GetAttr_Generic_Tail0_Rest3:
             ROP_TAIL_DISPATCH();
             rop_GetAttr_Generic_getattr_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all17 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs18 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_obj}};
-            _PyRop_RetireFailedCall(&a_all17, &srcs18);
-            PROCESS_ERROR_AT(RAISE, 95, this_instr);
+            { rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_GetAttr_Generic_getattr_at_origin1_Failed);
             rop_GetAttr_Generic_getattr_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(getattr_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all19 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all19);
-            IR_REDIRECT();
+            { rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->getattr_at_origin1_dropped = getattr_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetAttr_Generic_getattr_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetMethod_Generic_getmethod_at_origin1_Failed) {
+    // GetMethod.Generic: the cold region from rop_GetMethod_Generic_getmethod_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetMethod_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_C(ir_word));
+    PyValue out1;
+    PyValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_callable;
+    PyValue *const home_callable = &IR_SLOT(IR_A(ir_word));
+    PyValue old_self_dst;
+    PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
+    _PyAttrRecipe out11;
+    int ret12;
+    int adapt_before_use_getmethod2_cp;
+    int ret13;
+    int adapt_before_use_getmethod2_cLModule;
+    int ret14;
+    int adapt_before_use_getmethod2_cLClassMethod;
+    int ret15;
+    int adapt_before_use_getmethod2_cLLazyDict;
+    int ret16;
+    int adapt_before_use_getmethod2_cLNoDict;
+    int ret17;
+    int adapt_before_use_getmethod2_cm;
+    int ret18;
+    _PyRopAnchors a_all19;
+    _PyRopSrcs srcs20;
+    _PyRopAnchors a_all21;
+    PyValue f;
+    PyValue s;
+    PyValue getmethod_at_origin1_callable;
+    PyValue getmethod_at_origin1_receiver;
+    PyValue getmethod_at_origin1_kept;
+    PyValue getmethod_at_origin1_self_kept;
+    PyValue getmethod_at_origin1_dropped;
+    PyValue getmethod_at_origin1_self_dropped;
+    _PyAttrRecipe adapt_before_use_getmethod2_rr;
+    _PyAttrRecipe adapt_before_use_getmethod2_r;
+    _PyAttrRecipe adapt_before_use_getmethod2_rn;
+    _PyAttrRecipe adapt_before_use_getmethod2_rNoDict;
+    _PyAttrRecipe adapt_before_use_getmethod2_rLazyDict;
+    _PyAttrRecipe adapt_before_use_getmethod2_rClassMethod;
+    _PyAttrRecipe adapt_before_use_getmethod2_rModule;
+    { const rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_GetMethod_Generic_getmethod_at_origin1_Failed;
+    rop_GetMethod_Generic_getmethod_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all19 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs20 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
+    _PyRop_RetireFailedCall(&a_all19, &srcs20);
+    PROCESS_ERROR_AT(RAISE, 101, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetMethod_Generic_getmethod_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue getmethod_at_origin1_dropped;
+    PyValue getmethod_at_origin1_self_dropped;
+} rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetMethod_Generic_getmethod_at_origin1_Moved) {
+    // GetMethod.Generic: the cold region from rop_GetMethod_Generic_getmethod_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetMethod_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_C(ir_word));
+    PyValue out1;
+    PyValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_callable;
+    PyValue *const home_callable = &IR_SLOT(IR_A(ir_word));
+    PyValue old_self_dst;
+    PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
+    _PyAttrRecipe out11;
+    int ret12;
+    int adapt_before_use_getmethod2_cp;
+    int ret13;
+    int adapt_before_use_getmethod2_cLModule;
+    int ret14;
+    int adapt_before_use_getmethod2_cLClassMethod;
+    int ret15;
+    int adapt_before_use_getmethod2_cLLazyDict;
+    int ret16;
+    int adapt_before_use_getmethod2_cLNoDict;
+    int ret17;
+    int adapt_before_use_getmethod2_cm;
+    int ret18;
+    _PyRopAnchors a_all19;
+    _PyRopSrcs srcs20;
+    _PyRopAnchors a_all21;
+    PyValue f;
+    PyValue s;
+    PyValue getmethod_at_origin1_callable;
+    PyValue getmethod_at_origin1_receiver;
+    PyValue getmethod_at_origin1_kept;
+    PyValue getmethod_at_origin1_self_kept;
+    PyValue getmethod_at_origin1_dropped;
+    PyValue getmethod_at_origin1_self_dropped;
+    _PyAttrRecipe adapt_before_use_getmethod2_rr;
+    _PyAttrRecipe adapt_before_use_getmethod2_r;
+    _PyAttrRecipe adapt_before_use_getmethod2_rn;
+    _PyAttrRecipe adapt_before_use_getmethod2_rNoDict;
+    _PyAttrRecipe adapt_before_use_getmethod2_rLazyDict;
+    _PyAttrRecipe adapt_before_use_getmethod2_rClassMethod;
+    _PyAttrRecipe adapt_before_use_getmethod2_rModule;
+    { const rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      getmethod_at_origin1_dropped = ir_in->getmethod_at_origin1_dropped;
+      getmethod_at_origin1_self_dropped = ir_in->getmethod_at_origin1_self_dropped;
+    }
+    goto rop_GetMethod_Generic_getmethod_at_origin1_Moved;
+    rop_GetMethod_Generic_getmethod_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(getmethod_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardMaybe(getmethod_at_origin1_self_dropped);
+    IR_STUB_ESCAPE();
+    a_all21 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all21);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetMethod_Generic_getmethod_at_origin1_Moved)
+#endif
 
         TARGET(GetMethod_Generic) {
             // GetMethod.Generic (shared)
@@ -2036,23 +2966,155 @@
             }
             goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
             rop_GetMethod_Generic_getmethod_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all19 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs20 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
-            _PyRop_RetireFailedCall(&a_all19, &srcs20);
-            PROCESS_ERROR_AT(RAISE, 101, this_instr);
+            { rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_GetMethod_Generic_getmethod_at_origin1_Failed);
             rop_GetMethod_Generic_getmethod_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(getmethod_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardMaybe(getmethod_at_origin1_self_dropped);
-            IR_STUB_ESCAPE();
-            a_all21 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all21);
-            IR_REDIRECT();
+            { rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->getmethod_at_origin1_dropped = getmethod_at_origin1_dropped;
+              ir_in->getmethod_at_origin1_self_dropped = getmethod_at_origin1_self_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetMethod_Generic_getmethod_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Generic_getitem_at_origin1_Failed) {
+    // GetItem.Generic: the cold region from rop_GetItem_Generic_getitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetItem_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    _PyInterpreterFrame * c;
+    int ret1;
+    int adapt_before_use_getitem2_c1;
+    int ret2;
+    int adapt_before_use_getitem2_cgi;
+    int ret3;
+    int adapt_before_use_getitem2_c6;
+    int ret4;
+    int adapt_before_use_getitem2_c5;
+    int ret5;
+    int adapt_before_use_getitem2_c4;
+    int ret6;
+    int adapt_before_use_getitem2_c3;
+    int ret7;
+    int adapt_before_use_getitem2_c2;
+    int ret8;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret9;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all10;
+    _PyRopSrcs srcs11;
+    _PyRopAnchors a_all12;
+    PyValue z;
+    PyValue getitem_at_origin1_value;
+    PyValue getitem_at_origin1_kept;
+    PyValue getitem_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_GetItem_Generic_getitem_at_origin1_Failed;
+    rop_GetItem_Generic_getitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs11 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}};
+    _PyRop_RetireFailedCall(&a_all10, &srcs11);
+    PROCESS_ERROR_AT(RAISE, 98, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Generic_getitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue getitem_at_origin1_dropped;
+} rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Generic_getitem_at_origin1_Moved) {
+    // GetItem.Generic: the cold region from rop_GetItem_Generic_getitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetItem_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    _PyInterpreterFrame * c;
+    int ret1;
+    int adapt_before_use_getitem2_c1;
+    int ret2;
+    int adapt_before_use_getitem2_cgi;
+    int ret3;
+    int adapt_before_use_getitem2_c6;
+    int ret4;
+    int adapt_before_use_getitem2_c5;
+    int ret5;
+    int adapt_before_use_getitem2_c4;
+    int ret6;
+    int adapt_before_use_getitem2_c3;
+    int ret7;
+    int adapt_before_use_getitem2_c2;
+    int ret8;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret9;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all10;
+    _PyRopSrcs srcs11;
+    _PyRopAnchors a_all12;
+    PyValue z;
+    PyValue getitem_at_origin1_value;
+    PyValue getitem_at_origin1_kept;
+    PyValue getitem_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      getitem_at_origin1_dropped = ir_in->getitem_at_origin1_dropped;
+    }
+    goto rop_GetItem_Generic_getitem_at_origin1_Moved;
+    rop_GetItem_Generic_getitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(getitem_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all12 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all12);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Generic_getitem_at_origin1_Moved)
+#endif
 
         TARGET(GetItem_Generic) {
             // GetItem.Generic (split)
@@ -2265,21 +3327,136 @@
             rop_GetItem_Generic_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_GetItem_Generic_getitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs11 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}};
-            _PyRop_RetireFailedCall(&a_all10, &srcs11);
-            PROCESS_ERROR_AT(RAISE, 98, this_instr);
+            { rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_Generic_getitem_at_origin1_Failed);
             rop_GetItem_Generic_getitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(getitem_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all12 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all12);
-            IR_REDIRECT();
+            { rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->getitem_at_origin1_dropped = getitem_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_Generic_getitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_Generic_setitem_at_origin1_Failed) {
+    // SetItem.Generic: the cold region from rop_SetItem_Generic_setitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_SetItem_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    int ret2;
+    int adapt_before_use_setitem2_c1;
+    int ret3;
+    int adapt_before_use_setitem2_c2;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyRopAnchors a_all7;
+    { const rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_Generic_setitem_at_origin1_Failed;
+    rop_SetItem_Generic_setitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs6 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 170, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_Generic_setitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_Generic_setitem_at_origin1_Moved) {
+    // SetItem.Generic: the cold region from rop_SetItem_Generic_setitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_SetItem_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    int ret2;
+    int adapt_before_use_setitem2_c1;
+    int ret3;
+    int adapt_before_use_setitem2_c2;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyRopAnchors a_all7;
+    { const rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_Generic_setitem_at_origin1_Moved;
+    rop_SetItem_Generic_setitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all7 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    _PyRop_RetireAbandoned(&a_all7);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_Generic_setitem_at_origin1_Moved)
+#endif
 
         TARGET(SetItem_Generic) {
             // SetItem.Generic (shared)
@@ -2409,19 +3586,74 @@
             }
             goto rop_SetItem_Generic_adapt_before_use_setitem2_Run;
             rop_SetItem_Generic_setitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs6 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 170, this_instr);
+            { rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_Generic_setitem_at_origin1_Failed);
             rop_SetItem_Generic_setitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all7 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            _PyRop_RetireAbandoned(&a_all7);
-            IR_REDIRECT();
+            { rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_Generic_setitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_IterOpen_Generic_Failed;
+static_assert(sizeof(rop_in_Cold_IterOpen_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_IterOpen_Generic_Failed) {
+    // IterOpen.Generic: the cold region from rop_IterOpen_Generic_Failed
+    int opcode = ROP_HANDLER_IterOpen_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    _PyStatusValue ret1;
+    PyValue own_source = PyValue_NULL;
+    PyValue old_pair_receiver;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
+    int adapt_before_use_iter1_c_indexed;
+    int ret2;
+    int adapt_before_use_iter1_c_self;
+    int ret3;
+    int adapt_before_use_iter1_c_gen;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    PyValue z;
+    PyValue pr;
+    PyValue ir;
+    { const rop_in_Cold_IterOpen_Generic_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_IterOpen_Generic_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_IterOpen_Generic_Failed;
+    rop_IterOpen_Generic_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs6 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_source}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 120, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_IterOpen_Generic_Failed)
+#endif
 
         TARGET(IterOpen_Generic) {
             // IterOpen.Generic (shared)
@@ -2556,12 +3788,11 @@
             _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h);
             goto rop_IterOpen_Generic_Run;
             rop_IterOpen_Generic_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs6 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_source}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 120, this_instr);
+            { rop_in_Cold_IterOpen_Generic_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_IterOpen_Generic_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_IterOpen_Generic_Failed);
             rop_IterOpen_Generic_Indexed:
             z = _PyRop_TaggedZero();
             if (!(ir_word & IR_F_LOCAL_B)) {
@@ -2599,6 +3830,229 @@
             rop_IterOpen_Generic_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_ForIter_Generic_Failed;
+static_assert(sizeof(rop_in_Cold_ForIter_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Generic_Failed) {
+    // ForIter.Generic: the cold region from rop_ForIter_Generic_Failed
+    int opcode = ROP_HANDLER_ForIter_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow adapt_before_use_for_iter1_r;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow adapt_before_use_for_iter1_c;
+    bool won;
+    PyValueBorrow g;
+    _PyInterpreterFrame * c;
+    int adapt_before_use_for_iter1_c_list;
+    int ret1;
+    int adapt_before_use_for_iter1_c_range;
+    int ret2;
+    int adapt_before_use_for_iter1_c_gen;
+    int ret3;
+    int adapt_before_use_for_iter1_c_slot;
+    int ret4;
+    int adapt_before_use_for_iter1_c_tuple;
+    int ret5;
+    int adapt_before_use_for_iter1_c_indexed;
+    int ret6;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue out7;
+    _PyStatusValue ret8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue old_item;
+    PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    _PyRopAnchors a_all11;
+    _PyRopSrcs srcs12;
+    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue own_pair_cursor = PyValue_NULL;
+    _PyRopAnchors a_all13;
+    _PyRopAnchors a_all14;
+    PyValue iv;
+    PyValue nc;
+    PyValue ev;
+    { const rop_in_Cold_ForIter_Generic_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Generic_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_ForIter_Generic_Failed;
+    rop_ForIter_Generic_Failed:
+    IR_STUB_ESCAPE();
+    a_all11 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs12 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all11, &srcs12);
+    PROCESS_ERROR_AT(RAISE, 85, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Generic_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ev;
+} rop_in_Cold_ForIter_Generic_EndGone;
+static_assert(sizeof(rop_in_Cold_ForIter_Generic_EndGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Generic_EndGone) {
+    // ForIter.Generic: the cold region from rop_ForIter_Generic_EndGone
+    int opcode = ROP_HANDLER_ForIter_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow adapt_before_use_for_iter1_r;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow adapt_before_use_for_iter1_c;
+    bool won;
+    PyValueBorrow g;
+    _PyInterpreterFrame * c;
+    int adapt_before_use_for_iter1_c_list;
+    int ret1;
+    int adapt_before_use_for_iter1_c_range;
+    int ret2;
+    int adapt_before_use_for_iter1_c_gen;
+    int ret3;
+    int adapt_before_use_for_iter1_c_slot;
+    int ret4;
+    int adapt_before_use_for_iter1_c_tuple;
+    int ret5;
+    int adapt_before_use_for_iter1_c_indexed;
+    int ret6;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue out7;
+    _PyStatusValue ret8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue old_item;
+    PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    _PyRopAnchors a_all11;
+    _PyRopSrcs srcs12;
+    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue own_pair_cursor = PyValue_NULL;
+    _PyRopAnchors a_all13;
+    _PyRopAnchors a_all14;
+    PyValue iv;
+    PyValue nc;
+    PyValue ev;
+    { const rop_in_Cold_ForIter_Generic_EndGone *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Generic_EndGone);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      ev = ir_in->ev;
+    }
+    goto rop_ForIter_Generic_EndGone;
+    rop_ForIter_Generic_EndGone:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(ev);
+    IR_STUB_ESCAPE();
+    a_all13 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all13);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Generic_EndGone)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue iv;
+    PyValue nc;
+} rop_in_Cold_ForIter_Generic_ItemGone;
+static_assert(sizeof(rop_in_Cold_ForIter_Generic_ItemGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Generic_ItemGone) {
+    // ForIter.Generic: the cold region from rop_ForIter_Generic_ItemGone
+    int opcode = ROP_HANDLER_ForIter_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow adapt_before_use_for_iter1_r;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow adapt_before_use_for_iter1_c;
+    bool won;
+    PyValueBorrow g;
+    _PyInterpreterFrame * c;
+    int adapt_before_use_for_iter1_c_list;
+    int ret1;
+    int adapt_before_use_for_iter1_c_range;
+    int ret2;
+    int adapt_before_use_for_iter1_c_gen;
+    int ret3;
+    int adapt_before_use_for_iter1_c_slot;
+    int ret4;
+    int adapt_before_use_for_iter1_c_tuple;
+    int ret5;
+    int adapt_before_use_for_iter1_c_indexed;
+    int ret6;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue out7;
+    _PyStatusValue ret8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue old_item;
+    PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    _PyRopAnchors a_all11;
+    _PyRopSrcs srcs12;
+    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue own_pair_cursor = PyValue_NULL;
+    _PyRopAnchors a_all13;
+    _PyRopAnchors a_all14;
+    PyValue iv;
+    PyValue nc;
+    PyValue ev;
+    { const rop_in_Cold_ForIter_Generic_ItemGone *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Generic_ItemGone);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      iv = ir_in->iv;
+      nc = ir_in->nc;
+    }
+    goto rop_ForIter_Generic_ItemGone;
+    rop_ForIter_Generic_ItemGone:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(iv);
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(nc);
+    IR_STUB_ESCAPE();
+    a_all14 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all14);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Generic_ItemGone)
+#endif
 
         TARGET(ForIter_Generic) {
             // ForIter.Generic (split)
@@ -2812,12 +4266,13 @@
             rop_ForIter_Generic_Tail0_Rest4:
             ROP_TAIL_DISPATCH();
             rop_ForIter_Generic_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all11 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs12 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all11, &srcs12);
-            PROCESS_ERROR_AT(RAISE, 85, this_instr);
+            { rop_in_Cold_ForIter_Generic_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Generic_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_ForIter_Generic_Failed);
             rop_ForIter_Generic_Exhausted:
             if (_PyRop_RedirectPending(frame)) {
                 goto rop_ForIter_Generic_EndGone;
@@ -2856,24 +4311,64 @@
             rop_ForIter_Generic_Tail1_Rest5:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_ForIter_Generic_EndGone:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(ev);
-            IR_STUB_ESCAPE();
-            a_all13 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all13);
-            IR_REDIRECT();
+            { rop_in_Cold_ForIter_Generic_EndGone *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Generic_EndGone);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->ev = ev;
+            }
+            IR_OUTLINE_GOTO(Cold_ForIter_Generic_EndGone);
             rop_ForIter_Generic_ItemGone:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(iv);
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(nc);
-            IR_STUB_ESCAPE();
-            a_all14 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all14);
-            IR_REDIRECT();
+            { rop_in_Cold_ForIter_Generic_ItemGone *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Generic_ItemGone);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->iv = iv;
+              ir_in->nc = nc;
+            }
+            IR_OUTLINE_GOTO(Cold_ForIter_Generic_ItemGone);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue global_at_origin1_dropped;
+} rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GlobalRead_Generic_global_at_origin1_Moved) {
+    // GlobalRead.Generic: the cold region from rop_GlobalRead_Generic_global_at_origin1_Moved
+    int opcode = ROP_HANDLER_GlobalRead_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyGlobalRecipe out2;
+    int ret3;
+    int adapt_before_use_global2_cModule;
+    int ret4;
+    int adapt_before_use_global2_cBuiltin;
+    int ret5;
+    PyValue z;
+    PyValue global_at_origin1_value;
+    PyValue global_at_origin1_kept;
+    PyValue global_at_origin1_dropped;
+    _PyGlobalRecipe adapt_before_use_global2_rModule;
+    _PyGlobalRecipe adapt_before_use_global2_rBuiltin;
+    { const rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved);
+      global_at_origin1_dropped = ir_in->global_at_origin1_dropped;
+    }
+    goto rop_GlobalRead_Generic_global_at_origin1_Moved;
+    rop_GlobalRead_Generic_global_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(global_at_origin1_dropped);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GlobalRead_Generic_global_at_origin1_Moved)
+#endif
 
         TARGET(GlobalRead_Generic) {
             // GlobalRead.Generic (shared)
@@ -2961,11 +4456,130 @@
             rop_GlobalRead_Generic_global_at_origin1_Failed:
             PROCESS_ERROR_AT(RAISE, 103, this_instr);
             rop_GlobalRead_Generic_global_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(global_at_origin1_dropped);
-            IR_REDIRECT();
+            { rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved);
+              ir_in->global_at_origin1_dropped = global_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GlobalRead_Generic_global_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Binary_Generic_binary_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Binary_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Failed) {
+    // Binary.Generic: the cold region from rop_Binary_Generic_binary_at_origin1_Failed
+    int opcode = ROP_HANDLER_Binary_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_binary2_c;
+    int ret2;
+    int adapt_before_use_binary2_cf;
+    int ret3;
+    int adapt_before_use_binary2_ct;
+    int ret4;
+    int adapt_before_use_binary2_ce;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    _PyRopAnchors a_all8;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    { const rop_in_Cold_Binary_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Binary_Generic_binary_at_origin1_Failed;
+    rop_Binary_Generic_binary_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all6, &srcs7);
+    PROCESS_ERROR_AT(RAISE, 23, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_binary_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue binary_at_origin1_dropped;
+} rop_in_Cold_Binary_Generic_binary_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Binary_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Moved) {
+    // Binary.Generic: the cold region from rop_Binary_Generic_binary_at_origin1_Moved
+    int opcode = ROP_HANDLER_Binary_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_binary2_c;
+    int ret2;
+    int adapt_before_use_binary2_cf;
+    int ret3;
+    int adapt_before_use_binary2_ct;
+    int ret4;
+    int adapt_before_use_binary2_ce;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    _PyRopAnchors a_all8;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    { const rop_in_Cold_Binary_Generic_binary_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      binary_at_origin1_dropped = ir_in->binary_at_origin1_dropped;
+    }
+    goto rop_Binary_Generic_binary_at_origin1_Moved;
+    rop_Binary_Generic_binary_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(binary_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all8 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all8);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_binary_at_origin1_Moved)
+#endif
 
         TARGET(Binary_Generic) {
             // Binary.Generic (shared)
@@ -3128,21 +4742,142 @@
             _PyRop_Backoff(&((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
             goto rop_Binary_Generic_Run;
             rop_Binary_Generic_binary_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all6, &srcs7);
-            PROCESS_ERROR_AT(RAISE, 23, this_instr);
+            { rop_in_Cold_Binary_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Generic_binary_at_origin1_Failed);
             rop_Binary_Generic_binary_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(binary_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all8 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all8);
-            IR_REDIRECT();
+            { rop_in_Cold_Binary_Generic_binary_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->binary_at_origin1_dropped = binary_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Generic_binary_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AppendText_Generic_binary_at_origin1_Failed) {
+    // AppendText.Generic: the cold region from rop_AppendText_Generic_binary_at_origin1_Failed
+    int opcode = ROP_HANDLER_AppendText_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_append2_c;
+    int ret2;
+    int adapt_before_use_append2_cf;
+    int ret3;
+    int adapt_before_use_append2_ct;
+    int ret4;
+    int adapt_before_use_append2_ce;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    _PyRopAnchors a_all8;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    { const rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AppendText_Generic_binary_at_origin1_Failed;
+    rop_AppendText_Generic_binary_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all6, &srcs7);
+    PROCESS_ERROR_AT(RAISE, 10, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AppendText_Generic_binary_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue binary_at_origin1_dropped;
+} rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AppendText_Generic_binary_at_origin1_Moved) {
+    // AppendText.Generic: the cold region from rop_AppendText_Generic_binary_at_origin1_Moved
+    int opcode = ROP_HANDLER_AppendText_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_append2_c;
+    int ret2;
+    int adapt_before_use_append2_cf;
+    int ret3;
+    int adapt_before_use_append2_ct;
+    int ret4;
+    int adapt_before_use_append2_ce;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    _PyRopAnchors a_all8;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    { const rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      binary_at_origin1_dropped = ir_in->binary_at_origin1_dropped;
+    }
+    goto rop_AppendText_Generic_binary_at_origin1_Moved;
+    rop_AppendText_Generic_binary_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(binary_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all8 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all8);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AppendText_Generic_binary_at_origin1_Moved)
+#endif
 
         TARGET(AppendText_Generic) {
             // AppendText.Generic (shared)
@@ -3305,21 +5040,261 @@
             _PyRop_Backoff(&((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
             goto rop_AppendText_Generic_Run;
             rop_AppendText_Generic_binary_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all6, &srcs7);
-            PROCESS_ERROR_AT(RAISE, 10, this_instr);
+            { rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AppendText_Generic_binary_at_origin1_Failed);
             rop_AppendText_Generic_binary_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(binary_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all8 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all8);
-            IR_REDIRECT();
+            { rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->binary_at_origin1_dropped = binary_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_AppendText_Generic_binary_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_Send_Generic_Failed;
+static_assert(sizeof(rop_in_Cold_Send_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Generic_Failed) {
+    // Send.Generic: the cold region from rop_Send_Generic_Failed
+    int opcode = ROP_HANDLER_Send_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow adapt_before_use_send1_g;
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    PyValueBorrow adapt_before_use_send1_v;
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow adapt_before_use_send1_c;
+    bool won;
+    PyValueBorrow g;
+    PyValue sent;
+    _PyInterpreterFrame * c;
+    int adapt_before_use_send1_c_gen;
+    int ret1;
+    int adapt_before_use_send1_c_virtual;
+    int ret2;
+    int adapt_before_use_send1_c_async;
+    int ret3;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue out4;
+    _PyStatusValue ret5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
+    _PyRopAnchors a_all8;
+    _PyRopSrcs srcs9;
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all10;
+    _PyRopAnchors a_all11;
+    PyValue y;
+    PyValue nc;
+    PyValue rv;
+    { const rop_in_Cold_Send_Generic_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Generic_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_Send_Generic_Failed;
+    rop_Send_Generic_Failed:
+    IR_STUB_ESCAPE();
+    a_all8 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs9 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all8, &srcs9);
+    PROCESS_ERROR_AT(RAISE, 166, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Send_Generic_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue rv;
+} rop_in_Cold_Send_Generic_DoneGone;
+static_assert(sizeof(rop_in_Cold_Send_Generic_DoneGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Generic_DoneGone) {
+    // Send.Generic: the cold region from rop_Send_Generic_DoneGone
+    int opcode = ROP_HANDLER_Send_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow adapt_before_use_send1_g;
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    PyValueBorrow adapt_before_use_send1_v;
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow adapt_before_use_send1_c;
+    bool won;
+    PyValueBorrow g;
+    PyValue sent;
+    _PyInterpreterFrame * c;
+    int adapt_before_use_send1_c_gen;
+    int ret1;
+    int adapt_before_use_send1_c_virtual;
+    int ret2;
+    int adapt_before_use_send1_c_async;
+    int ret3;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue out4;
+    _PyStatusValue ret5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
+    _PyRopAnchors a_all8;
+    _PyRopSrcs srcs9;
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all10;
+    _PyRopAnchors a_all11;
+    PyValue y;
+    PyValue nc;
+    PyValue rv;
+    { const rop_in_Cold_Send_Generic_DoneGone *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Generic_DoneGone);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+      rv = ir_in->rv;
+    }
+    goto rop_Send_Generic_DoneGone;
+    rop_Send_Generic_DoneGone:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(rv);
+    IR_STUB_ESCAPE();
+    a_all10 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    _PyRop_RetireAbandoned(&a_all10);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Send_Generic_DoneGone)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue y;
+    PyValue nc;
+} rop_in_Cold_Send_Generic_YieldGone;
+static_assert(sizeof(rop_in_Cold_Send_Generic_YieldGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Generic_YieldGone) {
+    // Send.Generic: the cold region from rop_Send_Generic_YieldGone
+    int opcode = ROP_HANDLER_Send_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow adapt_before_use_send1_g;
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    PyValueBorrow adapt_before_use_send1_v;
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow adapt_before_use_send1_c;
+    bool won;
+    PyValueBorrow g;
+    PyValue sent;
+    _PyInterpreterFrame * c;
+    int adapt_before_use_send1_c_gen;
+    int ret1;
+    int adapt_before_use_send1_c_virtual;
+    int ret2;
+    int adapt_before_use_send1_c_async;
+    int ret3;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue out4;
+    _PyStatusValue ret5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
+    _PyRopAnchors a_all8;
+    _PyRopSrcs srcs9;
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all10;
+    _PyRopAnchors a_all11;
+    PyValue y;
+    PyValue nc;
+    PyValue rv;
+    { const rop_in_Cold_Send_Generic_YieldGone *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Generic_YieldGone);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+      y = ir_in->y;
+      nc = ir_in->nc;
+    }
+    goto rop_Send_Generic_YieldGone;
+    rop_Send_Generic_YieldGone:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(y);
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(nc);
+    IR_STUB_ESCAPE();
+    a_all11 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    _PyRop_RetireAbandoned(&a_all11);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Send_Generic_YieldGone)
+#endif
 
         TARGET(Send_Generic) {
             // Send.Generic (split)
@@ -3499,12 +5474,15 @@
             rop_Send_Generic_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_Send_Generic_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all8 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs9 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all8, &srcs9);
-            PROCESS_ERROR_AT(RAISE, 166, this_instr);
+            { rop_in_Cold_Send_Generic_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Generic_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_Send_Generic_Failed);
             rop_Send_Generic_Done:
             if (_PyRop_RedirectPending(frame)) {
                 goto rop_Send_Generic_DoneGone;
@@ -3559,24 +5537,265 @@
             rop_Send_Generic_Tail1_Rest7:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_Send_Generic_DoneGone:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(rv);
-            IR_STUB_ESCAPE();
-            a_all10 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            _PyRop_RetireAbandoned(&a_all10);
-            IR_REDIRECT();
+            { rop_in_Cold_Send_Generic_DoneGone *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Generic_DoneGone);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+              ir_in->rv = rv;
+            }
+            IR_OUTLINE_GOTO(Cold_Send_Generic_DoneGone);
             rop_Send_Generic_YieldGone:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(y);
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(nc);
-            IR_STUB_ESCAPE();
-            a_all11 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            _PyRop_RetireAbandoned(&a_all11);
-            IR_REDIRECT();
+            { rop_in_Cold_Send_Generic_YieldGone *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Generic_YieldGone);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+              ir_in->y = y;
+              ir_in->nc = nc;
+            }
+            IR_OUTLINE_GOTO(Cold_Send_Generic_YieldGone);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue compare_at_origin1_dropped;
+} rop_in_Cold_Compare_Generic_compare_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Compare_Generic_compare_at_origin1_Moved) {
+    // Compare.Generic: the cold region from rop_Compare_Generic_compare_at_origin1_Moved
+    int opcode = ROP_HANDLER_Compare_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_compare3_ci;
+    int ret2;
+    int adapt_before_use_compare3_cf;
+    int ret3;
+    int adapt_before_use_compare3_cs;
+    int ret4;
+    PyValue ret5;
+    _PyRopAnchors a_all6;
+    _PyRopAnchors a_all7;
+    _PyRopSrcs srcs8;
+    PyValue z;
+    PyValue compare_at_origin1_value;
+    PyValue compare_at_origin1_kept;
+    PyValue compare_at_origin1_dropped;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_Compare_Generic_compare_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      compare_at_origin1_dropped = ir_in->compare_at_origin1_dropped;
+    }
+    goto rop_Compare_Generic_compare_at_origin1_Moved;
+    rop_Compare_Generic_compare_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(compare_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all6);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Compare_Generic_compare_at_origin1_Moved)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed;
+static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Compare_Generic_compare_test_at_origin2_Failed) {
+    // Compare.Generic: the cold region from rop_Compare_Generic_compare_test_at_origin2_Failed
+    int opcode = ROP_HANDLER_Compare_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_compare3_ci;
+    int ret2;
+    int adapt_before_use_compare3_cf;
+    int ret3;
+    int adapt_before_use_compare3_cs;
+    int ret4;
+    PyValue ret5;
+    _PyRopAnchors a_all6;
+    _PyRopAnchors a_all7;
+    _PyRopSrcs srcs8;
+    PyValue z;
+    PyValue compare_at_origin1_value;
+    PyValue compare_at_origin1_kept;
+    PyValue compare_at_origin1_dropped;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Compare_Generic_compare_test_at_origin2_Failed;
+    rop_Compare_Generic_compare_test_at_origin2_Failed:
+    IR_STUB_ESCAPE();
+    a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs8 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all7, &srcs8);
+    PROCESS_ERROR_AT(RAISE, 63, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Compare_Generic_compare_test_at_origin2_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Compare_Generic_compare_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Compare_Generic_compare_at_origin1_Failed) {
+    // Compare.Generic: the cold region from rop_Compare_Generic_compare_at_origin1_Failed
+    int opcode = ROP_HANDLER_Compare_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_compare3_ci;
+    int ret2;
+    int adapt_before_use_compare3_cf;
+    int ret3;
+    int adapt_before_use_compare3_cs;
+    int ret4;
+    PyValue ret5;
+    _PyRopAnchors a_all6;
+    _PyRopAnchors a_all7;
+    _PyRopSrcs srcs8;
+    PyValue z;
+    PyValue compare_at_origin1_value;
+    PyValue compare_at_origin1_kept;
+    PyValue compare_at_origin1_dropped;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_Compare_Generic_compare_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Compare_Generic_compare_at_origin1_Failed;
+    rop_Compare_Generic_compare_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs8 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all7, &srcs8);
+    PROCESS_ERROR_AT(RAISE, 63, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Compare_Generic_compare_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved;
+static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Compare_Generic_compare_test_at_origin2_Moved) {
+    // Compare.Generic: the cold region from rop_Compare_Generic_compare_test_at_origin2_Moved
+    int opcode = ROP_HANDLER_Compare_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_compare3_ci;
+    int ret2;
+    int adapt_before_use_compare3_cf;
+    int ret3;
+    int adapt_before_use_compare3_cs;
+    int ret4;
+    PyValue ret5;
+    _PyRopAnchors a_all6;
+    _PyRopAnchors a_all7;
+    _PyRopSrcs srcs8;
+    PyValue z;
+    PyValue compare_at_origin1_value;
+    PyValue compare_at_origin1_kept;
+    PyValue compare_at_origin1_dropped;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Compare_Generic_compare_test_at_origin2_Moved;
+    rop_Compare_Generic_Gone:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all6);
+    IR_REDIRECT();
+    rop_Compare_Generic_compare_test_at_origin2_Moved:
+    goto rop_Compare_Generic_Gone;
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Compare_Generic_compare_test_at_origin2_Moved)
+#endif
 
         TARGET(Compare_Generic) {
             // Compare.Generic (shared)
@@ -3757,35 +5976,152 @@
             z = compare_at_origin1_kept;
             goto rop_Compare_Generic_Finish;
             rop_Compare_Generic_compare_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(compare_at_origin1_dropped);
-            rop_Compare_Generic_Gone:
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all6);
-            IR_REDIRECT();
+            { rop_in_Cold_Compare_Generic_compare_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->compare_at_origin1_dropped = compare_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_Compare_Generic_compare_at_origin1_Moved);
             rop_Compare_Generic_compare_test_at_origin2_Failed:
-            IR_COLD();
+            { rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Compare_Generic_compare_test_at_origin2_Failed);
             rop_Compare_Generic_compare_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs8 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all7, &srcs8);
-            PROCESS_ERROR_AT(RAISE, 63, this_instr);
+            { rop_in_Cold_Compare_Generic_compare_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Compare_Generic_compare_at_origin1_Failed);
             rop_Compare_Generic_compare_test_at_origin2_No:
             if (!_PyRop_RedirectPending(frame)) {
                 compare_test_at_origin2_hit = false;
                 goto rop_Compare_Generic_compare_test_at_origin2_Said;
             }
             rop_Compare_Generic_compare_test_at_origin2_Moved:
-            IR_COLD();
-            goto rop_Compare_Generic_Gone;
+            { rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Compare_Generic_compare_test_at_origin2_Moved);
             rop_Compare_Generic_compare_test_at_origin2_Not:
             z = _PyRop_TruthObject(false, false);
             goto rop_Compare_Generic_Finish;
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Generic_contains_test_at_origin1_Failed) {
+    // Contains.Generic: the cold region from rop_Contains_Generic_contains_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_Contains_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_item = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_container = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_item = PyValue_NULL;
+    PyValue own_container = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    int adapt_before_use_contains2_cs;
+    int ret3;
+    int adapt_before_use_contains2_cd;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyRopAnchors a_all7;
+    PyValue z;
+    bool contains_test_at_origin1_hit;
+    { const rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Contains_Generic_contains_test_at_origin1_Failed;
+    rop_Contains_Generic_contains_test_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs6 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 66, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Contains_Generic_contains_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Generic_contains_test_at_origin1_Moved) {
+    // Contains.Generic: the cold region from rop_Contains_Generic_contains_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_Contains_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_item = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_container = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_item = PyValue_NULL;
+    PyValue own_container = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    int adapt_before_use_contains2_cs;
+    int ret3;
+    int adapt_before_use_contains2_cd;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyRopAnchors a_all7;
+    PyValue z;
+    bool contains_test_at_origin1_hit;
+    { const rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Contains_Generic_contains_test_at_origin1_Moved;
+    rop_Contains_Generic_contains_test_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all7);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Contains_Generic_contains_test_at_origin1_Moved)
+#endif
 
         TARGET(Contains_Generic) {
             // Contains.Generic (shared)
@@ -3922,27 +6258,284 @@
             }
             goto rop_Contains_Generic_adapt_before_use_contains2_Run;
             rop_Contains_Generic_contains_test_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs6 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 66, this_instr);
+            { rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Contains_Generic_contains_test_at_origin1_Failed);
             rop_Contains_Generic_contains_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 contains_test_at_origin1_hit = false;
                 goto rop_Contains_Generic_contains_test_at_origin1_Said;
             }
             rop_Contains_Generic_contains_test_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all7);
-            IR_REDIRECT();
+            { rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Contains_Generic_contains_test_at_origin1_Moved);
             rop_Contains_Generic_contains_test_at_origin1_Not:
             z = _PyRop_TruthObject(false, (uint32_t)IR_D(ir_word));
             goto rop_Contains_Generic_Finish;
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Generic_compare_test_at_origin2_Failed) {
+    // TestBranch.Generic: the cold region from rop_TestBranch_Generic_compare_test_at_origin2_Failed
+    int opcode = ROP_HANDLER_TestBranch_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    int ret2;
+    int adapt_before_use_test3_cs;
+    int ret3;
+    int adapt_before_use_test3_ci;
+    int ret4;
+    int adapt_before_use_test3_cf;
+    int ret5;
+    int adapt_before_use_test3_cs2;
+    int ret6;
+    int adapt_before_use_test3_cq;
+    int ret7;
+    int adapt_before_use_test3_cd;
+    int ret8;
+    uint32_t rel;
+    int ret9;
+    _PyRopAnchors a_all10;
+    _PyRopSrcs srcs11;
+    _PyRopAnchors a_all12;
+    bool same;
+    bool hit;
+    bool contains_test_at_origin1_hit;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Generic_compare_test_at_origin2_Failed;
+    rop_TestBranch_Generic_compare_test_at_origin2_Failed:
+    IR_STUB_ESCAPE();
+    a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs11 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all10, &srcs11);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Generic_compare_test_at_origin2_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Generic_compare_test_at_origin2_Moved) {
+    // TestBranch.Generic: the cold region from rop_TestBranch_Generic_compare_test_at_origin2_Moved
+    int opcode = ROP_HANDLER_TestBranch_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    int ret2;
+    int adapt_before_use_test3_cs;
+    int ret3;
+    int adapt_before_use_test3_ci;
+    int ret4;
+    int adapt_before_use_test3_cf;
+    int ret5;
+    int adapt_before_use_test3_cs2;
+    int ret6;
+    int adapt_before_use_test3_cq;
+    int ret7;
+    int adapt_before_use_test3_cd;
+    int ret8;
+    uint32_t rel;
+    int ret9;
+    _PyRopAnchors a_all10;
+    _PyRopSrcs srcs11;
+    _PyRopAnchors a_all12;
+    bool same;
+    bool hit;
+    bool contains_test_at_origin1_hit;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Generic_compare_test_at_origin2_Moved;
+    rop_TestBranch_Generic_compare_test_at_origin2_Moved:
+    IR_STUB_ESCAPE();
+    a_all12 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all12);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Generic_compare_test_at_origin2_Moved)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Generic_contains_test_at_origin1_Failed) {
+    // TestBranch.Generic: the cold region from rop_TestBranch_Generic_contains_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_TestBranch_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    int ret2;
+    int adapt_before_use_test3_cs;
+    int ret3;
+    int adapt_before_use_test3_ci;
+    int ret4;
+    int adapt_before_use_test3_cf;
+    int ret5;
+    int adapt_before_use_test3_cs2;
+    int ret6;
+    int adapt_before_use_test3_cq;
+    int ret7;
+    int adapt_before_use_test3_cd;
+    int ret8;
+    uint32_t rel;
+    int ret9;
+    _PyRopAnchors a_all10;
+    _PyRopSrcs srcs11;
+    _PyRopAnchors a_all12;
+    bool same;
+    bool hit;
+    bool contains_test_at_origin1_hit;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Generic_contains_test_at_origin1_Failed;
+    rop_TestBranch_Generic_Failed:
+    IR_STUB_ESCAPE();
+    a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs11 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all10, &srcs11);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
+    rop_TestBranch_Generic_contains_test_at_origin1_Failed:
+    goto rop_TestBranch_Generic_Failed;
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Generic_contains_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Generic_contains_test_at_origin1_Moved) {
+    // TestBranch.Generic: the cold region from rop_TestBranch_Generic_contains_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_TestBranch_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    int ret2;
+    int adapt_before_use_test3_cs;
+    int ret3;
+    int adapt_before_use_test3_ci;
+    int ret4;
+    int adapt_before_use_test3_cf;
+    int ret5;
+    int adapt_before_use_test3_cs2;
+    int ret6;
+    int adapt_before_use_test3_cq;
+    int ret7;
+    int adapt_before_use_test3_cd;
+    int ret8;
+    uint32_t rel;
+    int ret9;
+    _PyRopAnchors a_all10;
+    _PyRopSrcs srcs11;
+    _PyRopAnchors a_all12;
+    bool same;
+    bool hit;
+    bool contains_test_at_origin1_hit;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Generic_contains_test_at_origin1_Moved;
+    rop_TestBranch_Generic_Gone:
+    IR_STUB_ESCAPE();
+    a_all12 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all12);
+    IR_REDIRECT();
+    rop_TestBranch_Generic_contains_test_at_origin1_Moved:
+    goto rop_TestBranch_Generic_Gone;
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Generic_contains_test_at_origin1_Moved)
+#endif
 
         TARGET(TestBranch_Generic) {
             // TestBranch.Generic (shared)
@@ -4208,40 +6801,51 @@
             rop_TestBranch_Generic_compare_test_at_origin2_Is:
             goto rop_TestBranch_Generic_Yes;
             rop_TestBranch_Generic_compare_test_at_origin2_Failed:
-            IR_COLD();
-            rop_TestBranch_Generic_Failed:
-            IR_STUB_ESCAPE();
-            a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs11 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all10, &srcs11);
-            PROCESS_ERROR_AT(RAISE, 188, this_instr);
+            { rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Generic_compare_test_at_origin2_Failed);
             rop_TestBranch_Generic_compare_test_at_origin2_No:
             if (!_PyRop_RedirectPending(frame)) {
                 compare_test_at_origin2_hit = false;
                 goto rop_TestBranch_Generic_compare_test_at_origin2_Said;
             }
             rop_TestBranch_Generic_compare_test_at_origin2_Moved:
-            IR_COLD();
-            rop_TestBranch_Generic_Gone:
-            IR_STUB_ESCAPE();
-            a_all12 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all12);
-            IR_REDIRECT();
+            { rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Generic_compare_test_at_origin2_Moved);
             rop_TestBranch_Generic_compare_test_at_origin2_Not:
             rop_TestBranch_Generic_No:
             hit = false;
             goto rop_TestBranch_Generic_Test;
             rop_TestBranch_Generic_contains_test_at_origin1_Failed:
-            IR_COLD();
-            goto rop_TestBranch_Generic_Failed;
+            { rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Generic_contains_test_at_origin1_Failed);
             rop_TestBranch_Generic_contains_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 contains_test_at_origin1_hit = false;
                 goto rop_TestBranch_Generic_contains_test_at_origin1_Said;
             }
             rop_TestBranch_Generic_contains_test_at_origin1_Moved:
-            IR_COLD();
-            goto rop_TestBranch_Generic_Gone;
+            { rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Generic_contains_test_at_origin1_Moved);
             rop_TestBranch_Generic_contains_test_at_origin1_Not:
             goto rop_TestBranch_Generic_No;
             rop_TestBranch_Generic_Fall:
@@ -4297,6 +6901,113 @@
             rop_TestBranch_Generic_Tail3_Rest2:
             ROP_TAIL_DISPATCH();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Truth_Generic_truth_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Truth_Generic_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Truth_Generic_truth_at_origin1_Failed) {
+    // Truth.Generic: the cold region from rop_Truth_Generic_truth_at_origin1_Failed
+    int opcode = ROP_HANDLER_Truth_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_truth2_c_bool;
+    int ret2;
+    int adapt_before_use_truth2_c_int;
+    int ret3;
+    int adapt_before_use_truth2_c_list;
+    int ret4;
+    int adapt_before_use_truth2_c_none;
+    int ret5;
+    int adapt_before_use_truth2_c_str;
+    int ret6;
+    int adapt_before_use_truth2_c_plain;
+    int ret7;
+    int adapt_before_use_truth2_c_slot;
+    int ret8;
+    _PyRopAnchors a_all9;
+    _PyRopSrcs srcs10;
+    _PyRopAnchors a_all11;
+    PyValue z;
+    bool truth_at_origin1_hit;
+    { const rop_in_Cold_Truth_Generic_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Truth_Generic_truth_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_Truth_Generic_truth_at_origin1_Failed;
+    rop_Truth_Generic_truth_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all9 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs10 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all9, &srcs10);
+    PROCESS_ERROR_AT(RAISE, 192, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Truth_Generic_truth_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Truth_Generic_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Truth_Generic_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Truth_Generic_truth_at_origin1_Moved) {
+    // Truth.Generic: the cold region from rop_Truth_Generic_truth_at_origin1_Moved
+    int opcode = ROP_HANDLER_Truth_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_truth2_c_bool;
+    int ret2;
+    int adapt_before_use_truth2_c_int;
+    int ret3;
+    int adapt_before_use_truth2_c_list;
+    int ret4;
+    int adapt_before_use_truth2_c_none;
+    int ret5;
+    int adapt_before_use_truth2_c_str;
+    int ret6;
+    int adapt_before_use_truth2_c_plain;
+    int ret7;
+    int adapt_before_use_truth2_c_slot;
+    int ret8;
+    _PyRopAnchors a_all9;
+    _PyRopSrcs srcs10;
+    _PyRopAnchors a_all11;
+    PyValue z;
+    bool truth_at_origin1_hit;
+    { const rop_in_Cold_Truth_Generic_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Truth_Generic_truth_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_Truth_Generic_truth_at_origin1_Moved;
+    rop_Truth_Generic_truth_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all11);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Truth_Generic_truth_at_origin1_Moved)
+#endif
 
         TARGET(Truth_Generic) {
             // Truth.Generic (shared)
@@ -4498,27 +7209,129 @@
             _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h);
             goto rop_Truth_Generic_Run;
             rop_Truth_Generic_truth_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all9 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs10 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
-            _PyRop_RetireFailedCall(&a_all9, &srcs10);
-            PROCESS_ERROR_AT(RAISE, 192, this_instr);
+            { rop_in_Cold_Truth_Generic_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Truth_Generic_truth_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_Truth_Generic_truth_at_origin1_Failed);
             rop_Truth_Generic_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 truth_at_origin1_hit = false;
                 goto rop_Truth_Generic_truth_at_origin1_Said;
             }
             rop_Truth_Generic_truth_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all11);
-            IR_REDIRECT();
+            { rop_in_Cold_Truth_Generic_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Truth_Generic_truth_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_Truth_Generic_truth_at_origin1_Moved);
             rop_Truth_Generic_truth_at_origin1_Not:
             z = _PyRop_TruthObject(false, (uint32_t)IR_C(ir_word));
             goto rop_Truth_Generic_Finish;
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Generic_truth_at_origin1_Failed) {
+    // BranchTruth.Generic: the cold region from rop_BranchTruth_Generic_truth_at_origin1_Failed
+    int opcode = ROP_HANDLER_BranchTruth_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    int ret1;
+    int adapt_before_use_branch_truth2_c_bool;
+    int ret2;
+    int adapt_before_use_branch_truth2_c_int;
+    int ret3;
+    int adapt_before_use_branch_truth2_c_list;
+    int ret4;
+    int adapt_before_use_branch_truth2_c_none;
+    int ret5;
+    int adapt_before_use_branch_truth2_c_str;
+    int ret6;
+    int adapt_before_use_branch_truth2_c_plain;
+    int ret7;
+    int adapt_before_use_branch_truth2_c_slot;
+    int ret8;
+    _PyRopAnchors a_all9;
+    _PyRopSrcs srcs10;
+    _PyRopAnchors a_all11;
+    PyValue own_value = PyValue_NULL;
+    bool hit;
+    bool truth_at_origin1_hit;
+    { const rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_BranchTruth_Generic_truth_at_origin1_Failed;
+    rop_BranchTruth_Generic_truth_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all9 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs10 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all9, &srcs10);
+    PROCESS_ERROR_AT(RAISE, 28, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Generic_truth_at_origin1_Moved) {
+    // BranchTruth.Generic: the cold region from rop_BranchTruth_Generic_truth_at_origin1_Moved
+    int opcode = ROP_HANDLER_BranchTruth_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    int ret1;
+    int adapt_before_use_branch_truth2_c_bool;
+    int ret2;
+    int adapt_before_use_branch_truth2_c_int;
+    int ret3;
+    int adapt_before_use_branch_truth2_c_list;
+    int ret4;
+    int adapt_before_use_branch_truth2_c_none;
+    int ret5;
+    int adapt_before_use_branch_truth2_c_str;
+    int ret6;
+    int adapt_before_use_branch_truth2_c_plain;
+    int ret7;
+    int adapt_before_use_branch_truth2_c_slot;
+    int ret8;
+    _PyRopAnchors a_all9;
+    _PyRopSrcs srcs10;
+    _PyRopAnchors a_all11;
+    PyValue own_value = PyValue_NULL;
+    bool hit;
+    bool truth_at_origin1_hit;
+    { const rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_BranchTruth_Generic_truth_at_origin1_Moved;
+    rop_BranchTruth_Generic_truth_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all11);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Moved)
+#endif
 
         TARGET(BranchTruth_Generic) {
             // BranchTruth.Generic (shared)
@@ -4712,23 +7525,22 @@
             _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h);
             goto rop_BranchTruth_Generic_Run;
             rop_BranchTruth_Generic_truth_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all9 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs10 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
-            _PyRop_RetireFailedCall(&a_all9, &srcs10);
-            PROCESS_ERROR_AT(RAISE, 28, this_instr);
+            { rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_BranchTruth_Generic_truth_at_origin1_Failed);
             rop_BranchTruth_Generic_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 truth_at_origin1_hit = false;
                 goto rop_BranchTruth_Generic_truth_at_origin1_Said;
             }
             rop_BranchTruth_Generic_truth_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all11);
-            IR_REDIRECT();
+            { rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_BranchTruth_Generic_truth_at_origin1_Moved);
             rop_BranchTruth_Generic_truth_at_origin1_Not:
             hit = false;
             goto rop_BranchTruth_Generic_Test;
@@ -5077,6 +7889,113 @@
             PROCESS_ERROR_AT(RAISE, 1, this_instr);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Add_Extended_extension_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Add_Extended_extension_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Extended_extension_at_origin1_Failed) {
+    // Add.Extended: the cold region from rop_Add_Extended_extension_at_origin1_Failed
+    int opcode = ROP_HANDLER_Add_Extended;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue extension_at_origin1_value;
+    PyValue extension_at_origin1_kept;
+    PyValue extension_at_origin1_dropped;
+    { const rop_in_Cold_Add_Extended_extension_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Extended_extension_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Add_Extended_extension_at_origin1_Failed;
+    rop_Add_Extended_extension_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 3, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Extended_extension_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue extension_at_origin1_dropped;
+} rop_in_Cold_Add_Extended_extension_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Add_Extended_extension_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Extended_extension_at_origin1_Moved) {
+    // Add.Extended: the cold region from rop_Add_Extended_extension_at_origin1_Moved
+    int opcode = ROP_HANDLER_Add_Extended;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue extension_at_origin1_value;
+    PyValue extension_at_origin1_kept;
+    PyValue extension_at_origin1_dropped;
+    { const rop_in_Cold_Add_Extended_extension_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Extended_extension_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      extension_at_origin1_dropped = ir_in->extension_at_origin1_dropped;
+    }
+    goto rop_Add_Extended_extension_at_origin1_Moved;
+    rop_Add_Extended_extension_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(extension_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Add_Extended_extension_at_origin1_Moved)
+#endif
+
         TARGET(Add_Extended) {
             // Add.Extended (shared)
             int opcode = ROP_HANDLER_Add_Extended;
@@ -5168,21 +8087,124 @@
             rop_Add_Extended_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_Add_Extended_extension_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 3, this_instr);
+            { rop_in_Cold_Add_Extended_extension_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Extended_extension_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Add_Extended_extension_at_origin1_Failed);
             rop_Add_Extended_extension_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(extension_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_Add_Extended_extension_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Add_Extended_extension_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->extension_at_origin1_dropped = extension_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_Add_Extended_extension_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Instance_setattr_at_origin1_Failed) {
+    // AttrWrite.Instance: the cold region from rop_AttrWrite_Instance_setattr_at_origin1_Failed
+    int opcode = ROP_HANDLER_AttrWrite_Instance;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Instance_setattr_at_origin1_Failed;
+    rop_AttrWrite_Instance_setattr_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs5 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all4, &srcs5);
+    PROCESS_ERROR_AT(RAISE, 18, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Instance_setattr_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Instance_setattr_at_origin1_Moved) {
+    // AttrWrite.Instance: the cold region from rop_AttrWrite_Instance_setattr_at_origin1_Moved
+    int opcode = ROP_HANDLER_AttrWrite_Instance;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Instance_setattr_at_origin1_Moved;
+    rop_AttrWrite_Instance_setattr_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all6);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Instance_setattr_at_origin1_Moved)
+#endif
 
         TARGET(AttrWrite_Instance) {
             // AttrWrite.Instance (inline)
@@ -5303,18 +8325,21 @@
             rop_AttrWrite_Instance_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
             rop_AttrWrite_Instance_setattr_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs5 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all4, &srcs5);
-            PROCESS_ERROR_AT(RAISE, 18, this_instr);
+            { rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Instance_setattr_at_origin1_Failed);
             rop_AttrWrite_Instance_setattr_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all6);
-            IR_REDIRECT();
+            { rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Instance_setattr_at_origin1_Moved);
         }
 
         TARGET(AttrWrite_Shape_TT) {
@@ -5570,6 +8595,107 @@
             JUMP_TO_PREDICTED(AttrWrite_Generic);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Hint_setattr_at_origin1_Failed) {
+    // AttrWrite.Hint: the cold region from rop_AttrWrite_Hint_setattr_at_origin1_Failed
+    int opcode = ROP_HANDLER_AttrWrite_Hint;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Hint_setattr_at_origin1_Failed;
+    rop_AttrWrite_Hint_setattr_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs5 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all4, &srcs5);
+    PROCESS_ERROR_AT(RAISE, 18, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Hint_setattr_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Hint_setattr_at_origin1_Moved) {
+    // AttrWrite.Hint: the cold region from rop_AttrWrite_Hint_setattr_at_origin1_Moved
+    int opcode = ROP_HANDLER_AttrWrite_Hint;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Hint_setattr_at_origin1_Moved;
+    rop_AttrWrite_Hint_setattr_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all6);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Hint_setattr_at_origin1_Moved)
+#endif
+
         TARGET(AttrWrite_Hint) {
             // AttrWrite.Hint (inline)
             int opcode = ROP_HANDLER_AttrWrite_Hint;
@@ -5693,19 +8819,121 @@
             rop_AttrWrite_Hint_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
             rop_AttrWrite_Hint_setattr_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs5 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all4, &srcs5);
-            PROCESS_ERROR_AT(RAISE, 18, this_instr);
+            { rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Hint_setattr_at_origin1_Failed);
             rop_AttrWrite_Hint_setattr_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all6);
-            IR_REDIRECT();
+            { rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Hint_setattr_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Hint_setattr_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed) {
+    // AttrWrite.Slot_LT: the cold region from rop_AttrWrite_Slot_LT_setattr_at_origin1_Failed
+    int opcode = ROP_HANDLER_AttrWrite_Slot_LT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Slot_LT_setattr_at_origin1_Failed;
+    rop_AttrWrite_Slot_LT_setattr_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs5 = (_PyRopSrcs){frame, 2, {1, 0}, {home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all4, &srcs5);
+    PROCESS_ERROR_AT(RAISE, 18, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved) {
+    // AttrWrite.Slot_LT: the cold region from rop_AttrWrite_Slot_LT_setattr_at_origin1_Moved
+    int opcode = ROP_HANDLER_AttrWrite_Slot_LT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Slot_LT_setattr_at_origin1_Moved;
+    rop_AttrWrite_Slot_LT_setattr_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all6);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved)
+#endif
 
         TARGET(AttrWrite_Slot_LT) {
             // AttrWrite.Slot_LT (inline)
@@ -5799,19 +9027,123 @@
             rop_AttrWrite_Slot_LT_Tail1_Rest3:
             ROP_TAIL_DISPATCH();
             rop_AttrWrite_Slot_LT_setattr_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs5 = (_PyRopSrcs){frame, 2, {1, 0}, {home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all4, &srcs5);
-            PROCESS_ERROR_AT(RAISE, 18, this_instr);
+            { rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed);
             rop_AttrWrite_Slot_LT_setattr_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all6);
-            IR_REDIRECT();
+            { rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed) {
+    // AttrWrite.Slot_TT: the cold region from rop_AttrWrite_Slot_TT_setattr_at_origin1_Failed
+    int opcode = ROP_HANDLER_AttrWrite_Slot_TT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Slot_TT_setattr_at_origin1_Failed;
+    rop_AttrWrite_Slot_TT_setattr_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs5 = (_PyRopSrcs){frame, 2, {0, 0}, {home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all4, &srcs5);
+    PROCESS_ERROR_AT(RAISE, 18, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved) {
+    // AttrWrite.Slot_TT: the cold region from rop_AttrWrite_Slot_TT_setattr_at_origin1_Moved
+    int opcode = ROP_HANDLER_AttrWrite_Slot_TT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Slot_TT_setattr_at_origin1_Moved;
+    rop_AttrWrite_Slot_TT_setattr_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all6);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved)
+#endif
 
         TARGET(AttrWrite_Slot_TT) {
             // AttrWrite.Slot_TT (inline)
@@ -5922,19 +9254,123 @@
             rop_AttrWrite_Slot_TT_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
             rop_AttrWrite_Slot_TT_setattr_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs5 = (_PyRopSrcs){frame, 2, {0, 0}, {home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all4, &srcs5);
-            PROCESS_ERROR_AT(RAISE, 18, this_instr);
+            { rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed);
             rop_AttrWrite_Slot_TT_setattr_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all6);
-            IR_REDIRECT();
+            { rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Slot_TT_setattr_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_setattr_at_origin1_Failed) {
+    // AttrWrite.Slot: the cold region from rop_AttrWrite_Slot_setattr_at_origin1_Failed
+    int opcode = ROP_HANDLER_AttrWrite_Slot;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Slot_setattr_at_origin1_Failed;
+    rop_AttrWrite_Slot_setattr_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs5 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all4, &srcs5);
+    PROCESS_ERROR_AT(RAISE, 18, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Slot_setattr_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_setattr_at_origin1_Moved) {
+    // AttrWrite.Slot: the cold region from rop_AttrWrite_Slot_setattr_at_origin1_Moved
+    int opcode = ROP_HANDLER_AttrWrite_Slot;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow w;
+    PyValue out2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret3;
+    _PyRopAnchors a_all4;
+    _PyRopSrcs srcs5;
+    _PyRopAnchors a_all6;
+    _PyAttrRecipe r;
+    PyValue old;
+    { const rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_AttrWrite_Slot_setattr_at_origin1_Moved;
+    rop_AttrWrite_Slot_setattr_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all6);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Slot_setattr_at_origin1_Moved)
+#endif
 
         TARGET(AttrWrite_Slot) {
             // AttrWrite.Slot (inline)
@@ -6052,18 +9488,21 @@
             rop_AttrWrite_Slot_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
             rop_AttrWrite_Slot_setattr_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs5 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all4, &srcs5);
-            PROCESS_ERROR_AT(RAISE, 18, this_instr);
+            { rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Slot_setattr_at_origin1_Failed);
             rop_AttrWrite_Slot_setattr_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all6);
-            IR_REDIRECT();
+            { rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_AttrWrite_Slot_setattr_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_AttrWrite_Slot_setattr_at_origin1_Moved);
         }
 
         TARGET(SuperAttr_Builtin) {
@@ -6430,6 +9869,127 @@
             PROCESS_ERROR_AT(RAISE, 186, this_instr);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SpecialLookup_Generic_special_at_origin1_Failed) {
+    // SpecialLookup.Generic: the cold region from rop_SpecialLookup_Generic_special_at_origin1_Failed
+    int opcode = ROP_HANDLER_SpecialLookup_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_C(ir_word));
+    PyValue out1;
+    PyValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_fn;
+    PyValue *const home_fn = &IR_SLOT(IR_A(ir_word));
+    PyValue old_self_dst;
+    PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
+    _PyRopAnchors a_all11;
+    _PyRopSrcs srcs12;
+    _PyRopAnchors a_all13;
+    PyValue f;
+    PyValue s;
+    PyValue special_at_origin1_callable;
+    PyValue special_at_origin1_receiver;
+    PyValue special_at_origin1_kept;
+    PyValue special_at_origin1_self_kept;
+    PyValue special_at_origin1_dropped;
+    PyValue special_at_origin1_self_dropped;
+    { const rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_SpecialLookup_Generic_special_at_origin1_Failed;
+    rop_SpecialLookup_Generic_special_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs12 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
+    _PyRop_RetireFailedCall(&a_all11, &srcs12);
+    PROCESS_ERROR_AT(RAISE, 178, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue special_at_origin1_dropped;
+    PyValue special_at_origin1_self_dropped;
+} rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SpecialLookup_Generic_special_at_origin1_Moved) {
+    // SpecialLookup.Generic: the cold region from rop_SpecialLookup_Generic_special_at_origin1_Moved
+    int opcode = ROP_HANDLER_SpecialLookup_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_C(ir_word));
+    PyValue out1;
+    PyValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_fn;
+    PyValue *const home_fn = &IR_SLOT(IR_A(ir_word));
+    PyValue old_self_dst;
+    PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
+    _PyRopAnchors a_all11;
+    _PyRopSrcs srcs12;
+    _PyRopAnchors a_all13;
+    PyValue f;
+    PyValue s;
+    PyValue special_at_origin1_callable;
+    PyValue special_at_origin1_receiver;
+    PyValue special_at_origin1_kept;
+    PyValue special_at_origin1_self_kept;
+    PyValue special_at_origin1_dropped;
+    PyValue special_at_origin1_self_dropped;
+    { const rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      special_at_origin1_dropped = ir_in->special_at_origin1_dropped;
+      special_at_origin1_self_dropped = ir_in->special_at_origin1_self_dropped;
+    }
+    goto rop_SpecialLookup_Generic_special_at_origin1_Moved;
+    rop_SpecialLookup_Generic_special_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(special_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardMaybe(special_at_origin1_self_dropped);
+    IR_STUB_ESCAPE();
+    a_all13 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all13);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
+#endif
+
         TARGET(SpecialLookup_Generic) {
             // SpecialLookup.Generic (shared)
             int opcode = ROP_HANDLER_SpecialLookup_Generic;
@@ -6529,22 +10089,19 @@
             rop_SpecialLookup_Generic_Tail0_Rest4:
             ROP_TAIL_DISPATCH();
             rop_SpecialLookup_Generic_special_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs12 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
-            _PyRop_RetireFailedCall(&a_all11, &srcs12);
-            PROCESS_ERROR_AT(RAISE, 178, this_instr);
+            { rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_SpecialLookup_Generic_special_at_origin1_Failed);
             rop_SpecialLookup_Generic_special_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(special_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardMaybe(special_at_origin1_self_dropped);
-            IR_STUB_ESCAPE();
-            a_all13 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all13);
-            IR_REDIRECT();
+            { rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->special_at_origin1_dropped = special_at_origin1_dropped;
+              ir_in->special_at_origin1_self_dropped = special_at_origin1_self_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_SpecialLookup_Generic_special_at_origin1_Moved);
         }
 
         TARGET(Call_Exact) {
@@ -6688,6 +10245,24 @@
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_InitResult_Check_Wrong) {
+    // InitResult.Check: the cold region from rop_InitResult_Check_Wrong
+    int opcode = ROP_HANDLER_InitResult_Check;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValue own_value = PyValue_NULL;
+    goto rop_InitResult_Check_Wrong;
+    rop_InitResult_Check_Wrong:
+    _PyRop_InitResultError(PyValue_Borrow(*home_value));
+    PROCESS_ERROR_AT(RAISE, 112, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_InitResult_Check_Wrong)
+#endif
+
         TARGET(InitResult_Check) {
             // InitResult.Check (split)
             int opcode = ROP_HANDLER_InitResult_Check;
@@ -6713,10 +10288,79 @@
             ROP_TAIL_PARK_FIRST(own_value);
             ROP_TAIL_DISPATCH();
             rop_InitResult_Check_Wrong:
-            IR_COLD();
-            _PyRop_InitResultError(PyValue_Borrow(*home_value));
-            PROCESS_ERROR_AT(RAISE, 112, this_instr);
+            IR_OUTLINE_GOTO(Cold_InitResult_Check_Wrong);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue efo;
+} rop_in_Cold_Call_Observed_EventFailed;
+static_assert(sizeof(rop_in_Cold_Call_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Observed_EventFailed) {
+    // Call.Observed: the cold region from rop_Call_Observed_EventFailed
+    int opcode = ROP_HANDLER_Call_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    int ret1;
+    void * ret2;
+    PyValue ret3;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret4;
+    PyValue efo;
+    PyValue rfo;
+    PyValue pfo;
+    _PyInterpreterFrame * c;
+    PyValue nfo;
+    PyValue z;
+    { const rop_in_Cold_Call_Observed_EventFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Call_Observed_EventFailed);
+      efo = ir_in->efo;
+    }
+    goto rop_Call_Observed_EventFailed;
+    rop_Call_Observed_EventFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedHeld(frame, home_fn, efo, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_Observed_EventFailed)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Observed_NativeFailed) {
+    // Call.Observed: the cold region from rop_Call_Observed_NativeFailed
+    int opcode = ROP_HANDLER_Call_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    int ret1;
+    void * ret2;
+    PyValue ret3;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret4;
+    PyValue efo;
+    PyValue rfo;
+    PyValue pfo;
+    _PyInterpreterFrame * c;
+    PyValue nfo;
+    PyValue z;
+    goto rop_Call_Observed_NativeFailed;
+    rop_Call_Observed_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_Observed_NativeFailed)
+#endif
 
         TARGET(Call_Observed) {
             // Call.Observed (split)
@@ -6765,10 +10409,10 @@
             c = ret2;
             ROP_ENTER(c, IR_A(ir_word));
             rop_Call_Observed_EventFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedHeld(frame, home_fn, efo, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            { rop_in_Cold_Call_Observed_EventFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Call_Observed_EventFailed);
+              ir_in->efo = efo;
+            }
+            IR_OUTLINE_GOTO(Cold_Call_Observed_EventFailed);
             rop_Call_Observed_Native:
             IR_STUB_ESCAPE();
             ret3 = _PyRop_CallNativeObservedHeld(tstate, frame, this_instr, home_fn, nfo, this_instr);
@@ -6801,10 +10445,7 @@
             rop_Call_Observed_Next:
             DISPATCH();
             rop_Call_Observed_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_Observed_NativeFailed);
             rop_Call_Observed_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_Observed_PollSwitched:
@@ -7066,6 +10707,31 @@
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_PlanGenerator_NativeFailed) {
+    // Call.PlanGenerator: the cold region from rop_Call_PlanGenerator_NativeFailed
+    int opcode = ROP_HANDLER_Call_PlanGenerator;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue own_fn = PyValue_NULL;
+    PyValue z;
+    PyValue r;
+    goto rop_Call_PlanGenerator_NativeFailed;
+    rop_Call_PlanGenerator_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_PlanGenerator_NativeFailed)
+#endif
+
         TARGET(Call_PlanGenerator) {
             // Call.PlanGenerator (split)
             int opcode = ROP_HANDLER_Call_PlanGenerator;
@@ -7139,13 +10805,35 @@
             rop_Call_PlanGenerator_Tail1_Rest2:
             ROP_TAIL_DISPATCH();
             rop_Call_PlanGenerator_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_PlanGenerator_NativeFailed);
             rop_Call_PlanGenerator_Failed:
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BoundGeneral_NativeFailed) {
+    // Call.BoundGeneral: the cold region from rop_Call_BoundGeneral_NativeFailed
+    int opcode = ROP_HANDLER_Call_BoundGeneral;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    void * ret1;
+    PyValue ret2;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyInterpreterFrame * c;
+    PyValue z;
+    goto rop_Call_BoundGeneral_NativeFailed;
+    rop_Call_BoundGeneral_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_BoundGeneral_NativeFailed)
+#endif
 
         TARGET(Call_BoundGeneral) {
             // Call.BoundGeneral (split)
@@ -7213,10 +10901,7 @@
             rop_Call_BoundGeneral_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_Call_BoundGeneral_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_BoundGeneral_NativeFailed);
             rop_Call_BoundGeneral_Failed:
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
         }
@@ -7306,6 +10991,30 @@
             ROP_TAIL_DISPATCH();
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Str1_Failed) {
+    // Call.Str1: the cold region from rop_Call_Str1_Failed
+    int opcode = ROP_HANDLER_Call_Str1;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_Str1_Failed;
+    rop_Call_Str1_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_Str1_Failed)
+#endif
+
         TARGET(Call_Str1) {
             // Call.Str1 (split)
             int opcode = ROP_HANDLER_Call_Str1;
@@ -7359,15 +11068,36 @@
             rop_Call_Str1_Next:
             DISPATCH();
             rop_Call_Str1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_Str1_Failed);
             rop_Call_Str1_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_Str1_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Tuple1_Failed) {
+    // Call.Tuple1: the cold region from rop_Call_Tuple1_Failed
+    int opcode = ROP_HANDLER_Call_Tuple1;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_Tuple1_Failed;
+    rop_Call_Tuple1_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_Tuple1_Failed)
+#endif
 
         TARGET(Call_Tuple1) {
             // Call.Tuple1 (split)
@@ -7422,15 +11152,36 @@
             rop_Call_Tuple1_Next:
             DISPATCH();
             rop_Call_Tuple1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_Tuple1_Failed);
             rop_Call_Tuple1_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_Tuple1_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BuiltinClass_Failed) {
+    // Call.BuiltinClass: the cold region from rop_Call_BuiltinClass_Failed
+    int opcode = ROP_HANDLER_Call_BuiltinClass;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_BuiltinClass_Failed;
+    rop_Call_BuiltinClass_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_BuiltinClass_Failed)
+#endif
 
         TARGET(Call_BuiltinClass) {
             // Call.BuiltinClass (split)
@@ -7485,15 +11236,36 @@
             rop_Call_BuiltinClass_Next:
             DISPATCH();
             rop_Call_BuiltinClass_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_BuiltinClass_Failed);
             rop_Call_BuiltinClass_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_BuiltinClass_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BuiltinO_Failed) {
+    // Call.BuiltinO: the cold region from rop_Call_BuiltinO_Failed
+    int opcode = ROP_HANDLER_Call_BuiltinO;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_BuiltinO_Failed;
+    rop_Call_BuiltinO_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_BuiltinO_Failed)
+#endif
 
         TARGET(Call_BuiltinO) {
             // Call.BuiltinO (split)
@@ -7548,15 +11320,36 @@
             rop_Call_BuiltinO_Next:
             DISPATCH();
             rop_Call_BuiltinO_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_BuiltinO_Failed);
             rop_Call_BuiltinO_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_BuiltinO_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BuiltinFast_LT_Failed) {
+    // Call.BuiltinFast_LT: the cold region from rop_Call_BuiltinFast_LT_Failed
+    int opcode = ROP_HANDLER_Call_BuiltinFast_LT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_BuiltinFast_LT_Failed;
+    rop_Call_BuiltinFast_LT_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_BuiltinFast_LT_Failed)
+#endif
 
         TARGET(Call_BuiltinFast_LT) {
             // Call.BuiltinFast_LT (split)
@@ -7610,15 +11403,35 @@
             rop_Call_BuiltinFast_LT_Next:
             DISPATCH();
             rop_Call_BuiltinFast_LT_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_BuiltinFast_LT_Failed);
             rop_Call_BuiltinFast_LT_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_BuiltinFast_LT_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BuiltinFast_TT_Failed) {
+    // Call.BuiltinFast_TT: the cold region from rop_Call_BuiltinFast_TT_Failed
+    int opcode = ROP_HANDLER_Call_BuiltinFast_TT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_BuiltinFast_TT_Failed;
+    rop_Call_BuiltinFast_TT_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_BuiltinFast_TT_Failed)
+#endif
 
         TARGET(Call_BuiltinFast_TT) {
             // Call.BuiltinFast_TT (split)
@@ -7670,15 +11483,36 @@
             rop_Call_BuiltinFast_TT_Next:
             DISPATCH();
             rop_Call_BuiltinFast_TT_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_BuiltinFast_TT_Failed);
             rop_Call_BuiltinFast_TT_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_BuiltinFast_TT_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BuiltinFast_Failed) {
+    // Call.BuiltinFast: the cold region from rop_Call_BuiltinFast_Failed
+    int opcode = ROP_HANDLER_Call_BuiltinFast;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_BuiltinFast_Failed;
+    rop_Call_BuiltinFast_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_BuiltinFast_Failed)
+#endif
 
         TARGET(Call_BuiltinFast) {
             // Call.BuiltinFast (split)
@@ -7733,15 +11567,36 @@
             rop_Call_BuiltinFast_Next:
             DISPATCH();
             rop_Call_BuiltinFast_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_BuiltinFast_Failed);
             rop_Call_BuiltinFast_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_BuiltinFast_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BuiltinFastKeywords_Failed) {
+    // Call.BuiltinFastKeywords: the cold region from rop_Call_BuiltinFastKeywords_Failed
+    int opcode = ROP_HANDLER_Call_BuiltinFastKeywords;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_BuiltinFastKeywords_Failed;
+    rop_Call_BuiltinFastKeywords_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_BuiltinFastKeywords_Failed)
+#endif
 
         TARGET(Call_BuiltinFastKeywords) {
             // Call.BuiltinFastKeywords (split)
@@ -7796,15 +11651,35 @@
             rop_Call_BuiltinFastKeywords_Next:
             DISPATCH();
             rop_Call_BuiltinFastKeywords_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_BuiltinFastKeywords_Failed);
             rop_Call_BuiltinFastKeywords_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_BuiltinFastKeywords_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Len_Failed) {
+    // Call.Len: the cold region from rop_Call_Len_Failed
+    int opcode = ROP_HANDLER_Call_Len;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    goto rop_Call_Len_Failed;
+    rop_Call_Len_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_Len_Failed)
+#endif
 
         TARGET(Call_Len) {
             // Call.Len (split)
@@ -7854,11 +11729,30 @@
             rop_Call_Len_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_Call_Len_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_Len_Failed);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Isinstance_TT_Failed) {
+    // Call.Isinstance_TT: the cold region from rop_Call_Isinstance_TT_Failed
+    int opcode = ROP_HANDLER_Call_Isinstance_TT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    goto rop_Call_Isinstance_TT_Failed;
+    rop_Call_Isinstance_TT_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_Isinstance_TT_Failed)
+#endif
 
         TARGET(Call_Isinstance_TT) {
             // Call.Isinstance_TT (split)
@@ -7898,11 +11792,31 @@
             ROP_TAIL_PARK_FIRST(own_fn);
             ROP_TAIL_DISPATCH();
             rop_Call_Isinstance_TT_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_Isinstance_TT_Failed);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Isinstance_Failed) {
+    // Call.Isinstance: the cold region from rop_Call_Isinstance_Failed
+    int opcode = ROP_HANDLER_Call_Isinstance;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    goto rop_Call_Isinstance_Failed;
+    rop_Call_Isinstance_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_Isinstance_Failed)
+#endif
 
         TARGET(Call_Isinstance) {
             // Call.Isinstance (split)
@@ -7952,11 +11866,31 @@
             rop_Call_Isinstance_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_Call_Isinstance_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_Isinstance_Failed);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_ListAppend_Failed) {
+    // Call.ListAppend: the cold region from rop_Call_ListAppend_Failed
+    int opcode = ROP_HANDLER_Call_ListAppend;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue z;
+    goto rop_Call_ListAppend_Failed;
+    rop_Call_ListAppend_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_ListAppend_Failed)
+#endif
 
         TARGET(Call_ListAppend) {
             // Call.ListAppend (split)
@@ -8008,11 +11942,32 @@
             rop_Call_ListAppend_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_Call_ListAppend_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_ListAppend_Failed);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_DescriptorO_Failed) {
+    // Call.DescriptorO: the cold region from rop_Call_DescriptorO_Failed
+    int opcode = ROP_HANDLER_Call_DescriptorO;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_DescriptorO_Failed;
+    rop_Call_DescriptorO_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_DescriptorO_Failed)
+#endif
 
         TARGET(Call_DescriptorO) {
             // Call.DescriptorO (split)
@@ -8067,15 +12022,35 @@
             rop_Call_DescriptorO_Next:
             DISPATCH();
             rop_Call_DescriptorO_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_DescriptorO_Failed);
             rop_Call_DescriptorO_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_DescriptorO_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_DescriptorFast_TT_Failed) {
+    // Call.DescriptorFast_TT: the cold region from rop_Call_DescriptorFast_TT_Failed
+    int opcode = ROP_HANDLER_Call_DescriptorFast_TT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_DescriptorFast_TT_Failed;
+    rop_Call_DescriptorFast_TT_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_DescriptorFast_TT_Failed)
+#endif
 
         TARGET(Call_DescriptorFast_TT) {
             // Call.DescriptorFast_TT (split)
@@ -8127,15 +12102,36 @@
             rop_Call_DescriptorFast_TT_Next:
             DISPATCH();
             rop_Call_DescriptorFast_TT_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_DescriptorFast_TT_Failed);
             rop_Call_DescriptorFast_TT_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_DescriptorFast_TT_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_DescriptorFast_LT_Failed) {
+    // Call.DescriptorFast_LT: the cold region from rop_Call_DescriptorFast_LT_Failed
+    int opcode = ROP_HANDLER_Call_DescriptorFast_LT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_DescriptorFast_LT_Failed;
+    rop_Call_DescriptorFast_LT_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_DescriptorFast_LT_Failed)
+#endif
 
         TARGET(Call_DescriptorFast_LT) {
             // Call.DescriptorFast_LT (split)
@@ -8189,15 +12185,36 @@
             rop_Call_DescriptorFast_LT_Next:
             DISPATCH();
             rop_Call_DescriptorFast_LT_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_DescriptorFast_LT_Failed);
             rop_Call_DescriptorFast_LT_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_DescriptorFast_LT_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_DescriptorFast_Failed) {
+    // Call.DescriptorFast: the cold region from rop_Call_DescriptorFast_Failed
+    int opcode = ROP_HANDLER_Call_DescriptorFast;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_DescriptorFast_Failed;
+    rop_Call_DescriptorFast_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_DescriptorFast_Failed)
+#endif
 
         TARGET(Call_DescriptorFast) {
             // Call.DescriptorFast (split)
@@ -8252,15 +12269,36 @@
             rop_Call_DescriptorFast_Next:
             DISPATCH();
             rop_Call_DescriptorFast_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_DescriptorFast_Failed);
             rop_Call_DescriptorFast_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_DescriptorFast_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_DescriptorFastKeywords_Failed) {
+    // Call.DescriptorFastKeywords: the cold region from rop_Call_DescriptorFastKeywords_Failed
+    int opcode = ROP_HANDLER_Call_DescriptorFastKeywords;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_DescriptorFastKeywords_Failed;
+    rop_Call_DescriptorFastKeywords_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_DescriptorFastKeywords_Failed)
+#endif
 
         TARGET(Call_DescriptorFastKeywords) {
             // Call.DescriptorFastKeywords (split)
@@ -8315,15 +12353,36 @@
             rop_Call_DescriptorFastKeywords_Next:
             DISPATCH();
             rop_Call_DescriptorFastKeywords_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_DescriptorFastKeywords_Failed);
             rop_Call_DescriptorFastKeywords_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_DescriptorFastKeywords_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_DescriptorNoargs_Failed) {
+    // Call.DescriptorNoargs: the cold region from rop_Call_DescriptorNoargs_Failed
+    int opcode = ROP_HANDLER_Call_DescriptorNoargs;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_Call_DescriptorNoargs_Failed;
+    rop_Call_DescriptorNoargs_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Call_DescriptorNoargs_Failed)
+#endif
 
         TARGET(Call_DescriptorNoargs) {
             // Call.DescriptorNoargs (split)
@@ -8378,15 +12437,37 @@
             rop_Call_DescriptorNoargs_Next:
             DISPATCH();
             rop_Call_DescriptorNoargs_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
+            IR_OUTLINE_GOTO(Cold_Call_DescriptorNoargs_Failed);
             rop_Call_DescriptorNoargs_PollFailed:
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_DescriptorNoargs_PollSwitched:
             IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_Generator_NativeFailed) {
+    // CallKw.Generator: the cold region from rop_CallKw_Generator_NativeFailed
+    int opcode = ROP_HANDLER_CallKw_Generator;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    PyValue own_fn = PyValue_NULL;
+    PyValue z;
+    PyValue r;
+    goto rop_CallKw_Generator_NativeFailed;
+    rop_CallKw_Generator_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 48, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallKw_Generator_NativeFailed)
+#endif
 
         TARGET(CallKw_Generator) {
             // CallKw.Generator (split)
@@ -8461,10 +12542,7 @@
             rop_CallKw_Generator_Tail1_Rest2:
             ROP_TAIL_DISPATCH();
             rop_CallKw_Generator_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
+            IR_OUTLINE_GOTO(Cold_CallKw_Generator_NativeFailed);
             rop_CallKw_Generator_Failed:
             PROCESS_ERROR_AT(RAISE, 48, this_instr);
         }
@@ -8500,6 +12578,30 @@
             rop_CallKw_BoundMethod_Failed:
             PROCESS_ERROR_AT(RAISE, 48, this_instr);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_NonPy_NativeFailed) {
+    // CallKw.NonPy: the cold region from rop_CallKw_NonPy_NativeFailed
+    int opcode = ROP_HANDLER_CallKw_NonPy;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret2;
+    PyValue z;
+    goto rop_CallKw_NonPy_NativeFailed;
+    rop_CallKw_NonPy_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 48, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallKw_NonPy_NativeFailed)
+#endif
 
         TARGET(CallKw_NonPy) {
             // CallKw.NonPy (split)
@@ -8545,15 +12647,83 @@
             }
             DISPATCH();
             rop_CallKw_NonPy_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
+            IR_OUTLINE_GOTO(Cold_CallKw_NonPy_NativeFailed);
             rop_CallKw_NonPy_PollFailed:
             PROCESS_ERROR_AT(RAISE, 49, this_instr);
             rop_CallKw_NonPy_PollSwitched:
             IR_REDIRECT();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue efo;
+} rop_in_Cold_CallKw_Observed_EventFailed;
+static_assert(sizeof(rop_in_Cold_CallKw_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_Observed_EventFailed) {
+    // CallKw.Observed: the cold region from rop_CallKw_Observed_EventFailed
+    int opcode = ROP_HANDLER_CallKw_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    int ret1;
+    void * ret2;
+    PyValue ret3;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret4;
+    PyValue efo;
+    PyValue rfo;
+    PyValue pfo;
+    _PyInterpreterFrame * c;
+    PyValue nfo;
+    PyValue z;
+    { const rop_in_Cold_CallKw_Observed_EventFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallKw_Observed_EventFailed);
+      efo = ir_in->efo;
+    }
+    goto rop_CallKw_Observed_EventFailed;
+    rop_CallKw_Observed_EventFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedHeld(frame, home_fn, efo, this_instr);
+    PROCESS_ERROR_AT(RAISE, 48, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallKw_Observed_EventFailed)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_Observed_NativeFailed) {
+    // CallKw.Observed: the cold region from rop_CallKw_Observed_NativeFailed
+    int opcode = ROP_HANDLER_CallKw_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    int ret1;
+    void * ret2;
+    PyValue ret3;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret4;
+    PyValue efo;
+    PyValue rfo;
+    PyValue pfo;
+    _PyInterpreterFrame * c;
+    PyValue nfo;
+    PyValue z;
+    goto rop_CallKw_Observed_NativeFailed;
+    rop_CallKw_Observed_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 48, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallKw_Observed_NativeFailed)
+#endif
 
         TARGET(CallKw_Observed) {
             // CallKw.Observed (split)
@@ -8602,10 +12772,10 @@
             c = ret2;
             ROP_ENTER(c, IR_A(ir_word));
             rop_CallKw_Observed_EventFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedHeld(frame, home_fn, efo, this_instr);
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
+            { rop_in_Cold_CallKw_Observed_EventFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallKw_Observed_EventFailed);
+              ir_in->efo = efo;
+            }
+            IR_OUTLINE_GOTO(Cold_CallKw_Observed_EventFailed);
             rop_CallKw_Observed_Native:
             IR_STUB_ESCAPE();
             ret3 = _PyRop_CallNativeObservedHeld(tstate, frame, this_instr, home_fn, nfo, this_instr);
@@ -8632,10 +12802,7 @@
             }
             DISPATCH();
             rop_CallKw_Observed_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
+            IR_OUTLINE_GOTO(Cold_CallKw_Observed_NativeFailed);
             rop_CallKw_Observed_PollFailed:
             PROCESS_ERROR_AT(RAISE, 49, this_instr);
             rop_CallKw_Observed_PollSwitched:
@@ -8643,6 +12810,117 @@
             rop_CallKw_Observed_Failed:
             PROCESS_ERROR_AT(RAISE, 48, this_instr);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue tfo;
+    PyValue tko;
+} rop_in_Cold_CallEx_Py_TupleFailed;
+static_assert(sizeof(rop_in_Cold_CallEx_Py_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Py_TupleFailed) {
+    // CallEx.Py: the cold region from rop_CallEx_Py_TupleFailed
+    int opcode = ROP_HANDLER_CallEx_Py;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    void * ret13;
+    PyValue ret14;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret15;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    { const rop_in_Cold_CallEx_Py_TupleFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_Py_TupleFailed);
+      tfo = ir_in->tfo;
+      tko = ir_in->tko;
+    }
+    goto rop_CallEx_Py_TupleFailed;
+    rop_CallEx_Py_TupleFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Py_TupleFailed)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Py_NativeFailed) {
+    // CallEx.Py: the cold region from rop_CallEx_Py_NativeFailed
+    int opcode = ROP_HANDLER_CallEx_Py;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    void * ret13;
+    PyValue ret14;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret15;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    goto rop_CallEx_Py_NativeFailed;
+    rop_CallEx_Py_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Py_NativeFailed)
+#endif
 
         TARGET(CallEx_Py) {
             // CallEx.Py (split)
@@ -8735,10 +13013,11 @@
             c = ret13;
             ROP_ENTER(c, IR_A(ir_word));
             rop_CallEx_Py_TupleFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            { rop_in_Cold_CallEx_Py_TupleFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_Py_TupleFailed);
+              ir_in->tfo = tfo;
+              ir_in->tko = tko;
+            }
+            IR_OUTLINE_GOTO(Cold_CallEx_Py_TupleFailed);
             rop_CallEx_Py_Native:
             IR_STUB_ESCAPE();
             ret14 = _PyRop_CallNativeEx(tstate, frame, nfo, nko, ntup, this_instr);
@@ -8765,10 +13044,7 @@
             }
             DISPATCH();
             rop_CallEx_Py_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            IR_OUTLINE_GOTO(Cold_CallEx_Py_NativeFailed);
             rop_CallEx_Py_PollFailed:
             PROCESS_ERROR_AT(RAISE, 45, this_instr);
             rop_CallEx_Py_PollSwitched:
@@ -8776,6 +13052,117 @@
             rop_CallEx_Py_Failed:
             PROCESS_ERROR_AT(RAISE, 44, this_instr);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue tfo;
+    PyValue tko;
+} rop_in_Cold_CallEx_NonPy_TupleFailed;
+static_assert(sizeof(rop_in_Cold_CallEx_NonPy_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_NonPy_TupleFailed) {
+    // CallEx.NonPy: the cold region from rop_CallEx_NonPy_TupleFailed
+    int opcode = ROP_HANDLER_CallEx_NonPy;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    void * ret13;
+    PyValue ret14;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret15;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    { const rop_in_Cold_CallEx_NonPy_TupleFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_NonPy_TupleFailed);
+      tfo = ir_in->tfo;
+      tko = ir_in->tko;
+    }
+    goto rop_CallEx_NonPy_TupleFailed;
+    rop_CallEx_NonPy_TupleFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_NonPy_TupleFailed)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_NonPy_NativeFailed) {
+    // CallEx.NonPy: the cold region from rop_CallEx_NonPy_NativeFailed
+    int opcode = ROP_HANDLER_CallEx_NonPy;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue arg7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    void * ret13;
+    PyValue ret14;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret15;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    goto rop_CallEx_NonPy_NativeFailed;
+    rop_CallEx_NonPy_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_NonPy_NativeFailed)
+#endif
 
         TARGET(CallEx_NonPy) {
             // CallEx.NonPy (split)
@@ -8865,10 +13252,11 @@
             c = ret13;
             ROP_ENTER(c, IR_A(ir_word));
             rop_CallEx_NonPy_TupleFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            { rop_in_Cold_CallEx_NonPy_TupleFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_NonPy_TupleFailed);
+              ir_in->tfo = tfo;
+              ir_in->tko = tko;
+            }
+            IR_OUTLINE_GOTO(Cold_CallEx_NonPy_TupleFailed);
             rop_CallEx_NonPy_Native:
             IR_STUB_ESCAPE();
             ret14 = _PyRop_CallNativeEx(tstate, frame, nfo, nko, ntup, this_instr);
@@ -8895,10 +13283,7 @@
             }
             DISPATCH();
             rop_CallEx_NonPy_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            IR_OUTLINE_GOTO(Cold_CallEx_NonPy_NativeFailed);
             rop_CallEx_NonPy_PollFailed:
             PROCESS_ERROR_AT(RAISE, 45, this_instr);
             rop_CallEx_NonPy_PollSwitched:
@@ -8906,6 +13291,210 @@
             rop_CallEx_NonPy_Failed:
             PROCESS_ERROR_AT(RAISE, 44, this_instr);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue tfo;
+    PyValue tko;
+} rop_in_Cold_CallEx_Observed_TupleFailed;
+static_assert(sizeof(rop_in_Cold_CallEx_Observed_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Observed_TupleFailed) {
+    // CallEx.Observed: the cold region from rop_CallEx_Observed_TupleFailed
+    int opcode = ROP_HANDLER_CallEx_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue ret7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    PyValue arg13;
+    PyValue arg14;
+    PyValue arg15;
+    PyValue arg16;
+    PyValue arg17;
+    PyValue arg18;
+    void * ret19;
+    PyValue ret20;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret21;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue efo;
+    PyValue eko;
+    PyValue etup;
+    PyValue rfo;
+    PyValue rko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    { const rop_in_Cold_CallEx_Observed_TupleFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_Observed_TupleFailed);
+      tfo = ir_in->tfo;
+      tko = ir_in->tko;
+    }
+    goto rop_CallEx_Observed_TupleFailed;
+    rop_CallEx_Observed_TupleFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Observed_TupleFailed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue efo;
+    PyValue eko;
+} rop_in_Cold_CallEx_Observed_EventFailed;
+static_assert(sizeof(rop_in_Cold_CallEx_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Observed_EventFailed) {
+    // CallEx.Observed: the cold region from rop_CallEx_Observed_EventFailed
+    int opcode = ROP_HANDLER_CallEx_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue ret7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    PyValue arg13;
+    PyValue arg14;
+    PyValue arg15;
+    PyValue arg16;
+    PyValue arg17;
+    PyValue arg18;
+    void * ret19;
+    PyValue ret20;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret21;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue efo;
+    PyValue eko;
+    PyValue etup;
+    PyValue rfo;
+    PyValue rko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    { const rop_in_Cold_CallEx_Observed_EventFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_Observed_EventFailed);
+      efo = ir_in->efo;
+      eko = ir_in->eko;
+    }
+    goto rop_CallEx_Observed_EventFailed;
+    rop_CallEx_Observed_EventFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedHeldEx(frame, home_fn, efo, eko, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Observed_EventFailed)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Observed_NativeFailed) {
+    // CallEx.Observed: the cold region from rop_CallEx_Observed_NativeFailed
+    int opcode = ROP_HANDLER_CallEx_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    PyValue fo;
+    PyValue ko;
+    PyValue ret1;
+    PyValue arg2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue arg6;
+    PyValue ret7;
+    PyValue arg8;
+    PyValue arg9;
+    PyValue arg10;
+    PyValue arg11;
+    PyValue arg12;
+    PyValue arg13;
+    PyValue arg14;
+    PyValue arg15;
+    PyValue arg16;
+    PyValue arg17;
+    PyValue arg18;
+    void * ret19;
+    PyValue ret20;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret21;
+    PyValue tfo;
+    PyValue tko;
+    PyValue tup;
+    PyValue pfo;
+    PyValue pko;
+    PyValue efo;
+    PyValue eko;
+    PyValue etup;
+    PyValue rfo;
+    PyValue rko;
+    PyValue ptup;
+    PyValue qfo;
+    PyValue qko;
+    _PyInterpreterFrame * c;
+    PyValue ntup;
+    PyValue nfo;
+    PyValue nko;
+    PyValue z;
+    goto rop_CallEx_Observed_NativeFailed;
+    rop_CallEx_Observed_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Observed_NativeFailed)
+#endif
 
         TARGET(CallEx_Observed) {
             // CallEx.Observed (split)
@@ -9018,15 +13607,17 @@
             c = ret19;
             ROP_ENTER(c, IR_A(ir_word));
             rop_CallEx_Observed_TupleFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedHeldEx(frame, home_fn, tfo, tko, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            { rop_in_Cold_CallEx_Observed_TupleFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_Observed_TupleFailed);
+              ir_in->tfo = tfo;
+              ir_in->tko = tko;
+            }
+            IR_OUTLINE_GOTO(Cold_CallEx_Observed_TupleFailed);
             rop_CallEx_Observed_EventFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedHeldEx(frame, home_fn, efo, eko, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            { rop_in_Cold_CallEx_Observed_EventFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CallEx_Observed_EventFailed);
+              ir_in->efo = efo;
+              ir_in->eko = eko;
+            }
+            IR_OUTLINE_GOTO(Cold_CallEx_Observed_EventFailed);
             rop_CallEx_Observed_Native:
             IR_STUB_ESCAPE();
             ret20 = _PyRop_CallNativeObservedEx(tstate, frame, this_instr, nfo, nko, ntup, this_instr);
@@ -9053,10 +13644,7 @@
             }
             DISPATCH();
             rop_CallEx_Observed_NativeFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
-            PROCESS_ERROR_AT(RAISE, 44, this_instr);
+            IR_OUTLINE_GOTO(Cold_CallEx_Observed_NativeFailed);
             rop_CallEx_Observed_PollFailed:
             PROCESS_ERROR_AT(RAISE, 45, this_instr);
             rop_CallEx_Observed_PollSwitched:
@@ -9096,6 +13684,27 @@
             PROCESS_ERROR_AT(RAISE, 54, this_instr);
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CellRead_Get_Empty) {
+    // CellRead.Get: the cold region from rop_CellRead_Get_Empty
+    int opcode = ROP_HANDLER_CellRead_Get;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_cell = &IR_SLOT(IR_B(ir_word));
+    PyValue out1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue v;
+    goto rop_CellRead_Get_Empty;
+    rop_CellRead_Get_Empty:
+    _PyRop_UnboundCell(frame, home_cell);
+    PROCESS_ERROR_AT(RAISE, 58, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CellRead_Get_Empty)
+#endif
+
         TARGET(CellRead_Get) {
             // CellRead.Get (inline)
             int opcode = ROP_HANDLER_CellRead_Get;
@@ -9123,10 +13732,89 @@
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
             rop_CellRead_Get_Empty:
-            IR_COLD();
-            _PyRop_UnboundCell(frame, home_cell);
-            PROCESS_ERROR_AT(RAISE, 58, this_instr);
+            IR_OUTLINE_GOTO(Cold_CellRead_Get_Empty);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_CellMapRead_Lookup_Empty;
+static_assert(sizeof(rop_in_Cold_CellMapRead_Lookup_Empty) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CellMapRead_Lookup_Empty) {
+    // CellMapRead.Lookup: the cold region from rop_CellMapRead_Lookup_Empty
+    int opcode = ROP_HANDLER_CellMapRead_Lookup;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_mapping = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_cell = &IR_SLOT(IR_C(ir_word));
+    _PyStatusValue ret1;
+    PyValue own_mapping = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue out2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    PyValue z;
+    { const rop_in_Cold_CellMapRead_Lookup_Empty *ir_in = IR_OUTLINE_IN(rop_in_Cold_CellMapRead_Lookup_Empty);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_CellMapRead_Lookup_Empty;
+    rop_CellMapRead_Lookup_Empty:
+    _PyRop_UnboundCell(frame, home_cell);
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 56, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CellMapRead_Lookup_Empty)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_CellMapRead_Lookup_Failed;
+static_assert(sizeof(rop_in_Cold_CellMapRead_Lookup_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CellMapRead_Lookup_Failed) {
+    // CellMapRead.Lookup: the cold region from rop_CellMapRead_Lookup_Failed
+    int opcode = ROP_HANDLER_CellMapRead_Lookup;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_mapping = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_cell = &IR_SLOT(IR_C(ir_word));
+    _PyStatusValue ret1;
+    PyValue own_mapping = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue out2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    PyValue z;
+    { const rop_in_Cold_CellMapRead_Lookup_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CellMapRead_Lookup_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_CellMapRead_Lookup_Failed;
+    rop_CellMapRead_Lookup_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 56, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CellMapRead_Lookup_Failed)
+#endif
 
         TARGET(CellMapRead_Lookup) {
             // CellMapRead.Lookup (shared)
@@ -9191,15 +13879,17 @@
                 z = out2;
                 goto rop_CellMapRead_Lookup_Done;
             }
-            IR_COLD();
-            _PyRop_UnboundCell(frame, home_cell);
+            { rop_in_Cold_CellMapRead_Lookup_Empty *ir_in = IR_OUTLINE_IN(rop_in_Cold_CellMapRead_Lookup_Empty);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_CellMapRead_Lookup_Empty);
             rop_CellMapRead_Lookup_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 56, this_instr);
+            { rop_in_Cold_CellMapRead_Lookup_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CellMapRead_Lookup_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_CellMapRead_Lookup_Failed);
         }
 
         TARGET(CellStore_Set) {
@@ -9230,6 +13920,25 @@
             DISPATCH();
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CellDelete_Unbind_Empty) {
+    // CellDelete.Unbind: the cold region from rop_CellDelete_Unbind_Empty
+    int opcode = ROP_HANDLER_CellDelete_Unbind;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_cell = &IR_SLOT(IR_A(ir_word));
+    PyValue out1;
+    PyValue old;
+    goto rop_CellDelete_Unbind_Empty;
+    rop_CellDelete_Unbind_Empty:
+    _PyRop_UnboundCell(frame, home_cell);
+    PROCESS_ERROR_AT(RAISE, 52, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CellDelete_Unbind_Empty)
+#endif
+
         TARGET(CellDelete_Unbind) {
             // CellDelete.Unbind (shared)
             int opcode = ROP_HANDLER_CellDelete_Unbind;
@@ -9252,10 +13961,37 @@
             ROP_TAIL_PARK_FIRST(old);
             ROP_TAIL_DISPATCH();
             rop_CellDelete_Unbind_Empty:
-            IR_COLD();
-            _PyRop_UnboundCell(frame, home_cell);
-            PROCESS_ERROR_AT(RAISE, 52, this_instr);
+            IR_OUTLINE_GOTO(Cold_CellDelete_Unbind_Empty);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CleanupThrow_Generic_Reraise) {
+    // CleanupThrow.Generic: the cold region from rop_CleanupThrow_Generic_Reraise
+    int opcode = ROP_HANDLER_CleanupThrow_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_exc = &IR_SLOT(IR_C(ir_word));
+    bool m;
+    PyValue v;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    PyValue own_send_value = PyValue_NULL;
+    PyValue own_exc = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    goto rop_CleanupThrow_Generic_Reraise;
+    rop_CleanupThrow_Generic_Reraise:
+    IR_STUB_ESCAPE();
+    _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
+    PROCESS_ERROR_AT(UNWIND, 61, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_CleanupThrow_Generic_Reraise)
+#endif
 
         TARGET(CleanupThrow_Generic) {
             // CleanupThrow.Generic (split)
@@ -9326,11 +14062,30 @@
             rop_CleanupThrow_Generic_Tail0_Rest5:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_CleanupThrow_Generic_Reraise:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
-            PROCESS_ERROR_AT(UNWIND, 61, this_instr);
+            IR_OUTLINE_GOTO(Cold_CleanupThrow_Generic_Reraise);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_EndAsyncFor_Generic_Reraise) {
+    // EndAsyncFor.Generic: the cold region from rop_EndAsyncFor_Generic_Reraise
+    int opcode = ROP_HANDLER_EndAsyncFor_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_exc = &IR_SLOT(IR_B(ir_word));
+    bool m;
+    PyValue *const home_iter = &IR_SLOT(IR_A(ir_word));
+    PyValue own_iter = PyValue_NULL;
+    PyValue own_exc = PyValue_NULL;
+    goto rop_EndAsyncFor_Generic_Reraise;
+    rop_EndAsyncFor_Generic_Reraise:
+    IR_STUB_ESCAPE();
+    _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
+    PROCESS_ERROR_AT(UNWIND, 73, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_EndAsyncFor_Generic_Reraise)
+#endif
 
         TARGET(EndAsyncFor_Generic) {
             // EndAsyncFor.Generic (split)
@@ -9372,11 +14127,31 @@
             rop_EndAsyncFor_Generic_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_EndAsyncFor_Generic_Reraise:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
-            PROCESS_ERROR_AT(UNWIND, 73, this_instr);
+            IR_OUTLINE_GOTO(Cold_EndAsyncFor_Generic_Reraise);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_EndAsyncFor_Observed_Reraise) {
+    // EndAsyncFor.Observed: the cold region from rop_EndAsyncFor_Observed_Reraise
+    int opcode = ROP_HANDLER_EndAsyncFor_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    int ret1;
+    PyValue *const home_exc = &IR_SLOT(IR_B(ir_word));
+    bool m;
+    PyValue *const home_iter = &IR_SLOT(IR_A(ir_word));
+    PyValue own_iter = PyValue_NULL;
+    PyValue own_exc = PyValue_NULL;
+    goto rop_EndAsyncFor_Observed_Reraise;
+    rop_EndAsyncFor_Observed_Reraise:
+    IR_STUB_ESCAPE();
+    _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
+    PROCESS_ERROR_AT(UNWIND, 73, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_EndAsyncFor_Observed_Reraise)
+#endif
 
         TARGET(EndAsyncFor_Observed) {
             // EndAsyncFor.Observed (split)
@@ -9431,11 +14206,122 @@
             rop_EndAsyncFor_Observed_Moved:
             IR_REDIRECT();
             rop_EndAsyncFor_Observed_Reraise:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
-            PROCESS_ERROR_AT(UNWIND, 73, this_instr);
+            IR_OUTLINE_GOTO(Cold_EndAsyncFor_Observed_Reraise);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow b_view0;
+    PyValue b_owned0;
+    PyValueBorrow b_view1;
+    PyValue b_owned1;
+} rop_in_Cold_WithExit_Generic_BoundFailed;
+static_assert(sizeof(rop_in_Cold_WithExit_Generic_BoundFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_WithExit_Generic_BoundFailed) {
+    // WithExit.Generic: the cold region from rop_WithExit_Generic_BoundFailed
+    int opcode = ROP_HANDLER_WithExit_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_self = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_exit_fn = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_exc = &IR_SLOT(IR_D(ir_word));
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow b_view0;
+    PyValue b_owned0;
+    PyValueBorrow b_view1;
+    PyValue b_owned1;
+    PyValue ret2;
+    _PyRopAnchors b_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    PyValue z;
+    PyValue y;
+    { const rop_in_Cold_WithExit_Generic_BoundFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_WithExit_Generic_BoundFailed);
+      b_view0 = ir_in->b_view0;
+      b_owned0 = ir_in->b_owned0;
+      b_view1 = ir_in->b_view1;
+      b_owned1 = ir_in->b_owned1;
+    }
+    goto rop_WithExit_Generic_BoundFailed;
+    rop_WithExit_Generic_BoundFailed:
+    IR_STUB_ESCAPE();
+    b_all3 = (_PyRopAnchors){2, {b_view0, b_view1}, {b_owned0, b_owned1}};
+    srcs4 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&b_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 202, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_WithExit_Generic_BoundFailed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_WithExit_Generic_MethodFailed;
+static_assert(sizeof(rop_in_Cold_WithExit_Generic_MethodFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_WithExit_Generic_MethodFailed) {
+    // WithExit.Generic: the cold region from rop_WithExit_Generic_MethodFailed
+    int opcode = ROP_HANDLER_WithExit_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_self = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_exit_fn = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_exc = &IR_SLOT(IR_D(ir_word));
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow b_view0;
+    PyValue b_owned0;
+    PyValueBorrow b_view1;
+    PyValue b_owned1;
+    PyValue ret2;
+    _PyRopAnchors b_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    PyValue z;
+    PyValue y;
+    { const rop_in_Cold_WithExit_Generic_MethodFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_WithExit_Generic_MethodFailed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_WithExit_Generic_MethodFailed;
+    rop_WithExit_Generic_MethodFailed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 202, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_WithExit_Generic_MethodFailed)
+#endif
 
         TARGET(WithExit_Generic) {
             // WithExit.Generic (shared)
@@ -9548,19 +14434,23 @@
             rop_WithExit_Generic_Tail1_Rest3:
             ROP_TAIL_DISPATCH();
             rop_WithExit_Generic_BoundFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            b_all3 = (_PyRopAnchors){2, {b_view0, b_view1}, {b_owned0, b_owned1}};
-            srcs4 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&b_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 202, this_instr);
+            { rop_in_Cold_WithExit_Generic_BoundFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_WithExit_Generic_BoundFailed);
+              ir_in->b_view0 = b_view0;
+              ir_in->b_owned0 = b_owned0;
+              ir_in->b_view1 = b_view1;
+              ir_in->b_owned1 = b_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_WithExit_Generic_BoundFailed);
             rop_WithExit_Generic_MethodFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 202, this_instr);
+            { rop_in_Cold_WithExit_Generic_MethodFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_WithExit_Generic_MethodFailed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_WithExit_Generic_MethodFailed);
         }
 
         TARGET(Build_Tuple) {
@@ -10025,6 +14915,25 @@
             PROCESS_ERROR_AT(RAISE, 198, this_instr);
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Raise_Throw_Bare) {
+    // Raise.Throw: the cold region from rop_Raise_Throw_Bare
+    int opcode = ROP_HANDLER_Raise_Throw;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + (IR_A(ir_word) + 0) / IR_OPERANDS_PER_WORD;
+    _PyRopSpan span1;
+    int ret2;
+    goto rop_Raise_Throw_Bare;
+    rop_Raise_Throw_Bare:
+    IR_STUB_ESCAPE();
+    _PyRop_ReraisePending(tstate, frame, this_instr);
+    PROCESS_ERROR_AT(UNWIND, 150, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Raise_Throw_Bare)
+#endif
+
         TARGET(Raise_Throw) {
             // Raise.Throw (split)
             int opcode = ROP_HANDLER_Raise_Throw;
@@ -10042,13 +14951,28 @@
             if (ret2 < 0) {
                 goto rop_Raise_Throw_Failed;
             }
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_ReraisePending(tstate, frame, this_instr);
-            PROCESS_ERROR_AT(UNWIND, 150, this_instr);
+            IR_OUTLINE_GOTO(Cold_Raise_Throw_Bare);
             rop_Raise_Throw_Failed:
             PROCESS_ERROR_AT(RAISE, 149, this_instr);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Reraise_Plain_Failed) {
+    // Reraise.Plain: the cold region from rop_Reraise_Plain_Failed
+    int opcode = ROP_HANDLER_Reraise_Plain;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_exc = &IR_SLOT(IR_B(ir_word));
+    goto rop_Reraise_Plain_Failed;
+    rop_Reraise_Plain_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedOperand(frame, home_exc);
+    PROCESS_ERROR_AT(UNWIND, 152, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Reraise_Plain_Failed)
+#endif
 
         TARGET(Reraise_Plain) {
             // Reraise.Plain (split)
@@ -10062,11 +14986,27 @@
             PyValue *const home_exc = &IR_SLOT(IR_B(ir_word));
             IR_STUB_ESCAPE();
             _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedOperand(frame, home_exc);
-            PROCESS_ERROR_AT(UNWIND, 152, this_instr);
+            IR_OUTLINE_GOTO(Cold_Reraise_Plain_Failed);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Reraise_Origin_Failed) {
+    // Reraise.Origin: the cold region from rop_Reraise_Origin_Failed
+    int opcode = ROP_HANDLER_Reraise_Origin;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_lasti = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_exc = &IR_SLOT(IR_B(ir_word));
+    goto rop_Reraise_Origin_Failed;
+    rop_Reraise_Origin_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedOperand(frame, home_exc);
+    PROCESS_ERROR_AT(UNWIND, 151, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Reraise_Origin_Failed)
+#endif
 
         TARGET(Reraise_Origin) {
             // Reraise.Origin (split)
@@ -10082,10 +15022,7 @@
             _PyRop_SetOrigin(frame, home_lasti);
             IR_STUB_ESCAPE();
             _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedOperand(frame, home_exc);
-            PROCESS_ERROR_AT(UNWIND, 151, this_instr);
+            IR_OUTLINE_GOTO(Cold_Reraise_Origin_Failed);
         }
 
         TARGET(ExceptEnter_Install) {
@@ -10144,6 +15081,31 @@
             DISPATCH();
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ExceptMatch_Match_Invalid) {
+    // ExceptMatch.Match: the cold region from rop_ExceptMatch_Match_Invalid
+    int opcode = ROP_HANDLER_ExceptMatch_Match;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_pattern = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue *const home_exc = &IR_SLOT(IR_B(ir_word));
+    bool m;
+    PyValue r;
+    PyValue own_pattern = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    goto rop_ExceptMatch_Match_Invalid;
+    rop_ExceptMatch_Match_Invalid:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedOperand(frame, home_pattern);
+    PROCESS_ERROR_AT(RAISE, 79, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ExceptMatch_Match_Invalid)
+#endif
+
         TARGET(ExceptMatch_Match) {
             // ExceptMatch.Match (shared)
             int opcode = ROP_HANDLER_ExceptMatch_Match;
@@ -10187,11 +15149,40 @@
             rop_ExceptMatch_Match_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_ExceptMatch_Match_Invalid:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedOperand(frame, home_pattern);
-            PROCESS_ERROR_AT(RAISE, 79, this_instr);
+            IR_OUTLINE_GOTO(Cold_ExceptMatch_Match_Invalid);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ExceptGroupMatch_Split_Invalid) {
+    // ExceptGroupMatch.Split: the cold region from rop_ExceptGroupMatch_Split_Invalid
+    int opcode = ROP_HANDLER_ExceptGroupMatch_Split;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_pattern = &IR_SLOT(IR_D(ir_word));
+    int ret1;
+    PyValue *const home_exc = &IR_SLOT(IR_C(ir_word));
+    PyValue out2;
+    PyValue ret3;
+    PyValue arg4;
+    PyValue arg5;
+    PyValue old_rest;
+    PyValue *const home_rest = &IR_SLOT(IR_A(ir_word));
+    PyValue old_match;
+    PyValue *const home_match = &IR_SLOT(IR_B(ir_word));
+    PyValue m;
+    PyValue r;
+    goto rop_ExceptGroupMatch_Split_Invalid;
+    rop_ExceptGroupMatch_Split_Invalid:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedOperand(frame, home_pattern);
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedOperand(frame, home_exc);
+    PROCESS_ERROR_AT(RAISE, 76, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ExceptGroupMatch_Split_Invalid)
+#endif
 
         TARGET(ExceptGroupMatch_Split) {
             // ExceptGroupMatch.Split (split)
@@ -10248,12 +15239,7 @@
             rop_ExceptGroupMatch_Split_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_ExceptGroupMatch_Split_Invalid:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedOperand(frame, home_pattern);
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFailedOperand(frame, home_exc);
-            PROCESS_ERROR_AT(RAISE, 76, this_instr);
+            IR_OUTLINE_GOTO(Cold_ExceptGroupMatch_Split_Invalid);
             rop_ExceptGroupMatch_Split_Failed:
             PROCESS_ERROR_AT(RAISE, 76, this_instr);
         }
@@ -10578,6 +15564,101 @@
             JUMP_TO_PREDICTED(GetAttr_Generic);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetAttr_GetSet_getset_at_origin1_Failed) {
+    // GetAttr.GetSet: the cold region from rop_GetAttr_GetSet_getset_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetAttr_GetSet;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue ret2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    _PyAttrRecipe r;
+    PyValue z;
+    PyValue getset_at_origin1_value;
+    PyValue getset_at_origin1_kept;
+    PyValue getset_at_origin1_dropped;
+    { const rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_GetAttr_GetSet_getset_at_origin1_Failed;
+    rop_GetAttr_GetSet_getset_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_obj}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 95, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetAttr_GetSet_getset_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue getset_at_origin1_dropped;
+} rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetAttr_GetSet_getset_at_origin1_Moved) {
+    // GetAttr.GetSet: the cold region from rop_GetAttr_GetSet_getset_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetAttr_GetSet;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    _PyAttrRecipe out1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue ret2;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    _PyAttrRecipe r;
+    PyValue z;
+    PyValue getset_at_origin1_value;
+    PyValue getset_at_origin1_kept;
+    PyValue getset_at_origin1_dropped;
+    { const rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      getset_at_origin1_dropped = ir_in->getset_at_origin1_dropped;
+    }
+    goto rop_GetAttr_GetSet_getset_at_origin1_Moved;
+    rop_GetAttr_GetSet_getset_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(getset_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetAttr_GetSet_getset_at_origin1_Moved)
+#endif
+
         TARGET(GetAttr_GetSet) {
             // GetAttr.GetSet (inline)
             int opcode = ROP_HANDLER_GetAttr_GetSet;
@@ -10659,20 +15740,18 @@
             rop_GetAttr_GetSet_Miss:
             JUMP_TO_PREDICTED(GetAttr_Generic);
             rop_GetAttr_GetSet_getset_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_obj}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 95, this_instr);
+            { rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_GetAttr_GetSet_getset_at_origin1_Failed);
             rop_GetAttr_GetSet_getset_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(getset_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->getset_at_origin1_dropped = getset_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetAttr_GetSet_getset_at_origin1_Moved);
         }
 
         TARGET(GetAttr_Property) {
@@ -11953,6 +17032,93 @@
             ROP_ENTER(c, IR_A(ir_word));
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_DelItem_Generic_delitem_at_origin1_Failed) {
+    // DelItem.Generic: the cold region from rop_DelItem_Generic_delitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_DelItem_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    { const rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_DelItem_Generic_delitem_at_origin1_Failed;
+    rop_DelItem_Generic_delitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_key, home_obj}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 70, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_DelItem_Generic_delitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_DelItem_Generic_delitem_at_origin1_Moved) {
+    // DelItem.Generic: the cold region from rop_DelItem_Generic_delitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_DelItem_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    { const rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_DelItem_Generic_delitem_at_origin1_Moved;
+    rop_DelItem_Generic_delitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_DelItem_Generic_delitem_at_origin1_Moved)
+#endif
+
         TARGET(DelItem_Generic) {
             // DelItem.Generic (shared)
             int opcode = ROP_HANDLER_DelItem_Generic;
@@ -12018,19 +17184,141 @@
             rop_DelItem_Generic_Tail0_Rest4:
             ROP_TAIL_DISPATCH();
             rop_DelItem_Generic_delitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_key, home_obj}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 70, this_instr);
+            { rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_DelItem_Generic_delitem_at_origin1_Failed);
             rop_DelItem_Generic_delitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_DelItem_Generic_delitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SliceRead_Generic_binary_slice_at_origin1_Failed) {
+    // SliceRead.Generic: the cold region from rop_SliceRead_Generic_binary_slice_at_origin1_Failed
+    int opcode = ROP_HANDLER_SliceRead_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_start = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_stop = &IR_SLOT(IR_D(ir_word));
+    PyValue ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_start = PyValue_NULL;
+    PyValue own_stop = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue binary_slice_at_origin1_value;
+    PyValue binary_slice_at_origin1_kept;
+    PyValue binary_slice_at_origin1_dropped;
+    { const rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SliceRead_Generic_binary_slice_at_origin1_Failed;
+    rop_SliceRead_Generic_binary_slice_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs3 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_D), !!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_stop, home_start, home_obj}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 174, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SliceRead_Generic_binary_slice_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue binary_slice_at_origin1_dropped;
+} rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SliceRead_Generic_binary_slice_at_origin1_Moved) {
+    // SliceRead.Generic: the cold region from rop_SliceRead_Generic_binary_slice_at_origin1_Moved
+    int opcode = ROP_HANDLER_SliceRead_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_start = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_stop = &IR_SLOT(IR_D(ir_word));
+    PyValue ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_start = PyValue_NULL;
+    PyValue own_stop = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue binary_slice_at_origin1_value;
+    PyValue binary_slice_at_origin1_kept;
+    PyValue binary_slice_at_origin1_dropped;
+    { const rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+      binary_slice_at_origin1_dropped = ir_in->binary_slice_at_origin1_dropped;
+    }
+    goto rop_SliceRead_Generic_binary_slice_at_origin1_Moved;
+    rop_SliceRead_Generic_binary_slice_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(binary_slice_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SliceRead_Generic_binary_slice_at_origin1_Moved)
+#endif
 
         TARGET(SliceRead_Generic) {
             // SliceRead.Generic (shared)
@@ -12137,21 +17425,146 @@
             rop_SliceRead_Generic_Tail0_Rest7:
             ROP_TAIL_DISPATCH();
             rop_SliceRead_Generic_binary_slice_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs3 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_D), !!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_stop, home_start, home_obj}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 174, this_instr);
+            { rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SliceRead_Generic_binary_slice_at_origin1_Failed);
             rop_SliceRead_Generic_binary_slice_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(binary_slice_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+              ir_in->binary_slice_at_origin1_dropped = binary_slice_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_SliceRead_Generic_binary_slice_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValueBorrow a_view3;
+    PyValue a_owned3;
+} rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SliceWrite_Generic_store_slice_at_origin1_Failed) {
+    // SliceWrite.Generic: the cold region from rop_SliceWrite_Generic_store_slice_at_origin1_Failed
+    int opcode = ROP_HANDLER_SliceWrite_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_start = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_stop = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view3;
+    PyValue a_owned3;
+    PyValue *const home_value = &IR_SLOT(IR_D(ir_word));
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_start = PyValue_NULL;
+    PyValue own_stop = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    { const rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+      a_view3 = ir_in->a_view3;
+      a_owned3 = ir_in->a_owned3;
+    }
+    goto rop_SliceWrite_Generic_store_slice_at_origin1_Failed;
+    rop_SliceWrite_Generic_store_slice_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
+    srcs3 = (_PyRopSrcs){frame, 4, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_D)}, {home_stop, home_start, home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 176, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SliceWrite_Generic_store_slice_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValueBorrow a_view3;
+    PyValue a_owned3;
+} rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SliceWrite_Generic_store_slice_at_origin1_Moved) {
+    // SliceWrite.Generic: the cold region from rop_SliceWrite_Generic_store_slice_at_origin1_Moved
+    int opcode = ROP_HANDLER_SliceWrite_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_start = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_stop = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view3;
+    PyValue a_owned3;
+    PyValue *const home_value = &IR_SLOT(IR_D(ir_word));
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_start = PyValue_NULL;
+    PyValue own_stop = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    { const rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+      a_view3 = ir_in->a_view3;
+      a_owned3 = ir_in->a_owned3;
+    }
+    goto rop_SliceWrite_Generic_store_slice_at_origin1_Moved;
+    rop_SliceWrite_Generic_store_slice_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SliceWrite_Generic_store_slice_at_origin1_Moved)
+#endif
 
         TARGET(SliceWrite_Generic) {
             // SliceWrite.Generic (shared)
@@ -12260,18 +17673,29 @@
             rop_SliceWrite_Generic_Tail0_Rest8:
             ROP_TAIL_DISPATCH();
             rop_SliceWrite_Generic_store_slice_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
-            srcs3 = (_PyRopSrcs){frame, 4, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_D)}, {home_stop, home_start, home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 176, this_instr);
+            { rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+              ir_in->a_view3 = a_view3;
+              ir_in->a_owned3 = a_owned3;
+            }
+            IR_OUTLINE_GOTO(Cold_SliceWrite_Generic_store_slice_at_origin1_Failed);
             rop_SliceWrite_Generic_store_slice_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+              ir_in->a_view3 = a_view3;
+              ir_in->a_owned3 = a_owned3;
+            }
+            IR_OUTLINE_GOTO(Cold_SliceWrite_Generic_store_slice_at_origin1_Moved);
         }
 
         TARGET(BuildSlice_Generic) {
@@ -12685,6 +18109,111 @@
             ROP_TAIL_DISPATCH();
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed) {
+    // GetItem.ListSlice_TTT: the cold region from rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetItem_ListSlice_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow s;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue list_slice_at_origin1_value;
+    PyValue list_slice_at_origin1_kept;
+    PyValue list_slice_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed;
+    rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {0, 0}, {home_key, home_obj}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 98, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue list_slice_at_origin1_dropped;
+} rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved) {
+    // GetItem.ListSlice_TTT: the cold region from rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetItem_ListSlice_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow s;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue list_slice_at_origin1_value;
+    PyValue list_slice_at_origin1_kept;
+    PyValue list_slice_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      list_slice_at_origin1_dropped = ir_in->list_slice_at_origin1_dropped;
+    }
+    goto rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved;
+    rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(list_slice_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved)
+#endif
+
         TARGET(GetItem_ListSlice_TTT) {
             // GetItem.ListSlice_TTT (shared)
             int opcode = ROP_HANDLER_GetItem_ListSlice_TTT;
@@ -12769,21 +18298,130 @@
             rop_GetItem_ListSlice_TTT_Tail0_Rest4:
             ROP_TAIL_DISPATCH();
             rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {0, 0}, {home_key, home_obj}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 98, this_instr);
+            { rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed);
             rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(list_slice_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->list_slice_at_origin1_dropped = list_slice_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_ListSlice_list_slice_at_origin1_Failed) {
+    // GetItem.ListSlice: the cold region from rop_GetItem_ListSlice_list_slice_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetItem_ListSlice;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow s;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue list_slice_at_origin1_value;
+    PyValue list_slice_at_origin1_kept;
+    PyValue list_slice_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_GetItem_ListSlice_list_slice_at_origin1_Failed;
+    rop_GetItem_ListSlice_list_slice_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 98, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_ListSlice_list_slice_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue list_slice_at_origin1_dropped;
+} rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_ListSlice_list_slice_at_origin1_Moved) {
+    // GetItem.ListSlice: the cold region from rop_GetItem_ListSlice_list_slice_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetItem_ListSlice;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow s;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue list_slice_at_origin1_value;
+    PyValue list_slice_at_origin1_kept;
+    PyValue list_slice_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      list_slice_at_origin1_dropped = ir_in->list_slice_at_origin1_dropped;
+    }
+    goto rop_GetItem_ListSlice_list_slice_at_origin1_Moved;
+    rop_GetItem_ListSlice_list_slice_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(list_slice_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_ListSlice_list_slice_at_origin1_Moved)
+#endif
 
         TARGET(GetItem_ListSlice) {
             // GetItem.ListSlice (shared)
@@ -12879,21 +18517,130 @@
             rop_GetItem_ListSlice_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_GetItem_ListSlice_list_slice_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 98, this_instr);
+            { rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_ListSlice_list_slice_at_origin1_Failed);
             rop_GetItem_ListSlice_list_slice_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(list_slice_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->list_slice_at_origin1_dropped = list_slice_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_ListSlice_list_slice_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed) {
+    // GetItem.Dict_TTL: the cold region from rop_GetItem_Dict_TTL_getitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetItem_Dict_TTL;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow i;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue first;
+    PyValue z;
+    PyValue getitem_at_origin1_value;
+    PyValue getitem_at_origin1_kept;
+    PyValue getitem_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_GetItem_Dict_TTL_getitem_at_origin1_Failed;
+    rop_GetItem_Dict_TTL_getitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs4 = (_PyRopSrcs){frame, 2, {1, 0}, {home_key, home_obj}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 98, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue getitem_at_origin1_dropped;
+} rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved) {
+    // GetItem.Dict_TTL: the cold region from rop_GetItem_Dict_TTL_getitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetItem_Dict_TTL;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow i;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue first;
+    PyValue z;
+    PyValue getitem_at_origin1_value;
+    PyValue getitem_at_origin1_kept;
+    PyValue getitem_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      getitem_at_origin1_dropped = ir_in->getitem_at_origin1_dropped;
+    }
+    goto rop_GetItem_Dict_TTL_getitem_at_origin1_Moved;
+    rop_GetItem_Dict_TTL_getitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(getitem_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved)
+#endif
 
         TARGET(GetItem_Dict_TTL) {
             // GetItem.Dict_TTL (inline)
@@ -12984,21 +18731,132 @@
             rop_GetItem_Dict_TTL_Tail1_Rest3:
             ROP_TAIL_DISPATCH();
             rop_GetItem_Dict_TTL_getitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs4 = (_PyRopSrcs){frame, 2, {1, 0}, {home_key, home_obj}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 98, this_instr);
+            { rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed);
             rop_GetItem_Dict_TTL_getitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(getitem_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->getitem_at_origin1_dropped = getitem_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed) {
+    // GetItem.Dict_TTT: the cold region from rop_GetItem_Dict_TTT_getitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetItem_Dict_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow i;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue first;
+    PyValue z;
+    PyValue getitem_at_origin1_value;
+    PyValue getitem_at_origin1_kept;
+    PyValue getitem_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_GetItem_Dict_TTT_getitem_at_origin1_Failed;
+    rop_GetItem_Dict_TTT_getitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs4 = (_PyRopSrcs){frame, 2, {0, 0}, {home_key, home_obj}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 98, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue getitem_at_origin1_dropped;
+} rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved) {
+    // GetItem.Dict_TTT: the cold region from rop_GetItem_Dict_TTT_getitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetItem_Dict_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow i;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue first;
+    PyValue z;
+    PyValue getitem_at_origin1_value;
+    PyValue getitem_at_origin1_kept;
+    PyValue getitem_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      getitem_at_origin1_dropped = ir_in->getitem_at_origin1_dropped;
+    }
+    goto rop_GetItem_Dict_TTT_getitem_at_origin1_Moved;
+    rop_GetItem_Dict_TTT_getitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(getitem_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved)
+#endif
 
         TARGET(GetItem_Dict_TTT) {
             // GetItem.Dict_TTT (inline)
@@ -13106,21 +18964,134 @@
             rop_GetItem_Dict_TTT_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
             rop_GetItem_Dict_TTT_getitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs4 = (_PyRopSrcs){frame, 2, {0, 0}, {home_key, home_obj}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 98, this_instr);
+            { rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed);
             rop_GetItem_Dict_TTT_getitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(getitem_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->getitem_at_origin1_dropped = getitem_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_getitem_at_origin1_Failed) {
+    // GetItem.Dict: the cold region from rop_GetItem_Dict_getitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_GetItem_Dict;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow i;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue first;
+    PyValue z;
+    PyValue getitem_at_origin1_value;
+    PyValue getitem_at_origin1_kept;
+    PyValue getitem_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_GetItem_Dict_getitem_at_origin1_Failed;
+    rop_GetItem_Dict_getitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs4 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 98, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_getitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue getitem_at_origin1_dropped;
+} rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_getitem_at_origin1_Moved) {
+    // GetItem.Dict: the cold region from rop_GetItem_Dict_getitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_GetItem_Dict;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow i;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue first;
+    PyValue z;
+    PyValue getitem_at_origin1_value;
+    PyValue getitem_at_origin1_kept;
+    PyValue getitem_at_origin1_dropped;
+    { const rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      getitem_at_origin1_dropped = ir_in->getitem_at_origin1_dropped;
+    }
+    goto rop_GetItem_Dict_getitem_at_origin1_Moved;
+    rop_GetItem_Dict_getitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(getitem_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_getitem_at_origin1_Moved)
+#endif
 
         TARGET(GetItem_Dict) {
             // GetItem.Dict (inline)
@@ -13248,21 +19219,134 @@
             rop_GetItem_Dict_Tail1_Rest5:
             ROP_TAIL_DISPATCH();
             rop_GetItem_Dict_getitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs4 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 98, this_instr);
+            { rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_Dict_getitem_at_origin1_Failed);
             rop_GetItem_Dict_getitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(getitem_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->getitem_at_origin1_dropped = getitem_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_GetItem_Dict_getitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed) {
+    // SetItem.ListIndex_TLT: the cold region from rop_SetItem_ListIndex_TLT_setitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_SetItem_ListIndex_TLT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow i;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow w;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    int ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue old;
+    { const rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_ListIndex_TLT_setitem_at_origin1_Failed;
+    rop_SetItem_ListIndex_TLT_setitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs4 = (_PyRopSrcs){frame, 3, {1, 0, 0}, {home_key, home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 170, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved) {
+    // SetItem.ListIndex_TLT: the cold region from rop_SetItem_ListIndex_TLT_setitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_SetItem_ListIndex_TLT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow i;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow w;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    int ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue old;
+    { const rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_ListIndex_TLT_setitem_at_origin1_Moved;
+    rop_SetItem_ListIndex_TLT_setitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    _PyRop_RetireAbandoned(&a_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved)
+#endif
 
         TARGET(SetItem_ListIndex_TLT) {
             // SetItem.ListIndex_TLT (inline)
@@ -13380,19 +19464,137 @@
             rop_SetItem_ListIndex_TLT_Tail1_Rest5:
             ROP_TAIL_DISPATCH();
             rop_SetItem_ListIndex_TLT_setitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs4 = (_PyRopSrcs){frame, 3, {1, 0, 0}, {home_key, home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 170, this_instr);
+            { rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed);
             rop_SetItem_ListIndex_TLT_setitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            _PyRop_RetireAbandoned(&a_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed) {
+    // SetItem.ListIndex_TTT: the cold region from rop_SetItem_ListIndex_TTT_setitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_SetItem_ListIndex_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow i;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow w;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    int ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue old;
+    { const rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_ListIndex_TTT_setitem_at_origin1_Failed;
+    rop_SetItem_ListIndex_TTT_setitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs4 = (_PyRopSrcs){frame, 3, {0, 0, 0}, {home_key, home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 170, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved) {
+    // SetItem.ListIndex_TTT: the cold region from rop_SetItem_ListIndex_TTT_setitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_SetItem_ListIndex_TTT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow i;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow w;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    int ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue old;
+    { const rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_ListIndex_TTT_setitem_at_origin1_Moved;
+    rop_SetItem_ListIndex_TTT_setitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    _PyRop_RetireAbandoned(&a_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved)
+#endif
 
         TARGET(SetItem_ListIndex_TTT) {
             // SetItem.ListIndex_TTT (inline)
@@ -13512,19 +19714,137 @@
             rop_SetItem_ListIndex_TTT_Tail1_Rest5:
             ROP_TAIL_DISPATCH();
             rop_SetItem_ListIndex_TTT_setitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs4 = (_PyRopSrcs){frame, 3, {0, 0, 0}, {home_key, home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 170, this_instr);
+            { rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed);
             rop_SetItem_ListIndex_TTT_setitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            _PyRop_RetireAbandoned(&a_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_setitem_at_origin1_Failed) {
+    // SetItem.ListIndex: the cold region from rop_SetItem_ListIndex_setitem_at_origin1_Failed
+    int opcode = ROP_HANDLER_SetItem_ListIndex;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow i;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow w;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    int ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue old;
+    { const rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_ListIndex_setitem_at_origin1_Failed;
+    rop_SetItem_ListIndex_setitem_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs4 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 170, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_ListIndex_setitem_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_setitem_at_origin1_Moved) {
+    // SetItem.ListIndex: the cold region from rop_SetItem_ListIndex_setitem_at_origin1_Moved
+    int opcode = ROP_HANDLER_SetItem_ListIndex;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow i;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow w;
+    PyValue out1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    int ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue old;
+    { const rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_ListIndex_setitem_at_origin1_Moved;
+    rop_SetItem_ListIndex_setitem_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    _PyRop_RetireAbandoned(&a_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_ListIndex_setitem_at_origin1_Moved)
+#endif
 
         TARGET(SetItem_ListIndex) {
             // SetItem.ListIndex (inline)
@@ -13655,19 +19975,131 @@
             rop_SetItem_ListIndex_Tail1_Rest5:
             ROP_TAIL_DISPATCH();
             rop_SetItem_ListIndex_setitem_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs4 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 170, this_instr);
+            { rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_ListIndex_setitem_at_origin1_Failed);
             rop_SetItem_ListIndex_setitem_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            _PyRop_RetireAbandoned(&a_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_ListIndex_setitem_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_Dict_dict_store_at_origin1_Failed) {
+    // SetItem.Dict: the cold region from rop_SetItem_Dict_dict_store_at_origin1_Failed
+    int opcode = ROP_HANDLER_SetItem_Dict;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow l;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    { const rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_Dict_dict_store_at_origin1_Failed;
+    rop_SetItem_Dict_dict_store_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs3 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 170, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_Dict_dict_store_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_Dict_dict_store_at_origin1_Moved) {
+    // SetItem.Dict: the cold region from rop_SetItem_Dict_dict_store_at_origin1_Moved
+    int opcode = ROP_HANDLER_SetItem_Dict;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow l;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+    int ret1;
+    PyValue own_obj = PyValue_NULL;
+    PyValue own_key = PyValue_NULL;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    { const rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_SetItem_Dict_dict_store_at_origin1_Moved;
+    rop_SetItem_Dict_dict_store_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_SetItem_Dict_dict_store_at_origin1_Moved)
+#endif
 
         TARGET(SetItem_Dict) {
             // SetItem.Dict (inline)
@@ -13760,18 +20192,25 @@
             rop_SetItem_Dict_Tail0_Rest6:
             ROP_TAIL_DISPATCH();
             rop_SetItem_Dict_dict_store_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs3 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 170, this_instr);
+            { rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_Dict_dict_store_at_origin1_Failed);
             rop_SetItem_Dict_dict_store_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_SetItem_Dict_dict_store_at_origin1_Moved);
         }
 
         TARGET(IterOpen_Self) {
@@ -13865,6 +20304,47 @@
             ROP_TAIL_DISPATCH();
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_IterOpen_GenMethod_Failed;
+static_assert(sizeof(rop_in_Cold_IterOpen_GenMethod_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_IterOpen_GenMethod_Failed) {
+    // IterOpen.GenMethod: the cold region from rop_IterOpen_GenMethod_Failed
+    int opcode = ROP_HANDLER_IterOpen_GenMethod;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow v;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue ret1;
+    PyValue own_source = PyValue_NULL;
+    PyValue old_pair_receiver;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    PyValue g;
+    { const rop_in_Cold_IterOpen_GenMethod_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_IterOpen_GenMethod_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_IterOpen_GenMethod_Failed;
+    rop_IterOpen_GenMethod_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_source}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 120, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_IterOpen_GenMethod_Failed)
+#endif
+
         TARGET(IterOpen_GenMethod) {
             // IterOpen.GenMethod (split)
             int opcode = ROP_HANDLER_IterOpen_GenMethod;
@@ -13936,12 +20416,11 @@
             rop_IterOpen_GenMethod_Tail0_Rest4:
             ROP_TAIL_DISPATCH();
             rop_IterOpen_GenMethod_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_source}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 120, this_instr);
+            { rop_in_Cold_IterOpen_GenMethod_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_IterOpen_GenMethod_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_IterOpen_GenMethod_Failed);
         }
 
         TARGET(ForIter_List) {
@@ -14173,6 +20652,58 @@
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_ForIter_Indexed_Failed;
+static_assert(sizeof(rop_in_Cold_ForIter_Indexed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Indexed_Failed) {
+    // ForIter.Indexed: the cold region from rop_ForIter_Indexed_Failed
+    int opcode = ROP_HANDLER_ForIter_Indexed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_item;
+    PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue own_pair_cursor = PyValue_NULL;
+    PyValue iv;
+    PyValue nc;
+    PyValue ev;
+    { const rop_in_Cold_ForIter_Indexed_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Indexed_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_ForIter_Indexed_Failed;
+    rop_ForIter_Indexed_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 85, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Indexed_Failed)
+#endif
+
         TARGET(ForIter_Indexed) {
             // ForIter.Indexed (split)
             int opcode = ROP_HANDLER_ForIter_Indexed;
@@ -14254,12 +20785,13 @@
             rop_ForIter_Indexed_Tail0_Rest4:
             ROP_TAIL_DISPATCH();
             rop_ForIter_Indexed_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 85, this_instr);
+            { rop_in_Cold_ForIter_Indexed_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Indexed_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_ForIter_Indexed_Failed);
             rop_ForIter_Indexed_Exhausted:
             own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
             own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
@@ -14325,6 +20857,47 @@
             PROCESS_ERROR_AT(RAISE, 85, this_instr);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_ForIter_Slot_Failed;
+static_assert(sizeof(rop_in_Cold_ForIter_Slot_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Slot_Failed) {
+    // ForIter.Slot: the cold region from rop_ForIter_Slot_Failed
+    int opcode = ROP_HANDLER_ForIter_Slot;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    _PyStatusValue ret1;
+    PyValue old_item;
+    PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue own_pair_cursor = PyValue_NULL;
+    PyValue iv;
+    PyValue ev;
+    { const rop_in_Cold_ForIter_Slot_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Slot_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_ForIter_Slot_Failed;
+    rop_ForIter_Slot_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 85, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Slot_Failed)
+#endif
+
         TARGET(ForIter_Slot) {
             // ForIter.Slot (split)
             int opcode = ROP_HANDLER_ForIter_Slot;
@@ -14385,12 +20958,11 @@
             rop_ForIter_Slot_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_ForIter_Slot_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 85, this_instr);
+            { rop_in_Cold_ForIter_Slot_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Slot_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_ForIter_Slot_Failed);
             rop_ForIter_Slot_Exhausted:
             own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
             own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
@@ -14420,6 +20992,159 @@
             rop_ForIter_Slot_Tail1_Rest4:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_ForIter_Observed_Failed;
+static_assert(sizeof(rop_in_Cold_ForIter_Observed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Observed_Failed) {
+    // ForIter.Observed: the cold region from rop_ForIter_Observed_Failed
+    int opcode = ROP_HANDLER_ForIter_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_item;
+    PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    int ret8;
+    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue own_pair_cursor = PyValue_NULL;
+    int ret9;
+    PyValue iv;
+    PyValue nc;
+    PyValue ev;
+    { const rop_in_Cold_ForIter_Observed_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Observed_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_ForIter_Observed_Failed;
+    rop_ForIter_Observed_Failed:
+    IR_STUB_ESCAPE();
+    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs7 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all6, &srcs7);
+    PROCESS_ERROR_AT(RAISE, 85, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Observed_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue a_owned0;
+    PyValue a_owned1;
+} rop_in_Cold_ForIter_Observed_StopFailed;
+static_assert(sizeof(rop_in_Cold_ForIter_Observed_StopFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Observed_StopFailed) {
+    // ForIter.Observed: the cold region from rop_ForIter_Observed_StopFailed
+    int opcode = ROP_HANDLER_ForIter_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_item;
+    PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    int ret8;
+    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue own_pair_cursor = PyValue_NULL;
+    int ret9;
+    PyValue iv;
+    PyValue nc;
+    PyValue ev;
+    { const rop_in_Cold_ForIter_Observed_StopFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Observed_StopFailed);
+      a_owned0 = ir_in->a_owned0;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_ForIter_Observed_StopFailed;
+    rop_ForIter_Observed_StopFailed:
+    PyValue_XCLOSE(a_owned0);
+    PyValue_XCLOSE(a_owned1);
+    PROCESS_ERROR_AT(RAISE, 81, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Observed_StopFailed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue a_owned0;
+    PyValue a_owned1;
+} rop_in_Cold_ForIter_Observed_StopMoved;
+static_assert(sizeof(rop_in_Cold_ForIter_Observed_StopMoved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Observed_StopMoved) {
+    // ForIter.Observed: the cold region from rop_ForIter_Observed_StopMoved
+    int opcode = ROP_HANDLER_ForIter_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_pair_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_pair_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_item;
+    PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
+    int ret5;
+    _PyRopAnchors a_all6;
+    _PyRopSrcs srcs7;
+    int ret8;
+    PyValue own_pair_receiver = PyValue_NULL;
+    PyValue own_pair_cursor = PyValue_NULL;
+    int ret9;
+    PyValue iv;
+    PyValue nc;
+    PyValue ev;
+    { const rop_in_Cold_ForIter_Observed_StopMoved *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Observed_StopMoved);
+      a_owned0 = ir_in->a_owned0;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_ForIter_Observed_StopMoved;
+    rop_ForIter_Observed_StopMoved:
+    PyValue_XCLOSE(a_owned0);
+    PyValue_XCLOSE(a_owned1);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Observed_StopMoved)
+#endif
 
         TARGET(ForIter_Observed) {
             // ForIter.Observed (split)
@@ -14490,12 +21215,13 @@
             }
             DISPATCH();
             rop_ForIter_Observed_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs7 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all6, &srcs7);
-            PROCESS_ERROR_AT(RAISE, 85, this_instr);
+            { rop_in_Cold_ForIter_Observed_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Observed_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_ForIter_Observed_Failed);
             rop_ForIter_Observed_Exhausted:
             IR_STUB_ESCAPE();
             ret8 = _PyRop_StopIterationEvent(tstate, frame, this_instr, a_view0, ev);
@@ -14521,15 +21247,17 @@
             }
             IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_ForIter_Observed_StopFailed:
-            IR_COLD();
-            PyValue_XCLOSE(a_owned0);
-            PyValue_XCLOSE(a_owned1);
-            PROCESS_ERROR_AT(RAISE, 81, this_instr);
+            { rop_in_Cold_ForIter_Observed_StopFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Observed_StopFailed);
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_ForIter_Observed_StopFailed);
             rop_ForIter_Observed_StopMoved:
-            IR_COLD();
-            PyValue_XCLOSE(a_owned0);
-            PyValue_XCLOSE(a_owned1);
-            IR_REDIRECT();
+            { rop_in_Cold_ForIter_Observed_StopMoved *ir_in = IR_OUTLINE_IN(rop_in_Cold_ForIter_Observed_StopMoved);
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_ForIter_Observed_StopMoved);
             rop_ForIter_Observed_ExitEventFailed:
             PROCESS_ERROR_AT(RAISE, 84, this_instr);
             rop_ForIter_Observed_ExitMoved:
@@ -14849,6 +21577,45 @@
             PROCESS_ERROR_AT(RAISE, 137, this_instr);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_NamespaceReadFrom_Mapping_Failed;
+static_assert(sizeof(rop_in_Cold_NamespaceReadFrom_Mapping_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_NamespaceReadFrom_Mapping_Failed) {
+    // NamespaceReadFrom.Mapping: the cold region from rop_NamespaceReadFrom_Mapping_Failed
+    int opcode = ROP_HANDLER_NamespaceReadFrom_Mapping;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_mapping = &IR_SLOT(IR_B(ir_word));
+    _PyStatusValue ret1;
+    PyValue own_mapping = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    PyValue ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    PyValue z;
+    { const rop_in_Cold_NamespaceReadFrom_Mapping_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_NamespaceReadFrom_Mapping_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_NamespaceReadFrom_Mapping_Failed;
+    rop_NamespaceReadFrom_Mapping_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 139, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
+#endif
+
         TARGET(NamespaceReadFrom_Mapping) {
             // NamespaceReadFrom.Mapping (shared)
             int opcode = ROP_HANDLER_NamespaceReadFrom_Mapping;
@@ -14914,12 +21681,11 @@
                 goto rop_NamespaceReadFrom_Mapping_Done;
             }
             rop_NamespaceReadFrom_Mapping_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 139, this_instr);
+            { rop_in_Cold_NamespaceReadFrom_Mapping_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_NamespaceReadFrom_Mapping_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_NamespaceReadFrom_Mapping_Failed);
         }
 
         TARGET(NamespaceWrite_Name) {
@@ -16968,6 +23734,113 @@
             PROCESS_ERROR_AT(RAISE, 21, this_instr);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Binary_Extended_extension_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Binary_Extended_extension_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Extended_extension_at_origin1_Failed) {
+    // Binary.Extended: the cold region from rop_Binary_Extended_extension_at_origin1_Failed
+    int opcode = ROP_HANDLER_Binary_Extended;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue extension_at_origin1_value;
+    PyValue extension_at_origin1_kept;
+    PyValue extension_at_origin1_dropped;
+    { const rop_in_Cold_Binary_Extended_extension_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Extended_extension_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Binary_Extended_extension_at_origin1_Failed;
+    rop_Binary_Extended_extension_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 23, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Extended_extension_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue extension_at_origin1_dropped;
+} rop_in_Cold_Binary_Extended_extension_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Binary_Extended_extension_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Extended_extension_at_origin1_Moved) {
+    // Binary.Extended: the cold region from rop_Binary_Extended_extension_at_origin1_Moved
+    int opcode = ROP_HANDLER_Binary_Extended;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue extension_at_origin1_value;
+    PyValue extension_at_origin1_kept;
+    PyValue extension_at_origin1_dropped;
+    { const rop_in_Cold_Binary_Extended_extension_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Extended_extension_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      extension_at_origin1_dropped = ir_in->extension_at_origin1_dropped;
+    }
+    goto rop_Binary_Extended_extension_at_origin1_Moved;
+    rop_Binary_Extended_extension_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(extension_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Extended_extension_at_origin1_Moved)
+#endif
+
         TARGET(Binary_Extended) {
             // Binary.Extended (shared)
             int opcode = ROP_HANDLER_Binary_Extended;
@@ -17059,20 +23932,22 @@
             rop_Binary_Extended_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_Binary_Extended_extension_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 23, this_instr);
+            { rop_in_Cold_Binary_Extended_extension_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Extended_extension_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Extended_extension_at_origin1_Failed);
             rop_Binary_Extended_extension_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(extension_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_Binary_Extended_extension_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Extended_extension_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->extension_at_origin1_dropped = extension_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Extended_extension_at_origin1_Moved);
         }
 
         TARGET(Unary_Generic) {
@@ -17108,6 +23983,47 @@
             rop_Unary_Generic_Failed:
             PROCESS_ERROR_AT(RAISE, 194, this_instr);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_AppendText_Text_Failed;
+static_assert(sizeof(rop_in_Cold_AppendText_Text_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AppendText_Text_Failed) {
+    // AppendText.Text: the cold region from rop_AppendText_Text_Failed
+    int opcode = ROP_HANDLER_AppendText_Text;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue ret1;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    PyValue z;
+    { const rop_in_Cold_AppendText_Text_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AppendText_Text_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_AppendText_Text_Failed;
+    rop_AppendText_Text_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_y}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 9, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_AppendText_Text_Failed)
+#endif
 
         TARGET(AppendText_Text) {
             // AppendText.Text (shared)
@@ -17170,13 +24086,97 @@
             rop_AppendText_Text_Tail0_Rest3:
             ROP_TAIL_DISPATCH();
             rop_AppendText_Text_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_y}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 9, this_instr);
+            { rop_in_Cold_AppendText_Text_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_AppendText_Text_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_AppendText_Text_Failed);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Length_Size_length_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Length_Size_length_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Length_Size_length_at_origin1_Failed) {
+    // Length.Size: the cold region from rop_Length_Size_length_at_origin1_Failed
+    int opcode = ROP_HANDLER_Length_Size;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue length_at_origin1_value;
+    PyValue length_at_origin1_kept;
+    PyValue length_at_origin1_dropped;
+    { const rop_in_Cold_Length_Size_length_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Length_Size_length_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_Length_Size_length_at_origin1_Failed;
+    rop_Length_Size_length_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 124, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Length_Size_length_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue length_at_origin1_dropped;
+} rop_in_Cold_Length_Size_length_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Length_Size_length_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Length_Size_length_at_origin1_Moved) {
+    // Length.Size: the cold region from rop_Length_Size_length_at_origin1_Moved
+    int opcode = ROP_HANDLER_Length_Size;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue length_at_origin1_value;
+    PyValue length_at_origin1_kept;
+    PyValue length_at_origin1_dropped;
+    { const rop_in_Cold_Length_Size_length_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Length_Size_length_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      length_at_origin1_dropped = ir_in->length_at_origin1_dropped;
+    }
+    goto rop_Length_Size_length_at_origin1_Moved;
+    rop_Length_Size_length_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(length_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Length_Size_length_at_origin1_Moved)
+#endif
 
         TARGET(Length_Size) {
             // Length.Size (shared)
@@ -17231,20 +24231,18 @@
             rop_Length_Size_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
             rop_Length_Size_length_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 124, this_instr);
+            { rop_in_Cold_Length_Size_length_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Length_Size_length_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_Length_Size_length_at_origin1_Failed);
             rop_Length_Size_length_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(length_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_Length_Size_length_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Length_Size_length_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->length_at_origin1_dropped = length_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_Length_Size_length_at_origin1_Moved);
         }
 
         TARGET(Pattern_Flag) {
@@ -17272,6 +24270,81 @@
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    _PyRopAnchors a;
+} rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_PatternClass_Match_match_class_at_origin1_Failed) {
+    // PatternClass.Match: the cold region from rop_PatternClass_Match_match_class_at_origin1_Failed
+    int opcode = ROP_HANDLER_PatternClass_Match;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
+    _PyRopSpan span1;
+    _PyRopAnchors a;
+    PyValue ret2;
+    _PyRopSpan span3;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopSpan span4;
+    PyValue z;
+    PyValue match_class_at_origin1_value;
+    PyValue match_class_at_origin1_kept;
+    PyValue match_class_at_origin1_dropped;
+    { const rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed);
+      a = ir_in->a;
+    }
+    goto rop_PatternClass_Match_match_class_at_origin1_Failed;
+    rop_PatternClass_Match_match_class_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    span4 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
+    _PyRop_RetireFailedCall(&a, &span4);
+    PROCESS_ERROR_AT(RAISE, 146, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_PatternClass_Match_match_class_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    _PyRopAnchors a;
+    PyValue match_class_at_origin1_dropped;
+} rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_PatternClass_Match_match_class_at_origin1_Moved) {
+    // PatternClass.Match: the cold region from rop_PatternClass_Match_match_class_at_origin1_Moved
+    int opcode = ROP_HANDLER_PatternClass_Match;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + (IR_B(ir_word) + 3) / IR_OPERANDS_PER_WORD;
+    _PyRopSpan span1;
+    _PyRopAnchors a;
+    PyValue ret2;
+    _PyRopSpan span3;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopSpan span4;
+    PyValue z;
+    PyValue match_class_at_origin1_value;
+    PyValue match_class_at_origin1_kept;
+    PyValue match_class_at_origin1_dropped;
+    { const rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved);
+      a = ir_in->a;
+      match_class_at_origin1_dropped = ir_in->match_class_at_origin1_dropped;
+    }
+    goto rop_PatternClass_Match_match_class_at_origin1_Moved;
+    rop_PatternClass_Match_match_class_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(match_class_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    _PyRop_RetireAbandoned(&a);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_PatternClass_Match_match_class_at_origin1_Moved)
+#endif
 
         TARGET(PatternClass_Match) {
             // PatternClass.Match (shared)
@@ -17320,19 +24393,116 @@
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
             rop_PatternClass_Match_match_class_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            span4 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
-            _PyRop_RetireFailedCall(&a, &span4);
-            PROCESS_ERROR_AT(RAISE, 146, this_instr);
+            { rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed);
+              ir_in->a = a;
+            }
+            IR_OUTLINE_GOTO(Cold_PatternClass_Match_match_class_at_origin1_Failed);
             rop_PatternClass_Match_match_class_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(match_class_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            _PyRop_RetireAbandoned(&a);
-            IR_REDIRECT();
+            { rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved);
+              ir_in->a = a;
+              ir_in->match_class_at_origin1_dropped = match_class_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_PatternClass_Match_match_class_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_PatternKeys_Match_match_keys_at_origin1_Failed) {
+    // PatternKeys.Match: the cold region from rop_PatternKeys_Match_match_keys_at_origin1_Failed
+    int opcode = ROP_HANDLER_PatternKeys_Match;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_subject = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_keys = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue match_keys_at_origin1_value;
+    PyValue match_keys_at_origin1_kept;
+    PyValue match_keys_at_origin1_dropped;
+    { const rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_PatternKeys_Match_match_keys_at_origin1_Failed;
+    rop_PatternKeys_Match_match_keys_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 148, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue match_keys_at_origin1_dropped;
+} rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_PatternKeys_Match_match_keys_at_origin1_Moved) {
+    // PatternKeys.Match: the cold region from rop_PatternKeys_Match_match_keys_at_origin1_Moved
+    int opcode = ROP_HANDLER_PatternKeys_Match;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_subject = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_keys = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue match_keys_at_origin1_value;
+    PyValue match_keys_at_origin1_kept;
+    PyValue match_keys_at_origin1_dropped;
+    { const rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      match_keys_at_origin1_dropped = ir_in->match_keys_at_origin1_dropped;
+    }
+    goto rop_PatternKeys_Match_match_keys_at_origin1_Moved;
+    rop_PatternKeys_Match_match_keys_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(match_keys_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Moved)
+#endif
 
         TARGET(PatternKeys_Match) {
             // PatternKeys.Match (shared)
@@ -17398,20 +24568,22 @@
             rop_PatternKeys_Match_Tail0_Rest3:
             ROP_TAIL_DISPATCH();
             rop_PatternKeys_Match_match_keys_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 148, this_instr);
+            { rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_PatternKeys_Match_match_keys_at_origin1_Failed);
             rop_PatternKeys_Match_match_keys_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(match_keys_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->match_keys_at_origin1_dropped = match_keys_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_PatternKeys_Match_match_keys_at_origin1_Moved);
         }
 
         TARGET(Resume_Poll) {
@@ -17821,6 +24993,61 @@
             PROCESS_ERROR_AT(RAISE, 163, this_instr);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Send_Virtual_Failed;
+static_assert(sizeof(rop_in_Cold_Send_Virtual_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Virtual_Failed) {
+    // Send.Virtual: the cold region from rop_Send_Virtual_Failed
+    int opcode = ROP_HANDLER_Send_Virtual;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    PyValue y;
+    PyValue nc;
+    PyValue rv;
+    { const rop_in_Cold_Send_Virtual_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Virtual_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Send_Virtual_Failed;
+    rop_Send_Virtual_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 166, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Send_Virtual_Failed)
+#endif
+
         TARGET(Send_Virtual) {
             // Send.Virtual (split)
             int opcode = ROP_HANDLER_Send_Virtual;
@@ -17908,12 +25135,13 @@
             rop_Send_Virtual_Tail0_Rest4:
             ROP_TAIL_DISPATCH();
             rop_Send_Virtual_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 166, this_instr);
+            { rop_in_Cold_Send_Virtual_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Virtual_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Send_Virtual_Failed);
             rop_Send_Virtual_Done:
             own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
             own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
@@ -17959,6 +25187,67 @@
             rop_Send_Virtual_Tail1_Rest6:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_Send_AsyncGen_Failed;
+static_assert(sizeof(rop_in_Cold_Send_AsyncGen_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_AsyncGen_Failed) {
+    // Send.AsyncGen: the cold region from rop_Send_AsyncGen_Failed
+    int opcode = ROP_HANDLER_Send_AsyncGen;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    PyValue y;
+    PyValue nc;
+    PyValue rv;
+    { const rop_in_Cold_Send_AsyncGen_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_AsyncGen_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_Send_AsyncGen_Failed;
+    rop_Send_AsyncGen_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 166, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Send_AsyncGen_Failed)
+#endif
 
         TARGET(Send_AsyncGen) {
             // Send.AsyncGen (split)
@@ -18054,12 +25343,15 @@
             rop_Send_AsyncGen_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_Send_AsyncGen_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 166, this_instr);
+            { rop_in_Cold_Send_AsyncGen_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_AsyncGen_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_Send_AsyncGen_Failed);
             rop_Send_AsyncGen_Done:
             own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
             own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
@@ -18111,6 +25403,221 @@
             rop_Send_AsyncGen_Tail1_Rest7:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_Send_Observed_Failed;
+static_assert(sizeof(rop_in_Cold_Send_Observed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Observed_Failed) {
+    // Send.Observed: the cold region from rop_Send_Observed_Failed
+    int opcode = ROP_HANDLER_Send_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    bool won;
+    PyValueBorrow g;
+    PyValue sent;
+    _PyInterpreterFrame * c;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyStatusValue ret7;
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    int ret8;
+    _PyRopAnchors a_all9;
+    _PyRopSrcs srcs10;
+    PyValue y;
+    PyValue nc;
+    PyValue rv;
+    PyValue w;
+    { const rop_in_Cold_Send_Observed_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Observed_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_Send_Observed_Failed;
+    rop_Send_Observed_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 166, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Send_Observed_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_Send_Observed_StopFailed;
+static_assert(sizeof(rop_in_Cold_Send_Observed_StopFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Observed_StopFailed) {
+    // Send.Observed: the cold region from rop_Send_Observed_StopFailed
+    int opcode = ROP_HANDLER_Send_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    bool won;
+    PyValueBorrow g;
+    PyValue sent;
+    _PyInterpreterFrame * c;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyStatusValue ret7;
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    int ret8;
+    _PyRopAnchors a_all9;
+    _PyRopSrcs srcs10;
+    PyValue y;
+    PyValue nc;
+    PyValue rv;
+    PyValue w;
+    { const rop_in_Cold_Send_Observed_StopFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Observed_StopFailed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      a_view2 = ir_in->a_view2;
+      a_owned2 = ir_in->a_owned2;
+    }
+    goto rop_Send_Observed_StopFailed;
+    rop_Send_Observed_StopFailed:
+    IR_STUB_ESCAPE();
+    a_all9 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
+    srcs10 = (_PyRopSrcs){frame, 0, {}, {}};
+    _PyRop_RetireFailedCall(&a_all9, &srcs10);
+    PROCESS_ERROR_AT(RAISE, 166, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Send_Observed_StopFailed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue a_owned0;
+    PyValue a_owned1;
+    PyValue a_owned2;
+    PyValue own_send_receiver;
+    PyValue own_send_cursor;
+    PyValue own_send_value;
+} rop_in_Cold_Send_Observed_Moved;
+static_assert(sizeof(rop_in_Cold_Send_Observed_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Observed_Moved) {
+    // Send.Observed: the cold region from rop_Send_Observed_Moved
+    int opcode = ROP_HANDLER_Send_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_send_receiver = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_send_value = &IR_SLOT((IR_B(ir_word) + 2));
+    bool won;
+    PyValueBorrow g;
+    PyValue sent;
+    _PyInterpreterFrame * c;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_send_cursor = &IR_SLOT((IR_B(ir_word) + 1));
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue out1;
+    _PyStatusValue ret2;
+    PyValue arg3;
+    PyValue arg4;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyStatusValue ret7;
+    PyValue own_send_receiver = PyValue_NULL;
+    PyValue own_send_cursor = PyValue_NULL;
+    PyValue own_send_value = PyValue_NULL;
+    PyValue old_completed;
+    PyValue *const home_completed = &IR_SLOT(IR_A(ir_word));
+    int ret8;
+    _PyRopAnchors a_all9;
+    _PyRopSrcs srcs10;
+    PyValue y;
+    PyValue nc;
+    PyValue rv;
+    PyValue w;
+    { const rop_in_Cold_Send_Observed_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Observed_Moved);
+      a_owned0 = ir_in->a_owned0;
+      a_owned1 = ir_in->a_owned1;
+      a_owned2 = ir_in->a_owned2;
+      own_send_receiver = ir_in->own_send_receiver;
+      own_send_cursor = ir_in->own_send_cursor;
+      own_send_value = ir_in->own_send_value;
+    }
+    goto rop_Send_Observed_Moved;
+    rop_Send_Observed_Moved:
+    own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
+    own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
+    own_send_value = _PyFrame_TakeHome(frame, home_send_value);
+    PyValue_XCLOSE(a_owned0);
+    PyValue_XCLOSE(a_owned1);
+    PyValue_XCLOSE(a_owned2);
+    PyValue_XCLOSE(own_send_receiver);
+    PyValue_XCLOSE(own_send_cursor);
+    PyValue_XCLOSE(own_send_value);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Send_Observed_Moved)
+#endif
 
         TARGET(Send_Observed) {
             // Send.Observed (split)
@@ -18223,12 +25730,15 @@
             rop_Send_Observed_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_Send_Observed_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 166, this_instr);
+            { rop_in_Cold_Send_Observed_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Observed_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_Send_Observed_Failed);
             rop_Send_Observed_Done:
             IR_STUB_ESCAPE();
             ret7 = _PyRop_SendStopEvent(tstate, frame, this_instr, a_view0, rv);
@@ -18262,24 +25772,25 @@
             }
             IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_Send_Observed_StopFailed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all9 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
-            srcs10 = (_PyRopSrcs){frame, 0, {}, {}};
-            _PyRop_RetireFailedCall(&a_all9, &srcs10);
-            PROCESS_ERROR_AT(RAISE, 166, this_instr);
+            { rop_in_Cold_Send_Observed_StopFailed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Observed_StopFailed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_view2 = a_view2;
+              ir_in->a_owned2 = a_owned2;
+            }
+            IR_OUTLINE_GOTO(Cold_Send_Observed_StopFailed);
             rop_Send_Observed_Moved:
-            IR_COLD();
-            own_send_receiver = _PyFrame_TakeHome(frame, home_send_receiver);
-            own_send_cursor = _PyFrame_TakeHome(frame, home_send_cursor);
-            own_send_value = _PyFrame_TakeHome(frame, home_send_value);
-            PyValue_XCLOSE(a_owned0);
-            PyValue_XCLOSE(a_owned1);
-            PyValue_XCLOSE(a_owned2);
-            PyValue_XCLOSE(own_send_receiver);
-            PyValue_XCLOSE(own_send_cursor);
-            PyValue_XCLOSE(own_send_value);
-            IR_REDIRECT();
+            { rop_in_Cold_Send_Observed_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Send_Observed_Moved);
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->a_owned2 = a_owned2;
+              ir_in->own_send_receiver = own_send_receiver;
+              ir_in->own_send_cursor = own_send_cursor;
+              ir_in->own_send_value = own_send_value;
+            }
+            IR_OUTLINE_GOTO(Cold_Send_Observed_Moved);
             rop_Send_Observed_ExitFailed:
             PROCESS_ERROR_AT(RAISE, 165, this_instr);
             rop_Send_Observed_ExitMoved:
@@ -18901,6 +26412,101 @@
             ROP_TAIL_DISPATCH();
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Set_set_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Contains_Set_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Set_set_test_at_origin1_Failed) {
+    // Contains.Set: the cold region from rop_Contains_Set_set_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_Contains_Set;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_container = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_item = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_item = PyValue_NULL;
+    PyValue own_container = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    bool set_test_at_origin1_hit;
+    { const rop_in_Cold_Contains_Set_set_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Set_set_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Contains_Set_set_test_at_origin1_Failed;
+    rop_Contains_Set_set_test_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 66, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Contains_Set_set_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Set_set_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Contains_Set_set_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Set_set_test_at_origin1_Moved) {
+    // Contains.Set: the cold region from rop_Contains_Set_set_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_Contains_Set;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_container = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_item = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_item = PyValue_NULL;
+    PyValue own_container = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    bool set_test_at_origin1_hit;
+    { const rop_in_Cold_Contains_Set_set_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Set_set_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Contains_Set_set_test_at_origin1_Moved;
+    rop_Contains_Set_set_test_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Contains_Set_set_test_at_origin1_Moved)
+#endif
+
         TARGET(Contains_Set) {
             // Contains.Set (shared)
             int opcode = ROP_HANDLER_Contains_Set;
@@ -18994,27 +26600,125 @@
             rop_Contains_Set_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_Contains_Set_set_test_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 66, this_instr);
+            { rop_in_Cold_Contains_Set_set_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Set_set_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Contains_Set_set_test_at_origin1_Failed);
             rop_Contains_Set_set_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 set_test_at_origin1_hit = false;
                 goto rop_Contains_Set_set_test_at_origin1_Said;
             }
             rop_Contains_Set_set_test_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_Contains_Set_set_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Set_set_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Contains_Set_set_test_at_origin1_Moved);
             rop_Contains_Set_set_test_at_origin1_Not:
             z = _PyRop_TruthObject(false, (uint32_t)IR_D(ir_word));
             goto rop_Contains_Set_Finish;
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Dict_dict_test_at_origin1_Failed) {
+    // Contains.Dict: the cold region from rop_Contains_Dict_dict_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_Contains_Dict;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_container = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_item = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_item = PyValue_NULL;
+    PyValue own_container = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    bool dict_test_at_origin1_hit;
+    { const rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Contains_Dict_dict_test_at_origin1_Failed;
+    rop_Contains_Dict_dict_test_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 66, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Contains_Dict_dict_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Dict_dict_test_at_origin1_Moved) {
+    // Contains.Dict: the cold region from rop_Contains_Dict_dict_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_Contains_Dict;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_container = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_item = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_item = PyValue_NULL;
+    PyValue own_container = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    bool dict_test_at_origin1_hit;
+    { const rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_Contains_Dict_dict_test_at_origin1_Moved;
+    rop_Contains_Dict_dict_test_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Contains_Dict_dict_test_at_origin1_Moved)
+#endif
 
         TARGET(Contains_Dict) {
             // Contains.Dict (shared)
@@ -19109,23 +26813,26 @@
             rop_Contains_Dict_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_Contains_Dict_dict_test_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 66, this_instr);
+            { rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Contains_Dict_dict_test_at_origin1_Failed);
             rop_Contains_Dict_dict_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 dict_test_at_origin1_hit = false;
                 goto rop_Contains_Dict_dict_test_at_origin1_Said;
             }
             rop_Contains_Dict_dict_test_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_Contains_Dict_dict_test_at_origin1_Moved);
             rop_Contains_Dict_dict_test_at_origin1_Not:
             z = _PyRop_TruthObject(false, (uint32_t)IR_D(ir_word));
             goto rop_Contains_Dict_Finish;
@@ -20123,6 +27830,97 @@
             ROP_TAIL_DISPATCH();
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Set_TT_set_test_at_origin1_Failed) {
+    // TestBranch.Set_TT: the cold region from rop_TestBranch_Set_TT_set_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_TestBranch_Set_TT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool set_test_at_origin1_hit;
+    { const rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Set_TT_set_test_at_origin1_Failed;
+    rop_TestBranch_Set_TT_set_test_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {0, 0}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Set_TT_set_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Set_TT_set_test_at_origin1_Moved) {
+    // TestBranch.Set_TT: the cold region from rop_TestBranch_Set_TT_set_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_TestBranch_Set_TT;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool set_test_at_origin1_hit;
+    { const rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Set_TT_set_test_at_origin1_Moved;
+    rop_TestBranch_Set_TT_set_test_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Set_TT_set_test_at_origin1_Moved)
+#endif
+
         TARGET(TestBranch_Set_TT) {
             // TestBranch.Set_TT (shared)
             int opcode = ROP_HANDLER_TestBranch_Set_TT;
@@ -20207,23 +28005,26 @@
             rop_TestBranch_Set_TT_Tail0_Rest4:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_TestBranch_Set_TT_set_test_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {0, 0}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 188, this_instr);
+            { rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Set_TT_set_test_at_origin1_Failed);
             rop_TestBranch_Set_TT_set_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 set_test_at_origin1_hit = false;
                 goto rop_TestBranch_Set_TT_set_test_at_origin1_Said;
             }
             rop_TestBranch_Set_TT_set_test_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Set_TT_set_test_at_origin1_Moved);
             rop_TestBranch_Set_TT_set_test_at_origin1_Not:
             hit = false;
             goto rop_TestBranch_Set_TT_Test;
@@ -20256,6 +28057,97 @@
             rop_TestBranch_Set_TT_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Set_set_test_at_origin1_Failed) {
+    // TestBranch.Set: the cold region from rop_TestBranch_Set_set_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_TestBranch_Set;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool set_test_at_origin1_hit;
+    { const rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Set_set_test_at_origin1_Failed;
+    rop_TestBranch_Set_set_test_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Set_set_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Set_set_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Set_set_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Set_set_test_at_origin1_Moved) {
+    // TestBranch.Set: the cold region from rop_TestBranch_Set_set_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_TestBranch_Set;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool set_test_at_origin1_hit;
+    { const rop_in_Cold_TestBranch_Set_set_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Set_set_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Set_set_test_at_origin1_Moved;
+    rop_TestBranch_Set_set_test_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Set_set_test_at_origin1_Moved)
+#endif
 
         TARGET(TestBranch_Set) {
             // TestBranch.Set (shared)
@@ -20344,23 +28236,26 @@
             rop_TestBranch_Set_Tail0_Rest4:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_TestBranch_Set_set_test_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 188, this_instr);
+            { rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Set_set_test_at_origin1_Failed);
             rop_TestBranch_Set_set_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 set_test_at_origin1_hit = false;
                 goto rop_TestBranch_Set_set_test_at_origin1_Said;
             }
             rop_TestBranch_Set_set_test_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_TestBranch_Set_set_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Set_set_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Set_set_test_at_origin1_Moved);
             rop_TestBranch_Set_set_test_at_origin1_Not:
             hit = false;
             goto rop_TestBranch_Set_Test;
@@ -20397,6 +28292,97 @@
             rop_TestBranch_Set_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Dict_dict_test_at_origin1_Failed) {
+    // TestBranch.Dict: the cold region from rop_TestBranch_Dict_dict_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_TestBranch_Dict;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool dict_test_at_origin1_hit;
+    { const rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Dict_dict_test_at_origin1_Failed;
+    rop_TestBranch_Dict_dict_test_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Dict_dict_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Dict_dict_test_at_origin1_Moved) {
+    // TestBranch.Dict: the cold region from rop_TestBranch_Dict_dict_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_TestBranch_Dict;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool dict_test_at_origin1_hit;
+    { const rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Dict_dict_test_at_origin1_Moved;
+    rop_TestBranch_Dict_dict_test_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Dict_dict_test_at_origin1_Moved)
+#endif
 
         TARGET(TestBranch_Dict) {
             // TestBranch.Dict (shared)
@@ -20485,23 +28471,26 @@
             rop_TestBranch_Dict_Tail0_Rest4:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_TestBranch_Dict_dict_test_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 188, this_instr);
+            { rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Dict_dict_test_at_origin1_Failed);
             rop_TestBranch_Dict_dict_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 dict_test_at_origin1_hit = false;
                 goto rop_TestBranch_Dict_dict_test_at_origin1_Said;
             }
             rop_TestBranch_Dict_dict_test_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Dict_dict_test_at_origin1_Moved);
             rop_TestBranch_Dict_dict_test_at_origin1_Not:
             hit = false;
             goto rop_TestBranch_Dict_Test;
@@ -20538,6 +28527,97 @@
             rop_TestBranch_Dict_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed) {
+    // TestBranch.Sequence: the cold region from rop_TestBranch_Sequence_sequence_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_TestBranch_Sequence;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool sequence_test_at_origin1_hit;
+    { const rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Sequence_sequence_test_at_origin1_Failed;
+    rop_TestBranch_Sequence_sequence_test_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved) {
+    // TestBranch.Sequence: the cold region from rop_TestBranch_Sequence_sequence_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_TestBranch_Sequence;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool sequence_test_at_origin1_hit;
+    { const rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Sequence_sequence_test_at_origin1_Moved;
+    rop_TestBranch_Sequence_sequence_test_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved)
+#endif
 
         TARGET(TestBranch_Sequence) {
             // TestBranch.Sequence (shared)
@@ -20626,23 +28706,26 @@
             rop_TestBranch_Sequence_Tail0_Rest4:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_TestBranch_Sequence_sequence_test_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 188, this_instr);
+            { rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed);
             rop_TestBranch_Sequence_sequence_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 sequence_test_at_origin1_hit = false;
                 goto rop_TestBranch_Sequence_sequence_test_at_origin1_Said;
             }
             rop_TestBranch_Sequence_sequence_test_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved);
             rop_TestBranch_Sequence_sequence_test_at_origin1_Not:
             hit = false;
             goto rop_TestBranch_Sequence_Test;
@@ -20679,6 +28762,224 @@
             rop_TestBranch_Sequence_Tail1_Rest4:
             ROP_TAIL_DISPATCH();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Observed_compare_test_at_origin2_Failed) {
+    // TestBranch.Observed: the cold region from rop_TestBranch_Observed_compare_test_at_origin2_Failed
+    int opcode = ROP_HANDLER_TestBranch_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    int ret1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret2;
+    int ret3;
+    uint32_t rel;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyRopAnchors a_all7;
+    int ret8;
+    int ret9;
+    bool same;
+    bool hit;
+    bool contains_test_at_origin1_hit;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Observed_compare_test_at_origin2_Failed;
+    rop_TestBranch_Observed_compare_test_at_origin2_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs6 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Observed_compare_test_at_origin2_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Observed_compare_test_at_origin2_Moved) {
+    // TestBranch.Observed: the cold region from rop_TestBranch_Observed_compare_test_at_origin2_Moved
+    int opcode = ROP_HANDLER_TestBranch_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    int ret1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret2;
+    int ret3;
+    uint32_t rel;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyRopAnchors a_all7;
+    int ret8;
+    int ret9;
+    bool same;
+    bool hit;
+    bool contains_test_at_origin1_hit;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Observed_compare_test_at_origin2_Moved;
+    rop_TestBranch_Observed_compare_test_at_origin2_Moved:
+    IR_STUB_ESCAPE();
+    a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all7);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Observed_compare_test_at_origin2_Moved)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Observed_contains_test_at_origin1_Failed) {
+    // TestBranch.Observed: the cold region from rop_TestBranch_Observed_contains_test_at_origin1_Failed
+    int opcode = ROP_HANDLER_TestBranch_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    int ret1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret2;
+    int ret3;
+    uint32_t rel;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyRopAnchors a_all7;
+    int ret8;
+    int ret9;
+    bool same;
+    bool hit;
+    bool contains_test_at_origin1_hit;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Observed_contains_test_at_origin1_Failed;
+    rop_TestBranch_Observed_Failed:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs6 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all5, &srcs6);
+    PROCESS_ERROR_AT(RAISE, 188, this_instr);
+    rop_TestBranch_Observed_contains_test_at_origin1_Failed:
+    goto rop_TestBranch_Observed_Failed;
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Observed_contains_test_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Observed_contains_test_at_origin1_Moved) {
+    // TestBranch.Observed: the cold region from rop_TestBranch_Observed_contains_test_at_origin1_Moved
+    int opcode = ROP_HANDLER_TestBranch_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_A(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_B(ir_word));
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    int ret1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    int ret2;
+    int ret3;
+    uint32_t rel;
+    int ret4;
+    _PyRopAnchors a_all5;
+    _PyRopSrcs srcs6;
+    _PyRopAnchors a_all7;
+    int ret8;
+    int ret9;
+    bool same;
+    bool hit;
+    bool contains_test_at_origin1_hit;
+    bool compare_test_at_origin2_hit;
+    { const rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_TestBranch_Observed_contains_test_at_origin1_Moved;
+    rop_TestBranch_Observed_Gone:
+    IR_STUB_ESCAPE();
+    a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all7);
+    IR_REDIRECT();
+    rop_TestBranch_Observed_contains_test_at_origin1_Moved:
+    goto rop_TestBranch_Observed_Gone;
+}
+IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Observed_contains_test_at_origin1_Moved)
+#endif
 
         TARGET(TestBranch_Observed) {
             // TestBranch.Observed (split)
@@ -20816,40 +29117,51 @@
             rop_TestBranch_Observed_compare_test_at_origin2_Is:
             goto rop_TestBranch_Observed_Yes;
             rop_TestBranch_Observed_compare_test_at_origin2_Failed:
-            IR_COLD();
-            rop_TestBranch_Observed_Failed:
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs6 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
-            _PyRop_RetireFailedCall(&a_all5, &srcs6);
-            PROCESS_ERROR_AT(RAISE, 188, this_instr);
+            { rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Observed_compare_test_at_origin2_Failed);
             rop_TestBranch_Observed_compare_test_at_origin2_No:
             if (!_PyRop_RedirectPending(frame)) {
                 compare_test_at_origin2_hit = false;
                 goto rop_TestBranch_Observed_compare_test_at_origin2_Said;
             }
             rop_TestBranch_Observed_compare_test_at_origin2_Moved:
-            IR_COLD();
-            rop_TestBranch_Observed_Gone:
-            IR_STUB_ESCAPE();
-            a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all7);
-            IR_REDIRECT();
+            { rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Observed_compare_test_at_origin2_Moved);
             rop_TestBranch_Observed_compare_test_at_origin2_Not:
             rop_TestBranch_Observed_No:
             hit = false;
             goto rop_TestBranch_Observed_Test;
             rop_TestBranch_Observed_contains_test_at_origin1_Failed:
-            IR_COLD();
-            goto rop_TestBranch_Observed_Failed;
+            { rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Observed_contains_test_at_origin1_Failed);
             rop_TestBranch_Observed_contains_test_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 contains_test_at_origin1_hit = false;
                 goto rop_TestBranch_Observed_contains_test_at_origin1_Said;
             }
             rop_TestBranch_Observed_contains_test_at_origin1_Moved:
-            IR_COLD();
-            goto rop_TestBranch_Observed_Gone;
+            { rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_TestBranch_Observed_contains_test_at_origin1_Moved);
             rop_TestBranch_Observed_contains_test_at_origin1_Not:
             goto rop_TestBranch_Observed_No;
             rop_TestBranch_Observed_Fall:
@@ -20999,6 +29311,93 @@
             PROCESS_ERROR_AT(RAISE, 38, this_instr);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Convert_Text_convert_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Convert_Text_convert_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Convert_Text_convert_at_origin1_Failed) {
+    // Convert.Text: the cold region from rop_Convert_Text_convert_at_origin1_Failed
+    int opcode = ROP_HANDLER_Convert_Text;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue convert_at_origin1_value;
+    PyValue convert_at_origin1_kept;
+    PyValue convert_at_origin1_dropped;
+    { const rop_in_Cold_Convert_Text_convert_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Convert_Text_convert_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_Convert_Text_convert_at_origin1_Failed;
+    rop_Convert_Text_convert_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 68, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Convert_Text_convert_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue convert_at_origin1_dropped;
+} rop_in_Cold_Convert_Text_convert_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Convert_Text_convert_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Convert_Text_convert_at_origin1_Moved) {
+    // Convert.Text: the cold region from rop_Convert_Text_convert_at_origin1_Moved
+    int opcode = ROP_HANDLER_Convert_Text;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue convert_at_origin1_value;
+    PyValue convert_at_origin1_kept;
+    PyValue convert_at_origin1_dropped;
+    { const rop_in_Cold_Convert_Text_convert_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Convert_Text_convert_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      convert_at_origin1_dropped = ir_in->convert_at_origin1_dropped;
+    }
+    goto rop_Convert_Text_convert_at_origin1_Moved;
+    rop_Convert_Text_convert_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(convert_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Convert_Text_convert_at_origin1_Moved)
+#endif
+
         TARGET(Convert_Text) {
             // Convert.Text (shared)
             int opcode = ROP_HANDLER_Convert_Text;
@@ -21062,21 +29461,106 @@
             rop_Convert_Text_Tail0_Rest3:
             ROP_TAIL_DISPATCH();
             rop_Convert_Text_convert_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 68, this_instr);
+            { rop_in_Cold_Convert_Text_convert_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Convert_Text_convert_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_Convert_Text_convert_at_origin1_Failed);
             rop_Convert_Text_convert_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(convert_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_Convert_Text_convert_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Convert_Text_convert_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->convert_at_origin1_dropped = convert_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_Convert_Text_convert_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Format_Simple_format_plain_at_origin1_Failed) {
+    // Format.Simple: the cold region from rop_Format_Simple_format_plain_at_origin1_Failed
+    int opcode = ROP_HANDLER_Format_Simple;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue format_plain_at_origin1_value;
+    PyValue format_plain_at_origin1_kept;
+    PyValue format_plain_at_origin1_dropped;
+    { const rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_Format_Simple_format_plain_at_origin1_Failed;
+    rop_Format_Simple_format_plain_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 89, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Format_Simple_format_plain_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue format_plain_at_origin1_dropped;
+} rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Format_Simple_format_plain_at_origin1_Moved) {
+    // Format.Simple: the cold region from rop_Format_Simple_format_plain_at_origin1_Moved
+    int opcode = ROP_HANDLER_Format_Simple;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValue ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue format_plain_at_origin1_value;
+    PyValue format_plain_at_origin1_kept;
+    PyValue format_plain_at_origin1_dropped;
+    { const rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      format_plain_at_origin1_dropped = ir_in->format_plain_at_origin1_dropped;
+    }
+    goto rop_Format_Simple_format_plain_at_origin1_Moved;
+    rop_Format_Simple_format_plain_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(format_plain_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Format_Simple_format_plain_at_origin1_Moved)
+#endif
 
         TARGET(Format_Simple) {
             // Format.Simple (shared)
@@ -21141,21 +29625,122 @@
             rop_Format_Simple_Tail0_Rest3:
             ROP_TAIL_DISPATCH();
             rop_Format_Simple_format_plain_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 89, this_instr);
+            { rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_Format_Simple_format_plain_at_origin1_Failed);
             rop_Format_Simple_format_plain_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(format_plain_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->format_plain_at_origin1_dropped = format_plain_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_Format_Simple_format_plain_at_origin1_Moved);
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_FormatSpec_Value_format_value_at_origin1_Failed) {
+    // FormatSpec.Value: the cold region from rop_FormatSpec_Value_format_value_at_origin1_Failed
+    int opcode = ROP_HANDLER_FormatSpec_Value;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_spec = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue own_spec = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue format_value_at_origin1_value;
+    PyValue format_value_at_origin1_kept;
+    PyValue format_value_at_origin1_dropped;
+    { const rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+    }
+    goto rop_FormatSpec_Value_format_value_at_origin1_Failed;
+    rop_FormatSpec_Value_format_value_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_spec, home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 91, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_FormatSpec_Value_format_value_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue format_value_at_origin1_dropped;
+} rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_FormatSpec_Value_format_value_at_origin1_Moved) {
+    // FormatSpec.Value: the cold region from rop_FormatSpec_Value_format_value_at_origin1_Moved
+    int opcode = ROP_HANDLER_FormatSpec_Value;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue *const home_spec = &IR_SLOT(IR_C(ir_word));
+    PyValue ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue own_spec = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    PyValue format_value_at_origin1_value;
+    PyValue format_value_at_origin1_kept;
+    PyValue format_value_at_origin1_dropped;
+    { const rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+      a_view1 = ir_in->a_view1;
+      a_owned1 = ir_in->a_owned1;
+      format_value_at_origin1_dropped = ir_in->format_value_at_origin1_dropped;
+    }
+    goto rop_FormatSpec_Value_format_value_at_origin1_Moved;
+    rop_FormatSpec_Value_format_value_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(format_value_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_FormatSpec_Value_format_value_at_origin1_Moved)
+#endif
 
         TARGET(FormatSpec_Value) {
             // FormatSpec.Value (shared)
@@ -21241,20 +29826,22 @@
             rop_FormatSpec_Value_Tail0_Rest5:
             ROP_TAIL_DISPATCH();
             rop_FormatSpec_Value_format_value_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_spec, home_value}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 91, this_instr);
+            { rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+            }
+            IR_OUTLINE_GOTO(Cold_FormatSpec_Value_format_value_at_origin1_Failed);
             rop_FormatSpec_Value_format_value_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            _PyRop_DiscardResult(format_value_at_origin1_dropped);
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+              ir_in->a_view1 = a_view1;
+              ir_in->a_owned1 = a_owned1;
+              ir_in->format_value_at_origin1_dropped = format_value_at_origin1_dropped;
+            }
+            IR_OUTLINE_GOTO(Cold_FormatSpec_Value_format_value_at_origin1_Moved);
         }
 
         TARGET(Truth_Bool) {
@@ -21485,6 +30072,87 @@
             ROP_TAIL_DISPATCH();
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Truth_Slot_slot_truth_at_origin1_Failed) {
+    // Truth.Slot: the cold region from rop_Truth_Slot_slot_truth_at_origin1_Failed
+    int opcode = ROP_HANDLER_Truth_Slot;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow v;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    bool slot_truth_at_origin1_hit;
+    { const rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_Truth_Slot_slot_truth_at_origin1_Failed;
+    rop_Truth_Slot_slot_truth_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 192, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Truth_Slot_slot_truth_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Truth_Slot_slot_truth_at_origin1_Moved) {
+    // Truth.Slot: the cold region from rop_Truth_Slot_slot_truth_at_origin1_Moved
+    int opcode = ROP_HANDLER_Truth_Slot;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow v;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    PyValue z;
+    bool slot_truth_at_origin1_hit;
+    { const rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_Truth_Slot_slot_truth_at_origin1_Moved;
+    rop_Truth_Slot_slot_truth_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Truth_Slot_slot_truth_at_origin1_Moved)
+#endif
+
         TARGET(Truth_Slot) {
             // Truth.Slot (shared)
             int opcode = ROP_HANDLER_Truth_Slot;
@@ -21562,23 +30230,22 @@
             rop_Truth_Slot_Tail0_Rest3:
             ROP_TAIL_DISPATCH();
             rop_Truth_Slot_slot_truth_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 192, this_instr);
+            { rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_Truth_Slot_slot_truth_at_origin1_Failed);
             rop_Truth_Slot_slot_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 slot_truth_at_origin1_hit = false;
                 goto rop_Truth_Slot_slot_truth_at_origin1_Said;
             }
             rop_Truth_Slot_slot_truth_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_Truth_Slot_slot_truth_at_origin1_Moved);
             rop_Truth_Slot_slot_truth_at_origin1_Not:
             z = _PyRop_TruthObject(false, (uint32_t)IR_C(ir_word));
             goto rop_Truth_Slot_Finish;
@@ -22110,6 +30777,83 @@
             ROP_TAIL_DISPATCH();
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed) {
+    // BranchTruth.Slot_BRANCH_IF_FALSE: the cold region from rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed
+    int opcode = ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_FALSE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool slot_truth_at_origin1_hit;
+    { const rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 28, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved) {
+    // BranchTruth.Slot_BRANCH_IF_FALSE: the cold region from rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved
+    int opcode = ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_FALSE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool slot_truth_at_origin1_hit;
+    { const rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved)
+#endif
+
         TARGET(BranchTruth_Slot_BRANCH_IF_FALSE) {
             // BranchTruth.Slot_BRANCH_IF_FALSE (shared)
             int opcode = ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_FALSE;
@@ -22181,23 +30925,22 @@
             rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest2:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 28, this_instr);
+            { rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed);
             rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 slot_truth_at_origin1_hit = false;
                 goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Said;
             }
             rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved);
             rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Not:
             hit = false;
             goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Test;
@@ -22219,6 +30962,83 @@
             rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_Rest2:
             ROP_TAIL_DISPATCH();
         }
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed) {
+    // BranchTruth.Slot_BRANCH_IF_TRUE: the cold region from rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed
+    int opcode = ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_TRUE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool slot_truth_at_origin1_hit;
+    { const rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all2, &srcs3);
+    PROCESS_ERROR_AT(RAISE, 28, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved) {
+    // BranchTruth.Slot_BRANCH_IF_TRUE: the cold region from rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved
+    int opcode = ROP_HANDLER_BranchTruth_Slot_BRANCH_IF_TRUE;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValueBorrow v;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    int ret1;
+    PyValue own_value = PyValue_NULL;
+    _PyRopAnchors a_all2;
+    _PyRopSrcs srcs3;
+    _PyRopAnchors a_all4;
+    bool hit;
+    bool slot_truth_at_origin1_hit;
+    { const rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all4);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved)
+#endif
 
         TARGET(BranchTruth_Slot_BRANCH_IF_TRUE) {
             // BranchTruth.Slot_BRANCH_IF_TRUE (shared)
@@ -22291,23 +31111,22 @@
             rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest2:
             ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
-            _PyRop_RetireFailedCall(&a_all2, &srcs3);
-            PROCESS_ERROR_AT(RAISE, 28, this_instr);
+            { rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed);
             rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 slot_truth_at_origin1_hit = false;
                 goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Said;
             }
             rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all4);
-            IR_REDIRECT();
+            { rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved);
             rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Not:
             hit = false;
             goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Test;
@@ -22394,6 +31213,87 @@
             ROP_TAIL_DISPATCH();
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Observed_truth_at_origin1_Failed) {
+    // BranchTruth.Observed: the cold region from rop_BranchTruth_Observed_truth_at_origin1_Failed
+    int opcode = ROP_HANDLER_BranchTruth_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    int ret1;
+    int ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue own_value = PyValue_NULL;
+    int ret6;
+    int ret7;
+    bool hit;
+    bool truth_at_origin1_hit;
+    { const rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_BranchTruth_Observed_truth_at_origin1_Failed;
+    rop_BranchTruth_Observed_truth_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
+    _PyRop_RetireFailedCall(&a_all3, &srcs4);
+    PROCESS_ERROR_AT(RAISE, 28, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Failed)
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Observed_truth_at_origin1_Moved) {
+    // BranchTruth.Observed: the cold region from rop_BranchTruth_Observed_truth_at_origin1_Moved
+    int opcode = ROP_HANDLER_BranchTruth_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    int ret1;
+    int ret2;
+    _PyRopAnchors a_all3;
+    _PyRopSrcs srcs4;
+    _PyRopAnchors a_all5;
+    PyValue own_value = PyValue_NULL;
+    int ret6;
+    int ret7;
+    bool hit;
+    bool truth_at_origin1_hit;
+    { const rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved);
+      a_view0 = ir_in->a_view0;
+      a_owned0 = ir_in->a_owned0;
+    }
+    goto rop_BranchTruth_Observed_truth_at_origin1_Moved;
+    rop_BranchTruth_Observed_truth_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    a_all5 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all5);
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Moved)
+#endif
+
         TARGET(BranchTruth_Observed) {
             // BranchTruth.Observed (split)
             int opcode = ROP_HANDLER_BranchTruth_Observed;
@@ -22459,23 +31359,22 @@
             }
             IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
             rop_BranchTruth_Observed_truth_at_origin1_Failed:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
-            _PyRop_RetireFailedCall(&a_all3, &srcs4);
-            PROCESS_ERROR_AT(RAISE, 28, this_instr);
+            { rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_BranchTruth_Observed_truth_at_origin1_Failed);
             rop_BranchTruth_Observed_truth_at_origin1_No:
             if (!_PyRop_RedirectPending(frame)) {
                 truth_at_origin1_hit = false;
                 goto rop_BranchTruth_Observed_truth_at_origin1_Said;
             }
             rop_BranchTruth_Observed_truth_at_origin1_Moved:
-            IR_COLD();
-            IR_STUB_ESCAPE();
-            a_all5 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-            _PyRop_RetireAbandoned(&a_all5);
-            IR_REDIRECT();
+            { rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved);
+              ir_in->a_view0 = a_view0;
+              ir_in->a_owned0 = a_owned0;
+            }
+            IR_OUTLINE_GOTO(Cold_BranchTruth_Observed_truth_at_origin1_Moved);
             rop_BranchTruth_Observed_truth_at_origin1_Not:
             hit = false;
             goto rop_BranchTruth_Observed_Test;
@@ -22860,6 +31759,27 @@
             ROP_TAIL_DISPATCH();
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_LocalRead_Checked_Unbound) {
+    // LocalRead.Checked: the cold region from rop_LocalRead_Checked_Unbound
+    int opcode = ROP_HANDLER_LocalRead_Checked;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_local = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow m;
+    PyValue v;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    goto rop_LocalRead_Checked_Unbound;
+    rop_LocalRead_Checked_Unbound:
+    _PyRop_UnboundLocal(frame, home_local);
+    PROCESS_ERROR_AT(RAISE, 128, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_LocalRead_Checked_Unbound)
+#endif
+
         TARGET(LocalRead_Checked) {
             // LocalRead.Checked (shared)
             int opcode = ROP_HANDLER_LocalRead_Checked;
@@ -22890,9 +31810,7 @@
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
             rop_LocalRead_Checked_Unbound:
-            IR_COLD();
-            _PyRop_UnboundLocal(frame, home_local);
-            PROCESS_ERROR_AT(RAISE, 128, this_instr);
+            IR_OUTLINE_GOTO(Cold_LocalRead_Checked_Unbound);
         }
 
         TARGET(LocalWrite_Store) {

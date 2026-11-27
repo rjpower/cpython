@@ -114,6 +114,17 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
     } while (0)
 #undef JUMP_TO_LABEL
 #define JUMP_TO_LABEL(name) IR_JIT_GOTO(_JIT_LABEL_##name, IR_JIT_NO_WORD())
+/* An outlined cold region runs in the normal evaluator, from its entry for
+ * compiled code (IR_OUTLINED_JIT_ENTRY, Python/ceval_evaluator.h): a symbol
+ * of libpython, which the reader takes as an EXTERN hole */
+#undef IR_OUTLINE_GOTO
+#define IR_OUTLINE_GOTO(NAME) \
+    do { \
+        extern Py_IR_TAIL_CC __attribute__((visibility("hidden"), cold)) \
+        PyValue _PyEval_JitOut_##NAME(PyThreadState *, _PyInterpreterFrame *, \
+                                      _PyInstr *, _PyIRWord); \
+        Py_MUSTTAIL return _PyEval_JitOut_##NAME(tstate, frame, this_instr, ir_word); \
+    } while (0)
 /* A departing arm opens the thread's departure window (Python/jit.c,
  * _PyJit_Reclaim()): the copy runs on after its frame, and maybe its code,
  * is gone.  The exits into the evaluator close it. */

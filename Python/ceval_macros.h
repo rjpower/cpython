@@ -1083,20 +1083,20 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define IR_DISPATCH_SWITCHED() DISPATCH()
 #define IR_DISPATCH_REDIRECTED() DISPATCH()
 
-/* The head of a cold region of an arm: a block from which every way out is
- * a cold exit (miss, raise, redirect, again), and whose region makes a call
- * (Tools/cases_generator/rop_cgen.py, cold_region_heads()); later, the
- * blocks the .rop language declares cold.  GCC moves a block to a
- * function's cold part only if its estimated count is zero, and it sets
- * zero counts only from a call of a function declared cold, propagated
- * backwards and stopped by any call that may not return.  A cold label,
- * __builtin_expect() or __builtin_expect_with_probability() lower the
- * block's probability but never to zero, and an inline cold function is
- * inlined before the estimate, so none of them splits.  So the mark is a
- * real call of _PyEval_ColdPath(), which returns at once and clobbers no
- * register, so the hot path's registers do not change; it costs a call and
- * a return when the cold path runs.  Both evaluators and the stencils of the
- * baseline JIT (Python/jit_stencils.c) bind it here, the same way. */
-PyAPI_FUNC(void) _PyEval_ColdPath(void)
-    __attribute__((cold, no_caller_saved_registers));
-#define IR_COLD() _PyEval_ColdPath()
+/* An arm's cold region, outlined (Tools/cases_generator/rop_cgen.py,
+ * outline_cold()): a region from which every way out is a cold exit (miss,
+ * raise, unwind, redirect, again) and which makes a call is a function
+ * Cold_<arm>_<head> of the evaluator's type, which the arm tail-calls at
+ * the region's head with this_instr as next_instr, after it leaves the
+ * values that the region reads in the activation (IR_OUTLINE_IN).  The
+ * region's code is out of the arm, so the arm's hot path holds none of it
+ * and keeps no register or frame for it.  The stencils of the baseline JIT
+ * (Python/jit_stencils.c) bind IR_OUTLINE_GOTO() to the entry for compiled
+ * code, IR_OUTLINED_JIT_ENTRY (Python/ceval_evaluator.h). */
+#define IR_OUTLINED_FN(NAME) IR_TAIL_FN(NAME)
+#define IR_OUTLINE_GOTO(NAME) \
+    do { \
+        Py_MUSTTAIL return IR_TAIL_ID(NAME)(tstate, frame, this_instr, ir_word); \
+    } while (0)
+#define IR_OUTLINE_IN(TYPE) ((TYPE *)(void *)IR_ACTIVATION()->outline_in)
+#define IR_OUTLINE_IN_SIZE _PyEval_OUTLINE_IN_SIZE

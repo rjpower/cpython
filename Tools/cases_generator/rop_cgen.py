@@ -13,6 +13,7 @@ the error path with its point index, or the family's miss adapter.  The
 generated C uses the value API and never `.bits`.
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
@@ -480,14 +481,11 @@ def block_calls(program: Program, block: Block) -> bool:
 
 def cold_region_heads(program: Program, blocks, skip: set[str]) -> set[str]:
     """Rule J5-R1: the blocks where a cold region begins.  A block is cold
-    when every way out of it ends in a cold exit (COLD_EXITS); GCC finds the
-    same blocks only up to the first call that may not return, so a raise
-    path that retires its operands first stays in the hot part.  A region
+    when every way out of it ends in a cold exit (COLD_EXITS).  A region
     head is a cold block with a predecessor outside the region, other than
-    the entry, and is marked only if the region makes a call: a region
-    without one is already cold, since GCC propagates from the exit's own
-    cold tail call, and a mark would add a call and with it a stack frame to
-    the arm's hot path."""
+    the entry, and counts only if the region makes a call: such a region is
+    outlined (ArmLowerer.outline_cold), and a region without one costs the
+    arm no more than its own cold tail call would."""
     succs = {label: [t.label for t, _ in edges_of(program, blocks, b)]
              for label, b in blocks.items()}
     cold: set[str] = set()
@@ -609,12 +607,29 @@ class Lowering:
     spans: str | None = None
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
+    # The arm's cold regions, each a function of its own (outline_cold)
+    cold: list["ColdRegion"] = field(default_factory=list)
+
+
+@dataclass
+class ColdRegion:
+    """A cold region of an arm, outlined: the function NAME runs it from
+    its head, given the values that the arm computed before the head and
+    the region reads, which travel in the activation (IR_OUTLINE_IN)"""
+    name: str                               # the function, Cold_<arm>_<head>
+    head: str                               # the head's C label
+    live: list[tuple[str, str]]             # (C type, local) of each value
+    body: list[str]
 
 
 class ArmLowerer:
     def __init__(self, program: Program, arm: Arm, numbers: Mapping[str, int],
-                 points: Mapping[str, int], generic: Mapping[str, str | None]) -> None:
+                 points: Mapping[str, int], generic: Mapping[str, str | None],
+                 outline_cold: bool = True) -> None:
         self.program = program
+        # An arm of the evaluator outlines its cold regions; a completion,
+        # which returns to its caller, keeps them
+        self.outline_cold_regions = outline_cold
         self.arm = arm
         self.info: FlatGraph = flatten(program, arm)
         self.family = program.families[arm.family]
@@ -635,6 +650,7 @@ class ArmLowerer:
         self.blocks = dict(self.info.blocks)
         self.lines: list[str] = []
         self.decls: list[str] = []
+        self.decl_list: list[Decl] = []
         self.declared: set[str] = set()
         self.homes: dict[str, str] = {}      # operand -> its home pointer
         self.views: dict[str, str] = {}      # operand -> value bound by use()
@@ -650,6 +666,7 @@ class ArmLowerer:
         # tail closes (lower_tail_closes); any other line emits them first
         self.pending_closes: list[str] = []
         self.tails = 0
+        self.cold: list[ColdRegion] = []
         # A slot-class member arm (`over(locals: ...)`): each locals
         # operand's class, a constant, True for a local
         self.fixed_local: dict[str, bool] = fixed_locals(program, arm)
@@ -665,6 +682,7 @@ class ArmLowerer:
         if name in self.declared:
             return
         self.declared.add(name)
+        self.decl_list.append(Decl(name, ctype))
         self.decls.append(f"{ctype} {name}" + (f" = {init}" if init else "") + ";")
 
     def new_temp(self, ctype: str, stem: str = "t") -> str:
@@ -1066,7 +1084,9 @@ class ArmLowerer:
             st.name: len(st.value.args[0].items)
             for b in self.blocks.values() for st in b.stmts if is_span_anchor(st)}
         order = [label for label in self.layout() if label not in self.transfer_blocks]
-        self.cold_heads = cold_region_heads(self.program, self.blocks, self.transfer_blocks)
+        self.cold_heads = (cold_region_heads(self.program, self.blocks, self.transfer_blocks)
+                           if self.outline_cold_regions else set())
+        spans: dict[str, tuple[int, int]] = {}
         if self.fixed_local:
             # The member's word: an install that bypassed the generated row
             # (_PyIR_LocalsArm) fails here in a build with assert() on
@@ -1076,20 +1096,89 @@ class ArmLowerer:
                       f"({' | '.join(bits) or '0'}));")
         for i, label in enumerate(order):
             self.next_label = order[i + 1] if i + 1 < len(order) else None
+            start = len(self.lines)
             self.lower_block(self.blocks[label], label)
+            spans[label] = (start, len(self.lines))
         assert not self.pending_closes, self.arm.name
         for b in self.blocks.values():
             for p in b.params:
                 t = c_type(p.type)
                 if t is not None:
                     self.declare(self.local(p.name), t)
+        if self.cold_heads:
+            self.lines = self.outline_cold(order, spans)
         body = []
         for line in self.lines:
             body.append(line)
         return Lowering(self.arm.name, self.enc.words, self.payload_words(),
                         self.span_words(),
                         self.decls,
-                        self.drop_unused_labels(body))
+                        self.drop_unused_labels(body),
+                        self.cold)
+
+    def outline_cold(self, order: list[str], spans: Mapping[str, tuple[int, int]]) -> list[str]:
+        """Rule J5-R1: each cold region (cold_region_heads) becomes a
+        function of the evaluator's type, which the arm tail-calls at the
+        region's head (IR_OUTLINE_GOTO): the arm's hot path keeps no copy of
+        it, and a stencil of the baseline JIT reaches the one in the binary.
+        The function is the arm's own text from the head: the arm's
+        declarations, the region's blocks, and the locals that the arm set
+        before the head and the region reads, which the arm leaves in the
+        activation.  It decodes the word again, from this_instr."""
+        succs = {label: [t.label for t, _ in edges_of(self.program, self.blocks, b)]
+                 for label, b in self.blocks.items()}
+
+        def reach(start: str, stop: set[str]) -> set[str]:
+            seen: set[str] = set()
+            todo = [start]
+            while todo:
+                label = todo.pop()
+                if label in seen:
+                    continue
+                seen.add(label)
+                if label not in stop:
+                    todo.extend(succs[label])
+            return seen
+
+        def text(label: str) -> list[str]:
+            start, end = spans[label]
+            return self.lines[start:end]
+
+        in_arm = reach("entry", self.cold_heads)
+        heads = [label for label in order if label in self.cold_heads and label in in_arm]
+        first = spans[order[0]][0]
+        hot = self.lines[:first] + [
+            line for label in order if label in in_arm and label not in self.cold_heads
+            for line in text(label)]
+        hot_names = set(c_names(hot))
+        types = {d.name: d.ctype for d in self.decl_list}
+        arm_lines = self.lines[:first]
+        for label in order:
+            if label not in in_arm:
+                continue
+            if label not in self.cold_heads:
+                arm_lines += text(label)
+                continue
+            region = reach(label, set())
+            body = [line for lb in order if lb in region for line in text(lb)]
+            used = set(c_names(body))
+            live = [(types[n], n) for n in types
+                    if n in used and n in hot_names and not types[n].endswith("const")]
+            name = f"Cold_{self.prefix.removeprefix('rop_')}_{label}"
+            body = [f"goto {self.label(label)};"] + body
+            self.cold.append(ColdRegion(name, self.label(label), live,
+                                        self.drop_unused_labels(body)))
+            # The lines that a fallthrough into the head ran stay in the arm
+            head_lines = text(label)
+            at = head_lines.index(f"{self.label(label)}:")
+            arm_lines += head_lines[:at + 1]
+            if live:
+                arm_lines.append(f"{{ rop_in_{name} *ir_in = IR_OUTLINE_IN(rop_in_{name});")
+                arm_lines += [f"  ir_in->{n} = {n};" for _, n in live]
+                arm_lines.append("}")
+            arm_lines.append(f"IR_OUTLINE_GOTO({name});")
+        assert heads == [c.head.removeprefix(self.prefix + "_") for c in self.cold], self.arm.name
+        return arm_lines
 
     def payload_words(self) -> str | None:
         """An argument descriptor's homes follow the operand words, four to
@@ -1155,8 +1244,6 @@ class ArmLowerer:
     def lower_block(self, block, label: str) -> None:
         if label != "entry":
             self.emit(f"{self.label(label)}:")
-        if label in self.cold_heads:
-            self.emit("IR_COLD();")
         # An acquire() takes the owner on its own path only
         self.acquired = set(self.acquired_in[label])
         for i, s in enumerate(block.stmts):
@@ -1541,11 +1628,23 @@ def is_span_anchor(s) -> bool:
             and isinstance(s.value.args[0], SpanLit))
 
 
+@dataclass
+class Decl:
+    name: str
+    ctype: str
+
+
+def c_names(lines: list[str]) -> list[str]:
+    """The identifiers in some lines of C"""
+    return re.findall(r"\b[A-Za-z_]\w*\b", "\n".join(lines))
+
+
 def cname(operand: str) -> str:
     """A C identifier part for an operand or a projection g.p"""
     return operand.replace(".", "_")
 
 
 def lower_arm(program: Program, arm: Arm, numbers: Mapping[str, int],
-              points: Mapping[str, int], generic: Mapping[str, str | None]) -> Lowering:
-    return ArmLowerer(program, arm, numbers, points, generic).lower()
+              points: Mapping[str, int], generic: Mapping[str, str | None],
+              outline_cold: bool = True) -> Lowering:
+    return ArmLowerer(program, arm, numbers, points, generic, outline_cold).lower()

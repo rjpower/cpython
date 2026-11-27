@@ -70,6 +70,7 @@ typedef struct {
 /* The values that one arm's tail closes may park (TAIL_CLOSES in
  * Tools/cases_generator/rop_cgen.py) */
 #define _PyEval_TAIL_CLOSES 8
+#define _PyEval_OUTLINE_IN_SIZE 256
 
 typedef struct _PyEvalActivation {
     struct _PyEvalActivation *previous;   /* restored when this one exits */
@@ -102,6 +103,10 @@ typedef struct _PyEvalActivation {
      * close_dispatch: written on that exit only and read at once */
     PyValue tail_close[_PyEval_TAIL_CLOSES];
     int tail_closes;
+    /* The values that an arm passes to its outlined cold region
+     * (IR_OUTLINE_IN, Python/ceval_macros.h): written on that exit only and
+     * read at once */
+    _Alignas(16) char outline_in[_PyEval_OUTLINE_IN_SIZE];
 #ifdef Py_STATS
     /* The handler that ran last, for pair counts (INSTRUCTION_STATS()) */
     int last_handler;

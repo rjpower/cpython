@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `cc9cebf5e6a` (pushed; OB, JX, TI, EP and LR merged, below) holds:
+`pyjit/rir90` at `05acd1caa12` (pushed; OB, JX, TI, EP, LR, CO and GN merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -341,21 +341,61 @@ and deepcopy_memo (1.10 to 1.18) are slower at fewer instructions
 before.  The logging benchmarks (1.22) and the deepcopy family (1.16 to
 1.18) are furthest.
 
+**CO, merged at `06d904c0305`**: generic attribute sites cost what
+golden87's do.  A module function called as a method adapts
+(`GetMethod.Module`, golden87's LOAD_ATTR_MODULE).  The other generic
+sites in the logging, deepcopy and chaos benchmarks run generically in
+golden87 too, but an unadapted attribute read ran the specializer's
+descriptor analysis on every execution, about 700 instructions, to decide
+whether to enter a getter's frame.  A cheap necessary condition now comes
+first (the type's getattro and its cached lookup of the name), and a build
+with assertions checks that the full analysis agrees whenever it refuses.
+`fr.f_back` takes 543 instructions (from 1113; golden87 389);
+logging_simple runs 628M instructions per run (from 690M).
+
+**GN, merged at `05acd1caa12`**: a delegation chain moves in one
+transfer.  A send to a generator that delegates by `yield from` or `await`
+enters the deepest plain level directly, and a yield from it suspends every
+plain consumer above it, as golden87's `gen_resume` and `gen_yield` did.
+`Send.Gen` and `YieldFrom.Delegated` declare their chain roles and the
+checker verifies them; the language still states one frame switch per
+exit.  The walk stops at a level the evaluator would not skip into:
+observed code, stale instrumentation, a pending event, a JIT level.  The
+free-threaded build keeps one level per transfer, as golden87 did.
+generators runs 1.197 of golden87's instructions (from 1.326) and
+coroutines 1.015.  Closing a suspended chain 5,000 levels deep recurses in
+C and overflows a 256 KiB thread's stack, with or without the walk (a
+follow-up).
+
+Interpreter timing with CO and GN (`05acd1caa12`, all-29, CPU 15, JIT
+off): **1.106 of golden87's time**, against 1.086 before them.
+generators runs 0.98 (from 1.29) and logging_format 1.09 (from 1.23), but
+deltablue (+21%), logging_silent (+25%), coroutines, spectral_norm,
+comprehensions and go (+10-12%) are slower at unchanged instructions.  CO
+added one handler, which moved every later function: logging_silent takes
+29M L1 instruction-fetch misses per run against 1.0M without that arm
+(golden87 0.9M), raytrace 100M against 25M.  The arms' tail functions are
+spread over 7.4 MB of `.text`, so which hot arms share cache sets is an
+accident of what precedes them.  The layout rule, planned last, now
+decides the timings; LY designs it now and it lands after OM and FP.
+
 Running:
-- CO: sites that stay generic where golden87 specializes.  One cause was
-  found and fixed (module functions called as methods; the logging
-  benchmarks run 4% fewer instructions).  The other generic sites are
-  generic in golden87 too, but an unadapted attribute read runs the
-  specializer's descriptor analysis on every execution, about 700
-  instructions, to decide whether to enter a getter's frame; CO is making
-  that test cheap.
-- GN: a delegation chain (`yield from`, `await`) sent to or yielded from
-  in one transfer, as golden87 did, declared in the rows' contracts; and
-  generator completion.
 - OM: operand modes as member arms.  Every word tests its sources' local
   flags at run time (about 118M instructions on LR's 13 kernels); golden87
   had a handler per mode.  A generated `locals` operand lets `over(...)`
   state the hot arms' dominant modes as members.
+- FP: frame pointers in the arms' tail functions (255M instructions on
+  LR's kernels).  Each arm sets up a frame because the build keeps frame
+  pointers for native profilers; an arm reached by a tail call may need
+  none if it leaves the frame-pointer register untouched.  FP measures the
+  bound and checks perf, gdb and faulthandler stacks under each variant.
+  The bound is 1.094 to 1.076 of golden87's instructions on seven
+  kernels; arms that set up no frame and leave the register untouched
+  reach 1.079 with perf, gdb and faulthandler stacks whole (frame-pointer
+  walkers lose only the three-instruction driver).
+- LY: one layout rule for the evaluators' tail functions, judged by its
+  stability: adding an arm must not move any kernel's cycles by more than
+  3%.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

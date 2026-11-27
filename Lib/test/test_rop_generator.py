@@ -1036,9 +1036,19 @@ class GeneratedAddIntTests(unittest.TestCase):
             text = "\n".join(low.decls + low.body)
             self.assertIsNone(re.search(r"\.bits\b|_PyValue_BITS", text), text)
 
+    def test_stencil_decls(self):
+        out = io.StringIO()
+        rop_generator.write_stencil_decls(out, self.products, [])
+        rows = [line for line in out.getvalue().splitlines() if line.startswith("IR_JIT_DECL(")]
+        self.assertEqual(len(rows), len(self.products.lowered))
+        self.assertIn('IR_JIT_DECL(Add_Int_TLL, Add_Generic, "A B C D", "miss next raise")', rows)
+        self.assertIn('IR_JIT_DECL(Jump_Poll, -, "A B", "jump raise redirect")', rows)
+
     def test_generated_files_are_current(self):
         for name, writer in (("Python/generated_rop_cases.c.h", rop_generator.write_cases),
-                             ("Python/generated_rop_forms.c.h", rop_generator.write_forms)):
+                             ("Python/generated_rop_forms.c.h", rop_generator.write_forms),
+                             ("Python/generated_jit_stencil_decls.h",
+                              rop_generator.write_stencil_decls)):
             import io
             out = io.StringIO()
             sources = sorted(f"Python/register_ops/{p.name}"

@@ -813,4 +813,8 @@ _PyRop_IntrinsicAttr(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
     return res;
 }
 
+/* The stencils of the baseline JIT (Python/jit_stencils.c) compile these
+ * rows with the arms under their own bindings, and no evaluator. */
+#ifndef IR_JIT_STENCILS
 #include "ceval_evaluator.h"
+#endif

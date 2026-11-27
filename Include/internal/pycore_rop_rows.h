@@ -224,15 +224,19 @@ PyAPI_FUNC(void) _PyRop_PublishItemsRest(_PyRopSpan d, const PyValue *items,
  * through the word's element fields with the arm's constant layout (the
  * head's elements, then four to an operand word), and the value each home
  * held loses its count at once.  A value that would lose its last count
- * hands the rest of the publish to _PyRop_PublishItemsRest(), which parks
- * it and the values the later homes displace and closes them after the
- * last write: no code runs before every home is written, so a finalizer
- * sees the publish done and the items, a tuple's or a list's, cannot change
- * under it (a span longer than a park holds a count: a park's closes may
- * close a local source that a destination displaced).  A vacant home
- * displaces NULL. */
-static inline Py_ALWAYS_INLINE void
-_PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
+ * stops the publish: the result is the item's position, and that value is
+ * written through last.  The caller hands the rest of the publish to
+ * _PyRop_PublishItemsRest(), which parks it and the values the later homes
+ * displace and closes them after the last write: no code runs before every
+ * home is written, so a finalizer sees the publish done and the items, a
+ * tuple's or a list's, cannot change under it (a span longer than a park
+ * holds a count: a park's closes may close a local source that a
+ * destination displaced).  Otherwise the result is -1, with every home
+ * written and the hold closed.  A vacant home displaces NULL.  An arm
+ * hands the rest over in its outlined cold region (rop_cgen.py,
+ * lower_publish). */
+static inline Py_ALWAYS_INLINE int
+_PyRop_PublishItemsFast(const _PyRopSpan *d, _PyRopItems *v, PyValue *last)
 {
     assert(v->count == d->count);
     assert(d->count <= _PY_ROP_PARK || v->hold != NULL);
@@ -245,9 +249,8 @@ _PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
         PyValue old = *home;
         _PyFrame_WriteHome(d->frame, home, PyValue_DUP(PyValue_Borrow(v->items[i])));
         if (_PyValue_DropNoDealloc(old)) {
-            _PyRop_PublishItemsRest(*d, v->items, v->hold, i, old);
-            v->hold = NULL;
-            return;
+            *last = old;
+            return i;
         }
     }
     /* The operand words: one load for four fields */
@@ -270,13 +273,26 @@ _PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
         PyValue old = *home;
         _PyFrame_WriteHome(d->frame, home, PyValue_DUP(PyValue_Borrow(v->items[i])));
         if (_PyValue_DropNoDealloc(old)) {
-            _PyRop_PublishItemsRest(*d, v->items, v->hold, i, old);
-            v->hold = NULL;
-            return;
+            *last = old;
+            return i;
         }
     }
     Py_XDECREF(v->hold);
     v->hold = NULL;
+    return -1;
+}
+
+/* The whole publish (_PyRop_PublishItemsFast()), for the completions and
+ * the C rows */
+static inline Py_ALWAYS_INLINE void
+_PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
+{
+    PyValue last;
+    int i = _PyRop_PublishItemsFast(d, v, &last);
+    if (i >= 0) {
+        _PyRop_PublishItemsRest(*d, v->items, v->hold, i, last);
+        v->hold = NULL;
+    }
 }
 
 /* The values a call reads.  A local source is held by an owner of its own,

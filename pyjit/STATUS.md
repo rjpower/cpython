@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `ef79703336b` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY and JT merged, below) holds:
+`pyjit/rir90` at `30e57cf2207` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT and J1 merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -478,15 +478,29 @@ frames that last ran in their unit meet that word.  The ten modules,
 `test_remote_pdb` and the same path through `sys.setprofile` and
 `sys.monitoring` pass under `always` on release and assert.
 
-Running:
-- J1: the frame-transfer protocol that every JIT design needs.  A switch
-  jumps through the target code's entry table; the resume flag, the switch
-  routine and pins go (deferred reclamation of dead units replaces pins);
-  `Resume.Warm` becomes `Resume.Poll` when a code compiles; GN's chains
-  pass compiled frames.
+**J1, merged at `30e57cf2207`**: the frame-transfer protocol that every
+JIT design needs.  A frame switch jumps through the target code's entry
+table, published only while the code's newest unit is valid.  The resume
+flag, the switch routine and the pins are gone: a dead code's units wait
+on a list until no thread is between leaving a compiled frame and its
+next switch (three stores per call and return; CPython's quiescent-state
+reclamation counts a thread quiescent while it still holds a return
+address into the unit).  A compiled code's `Resume.Warm` head reads
+`Resume.Poll` while its entries are published, so interpreted callers
+enter compiled callees, and delegation chains pass compiled frames.  The
+gates found a latent fault: a compiled poll that moved its frame to the
+observing evaluator resumed it at the wrong word.  On nine kernels the JIT
+runs 1.117 of the interpreter's instructions (from 1.276); generators 1.02
+(from 2.04).  A call and return still costs 1.42 of the interpreter's,
+and nbody and unpack_sequence do not move: the rest is in the forms and
+stubs the compiled words call.
 
-HS, a unit to shrink the arms that still run more instructions than
-golden87's, is held until the JIT plan says whether it comes first.
+Running:
+- HS: an accounting of the hot arms that still run more instructions than
+  golden87's, then generator rules for the largest causes.  Under JA's
+  stencil design the arms are also the compiled words.
+
+The stencil design and the templates wait for the user's decision.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

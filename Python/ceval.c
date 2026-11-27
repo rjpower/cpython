@@ -6765,3 +6765,12 @@ _PyEval_SpecialMethodCanSuggest(PyTypeObject *type, int oparg)
             Py_FatalError("unsupported special method");
     }
 }
+
+/* The mark of an arm's cold region (IR_COLD(), Python/ceval_macros.h): a
+ * call that does nothing.  It saves every register it uses, which is none,
+ * and uses no vector register, so a caller keeps every register across it. */
+__attribute__((cold, no_caller_saved_registers, target("general-regs-only")))
+void
+_PyEval_ColdPath(void)
+{
+}

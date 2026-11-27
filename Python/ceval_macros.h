@@ -1100,3 +1100,21 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * apart from DISPATCH(), which there goes on at the next word. */
 #define IR_DISPATCH_SWITCHED() DISPATCH()
 #define IR_DISPATCH_REDIRECTED() DISPATCH()
+
+/* The head of a cold region of an arm: a block from which every way out is
+ * a cold exit (miss, raise, redirect, again), and whose region makes a call
+ * (Tools/cases_generator/rop_cgen.py, cold_region_heads()); later, the
+ * blocks the .rop language declares cold.  GCC moves a block to a
+ * function's cold part only if its estimated count is zero, and it sets
+ * zero counts only from a call of a function declared cold, propagated
+ * backwards and stopped by any call that may not return.  A cold label,
+ * __builtin_expect() or __builtin_expect_with_probability() lower the
+ * block's probability but never to zero, and an inline cold function is
+ * inlined before the estimate, so none of them splits.  So the mark is a
+ * real call of _PyEval_ColdPath(), which returns at once and clobbers no
+ * register, so the hot path's registers do not change; it costs a call and
+ * a return when the cold path runs.  Both evaluators and the stencils of the
+ * baseline JIT (Python/jit_stencils.c) bind it here, the same way. */
+PyAPI_FUNC(void) _PyEval_ColdPath(void)
+    __attribute__((cold, no_caller_saved_registers));
+#define IR_COLD() _PyEval_ColdPath()

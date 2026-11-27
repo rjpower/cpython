@@ -15,7 +15,7 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
-from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
+from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn, RowKind,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          PcRole, Slot, UNCOUNTED_FACTS, Wrap)
 from rop_check import GraphInfo, Program, enum_c_name, enum_of_member, expand_debts, fixed_locals, expand_group, group_part_decls, group_parts, is_args
@@ -439,6 +439,99 @@ def acquired_on_entry(program: Program, blocks) -> dict[str, frozenset[str]]:
             elif known != out:
                 raise Unsupported(f"acquire() on some paths into {key} only")
     return {label: result.get(label, frozenset()) for label in blocks}
+
+
+# The exits that leave an arm by a tail call of a cold routine (the miss
+# adapter, process_error, the redirect and again dispatches)
+COLD_EXITS = frozenset({"miss", "redirect", "again", "raise", "unwind"})
+
+
+def expr_calls(program: Program, e) -> bool:
+    """Whether an expression calls a helper row (a C call, or an inline row
+    that may make one); primitives and language forms do not"""
+    if isinstance(e, Call):
+        x = program.externs.get(e.callee)
+        if x is not None and x.kind is not RowKind.primitive:
+            return True
+        return any(expr_calls(program, a) for a in e.args)
+    if isinstance(e, (tuple, list)):
+        return any(expr_calls(program, a) for a in e)
+    if isinstance(e, SpanLit):
+        return expr_calls(program, e.items)
+    return False
+
+
+def block_calls(program: Program, block: Block) -> bool:
+    """Whether a block may make a call before its terminator leaves it: a
+    helper row, or a publication, whose retirements may deallocate"""
+    for st in block.stmts:
+        if isinstance(st, Publish):
+            return True
+        if isinstance(st, Let) and expr_calls(program, st.value):
+            return True
+        if isinstance(st, Guard) and expr_calls(program, st.cond):
+            return True
+    t = block.term
+    if isinstance(t, CallTerm):
+        x = program.externs.get(t.callee)
+        return x is None or x.kind is not RowKind.primitive or expr_calls(program, t.args)
+    if isinstance(t, Branch):
+        return expr_calls(program, t.cond)
+    if isinstance(t, Exit):
+        return expr_calls(program, t.args)
+    return False
+
+
+def cold_region_heads(program: Program, blocks, skip: set[str]) -> set[str]:
+    """Rule J5-R1: the blocks where a cold region begins.  A block is cold
+    when every way out of it ends in a cold exit (COLD_EXITS); GCC finds the
+    same blocks only up to the first call that may not return, so a raise
+    path that retires its operands first stays in the hot part.  A region
+    head is a cold block with a predecessor outside the region, other than
+    the entry, and is marked only if the region makes a call: a region
+    without one is already cold, since GCC propagates from the exit's own
+    cold tail call, and a mark would add a call and with it a stack frame to
+    the arm's hot path."""
+    succs = {label: [t.label for t, _ in edges_of(program, blocks, b)]
+             for label, b in blocks.items()}
+    cold: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for label, b in blocks.items():
+            if label in cold or label in skip or label == "entry":
+                continue
+            t = b.term
+            if isinstance(t, Exit):
+                is_cold = t.kind in COLD_EXITS
+            elif isinstance(t, (Goto, Branch, CallTerm)):
+                x = program.externs.get(t.callee) if isinstance(t, CallTerm) else None
+                is_cold = (not (x is not None and x.c is not None
+                                and CONVENTIONS[x.c.convention].transfer)
+                           and bool(succs[label])
+                           and all(s in cold for s in succs[label]))
+            else:
+                is_cold = False
+            if is_cold:
+                cold.add(label)
+                changed = True
+    preds: dict[str, set[str]] = {label: set() for label in blocks}
+    for label, ss in succs.items():
+        for s_ in ss:
+            preds[s_].add(label)
+    heads = set()
+    for label in cold:
+        if not preds[label] <= cold:
+            region, todo = set(), [label]
+            while todo:
+                lb = todo.pop()
+                if lb in region:
+                    continue
+                region.add(lb)
+                todo.extend(s_ for s_ in succs[lb] if s_ in cold)
+            if any(block_calls(program, blocks[lb]) for lb in region):
+                heads.add(label)
+    return heads
 
 
 def is_transfer(program: Program, callee: str) -> bool:
@@ -981,6 +1074,7 @@ class ArmLowerer:
             st.name: len(st.value.args[0].items)
             for b in self.blocks.values() for st in b.stmts if is_span_anchor(st)}
         order = [label for label in self.layout() if label not in self.transfer_blocks]
+        self.cold_heads = cold_region_heads(self.program, self.blocks, self.transfer_blocks)
         if self.fixed_local:
             # The member's word: an install that bypassed the generated row
             # (_PyIR_LocalsArm) fails here in a build with assert() on
@@ -1069,6 +1163,8 @@ class ArmLowerer:
     def lower_block(self, block, label: str) -> None:
         if label != "entry":
             self.emit(f"{self.label(label)}:")
+        if label in self.cold_heads:
+            self.emit("IR_COLD();")
         # An acquire() takes the owner on its own path only
         self.acquired = set(self.acquired_in[label])
         for i, s in enumerate(block.stmts):

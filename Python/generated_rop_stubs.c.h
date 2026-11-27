@@ -233,12 +233,14 @@ _PyIR_Rop_Stub_Add_Generic(
     _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
     goto rop_Add_Generic_Run;
     rop_Add_Generic_binary_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all6, &srcs7);
     PROCESS_ERROR_AT(RAISE, 3, this_instr);
     rop_Add_Generic_binary_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(binary_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -379,12 +381,14 @@ _PyIR_Rop_Stub_AttrWrite_Generic(
     rop_AttrWrite_Generic_Tail1_Rest2:
     ROP_TAIL_DISPATCH();
     rop_AttrWrite_Generic_delattr_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     d_all3 = (_PyRopAnchors){1, {d_view0}, {d_owned0}};
     srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_obj}};
     _PyRop_RetireFailedCall(&d_all3, &srcs4);
     PROCESS_ERROR_AT(RAISE, 16, this_instr);
     rop_AttrWrite_Generic_delattr_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     d_all5 = (_PyRopAnchors){1, {d_view0}, {d_owned0}};
     _PyRop_RetireAbandoned(&d_all5);
@@ -466,12 +470,14 @@ _PyIR_Rop_Stub_AttrWrite_Generic(
     }
     goto rop_AttrWrite_Generic_adapt_before_use_setattr3_Run;
     rop_AttrWrite_Generic_setattr_at_origin2_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all13 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs14 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_value}};
     _PyRop_RetireFailedCall(&a_all13, &srcs14);
     PROCESS_ERROR_AT(RAISE, 18, this_instr);
     rop_AttrWrite_Generic_setattr_at_origin2_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all15 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all15);
@@ -1105,12 +1111,14 @@ _PyIR_Rop_Stub_GetMethod_Generic(
     }
     goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
     rop_GetMethod_Generic_getmethod_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all19 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs20 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
     _PyRop_RetireFailedCall(&a_all19, &srcs20);
     PROCESS_ERROR_AT(RAISE, 101, this_instr);
     rop_GetMethod_Generic_getmethod_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(getmethod_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -1256,12 +1264,14 @@ _PyIR_Rop_Stub_SetItem_Generic(
     }
     goto rop_SetItem_Generic_adapt_before_use_setitem2_Run;
     rop_SetItem_Generic_setitem_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
     srcs6 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}};
     _PyRop_RetireFailedCall(&a_all5, &srcs6);
     PROCESS_ERROR_AT(RAISE, 170, this_instr);
     rop_SetItem_Generic_setitem_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all7 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
     _PyRop_RetireAbandoned(&a_all7);
@@ -1408,6 +1418,7 @@ _PyIR_Rop_Stub_IterOpen_Generic(
     _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h);
     goto rop_IterOpen_Generic_Run;
     rop_IterOpen_Generic_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs6 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_source}};
@@ -1544,6 +1555,7 @@ _PyIR_Rop_Stub_GlobalRead_Generic(
     rop_GlobalRead_Generic_global_at_origin1_Failed:
     PROCESS_ERROR_AT(RAISE, 103, this_instr);
     rop_GlobalRead_Generic_global_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(global_at_origin1_dropped);
     IR_REDIRECT();
@@ -1717,12 +1729,14 @@ _PyIR_Rop_Stub_Binary_Generic(
     _PyRop_Backoff(&((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
     goto rop_Binary_Generic_Run;
     rop_Binary_Generic_binary_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all6, &srcs7);
     PROCESS_ERROR_AT(RAISE, 23, this_instr);
     rop_Binary_Generic_binary_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(binary_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -1899,12 +1913,14 @@ _PyIR_Rop_Stub_AppendText_Generic(
     _PyRop_Backoff(&((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
     goto rop_AppendText_Generic_Run;
     rop_AppendText_Generic_binary_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all6, &srcs7);
     PROCESS_ERROR_AT(RAISE, 10, this_instr);
     rop_AppendText_Generic_binary_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(binary_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -2099,6 +2115,7 @@ _PyIR_Rop_Stub_Compare_Generic(
     z = compare_at_origin1_kept;
     goto rop_Compare_Generic_Finish;
     rop_Compare_Generic_compare_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(compare_at_origin1_dropped);
     rop_Compare_Generic_Gone:
@@ -2107,7 +2124,9 @@ _PyIR_Rop_Stub_Compare_Generic(
     _PyRop_RetireAbandoned(&a_all6);
     IR_REDIRECT();
     rop_Compare_Generic_compare_test_at_origin2_Failed:
+    IR_COLD();
     rop_Compare_Generic_compare_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs8 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
@@ -2119,6 +2138,7 @@ _PyIR_Rop_Stub_Compare_Generic(
         goto rop_Compare_Generic_compare_test_at_origin2_Said;
     }
     rop_Compare_Generic_compare_test_at_origin2_Moved:
+    IR_COLD();
     goto rop_Compare_Generic_Gone;
     rop_Compare_Generic_compare_test_at_origin2_Not:
     z = _PyRop_TruthObject(false, false);
@@ -2267,6 +2287,7 @@ _PyIR_Rop_Stub_Contains_Generic(
     }
     goto rop_Contains_Generic_adapt_before_use_contains2_Run;
     rop_Contains_Generic_contains_test_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs6 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
@@ -2278,6 +2299,7 @@ _PyIR_Rop_Stub_Contains_Generic(
         goto rop_Contains_Generic_contains_test_at_origin1_Said;
     }
     rop_Contains_Generic_contains_test_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all7);
@@ -2558,6 +2580,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     rop_TestBranch_Generic_compare_test_at_origin2_Is:
     goto rop_TestBranch_Generic_Yes;
     rop_TestBranch_Generic_compare_test_at_origin2_Failed:
+    IR_COLD();
     rop_TestBranch_Generic_Failed:
     IR_STUB_ESCAPE();
     a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -2570,6 +2593,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
         goto rop_TestBranch_Generic_compare_test_at_origin2_Said;
     }
     rop_TestBranch_Generic_compare_test_at_origin2_Moved:
+    IR_COLD();
     rop_TestBranch_Generic_Gone:
     IR_STUB_ESCAPE();
     a_all12 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -2580,6 +2604,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
     hit = false;
     goto rop_TestBranch_Generic_Test;
     rop_TestBranch_Generic_contains_test_at_origin1_Failed:
+    IR_COLD();
     goto rop_TestBranch_Generic_Failed;
     rop_TestBranch_Generic_contains_test_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
@@ -2587,6 +2612,7 @@ _PyIR_Rop_Stub_TestBranch_Generic(
         goto rop_TestBranch_Generic_contains_test_at_origin1_Said;
     }
     rop_TestBranch_Generic_contains_test_at_origin1_Moved:
+    IR_COLD();
     goto rop_TestBranch_Generic_Gone;
     rop_TestBranch_Generic_contains_test_at_origin1_Not:
     goto rop_TestBranch_Generic_No;
@@ -2851,6 +2877,7 @@ _PyIR_Rop_Stub_Truth_Generic(
     _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_D(ir_word)))->h);
     goto rop_Truth_Generic_Run;
     rop_Truth_Generic_truth_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all9 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs10 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
@@ -2862,6 +2889,7 @@ _PyIR_Rop_Stub_Truth_Generic(
         goto rop_Truth_Generic_truth_at_origin1_Said;
     }
     rop_Truth_Generic_truth_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     _PyRop_RetireAbandoned(&a_all11);
@@ -3070,6 +3098,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h);
     goto rop_BranchTruth_Generic_Run;
     rop_BranchTruth_Generic_truth_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all9 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs10 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
@@ -3081,6 +3110,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
         goto rop_BranchTruth_Generic_truth_at_origin1_Said;
     }
     rop_BranchTruth_Generic_truth_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     _PyRop_RetireAbandoned(&a_all11);
@@ -3394,12 +3424,14 @@ _PyIR_Rop_Stub_Add_Extended(
     rop_Add_Extended_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_Add_Extended_extension_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 3, this_instr);
     rop_Add_Extended_extension_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(extension_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -3514,12 +3546,14 @@ _PyIR_Rop_Stub_SpecialLookup_Generic(
     rop_SpecialLookup_Generic_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_SpecialLookup_Generic_special_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs12 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
     _PyRop_RetireFailedCall(&a_all11, &srcs12);
     PROCESS_ERROR_AT(RAISE, 178, this_instr);
     rop_SpecialLookup_Generic_special_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(special_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -3638,8 +3672,10 @@ _PyIR_Rop_Stub_CellMapRead_Lookup(
         z = out2;
         goto rop_CellMapRead_Lookup_Done;
     }
+    IR_COLD();
     _PyRop_UnboundCell(frame, home_cell);
     rop_CellMapRead_Lookup_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}};
@@ -3676,6 +3712,7 @@ _PyIR_Rop_Stub_CellDelete_Unbind(
     ROP_TAIL_PARK_FIRST(old);
     ROP_TAIL_DISPATCH();
     rop_CellDelete_Unbind_Empty:
+    IR_COLD();
     _PyRop_UnboundCell(frame, home_cell);
     PROCESS_ERROR_AT(RAISE, 52, this_instr);
 }
@@ -3798,12 +3835,14 @@ _PyIR_Rop_Stub_WithExit_Generic(
     rop_WithExit_Generic_Tail1_Rest3:
     ROP_TAIL_DISPATCH();
     rop_WithExit_Generic_BoundFailed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     b_all3 = (_PyRopAnchors){2, {b_view0, b_view1}, {b_owned0, b_owned1}};
     srcs4 = (_PyRopSrcs){frame, 0, {}, {}};
     _PyRop_RetireFailedCall(&b_all3, &srcs4);
     PROCESS_ERROR_AT(RAISE, 202, this_instr);
     rop_WithExit_Generic_MethodFailed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
     srcs6 = (_PyRopSrcs){frame, 0, {}, {}};
@@ -4498,6 +4537,7 @@ _PyIR_Rop_Stub_ExceptMatch_Match(
     rop_ExceptMatch_Match_Tail0_Rest2:
     ROP_TAIL_DISPATCH();
     rop_ExceptMatch_Match_Invalid:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedOperand(frame, home_pattern);
     PROCESS_ERROR_AT(RAISE, 79, this_instr);
@@ -4575,12 +4615,14 @@ _PyIR_Rop_Stub_DelItem_Generic(
     rop_DelItem_Generic_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_DelItem_Generic_delitem_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_key, home_obj}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 70, this_instr);
     rop_DelItem_Generic_delitem_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -4699,12 +4741,14 @@ _PyIR_Rop_Stub_SliceRead_Generic(
     rop_SliceRead_Generic_Tail0_Rest7:
     ROP_TAIL_DISPATCH();
     rop_SliceRead_Generic_binary_slice_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
     srcs3 = (_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_D), !!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_stop, home_start, home_obj}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 174, this_instr);
     rop_SliceRead_Generic_binary_slice_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(binary_slice_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -4827,12 +4871,14 @@ _PyIR_Rop_Stub_SliceWrite_Generic(
     rop_SliceWrite_Generic_Tail0_Rest8:
     ROP_TAIL_DISPATCH();
     rop_SliceWrite_Generic_store_slice_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
     srcs3 = (_PyRopSrcs){frame, 4, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_D)}, {home_stop, home_start, home_obj, home_value}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 176, this_instr);
     rop_SliceWrite_Generic_store_slice_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -4970,12 +5016,14 @@ _PyIR_Rop_Stub_GetItem_ListSlice_TTT(
     rop_GetItem_ListSlice_TTT_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {0, 0}, {home_key, home_obj}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 98, this_instr);
     rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(list_slice_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -5085,12 +5133,14 @@ _PyIR_Rop_Stub_GetItem_ListSlice(
     rop_GetItem_ListSlice_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_GetItem_ListSlice_list_slice_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 98, this_instr);
     rop_GetItem_ListSlice_list_slice_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(list_slice_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -5284,6 +5334,7 @@ _PyIR_Rop_Stub_NamespaceReadFrom_Mapping(
         goto rop_NamespaceReadFrom_Mapping_Done;
     }
     rop_NamespaceReadFrom_Mapping_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}};
@@ -7736,12 +7787,14 @@ _PyIR_Rop_Stub_Binary_Extended(
     rop_Binary_Extended_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_Binary_Extended_extension_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 23, this_instr);
     rop_Binary_Extended_extension_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(extension_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -7859,6 +7912,7 @@ _PyIR_Rop_Stub_AppendText_Text(
     rop_AppendText_Text_Tail0_Rest3:
     ROP_TAIL_DISPATCH();
     rop_AppendText_Text_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_y}};
@@ -7926,12 +7980,14 @@ _PyIR_Rop_Stub_Length_Size(
     rop_Length_Size_Tail0_Rest2:
     ROP_TAIL_DISPATCH();
     rop_Length_Size_length_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 0, {}, {}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 124, this_instr);
     rop_Length_Size_length_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(length_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -7994,11 +8050,13 @@ _PyIR_Rop_Stub_PatternClass_Match(
     ROP_TAIL_PARK_FIRST(old_dst);
     ROP_TAIL_DISPATCH();
     rop_PatternClass_Match_match_class_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     span4 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
     _PyRop_RetireFailedCall(&a, &span4);
     PROCESS_ERROR_AT(RAISE, 146, this_instr);
     rop_PatternClass_Match_match_class_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(match_class_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -8077,12 +8135,14 @@ _PyIR_Rop_Stub_PatternKeys_Match(
     rop_PatternKeys_Match_Tail0_Rest3:
     ROP_TAIL_DISPATCH();
     rop_PatternKeys_Match_match_keys_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 0, {}, {}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 148, this_instr);
     rop_PatternKeys_Match_match_keys_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(match_keys_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -9050,6 +9110,7 @@ _PyIR_Rop_Stub_Contains_Set(
     rop_Contains_Set_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_Contains_Set_set_test_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
@@ -9061,6 +9122,7 @@ _PyIR_Rop_Stub_Contains_Set(
         goto rop_Contains_Set_set_test_at_origin1_Said;
     }
     rop_Contains_Set_set_test_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -9170,6 +9232,7 @@ _PyIR_Rop_Stub_Contains_Dict(
     rop_Contains_Dict_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_Contains_Dict_dict_test_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_container, home_item}};
@@ -9181,6 +9244,7 @@ _PyIR_Rop_Stub_Contains_Dict(
         goto rop_Contains_Dict_dict_test_at_origin1_Said;
     }
     rop_Contains_Dict_dict_test_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -10297,6 +10361,7 @@ _PyIR_Rop_Stub_TestBranch_Set_TT(
     rop_TestBranch_Set_TT_Tail0_Rest4:
     ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Set_TT_set_test_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {0, 0}, {home_y, home_x}};
@@ -10308,6 +10373,7 @@ _PyIR_Rop_Stub_TestBranch_Set_TT(
         goto rop_TestBranch_Set_TT_set_test_at_origin1_Said;
     }
     rop_TestBranch_Set_TT_set_test_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -10439,6 +10505,7 @@ _PyIR_Rop_Stub_TestBranch_Set(
     rop_TestBranch_Set_Tail0_Rest4:
     ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Set_set_test_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
@@ -10450,6 +10517,7 @@ _PyIR_Rop_Stub_TestBranch_Set(
         goto rop_TestBranch_Set_set_test_at_origin1_Said;
     }
     rop_TestBranch_Set_set_test_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -10585,6 +10653,7 @@ _PyIR_Rop_Stub_TestBranch_Dict(
     rop_TestBranch_Dict_Tail0_Rest4:
     ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Dict_dict_test_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
@@ -10596,6 +10665,7 @@ _PyIR_Rop_Stub_TestBranch_Dict(
         goto rop_TestBranch_Dict_dict_test_at_origin1_Said;
     }
     rop_TestBranch_Dict_dict_test_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -10731,6 +10801,7 @@ _PyIR_Rop_Stub_TestBranch_Sequence(
     rop_TestBranch_Sequence_Tail0_Rest4:
     ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Sequence_sequence_test_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A)}, {home_y, home_x}};
@@ -10742,6 +10813,7 @@ _PyIR_Rop_Stub_TestBranch_Sequence(
         goto rop_TestBranch_Sequence_sequence_test_at_origin1_Said;
     }
     rop_TestBranch_Sequence_sequence_test_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -10973,12 +11045,14 @@ _PyIR_Rop_Stub_Convert_Text(
     rop_Convert_Text_Tail0_Rest3:
     ROP_TAIL_DISPATCH();
     rop_Convert_Text_convert_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 68, this_instr);
     rop_Convert_Text_convert_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(convert_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -11057,12 +11131,14 @@ _PyIR_Rop_Stub_Format_Simple(
     rop_Format_Simple_Tail0_Rest3:
     ROP_TAIL_DISPATCH();
     rop_Format_Simple_format_plain_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 89, this_instr);
     rop_Format_Simple_format_plain_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(format_plain_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -11162,12 +11238,14 @@ _PyIR_Rop_Stub_FormatSpec_Value(
     rop_FormatSpec_Value_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_FormatSpec_Value_format_value_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
     srcs3 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_spec, home_value}};
     _PyRop_RetireFailedCall(&a_all2, &srcs3);
     PROCESS_ERROR_AT(RAISE, 91, this_instr);
     rop_FormatSpec_Value_format_value_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(format_value_at_origin1_dropped);
     IR_STUB_ESCAPE();
@@ -11260,6 +11338,7 @@ _PyIR_Rop_Stub_Truth_Slot(
     rop_Truth_Slot_Tail0_Rest3:
     ROP_TAIL_DISPATCH();
     rop_Truth_Slot_slot_truth_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}};
@@ -11271,6 +11350,7 @@ _PyIR_Rop_Stub_Truth_Slot(
         goto rop_Truth_Slot_slot_truth_at_origin1_Said;
     }
     rop_Truth_Slot_slot_truth_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -11358,6 +11438,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_FALSE(
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest2:
     ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
@@ -11369,6 +11450,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_FALSE(
         goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Said;
     }
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -11473,6 +11555,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_TRUE(
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest2:
     ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs3 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}};
@@ -11484,6 +11567,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot_BRANCH_IF_TRUE(
         goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Said;
     }
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Moved:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     _PyRop_RetireAbandoned(&a_all4);
@@ -11547,6 +11631,7 @@ _PyIR_Rop_Stub_LocalRead_Checked(
     ROP_TAIL_PARK_FIRST(old_dst);
     ROP_TAIL_DISPATCH();
     rop_LocalRead_Checked_Unbound:
+    IR_COLD();
     _PyRop_UnboundLocal(frame, home_local);
     PROCESS_ERROR_AT(RAISE, 128, this_instr);
 }
@@ -11834,9 +11919,11 @@ _PyRop_Complete_ForIter_CompleteObserved(
     }
     IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_ForIter_CompleteObserved_StopFailed:
+    IR_COLD();
     PyValue_XCLOSE(a_owned0);
     PROCESS_ERROR_AT(RAISE, 81, this_instr);
     rop_ForIter_CompleteObserved_StopMoved:
+    IR_COLD();
     PyValue_XCLOSE(a_owned0);
     IR_REDIRECT();
     rop_ForIter_CompleteObserved_ExitEventFailed:
@@ -11948,12 +12035,14 @@ _PyRop_Complete_Send_CompleteObserved(
     }
     IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_Send_CompleteObserved_Failed:
+    IR_COLD();
     IR_STUB_ESCAPE();
     a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
     srcs4 = (_PyRopSrcs){frame, 0, {}, {}};
     _PyRop_RetireFailedCall(&a_all3, &srcs4);
     PROCESS_ERROR_AT(RAISE, 163, this_instr);
     rop_Send_CompleteObserved_Moved:
+    IR_COLD();
     PyValue_XCLOSE(a_owned0);
     IR_REDIRECT();
     rop_Send_CompleteObserved_ExitFailed:

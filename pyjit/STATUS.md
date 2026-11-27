@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `f9b6d112cb6` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1 and HS merged, below) holds:
+`pyjit/rir90` at `a620c74c5a0` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS and J2 merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -515,7 +515,29 @@ warm (from 1.338 / 1.326), so **1.14 of the interpreter's time** (from
 1.30); generators runs 1.05 of the interpreter (from 2.42), and
 unpack_sequence (1.55) and nbody (1.30) are furthest.
 
-The stencil design and the templates wait for the user's decision.
+**The user's decision, 2026-11-27**: the baseline JIT is copy-and-patch
+from the interpreter's own arms ("let's keep it clean and simple"), and the
+templates leave the baseline, so each arm has one form.  The register
+families stay the one statement of semantics; the generator and the build
+produce the interpreter's arms and the stencils from them.  Small changes
+to the interpreter's code are acceptable where they keep the design clean;
+a unit records the per-arm instruction change instead of requiring
+identical bytes.  The admitted-entry tests stay until the emitter settles
+how a stale compiled copy meets a rewritten entry.
+
+**J2, merged at `a620c74c5a0`**: stencils for the baseline JIT.
+`Python/jit_stencils.c` compiles `generated_rop_cases.c.h` a second time
+under stencil bindings: operand fields become holes, the dispatch becomes a
+continuation, branches become targets, and exits become holes that are
+marked cold.  `Tools/jit/stencils.py`, stdlib only, reads the object and
+writes `generated_jit_stencils.h` in the build tree: each arm's hot, cold
+and jump-table parts, its holes and its CFA rows.  The table also carries a
+support image of the local helpers and constants.  Relocations are a
+closed, declared set, and a refusal fails the build.  All 364 arms have a
+stencil.  Their hot parts total 0.71 of the interpreter arms' static
+instructions (`Add.Int_TLL` 31 against 41, `Binary.Float` multiply 31
+against 55, `Jump.Poll` 14 against 18).  The interpreter's object is
+unchanged.  Nothing reads the table yet: J3, the emitter, is running.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

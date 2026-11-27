@@ -759,13 +759,19 @@ PyValue _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 PyValue _PyRop_AppendText(PyValue *home, PyValueBorrow right);
 
 
-/* Python/ceval.c: the namespace rows (Python/register_ops/namespaces.rop).
- * A name is passed as its index in co_names, which an operand holds in 16
- * bits, wider than a name field. */
+/* The name at index in the code's co_names: every name operand of an arm
+ * and the namespace rows (Python/register_ops/namespaces.rop), which pass
+ * the index because an operand holds it in 16 bits, wider than a name
+ * field.  Code construction admits only exact str names
+ * (Objects/codeobject.c, intern_strings), so the word is an object and the
+ * read is checked in debug builds only. */
 static inline PyObject *
 _PyRop_NameAt(_PyInterpreterFrame *frame, uint32_t index)
 {
-    return _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_names, index);
+    PyValueBorrow name = PyTuple_GET_VALUE(_PyFrame_GetCode(frame)->co_names, index);
+    assert(PyValue_IsObject(name) &&
+           PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(name)));
+    return _PyValue_AsKnownObjectBorrowPointer(name);
 }
 
 PyAPI_FUNC(PyValue) _PyRop_LoadName(PyThreadState *, _PyInterpreterFrame *, uint32_t);

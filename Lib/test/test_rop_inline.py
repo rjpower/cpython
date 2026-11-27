@@ -1,8 +1,8 @@
 """The inline policy of the register instruction rows holds in the binary:
 the interpreter makes no call to a row declared `inline`, and the forms and
 stubs share one out-of-line copy of it (Tools/cases_generator/rop_cgen.py).
-An arm whose closes leave it by a tail call (lower_tail_closes) makes no
-call and allocates no stack frame.
+An arm whose closes leave it by a tail call (lower_tail_closes) and whose
+name operands are read unchecked makes no call and allocates no stack frame.
 The interpreter is ir_evaluate() and, when it tail-calls, the function of
 each handler, label and routine (ir_tail_*, Python/ceval_tail.h)."""
 
@@ -37,6 +37,17 @@ TAIL_CLOSE_ONLY = [
     "GlobalRead_Builtin", "GetItem_ListIndex", "SetItem_ListIndex",
     "GetAttr_PolyShape", "BranchNone_Test", "BranchTruth_Plain_BRANCH_IF_FALSE",
     "ForIter_List",
+]
+
+# Arms whose other call was the release-build check of a name operand, which
+# the generator reads through _PyRop_NameAt() unchecked
+NAME_READ_ONLY = [
+    "GetAttr_Shape", "GetAttr_Shape_TL", "GetAttr_ValueSlot",
+    "GetAttr_ValueSlot_TL", "GetAttr_Instance", "GetAttr_Module",
+    "GetMethod_MethodValues", "GetMethod_MethodValues_TTL",
+    "GetMethod_NoDict", "GetMethod_NoDict_TTL", "GetMethod_Module",
+    "AttrWrite_Shape", "AttrWrite_Shape_LL", "AttrWrite_ShapeAdd",
+    "AttrWrite_ShapeAdd_LL",
 ]
 
 
@@ -91,7 +102,7 @@ class InlineRowBinaryTests(unittest.TestCase):
             self.skipTest("the free-threaded build closes in place")
         if "-DNDEBUG" not in sysconfig.get_config_var("PY_CFLAGS").split():
             self.skipTest("an assert() is a call")
-        for arm in TAIL_CLOSE_ONLY:
+        for arm in TAIL_CLOSE_ONLY + NAME_READ_ONLY:
             with self.subTest(arm=arm):
                 match = re.search(rf"^[0-9a-f]+ <ir_tail_{arm}>:\n(.*?)(?=^[0-9a-f]+ <|\Z)",
                                   self.calls, re.M | re.S)

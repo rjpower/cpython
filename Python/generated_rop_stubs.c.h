@@ -313,7 +313,7 @@ _PyIR_Rop_Stub_AttrWrite_Generic(
     a_view1 = PyValue_Borrow(*home_value);
     a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) : PyValue_NULL;
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_SetAttr(a_view0, GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), a_view1);
+    ret1 = _PyRop_SetAttr(a_view0, _PyRop_NameAt(frame, IR_B(ir_word)), a_view1);
     if (ret1 < 0) {
         goto rop_AttrWrite_Generic_setattr_at_origin2_Failed;
     }
@@ -355,7 +355,7 @@ _PyIR_Rop_Stub_AttrWrite_Generic(
     d_view0 = PyValue_Borrow(*home_obj);
     d_owned0 = (ir_word & IR_F_LOCAL_A) ? PyValue_DUP(d_view0) : PyValue_NULL;
     IR_STUB_ESCAPE();
-    ret2 = _PyRop_DelAttr(d_view0, GETITEM(FRAME_CO_NAMES, IR_B(ir_word)));
+    ret2 = _PyRop_DelAttr(d_view0, _PyRop_NameAt(frame, IR_B(ir_word)));
     if (ret2 < 0) {
         goto rop_AttrWrite_Generic_delattr_at_origin1_Failed;
     }
@@ -390,7 +390,7 @@ _PyIR_Rop_Stub_AttrWrite_Generic(
     _PyRop_RetireAbandoned(&d_all5);
     IR_REDIRECT();
     rop_AttrWrite_Generic_adapt_before_use_setattr3_Sample:
-    ret7 = _PyAttr_ClassifySetAttr(PyValue_Borrow(*home_obj), this_instr, ((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out6);
+    ret7 = _PyAttr_ClassifySetAttr(PyValue_Borrow(*home_obj), this_instr, ((_PyFbAttr *)IR_FB(IR_D(ir_word))), _PyRop_NameAt(frame, IR_B(ir_word)), &out6);
     if (ret7 == 1) {
         adapt_before_use_setattr3_rShape = out6;
         goto rop_AttrWrite_Generic_adapt_before_use_setattr3_LShape;
@@ -510,7 +510,7 @@ _PyIR_Rop_Stub_SuperAttr_Generic(
     rop_SuperAttr_Generic_Run:
     span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
     IR_STUB_ESCAPE();
-    ret2 = _PyRop_SuperLookup(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    ret2 = _PyRop_SuperLookup(tstate, frame, this_instr, &span1, _PyRop_NameAt(frame, IR_C(ir_word)));
     if (PyValue_IsNull(ret2)) {
         goto rop_SuperAttr_Generic_Failed;
     }
@@ -578,7 +578,7 @@ _PyIR_Rop_Stub_SuperAttrExplicit_Generic(
     rop_SuperAttrExplicit_Generic_Run:
     span1 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
     IR_STUB_ESCAPE();
-    ret2 = _PyRop_SuperLookupExplicit(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_C(ir_word)));
+    ret2 = _PyRop_SuperLookupExplicit(tstate, frame, this_instr, &span1, _PyRop_NameAt(frame, IR_C(ir_word)));
     if (PyValue_IsNull(ret2)) {
         goto rop_SuperAttrExplicit_Generic_Failed;
     }
@@ -652,7 +652,7 @@ _PyIR_Rop_Stub_SuperMethod_Generic(
     rop_SuperMethod_Generic_Run:
     span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
     IR_STUB_ESCAPE();
-    ret3 = _PyRop_SuperMethod(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out2);
+    ret3 = _PyRop_SuperMethod(tstate, frame, this_instr, &span1, _PyRop_NameAt(frame, IR_D(ir_word)), &out2);
     if (PyValue_IsNull(ret3)) {
         goto rop_SuperMethod_Generic_Failed;
     }
@@ -740,7 +740,7 @@ _PyIR_Rop_Stub_SuperMethodExplicit_Generic(
     rop_SuperMethodExplicit_Generic_Run:
     span1 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
     IR_STUB_ESCAPE();
-    ret3 = _PyRop_SuperMethodExplicit(tstate, frame, this_instr, &span1, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out2);
+    ret3 = _PyRop_SuperMethodExplicit(tstate, frame, this_instr, &span1, _PyRop_NameAt(frame, IR_D(ir_word)), &out2);
     if (PyValue_IsNull(ret3)) {
         goto rop_SuperMethodExplicit_Generic_Failed;
     }
@@ -951,7 +951,7 @@ _PyIR_Rop_Stub_GetMethod_Generic(
     a_view0 = PyValue_Borrow(*home_obj);
     a_owned0 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view0) : PyValue_NULL;
     IR_STUB_ESCAPE();
-    ret2 = _PyAttr_GetMethod(a_view0, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out1);
+    ret2 = _PyAttr_GetMethod(a_view0, _PyRop_NameAt(frame, IR_D(ir_word)), &out1);
     if (PyValue_IsNull(ret2)) {
         goto rop_GetMethod_Generic_getmethod_at_origin1_Failed;
     }
@@ -1009,7 +1009,7 @@ _PyIR_Rop_Stub_GetMethod_Generic(
     rop_GetMethod_Generic_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_GetMethod_Generic_adapt_before_use_getmethod2_Sample:
-    ret12 = _PyAttr_ClassifyGetMethod(PyValue_Borrow(*home_obj), this_instr, ((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out11);
+    ret12 = _PyAttr_ClassifyGetMethod(PyValue_Borrow(*home_obj), this_instr, ((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), _PyRop_NameAt(frame, IR_D(ir_word)), &out11);
     if (ret12 == 1) {
         adapt_before_use_getmethod2_rn = out11;
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_NoDictCheck;
@@ -1488,7 +1488,7 @@ _PyIR_Rop_Stub_GlobalRead_Generic(
     rop_GlobalRead_Generic_adapt_before_use_global2_Run:
     rop_GlobalRead_Generic_Run:
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_LoadGlobal(frame, GETITEM(FRAME_CO_NAMES, IR_B(ir_word)));
+    ret1 = _PyRop_LoadGlobal(frame, _PyRop_NameAt(frame, IR_B(ir_word)));
     if (PyValue_IsNull(ret1)) {
         goto rop_GlobalRead_Generic_global_at_origin1_Failed;
     }
@@ -1508,7 +1508,7 @@ _PyIR_Rop_Stub_GlobalRead_Generic(
     ROP_TAIL_PARK_FIRST(old_dst);
     ROP_TAIL_DISPATCH();
     rop_GlobalRead_Generic_adapt_before_use_global2_Sample:
-    ret3 = _PyGlobal_Classify(frame, this_instr, ((_PyFbGlobal *)IR_FB(IR_C(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out2);
+    ret3 = _PyGlobal_Classify(frame, this_instr, ((_PyFbGlobal *)IR_FB(IR_C(ir_word))), _PyRop_NameAt(frame, IR_B(ir_word)), &out2);
     if (ret3 == 1) {
         adapt_before_use_global2_rBuiltin = out2;
         goto rop_GlobalRead_Generic_adapt_before_use_global2_LBuiltin;
@@ -5435,7 +5435,7 @@ _PyIR_Rop_Stub_Import_Eager(
     l = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_level) : _PyFrame_TakeHome(frame, home_level));
     f = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_fromlist) : _PyFrame_TakeHome(frame, home_fromlist));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_EAGER);
+    ret1 = _PyRop_ImportName(tstate, frame, _PyRop_NameAt(frame, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_EAGER);
     if (PyValue_IsNull(ret1)) {
         goto rop_Import_Eager_Failed;
     }
@@ -5479,7 +5479,7 @@ _PyIR_Rop_Stub_Import_Policy(
     l = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_level) : _PyFrame_TakeHome(frame, home_level));
     f = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_fromlist) : _PyFrame_TakeHome(frame, home_fromlist));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_POLICY);
+    ret1 = _PyRop_ImportName(tstate, frame, _PyRop_NameAt(frame, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_POLICY);
     if (PyValue_IsNull(ret1)) {
         goto rop_Import_Policy_Failed;
     }
@@ -5523,7 +5523,7 @@ _PyIR_Rop_Stub_Import_Lazy(
     l = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_level) : _PyFrame_TakeHome(frame, home_level));
     f = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_fromlist) : _PyFrame_TakeHome(frame, home_fromlist));
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_ImportName(tstate, frame, GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_LAZY);
+    ret1 = _PyRop_ImportName(tstate, frame, _PyRop_NameAt(frame, IR_D(ir_word)), l, f, ROP_IMPORTKIND_IMPORT_LAZY);
     if (PyValue_IsNull(ret1)) {
         goto rop_Import_Lazy_Failed;
     }

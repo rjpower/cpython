@@ -420,16 +420,6 @@ _PyRop_EntersBelow(_PyInterpreterFrame *new_frame, _PyInterpreterFrame *frame)
         IR_START_FRAME();                                        \
     } while (0)
 
-/* Tuple access macros */
-
-static inline PyObject *
-GETITEM(PyObject *v, Py_ssize_t i) {
-    assert(PyTuple_Check(v));
-    assert(i >= 0);
-    assert(i < PyTuple_GET_SIZE(v));
-    return _PyTuple_GET_OBJECT(v, i);
-}
-
 /* Code access macros */
 
 #define NEXTOPARG()  do { \
@@ -451,7 +441,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Data access macros */
 #define FRAME_CO_CONSTS (_PyFrame_GetCode(frame)->co_consts)
-#define FRAME_CO_NAMES  (_PyFrame_GetCode(frame)->co_names)
 
 /* Local variable macros */
 

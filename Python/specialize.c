@@ -1698,6 +1698,7 @@ static const attr_arm attr_arms[] = {
     {ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1, -1},
     {ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2, -1},
     {ATTR_CLASSMETHOD, ROP_HANDLER_GetMethod_ClassMethod, -1, 3, -1},
+    {ATTR_MODULE, ROP_HANDLER_GetMethod_Module, -1, 4, -1},
     {ATTR_STORE_INSTANCE_VALUE, ROP_HANDLER_AttrWrite_Instance, -1, -1, 0},
     {ATTR_STORE_SHAPE, ROP_HANDLER_AttrWrite_Shape, -1, -1, 1},
     {ATTR_STORE_SHAPE_ADD, ROP_HANDLER_AttrWrite_ShapeAdd, -1, -1, 2},
@@ -1757,8 +1758,7 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
     }
     attr_collect = NULL;
     // The last case of each row is "none"
-    int none = family == ATTR_FAMILY_GETATTR ? 12
-             : family == ATTR_FAMILY_GETMETHOD ? 4 : 5;
+    int none = family == ATTR_FAMILY_GETATTR ? 12 : 5;
     const attr_arm *chosen = attr_arm_of(nominated.kind, family);
     if (chosen == NULL) {
         attr_restore_entry((_PyFbAttr *)fb, &before);

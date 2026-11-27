@@ -2312,6 +2312,31 @@ class TestSpecializer(TestBase):
 
     @cpython_only
     @requires_specialization
+    def test_load_attr_module_method_position(self):
+        # A call of a module's function loads the attribute with the method
+        # bit set: the module arm serves it, with no self.
+        module = types.ModuleType("test_module_method_position")
+        module.__dict__["double"] = lambda x: 2 * x
+
+        def call_module_function():
+            return module.double(21)
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            self.assertEqual(call_module_function(), 42)
+        self.assert_specialized(call_module_function, "GetMethod.Module")
+
+        # A rebinding of the name changes the dictionary's keys version
+        # only when keys are added; a new value is read through the entry.
+        module.__dict__["double"] = lambda x: 3 * x
+        self.assertEqual(call_module_function(), 63)
+        module.__dict__["extra"] = 1
+        self.assertEqual(call_module_function(), 63)
+        del module.__dict__["double"]
+        with self.assertRaises(AttributeError):
+            call_module_function()
+
+    @cpython_only
+    @requires_specialization
     def test_load_attr_module_subclass_with_data_descriptor(self):
         # gh-156399: a types.ModuleType subclass inherits
         # PyModule_Type.tp_getattro, so guarding specialization on tp_getattro

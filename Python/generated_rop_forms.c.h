@@ -179,6 +179,7 @@ static _PyIRTransfer ir_run_GetMethod_ClassMethod(PyThreadState *tstate, _PyInte
 static _PyIRTransfer ir_run_GetMethod_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetMethod_LazyDict(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetMethod_MethodValues(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetMethod_Module(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetMethod_NoDict(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetMethod_PolyMethod(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GlobalRead_Builtin(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -2111,17 +2112,19 @@ ir_run_GetMethod_Generic(
     int ret12;
     int adapt_before_use_getmethod2_cp;
     int ret13;
-    int adapt_before_use_getmethod2_cLClassMethod;
+    int adapt_before_use_getmethod2_cLModule;
     int ret14;
-    int adapt_before_use_getmethod2_cLLazyDict;
+    int adapt_before_use_getmethod2_cLClassMethod;
     int ret15;
-    int adapt_before_use_getmethod2_cLNoDict;
+    int adapt_before_use_getmethod2_cLLazyDict;
     int ret16;
-    int adapt_before_use_getmethod2_cm;
+    int adapt_before_use_getmethod2_cLNoDict;
     int ret17;
-    _PyRopAnchors a_all18;
-    _PyRopSrcs srcs19;
-    _PyRopAnchors a_all20;
+    int adapt_before_use_getmethod2_cm;
+    int ret18;
+    _PyRopAnchors a_all19;
+    _PyRopSrcs srcs20;
+    _PyRopAnchors a_all21;
     PyValue f;
     PyValue s;
     PyValue getmethod_at_origin1_callable;
@@ -2136,6 +2139,7 @@ ir_run_GetMethod_Generic(
     _PyAttrRecipe adapt_before_use_getmethod2_rNoDict;
     _PyAttrRecipe adapt_before_use_getmethod2_rLazyDict;
     _PyAttrRecipe adapt_before_use_getmethod2_rClassMethod;
+    _PyAttrRecipe adapt_before_use_getmethod2_rModule;
     if (!_PyFb_TickQuiet(&((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h)) {
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Sample;
     }
@@ -2196,6 +2200,10 @@ ir_run_GetMethod_Generic(
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_LClassMethod;
     }
     if (ret12 == 4) {
+        adapt_before_use_getmethod2_rModule = out11;
+        goto rop_GetMethod_Generic_adapt_before_use_getmethod2_LModule;
+    }
+    if (ret12 == 5) {
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Other;
     }
     adapt_before_use_getmethod2_rr = out11;
@@ -2219,9 +2227,9 @@ ir_run_GetMethod_Generic(
     rop_GetMethod_Generic_adapt_before_use_getmethod2_Other:
     _PyRop_Backoff(&((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
     goto rop_GetMethod_Generic_Run;
-    rop_GetMethod_Generic_adapt_before_use_getmethod2_LClassMethod:
-    adapt_before_use_getmethod2_cLClassMethod = ROP_HANDLER_GetMethod_ClassMethod;
-    ret14 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLClassMethod);
+    rop_GetMethod_Generic_adapt_before_use_getmethod2_LModule:
+    adapt_before_use_getmethod2_cLModule = ROP_HANDLER_GetMethod_Module;
+    ret14 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLModule);
     if (ret14 > 0) {
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
     }
@@ -2229,13 +2237,23 @@ ir_run_GetMethod_Generic(
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
     }
     goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
-    rop_GetMethod_Generic_adapt_before_use_getmethod2_LLazyDict:
-    adapt_before_use_getmethod2_cLLazyDict = ROP_HANDLER_GetMethod_LazyDict;
-    ret15 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLLazyDict);
+    rop_GetMethod_Generic_adapt_before_use_getmethod2_LClassMethod:
+    adapt_before_use_getmethod2_cLClassMethod = ROP_HANDLER_GetMethod_ClassMethod;
+    ret15 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLClassMethod);
     if (ret15 > 0) {
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
     }
     if (ret15 == 0) {
+        goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
+    }
+    goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
+    rop_GetMethod_Generic_adapt_before_use_getmethod2_LLazyDict:
+    adapt_before_use_getmethod2_cLLazyDict = ROP_HANDLER_GetMethod_LazyDict;
+    ret16 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLLazyDict);
+    if (ret16 > 0) {
+        goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
+    }
+    if (ret16 == 0) {
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
     }
     goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
@@ -2245,17 +2263,7 @@ ir_run_GetMethod_Generic(
     }
     adapt_before_use_getmethod2_rNoDict = adapt_before_use_getmethod2_rn;
     adapt_before_use_getmethod2_cLNoDict = ROP_HANDLER_GetMethod_NoDict;
-    ret16 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLNoDict);
-    if (ret16 > 0) {
-        goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
-    }
-    if (ret16 == 0) {
-        goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
-    }
-    goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
-    rop_GetMethod_Generic_adapt_before_use_getmethod2_Mono:
-    adapt_before_use_getmethod2_cm = ROP_HANDLER_GetMethod_MethodValues;
-    ret17 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cm);
+    ret17 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cLNoDict);
     if (ret17 > 0) {
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
     }
@@ -2263,11 +2271,21 @@ ir_run_GetMethod_Generic(
         goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
     }
     goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
+    rop_GetMethod_Generic_adapt_before_use_getmethod2_Mono:
+    adapt_before_use_getmethod2_cm = ROP_HANDLER_GetMethod_MethodValues;
+    ret18 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_getmethod2_cm);
+    if (ret18 > 0) {
+        goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Changed;
+    }
+    if (ret18 == 0) {
+        goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
+    }
+    goto rop_GetMethod_Generic_adapt_before_use_getmethod2_Run;
     rop_GetMethod_Generic_getmethod_at_origin1_Failed:
     IR_STUB_ESCAPE();
-    a_all18 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-    srcs19 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
-    _PyRop_RetireFailedCall(&a_all18, &srcs19);
+    a_all19 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    srcs20 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_C)}, {home_obj}};
+    _PyRop_RetireFailedCall(&a_all19, &srcs20);
     PROCESS_ERROR_AT(RAISE, 101, this_instr);
     rop_GetMethod_Generic_getmethod_at_origin1_Moved:
     IR_STUB_ESCAPE();
@@ -2275,8 +2293,8 @@ ir_run_GetMethod_Generic(
     IR_STUB_ESCAPE();
     _PyRop_DiscardMaybe(getmethod_at_origin1_self_dropped);
     IR_STUB_ESCAPE();
-    a_all20 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-    _PyRop_RetireAbandoned(&a_all20);
+    a_all21 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
+    _PyRop_RetireAbandoned(&a_all21);
     IR_REDIRECT();
 }
 
@@ -9906,6 +9924,63 @@ ir_run_GetMethod_MethodValues(
     PyValue_XCLOSE(old_self_dst);
     DISPATCH();
     rop_GetMethod_MethodValues_Miss:
+    JUMP_TO_PREDICTED(GetMethod_Generic);
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_GetMethod_Module(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // GetMethod.Module (inline)
+    int opcode = ROP_HANDLER_GetMethod_Module;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    next_instr += 2;
+    INSTRUCTION_STATS(ROP_HANDLER_GetMethod_Module);
+    _PyAttrRecipe out1;
+    PyValue *const home_obj = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow v;
+    PyObject * o;
+    PyValueBorrow item;
+    PyValue method;
+    PyValue own_obj = PyValue_NULL;
+    PyValue old_callable;
+    PyValue *const home_callable = &IR_SLOT(IR_A(ir_word));
+    PyValue old_self_dst;
+    PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
+    _PyAttrRecipe r;
+    if (!_PyAttr_AdmittedRecipe(((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out1)) {
+        goto rop_GetMethod_Module_Miss;
+    }
+    r = out1;
+    v = PyValue_Borrow(*home_obj);
+    if (!PyValue_IsObject(v)) {
+        JUMP_TO_PREDICTED(GetMethod_Generic);
+    }
+    o = PyValue_AsKnownObjectBorrow(v);
+    if (!_PyAttr_IsModule(o)) {
+        JUMP_TO_PREDICTED(GetMethod_Generic);
+    }
+    item = _PyAttr_ModuleEntry(o, r);
+    if (!_PyValue_BorrowPresent(item)) {
+        JUMP_TO_PREDICTED(GetMethod_Generic);
+    }
+    method = PyValue_DUP(item);
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        own_obj = _PyFrame_TakeHome(frame, home_obj);
+    }
+    old_callable = *home_callable;
+    old_self_dst = *home_self_dst;
+    _PyFrame_WriteHome(frame, home_callable, method);
+    _PyValue_CheckHome(*home_callable);
+    _PyFrame_WriteHome(frame, home_self_dst, PyValue_NULL);
+    PyValue_XCLOSE(own_obj);
+    PyValue_XCLOSE(old_callable);
+    PyValue_XCLOSE(old_self_dst);
+    DISPATCH();
+    rop_GetMethod_Module_Miss:
     JUMP_TO_PREDICTED(GetMethod_Generic);
 }
 
@@ -18518,191 +18593,191 @@ static const _PyIRForm ir_handler_forms[512] = {
     [115] = ir_run_GetAttr_NonDescriptorNoDict,
     [116] = ir_run_GetMethod_MethodValues,
     [117] = ir_run_GetMethod_Generic,
-    [118] = ir_run_GetMethod_PolyMethod,
-    [119] = ir_run_GetMethod_NoDict,
-    [120] = ir_run_GetMethod_LazyDict,
-    [121] = ir_run_GetMethod_ClassMethod,
-    [122] = ir_run_GetItem_Getitem,
-    [123] = ir_run_GetItem_Generic,
-    [124] = ir_run_SetItem_Generic,
-    [125] = ir_run_DelItem_Generic,
-    [126] = ir_run_SliceRead_Generic,
-    [127] = ir_run_SliceWrite_Generic,
-    [128] = ir_run_BuildSlice_Generic,
-    [129] = ir_run_GetItem_ListIndex,
-    [130] = ir_run_GetItem_TupleIndex,
-    [131] = ir_run_GetItem_Ascii,
-    [132] = ir_run_GetItem_UnicodeAsciiChar,
-    [133] = ir_run_GetItem_ListSlice,
-    [134] = ir_run_GetItem_Dict,
-    [135] = ir_run_SetItem_ListIndex,
-    [136] = ir_run_SetItem_Dict,
-    [137] = ir_run_IterOpen_Generic,
-    [138] = ir_run_ForIter_Generic,
-    [139] = ir_run_IterOpen_Self,
-    [140] = ir_run_IterOpen_Indexed,
-    [141] = ir_run_IterOpen_GenMethod,
-    [142] = ir_run_ForIter_List,
-    [143] = ir_run_ForIter_Tuple,
-    [144] = ir_run_ForIter_Range,
-    [145] = ir_run_ForIter_Indexed,
-    [146] = ir_run_ForIter_Gen,
-    [147] = ir_run_ForIter_Slot,
-    [148] = ir_run_ForIter_Observed,
-    [149] = ir_run_IterClose_Retire,
-    [150] = ir_run_IterClose_Observed,
-    [151] = ir_run_GlobalRead_Generic,
-    [152] = ir_run_GlobalRead_Module,
-    [153] = ir_run_GlobalRead_Builtin,
-    [154] = ir_run_NamespaceRead_Name,
-    [155] = ir_run_NamespaceRead_Locals,
-    [156] = ir_run_NamespaceRead_BuildClass,
-    [157] = ir_run_NamespaceReadFrom_Mapping,
-    [158] = ir_run_NamespaceWrite_Name,
-    [159] = ir_run_NamespaceWrite_Global,
-    [160] = ir_run_SetupAnnotations_Setup,
-    [161] = ir_run_Import_Eager,
-    [162] = ir_run_Import_Policy,
-    [163] = ir_run_Import_Lazy,
-    [164] = ir_run_ImportFrom_From,
-    [165] = ir_run_ImportFrom_FromLast,
-    [166] = ir_run_Binary_Int_NB_INPLACE_ADD,
-    [167] = ir_run_Binary_Int_NB_SUBTRACT,
-    [168] = ir_run_Binary_Int_NB_INPLACE_SUBTRACT,
-    [169] = ir_run_Binary_Int_NB_MULTIPLY,
-    [170] = ir_run_Binary_Int_NB_INPLACE_MULTIPLY,
-    [171] = ir_run_Binary_Int_NB_FLOOR_DIVIDE,
-    [172] = ir_run_Binary_Int_NB_REMAINDER,
-    [173] = ir_run_Binary_Int_NB_AND,
-    [174] = ir_run_Binary_Int_NB_OR,
-    [175] = ir_run_Binary_Int_NB_XOR,
-    [176] = ir_run_Binary_Int_NB_LSHIFT,
-    [177] = ir_run_Binary_Int_NB_RSHIFT,
-    [178] = ir_run_Binary_Int,
-    [179] = ir_run_Binary_Float_NB_INPLACE_ADD,
-    [180] = ir_run_Binary_Float_NB_SUBTRACT,
-    [181] = ir_run_Binary_Float_NB_INPLACE_SUBTRACT,
-    [182] = ir_run_Binary_Float_NB_MULTIPLY,
-    [183] = ir_run_Binary_Float_NB_INPLACE_MULTIPLY,
-    [184] = ir_run_Binary_Float_NB_TRUE_DIVIDE,
-    [185] = ir_run_Binary_Float_NB_INPLACE_TRUE_DIVIDE,
-    [186] = ir_run_Binary_Float_NB_POWER,
-    [187] = ir_run_Binary_Float_NB_INPLACE_POWER,
-    [188] = ir_run_Binary_Text,
-    [189] = ir_run_Binary_Extended,
-    [190] = ir_run_Binary_Generic,
-    [191] = ir_run_Unary_Generic,
-    [192] = ir_run_AppendText_Text,
-    [193] = ir_run_AppendText_Generic,
-    [194] = ir_run_Length_Size,
-    [195] = ir_run_Pattern_Flag,
-    [196] = ir_run_PatternClass_Match,
-    [197] = ir_run_PatternKeys_Match,
-    [198] = ir_run_Resume_Poll,
-    [199] = ir_run_Resume_Warm,
-    [200] = ir_run_Resume_Observed,
-    [201] = ir_run_Awaitable_Await,
-    [202] = ir_run_AsyncIterOpen_Open,
-    [203] = ir_run_AsyncIterNext_Next,
-    [204] = ir_run_Yield_Ordinary,
-    [205] = ir_run_YieldFrom_Delegated,
-    [206] = ir_run_Yield_Observed,
-    [207] = ir_run_YieldFrom_Observed,
-    [208] = ir_run_Send_Generic,
-    [209] = ir_run_Send_Gen,
-    [210] = ir_run_Send_Virtual,
-    [211] = ir_run_Send_AsyncGen,
-    [212] = ir_run_Send_Observed,
-    [213] = ir_run_Compare_Int_LT,
-    [214] = ir_run_Compare_Int_LE,
-    [215] = ir_run_Compare_Int_EQ,
-    [216] = ir_run_Compare_Int_NE,
-    [217] = ir_run_Compare_Int_GT,
-    [218] = ir_run_Compare_Int_GE,
-    [219] = ir_run_Compare_Float_LT,
-    [220] = ir_run_Compare_Float_LE,
-    [221] = ir_run_Compare_Float_EQ,
-    [222] = ir_run_Compare_Float_NE,
-    [223] = ir_run_Compare_Float_GT,
-    [224] = ir_run_Compare_Float_GE,
-    [225] = ir_run_Compare_Str_EQ,
-    [226] = ir_run_Compare_Str_NE,
-    [227] = ir_run_Compare_Generic,
-    [228] = ir_run_Identity_Test,
-    [229] = ir_run_Contains_Set,
-    [230] = ir_run_Contains_Dict,
-    [231] = ir_run_Contains_Generic,
-    [232] = ir_run_TestBranch_Identity,
-    [233] = ir_run_TestBranch_Int_TEST_LT,
-    [234] = ir_run_TestBranch_Int_TEST_LE,
-    [235] = ir_run_TestBranch_Int_TEST_EQ,
-    [236] = ir_run_TestBranch_Int_TEST_NE,
-    [237] = ir_run_TestBranch_Int_TEST_GT,
-    [238] = ir_run_TestBranch_Int_TEST_GE,
-    [239] = ir_run_TestBranch_Float_TEST_LT,
-    [240] = ir_run_TestBranch_Float_TEST_LE,
-    [241] = ir_run_TestBranch_Float_TEST_EQ,
-    [242] = ir_run_TestBranch_Float_TEST_NE,
-    [243] = ir_run_TestBranch_Float_TEST_GT,
-    [244] = ir_run_TestBranch_Float_TEST_GE,
-    [245] = ir_run_TestBranch_Str_TEST_EQ,
-    [246] = ir_run_TestBranch_Str_TEST_NE,
-    [247] = ir_run_TestBranch_Set,
-    [248] = ir_run_TestBranch_Dict,
-    [249] = ir_run_TestBranch_Sequence,
-    [250] = ir_run_TestBranch_Generic,
-    [251] = ir_run_TestBranch_Observed,
-    [252] = ir_run_BuildText_Join,
-    [253] = ir_run_BuildText_Interpolation,
-    [254] = ir_run_BuildText_Template,
-    [255] = ir_run_Convert_Text,
-    [256] = ir_run_Format_Simple,
-    [257] = ir_run_FormatSpec_Value,
-    [258] = ir_run_Truth_Bool,
-    [259] = ir_run_Truth_Int,
-    [260] = ir_run_Truth_List,
-    [261] = ir_run_Truth_None,
-    [262] = ir_run_Truth_Str,
-    [263] = ir_run_Truth_Plain,
-    [264] = ir_run_Truth_Slot,
-    [265] = ir_run_Truth_Generic,
-    [266] = ir_run_BranchTruth_Bool_BRANCH_IF_FALSE,
-    [267] = ir_run_BranchTruth_Bool_BRANCH_IF_TRUE,
-    [268] = ir_run_BranchTruth_Int_BRANCH_IF_FALSE,
-    [269] = ir_run_BranchTruth_Int_BRANCH_IF_TRUE,
-    [270] = ir_run_BranchTruth_List_BRANCH_IF_FALSE,
-    [271] = ir_run_BranchTruth_List_BRANCH_IF_TRUE,
-    [272] = ir_run_BranchTruth_None_BRANCH_IF_FALSE,
-    [273] = ir_run_BranchTruth_None_BRANCH_IF_TRUE,
-    [274] = ir_run_BranchTruth_Str_BRANCH_IF_FALSE,
-    [275] = ir_run_BranchTruth_Str_BRANCH_IF_TRUE,
-    [276] = ir_run_BranchTruth_Plain_BRANCH_IF_FALSE,
-    [277] = ir_run_BranchTruth_Plain_BRANCH_IF_TRUE,
-    [278] = ir_run_BranchTruth_Slot_BRANCH_IF_FALSE,
-    [279] = ir_run_BranchTruth_Slot_BRANCH_IF_TRUE,
-    [280] = ir_run_BranchTruth_Generic,
-    [281] = ir_run_BranchNone_Test,
-    [282] = ir_run_BranchTruth_Observed,
-    [283] = ir_run_BranchNone_Observed,
-    [284] = ir_run_Jump_Direct,
-    [285] = ir_run_Jump_Trailing,
-    [286] = ir_run_Jump_Poll,
-    [287] = ir_run_Jump_Warm,
-    [288] = ir_run_Jump_Observed,
-    [289] = ir_run_Const_Pool,
-    [290] = ir_run_Const_Small,
-    [291] = ir_run_Const_Common,
-    [292] = ir_run_LocalRead_Bound,
-    [293] = ir_run_LocalRead_Checked,
-    [294] = ir_run_LocalWrite_Store,
-    [295] = ir_run_LocalWrite_Restore,
-    [296] = ir_run_SaveLocal_Take,
-    [297] = ir_run_LocalDelete_Checked,
-    [298] = ir_run_Move_Transfer,
-    [299] = ir_run_Move_Copy,
-    [300] = ir_run_Rotate_Cycle,
-    [301] = ir_run_Retire_Close,
-    [302] = ir_run_UNKNOWN_OPCODE,
+    [118] = ir_run_GetMethod_Module,
+    [119] = ir_run_GetMethod_PolyMethod,
+    [120] = ir_run_GetMethod_NoDict,
+    [121] = ir_run_GetMethod_LazyDict,
+    [122] = ir_run_GetMethod_ClassMethod,
+    [123] = ir_run_GetItem_Getitem,
+    [124] = ir_run_GetItem_Generic,
+    [125] = ir_run_SetItem_Generic,
+    [126] = ir_run_DelItem_Generic,
+    [127] = ir_run_SliceRead_Generic,
+    [128] = ir_run_SliceWrite_Generic,
+    [129] = ir_run_BuildSlice_Generic,
+    [130] = ir_run_GetItem_ListIndex,
+    [131] = ir_run_GetItem_TupleIndex,
+    [132] = ir_run_GetItem_Ascii,
+    [133] = ir_run_GetItem_UnicodeAsciiChar,
+    [134] = ir_run_GetItem_ListSlice,
+    [135] = ir_run_GetItem_Dict,
+    [136] = ir_run_SetItem_ListIndex,
+    [137] = ir_run_SetItem_Dict,
+    [138] = ir_run_IterOpen_Generic,
+    [139] = ir_run_ForIter_Generic,
+    [140] = ir_run_IterOpen_Self,
+    [141] = ir_run_IterOpen_Indexed,
+    [142] = ir_run_IterOpen_GenMethod,
+    [143] = ir_run_ForIter_List,
+    [144] = ir_run_ForIter_Tuple,
+    [145] = ir_run_ForIter_Range,
+    [146] = ir_run_ForIter_Indexed,
+    [147] = ir_run_ForIter_Gen,
+    [148] = ir_run_ForIter_Slot,
+    [149] = ir_run_ForIter_Observed,
+    [150] = ir_run_IterClose_Retire,
+    [151] = ir_run_IterClose_Observed,
+    [152] = ir_run_GlobalRead_Generic,
+    [153] = ir_run_GlobalRead_Module,
+    [154] = ir_run_GlobalRead_Builtin,
+    [155] = ir_run_NamespaceRead_Name,
+    [156] = ir_run_NamespaceRead_Locals,
+    [157] = ir_run_NamespaceRead_BuildClass,
+    [158] = ir_run_NamespaceReadFrom_Mapping,
+    [159] = ir_run_NamespaceWrite_Name,
+    [160] = ir_run_NamespaceWrite_Global,
+    [161] = ir_run_SetupAnnotations_Setup,
+    [162] = ir_run_Import_Eager,
+    [163] = ir_run_Import_Policy,
+    [164] = ir_run_Import_Lazy,
+    [165] = ir_run_ImportFrom_From,
+    [166] = ir_run_ImportFrom_FromLast,
+    [167] = ir_run_Binary_Int_NB_INPLACE_ADD,
+    [168] = ir_run_Binary_Int_NB_SUBTRACT,
+    [169] = ir_run_Binary_Int_NB_INPLACE_SUBTRACT,
+    [170] = ir_run_Binary_Int_NB_MULTIPLY,
+    [171] = ir_run_Binary_Int_NB_INPLACE_MULTIPLY,
+    [172] = ir_run_Binary_Int_NB_FLOOR_DIVIDE,
+    [173] = ir_run_Binary_Int_NB_REMAINDER,
+    [174] = ir_run_Binary_Int_NB_AND,
+    [175] = ir_run_Binary_Int_NB_OR,
+    [176] = ir_run_Binary_Int_NB_XOR,
+    [177] = ir_run_Binary_Int_NB_LSHIFT,
+    [178] = ir_run_Binary_Int_NB_RSHIFT,
+    [179] = ir_run_Binary_Int,
+    [180] = ir_run_Binary_Float_NB_INPLACE_ADD,
+    [181] = ir_run_Binary_Float_NB_SUBTRACT,
+    [182] = ir_run_Binary_Float_NB_INPLACE_SUBTRACT,
+    [183] = ir_run_Binary_Float_NB_MULTIPLY,
+    [184] = ir_run_Binary_Float_NB_INPLACE_MULTIPLY,
+    [185] = ir_run_Binary_Float_NB_TRUE_DIVIDE,
+    [186] = ir_run_Binary_Float_NB_INPLACE_TRUE_DIVIDE,
+    [187] = ir_run_Binary_Float_NB_POWER,
+    [188] = ir_run_Binary_Float_NB_INPLACE_POWER,
+    [189] = ir_run_Binary_Text,
+    [190] = ir_run_Binary_Extended,
+    [191] = ir_run_Binary_Generic,
+    [192] = ir_run_Unary_Generic,
+    [193] = ir_run_AppendText_Text,
+    [194] = ir_run_AppendText_Generic,
+    [195] = ir_run_Length_Size,
+    [196] = ir_run_Pattern_Flag,
+    [197] = ir_run_PatternClass_Match,
+    [198] = ir_run_PatternKeys_Match,
+    [199] = ir_run_Resume_Poll,
+    [200] = ir_run_Resume_Warm,
+    [201] = ir_run_Resume_Observed,
+    [202] = ir_run_Awaitable_Await,
+    [203] = ir_run_AsyncIterOpen_Open,
+    [204] = ir_run_AsyncIterNext_Next,
+    [205] = ir_run_Yield_Ordinary,
+    [206] = ir_run_YieldFrom_Delegated,
+    [207] = ir_run_Yield_Observed,
+    [208] = ir_run_YieldFrom_Observed,
+    [209] = ir_run_Send_Generic,
+    [210] = ir_run_Send_Gen,
+    [211] = ir_run_Send_Virtual,
+    [212] = ir_run_Send_AsyncGen,
+    [213] = ir_run_Send_Observed,
+    [214] = ir_run_Compare_Int_LT,
+    [215] = ir_run_Compare_Int_LE,
+    [216] = ir_run_Compare_Int_EQ,
+    [217] = ir_run_Compare_Int_NE,
+    [218] = ir_run_Compare_Int_GT,
+    [219] = ir_run_Compare_Int_GE,
+    [220] = ir_run_Compare_Float_LT,
+    [221] = ir_run_Compare_Float_LE,
+    [222] = ir_run_Compare_Float_EQ,
+    [223] = ir_run_Compare_Float_NE,
+    [224] = ir_run_Compare_Float_GT,
+    [225] = ir_run_Compare_Float_GE,
+    [226] = ir_run_Compare_Str_EQ,
+    [227] = ir_run_Compare_Str_NE,
+    [228] = ir_run_Compare_Generic,
+    [229] = ir_run_Identity_Test,
+    [230] = ir_run_Contains_Set,
+    [231] = ir_run_Contains_Dict,
+    [232] = ir_run_Contains_Generic,
+    [233] = ir_run_TestBranch_Identity,
+    [234] = ir_run_TestBranch_Int_TEST_LT,
+    [235] = ir_run_TestBranch_Int_TEST_LE,
+    [236] = ir_run_TestBranch_Int_TEST_EQ,
+    [237] = ir_run_TestBranch_Int_TEST_NE,
+    [238] = ir_run_TestBranch_Int_TEST_GT,
+    [239] = ir_run_TestBranch_Int_TEST_GE,
+    [240] = ir_run_TestBranch_Float_TEST_LT,
+    [241] = ir_run_TestBranch_Float_TEST_LE,
+    [242] = ir_run_TestBranch_Float_TEST_EQ,
+    [243] = ir_run_TestBranch_Float_TEST_NE,
+    [244] = ir_run_TestBranch_Float_TEST_GT,
+    [245] = ir_run_TestBranch_Float_TEST_GE,
+    [246] = ir_run_TestBranch_Str_TEST_EQ,
+    [247] = ir_run_TestBranch_Str_TEST_NE,
+    [248] = ir_run_TestBranch_Set,
+    [249] = ir_run_TestBranch_Dict,
+    [250] = ir_run_TestBranch_Sequence,
+    [251] = ir_run_TestBranch_Generic,
+    [252] = ir_run_TestBranch_Observed,
+    [253] = ir_run_BuildText_Join,
+    [254] = ir_run_BuildText_Interpolation,
+    [255] = ir_run_BuildText_Template,
+    [256] = ir_run_Convert_Text,
+    [257] = ir_run_Format_Simple,
+    [258] = ir_run_FormatSpec_Value,
+    [259] = ir_run_Truth_Bool,
+    [260] = ir_run_Truth_Int,
+    [261] = ir_run_Truth_List,
+    [262] = ir_run_Truth_None,
+    [263] = ir_run_Truth_Str,
+    [264] = ir_run_Truth_Plain,
+    [265] = ir_run_Truth_Slot,
+    [266] = ir_run_Truth_Generic,
+    [267] = ir_run_BranchTruth_Bool_BRANCH_IF_FALSE,
+    [268] = ir_run_BranchTruth_Bool_BRANCH_IF_TRUE,
+    [269] = ir_run_BranchTruth_Int_BRANCH_IF_FALSE,
+    [270] = ir_run_BranchTruth_Int_BRANCH_IF_TRUE,
+    [271] = ir_run_BranchTruth_List_BRANCH_IF_FALSE,
+    [272] = ir_run_BranchTruth_List_BRANCH_IF_TRUE,
+    [273] = ir_run_BranchTruth_None_BRANCH_IF_FALSE,
+    [274] = ir_run_BranchTruth_None_BRANCH_IF_TRUE,
+    [275] = ir_run_BranchTruth_Str_BRANCH_IF_FALSE,
+    [276] = ir_run_BranchTruth_Str_BRANCH_IF_TRUE,
+    [277] = ir_run_BranchTruth_Plain_BRANCH_IF_FALSE,
+    [278] = ir_run_BranchTruth_Plain_BRANCH_IF_TRUE,
+    [279] = ir_run_BranchTruth_Slot_BRANCH_IF_FALSE,
+    [280] = ir_run_BranchTruth_Slot_BRANCH_IF_TRUE,
+    [281] = ir_run_BranchTruth_Generic,
+    [282] = ir_run_BranchNone_Test,
+    [283] = ir_run_BranchTruth_Observed,
+    [284] = ir_run_BranchNone_Observed,
+    [285] = ir_run_Jump_Direct,
+    [286] = ir_run_Jump_Trailing,
+    [287] = ir_run_Jump_Poll,
+    [288] = ir_run_Jump_Warm,
+    [289] = ir_run_Jump_Observed,
+    [290] = ir_run_Const_Pool,
+    [291] = ir_run_Const_Small,
+    [292] = ir_run_Const_Common,
+    [293] = ir_run_LocalRead_Bound,
+    [294] = ir_run_LocalRead_Checked,
+    [295] = ir_run_LocalWrite_Store,
+    [296] = ir_run_LocalWrite_Restore,
+    [297] = ir_run_SaveLocal_Take,
+    [298] = ir_run_LocalDelete_Checked,
+    [299] = ir_run_Move_Transfer,
+    [300] = ir_run_Move_Copy,
+    [301] = ir_run_Rotate_Cycle,
+    [302] = ir_run_Retire_Close,
     [303] = ir_run_UNKNOWN_OPCODE,
     [304] = ir_run_UNKNOWN_OPCODE,
     [305] = ir_run_UNKNOWN_OPCODE,
@@ -19033,191 +19108,191 @@ static const _PyIRForm ir_observing_forms[512] = {
     [115] = ir_run_GetAttr_NonDescriptorNoDict,
     [116] = ir_run_GetMethod_MethodValues,
     [117] = ir_run_GetMethod_Generic,
-    [118] = ir_run_GetMethod_PolyMethod,
-    [119] = ir_run_GetMethod_NoDict,
-    [120] = ir_run_GetMethod_LazyDict,
-    [121] = ir_run_GetMethod_ClassMethod,
-    [122] = ir_run_GetItem_Getitem,
-    [123] = ir_run_GetItem_Generic,
-    [124] = ir_run_SetItem_Generic,
-    [125] = ir_run_DelItem_Generic,
-    [126] = ir_run_SliceRead_Generic,
-    [127] = ir_run_SliceWrite_Generic,
-    [128] = ir_run_BuildSlice_Generic,
-    [129] = ir_run_GetItem_ListIndex,
-    [130] = ir_run_GetItem_TupleIndex,
-    [131] = ir_run_GetItem_Ascii,
-    [132] = ir_run_GetItem_UnicodeAsciiChar,
-    [133] = ir_run_GetItem_ListSlice,
-    [134] = ir_run_GetItem_Dict,
-    [135] = ir_run_SetItem_ListIndex,
-    [136] = ir_run_SetItem_Dict,
-    [137] = ir_run_IterOpen_Generic,
-    [138] = ir_run_ForIter_Generic,
-    [139] = ir_run_IterOpen_Self,
-    [140] = ir_run_IterOpen_Indexed,
-    [141] = ir_run_IterOpen_GenMethod,
-    [142] = ir_run_ForIter_List,
-    [143] = ir_run_ForIter_Tuple,
-    [144] = ir_run_ForIter_Range,
-    [145] = ir_run_ForIter_Indexed,
-    [146] = ir_run_ForIter_Gen,
-    [147] = ir_run_ForIter_Slot,
-    [148] = ir_run_ForIter_Observed,
-    [149] = ir_run_IterClose_Retire,
-    [150] = ir_run_IterClose_Observed,
-    [151] = ir_run_GlobalRead_Generic,
-    [152] = ir_run_GlobalRead_Module,
-    [153] = ir_run_GlobalRead_Builtin,
-    [154] = ir_run_NamespaceRead_Name,
-    [155] = ir_run_NamespaceRead_Locals,
-    [156] = ir_run_NamespaceRead_BuildClass,
-    [157] = ir_run_NamespaceReadFrom_Mapping,
-    [158] = ir_run_NamespaceWrite_Name,
-    [159] = ir_run_NamespaceWrite_Global,
-    [160] = ir_run_SetupAnnotations_Setup,
-    [161] = ir_run_Import_Eager,
-    [162] = ir_run_Import_Policy,
-    [163] = ir_run_Import_Lazy,
-    [164] = ir_run_ImportFrom_From,
-    [165] = ir_run_ImportFrom_FromLast,
-    [166] = ir_run_Binary_Int_NB_INPLACE_ADD,
-    [167] = ir_run_Binary_Int_NB_SUBTRACT,
-    [168] = ir_run_Binary_Int_NB_INPLACE_SUBTRACT,
-    [169] = ir_run_Binary_Int_NB_MULTIPLY,
-    [170] = ir_run_Binary_Int_NB_INPLACE_MULTIPLY,
-    [171] = ir_run_Binary_Int_NB_FLOOR_DIVIDE,
-    [172] = ir_run_Binary_Int_NB_REMAINDER,
-    [173] = ir_run_Binary_Int_NB_AND,
-    [174] = ir_run_Binary_Int_NB_OR,
-    [175] = ir_run_Binary_Int_NB_XOR,
-    [176] = ir_run_Binary_Int_NB_LSHIFT,
-    [177] = ir_run_Binary_Int_NB_RSHIFT,
-    [178] = ir_run_Binary_Int,
-    [179] = ir_run_Binary_Float_NB_INPLACE_ADD,
-    [180] = ir_run_Binary_Float_NB_SUBTRACT,
-    [181] = ir_run_Binary_Float_NB_INPLACE_SUBTRACT,
-    [182] = ir_run_Binary_Float_NB_MULTIPLY,
-    [183] = ir_run_Binary_Float_NB_INPLACE_MULTIPLY,
-    [184] = ir_run_Binary_Float_NB_TRUE_DIVIDE,
-    [185] = ir_run_Binary_Float_NB_INPLACE_TRUE_DIVIDE,
-    [186] = ir_run_Binary_Float_NB_POWER,
-    [187] = ir_run_Binary_Float_NB_INPLACE_POWER,
-    [188] = ir_run_Binary_Text,
-    [189] = ir_run_Binary_Extended,
-    [190] = ir_run_Binary_Generic,
-    [191] = ir_run_Unary_Generic,
-    [192] = ir_run_AppendText_Text,
-    [193] = ir_run_AppendText_Generic,
-    [194] = ir_run_Length_Size,
-    [195] = ir_run_Pattern_Flag,
-    [196] = ir_run_PatternClass_Match,
-    [197] = ir_run_PatternKeys_Match,
-    [198] = ir_run_Resume_Observed,
+    [118] = ir_run_GetMethod_Module,
+    [119] = ir_run_GetMethod_PolyMethod,
+    [120] = ir_run_GetMethod_NoDict,
+    [121] = ir_run_GetMethod_LazyDict,
+    [122] = ir_run_GetMethod_ClassMethod,
+    [123] = ir_run_GetItem_Getitem,
+    [124] = ir_run_GetItem_Generic,
+    [125] = ir_run_SetItem_Generic,
+    [126] = ir_run_DelItem_Generic,
+    [127] = ir_run_SliceRead_Generic,
+    [128] = ir_run_SliceWrite_Generic,
+    [129] = ir_run_BuildSlice_Generic,
+    [130] = ir_run_GetItem_ListIndex,
+    [131] = ir_run_GetItem_TupleIndex,
+    [132] = ir_run_GetItem_Ascii,
+    [133] = ir_run_GetItem_UnicodeAsciiChar,
+    [134] = ir_run_GetItem_ListSlice,
+    [135] = ir_run_GetItem_Dict,
+    [136] = ir_run_SetItem_ListIndex,
+    [137] = ir_run_SetItem_Dict,
+    [138] = ir_run_IterOpen_Generic,
+    [139] = ir_run_ForIter_Generic,
+    [140] = ir_run_IterOpen_Self,
+    [141] = ir_run_IterOpen_Indexed,
+    [142] = ir_run_IterOpen_GenMethod,
+    [143] = ir_run_ForIter_List,
+    [144] = ir_run_ForIter_Tuple,
+    [145] = ir_run_ForIter_Range,
+    [146] = ir_run_ForIter_Indexed,
+    [147] = ir_run_ForIter_Gen,
+    [148] = ir_run_ForIter_Slot,
+    [149] = ir_run_ForIter_Observed,
+    [150] = ir_run_IterClose_Retire,
+    [151] = ir_run_IterClose_Observed,
+    [152] = ir_run_GlobalRead_Generic,
+    [153] = ir_run_GlobalRead_Module,
+    [154] = ir_run_GlobalRead_Builtin,
+    [155] = ir_run_NamespaceRead_Name,
+    [156] = ir_run_NamespaceRead_Locals,
+    [157] = ir_run_NamespaceRead_BuildClass,
+    [158] = ir_run_NamespaceReadFrom_Mapping,
+    [159] = ir_run_NamespaceWrite_Name,
+    [160] = ir_run_NamespaceWrite_Global,
+    [161] = ir_run_SetupAnnotations_Setup,
+    [162] = ir_run_Import_Eager,
+    [163] = ir_run_Import_Policy,
+    [164] = ir_run_Import_Lazy,
+    [165] = ir_run_ImportFrom_From,
+    [166] = ir_run_ImportFrom_FromLast,
+    [167] = ir_run_Binary_Int_NB_INPLACE_ADD,
+    [168] = ir_run_Binary_Int_NB_SUBTRACT,
+    [169] = ir_run_Binary_Int_NB_INPLACE_SUBTRACT,
+    [170] = ir_run_Binary_Int_NB_MULTIPLY,
+    [171] = ir_run_Binary_Int_NB_INPLACE_MULTIPLY,
+    [172] = ir_run_Binary_Int_NB_FLOOR_DIVIDE,
+    [173] = ir_run_Binary_Int_NB_REMAINDER,
+    [174] = ir_run_Binary_Int_NB_AND,
+    [175] = ir_run_Binary_Int_NB_OR,
+    [176] = ir_run_Binary_Int_NB_XOR,
+    [177] = ir_run_Binary_Int_NB_LSHIFT,
+    [178] = ir_run_Binary_Int_NB_RSHIFT,
+    [179] = ir_run_Binary_Int,
+    [180] = ir_run_Binary_Float_NB_INPLACE_ADD,
+    [181] = ir_run_Binary_Float_NB_SUBTRACT,
+    [182] = ir_run_Binary_Float_NB_INPLACE_SUBTRACT,
+    [183] = ir_run_Binary_Float_NB_MULTIPLY,
+    [184] = ir_run_Binary_Float_NB_INPLACE_MULTIPLY,
+    [185] = ir_run_Binary_Float_NB_TRUE_DIVIDE,
+    [186] = ir_run_Binary_Float_NB_INPLACE_TRUE_DIVIDE,
+    [187] = ir_run_Binary_Float_NB_POWER,
+    [188] = ir_run_Binary_Float_NB_INPLACE_POWER,
+    [189] = ir_run_Binary_Text,
+    [190] = ir_run_Binary_Extended,
+    [191] = ir_run_Binary_Generic,
+    [192] = ir_run_Unary_Generic,
+    [193] = ir_run_AppendText_Text,
+    [194] = ir_run_AppendText_Generic,
+    [195] = ir_run_Length_Size,
+    [196] = ir_run_Pattern_Flag,
+    [197] = ir_run_PatternClass_Match,
+    [198] = ir_run_PatternKeys_Match,
     [199] = ir_run_Resume_Observed,
     [200] = ir_run_Resume_Observed,
-    [201] = ir_run_Awaitable_Await,
-    [202] = ir_run_AsyncIterOpen_Open,
-    [203] = ir_run_AsyncIterNext_Next,
-    [204] = ir_run_Yield_Ordinary,
-    [205] = ir_run_YieldFrom_Delegated,
-    [206] = ir_run_Yield_Observed,
-    [207] = ir_run_YieldFrom_Observed,
-    [208] = ir_run_Send_Generic,
-    [209] = ir_run_Send_Gen,
-    [210] = ir_run_Send_Virtual,
-    [211] = ir_run_Send_AsyncGen,
-    [212] = ir_run_Send_Observed,
-    [213] = ir_run_Compare_Int_LT,
-    [214] = ir_run_Compare_Int_LE,
-    [215] = ir_run_Compare_Int_EQ,
-    [216] = ir_run_Compare_Int_NE,
-    [217] = ir_run_Compare_Int_GT,
-    [218] = ir_run_Compare_Int_GE,
-    [219] = ir_run_Compare_Float_LT,
-    [220] = ir_run_Compare_Float_LE,
-    [221] = ir_run_Compare_Float_EQ,
-    [222] = ir_run_Compare_Float_NE,
-    [223] = ir_run_Compare_Float_GT,
-    [224] = ir_run_Compare_Float_GE,
-    [225] = ir_run_Compare_Str_EQ,
-    [226] = ir_run_Compare_Str_NE,
-    [227] = ir_run_Compare_Generic,
-    [228] = ir_run_Identity_Test,
-    [229] = ir_run_Contains_Set,
-    [230] = ir_run_Contains_Dict,
-    [231] = ir_run_Contains_Generic,
-    [232] = ir_run_TestBranch_Identity,
-    [233] = ir_run_TestBranch_Int_TEST_LT,
-    [234] = ir_run_TestBranch_Int_TEST_LE,
-    [235] = ir_run_TestBranch_Int_TEST_EQ,
-    [236] = ir_run_TestBranch_Int_TEST_NE,
-    [237] = ir_run_TestBranch_Int_TEST_GT,
-    [238] = ir_run_TestBranch_Int_TEST_GE,
-    [239] = ir_run_TestBranch_Float_TEST_LT,
-    [240] = ir_run_TestBranch_Float_TEST_LE,
-    [241] = ir_run_TestBranch_Float_TEST_EQ,
-    [242] = ir_run_TestBranch_Float_TEST_NE,
-    [243] = ir_run_TestBranch_Float_TEST_GT,
-    [244] = ir_run_TestBranch_Float_TEST_GE,
-    [245] = ir_run_TestBranch_Str_TEST_EQ,
-    [246] = ir_run_TestBranch_Str_TEST_NE,
-    [247] = ir_run_TestBranch_Set,
-    [248] = ir_run_TestBranch_Dict,
-    [249] = ir_run_TestBranch_Sequence,
-    [250] = ir_run_TestBranch_Generic,
-    [251] = ir_run_TestBranch_Observed,
-    [252] = ir_run_BuildText_Join,
-    [253] = ir_run_BuildText_Interpolation,
-    [254] = ir_run_BuildText_Template,
-    [255] = ir_run_Convert_Text,
-    [256] = ir_run_Format_Simple,
-    [257] = ir_run_FormatSpec_Value,
-    [258] = ir_run_Truth_Bool,
-    [259] = ir_run_Truth_Int,
-    [260] = ir_run_Truth_List,
-    [261] = ir_run_Truth_None,
-    [262] = ir_run_Truth_Str,
-    [263] = ir_run_Truth_Plain,
-    [264] = ir_run_Truth_Slot,
-    [265] = ir_run_Truth_Generic,
-    [266] = ir_run_BranchTruth_Bool_BRANCH_IF_FALSE,
-    [267] = ir_run_BranchTruth_Bool_BRANCH_IF_TRUE,
-    [268] = ir_run_BranchTruth_Int_BRANCH_IF_FALSE,
-    [269] = ir_run_BranchTruth_Int_BRANCH_IF_TRUE,
-    [270] = ir_run_BranchTruth_List_BRANCH_IF_FALSE,
-    [271] = ir_run_BranchTruth_List_BRANCH_IF_TRUE,
-    [272] = ir_run_BranchTruth_None_BRANCH_IF_FALSE,
-    [273] = ir_run_BranchTruth_None_BRANCH_IF_TRUE,
-    [274] = ir_run_BranchTruth_Str_BRANCH_IF_FALSE,
-    [275] = ir_run_BranchTruth_Str_BRANCH_IF_TRUE,
-    [276] = ir_run_BranchTruth_Plain_BRANCH_IF_FALSE,
-    [277] = ir_run_BranchTruth_Plain_BRANCH_IF_TRUE,
-    [278] = ir_run_BranchTruth_Slot_BRANCH_IF_FALSE,
-    [279] = ir_run_BranchTruth_Slot_BRANCH_IF_TRUE,
-    [280] = ir_run_BranchTruth_Generic,
-    [281] = ir_run_BranchNone_Test,
-    [282] = ir_run_BranchTruth_Observed,
-    [283] = ir_run_BranchNone_Observed,
-    [284] = ir_run_Jump_Direct,
-    [285] = ir_run_Jump_Trailing,
-    [286] = ir_run_Jump_Poll,
-    [287] = ir_run_Jump_Warm,
-    [288] = ir_run_Jump_Observed,
-    [289] = ir_run_Const_Pool,
-    [290] = ir_run_Const_Small,
-    [291] = ir_run_Const_Common,
-    [292] = ir_run_LocalRead_Bound,
-    [293] = ir_run_LocalRead_Checked,
-    [294] = ir_run_LocalWrite_Store,
-    [295] = ir_run_LocalWrite_Restore,
-    [296] = ir_run_SaveLocal_Take,
-    [297] = ir_run_LocalDelete_Checked,
-    [298] = ir_run_Move_Transfer,
-    [299] = ir_run_Move_Copy,
-    [300] = ir_run_Rotate_Cycle,
-    [301] = ir_run_Retire_Close,
-    [302] = ir_run_UNKNOWN_OPCODE,
+    [201] = ir_run_Resume_Observed,
+    [202] = ir_run_Awaitable_Await,
+    [203] = ir_run_AsyncIterOpen_Open,
+    [204] = ir_run_AsyncIterNext_Next,
+    [205] = ir_run_Yield_Ordinary,
+    [206] = ir_run_YieldFrom_Delegated,
+    [207] = ir_run_Yield_Observed,
+    [208] = ir_run_YieldFrom_Observed,
+    [209] = ir_run_Send_Generic,
+    [210] = ir_run_Send_Gen,
+    [211] = ir_run_Send_Virtual,
+    [212] = ir_run_Send_AsyncGen,
+    [213] = ir_run_Send_Observed,
+    [214] = ir_run_Compare_Int_LT,
+    [215] = ir_run_Compare_Int_LE,
+    [216] = ir_run_Compare_Int_EQ,
+    [217] = ir_run_Compare_Int_NE,
+    [218] = ir_run_Compare_Int_GT,
+    [219] = ir_run_Compare_Int_GE,
+    [220] = ir_run_Compare_Float_LT,
+    [221] = ir_run_Compare_Float_LE,
+    [222] = ir_run_Compare_Float_EQ,
+    [223] = ir_run_Compare_Float_NE,
+    [224] = ir_run_Compare_Float_GT,
+    [225] = ir_run_Compare_Float_GE,
+    [226] = ir_run_Compare_Str_EQ,
+    [227] = ir_run_Compare_Str_NE,
+    [228] = ir_run_Compare_Generic,
+    [229] = ir_run_Identity_Test,
+    [230] = ir_run_Contains_Set,
+    [231] = ir_run_Contains_Dict,
+    [232] = ir_run_Contains_Generic,
+    [233] = ir_run_TestBranch_Identity,
+    [234] = ir_run_TestBranch_Int_TEST_LT,
+    [235] = ir_run_TestBranch_Int_TEST_LE,
+    [236] = ir_run_TestBranch_Int_TEST_EQ,
+    [237] = ir_run_TestBranch_Int_TEST_NE,
+    [238] = ir_run_TestBranch_Int_TEST_GT,
+    [239] = ir_run_TestBranch_Int_TEST_GE,
+    [240] = ir_run_TestBranch_Float_TEST_LT,
+    [241] = ir_run_TestBranch_Float_TEST_LE,
+    [242] = ir_run_TestBranch_Float_TEST_EQ,
+    [243] = ir_run_TestBranch_Float_TEST_NE,
+    [244] = ir_run_TestBranch_Float_TEST_GT,
+    [245] = ir_run_TestBranch_Float_TEST_GE,
+    [246] = ir_run_TestBranch_Str_TEST_EQ,
+    [247] = ir_run_TestBranch_Str_TEST_NE,
+    [248] = ir_run_TestBranch_Set,
+    [249] = ir_run_TestBranch_Dict,
+    [250] = ir_run_TestBranch_Sequence,
+    [251] = ir_run_TestBranch_Generic,
+    [252] = ir_run_TestBranch_Observed,
+    [253] = ir_run_BuildText_Join,
+    [254] = ir_run_BuildText_Interpolation,
+    [255] = ir_run_BuildText_Template,
+    [256] = ir_run_Convert_Text,
+    [257] = ir_run_Format_Simple,
+    [258] = ir_run_FormatSpec_Value,
+    [259] = ir_run_Truth_Bool,
+    [260] = ir_run_Truth_Int,
+    [261] = ir_run_Truth_List,
+    [262] = ir_run_Truth_None,
+    [263] = ir_run_Truth_Str,
+    [264] = ir_run_Truth_Plain,
+    [265] = ir_run_Truth_Slot,
+    [266] = ir_run_Truth_Generic,
+    [267] = ir_run_BranchTruth_Bool_BRANCH_IF_FALSE,
+    [268] = ir_run_BranchTruth_Bool_BRANCH_IF_TRUE,
+    [269] = ir_run_BranchTruth_Int_BRANCH_IF_FALSE,
+    [270] = ir_run_BranchTruth_Int_BRANCH_IF_TRUE,
+    [271] = ir_run_BranchTruth_List_BRANCH_IF_FALSE,
+    [272] = ir_run_BranchTruth_List_BRANCH_IF_TRUE,
+    [273] = ir_run_BranchTruth_None_BRANCH_IF_FALSE,
+    [274] = ir_run_BranchTruth_None_BRANCH_IF_TRUE,
+    [275] = ir_run_BranchTruth_Str_BRANCH_IF_FALSE,
+    [276] = ir_run_BranchTruth_Str_BRANCH_IF_TRUE,
+    [277] = ir_run_BranchTruth_Plain_BRANCH_IF_FALSE,
+    [278] = ir_run_BranchTruth_Plain_BRANCH_IF_TRUE,
+    [279] = ir_run_BranchTruth_Slot_BRANCH_IF_FALSE,
+    [280] = ir_run_BranchTruth_Slot_BRANCH_IF_TRUE,
+    [281] = ir_run_BranchTruth_Generic,
+    [282] = ir_run_BranchNone_Test,
+    [283] = ir_run_BranchTruth_Observed,
+    [284] = ir_run_BranchNone_Observed,
+    [285] = ir_run_Jump_Direct,
+    [286] = ir_run_Jump_Trailing,
+    [287] = ir_run_Jump_Poll,
+    [288] = ir_run_Jump_Warm,
+    [289] = ir_run_Jump_Observed,
+    [290] = ir_run_Const_Pool,
+    [291] = ir_run_Const_Small,
+    [292] = ir_run_Const_Common,
+    [293] = ir_run_LocalRead_Bound,
+    [294] = ir_run_LocalRead_Checked,
+    [295] = ir_run_LocalWrite_Store,
+    [296] = ir_run_LocalWrite_Restore,
+    [297] = ir_run_SaveLocal_Take,
+    [298] = ir_run_LocalDelete_Checked,
+    [299] = ir_run_Move_Transfer,
+    [300] = ir_run_Move_Copy,
+    [301] = ir_run_Rotate_Cycle,
+    [302] = ir_run_Retire_Close,
     [303] = ir_run_UNKNOWN_OPCODE,
     [304] = ir_run_UNKNOWN_OPCODE,
     [305] = ir_run_UNKNOWN_OPCODE,

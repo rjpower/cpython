@@ -20,7 +20,8 @@ SPECIALIZED = {
     "GetAttr": ["Instance", "Shape", "PolyShape", "Module", "Hint", "ValueSlot",
                 "PointerSlot", "Class", "NonDescriptorValues", "NonDescriptorNoDict",
                 "GetSet", "Property", "GetattributeOverridden"],
-    "GetMethod": ["MethodValues", "PolyMethod", "NoDict", "LazyDict", "ClassMethod"],
+    "GetMethod": ["MethodValues", "PolyMethod", "NoDict", "LazyDict", "ClassMethod",
+                  "Module"],
 }
 
 

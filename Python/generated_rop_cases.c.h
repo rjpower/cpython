@@ -2008,55 +2008,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Generic_NativeFailed)
             PROCESS_ERROR_AT(RAISE, 44, this_instr);
         }
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValue own_source;
-    int pub4;
-    PyValue last5;
-    _PyRopItems vals;
-} rop_in_Cold_Unpack_Generic_PublishRest0;
-static_assert(sizeof(rop_in_Cold_Unpack_Generic_PublishRest0) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
-#ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Unpack_Generic_PublishRest0) {
-    // Unpack.Generic: the cold region from rop_Unpack_Generic_PublishRest0
-    int opcode = ROP_HANDLER_Unpack_Generic;
-    (void)opcode;
-    _PyIRWord *const this_instr = next_instr;
-    (void)this_instr;
-    next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
-    size_t adapt_before_use_unpack1_n;
-    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-    _PyRopItems out1;
-    int ret2;
-    PyValue own_source = PyValue_NULL;
-    _PyRopSpan span3;
-    int pub4;
-    PyValue last5;
-    int ret6;
-    int adapt_before_use_unpack1_ct;
-    int ret7;
-    int adapt_before_use_unpack1_cl;
-    int ret8;
-    _PyRopItems vals;
-    { const rop_in_Cold_Unpack_Generic_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Generic_PublishRest0);
-      own_source = ir_in->own_source;
-      pub4 = ir_in->pub4;
-      last5 = ir_in->last5;
-      vals = ir_in->vals;
-    }
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-    _PyRop_PublishItemsRest(span3, vals.items, vals.hold, pub4, last5);
-    vals.hold = NULL;
-    goto rop_Unpack_Generic_Published0;
-    rop_Unpack_Generic_Published0:
-    ROP_TAIL_CLOSE(own_source, rop_Unpack_Generic_Tail0_0);
-    DISPATCH();
-    rop_Unpack_Generic_Tail0_0:
-    ROP_TAIL_PARK_FIRST(own_source);
-    ROP_TAIL_DISPATCH();
-}
-IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_PublishRest0)
-#endif
-
         TARGET(Unpack_Generic) {
             // Unpack.Generic (shared)
             int opcode = ROP_HANDLER_Unpack_Generic;
@@ -2072,13 +2023,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_PublishRest0)
             int ret2;
             PyValue own_source = PyValue_NULL;
             _PyRopSpan span3;
-            int pub4;
-            PyValue last5;
-            int ret6;
+            int ret4;
             int adapt_before_use_unpack1_ct;
-            int ret7;
+            int ret5;
             int adapt_before_use_unpack1_cl;
-            int ret8;
+            int ret6;
             _PyRopItems vals;
             adapt_before_use_unpack1_n = (Py_ssize_t)IR_A(ir_word);
             if (!_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h)) {
@@ -2097,29 +2046,26 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_PublishRest0)
             }
             IR_STUB_ESCAPE();
             span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-            pub4 = _PyRop_PublishItemsFast(&span3, &vals, &last5);
-            if (pub4 >= 0) {
-                goto rop_Unpack_Generic_PublishRest0;
-            }
+            _PyRop_PublishItems(&span3, &vals);
             ROP_TAIL_CLOSE(own_source, rop_Unpack_Generic_Tail0_0);
             DISPATCH();
             rop_Unpack_Generic_Tail0_0:
             ROP_TAIL_PARK_FIRST(own_source);
             ROP_TAIL_DISPATCH();
             rop_Unpack_Generic_adapt_before_use_unpack1_Sample:
-            ret6 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), adapt_before_use_unpack1_n);
-            if (ret6 == 1) {
+            ret4 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), adapt_before_use_unpack1_n);
+            if (ret4 == 1) {
                 goto rop_Unpack_Generic_adapt_before_use_unpack1_ChosenList;
             }
-            if (ret6 == 2) {
+            if (ret4 == 2) {
                 goto rop_Unpack_Generic_adapt_before_use_unpack1_NoArm;
             }
             adapt_before_use_unpack1_ct = ROP_HANDLER_Unpack_Tuple;
-            ret7 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_ct);
-            if (ret7 == 0) {
+            ret5 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_ct);
+            if (ret5 == 0) {
                 goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
             }
-            if (ret7 < 0) {
+            if (ret5 < 0) {
                 goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
             }
             rop_Unpack_Generic_adapt_before_use_unpack1_Changed:
@@ -2130,24 +2076,16 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_PublishRest0)
             goto rop_Unpack_Generic_Run;
             rop_Unpack_Generic_adapt_before_use_unpack1_ChosenList:
             adapt_before_use_unpack1_cl = ROP_HANDLER_Unpack_List;
-            ret8 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_cl);
-            if (ret8 > 0) {
+            ret6 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_cl);
+            if (ret6 > 0) {
                 goto rop_Unpack_Generic_adapt_before_use_unpack1_Changed;
             }
-            if (ret8 == 0) {
+            if (ret6 == 0) {
                 goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
             }
             goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
             rop_Unpack_Generic_Failed:
             PROCESS_ERROR_AT(RAISE, 196, this_instr);
-            rop_Unpack_Generic_PublishRest0:
-            { rop_in_Cold_Unpack_Generic_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Generic_PublishRest0);
-              ir_in->own_source = own_source;
-              ir_in->pub4 = pub4;
-              ir_in->last5 = last5;
-              ir_in->vals = vals;
-            }
-            IR_OUTLINE_GOTO(Cold_Unpack_Generic_PublishRest0);
         }
 
 typedef struct __attribute__((__may_alias__)) {
@@ -14463,48 +14401,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_WithExit_Generic_MethodFailed)
             PROCESS_ERROR_AT(RAISE, 133, this_instr);
         }
 
-typedef struct __attribute__((__may_alias__)) {
-    _PyRopItems vals;
-    PyValue own_source;
-    int pub2;
-    PyValue last3;
-} rop_in_Cold_Unpack_Tuple_PublishRest0;
-static_assert(sizeof(rop_in_Cold_Unpack_Tuple_PublishRest0) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
-#ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Unpack_Tuple_PublishRest0) {
-    // Unpack.Tuple: the cold region from rop_Unpack_Tuple_PublishRest0
-    int opcode = ROP_HANDLER_Unpack_Tuple;
-    (void)opcode;
-    _PyIRWord *const this_instr = next_instr;
-    (void)this_instr;
-    next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
-    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-    PyValueBorrow v;
-    _PyRopItems vals;
-    PyValue own_source = PyValue_NULL;
-    _PyRopSpan span1;
-    int pub2;
-    PyValue last3;
-    { const rop_in_Cold_Unpack_Tuple_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Tuple_PublishRest0);
-      vals = ir_in->vals;
-      own_source = ir_in->own_source;
-      pub2 = ir_in->pub2;
-      last3 = ir_in->last3;
-    }
-    span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-    _PyRop_PublishItemsRest(span1, vals.items, vals.hold, pub2, last3);
-    vals.hold = NULL;
-    goto rop_Unpack_Tuple_Published0;
-    rop_Unpack_Tuple_Published0:
-    ROP_TAIL_CLOSE(own_source, rop_Unpack_Tuple_Tail0_0);
-    DISPATCH();
-    rop_Unpack_Tuple_Tail0_0:
-    ROP_TAIL_PARK_FIRST(own_source);
-    ROP_TAIL_DISPATCH();
-}
-IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Tuple_PublishRest0)
-#endif
-
         TARGET(Unpack_Tuple) {
             // Unpack.Tuple (shared)
             int opcode = ROP_HANDLER_Unpack_Tuple;
@@ -14519,8 +14415,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Tuple_PublishRest0)
             _PyRopItems vals;
             PyValue own_source = PyValue_NULL;
             _PyRopSpan span1;
-            int pub2;
-            PyValue last3;
             v = PyValue_Borrow(*home_source);
             if (!_PyRop_TupleHasLength(v, (Py_ssize_t)IR_A(ir_word))) {
                 JUMP_TO_PREDICTED(Unpack_Generic);
@@ -14531,68 +14425,13 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Tuple_PublishRest0)
             }
             IR_STUB_ESCAPE();
             span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-            pub2 = _PyRop_PublishItemsFast(&span1, &vals, &last3);
-            if (pub2 >= 0) {
-                goto rop_Unpack_Tuple_PublishRest0;
-            }
+            _PyRop_PublishItems(&span1, &vals);
             ROP_TAIL_CLOSE(own_source, rop_Unpack_Tuple_Tail0_0);
             DISPATCH();
             rop_Unpack_Tuple_Tail0_0:
             ROP_TAIL_PARK_FIRST(own_source);
             ROP_TAIL_DISPATCH();
-            rop_Unpack_Tuple_PublishRest0:
-            { rop_in_Cold_Unpack_Tuple_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Tuple_PublishRest0);
-              ir_in->vals = vals;
-              ir_in->own_source = own_source;
-              ir_in->pub2 = pub2;
-              ir_in->last3 = last3;
-            }
-            IR_OUTLINE_GOTO(Cold_Unpack_Tuple_PublishRest0);
         }
-
-typedef struct __attribute__((__may_alias__)) {
-    PyValue own_source;
-    int pub4;
-    PyValue last5;
-    _PyRopItems vals;
-} rop_in_Cold_Unpack_List_PublishRest0;
-static_assert(sizeof(rop_in_Cold_Unpack_List_PublishRest0) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
-#ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Unpack_List_PublishRest0) {
-    // Unpack.List: the cold region from rop_Unpack_List_PublishRest0
-    int opcode = ROP_HANDLER_Unpack_List;
-    (void)opcode;
-    _PyIRWord *const this_instr = next_instr;
-    (void)this_instr;
-    next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
-    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-    PyValueBorrow v;
-    _PyRopItems out1;
-    int ret2;
-    PyValue own_source = PyValue_NULL;
-    _PyRopSpan span3;
-    int pub4;
-    PyValue last5;
-    _PyRopItems vals;
-    { const rop_in_Cold_Unpack_List_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_List_PublishRest0);
-      own_source = ir_in->own_source;
-      pub4 = ir_in->pub4;
-      last5 = ir_in->last5;
-      vals = ir_in->vals;
-    }
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-    _PyRop_PublishItemsRest(span3, vals.items, vals.hold, pub4, last5);
-    vals.hold = NULL;
-    goto rop_Unpack_List_Published0;
-    rop_Unpack_List_Published0:
-    ROP_TAIL_CLOSE(own_source, rop_Unpack_List_Tail0_0);
-    DISPATCH();
-    rop_Unpack_List_Tail0_0:
-    ROP_TAIL_PARK_FIRST(own_source);
-    ROP_TAIL_DISPATCH();
-}
-IR_OUTLINED_JIT_ENTRY(Cold_Unpack_List_PublishRest0)
-#endif
 
         TARGET(Unpack_List) {
             // Unpack.List (shared)
@@ -14609,8 +14448,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_List_PublishRest0)
             int ret2;
             PyValue own_source = PyValue_NULL;
             _PyRopSpan span3;
-            int pub4;
-            PyValue last5;
             _PyRopItems vals;
             v = PyValue_Borrow(*home_source);
             if (!_PyRop_ListHasLength(v, (Py_ssize_t)IR_A(ir_word))) {
@@ -14627,10 +14464,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_List_PublishRest0)
             }
             IR_STUB_ESCAPE();
             span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-            pub4 = _PyRop_PublishItemsFast(&span3, &vals, &last5);
-            if (pub4 >= 0) {
-                goto rop_Unpack_List_PublishRest0;
-            }
+            _PyRop_PublishItems(&span3, &vals);
             ROP_TAIL_CLOSE(own_source, rop_Unpack_List_Tail0_0);
             DISPATCH();
             rop_Unpack_List_Tail0_0:
@@ -14638,58 +14472,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_List_PublishRest0)
             ROP_TAIL_DISPATCH();
             rop_Unpack_List_Failed:
             PROCESS_ERROR_AT(RAISE, 196, this_instr);
-            rop_Unpack_List_PublishRest0:
-            { rop_in_Cold_Unpack_List_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_List_PublishRest0);
-              ir_in->own_source = own_source;
-              ir_in->pub4 = pub4;
-              ir_in->last5 = last5;
-              ir_in->vals = vals;
-            }
-            IR_OUTLINE_GOTO(Cold_Unpack_List_PublishRest0);
         }
-
-typedef struct __attribute__((__may_alias__)) {
-    PyValue own_source;
-    int pub4;
-    PyValue last5;
-    _PyRopItems vals;
-} rop_in_Cold_UnpackStar_Iterable_PublishRest0;
-static_assert(sizeof(rop_in_Cold_UnpackStar_Iterable_PublishRest0) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
-#ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_UnpackStar_Iterable_PublishRest0) {
-    // UnpackStar.Iterable: the cold region from rop_UnpackStar_Iterable_PublishRest0
-    int opcode = ROP_HANDLER_UnpackStar_Iterable;
-    (void)opcode;
-    _PyIRWord *const this_instr = next_instr;
-    (void)this_instr;
-    next_instr += 1 + (IR_A(ir_word) + 3) / IR_OPERANDS_PER_WORD;
-    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-    _PyRopItems out1;
-    int ret2;
-    PyValue own_source = PyValue_NULL;
-    _PyRopSpan span3;
-    int pub4;
-    PyValue last5;
-    _PyRopItems vals;
-    { const rop_in_Cold_UnpackStar_Iterable_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_UnpackStar_Iterable_PublishRest0);
-      own_source = ir_in->own_source;
-      pub4 = ir_in->pub4;
-      last5 = ir_in->last5;
-      vals = ir_in->vals;
-    }
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 0, 0};
-    _PyRop_PublishItemsRest(span3, vals.items, vals.hold, pub4, last5);
-    vals.hold = NULL;
-    goto rop_UnpackStar_Iterable_Published0;
-    rop_UnpackStar_Iterable_Published0:
-    ROP_TAIL_CLOSE(own_source, rop_UnpackStar_Iterable_Tail0_0);
-    DISPATCH();
-    rop_UnpackStar_Iterable_Tail0_0:
-    ROP_TAIL_PARK_FIRST(own_source);
-    ROP_TAIL_DISPATCH();
-}
-IR_OUTLINED_JIT_ENTRY(Cold_UnpackStar_Iterable_PublishRest0)
-#endif
 
         TARGET(UnpackStar_Iterable) {
             // UnpackStar.Iterable (shared)
@@ -14705,8 +14488,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_UnpackStar_Iterable_PublishRest0)
             int ret2;
             PyValue own_source = PyValue_NULL;
             _PyRopSpan span3;
-            int pub4;
-            PyValue last5;
             _PyRopItems vals;
             IR_STUB_ESCAPE();
             ret2 = _PyRop_UnpackStar(home_source, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)), &out1);
@@ -14719,10 +14500,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_UnpackStar_Iterable_PublishRest0)
             }
             IR_STUB_ESCAPE();
             span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 0, 0};
-            pub4 = _PyRop_PublishItemsFast(&span3, &vals, &last5);
-            if (pub4 >= 0) {
-                goto rop_UnpackStar_Iterable_PublishRest0;
-            }
+            _PyRop_PublishItems(&span3, &vals);
             ROP_TAIL_CLOSE(own_source, rop_UnpackStar_Iterable_Tail0_0);
             DISPATCH();
             rop_UnpackStar_Iterable_Tail0_0:
@@ -14730,14 +14508,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_UnpackStar_Iterable_PublishRest0)
             ROP_TAIL_DISPATCH();
             rop_UnpackStar_Iterable_Failed:
             PROCESS_ERROR_AT(RAISE, 198, this_instr);
-            rop_UnpackStar_Iterable_PublishRest0:
-            { rop_in_Cold_UnpackStar_Iterable_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_UnpackStar_Iterable_PublishRest0);
-              ir_in->own_source = own_source;
-              ir_in->pub4 = pub4;
-              ir_in->last5 = last5;
-              ir_in->vals = vals;
-            }
-            IR_OUTLINE_GOTO(Cold_UnpackStar_Iterable_PublishRest0);
         }
 
 #ifndef IR_JIT_STENCILS

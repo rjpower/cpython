@@ -703,8 +703,6 @@ class ArmLowerer:
         self.pending_closes: list[str] = []
         self.tails = 0
         self.cold: list[ColdRegion] = []
-        self.mid_cold: list[MidCold] = []
-        self.current_block = ""
         # A slot-class member arm (`over(locals: ...)`): each locals
         # operand's class, a constant, True for a local
         self.fixed_local: dict[str, bool] = fixed_locals(program, arm)
@@ -1145,7 +1143,7 @@ class ArmLowerer:
                 t = c_type(p.type)
                 if t is not None:
                     self.declare(self.local(p.name), t)
-        if self.cold_heads or self.mid_cold:
+        if self.cold_heads:
             self.lines = self.outline_cold(order, spans)
         body = []
         for line in self.lines:
@@ -1205,43 +1203,20 @@ class ArmLowerer:
                              self.label)
             live = [(types[n], n) for n in types
                     if n in needed and n in hot_names and not types[n].endswith("const")]
-            live, again = split_rematerial(live, hot)
             name = f"Cold_{self.prefix.removeprefix('rop_')}_{label}"
-            body = again + [f"goto {self.label(label)};"] + body
+            body = [f"goto {self.label(label)};"] + body
             self.cold.append(ColdRegion(name, self.label(label), live,
                                         self.drop_unused_labels(body)))
             # The lines that a fallthrough into the head ran stay in the arm
             head_lines = text(label)
             at = head_lines.index(f"{self.label(label)}:")
             arm_lines += head_lines[:at + 1]
-            arm_lines += outline_stub(name, live)
+            if live:
+                arm_lines.append(f"{{ rop_in_{name} *ir_in = IR_OUTLINE_IN(rop_in_{name});")
+                arm_lines += [f"  ir_in->{n} = {n};" for _, n in live]
+                arm_lines.append("}")
+            arm_lines.append(f"IR_OUTLINE_GOTO({name});")
         assert heads == [c.head.removeprefix(self.prefix + "_") for c in self.cold], self.arm.name
-        # A cold head inside a block (a publish's rest, lower_publish): the
-        # function runs the head's lines, then the block from where the arm
-        # goes on, and every block after it
-        for mid in self.mid_cold:
-            start, end = spans[mid.block]
-            block = self.lines[start:end]
-            rest = mid.lines + block[block.index(f"{mid.resume}:"):]
-            region = reach(mid.block, set()) - {mid.block}
-            texts = {lb: text(lb) for lb in region}
-            texts[mid.cold] = rest
-            msuccs = dict(succs)
-            msuccs[mid.cold] = succs[mid.block]
-            needed = live_in(mid.cold, region | {mid.cold}, msuccs, texts,
-                             lambda lb: lb if lb == mid.cold else self.label(lb))
-            live = [(types[n], n) for n in types
-                    if n in needed and n in hot_names and not types[n].endswith("const")]
-            live, again = split_rematerial(live, hot)
-            name = f"Cold_{mid.cold.removeprefix('rop_')}"
-            body = again + rest + [line for lb in order if lb in region for line in text(lb)]
-            self.cold.append(ColdRegion(name, mid.cold, live, self.drop_unused_labels(body)))
-            stub = [f"{mid.cold}:"] + outline_stub(name, live)
-            if any(f"goto {mid.cold};" in line for line in arm_lines):
-                arm_lines += stub
-            for c in self.cold:
-                if c.name != name and any(f"goto {mid.cold};" in line for line in c.body):
-                    c.body += stub
         return arm_lines
 
     def payload_words(self) -> str | None:
@@ -1306,7 +1281,6 @@ class ArmLowerer:
         return done
 
     def lower_block(self, block, label: str) -> None:
-        self.current_block = label
         if label != "entry":
             self.emit(f"{self.label(label)}:")
         # An acquire() takes the owner on its own path only
@@ -1427,25 +1401,7 @@ class ArmLowerer:
         for target, value in stored.items():
             # The closes may run finalizers, which a stub reports
             self.emit("IR_STUB_ESCAPE();")
-            span = self.span(target)
-            if not self.outline_cold_regions:
-                self.emit(f"_PyRop_PublishItems({span}, &{value});")
-                continue
-            # A displaced value left with no count is rare: the rest of the
-            # publish, and of the arm, runs out of line (outline_cold)
-            k = len(self.mid_cold)
-            at, last = self.new_temp("int", "pub"), self.new_temp("PyValue", "last")
-            cold, resume = f"{self.prefix}_PublishRest{k}", f"{self.prefix}_Published{k}"
-            self.emit(f"{at} = _PyRop_PublishItemsFast({span}, &{value}, &{last});")
-            self.emit(f"if ({at} >= 0) {{")
-            self.emit(f"    goto {cold};")
-            self.emit("}")
-            self.emit(f"{resume}:")
-            self.mid_cold.append(MidCold(self.current_block, cold, resume, [
-                f"_PyRop_PublishItemsRest({span.removeprefix('&')}, {value}.items, "
-                f"{value}.hold, {at}, {last});",
-                f"{value}.hold = NULL;",
-                f"goto {resume};"]))
+            self.emit(f"_PyRop_PublishItems({self.span(target)}, &{value});")
         for b in s.bindings:
             if b.vector:
                 continue
@@ -1720,51 +1676,6 @@ class Decl:
 def c_names(lines: list[str]) -> list[str]:
     """The identifiers in some lines of C"""
     return re.findall(r"\b[A-Za-z_]\w*\b", "\n".join(lines))
-
-
-def split_rematerial(live: list[tuple[str, str]], hot: list[str]
-                     ) -> tuple[list[tuple[str, str]], list[str]]:
-    """Of a cold region's inputs, those the arm sets once from the word
-    alone (a span's descriptor, a decoded field): the region sets them again
-    from its own this_instr and ir_word, rather than the arm keeping them
-    live to its exit and storing them in the activation.  Returns the
-    inputs that travel and the region's lines that set the others."""
-    if any(re.match(r"\s*frame\s*=[^=]", line) for line in hot):
-        return live, []
-    travel, again = [], []
-    for ctype, n in live:
-        defs = [line for line in hot if re.match(rf"\s*{n}\s*=[^=]", line)]
-        if len(defs) == 1:
-            rhs = defs[0].split("=", 1)[1]
-            # Only the word's fields and the span literal: a call may read
-            # state that changed after the arm set the input
-            if all(m in ("frame", "this_instr", "ir_word", "_PyRopSpan") or m.startswith("IR_")
-                   for m in c_names([rhs])):
-                again.append(defs[0].strip())
-                continue
-        travel.append((ctype, n))
-    return travel, again
-
-
-def outline_stub(name: str, live: list[tuple[str, str]]) -> list[str]:
-    """The arm's way into an outlined region: the region's inputs into the
-    activation, then the tail call"""
-    lines = []
-    if live:
-        lines.append(f"{{ rop_in_{name} *ir_in = IR_OUTLINE_IN(rop_in_{name});")
-        lines += [f"  ir_in->{n} = {n};" for _, n in live]
-        lines.append("}")
-    return lines + [f"IR_OUTLINE_GOTO({name});"]
-
-
-@dataclass
-class MidCold:
-    """A cold head inside a block (ArmLowerer.outline_cold): the arm goes
-    to the label cold, whose lines go on at the label resume of the block"""
-    block: str
-    cold: str
-    resume: str
-    lines: list[str]
 
 
 def block_uses_defs(lines: list[str]) -> tuple[set[str], set[str], dict[str, set[str]]]:

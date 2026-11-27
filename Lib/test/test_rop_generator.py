@@ -233,11 +233,8 @@ class ArmLoweringTests(unittest.TestCase):
 
     def test_an_owners_binding_publishes_the_items_in_one_call(self):
         # d[] = v writes every item into its home before any displaced value
-        # is closed (_PyRop_PublishItemsFast), which discharges old(d); the
-        # span carries the layout's constant geometry.  A displaced value
-        # left with no count sends the rest of the publish, and of the arm,
-        # out of line (_PyRop_PublishItemsRest).  The region sets the span
-        # again from the word rather than receiving it
+        # is closed (_PyRop_PublishItems), which discharges old(d); the span
+        # carries the layout's constant geometry
         program = rop_check.check([rop_syntax.parse(OWNERS, "t.rop")])
         self.assertEqual(program.diagnostics, ())
         p = rop_generator.lower_all(program, rop_generator.number_arms(program))
@@ -248,16 +245,9 @@ class ArmLoweringTests(unittest.TestCase):
         self.assertRegex(text, r"span\d+ = \(_PyRopSpan\)\{frame, this_instr, 0, "
                                r"IR_\w+\(ir_word\), \d, \d\};")
         order = [text.index(mark) for mark in (
-            "IR_STUB_ESCAPE();", "_PyRop_PublishItemsFast(&span")]
+            "IR_STUB_ESCAPE();", "_PyRop_PublishItems(&span")]
         self.assertEqual(order, sorted(order))
         self.assertNotIn("PyValue_XCLOSE", text)
-        self.assertNotIn("_PyRop_PublishItemsRest(", text)
-        (c,) = [c for c in p.lowered["F.Split"].cold if "PublishRest" in c.name]
-        self.assertIn("v", [n for _, n in c.live])
-        self.assertFalse([n for _, n in c.live if n.startswith("span")])
-        self.assertRegex(c.body[0], r"span\d+ = \(_PyRopSpan\)\{frame, this_instr, ")
-        self.assertRegex("\n".join(c.body),
-                         r"_PyRop_PublishItemsRest\(span\d+, v.items, v.hold, pub\d+, last\d+\);")
 
     def test_anchors_of_a_literal_span_are_scalars(self):
         # Binary.Generic anchors [x, y]: a view and an owner per source on

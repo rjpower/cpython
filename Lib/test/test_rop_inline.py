@@ -123,6 +123,9 @@ class InlineRowBinaryTests(unittest.TestCase):
                 self.assertNotRegex(body, r"\ssub\s+\$0x[0-9a-f]+,%rsp")
 
     def test_span_publishes_need_no_stack_protector(self):
+        if "-DNDEBUG" not in sysconfig.get_config_var("PY_CFLAGS").split():
+            self.skipTest("a row that asserts is not inlined, so its "
+                          "out-parameter (Unpack.List's items) escapes")
         for arm in SPAN_PUBLISH:
             with self.subTest(arm=arm):
                 body = arm_body(self.calls, arm)

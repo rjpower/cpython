@@ -147,7 +147,9 @@
  * with the child's value in SLOT, P's definition, when NEW returns.
  * ROP_RETURN: `exit return(CALLER, HEAD)`.  The value is in the caller's
  * slot already; the caller goes on at HEAD, in its unit if it ran in one.
- * ROP_GEN_RETURN: `tail generator_return(CALLER, V, DYING)`. */
+ * ROP_GEN_RETURN: `tail generator_return(CALLER, V, DYING)`;
+ * ROP_GEN_RETURN_EMPTY: generator_return_empty's, for a frame whose scratch
+ * is vacant, whose retirement clears only its fixed slots. */
 #define ROP_ENTER(NEW, SLOT) \
     do { \
         frame->return_slot = (uint16_t)(SLOT); \
@@ -166,6 +168,11 @@
     do { \
         frame = (CALLER); \
         IR_GEN_RETURN((V), (DYING), 0); \
+    } while (0)
+#define ROP_GEN_RETURN_EMPTY(CALLER, V, DYING) \
+    do { \
+        frame = (CALLER); \
+        IR_GEN_RETURN((V), (DYING), 1); \
     } while (0)
 
 /* ROP_YIELD: `exit yield(V) resume P` of a Yield word, ROP_YIELD_FROM of a

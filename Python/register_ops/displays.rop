@@ -146,7 +146,7 @@ extern helper set_add(set:Src, item:O)
     review: "ceval.c _PyRop_SetAdd: _PySet_AddValueTakeRef. The container is the word's home.",
     contract: "The item is taken on every outcome. The container is read and kept. A hash or equality of the item can run Python.");
 
-arm AddElement.Append shared select(append)
+arm AddElement.Append shared select(append) over(locals: TT; rest)
   effects(writes, allocates, raises, releases, runs_python)
   feedback()
   exits(next, raise)

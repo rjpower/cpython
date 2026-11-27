@@ -42,7 +42,7 @@ def adaptive_names(f):
     """The arms that the words of f run: the addition of a BINARY_OP is
     Add.Int, Add.Float, Add.Text, Add.Extended or Add.Generic; a CALL is
     Call.Exact, Call.Init, ..."""
-    return {word.arm for word in dis.get_instructions(f, adaptive=True)}
+    return {dis.declared_arm(word.arm) for word in dis.get_instructions(f, adaptive=True)}
 
 
 class TestBase(unittest.TestCase):

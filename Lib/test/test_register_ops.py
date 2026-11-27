@@ -783,7 +783,8 @@ class DefinitionTests(unittest.TestCase):
 
     def test_pilot(self):
         p = self.program
-        self.assertEqual(sorted(a.name for a in p.arms_of("Add")),
+        # The declared arms; slot-class members are LocalsArmTests'
+        self.assertEqual(sorted(a.name for a in p.arms_of("Add") if a.locals is None),
                          ["Add.Extended", "Add.Float", "Add.Generic", "Add.Int", "Add.Text"])
         self.assertIn("GetAttr.Instance", p.arms)
         self.assertIsNotNone(p.macros["adapt_before_use_add"].graph)

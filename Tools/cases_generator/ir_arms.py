@@ -68,3 +68,9 @@ class ArmEntry:
     # The observer gates the family (`observes gates`): the observing
     # evaluator's table sends every word of the family to it
     observer_gates: bool = False
+    # A slot-class member arm (`over(locals: ...)`): the C name of the arm
+    # it is a member of, which the feedback and the readers report
+    declared: str | None = None
+    # An arm with slot-class members: the C name of the arm for each value
+    # of the head's four slot-class flags (rop_check.LocalsSet.row)
+    locals_row: tuple[str, ...] | None = None

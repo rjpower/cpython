@@ -368,7 +368,7 @@ arm AttrWrite.Instance inline entry(instance)
     exit redirect(current_route);
 }
 
-arm AttrWrite.Shape inline entry(shape)
+arm AttrWrite.Shape inline over(locals: TT, LL; rest) entry(shape)
   effects(reads, writes, releases)
   feedback(read(entry.type_version), read(entry.shape), read(entry.shape_to), read(entry.offset))
   exits(next, miss)
@@ -393,7 +393,7 @@ arm AttrWrite.Shape inline entry(shape)
     exit miss();
 }
 
-arm AttrWrite.ShapeAdd inline entry(shape_add)
+arm AttrWrite.ShapeAdd inline over(locals: LL; rest) entry(shape_add)
   effects(reads, writes, releases)
   feedback(read(entry.type_version), read(entry.shape), read(entry.shape_to), read(entry.offset))
   exits(next, miss)
@@ -463,7 +463,7 @@ arm AttrWrite.Hint inline entry(hint)
     exit redirect(current_route);
 }
 
-arm AttrWrite.Slot inline entry(slot)
+arm AttrWrite.Slot inline over(locals: LT, TT; rest) entry(slot)
   effects(runs_python, raises, reads, writes, releases)
   feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
   exits(next, miss, raise, redirect)

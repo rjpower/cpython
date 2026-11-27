@@ -786,6 +786,134 @@ arm F.Any shared effects() feedback() exits(next)
 """
 
 
+LOCALS = """\
+enum Op(A, B, C);
+family F(dst:Dst, x:Src, y:Src, op:Enum<Op>) exits(next, miss);
+extern primitive op_ok(op:Enum<Op>, v:B) -> Bool
+  effects()
+  c op_ok_c as bool
+  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+arm F.Fast shared OVERS effects() feedback() exits(next, miss)
+{
+  entry():
+    guard op_ok(op, use(x)) else miss;
+    exit next();
+}
+"""
+
+
+def locals_program(overs: str) -> "rop_check.Program":
+    return rop_check.check([rop_syntax.parse(LOCALS.replace("OVERS", overs), "m.rop")])
+
+
+class LocalsArmTests(unittest.TestCase):
+    """Slot-class members (`over(locals: ...)`): one arm per combination of
+    the family's Src and Dst homes, T or L each, read from the word's flags"""
+
+    def test_each_member_is_an_arm_with_its_letters(self):
+        program = locals_program("over(locals: TLL, TTL; rest)")
+        self.assertEqual(program.diagnostics, ())
+        self.assertEqual(list(program.arms), ["F.Fast_TLL", "F.Fast_TTL", "F.Fast"])
+        self.assertEqual(program.arms["F.Fast_TLL"].locals, "TLL")
+        self.assertIsNone(program.arms["F.Fast"].locals)
+        ls = program.locals_sets["F.Fast"]
+        self.assertEqual([name for name, _ in ls.operands], ["dst", "x", "y"])
+        self.assertEqual(rop_check.fixed_locals(program, program.arms["F.Fast_TTL"]),
+                         {"dst": False, "x": False, "y": True})
+
+    def test_the_row_reads_the_operands_flags(self):
+        ls = locals_program("over(locals: TLL; rest)").locals_sets["F.Fast"]
+        # dst, x and y sit in fields A, B and C: bits 0, 1 and 2 of the
+        # nibble; field D's bit is not an operand's
+        row = ls.row()
+        self.assertEqual({i for i, arm in enumerate(row) if arm == "F.Fast_TLL"}, {6, 14})
+        self.assertEqual(set(row) - {"F.Fast_TLL"}, {"F.Fast"})
+
+    def test_a_qualified_member_belongs_to_one_member_arm(self):
+        program = locals_program("over(op: A, B) over(locals: A.TLL, TTT; rest)")
+        self.assertEqual(program.diagnostics, ())
+        self.assertEqual(list(program.arms), ["F.Fast_A_TLL", "F.Fast_A_TTT", "F.Fast_A",
+                                              "F.Fast_B_TTT", "F.Fast_B"])
+        self.assertEqual(program.locals_sets["F.Fast_B"].arms, {"TTT": "F.Fast_B_TTT"})
+
+    def test_refusals(self):
+        cases = [
+            ("over(locals: TL; rest)", "over(locals): member TL does not match F's "
+             "locals operands (dst, x, y): 3 letters, each T or L"),
+            ("over(locals: TLX; rest)", "over(locals): member TLX does not match F's "
+             "locals operands (dst, x, y): 3 letters, each T or L"),
+            ("over(op: A) over(locals: C.TLL; rest)", "over(locals): C in C.TLL is not "
+             "a member of the arm's over(...) (one of A)"),
+            ("over(locals: B.TLL; rest)", "over(locals): B in B.TLL is not a member of "
+             "the arm's over(...)"),
+            ("over(locals: TLL, TLL; rest)", "over(locals): a member is listed twice "
+             "for one arm"),
+            ("over(locals: TLL)", "over(locals): without rest, every combination of "
+             "dst, x, y is a member: an install meets any word"),
+            ("over(op: A) over(op: B)", "over(op): an arm states one set over an enum "
+             "operand; a second one is over locals"),
+        ]
+        for overs, message in cases:
+            with self.subTest(overs=overs):
+                program = locals_program(overs)
+                self.assertEqual([d.message for d in program.diagnostics], [message])
+
+    def test_the_clause_prints_as_parsed(self):
+        source = LOCALS.replace("OVERS", "over(op: A) over(locals: A.TLL; rest)")
+        (arm,) = [d for d in rop_syntax.parse(source, "m.rop").decls
+                  if isinstance(d, rop_model.Arm)]
+        self.assertIn("over(op: A) over(locals: A.TLL; rest)",
+                      "\n".join(rop_print.decl_lines(arm)))
+
+    def test_a_member_arm_tests_no_flag_and_closes_no_vacant_destination(self):
+        p = products()
+        out = io.StringIO()
+        rop_generator.write_cases(out, p, [])
+        text = out.getvalue()
+        body = text[text.index("TARGET(GetAttr_Shape_TL)"):]
+        body = body[:body.index("\n        }\n")]
+        # obj is a local: no flag test, no take; dst is a vacant temporary
+        self.assertNotIn("if (!(ir_word & IR_F_LOCAL", body)
+        self.assertNotIn("old_dst", body)
+        self.assertIn("assert(PyValue_IsNull(*home_dst));", body)
+        self.assertIn("assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B)) == "
+                      "(IR_F_LOCAL_B));", body)
+        rest = text[text.index("TARGET(GetAttr_Shape)"):]
+        rest = rest[:rest.index("\n        }\n")]
+        self.assertIn("if (!(ir_word & IR_F_LOCAL_B))", rest)
+        self.assertIn("old_dst = *home_dst;", rest)
+
+    def test_only_a_member_drops_an_old_value(self):
+        # A projection is a temporary but not vacant: an arm without members
+        # (ForIter.Generic's pair cursor) loads and closes its old value
+        p = products()
+        out = io.StringIO()
+        rop_generator.write_cases(out, p, [])
+        text = out.getvalue()
+        body = text[text.index("TARGET(ForIter_Generic)"):]
+        body = body[:body.index("\n        }\n")]
+        self.assertIn("old_pair_cursor = *home_pair_cursor;", body)
+        self.assertNotIn("assert(PyValue_IsNull(", body)
+
+    def test_the_metadata_lists_rows_and_declared_arms(self):
+        entries = {e.dotted: e for e in rop_generator.arm_entries(products())}
+        self.assertEqual(entries["GetAttr.Shape_TL"].declared, "GetAttr_Shape")
+        row = entries["GetAttr.Shape"].locals_row
+        self.assertEqual(len(row), 16)
+        self.assertEqual(set(row), {"GetAttr_Shape", "GetAttr_Shape_TL"})
+        # A member keeps its declared arm's plan for the JIT: inline, or
+        # shared with a stub of its own
+        for member, declared in (("GetAttr.Shape_TL", "GetAttr.Shape"),
+                                 ("Add.Int_TLL", "Add.Int"),
+                                 ("Add.Float_TTT", "Add.Float")):
+            with self.subTest(member=member):
+                self.assertEqual(entries[member].region, entries[declared].region)
+                self.assertEqual(entries[member].generic, entries[declared].generic)
+        self.assertEqual(entries["Add.Int_TLL"].region, "inline")
+        self.assertEqual(entries["Add.Float_TTT"].region, "shared")
+        self.assertEqual(entries["Add.Float_TTT"].stub, "_PyIR_Rop_Stub_Add_Float_TTT")
+
+
 class EnvironmentTests(unittest.TestCase):
     def test_table_covers_implicit_names_the_checker_knows(self):
         import rop_catalog

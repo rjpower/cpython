@@ -672,6 +672,7 @@ arm Truth.Generic shared
 
 
 arm BranchTruth.Bool inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
+  over(locals: BRANCH_IF_FALSE.T; rest)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -691,6 +692,7 @@ arm BranchTruth.Bool inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
 }
 
 arm BranchTruth.Int inline over(mode: BRANCH_IF_FALSE, BRANCH_IF_TRUE)
+  over(locals: BRANCH_IF_FALSE.L; rest)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
@@ -867,7 +869,7 @@ arm BranchTruth.Generic shared
 }
 
 // BranchNone: an identity test with None, in either sense
-arm BranchNone.Test inline
+arm BranchNone.Test inline over(locals: L; rest)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch)

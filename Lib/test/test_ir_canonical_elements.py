@@ -12,6 +12,7 @@ from test import support
 class CanonicalElementRuntimeTests(unittest.TestCase):
     def test_specialized_bounds_values_and_generic_misses(self):
         import _testinternalcapi
+        from test.support import ir_dis as dis
 
         def template(container, index):
             return container[index]
@@ -24,8 +25,7 @@ class CanonicalElementRuntimeTests(unittest.TestCase):
                 self.assertIs(read(container, 0), values[0])
             expected = f"GetItem.{kind.__name__.capitalize()}Index"
             if kind is tuple or not support.Py_GIL_DISABLED:
-                self.assertIn(expected, {word[0] for word in
-                                        _testinternalcapi.get_ir(read.__code__, True)})
+                self.assertIn(expected, dis.executing_arms(read.__code__))
             for index, value in enumerate(values):
                 result = read(container, index)
                 if isinstance(value, float) and value != value:

@@ -19,7 +19,7 @@ from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, ExcRole, Fac
                          FrameRole,
                          Handle, MonitoringEvent, PcRole, Region, RowKind, Scalar, Schema, Select,
                          SchemaCtor, Wrap)
-from rop_model import (Access, Advance, Arm, Over, Binding, Block, BoolLit, Branch, Call,
+from rop_model import (LOCALS, Access, Advance, Arm, Over, Binding, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, CaseDecl, CBinding, Contract, Debt, Decl,
                        Diagnostic, Each, EdgeFact, Edge, EffectDecl, EnumDecl,
                        EnumType, EvidenceItem, Exit, Expr, Extern, FactUse, Family,
@@ -316,6 +316,9 @@ class Parser:
             self.expect("(")
             select = self.comma_list(")", lambda: self.enum_word(Select, "a selection")[0])
         over = self.over() if self.peek("over") else None
+        locals_over = self.over() if self.peek("over") else None
+        if over is not None and over.operand == LOCALS and locals_over is None:
+            over, locals_over = None, over
         entry: str | None = None
         if self.accept("entry"):
             self.expect("(")
@@ -332,17 +335,22 @@ class Parser:
         contract = self.contract(exits=True)
         graph = self.graph()
         return Arm(name.text, region, contract, graph, start.span, select, entry, observes,
-                   completion, trailing, gates, over, chain=chain)
+                   completion, trailing, gates, over, chain=chain,
+                   locals_over=locals_over)
 
     def over(self) -> Over:
-        """`over(operand: M1, M2[; rest])`"""
+        """`over(operand: M1, M2[; rest])`, or `over(locals: [M.]TL, ...;
+        rest)`"""
         start = self.expect("over")
         self.expect("(")
         operand = self.ident("an enum operand").text
         self.expect(":")
-        members = [self.ident("an enum member").text]
+        # A slot-class member may be qualified by a member of the arm's
+        # other set (`NB_MULTIPLY.TLL`)
+        member = self.qname if operand == LOCALS else lambda: self.ident("an enum member")
+        members = [member().text]
         while self.accept(","):
-            members.append(self.ident("an enum member").text)
+            members.append(member().text)
         rest = False
         if self.accept(";"):
             self.expect("rest")

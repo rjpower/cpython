@@ -6,6 +6,7 @@ import sys
 import unittest
 import weakref
 from test.support import import_helper
+from test.support import ir_dis
 from test.support.ir_dis import IRCode
 
 
@@ -51,10 +52,9 @@ class CanonicalHomeTests(unittest.TestCase):
         routes = {}
         for function in (local, temporary, discard):
             words = _testinternalcapi.get_ir(function.__code__, True)
-            self.assertIn('GetItem.ListIndex',
-                          [word[0] for word in words])
+            self.assertIn('GetItem.ListIndex', ir_dis.executing_arms(function.__code__))
             routes[function] = next(word for word in words
-                                    if word[0] == 'GetItem.ListIndex')
+                                    if ir_dis.declared_arm(word[0]) == 'GetItem.ListIndex')
         local_count = len(_testinternalcapi.get_co_localskinds(local.__code__))
         self.assertLess(routes[local][1], local_count)
         # Temporaries follow the fixed slots (locals, constants, discard)
@@ -98,9 +98,7 @@ class CanonicalHomeTests(unittest.TestCase):
 
         for _ in range(64):
             self.assertEqual(read(lambda: [2.5]), 2.5)
-        self.assertIn('GetItem.ListIndex',
-                      [word[0] for word in _testinternalcapi.get_ir(
-                          read.__code__, True)])
+        self.assertIn('GetItem.ListIndex', ir_dis.executing_arms(read.__code__))
         result = read(factory)
         gc.collect()
         self.assertIs(references[0](), result)

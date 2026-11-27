@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from test import test_tools
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
@@ -36,7 +36,7 @@ def adapted(fn, *args):
             fn(*args)
         except NameError:
             pass
-    return [row[0] for row in _testinternalcapi.get_ir(fn.__code__, True)]
+    return ir_dis.executing_arms(fn.__code__)
 
 
 def warmed(fn, *args):

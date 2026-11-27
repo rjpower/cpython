@@ -455,8 +455,8 @@ def warm(func, *args, **kwargs):
 
 def opnames(func):
     # The arms that the words run
-    names = {i.arm for i in dis.get_instructions(func, adaptive=True)}
-    return names | {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
+    names = {dis.declared_arm(i.arm) for i in dis.get_instructions(func, adaptive=True)}
+    return names | set(dis.executing_arms(func.__code__))
 
 
 def existing(*names):
@@ -467,7 +467,7 @@ def existing(*names):
 
 
 def handler_names(func):
-    return [row[0] for row in _testinternalcapi.get_ir(func.__code__, True)]
+    return dis.executing_arms(func.__code__)
 
 
 def add3(a, b, c):

@@ -181,7 +181,7 @@ arm GlobalRead.Generic shared
     exit redirect(route);
 }
 
-arm GlobalRead.Module inline entry(module)
+arm GlobalRead.Module inline over(locals: T; rest) entry(module)
   effects(reads, writes, releases on (dst))
   feedback(read(entry.globals_version), read(entry.index))
   exits(next, miss)
@@ -202,7 +202,7 @@ arm GlobalRead.Module inline entry(module)
     exit miss();
 }
 
-arm GlobalRead.Builtin inline entry(builtin)
+arm GlobalRead.Builtin inline over(locals: T; rest) entry(builtin)
   effects(reads, writes, releases on (dst))
   feedback(read(entry.globals_version), read(entry.builtins_version), read(entry.index))
   exits(next, miss)

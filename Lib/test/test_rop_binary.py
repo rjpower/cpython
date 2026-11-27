@@ -154,7 +154,8 @@ POWER_CASES = [
 def binary_arm(function):
     """The arm that function's one Binary word runs"""
     from test.support import ir_dis
-    (arm,) = [w.arm for w in ir_dis.get_instructions(function, adaptive=True)
+    (arm,) = [ir_dis.declared_arm(w.arm)
+              for w in ir_dis.get_instructions(function, adaptive=True)
               if w.arm.split(".")[0] == "Binary"]
     return arm
 

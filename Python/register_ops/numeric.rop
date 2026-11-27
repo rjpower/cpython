@@ -200,6 +200,8 @@ arm Binary.Int shared over(op: NB_INPLACE_ADD, NB_SUBTRACT, NB_INPLACE_SUBTRACT,
                            NB_MULTIPLY, NB_INPLACE_MULTIPLY, NB_FLOOR_DIVIDE,
                            NB_REMAINDER, NB_AND, NB_OR, NB_XOR, NB_LSHIFT, NB_RSHIFT;
                            rest)
+  over(locals: NB_SUBTRACT.TLL, NB_INPLACE_ADD.LLL, NB_MULTIPLY.TTT,
+               NB_INPLACE_SUBTRACT.TTL; rest)
   effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)
@@ -228,6 +230,9 @@ arm Binary.Int shared over(op: NB_INPLACE_ADD, NB_SUBTRACT, NB_INPLACE_SUBTRACT,
 arm Binary.Float shared over(op: NB_INPLACE_ADD, NB_SUBTRACT, NB_INPLACE_SUBTRACT,
                              NB_MULTIPLY, NB_INPLACE_MULTIPLY, NB_TRUE_DIVIDE,
                              NB_INPLACE_TRUE_DIVIDE, NB_POWER, NB_INPLACE_POWER)
+  over(locals: NB_MULTIPLY.TLL, NB_MULTIPLY.TTT, NB_MULTIPLY.TTL, NB_INPLACE_ADD.TTT,
+               NB_INPLACE_ADD.LTT, NB_SUBTRACT.TTT, NB_SUBTRACT.LLL,
+               NB_TRUE_DIVIDE.TLT; rest)
   effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)

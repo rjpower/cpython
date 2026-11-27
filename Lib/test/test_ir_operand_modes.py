@@ -17,7 +17,8 @@ ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD * 3
 
 
 def handlers(func):
-    return [word[0] for word in _testinternalcapi.get_ir(func.__code__, True)]
+    return [dis.declared_arm(word[0])
+            for word in _testinternalcapi.get_ir(func.__code__, True)]
 
 
 @unittest.skipUnless(support.Py_SHAPES and not support.Py_GIL_DISABLED,
@@ -203,6 +204,90 @@ class OperandModeTests(unittest.TestCase):
         for _ in range(ROUNDS):
             self.assertIs(read(owner), owner.value)
         self.assertIn(VARIANT, handlers(read))
+
+
+
+# Slot-class members (`over(locals: ...)`): the operands of a family's
+# implicit locals operand, from the operand tables: its Src and Dst homes in
+# the head word, in operand order, with each field's flag bit
+_HEAD_FIELDS = {16: 9, 28: 10, 40: 11, 52: 12}
+
+
+def locals_operands(family):
+    return [(name, _HEAD_FIELDS[offset])
+            for name, kind, role, _, _, offset in _testinternalcapi.arm_operands()[family]
+            if kind == "home" and role in ("dst", "src") and offset in _HEAD_FIELDS]
+
+
+def letters(family, word):
+    return "".join("L" if word >> bit & 1 else "T" for _, bit in locals_operands(family))
+
+
+@support.requires_specialization
+class LocalsMemberTests(unittest.TestCase):
+    """Every executing word runs the slot-class member that its flags select,
+    or its declared arm when no member has its flags, whether the
+    executing-copy builder chose the handler or adaptation installed it
+    (set_opcode())"""
+
+    def check_words(self, func):
+        names = [word[0].partition("+")[0]
+                 for word in _testinternalcapi.get_ir(func.__code__, True)]
+        raw = _testinternalcapi.get_ir_raw(func.__code__)[-2]
+        words = [int.from_bytes(raw[i:i + 8], "little") for i in range(0, len(raw), 8)]
+        members = {}
+        for member, declared in dis._declared_arms.items():
+            members.setdefault(declared, set()).add(member)
+        checked = 0
+        for name, word in zip(names, words):
+            declared = dis.declared_arm(name)
+            if declared not in members:
+                continue
+            family = declared.partition(".")[0]
+            mine = f"{declared}_{letters(family, word)}"
+            want = mine if mine in members[declared] else declared
+            self.assertEqual(name, want, f"word {word:#x} of {func.__name__}")
+            checked += 1
+        return checked
+
+    def test_members_follow_the_word_flags(self):
+        class Owner:
+            pass
+
+        def local_receiver(owner):
+            return owner.value
+
+        def temporary_receiver(owner):
+            return owner.inner.value
+
+        def stored_result(owner):
+            result = owner.value
+            return result
+
+        def chained(a, b, c):
+            return a + b + c
+
+        def into_local(a, b):
+            c = a + b
+            return c
+
+        def subscripts(items, i):
+            items[i] = items[i] + items[0]
+            return items[i]
+
+        owner = Owner()
+        owner.value = 1
+        owner.inner = Owner()
+        owner.inner.value = 2
+        functions = [(local_receiver, (owner,)), (temporary_receiver, (owner,)),
+                     (stored_result, (owner,)), (chained, (1, 2, 3)),
+                     (into_local, (1, 2)), (subscripts, ([1, 2, 3], 1))]
+        checked = 0
+        for func, args in functions:
+            for _ in range(ROUNDS):
+                func(*args)
+            checked += self.check_words(func)
+        self.assertTrue(checked)
 
 
 if __name__ == "__main__":

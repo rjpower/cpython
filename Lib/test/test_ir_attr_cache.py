@@ -25,7 +25,7 @@ def warm(read, owner):
 
 
 def handlers(read):
-    return [row[0] for row in _testinternalcapi.get_ir(read.__code__, True)]
+    return dis.executing_arms(read.__code__)
 
 
 @cpython_only

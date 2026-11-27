@@ -55,8 +55,8 @@ IR_MAX_FORWARD = 2047
 
 
 def handlers(func):
-    """The handlers of the executing copy of func's code"""
-    return [word[0] for word in get_ir(func.__code__, True)]
+    """The handlers of the executing copy of func's code, as declared"""
+    return [dis.declared_arm(word[0]) for word in get_ir(func.__code__, True)]
 
 
 def nlocalsplus(func):

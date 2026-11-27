@@ -29,7 +29,7 @@ import _testinternalcapi
 __all__ = ["dis", "disassemble", "get_instructions", "findlinestarts",
            "findlabels", "Bytecode", "Word", "Operand", "Edge", "IRCode",
            "origin_opcode", "encode_words", "specialized_arms",
-           "constant_slot_reads"]
+           "constant_slot_reads", "declared_arm", "executing_arms"]
 
 _have_code = (types.MethodType, types.FunctionType, types.CodeType,
               classmethod, staticmethod, type)
@@ -55,6 +55,26 @@ _IR_FORWARD = _opcode.IR_FORWARD
 _ROLE_ELEMENT = _opcode.IR_ROLE_ELEMENT
 _FEEDBACK_KINDS, _FEEDBACK_STATES = _testinternalcapi.get_feedback_names()
 _NO_LINENO = '  --'
+# The arm that each slot-class member arm (`over(locals: ...)`) is a member of
+_declared_arms = _testinternalcapi.arm_declared()
+
+
+def declared_arm(name):
+    """The declared arm of a handler name: the arm that a slot-class member
+    (`over(locals: ...)`, "GetAttr.Shape_TL") is a member of, else the name
+    itself.  The word flags that the name shows (+NAME) are kept.  Given a
+    handler id, the declared arm's id.  A word reports the member it runs;
+    a test that asks which arm a word runs compares this."""
+    if isinstance(name, int):
+        return _all_opmap[declared_arm(_all_opname[name])]
+    handler, plus, flags = name.partition("+")
+    return _declared_arms.get(handler, handler) + plus + flags
+
+
+def executing_arms(code):
+    """The declared arm (declared_arm()) of each word of the executing copy
+    of code, with its word flags"""
+    return [declared_arm(word[0]) for word in _testinternalcapi.get_ir(code, True)]
 
 
 def _handler_name(field):

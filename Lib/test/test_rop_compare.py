@@ -9,7 +9,7 @@ import operator
 import sys
 import unittest
 
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 
 capi = import_helper.import_module("_testinternalcapi")
 
@@ -25,8 +25,8 @@ def make(source):
 
 
 def words(f):
-    "The names of the register instructions of f's code, without operands"
-    return [w[0].split("+")[0] for w in capi.get_ir(f.__code__, True)
+    "The declared arms of the register instructions of f's code, without operands"
+    return [ir_dis.declared_arm(w[0].split("+")[0]) for w in capi.get_ir(f.__code__, True)
             if w[0] not in ("IR_OPERANDS", "OPERAND")]
 
 

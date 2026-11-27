@@ -8,7 +8,7 @@ import signal
 import sys
 import unittest
 
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 
 capi = import_helper.import_module("_testinternalcapi")
 if not hasattr(capi, "jit_template_run"):
@@ -254,7 +254,7 @@ def adapted_arm(family, value):
     generic = arms()[GENERIC[family]]
     for _ in range(4000):
         capi.jit_template_run(f, index, {slot_of(fields, field): value}, FORM, generic)
-        name = capi.get_ir(f.__code__, True)[index][0]
+        name = ir_dis.declared_arm(capi.get_ir(f.__code__, True)[index][0])
         if name != GENERIC[family]:
             return name
         generic = -1 if name != GENERIC[family] else generic

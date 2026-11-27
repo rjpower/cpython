@@ -332,7 +332,8 @@ def verify(program: Program, exit_points: dict[str, frozenset[tuple[int, str | N
         if name not in broken and name in program.graphs:
             out += check_graph(program, name, arm, None, exit_points)
     out += check_families(program, broken)
-    return tuple(sorted(out, key=rop_check.diagnostic_order))
+    return tuple(sorted(rop_check.without_member_repeats(out, program.locals_sets),
+                        key=rop_check.diagnostic_order))
 
 
 def load(paths: Iterable[Path]) -> Program:

@@ -230,6 +230,41 @@
     do { \
         Py_MUSTTAIL return ir_tail_table[opcode](tstate, frame, next_instr, ir_word); \
     } while (0)
+/* The closes before an arm's dispatching exit (Tools/cases_generator/rop_cgen.py,
+ * lower_tail_closes).  Each drops its count inline
+ * (_PyValue_DropNoDealloc()); a value left with no count is not
+ * deallocated, and the arm goes to its cold block COLD, which parks it, and
+ * each later close's value left with no count, in the activation and
+ * leaves through the VM routine close_dispatch (Python/ceval_evaluator.h),
+ * which gives them their last counts back and closes them in order, then
+ * dispatches.  No code runs between the decrement and the restore, and no
+ * arm calls on its way to its next word. */
+#define ROP_TAIL_CLOSE(V, COLD) \
+    do { \
+        if (Py_UNLIKELY(_PyValue_DropNoDealloc(V))) { \
+            goto COLD; \
+        } \
+    } while (0)
+#define ROP_TAIL_PARK_FIRST(V) \
+    do { \
+        _PyEvalActivation *ir_tail = IR_ACTIVATION(); \
+        ir_tail->tail_close[0] = (V); \
+        ir_tail->tail_closes = 1; \
+    } while (0)
+#define ROP_TAIL_PARK(V) \
+    do { \
+        PyValue ir_parked = (V); \
+        if (_PyValue_DropNoDealloc(ir_parked)) { \
+            _PyEvalActivation *ir_tail = IR_ACTIVATION(); \
+            ir_tail->tail_close[ir_tail->tail_closes++] = ir_parked; \
+        } \
+    } while (0)
+#define ROP_TAIL_DISPATCH() JUMP_TO_LABEL(close_dispatch)
+#define ROP_TAIL_BRANCH(T) \
+    do { \
+        next_instr = (T); \
+        JUMP_TO_LABEL(close_dispatch); \
+    } while (0)
 /* An error leaves the handler for the routine process_error, which unwinds
  * by the exception table and either dispatches at the handler found or ends
  * the activation. */

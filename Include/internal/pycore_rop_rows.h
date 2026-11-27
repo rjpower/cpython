@@ -151,15 +151,16 @@ _PyRop_UnpackTuple(PyValue *source_home, size_t n)
                          (Py_ssize_t)n};
 }
 
-/* The count that ref owns is dropped, as PyValue_XCLOSE() drops it, unless
- * it is the last one: then the result is true and ref still holds that
- * count, for the caller to close once no code that the close could run may
- * observe a half-done write.  The last count is kept rather than dropped
- * and the object deallocated later: a finalizer that an earlier close runs
- * may collect garbage, which must not find an object with no count.  The
- * free-threaded build closes at once. */
+/* The count that ref owns is dropped, as PyValue_XCLOSE() drops it, but an
+ * object that this leaves with no count is not deallocated: the result is
+ * true, and the caller gives the object its last count back
+ * (_PyValue_RestoreLast()) before any code runs, then closes it once no
+ * code that the close could run may observe a half-done write.  The count
+ * must be back before any code runs: a finalizer may collect garbage, which
+ * must not find an object with no count.  The fast path is the decrement
+ * and test of PyValue_XCLOSE().  The free-threaded build closes at once. */
 static inline Py_ALWAYS_INLINE bool
-_PyValue_DropUnlessLast(PyValue ref)
+_PyValue_DropNoDealloc(PyValue ref)
 {
 #ifdef Py_GIL_DISABLED
     PyValue_XCLOSE(ref);
@@ -176,7 +177,6 @@ _PyValue_DropUnlessLast(PyValue ref)
     }
 #endif
     if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
-        op->ob_refcnt = 1;
         return true;
     }
 #ifdef Py_REF_DEBUG
@@ -189,8 +189,18 @@ _PyValue_DropUnlessLast(PyValue ref)
 #endif
 }
 
-/* The rest of a publish whose element i displaced last, a value whose last
- * count _PyValue_DropUnlessLast() kept (in ceval.c) */
+/* The last count of an object that _PyValue_DropNoDealloc() left with none,
+ * which ref owns again */
+static inline void
+_PyValue_RestoreLast(PyValue ref)
+{
+    PyObject *op = BITS_TO_PTR(ref);
+    assert(op->ob_refcnt == 0);
+    op->ob_refcnt = 1;
+}
+
+/* The rest of a publish whose element i displaced last, a value that
+ * _PyValue_DropNoDealloc() left with no count (in ceval.c) */
 PyAPI_FUNC(void) _PyRop_PublishItemsRest(const _PyRopSpan *d, _PyRopItems *v,
                                          int i, PyValue last);
 
@@ -218,7 +228,7 @@ _PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
         PyValue *home = &homes[_PyIR_SpanElementAt(d->head, d->nhead, d->fixed, j)];
         PyValue old = *home;
         _PyFrame_WriteHome(d->frame, home, PyValue_DUP(PyValue_Borrow(v->items[i])));
-        if (_PyValue_DropUnlessLast(old)) {
+        if (_PyValue_DropNoDealloc(old)) {
             _PyRop_PublishItemsRest(d, v, i, old);
             return;
         }
@@ -242,7 +252,7 @@ _PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
         left--;
         PyValue old = *home;
         _PyFrame_WriteHome(d->frame, home, PyValue_DUP(PyValue_Borrow(v->items[i])));
-        if (_PyValue_DropUnlessLast(old)) {
+        if (_PyValue_DropNoDealloc(old)) {
             _PyRop_PublishItemsRest(d, v, i, old);
             return;
         }

@@ -67,6 +67,10 @@ typedef struct {
  * keeps state of its own here.  gdb walks the chain (Tools/gdb/libpython.py):
  * the innermost Python frame of an activation is tstate->current_frame for
  * the newest, and entry.frame.previous of the next newer one otherwise. */
+/* The values that one arm's tail closes may park (TAIL_CLOSES in
+ * Tools/cases_generator/rop_cgen.py) */
+#define _PyEval_TAIL_CLOSES 8
+
 typedef struct _PyEvalActivation {
     struct _PyEvalActivation *previous;   /* restored when this one exits */
     _PyEntryFrame entry;                   /* its entry frame */
@@ -105,6 +109,11 @@ typedef struct _PyEvalActivation {
      * named here.  The field is in every build, so that the layout does not
      * depend on NDEBUG, which the test modules undefine. */
     struct _PyJitUnit *jit_unit;
+    /* The last counts that an arm's tail closes parked (ROP_TAIL_PARK,
+     * Python/ceval_macros.h), in close order, for the routine
+     * close_dispatch: written on that exit only and read at once */
+    PyValue tail_close[_PyEval_TAIL_CLOSES];
+    int tail_closes;
 #ifdef Py_STATS
     /* The handler that ran last, for pair counts (INSTRUCTION_STATS()) */
     int last_handler;

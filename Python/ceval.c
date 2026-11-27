@@ -3004,7 +3004,8 @@ done:
 }
 
 /* The rest of the publish `d[] = v` (_PyRop_PublishItems()) from element
- * i, whose home displaced last, a value that holds its last count: up to a
+ * i, whose home displaced last, a value that _PyValue_DropNoDealloc() left
+ * with no count, which gets it back before any code runs: up to a
  * park of homes at a time, every home is written before any value it
  * displaced is closed, so no code runs until the park is published (a
  * longer span's items are a held tuple's). */
@@ -3012,6 +3013,7 @@ Py_NO_INLINE void
 _PyRop_PublishItemsRest(const _PyRopSpan *d, _PyRopItems *v, int i,
                         PyValue last)
 {
+    _PyValue_RestoreLast(last);
     PyValue park[_PY_ROP_PARK];
     int parked = 0;
     park[parked++] = last;

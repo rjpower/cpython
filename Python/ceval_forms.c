@@ -64,6 +64,16 @@
 #undef IR_ERROR_SWITCH
 #pragma push_macro("IR_COMPLETIONS")
 #undef IR_COMPLETIONS
+#pragma push_macro("ROP_TAIL_CLOSE")
+#undef ROP_TAIL_CLOSE
+#pragma push_macro("ROP_TAIL_PARK_FIRST")
+#undef ROP_TAIL_PARK_FIRST
+#pragma push_macro("ROP_TAIL_PARK")
+#undef ROP_TAIL_PARK
+#pragma push_macro("ROP_TAIL_DISPATCH")
+#undef ROP_TAIL_DISPATCH
+#pragma push_macro("ROP_TAIL_BRANCH")
+#undef ROP_TAIL_BRANCH
 /* The forms are compiled once: a word runs the form of the table that its
  * frame's code asks for, the observer of its family in observed code
  * (ir_observing_forms).  The switch word only takes the frame's entry off
@@ -163,6 +173,19 @@ ir_frame_observed(_PyInterpreterFrame *frame)
             _PyFrame_PublishReturnSlot(frame, (V)); \
         } \
     } while (0)
+/* The forms and the stubs close a tail close where it stands; the parking
+ * blocks are never entered */
+#define ROP_TAIL_CLOSE(V, COLD) \
+    do { \
+        PyValue_XCLOSE(V); \
+        if (0) { \
+            goto COLD; \
+        } \
+    } while (0)
+#define ROP_TAIL_PARK_FIRST(V) ((void)(V))
+#define ROP_TAIL_PARK(V) ((void)(V))
+#define ROP_TAIL_DISPATCH() DISPATCH()
+#define ROP_TAIL_BRANCH(T) IR_BRANCH(T)
 
 /* The event of an observed branch, jump or loop step, after the effect
  * (rule 12).  It is out of the evaluator, where the observers only call
@@ -366,3 +389,8 @@ _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int thro
 #pragma pop_macro("IR_PIN_DEPARTING")
 #pragma pop_macro("IR_ERROR_SWITCH")
 #pragma pop_macro("IR_COMPLETIONS")
+#pragma pop_macro("ROP_TAIL_CLOSE")
+#pragma pop_macro("ROP_TAIL_PARK_FIRST")
+#pragma pop_macro("ROP_TAIL_PARK")
+#pragma pop_macro("ROP_TAIL_DISPATCH")
+#pragma pop_macro("ROP_TAIL_BRANCH")

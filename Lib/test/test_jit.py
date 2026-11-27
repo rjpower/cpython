@@ -886,123 +886,88 @@ class TestEntries(JitTestCase):
 
 
 @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
-class TestPins(unittest.TestCase):
-    """The execution pin (g3/design.md section 2): a departure from a frame
-    keeps the frame's code alive in the evaluation loop's activation until
-    the next pin, jit_run()'s release after the native call, or the loop's
-    exit, whichever comes first; nothing in one activation releases
-    another's pin.  _testinternalcapi.jit_pin_departing() pins as compiled
-    code does."""
+class TestReclamation(unittest.TestCase):
+    """A dead code's units outlive it while a thread may run them: a
+    departing word opens the thread's departure window, which its next
+    frame switch closes, and the units wait on the interpreter's dead list
+    until no thread is in a window (Python/jit.c, _PyJit_Reclaim()).  Freed
+    unit memory is inaccessible, so a premature free crashes."""
 
     # The interpreter, the function forms and both JIT modes
     MODES = (("jit=off",), ("ir_forms",)) + (
         (("jit=on",), ("jit=always",)) if AVAILABLE else ())
 
-    PRELUDE = """
-        import _testinternalcapi as t, operator, weakref
-        log = []
-        def g(x):
-            return x * 2
-        def callback(ref):
-            # Python runs inside the release: compiled code is called
-            log.append(("callback", [g(i) for i in range(3)]))
-        def fresh_code():
-            # A code that only what the caller keeps refers to
-            ns = {}
-            exec("def f(): pass", ns)
-            return ns.pop("f").__code__
-    """
-
-    def check_modes(self, source, expected=None):
-        """The script prints the same in every mode, or what expected
-        (a function of the mode's options) says."""
-        source = textwrap.dedent(self.PRELUDE) + textwrap.dedent(source)
+    def check_modes(self, source):
         for options in self.MODES:
             with self.subTest(options=options):
-                want = expected(options) if expected else "ok\n"
-                self.assertEqual(run(source, *options), want)
+                self.assertEqual(run(source, *options), "ok\n")
 
-    def test_the_next_pin_releases_the_old_one(self):
-        # One call of the hook pins each item in turn, so that no release by
-        # jit_run() comes between the pins under the JIT
+    def test_a_code_dies_in_its_own_return(self):
+        # f replaces its function's code, so its frame holds the last
+        # reference, which the return drops before the unit switches
         self.check_modes("""
-            def run():
-                code = fresh_code()
-                ref = weakref.ref(code, callback)
-                items = [code, None, run.__code__]
-                del code
-                # The code; the pinned code again by the pin's own and last
-                # reference (stored before the old pin is released, so it
-                # lives); another code, whose pin releases it: the callback
-                # runs inside that pin, which reports ESCAPED
-                log.append(t.jit_pin_departing(items))
-                log.append(ref() is None)
-            for i in range(40):
-                run()
-                assert log == [("callback", [0, 2, 4]), [0, 0, 2], True], (i, log)
-                log.clear()
-            print("ok")
-        """)
-
-    def test_a_nested_loop_releases_only_its_own_pin(self):
-        self.check_modes("""
-            def inner():
-                # From C: an evaluation loop of its own, whose pin this is
-                t.jit_pin_departing()
-                log.append("inner")
-            def run():
-                code = fresh_code()
-                ref = weakref.ref(code, callback)
-                items = [code, inner, run.__code__]
-                del code
-                # The outer pin outlives the nested loop's exit: the last
-                # pin releases it
-                log.append(t.jit_pin_departing(items))
-            for i in range(40):
-                run()
-                assert log == ["inner", ("callback", [0, 2, 4]), [0, None, 2]], (i, log)
-                log.clear()
-            print("ok")
-        """)
-
-    def test_the_departed_code_lives_until_a_release(self):
-        # f drops its function's reference to its code and pins it: once
-        # its frame is gone the pin holds the code.  From C, f runs in a
-        # loop of its own, whose exit (or jit_run()) releases the pin before
-        # the call returns.  Called directly, the code lives on until the
-        # next pin, in every mode: compiled code switches from the caller
-        # into f and back within one native activation.
-        def expected(options):
-            return "returning dead\nreturning alive\ndead\n"
-        self.check_modes("""
-            def make():
-                ns = {"t": t, "log": log}
-                exec("def f(self):\\n"
-                     "    self.__code__ = (lambda self: None).__code__\\n"
-                     "    t.jit_pin_departing()\\n"
-                     "    log.append('returning')\\n", ns)
+            import _testinternalcapi as t, operator, weakref
+            log = []
+            for i in range(200):
+                ns = {}
+                exec("def f(self, n):\\n"
+                     "    self.__code__ = (lambda self, n: None).__code__\\n"
+                     "    return n + 1\\n", ns)
                 f = ns.pop("f")
-                return f, weakref.ref(f.__code__, lambda r: log.append("dead"))
-            f, ref = make()
-            operator.call(f, f)
-            print(*log)
-            log.clear()
-            f, ref = make()
-            f(f)
-            print(*log, "alive" if ref() is not None else "")
-            log.clear()
-            t.jit_pin_departing()
-            print(*log)
-        """, expected)
+                ref = weakref.ref(f.__code__, lambda r: log.append(i))
+                if i % 2:
+                    t.jit_compile(f.__code__)
+                call = operator.call if i % 3 else (lambda g, *a: g(*a))
+                assert call(f, f, i) == i + 1
+                assert ref() is None and log[-1] == i, (i, log[-1:])
+                del f, ns
+            print("ok")
+        """)
 
-    def test_pinned_codes_come_and_go(self):
-        # Assert builds check at every free that no activation is running a
-        # unit of the code
+    @unittest.skipUnless(AVAILABLE, "the JIT is not available")
+    def test_a_window_on_another_thread_keeps_the_dead_units(self):
+        # The worker's departing frame closes a local whose finalizer
+        # blocks with the GIL released: its window stays open, so the units
+        # of the codes that die meanwhile wait, through the main thread's
+        # compiles; they go once the worker has left its unit
+        out = run("""
+            import threading, _testinternalcapi as t
+            entered = threading.Event()
+            release = threading.Event()
+            class Blocker:
+                def __del__(self):
+                    entered.set()
+                    release.wait()
+            def depart():
+                b = Blocker()
+                return 1
+            def worker():
+                depart()
+            def die():
+                ns = {}
+                exec("def f(n):\\n    return n + 1\\n", ns)
+                t.jit_compile(ns["f"].__code__)
+                assert ns["f"](1) == 2
+            # Its return runs in its unit, which marks the departure
+            t.jit_compile(depart.__code__)
+            th = threading.Thread(target=worker)
+            th.start()
+            entered.wait()
+            for i in range(5):
+                die()
+            print(t.jit_stats()["dead"] >= 5)
+            release.set()
+            th.join()
+            print(t.jit_stats()["dead"])
+        """, "jit=always")
+        self.assertEqual(out.split(), ["True", "0"])
+
+    def test_codes_come_and_go(self):
         self.check_modes("""
+            import _testinternalcapi as t
             for i in range(300):
-                ns = {"t": t}
+                ns = {}
                 exec(f"def f(n):\\n"
-                     f"    t.jit_pin_departing()\\n"
                      f"    return n + {i} if n < 3 else f(n - 1)\\n", ns)
                 f = ns["f"]
                 if i % 2:
@@ -1389,11 +1354,6 @@ def report(name, before):
     turns, switches = stats()
     switched = switches - before[1] if switches >= 0 else -1
     print(f"jit {name} turns={turns - before[0]} switches={switched}")
-def settle():
-    # The activation's pin keeps the code that compiled code departed last
-    # until the next departure (g3/design.md section 2), which may be later
-    # than the interpreter's release: pinning this frame's code releases it
-    t.jit_pin_departing()
 """
 
 
@@ -1569,7 +1529,6 @@ class TestFrameTransfers(JitTestCase):
                 keep = weakref.ref(ns["f"].__code__, died("one"))
                 ns["f"]()
                 ns.clear()
-            settle()
             print(log[-1], len(log))
             log.clear()
 
@@ -1586,7 +1545,6 @@ class TestFrameTransfers(JitTestCase):
                 f(h)
                 del f, h
             gc.collect()
-            settle()
             print(sorted(set(name for name, _ in log)))
             log.clear()
 
@@ -1604,7 +1562,6 @@ class TestFrameTransfers(JitTestCase):
                 del r
                 print(ns["r"](0), end=" ") if i == 0 else ns["r"](0)
             print()
-            settle()
             print(log[-1], len(log))
             log.clear()
 
@@ -1622,7 +1579,6 @@ class TestFrameTransfers(JitTestCase):
                      {"Dropper": Dropper, "ns": ns}, ns)
                 keep = weakref.ref(ns["f"].__code__, died("four"))
                 ns["f"]()
-            settle()
             print(log[-2:], len(log))
             log.clear()
 
@@ -1637,7 +1593,7 @@ class TestFrameTransfers(JitTestCase):
 
             # 6. a capped unit's RETURN form loses the last reference to
             #    its code: the code is at the recompile cap, so its unit
-            #    runs the forms, which pin as the stubs do
+            #    runs the forms, which mark the departure
             for i in range(20):
                 ns = {}
                 exec("def f(drop):\\n"
@@ -1653,7 +1609,6 @@ class TestFrameTransfers(JitTestCase):
                     ns["f"](False)
                 keep = weakref.ref(ns["f"].__code__, died("six"))
                 ns["f"](True)
-            settle()
             print(log[-1], len(log))
             log.clear()
 
@@ -1722,13 +1677,12 @@ class TestFrameTransfers(JitTestCase):
             print([list(g) for g in gens])
         """)
 
-    def test_generator_boundary_pins(self):
+    def test_generator_boundary_departures(self):
         # The guarded generator-boundary variants, warmed until their
-        # words specialise: (a) a miss at the guard while the old pin's
-        # code has no other reference, which the generic's pin drops (the
-        # miss takes no pin); (b) a completion whose departing frame's code
-        # loses its last reference (GEN_COMPLETE_RETURN for the RETURN
-        # consumers)
+        # words specialise: (a) a miss at the guard just after a code died
+        # in its own return, whose units wait on the dead list; (b) a
+        # completion whose departing frame's code loses its last reference
+        # (GEN_COMPLETE_RETURN for the RETURN consumers)
         outs = self.check_transfers("""
             import gc
             log = []
@@ -1736,9 +1690,8 @@ class TestFrameTransfers(JitTestCase):
                 return x * 2
             def died(name):
                 return lambda ref: log.append((name, [g(i) for i in range(3)]))
-            def dying_pin(name):
-                # A return that leaves the pin on a code with no other
-                # reference
+            def dying_code(name):
+                # A return that drops the last reference to its code
                 ns = {}
                 exec("def d():\\n    ns.clear()\\n    return 0\\n", {"ns": ns}, ns)
                 keep = weakref.ref(ns["d"].__code__, died(name))
@@ -1789,7 +1742,7 @@ class TestFrameTransfers(JitTestCase):
                 words = {r[0] for r in t.get_ir(ns["f"].__code__, True)}
                 print("jit words", name, name in words)
                 # (a)
-                keep_a = dying_pin(name + " a")
+                keep_a = dying_code(name + " a")
                 print(name, "a", run(ns["f"], miss(), False))
                 # (b)
                 keep_b = weakref.ref(ns["f"].__code__, died(name + " b"))

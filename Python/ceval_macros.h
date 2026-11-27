@@ -1066,10 +1066,10 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
         IR_BRANCH(rop_target); \
     } while (0)
 
-/* The execution pin (g3/design.md section 2) that a departing arm takes
- * after its last guard.  The evaluator runs in no unit: nothing to keep
- * alive.  The function forms and the stubs bind it to _PyJit_PinDeparting(). */
-#define IR_PIN_DEPARTING() ((void)0)
+/* A departing arm opens the thread's departure window after its last guard
+ * (Python/jit.c, _PyJit_Reclaim()).  The evaluator runs in no unit: nothing
+ * to mark.  The function forms bind it to the thread's flag. */
+#define IR_MARK_DEPARTURE() ((void)0)
 
 /* The feedback entry of another instruction of the frame. */
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \

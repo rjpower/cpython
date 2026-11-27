@@ -92,20 +92,6 @@ _PyJit_InitInterpreter(PyInterpreterState *interp)
     return _PyStatus_OK();
 }
 
-int
-_PyJit_PinDeparting(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
-    PyObject *old = activation->jit_pin;
-    activation->jit_pin = Py_NewRef(frame->f_executable);
-    if (old == NULL) {
-        return 0;
-    }
-    int status = Py_REFCNT(old) == 1 ? _PyIR_ESCAPED : 0;
-    Py_DECREF(old);
-    return status;
-}
-
 #ifndef _PY_JIT_SUPPORTED
 
 int
@@ -439,6 +425,9 @@ emit_other_frame(_PyJitCompiler *c, _PyJitLabel other)
     _PyJitAsm_UnaryM(a, _PyJitUnary_INC,
                      AT(RCX, offsetof(PyInterpreterState, ceval.jit_switches)));
 #endif
+    /* The unit that departed, if a departing word ran, is left: the
+     * thread's departure window closes (_PyJit_Reclaim()) */
+    _PyJitAsm_MovMI8(a, AT(R12, offsetof(_PyThreadStateImpl, jit_departing)), 0);
     _PyJitAsm_JmpM(a, _PyJitMem_Indexed(R(RSI), R(RDX), 0, 0));
 
     /* No entries: none to run if the code has no unit; otherwise the
@@ -1079,6 +1068,12 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     if (_PyCode_IsObserved(code)) {
         return NULL;
     }
+    /* Units are made only here, so draining here bounds the dead list by
+     * the compile rate */
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (interp->ceval.jit_dead != NULL) {
+        _PyJit_Reclaim(interp);
+    }
     const _PyIRWord *words = exec->words;
     uint32_t nwords = exec->nwords;
     _PyJitUnit *unit = PyMem_RawCalloc(1, sizeof(_PyJitUnit));
@@ -1112,7 +1107,6 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     _PyJitAsm_Fini(&a);
     PyMem_RawFree(labels);
     exec->jit_compiles++;
-    PyInterpreterState *interp = _PyInterpreterState_GET();
     interp->ceval.jit_compiled_codes += exec->jit_compiles == 1;
     interp->ceval.jit_compiles++;
     interp->ceval.jit_compiled_words += nwords;
@@ -1201,6 +1195,53 @@ _PyJit_Retire(_PyCodeExec *exec)
     }
 }
 
+static void
+free_chain(_PyJitUnit *unit)
+{
+    while (unit != NULL) {
+        _PyJitUnit *older = unit->older;
+        free_unit(unit);
+        unit = older;
+    }
+}
+
+/* Whether a thread of interp is in a departure window: its flag, or the
+ * flag that one of its activations saved, is set.  The caller holds the
+ * GIL, so every other thread is stopped where its flag is published: a
+ * thread sets it before it can release the GIL and clears it only while
+ * holding the GIL. */
+static bool
+in_departure_window(PyInterpreterState *interp)
+{
+    bool found = false;
+    HEAD_LOCK(interp->runtime);
+    _Py_FOR_EACH_TSTATE_UNLOCKED(interp, ts) {
+        _PyThreadStateImpl *impl = (_PyThreadStateImpl *)ts;
+        found = impl->jit_departing;
+        for (_PyEvalActivation *a = impl->eval_activation;
+             a != NULL && !found; a = a->previous)
+        {
+            found = a->jit_departing;
+        }
+        if (found) {
+            break;
+        }
+    }
+    HEAD_UNLOCK(interp->runtime);
+    return found;
+}
+
+void
+_PyJit_Reclaim(PyInterpreterState *interp)
+{
+    _PyJitUnit *dead = interp->ceval.jit_dead;
+    if (dead == NULL || in_departure_window(interp)) {
+        return;
+    }
+    interp->ceval.jit_dead = NULL;
+    free_chain(dead);
+}
+
 void
 _PyJit_FreeUnits(_PyCodeExec *exec)
 {
@@ -1208,11 +1249,31 @@ _PyJit_FreeUnits(_PyCodeExec *exec)
     /* The words go with the exec: no head to give back */
     exec->jit_entries = NULL;
     exec->jit_unit = NULL;
-    while (unit != NULL) {
-        _PyJitUnit *older = unit->older;
-        free_unit(unit);
-        unit = older;
+    if (unit == NULL) {
+        return;
     }
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (tstate == NULL) {
+        /* No thread runs Python */
+        free_chain(unit);
+        return;
+    }
+    /* A thread in a departure window may still run one of them: the
+     * whole chain waits on the dead list (_PyJit_Reclaim()) */
+    _PyJitUnit *last = unit;
+    while (last->older != NULL) {
+        last = last->older;
+    }
+    PyInterpreterState *interp = tstate->interp;
+    last->older = interp->ceval.jit_dead;
+    interp->ceval.jit_dead = unit;
+}
+
+void
+_PyJit_FiniInterpreter(PyInterpreterState *interp)
+{
+    free_chain(interp->ceval.jit_dead);
+    interp->ceval.jit_dead = NULL;
 }
 
 #endif  /* _PY_JIT_SUPPORTED */

@@ -2837,8 +2837,8 @@ _PyEval_JitRun(PyThreadState *tstate, _PyJitUnit *unit,
         tstate->interp->ceval.jit_turns++;
         _PyIRTransfer t = ((jit_entry)unit->code.start)(
             tstate, frame, unit->entries[next - frame->ir_words]);
-        /* No unit runs: the code that a unit departed from last may go */
-        Py_CLEAR(IR_ACTIVATION()->jit_pin);
+        /* No unit runs: the window of the unit's last departure is closed */
+        ((_PyThreadStateImpl *)tstate)->jit_departing = 0;
         if (t.next == NULL || t.next == &_PyEval_SwitchWord) {
             return t;
         }
@@ -2992,7 +2992,8 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     activation.source_error_frame = NULL;
     activation.source_error_handler = (_PyExceptionHandler){0};
     activation.observer_context = NULL;
-    activation.jit_pin = NULL;
+    activation.jit_departing = tstate_impl->jit_departing;
+    tstate_impl->jit_departing = 0;
 #ifdef Py_STATS
     /* Handler 0 is no pair predecessor (INSTRUCTION_STATS()) */
     activation.last_handler = 0;
@@ -3070,11 +3071,13 @@ early_exit:
     result = PyValue_NULL;
 
 leave:
-    /* The pin of the last departure that compiled code or a function form
-     * made in this activation, now that nothing of it runs (the backstop of
-     * -X ir_forms, which has no jit_run()).  A callback that its release
-     * runs runs in a loop of its own. */
-    Py_CLEAR(activation.jit_pin);
+    /* Reopen the outer activation's window, if it was in one.  Leaving the
+     * thread's outermost activation is a point where the units of dead
+     * codes may go (Python/jit.c, _PyJit_Reclaim()). */
+    tstate_impl->jit_departing = activation.jit_departing;
+    if (activation.previous == NULL && tstate->interp->ceval.jit_dead != NULL) {
+        _PyJit_Reclaim(tstate->interp);
+    }
     assert(borrow->eval_floor == floor);
     _PyBorrowScope_Exit(tstate, floor);
     borrow->eval_floor = outer_floor;

@@ -14,6 +14,7 @@
 #include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
 #include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
+#include "pycore_jit.h"           // _PyJit_FiniInterpreter()
 #include "pycore_long_value.h"    // _PyValue_AsLongLong()
 #include "pycore_pystats.h"       // _PyStats_InterpFini()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()
@@ -869,6 +870,8 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
         interp->context_watchers[i] = NULL;
     }
     interp->active_context_watchers = 0;
+    /* The codes are gone, and no thread runs in a unit */
+    _PyJit_FiniInterpreter(interp);
     // XXX Once we have one allocator per interpreter (i.e.
     // per-interpreter GC) we must ensure that all of the interpreter's
     // objects have been cleaned up at the point.

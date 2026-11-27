@@ -1378,8 +1378,6 @@ MEMBER_WHY = ("slot-class member: no scenario source's word has its combination;
 NOT_RUN |= {
     "Add.Int_TTL": MEMBER_WHY,
     "AddElement.Append_TT": MEMBER_WHY,
-    "AttrWrite.Shape_TT": MEMBER_WHY,
-    "AttrWrite.Slot_TT": MEMBER_WHY,
     "Binary.Float_NB_INPLACE_ADD_LTT": MEMBER_WHY,
     "Binary.Float_NB_MULTIPLY_TTL": MEMBER_WHY,
     "Binary.Float_NB_TRUE_DIVIDE_TLT": MEMBER_WHY,
@@ -1404,6 +1402,10 @@ NOT_RUN |= {
     "TestBranch.Int_TEST_NE_TT": MEMBER_WHY,
     "TestBranch.Set_TT": MEMBER_WHY,
 }
+# A member of an arm that does not run does not run either: it runs only on
+# its declared arm's words
+NOT_RUN |= {name: f"member of {declared}: {NOT_RUN[declared]}" for name in PROGRAM.arms
+            if (declared := declared_of(name)) != name and declared in NOT_RUN}
 
 
 def evaluated_arms():

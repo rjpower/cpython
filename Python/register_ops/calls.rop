@@ -1584,7 +1584,7 @@ arm Call.BoundGeneral split
 // The native specializations: each guards the callable (and the call's shape), calls
 // the callee on the operands in their homes, and publishes the result
 
-arm Call.Type1 split
+arm Call.Type1 split over(locals: LT; rest)
   effects(writes, reads, releases on (dst), allocates)
   feedback()
   exits(next, miss)
@@ -1725,7 +1725,7 @@ arm Call.BuiltinO split
     exit redirect(ps);
 }
 
-arm Call.BuiltinFast split
+arm Call.BuiltinFast split over(locals: LT, TT; rest)
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
   exits(next, raise, miss, redirect)
@@ -1809,7 +1809,7 @@ arm Call.Len split
     exit raise(Call.Failed, saved);
 }
 
-arm Call.Isinstance split
+arm Call.Isinstance split over(locals: TT; rest)
   effects(writes, reads, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise, miss)
@@ -1882,7 +1882,7 @@ arm Call.DescriptorO split
     exit redirect(ps);
 }
 
-arm Call.DescriptorFast split
+arm Call.DescriptorFast split over(locals: TT, LT; rest)
   effects(writes, reads, runs_python, raises, allocates, polls, releases on (dst))
   feedback()
   exits(next, raise, miss, redirect)

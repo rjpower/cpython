@@ -56,7 +56,7 @@ extern primitive borrow_value_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
     lowering: "none yet: an arm that calls it keeps the call of its form (rop_leaf has no lowering)",
     test: "test_rop_getattr row tests");
 
-arm GetAttr.Instance inline entry(instance)
+arm GetAttr.Instance inline over(locals: TL; rest) entry(instance)
   effects(reads, writes, releases on (dst))
   feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
   exits(next, miss)
@@ -515,7 +515,7 @@ extern helper poly_shape(fr:Frame, f:Fb<Attr>, o:Obj)
     review: "pycore_attr_recipe.h: the row of the owner's version whose shape is the owner's.",
     contract: "Reads the site's poly table; no callee. The hit carries the version and the shape that it matched.");
 
-arm GetAttr.Shape inline entry(shape)
+arm GetAttr.Shape inline over(locals: TL; rest) entry(shape)
   effects(reads, writes, releases on (dst))
   feedback(read(entry.kind), read(entry.type_version), read(entry.shape), read(entry.offset))
   exits(next, miss)
@@ -539,7 +539,7 @@ arm GetAttr.Shape inline entry(shape)
 }
 
 // Two to four compatible recipes of one site: the row of the owner's type
-arm GetAttr.PolyShape inline
+arm GetAttr.PolyShape inline over(locals: TL; rest)
   effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
@@ -711,7 +711,7 @@ arm GetAttr.Hint inline entry(hint)
     exit miss();
 }
 
-arm GetAttr.ValueSlot inline entry(value_slot)
+arm GetAttr.ValueSlot inline over(locals: TL; rest) entry(value_slot)
   effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
@@ -759,7 +759,7 @@ arm GetAttr.PointerSlot inline entry(pointer_slot)
     exit miss();
 }
 
-arm GetAttr.Class inline entry(class_)
+arm GetAttr.Class inline over(locals: TT; rest) entry(class_)
   effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
@@ -1005,7 +1005,7 @@ macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
     exit run();
 }
 
-arm GetMethod.MethodValues inline entry(method_values)
+arm GetMethod.MethodValues inline over(locals: TTL; rest) entry(method_values)
   effects(reads, writes, releases on (callable, self_dst))
   feedback(read(entry.type_version), read(entry.class_value))
   exits(next, miss)
@@ -1063,7 +1063,7 @@ arm GetMethod.Generic shared
 
 // Two to four method rows of one site: the row of the receiver's type, with
 // its own shadowing guard
-arm GetMethod.PolyMethod inline
+arm GetMethod.PolyMethod inline over(locals: TTL; rest)
   effects(reads, writes, releases on (callable, self_dst))
   feedback(read(entry.kind), read(entry.rows))
   exits(next, miss)
@@ -1087,7 +1087,7 @@ arm GetMethod.PolyMethod inline
     exit miss();
 }
 
-arm GetMethod.NoDict inline entry(no_dict)
+arm GetMethod.NoDict inline over(locals: TTL; rest) entry(no_dict)
   effects(reads, writes, releases on (callable, self_dst))
   feedback(read(entry))
   exits(next, miss)

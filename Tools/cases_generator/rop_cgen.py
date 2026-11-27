@@ -18,7 +18,7 @@ from dataclasses import dataclass, field, replace
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          PcRole, Slot, UNCOUNTED_FACTS, Wrap)
-from rop_check import GraphInfo, Program, enum_c_name, enum_of_member, expand_debts, expand_group, group_part_decls, group_parts, is_args
+from rop_check import GraphInfo, Program, enum_c_name, enum_of_member, expand_debts, fixed_locals, expand_group, group_part_decls, group_parts, is_args
 from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
@@ -565,6 +565,9 @@ class ArmLowerer:
         # tail closes (lower_tail_closes); any other line emits them first
         self.pending_closes: list[str] = []
         self.tails = 0
+        # A slot-class member arm (`over(locals: ...)`): each locals
+        # operand's class, a constant, True for a local
+        self.fixed_local: dict[str, bool] = fixed_locals(program, arm)
 
     # Names
 
@@ -647,10 +650,26 @@ class ArmLowerer:
 
     def local_flag(self, operand: str) -> str | None:
         """The word's flag that marks the home a local's; None for a
-        projection, which is always a temporary"""
-        if operand in self.parts:
+        projection, which is always a temporary, and for an operand whose
+        class the member arm fixes (is_local)"""
+        if operand in self.parts or operand in self.fixed_local:
             return None
         return f"IR_F_LOCAL_{self.slot(operand).name}"
+
+    def is_local(self, operand: str) -> bool | None:
+        """Whether the operand's home is a local: a constant for a
+        projection (never) and for an operand the member arm fixes, None
+        where the word's flag says"""
+        if operand in self.parts:
+            return False
+        return self.fixed_local.get(operand)
+
+    def flag_test(self, operand: str) -> str:
+        """The C condition that the operand's home is a local"""
+        fixed = self.is_local(operand)
+        if fixed is not None:
+            return "1" if fixed else "0"
+        return f"(ir_word & {self.local_flag(operand)})"
 
     # Expressions
 
@@ -692,8 +711,8 @@ class ArmLowerer:
         return f"&{srcs}"
 
     def local_flags(self, names: list[str]) -> str:
-        return ", ".join("0" if self.local_flag(n) is None
-                         else f"!!(ir_word & {self.local_flag(n)})" for n in names)
+        return ", ".join(t if (t := self.flag_test(n)) in ("0", "1") else f"!!{t}"
+                         for n in names)
 
     def anchor_scalars(self, name: str, span: SpanLit) -> None:
         """anchor_for_call over a literal span, as a view and an owner per
@@ -706,11 +725,12 @@ class ArmLowerer:
             self.declare(view, "PyValueBorrow")
             self.declare(owned, "PyValue")
             self.emit(f"{view} = PyValue_Borrow(*{self.home(item.name)});")
-            flag = self.local_flag(item.name)
-            if flag is None:
-                self.emit(f"{owned} = PyValue_NULL;")
+            fixed = self.is_local(item.name)
+            if fixed is not None:
+                self.emit(f"{owned} = {f'PyValue_DUP({view})' if fixed else 'PyValue_NULL'};")
             else:
-                self.emit(f"{owned} = (ir_word & {flag}) ? PyValue_DUP({view}) : PyValue_NULL;")
+                self.emit(f"{owned} = {self.flag_test(item.name)} ? PyValue_DUP({view}) "
+                          ": PyValue_NULL;")
 
     def anchor_aggregate(self, name: str) -> str:
         """A scalar anchor as the aggregate a row that consumes it takes"""
@@ -895,10 +915,10 @@ class ArmLowerer:
             assert isinstance(arg, Name)
             home = self.home(arg.name)
             self.acquired.add(arg.name)
-            flag = self.local_flag(arg.name)
-            if flag is None:
-                return f"_PyFrame_TakeHome(frame, {home})"
-            return (f"((ir_word & {flag}) ? PyValue_DUP(*{home}) "
+            fixed = self.is_local(arg.name)
+            if fixed is not None:
+                return f"PyValue_DUP(*{home})" if fixed else f"_PyFrame_TakeHome(frame, {home})"
+            return (f"({self.flag_test(arg.name)} ? PyValue_DUP(*{home}) "
                     f": _PyFrame_TakeHome(frame, {home}))")
         if e.callee == "unwrap":
             (arg,) = e.args
@@ -954,6 +974,13 @@ class ArmLowerer:
             st.name: len(st.value.args[0].items)
             for b in self.blocks.values() for st in b.stmts if is_span_anchor(st)}
         order = [label for label in self.layout() if label not in self.transfer_blocks]
+        if self.fixed_local:
+            # The member's word: an install that bypassed the generated row
+            # (_PyIR_LocalsArm) fails here in a build with assert() on
+            flags = [f"IR_F_LOCAL_{self.slot(n).name}" for n in self.fixed_local]
+            bits = [f"IR_F_LOCAL_{self.slot(n).name}" for n, l in self.fixed_local.items() if l]
+            self.emit(f"assert((ir_word & ({' | '.join(flags)})) == "
+                      f"({' | '.join(bits) or '0'}));")
         for i, label in enumerate(order):
             self.next_label = order[i + 1] if i + 1 < len(order) else None
             self.lower_block(self.blocks[label], label)
@@ -1127,6 +1154,10 @@ class ArmLowerer:
                 # acquire() already took the owner or a count of its own
                 owners[d.subject] = None
                 continue
+            if self.is_local(d.subject):
+                # A local keeps its value: nothing to clear or close
+                owners[d.subject] = None
+                continue
             home, flag = self.home(d.subject), self.local_flag(d.subject)
             view = self.views.get(d.subject)
             if view is not None and facts.uncounted(view):
@@ -1140,6 +1171,11 @@ class ArmLowerer:
             self.emit_temporary(flag, f"{owner} = _PyFrame_TakeHome(frame, {home});")
         for d in olds:
             if d.subject in stored:
+                continue
+            if self.is_local(d.subject) is False:
+                # A temporary destination is vacant by construction
+                # (rop_check.check_contract): no old value to close
+                self.emit(f"assert(PyValue_IsNull(*{self.home(d.subject)}));")
                 continue
             self.declare("old_" + cname(d.subject), "PyValue")
             self.emit(f"old_{cname(d.subject)} = *{self.home(d.subject)};")
@@ -1173,6 +1209,8 @@ class ArmLowerer:
             elif d.kind is DebtKind.spent and owners[d.subject] is not None:
                 self.close(owners[d.subject])
             elif d.kind is DebtKind.old and d.subject in stored:
+                pass
+            elif d.kind is DebtKind.old and self.is_local(d.subject) is False:
                 pass
             elif d.kind is DebtKind.old:
                 self.close(f"old_{cname(d.subject)}")

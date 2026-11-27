@@ -904,7 +904,10 @@ def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
             "again" in fam.exits, is_generic(p.program, arm),
             arm_format(p.program, arm), None if runs is None else c_name(runs),
             emitted, arm.trailing,
-            runs is not None and p.program.arms[runs].gates))
+            runs is not None and p.program.arms[runs].gates,
+            c_name(name[:-len(arm.locals) - 1]) if arm.locals is not None else None,
+            (tuple(c_name(n) for n in p.program.locals_sets[name].row())
+             if name in p.program.locals_sets else None)))
     return entries
 
 

@@ -219,16 +219,26 @@ class Graph:
 
 
 TEMP_ONLY = frozenset({"TEMP"})
+LOCAL_ONLY = frozenset({"LOCAL"})
 COUNT_PRIMS = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
                "PyValue_CLOSE_SPECIALIZED"}
 
 
 def temp_test(operand) -> str | None:
     "The C test that the slot of operand is a temporary, None if always"
-    return None if operand.may_name == TEMP_ONLY else f"!(ir_word & IR_F_LOCAL_{operand.field})"
+    if operand.may_name == TEMP_ONLY:
+        return None
+    if operand.may_name == LOCAL_ONLY:
+        return "0"
+    return f"!(ir_word & IR_F_LOCAL_{operand.field})"
 
 
-def local_test(operand) -> str:
+def local_test(operand) -> str | None:
+    "The C test that the slot of operand is a local, None if always"
+    if operand.may_name == LOCAL_ONLY:
+        return None
+    if operand.may_name == TEMP_ONLY:
+        return "0"
     return f"(ir_word & IR_F_LOCAL_{operand.field})"
 
 

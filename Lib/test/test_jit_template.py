@@ -16,7 +16,7 @@ import weakref
 
 from test import test_tools
 from test import support
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 from test.support.script_helper import assert_python_ok
 
 capi = import_helper.import_module("_testinternalcapi")
@@ -515,7 +515,7 @@ def word_of(func, handler, nth=-1):
     "The index and fields of func's nth word that compiles as handler"
     words = capi.get_ir(func.__code__, True)
     found = [(i, w) for i, w in enumerate(words)
-             if JIT_FORMS.get(w[0], w[0]) == handler]
+             if JIT_FORMS.get(name := ir_dis.declared_arm(w[0]), name) == handler]
     if not found:
         raise AssertionError(f"no {handler} in {[w[0] for w in words]}")
     return found[nth]
@@ -745,7 +745,7 @@ class TemplateTests(unittest.TestCase):
             def word(fresh=False):
                 nonlocal current
                 if (fresh or current is None or
-                        capi.get_ir(current[0].__code__, True)[current[1]][0] != handler):
+                        ir_dis.executing_arms(current[0].__code__)[current[1]] != handler):
                     f = self.compile(source, warm)
                     current = (f, word_of(f, handler, nth)[0])
                 return current

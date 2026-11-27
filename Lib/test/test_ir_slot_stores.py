@@ -12,7 +12,7 @@ PYTHON_JIT off and always.
 import textwrap
 import unittest
 
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 from test.support.script_helper import assert_python_ok
 
 import_helper.import_module("_testinternalcapi")
@@ -22,6 +22,7 @@ import_helper.import_module("_testinternalcapi")
 SCRIPT = """
 import _testinternalcapi as capi
 import gc
+from test.support import ir_dis
 import sys
 import weakref
 
@@ -54,7 +55,7 @@ class Empty:
 
 
 def handlers(func):
-    return {w[0] for w in capi.get_ir(func.__code__, True)}
+    return set(ir_dis.executing_arms(func.__code__))
 
 
 def check_released(handlers_of, func, targets):

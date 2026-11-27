@@ -867,7 +867,7 @@ arm BranchTruth.Generic shared
 }
 
 // BranchNone: an identity test with None, in either sense
-arm BranchNone.Test inline
+arm BranchNone.Test inline over(locals: L; rest)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch)

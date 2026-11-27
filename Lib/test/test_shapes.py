@@ -24,7 +24,8 @@ COOLDOWN = _testinternalcapi.SPECIALIZATION_COOLDOWN
 def opnames(func):
     # The arms that the words run
     names = {i.arm for i in dis.get_instructions(func, adaptive=True)}
-    return names | {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
+    names |= {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
+    return {dis.declared_arm(name) for name in names}
 
 
 def make_class():

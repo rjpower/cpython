@@ -2265,6 +2265,35 @@ arm_handlers(PyObject *self, PyObject *Py_UNUSED(ignored))
     return result;
 }
 
+/* arm_declared() -> {member name: declared arm name}: the arm that each
+ * slot-class member arm (`over(locals: ...)`) is a member of
+ * (_PyIR_LocalsDeclared).  A reader reports the member a word runs;
+ * test.support.ir_dis.declared_arm() gives its declared arm. */
+static PyObject *
+arm_declared(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *result = PyDict_New();
+    if (result == NULL) {
+        return NULL;
+    }
+    for (int h = 0; h < IR_NUM_HANDLERS; h++) {
+        int declared = _PyIR_DeclaredArm(h);
+        if (declared == h) {
+            continue;
+        }
+        PyObject *name = PyUnicode_FromString(_PyIR_HandlerName(declared));
+        if (name == NULL ||
+            PyDict_SetItemString(result, _PyIR_HandlerName(h), name) < 0)
+        {
+            Py_XDECREF(name);
+            Py_DECREF(result);
+            return NULL;
+        }
+        Py_DECREF(name);
+    }
+    return result;
+}
+
 /* Whether an arm of family `want` may stand in a word of family `have`: the
  * same family, or a method load, which the translator writes as a GetAttr
  * word that a GetMethod arm replaces. */
@@ -5810,6 +5839,7 @@ static PyMethodDef module_functions[] = {
     {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
+    {"arm_declared", arm_declared, METH_NOARGS, NULL},
     {"arm_operands", arm_operands, METH_NOARGS, NULL},
     {"declared_enums", declared_enums, METH_NOARGS, NULL},
     {"get_feedback_names", get_feedback_names, METH_NOARGS, NULL},

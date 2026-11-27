@@ -126,6 +126,8 @@ static_assert(IR_NUM_HANDLERS <= IR_H_SWITCH,
 #define IR_F_LOCAL_C    (1 << 11)
 #define IR_F_LOCAL_D    (1 << 12)
 #define IR_F_LOCAL_MASK (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C | IR_F_LOCAL_D)
+static_assert(IR_F_LOCAL_A == 1 << 9 && IR_F_LOCAL_MASK == 15 << 9,
+              "_PyIR_LocalsArm() (pycore_ir_metadata.h) reads bits 9-12");
 
 /* Call-role flags of a call-family word, which the code object's words and
  * the .pyc carry.  IR_F_NO_SELF, on CALL and CALL_KW: the call has no self

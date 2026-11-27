@@ -7,7 +7,7 @@ import sys
 import unittest
 
 from test import test_tools
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 
 capi = import_helper.import_module("_testinternalcapi")
 if not hasattr(capi, "jit_template_run"):
@@ -44,7 +44,7 @@ def compiled(kind):
 def handler_of(f, index):
     """The handler of word index of the executing copy"""
     words = capi.get_ir_raw(f.__code__)[-2]
-    return struct.unpack_from("<Q", words, index * 8)[0] & 0x1FF
+    return ir_dis.declared_arm(struct.unpack_from("<Q", words, index * 8)[0] & 0x1FF)
 
 
 def probe(f, index, fields, lhs, rhs, mode, handler):

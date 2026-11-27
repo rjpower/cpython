@@ -288,11 +288,15 @@ instr_entry(_PyInstr *instr)
     return h;
 }
 
+/* The one writer of an executing word's handler.  An arm with slot-class
+ * members (`over(locals: ...)`) installs the member that the word's flags
+ * select, which never change. */
 static inline int
 set_opcode(_PyInstr *instr, int opcode)
 {
 #ifdef Py_GIL_DISABLED
     _PyIRWord old = _Py_atomic_load_uint64_relaxed(instr);
+    opcode = _PyIR_LocalsArm(opcode, old);
     _PyIRWord new = (old & ~(_PyIRWord)IR_HANDLER_MASK) | (_PyIRWord)opcode;
     if (!_Py_atomic_compare_exchange_uint64(instr, &old, new)) {
         /* Another thread rewrote the word */
@@ -300,7 +304,7 @@ set_opcode(_PyInstr *instr, int opcode)
     }
     return 1;
 #else
-    _PyIR_SetHandler(instr, opcode);
+    _PyIR_SetHandler(instr, _PyIR_LocalsArm(opcode, *instr));
     /* No unit is marked here: a unit is stale only when its code finds the
      * word's handler changed (Python/jit.c, resolve_status()) */
     return 1;
@@ -455,7 +459,8 @@ fb_begin_ex(_PyInstr *instr, bool may_allocate)
     // Entry 0 is a header and never specialises
     assert(!is_shared_entry(h));
     if (h->state == FB_MONO && h->poly == 0 && instr_is_specialized(instr)) {
-        fb_save_mono(instr, h, IR_HANDLER(*instr), may_allocate);
+        // The feedback names the declared arm, not its slot-class member
+        fb_save_mono(instr, h, _PyIR_DeclaredArm(IR_HANDLER(*instr)), may_allocate);
     }
     // Constant sizes, so that the compiler inlines the stores
     switch (h->kind) {
@@ -763,8 +768,8 @@ _PyRop_Install(_PyInstr *instr, _PyFbHeader *h, int handler)
     /* A nomination that does not change the word still consumes the
      * attempt, so the site does not sample again at once */
     set_counter(h, adaptive_counter_cooldown());
-    int current = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    if (current == handler) {
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
+    if (IR_HANDLER(word) == _PyIR_LocalsArm(handler, word)) {
         return 0;
     }
     if (!set_opcode(instr, handler)) {

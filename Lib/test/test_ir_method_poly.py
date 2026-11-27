@@ -4,7 +4,7 @@ import types
 import unittest
 
 from test import support
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 POLY = "GetMethod.PolyMethod"
@@ -12,7 +12,7 @@ ROUNDS = _testinternalcapi.SPECIALIZATION_COOLDOWN * 4
 
 
 def handlers(function):
-    return {word[0] for word in _testinternalcapi.get_ir(function.__code__, True)}
+    return set(ir_dis.executing_arms(function.__code__))
 
 
 def template(owner):

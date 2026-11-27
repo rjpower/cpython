@@ -828,7 +828,7 @@ arm Contains.Generic shared
 
 // TestBranch: the same tests, then the edge
 
-arm TestBranch.Identity inline
+arm TestBranch.Identity inline over(locals: TT; rest)
   effects(reads, writes, releases, runs_python)
   feedback()
   exits(next, branch)
@@ -911,7 +911,7 @@ arm TestBranch.Str shared over(test: TEST_EQ, TEST_NE)
     exit next();
 }
 
-arm TestBranch.Set shared
+arm TestBranch.Set shared over(locals: TT; rest)
   effects(reads, runs_python, writes, releases, raises)
   feedback()
   exits(next, branch, miss, raise, redirect)

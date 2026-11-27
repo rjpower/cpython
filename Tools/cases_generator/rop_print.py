@@ -177,6 +177,10 @@ def decl_lines(d: Decl) -> list[str]:
         if d.over is not None:
             rest = "; rest" if d.over.rest else ""
             select += f" over({d.over.operand}: {', '.join(d.over.members)}{rest})"
+        if d.locals_over is not None:
+            rest = "; rest" if d.locals_over.rest else ""
+            select += (f" over({d.locals_over.operand}: "
+                       f"{', '.join(d.locals_over.members)}{rest})")
         entry = "" if d.entry is None else f" entry({d.entry})"
         observes = (" observes" if d.observes else "") + (" trailing" if d.trailing else "") + (" gates" if d.gates else "")
         completion = "" if d.completion is None else f" completion({d.completion})"

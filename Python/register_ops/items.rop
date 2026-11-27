@@ -783,7 +783,7 @@ macro adapt_before_use_setitem(f:Fb<Item>, o:Src, k:Src)
 
 // Arms
 
-arm GetItem.ListIndex inline entry(list_index)
+arm GetItem.ListIndex inline over(locals: TLL, LLL; rest) entry(list_index)
   effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
@@ -800,7 +800,7 @@ arm GetItem.ListIndex inline entry(list_index)
     exit next();
 }
 
-arm GetItem.TupleIndex inline entry(tuple_index)
+arm GetItem.TupleIndex inline over(locals: TTL, TLL; rest) entry(tuple_index)
   effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
@@ -852,7 +852,7 @@ arm GetItem.UnicodeAsciiChar inline entry(unicode_char)
     exit next();
 }
 
-arm GetItem.ListSlice shared entry(list_slice)
+arm GetItem.ListSlice shared over(locals: TTT; rest) entry(list_slice)
   effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, miss, raise, redirect)
@@ -879,7 +879,7 @@ arm GetItem.ListSlice shared entry(list_slice)
     exit redirect(current_route);
 }
 
-arm GetItem.Dict inline entry(dict)
+arm GetItem.Dict inline over(locals: TTL, TTT; rest) entry(dict)
   effects(runs_python, raises, writes, releases on (dst))
   feedback()
   exits(next, miss, raise, redirect)
@@ -913,7 +913,7 @@ arm GetItem.Dict inline entry(dict)
     exit redirect(current_route);
 }
 
-arm SetItem.ListIndex inline entry(list_index)
+arm SetItem.ListIndex inline over(locals: TLT, TTT; rest) entry(list_index)
   effects(reads, writes, releases, runs_python, raises)
   feedback()
   exits(next, miss, raise, redirect)

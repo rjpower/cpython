@@ -292,7 +292,7 @@ macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
     exit run();
 }
 
-arm Add.Int inline
+arm Add.Int inline over(locals: TLL, TTL; rest)
   effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)
@@ -323,7 +323,7 @@ arm Add.Int inline
 }
 
 // Two admitted float or inline numbers: the sum is a float
-arm Add.Float shared
+arm Add.Float shared over(locals: TTT; rest)
   effects(writes, allocates, raises, releases on (dst))
   feedback()
   exits(next, miss, raise)

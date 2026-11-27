@@ -457,6 +457,12 @@ class Point:
         return self.name.split(".")[0]
 
 
+# The operand that every family with home operands has implicitly: the
+# slot classes of those homes, read from the word's flags (`over(locals:
+# ...)`, rop_check.locals_operands)
+LOCALS = "locals"
+
+
 @dataclass(frozen=True, slots=True)
 class Over:
     """`over(op: M1, M2[; rest])`: the arm is stated once and stands for one
@@ -504,6 +510,12 @@ class Arm:
     # `member` naming its member, and the rest arm, with neither.
     over: Over | None = None
     member: str | None = None
+    # The slot-class members the arm states (`over(locals: ...)`), as
+    # parsed: a member may be qualified by a member of `over`.  The checker
+    # adds one arm per member, with `locals` holding its letters, one per
+    # locals operand (rop_check.locals_operands): T, a temporary; L, a local.
+    locals_over: Over | None = None
+    locals: str | None = None
 
     @property
     def family(self) -> str:

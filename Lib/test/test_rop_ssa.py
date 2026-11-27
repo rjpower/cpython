@@ -25,6 +25,7 @@ from pathlib import Path
 from test import support, test_tools
 
 capi = support.import_helper.import_module("_testinternalcapi")
+from test.support import ir_dis
 if not hasattr(capi, "jit_template_run"):
     raise unittest.SkipTest("needs the template probe")
 
@@ -960,7 +961,7 @@ def compiled(scenario, source, arm=None):
                 pass
     words = capi.get_ir(f.__code__, True)
     index = next((i for i, w in enumerate(words)
-                  if w[0].split("+")[0] == arm
+                  if ir_dis.declared_arm(w[0].split("+")[0]) == arm
                   or arm is None and w[0].split("+")[0].partition(".")[0] == scenario.family),
                  None)
     if index is None:
@@ -1069,24 +1070,33 @@ def prepare(arm_name, scenario, source, inputs):
     """A fresh word that the arm runs on, with its homes filled from the
     inputs, or None if the arm does not run on the scenario's word"""
     arm = PROGRAM.arms[arm_name]
-    if arm_name in scenario.skip:
+    # A slot-class member (`over(locals: ...)`) is skipped, requires inputs
+    # and runs on words as its declared arm does
+    declared = PROGRAM.arms[declared_of(arm_name)]
+    if declared.name in scenario.skip:
         return None
     if arm.observes and source not in scenario.monitored:
         return None
-    if arm_name in scenario.requires and scenario.requires[arm_name] not in inputs:
+    if (declared.name in scenario.requires
+            and scenario.requires[declared.name] not in inputs):
         return None
-    # An arm chosen by static evidence runs only on the words it was chosen for
+    # An arm chosen by static evidence runs only on the words it was chosen
+    # for
     built = compiled(scenario, source,
-                     scenario.words_of.get(arm_name, arm_name)
-                     if arm.select or scenario.per_arm else None)
+                     scenario.words_of.get(declared.name, declared.name)
+                     if declared.select or scenario.per_arm else None)
     if built is None:
         return None
     f, index, length, words = built
     current = capi.get_ir(f.__code__, True)[index][0].split("+")[0]
-    if (scenario.coherent and current != arm_name and not is_generic(arm)
-            and not arm.observes):
+    if (scenario.coherent and ir_dis.declared_arm(current) != declared.name
+            and not is_generic(arm) and not arm.observes):
         return None
     site = ev.decode_site(PROGRAM, arm.family, words, index, length)
+    # A member runs only on a word whose slot-class flags select it
+    fixed = rop_check.fixed_locals(PROGRAM, arm)
+    if any(site.local[name] != local for name, local in fixed.items()):
+        return None
     ssa = SSA[arm_name]
     homes = {site.operands[n]: n for n, k in ssa.operands.items() if k is FieldKind.home}
     slots = {}
@@ -1105,9 +1115,18 @@ def prepare(arm_name, scenario, source, inputs):
             for slot in site.operands[param.name]:
                 homes.setdefault(slot, param.name)
     for slot, operand in homes.items():
+        # A member's temporary destination is vacant by construction
+        if fixed.get(operand) is False:
+            continue
         if slot not in slots and operand in ("dst", "callable"):
             slots[slot] = Old()
     return Word(f, index, length, site, slots, homes)
+
+
+def declared_of(arm_name):
+    "The arm that a slot-class member arm is a member of, else the arm"
+    arm = PROGRAM.arms[arm_name]
+    return arm_name if arm.locals is None else arm_name[:-len(arm.locals) - 1]
 
 
 def check(cx, arm_name, scenario, source, inputs):
@@ -1350,6 +1369,32 @@ NOT_RUN = {
                                                            "other loop jump",
     "Resume.Poll" if sys._jit.is_enabled() else "Resume.Warm": "the JIT's state selects "
                                                                "the other resume",
+}
+
+# A slot-class member (`over(locals: ...)`) runs only on a word whose flags
+# select it, and the scenario runs its family's first word
+MEMBER_WHY = ("slot-class member: no scenario source's word has its combination; "
+              "its declared arm runs")
+NOT_RUN |= {
+    "Add.Int_TTL": MEMBER_WHY,
+    "AddElement.Append_TT": MEMBER_WHY,
+    "AttrWrite.Shape_TT": MEMBER_WHY,
+    "AttrWrite.Slot_TT": MEMBER_WHY,
+    "Call.BuiltinFast_LT": MEMBER_WHY,
+    "Call.DescriptorFast_LT": MEMBER_WHY,
+    "Call.Type1_LT": MEMBER_WHY,
+    "Const.Common_T": MEMBER_WHY,
+    "Const.Pool_T": MEMBER_WHY,
+    "GetAttr.Class_TT": MEMBER_WHY,
+    "GetItem.Dict_TTL": MEMBER_WHY,
+    "GetItem.Dict_TTT": MEMBER_WHY,
+    "GetItem.ListIndex_LLL": MEMBER_WHY,
+    "GetItem.ListSlice_TTT": MEMBER_WHY,
+    "GetItem.TupleIndex_TTL": MEMBER_WHY,
+    "SetItem.ListIndex_TLT": MEMBER_WHY,
+    "SetItem.ListIndex_TTT": MEMBER_WHY,
+    "TestBranch.Identity_TT": MEMBER_WHY,
+    "TestBranch.Set_TT": MEMBER_WHY,
 }
 
 

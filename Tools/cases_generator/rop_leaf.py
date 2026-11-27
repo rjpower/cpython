@@ -31,7 +31,7 @@ from rop_catalog import (CONVENTIONS, FB_LAYOUT, RECIPE_LAYOUT, AccessMode, CLay
                          CSource, CTest, DebtKind, FieldKind, Handle, Scalar,
                          Schema, SchemaCtor, Wrap)
 from rop_cgen import Unsupported, arm_facts, facts_at, flatten, home_views
-from rop_check import Program, enum_c_name
+from rop_check import Program, enum_c_name, fixed_locals
 from rop_model import (Arm, EnumType, Extern, HandleType, Publish, ScalarType, SchemaType,
                        Type, WrapType)
 from rop_ssa import (INTACT, BranchTerm, ExitTerm, Jump, Op, OpKind, SsaArm, Switch,
@@ -1037,9 +1037,13 @@ class TemplateBuilder:
         self.deopt: jit_backend.TBlock | None = None
         self.homes: dict[str, Home] = {}
         enc = program.encodings[arm.family]
+        # A slot-class member arm fixes what each locals operand names
+        fixed = fixed_locals(program, arm)
         for p in enc.placements:
             if p.kind is FieldKind.home and p.slots[0].word == 0:
-                self.homes[p.operand] = Home(p.slots[0].name)
+                names = (frozenset({"LOCAL" if fixed[p.operand] else "TEMP"})
+                         if p.operand in fixed else Home.may_name)
+                self.homes[p.operand] = Home(p.slots[0].name, names)
 
     def exit_block(self, kind: str) -> int:
         if kind == "raise":

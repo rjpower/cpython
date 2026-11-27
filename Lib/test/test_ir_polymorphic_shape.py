@@ -9,7 +9,7 @@ import unittest
 import weakref
 
 from test import support
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 from test.test_ir_admission import construct
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
@@ -22,7 +22,7 @@ def routes(code):
 
 
 def handlers(code):
-    return {word[0] for word in _testinternalcapi.get_ir(code, True)}
+    return set(ir_dis.executing_arms(code))
 
 
 def instances(count):

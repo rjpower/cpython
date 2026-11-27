@@ -291,6 +291,9 @@ make_exec(PyCodeObject *co, const _PyCodeIR *ir)
         assert(!(source[i] & IR_F_LOCAL_MASK));
         words[i] = exec_discard_slot(source[i], discard);
         words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nfixed);
+        /* An arm with slot-class members runs the member its flags select */
+        words[i] = (words[i] & ~(_PyIRWord)IR_HANDLER_MASK)
+                   | (_PyIRWord)_PyIR_LocalsArm(IR_HANDLER(words[i]), words[i]);
         /* An arm's fixed operand words are payload: no handler field,
          * no slot flags. */
         int fixed = _PyIR_WordLength(source[i]) - 1;

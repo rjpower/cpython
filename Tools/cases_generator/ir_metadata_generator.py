@@ -209,6 +209,49 @@ def generate_ir_metadata(
             out.emit(f"[{handler}] = {observing.get(handler, handler)},\n")
         out.emit("};\n#endif\n\n")
 
+        # Slot-class members (`over(locals: ...)`): the arm of each value of
+        # a word's four slot-class flags, for the arms that have members,
+        # and the arm each member is of.  The one writer of a word's handler
+        # (set_opcode() in Python/specialize.c) and the executing copy's
+        # builder (Python/ir.c) choose through the rows.
+        by_name = {arm.name: arm for arm in arms}
+        rowed = [arm for arm in arms if arm.locals_row is not None]
+        out.emit("PyAPI_DATA(const uint8_t) _PyIR_LocalsRowOf[IR_NUM_HANDLERS];\n")
+        out.emit(f"PyAPI_DATA(const uint16_t) _PyIR_LocalsRows[{len(rowed) + 1}][16];\n")
+        out.emit("PyAPI_DATA(const uint16_t) _PyIR_LocalsDeclared[IR_NUM_HANDLERS];\n")
+        out.emit("#ifdef NEED_IR_METADATA\n")
+        out.emit("const uint8_t _PyIR_LocalsRowOf[IR_NUM_HANDLERS] = {\n")
+        for number, arm in enumerate(rowed, 1):
+            out.emit(f"[{arm_id(arm)}] = {number}, /* {arm.dotted} */\n")
+        out.emit("};\n")
+        out.emit(f"const uint16_t _PyIR_LocalsRows[{len(rowed) + 1}][16] = {{\n")
+        out.emit("{0},\n")
+        for arm in rowed:
+            assert arm.locals_row is not None
+            ids = ", ".join(str(arm_id(by_name[n])) for n in arm.locals_row)
+            out.emit(f"{{{ids}}}, /* {arm.dotted} */\n")
+        out.emit("};\n")
+        out.emit("const uint16_t _PyIR_LocalsDeclared[IR_NUM_HANDLERS] = {\n")
+        for arm in arms:
+            if arm.declared is not None:
+                out.emit(f"[{arm_id(arm)}] = {arm_id(by_name[arm.declared])}, "
+                         f"/* {arm.dotted} */\n")
+        out.emit("};\n#endif\n\n")
+        out.emit("/* The arm that a word with these slot-class flags runs for "
+                 "handler: its\n * member, or the handler itself */\n")
+        out.emit("static inline int\n_PyIR_LocalsArm(int handler, uint64_t word)\n")
+        out.emit("{\n")
+        out.emit("int row = _PyIR_LocalsRowOf[handler];\n")
+        out.emit("return row ? _PyIR_LocalsRows[row][(word >> 9) & 15] : handler;\n")
+        out.emit("}\n\n")
+        out.emit("/* The arm that handler is a slot-class member of, or the "
+                 "handler itself */\n")
+        out.emit("static inline int\n_PyIR_DeclaredArm(int handler)\n")
+        out.emit("{\n")
+        out.emit("int declared = _PyIR_LocalsDeclared[handler];\n")
+        out.emit("return declared ? declared : handler;\n")
+        out.emit("}\n\n")
+
         out.emit("PyAPI_DATA(const char *const) _PyIR_OnlyNames[IR_NUM_HANDLERS];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit("const char *const _PyIR_OnlyNames[IR_NUM_HANDLERS] = {\n")

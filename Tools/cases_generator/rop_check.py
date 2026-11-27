@@ -29,7 +29,7 @@ from rop_catalog import (HEAD_FLAG_ENUMS, CONVENTIONS, ENVIRONMENT, CSource, Con
                          WIDEST_IMMEDIATE, DebtKind,
                          Effect, ExcRole, ExitKind, Fact, FieldKind, FrameRole, Handle, PcRole,
                          Region, RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
-from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
+from rop_model import (LOCALS, RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, Contract, Debt, Decl, Diagnostic, Each, Edge, Encoding,
                        EnumDecl, Placement,
                        EnumType, Exit, Expr, Extern, FactUse, Family, Goto, Graph,
@@ -207,6 +207,56 @@ def member_arm_name(name: str, member: str) -> str:
     return f"{name}_{member}"
 
 
+@dataclass(frozen=True)
+class LocalsSet:
+    """The slot-class members of an arm (`over(locals: ...)`): the arm of
+    each member, by its letters, and the arm itself, which tests the word's
+    flags at run time, for every other combination."""
+    name: str                       # the arm the members are of
+    operands: tuple[tuple[str, Slot], ...]   # rop_check.locals_operands
+    arms: Mapping[str, str]         # letters -> member arm
+
+    def row(self) -> tuple[str, ...]:
+        """The arm for each value of the head's four slot-class flags
+        (IR_F_LOCAL_A .. D, bits 9-12 of the word): the member whose
+        letters match the flags of its operands' fields, else the arm"""
+        return tuple(self.arms.get(locals_letters(self.operands, nibble), self.name)
+                     for nibble in range(16))
+
+
+def fixed_locals(program: "Program", arm: Arm) -> dict[str, bool]:
+    """The slot class of each locals operand of a member arm
+    (`over(locals: ...)`), True for a local; empty for any other arm"""
+    if arm.locals is None:
+        return {}
+    ls = program.locals_sets[arm.name[:-len(arm.locals) - 1]]
+    return {name: letter == "L" for (name, _), letter in zip(ls.operands, arm.locals)}
+
+
+def locals_letters(operands: tuple[tuple[str, Slot], ...], nibble: int) -> str:
+    return "".join("L" if nibble >> "ABCD".index(slot.name) & 1 else "T"
+                   for _, slot in operands)
+
+
+def locals_operands(fam: Family, enc: Encoding) -> tuple[tuple[str, Slot], ...]:
+    """The operands of a family's implicit `locals` operand, in operand
+    order: each scalar home of type Src or Dst (or their Maybe) in a field of
+    the head word, whose slot-class flag the executing copy sets
+    (_PyIR_ExecLocalFlags).  A Local or Cell home is always a local and a
+    projection always a temporary, so neither is one."""
+    types = {p.name: p.type for p in fam.params}
+    found = []
+    for pl in enc.placements:
+        if pl.kind is not FieldKind.home or not pl.slots or pl.slots[0].word != 0:
+            continue
+        t = types[pl.operand]
+        if isinstance(t, WrapType) and t.wrap == Wrap.Maybe:
+            t = t.arg
+        if isinstance(t, HandleType) and t.handle in (Handle.Src, Handle.Dst):
+            found.append((pl.operand, pl.slots[0]))
+    return tuple(found)
+
+
 def enum_c_name(enum: str, member: str) -> str:
     """The C name of an enum member, which the generated metadata declares"""
     return f"ROP_{enum.upper()}_{member}"
@@ -241,6 +291,9 @@ class Program:
         default_factory=dict)
     # The member sets (`over(...)`), by the declared arm name
     member_sets: Mapping[str, "MemberSet"] = field(default_factory=dict)
+    # The slot-class member sets (`over(locals: ...)`), by the arm they are
+    # of (a declared arm or a member arm of `over(...)`)
+    locals_sets: Mapping[str, "LocalsSet"] = field(default_factory=dict)
 
     @property
     def pending(self) -> tuple[str, ...]:
@@ -485,6 +538,7 @@ class Checker:
     encodings: dict[str, Encoding] = field(default_factory=dict)
     completions: dict[str, Arm] = field(default_factory=dict)
     member_sets: dict[str, MemberSet] = field(default_factory=dict)
+    locals_sets: dict[str, LocalsSet] = field(default_factory=dict)
 
     def arm(self, name: str) -> Arm:
         """A word arm or a completion arm"""
@@ -501,6 +555,7 @@ def check(files: Iterable[SourceFile]) -> Program:
         check_enum(c, e)
     for fam in c.families.values():
         check_family(c, fam)
+    expand_locals_sets(c)
     for p in c.points.values():
         check_point(c, p)
     for x in c.externs.values():
@@ -516,8 +571,23 @@ def check(files: Iterable[SourceFile]) -> Program:
     check_macro_recursion(c)
     return Program(c.files, dict(c.enums), dict(c.families), dict(c.points),
                    dict(c.arms), dict(c.macros), dict(c.externs), dict(c.graphs),
-                   dict(c.encodings), tuple(sorted(c.diagnostics, key=diagnostic_order)),
-                   dict(c.completions), member_sets=dict(c.member_sets))
+                   dict(c.encodings),
+                   tuple(sorted(without_member_repeats(c.diagnostics, c.locals_sets),
+                                key=diagnostic_order)),
+                   dict(c.completions), member_sets=dict(c.member_sets),
+                   locals_sets=dict(c.locals_sets))
+
+
+def without_member_repeats(diagnostics: Iterable[Diagnostic],
+                           locals_sets: Mapping[str, "LocalsSet"]) -> tuple[Diagnostic, ...]:
+    """The diagnostics less a slot-class member's that its arm has too: a
+    member's body is its arm's, so a finding in it is reported once, at
+    the arm"""
+    arm_of = {member: ls.name for ls in locals_sets.values() for member in ls.arms.values()}
+    found = list(diagnostics)
+    seen = {(d.span, d.definition, d.message) for d in found}
+    return tuple(d for d in found if d.definition not in arm_of
+                 or (d.span, arm_of[d.definition], d.message) not in seen)
 
 
 def diagnostic_order(d: Diagnostic) -> tuple[str, int, int]:
@@ -606,6 +676,103 @@ def expand_member_sets(c: Checker) -> None:
             arms[a.name] = replace(a, over=None)
         c.member_sets[a.name] = MemberSet(a.name, a.over.operand, enum, by_member, rest)
     c.arms = arms
+
+
+def expand_locals_sets(c: Checker) -> None:
+    """Add, before each arm stated `over(locals: ...)`, one arm per listed
+    member, whose `locals` is the member's letters: the products read each
+    of its locals operands' slot classes as that constant.  A member
+    qualified by a member of the arm's `over(...)` belongs to that member's
+    arm only; an unqualified one to every arm of the declaration.  Run after
+    the families' encodings, which give the locals operands."""
+    declared: dict[str, list[tuple[str | None, str]] | None] = {}
+    arms: dict[str, Arm] = {}
+    for a in c.arms.values():
+        if a.locals_over is None:
+            arms[a.name] = a
+            continue
+        base = a.name[:-len(a.member) - 1] if a.member is not None else a.name
+        if base not in declared:
+            declared[base] = check_locals_over(c, a, base)
+        members = declared[base]
+        enc = c.encodings.get(a.family)
+        if members is None or enc is None:
+            arms[a.name] = replace(a, locals_over=None)
+            continue
+        operands = locals_operands(c.families[a.family], enc)
+        mine = [letters for q, letters in members if q is None or q == a.member]
+        if len(set(mine)) != len(mine):
+            c.report(a.locals_over.span, a.name, "over(locals): a member is listed "
+                     "twice for one arm")
+            arms[a.name] = replace(a, locals_over=None)
+            continue
+        if mine and not a.locals_over.rest and len(mine) != 2 ** len(operands):
+            c.report(a.locals_over.span, a.name, "over(locals): without rest, every "
+                     f"combination of {', '.join(n for n, _ in operands)} is a member: "
+                     "an install meets any word")
+        by_letters: dict[str, str] = {}
+        for letters in mine:
+            name = member_arm_name(a.name, letters)
+            if name in c.arms or name in c.completions:
+                c.report(a.locals_over.span, a.name, f"member arm {name} is also "
+                         "declared")
+                continue
+            by_letters[letters] = name
+            arms[name] = replace(a, name=name, locals_over=None, locals=letters,
+                                 select=())
+        arms[a.name] = replace(a, locals_over=None)
+        if by_letters:
+            c.locals_sets[a.name] = LocalsSet(a.name, operands, by_letters)
+    c.arms = arms
+
+
+def check_locals_over(c: Checker, a: Arm, base: str) -> list[tuple[str | None, str]] | None:
+    """The (qualifier, letters) members of a declaration's `over(locals:
+    ...)`, or None with a diagnostic"""
+    o = a.locals_over
+    assert o is not None
+    if o.operand != LOCALS:
+        c.report(o.span, base, f"over({o.operand}): an arm states one set over an "
+                 "enum operand; a second one is over locals")
+        return None
+    fam = c.families.get(a.family)
+    enc = c.encodings.get(a.family)
+    if fam is None or enc is None:
+        return None
+    operands = locals_operands(fam, enc)
+    if not operands:
+        c.report(o.span, base, f"over(locals): {fam.name} has no home operand of "
+                 "type Src or Dst in its head word")
+        return None
+    if a.observes or a.completion is not None or a.trailing:
+        c.report(o.span, base, "over(locals): not an observed, completion or "
+                 "trailing arm")
+        return None
+    if fam.generic is not None and base == f"{fam.name}.{fam.generic}":
+        c.report(o.span, base, "over(locals): the generic arm is what a miss and "
+                 "a deopt install; it has no members")
+        return None
+    first = c.member_sets.get(base)
+    want = len(operands)
+    names = ", ".join(n for n, _ in operands)
+    members: list[tuple[str | None, str]] = []
+    ok = True
+    for m in o.members:
+        q, _, letters = m.rpartition(".")
+        if q and (first is None or q not in first.arms):
+            listed = "" if first is None else f" (one of {', '.join(first.arms)})"
+            c.report(o.span, base, f"over(locals): {q} in {m} is not a member of the "
+                     f"arm's over(...){listed}")
+            ok = False
+            continue
+        if len(letters) != want or set(letters) - {"T", "L"}:
+            c.report(o.span, base, f"over(locals): member {letters} does not match "
+                     f"{fam.name}'s locals operands ({names}): {want} letters, each "
+                     "T or L")
+            ok = False
+            continue
+        members.append((q or None, letters))
+    return members if ok else None
 
 
 def over_enum(c: Checker, a: Arm) -> str | None:
@@ -1177,10 +1344,11 @@ def select_dimension(m: Select) -> str:
 def check_selection(c: Checker, fam: Family) -> None:
     """Arms chosen by static evidence: every combination of the dimensions
     the family's arms name is admitted by exactly one arm.  A trailing arm
-    is the assembler's, and no lowering selects it."""
+    is the assembler's, and no lowering selects it; nor a slot-class member,
+    which the executing copy chooses for its declared arm."""
     arms = [a for a in c.arms.values()
             if a.name.split(".")[0] == fam.name and not a.observes
-            and not a.trailing]
+            and not a.trailing and a.locals is None]
     if not any(a.select for a in arms):
         return
     if "miss" in fam.exits:

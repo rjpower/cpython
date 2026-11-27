@@ -1383,6 +1383,19 @@ PyAPI_FUNC(PyValue) _PyValue_BoxDouble(double value);
 /* The result of float arithmetic: inline unless it is NaN, which is boxed
    (see "NaN and signed zero" in boil/design/02-tagged-values.md, section
    3). PyValue_NULL with an exception set if boxing fails. */
+/* The word of value if it is not NaN, which owns no count: true, and the
+ * word written through out; false for NaN, which only a box holds
+ * (PyValue_FromDouble). */
+static inline bool
+_PyValue_FloatWord(double value, PyValue *out)
+{
+    if (isnan(value)) {
+        return false;
+    }
+    *out = PyValue_FromDoubleNotNaN(value);
+    return true;
+}
+
 static inline PyValue
 PyValue_FromDouble(double value)
 {

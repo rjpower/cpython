@@ -28,7 +28,8 @@ import rop_check
 import rop_verify
 from generators_common import root_relative_path, write_header
 from handler_table import first_arm, handler_ids
-from rop_cgen import Lowering, Unsupported, inline_rows, lower_arm, pending_blockers, row_signature
+from rop_cgen import (ColdRegion, Lowering, Unsupported, inline_rows, lower_arm,
+                      pending_blockers, row_signature)
 from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, FieldKind,
                          Handle, Select, Slot, Wrap)
 from rop_check import Program, enum_c_name, select_dimension
@@ -111,10 +112,12 @@ def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
         if is_generic(program, arm):
             generic[arm.family] = c_name(arm.name)
             generic_arms[arm.family] = arm.name
+    share_cold_regions(program, lowered)
     completions: dict[str, Lowering] = {}
     for arm in program.completions.values():
         try:
-            completions[arm.name] = lower_arm(program, arm, numbers, points, generic)
+            completions[arm.name] = lower_arm(program, arm, numbers, points, generic,
+                                              outline_cold=False)
         except Unsupported as e:
             pending = pending_blockers(program, arm)
             left_out[arm.name] = (f"pending: {', '.join(pending)}" if pending
@@ -134,19 +137,83 @@ _PyIRWord *const this_instr = next_instr;
 INSTRUCTION_STATS({handler});"""
 
 
-def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
-    lines = [f"// {arm.name} ({arm.region.name})"]
+def advance_text(arm: Arm, low: Lowering) -> str:
     advance = str(1 + low.words) if low.payload is None else f"{1 + low.words} + {low.payload}"
     if low.spans is not None:
         # A span instruction's length depends on its counts
         assert low.payload is None, arm.name
         advance = low.spans
+    return advance
+
+
+def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
+    lines = [f"// {arm.name} ({arm.region.name})"]
     lines += PROLOGUE.format(
-        handler=handler(arm.name), advance=advance,
+        handler=handler(arm.name), advance=advance_text(arm, low),
         save_ip="" if arm.trailing else "frame->instr_ptr = next_instr;\n").splitlines()
     lines += low.decls
     lines += low.body
     return [indent + line if line else line for line in lines]
+
+
+def cold_region_text(arm: Arm, low: Lowering, c: ColdRegion) -> list[str]:
+    """An outlined cold region of an arm (rop_cgen.ArmLowerer.outline_cold):
+    the arm tail-calls it with this_instr as next_instr.  The evaluators
+    compile the function (IR_OUTLINED_FN), and the normal one an entry for
+    the baseline JIT (IR_OUTLINED_JIT_ENTRY), which the stencils tail-call;
+    the type of its inputs is every unit's."""
+    out = []
+    if c.live:
+        out.append("typedef struct __attribute__((__may_alias__)) {")
+        out += [f"    {t} {n};" for t, n in c.live]
+        out.append(f"}} rop_in_{c.name};")
+        out.append(f"static_assert(sizeof(rop_in_{c.name}) <= IR_OUTLINE_IN_SIZE, "
+                   '"the activation holds a cold region\'s inputs");')
+    out.append("#ifndef IR_JIT_STENCILS")
+    out.append(f"IR_OUTLINED_FN({c.name}) {{")
+    body = [f"// {arm.name}: the cold region from {c.head}"]
+    body += PROLOGUE.format(handler=handler(arm.name), advance=advance_text(arm, low),
+                            save_ip="").splitlines()[:-1]
+    body += low.decls
+    if c.live:
+        body.append(f"{{ const rop_in_{c.name} *ir_in = IR_OUTLINE_IN(rop_in_{c.name});")
+        body += [f"  {n} = ir_in->{n};" for _, n in c.live]
+        body.append("}")
+    body += c.body
+    out += ["    " + line if line else line for line in body]
+    out.append("}")
+    out.append(f"IR_OUTLINED_JIT_ENTRY({c.name})")
+    out.append("#endif")
+    return out
+
+
+def share_cold_regions(program: Program, lowered: Mapping[str, Lowering]) -> None:
+    """Arms whose cold regions are the same text, but for the arm's labels
+    and handler id (which nothing in a region reads before it sets it),
+    share one function: the first, in the order the cases are printed"""
+    first: dict[str, str] = {}
+    for name, low in lowered.items():
+        arm = program.arms[name]
+        own = f"rop_{c_name(name)}_"
+        kept, renames = [], {}
+        for c in low.cold:
+            text = cold_region_text(arm, low, c)[:-2]
+            key = "\n".join(line.replace(c.name, "NAME").replace(own, "rop_ARM_")
+                            for line in text if "int opcode = " not in line
+                            and "// " not in line)
+            shared = first.setdefault(key, c.name)
+            if shared == c.name:
+                kept.append(c)
+            else:
+                renames[c.name] = shared
+        if not renames:
+            continue
+        low.cold = kept
+        for old, new in renames.items():
+            low.body = [line.replace(f"rop_in_{old} ", f"rop_in_{new} ")
+                            .replace(f"rop_in_{old})", f"rop_in_{new})")
+                            .replace(f"IR_OUTLINE_GOTO({old})", f"IR_OUTLINE_GOTO({new})")
+                        for line in low.body]
 
 
 def indented(lines: list[str], by: str) -> list[str]:
@@ -168,6 +235,8 @@ def write_cases(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write(MISS_MACRO)
     for name, low in p.lowered.items():
         arm = p.program.arms[name]
+        for c in low.cold:
+            out.write("\n" + "\n".join(cold_region_text(arm, low, c)) + "\n")
         out.write(f"\n        TARGET({c_name(name)}) {{\n")
         text = handler_text(arm, low, "            ")
         out.write("\n".join(text) + "\n        }\n")

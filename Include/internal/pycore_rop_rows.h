@@ -420,10 +420,10 @@ _PyRop_FloatOperands(PyValueBorrow a, PyValueBorrow b)
     return PyValue_FloatOperandsCheck(a, b);
 }
 
-static inline PyValue
-_PyRop_AddFloats(double x, double y)
+static inline double
+_PyRop_AddDoubles(double x, double y)
 {
-    return PyValue_FromDouble(x + y);
+    return x + y;
 }
 
 static inline bool

@@ -13,10 +13,11 @@ the error path with its point index, or the family's miss adapter.  The
 generated C uses the value API and never `.bits`.
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
-from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
+from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn, RowKind,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          PcRole, Slot, UNCOUNTED_FACTS, Wrap)
 from rop_check import GraphInfo, Program, enum_c_name, enum_of_member, expand_debts, fixed_locals, expand_group, group_part_decls, group_parts, is_args
@@ -437,6 +438,132 @@ def acquired_on_entry(program: Program, blocks) -> dict[str, frozenset[str]]:
     return {label: result.get(label, frozenset()) for label in blocks}
 
 
+# The exits that leave an arm by a tail call of a cold routine (the miss
+# adapter, process_error, the redirect and again dispatches)
+COLD_EXITS = frozenset({"miss", "redirect", "again", "raise", "unwind"})
+
+
+def expr_calls(program: Program, e) -> bool:
+    """Whether an expression calls a helper row (a C call, or an inline row
+    that may make one); primitives and language forms do not"""
+    if isinstance(e, Call):
+        x = program.externs.get(e.callee)
+        if x is not None and x.kind is not RowKind.primitive:
+            return True
+        return any(expr_calls(program, a) for a in e.args)
+    if isinstance(e, (tuple, list)):
+        return any(expr_calls(program, a) for a in e)
+    if isinstance(e, SpanLit):
+        return expr_calls(program, e.items)
+    return False
+
+
+def block_calls(program: Program, block: Block) -> bool:
+    """Whether a block may make a call before its terminator leaves it: a
+    helper row, or a publication, whose retirements may deallocate"""
+    for st in block.stmts:
+        if isinstance(st, Publish):
+            return True
+        if isinstance(st, Let) and expr_calls(program, st.value):
+            return True
+        if isinstance(st, Guard) and expr_calls(program, st.cond):
+            return True
+    t = block.term
+    if isinstance(t, CallTerm):
+        x = program.externs.get(t.callee)
+        return x is None or x.kind is not RowKind.primitive or expr_calls(program, t.args)
+    if isinstance(t, Branch):
+        return expr_calls(program, t.cond)
+    if isinstance(t, Exit):
+        return expr_calls(program, t.args)
+    return False
+
+
+def cold_region_heads(program: Program, blocks, skip: set[str]) -> set[str]:
+    """Rule J5-R1: the blocks where a cold region begins.  A block is cold
+    when every way out of it ends in a cold exit (COLD_EXITS).  A region
+    head is a cold block with a predecessor outside the region, other than
+    the entry, and counts only if the region makes a call: such a region is
+    outlined (ArmLowerer.outline_cold), and a region without one costs the
+    arm no more than its own cold tail call would."""
+    succs = {label: [t.label for t, _ in edges_of(program, blocks, b)]
+             for label, b in blocks.items()}
+    cold: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for label, b in blocks.items():
+            if label in cold or label in skip or label == "entry":
+                continue
+            t = b.term
+            if isinstance(t, Exit):
+                is_cold = t.kind in COLD_EXITS
+            elif isinstance(t, (Goto, Branch, CallTerm)):
+                x = program.externs.get(t.callee) if isinstance(t, CallTerm) else None
+                is_cold = (not (x is not None and x.c is not None
+                                and CONVENTIONS[x.c.convention].transfer)
+                           and bool(succs[label])
+                           and all(s in cold for s in succs[label]))
+            else:
+                is_cold = False
+            if is_cold:
+                cold.add(label)
+                changed = True
+    preds: dict[str, set[str]] = {label: set() for label in blocks}
+    for label, ss in succs.items():
+        for s_ in ss:
+            preds[s_].add(label)
+    heads = set()
+    for label in cold:
+        if not preds[label] <= cold:
+            region, todo = set(), [label]
+            while todo:
+                lb = todo.pop()
+                if lb in region:
+                    continue
+                region.add(lb)
+                todo.extend(s_ for s_ in succs[lb] if s_ in cold)
+            if any(block_calls(program, blocks[lb]) for lb in region):
+                heads.add(label)
+    return heads
+
+
+def cold_case_heads(program: Program, blocks, skip: set[str]) -> set[str]:
+    """Rule J5-R2: the blocks that only a row's `cold` case leads to.  The
+    arm runs such a block, and every block that it reaches, out of line
+    (ArmLowerer.outline_cold), as for a cold region: the rare path that
+    rejoins the arm, such as an overflow that boxes its result, leaves by
+    the outlined copy of the arm's rest, so the hot path keeps no frame or
+    register for it.  As for a cold region, a block counts only if its
+    region makes a call."""
+    into: dict[str, list[bool]] = {label: [] for label in blocks}
+    for b in blocks.values():
+        t = b.term
+        x = program.externs.get(t.callee) if isinstance(t, CallTerm) else None
+        if x is not None and isinstance(x.result, Cases):
+            cold_cases = {c.name for c in x.result.cases if c.cold}
+            for e in t.edges:
+                into[e.target.label].append(e.case in cold_cases)
+            continue
+        for target, _ in edges_of(program, blocks, b):
+            into[target.label].append(False)
+    succs = {label: [t.label for t, _ in edges_of(program, blocks, b)]
+             for label, b in blocks.items()}
+    heads = set()
+    for label, marks in into.items():
+        if label in skip or label == "entry" or not marks or not all(marks):
+            continue
+        region, todo = set(), [label]
+        while todo:
+            lb = todo.pop()
+            if lb not in region:
+                region.add(lb)
+                todo.extend(succs[lb])
+        if any(block_calls(program, blocks[lb]) for lb in region):
+            heads.add(label)
+    return heads
+
+
 def is_transfer(program: Program, callee: str) -> bool:
     x = program.externs.get(callee)
     return (x is not None and x.c is not None
@@ -516,12 +643,29 @@ class Lowering:
     spans: str | None = None
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
+    # The arm's cold regions, each a function of its own (outline_cold)
+    cold: list["ColdRegion"] = field(default_factory=list)
+
+
+@dataclass
+class ColdRegion:
+    """A cold region of an arm, outlined: the function NAME runs it from
+    its head, given the values that the arm computed before the head and
+    the region reads, which travel in the activation (IR_OUTLINE_IN)"""
+    name: str                               # the function, Cold_<arm>_<head>
+    head: str                               # the head's C label
+    live: list[tuple[str, str]]             # (C type, local) of each value
+    body: list[str]
 
 
 class ArmLowerer:
     def __init__(self, program: Program, arm: Arm, numbers: Mapping[str, int],
-                 points: Mapping[str, int], generic: Mapping[str, str | None]) -> None:
+                 points: Mapping[str, int], generic: Mapping[str, str | None],
+                 outline_cold: bool = True) -> None:
         self.program = program
+        # An arm of the evaluator outlines its cold regions; a completion,
+        # which returns to its caller, keeps them
+        self.outline_cold_regions = outline_cold
         self.arm = arm
         self.info: FlatGraph = flatten(program, arm)
         self.family = program.families[arm.family]
@@ -542,6 +686,7 @@ class ArmLowerer:
         self.blocks = dict(self.info.blocks)
         self.lines: list[str] = []
         self.decls: list[str] = []
+        self.decl_list: list[Decl] = []
         self.declared: set[str] = set()
         self.homes: dict[str, str] = {}      # operand -> its home pointer
         self.views: dict[str, str] = {}      # operand -> value bound by use()
@@ -557,6 +702,7 @@ class ArmLowerer:
         # tail closes (lower_tail_closes); any other line emits them first
         self.pending_closes: list[str] = []
         self.tails = 0
+        self.cold: list[ColdRegion] = []
         # A slot-class member arm (`over(locals: ...)`): each locals
         # operand's class, a constant, True for a local
         self.fixed_local: dict[str, bool] = fixed_locals(program, arm)
@@ -572,6 +718,7 @@ class ArmLowerer:
         if name in self.declared:
             return
         self.declared.add(name)
+        self.decl_list.append(Decl(name, ctype))
         self.decls.append(f"{ctype} {name}" + (f" = {init}" if init else "") + ";")
 
     def new_temp(self, ctype: str, stem: str = "t") -> str:
@@ -973,6 +1120,11 @@ class ArmLowerer:
             st.name: len(st.value.args[0].items)
             for b in self.blocks.values() for st in b.stmts if is_span_anchor(st)}
         order = [label for label in self.layout() if label not in self.transfer_blocks]
+        self.cold_heads = (
+            cold_region_heads(self.program, self.blocks, self.transfer_blocks)
+            | cold_case_heads(self.program, self.blocks, self.transfer_blocks)
+            if self.outline_cold_regions else set())
+        spans: dict[str, tuple[int, int]] = {}
         if self.fixed_local:
             # The member's word: an install that bypassed the generated row
             # (_PyIR_LocalsArm) fails here in a build with assert() on
@@ -982,20 +1134,90 @@ class ArmLowerer:
                       f"({' | '.join(bits) or '0'}));")
         for i, label in enumerate(order):
             self.next_label = order[i + 1] if i + 1 < len(order) else None
+            start = len(self.lines)
             self.lower_block(self.blocks[label], label)
+            spans[label] = (start, len(self.lines))
         assert not self.pending_closes, self.arm.name
         for b in self.blocks.values():
             for p in b.params:
                 t = c_type(p.type)
                 if t is not None:
                     self.declare(self.local(p.name), t)
+        if self.cold_heads:
+            self.lines = self.outline_cold(order, spans)
         body = []
         for line in self.lines:
             body.append(line)
         return Lowering(self.arm.name, self.enc.words, self.payload_words(),
                         self.span_words(),
                         self.decls,
-                        self.drop_unused_labels(body))
+                        self.drop_unused_labels(body),
+                        self.cold)
+
+    def outline_cold(self, order: list[str], spans: Mapping[str, tuple[int, int]]) -> list[str]:
+        """Rule J5-R1: each cold region (cold_region_heads) becomes a
+        function of the evaluator's type, which the arm tail-calls at the
+        region's head (IR_OUTLINE_GOTO): the arm's hot path keeps no copy of
+        it, and a stencil of the baseline JIT reaches the one in the binary.
+        The function is the arm's own text from the head: the arm's
+        declarations, the region's blocks, and the locals that the arm set
+        before the head and the region reads, which the arm leaves in the
+        activation.  It decodes the word again, from this_instr."""
+        succs = {label: [t.label for t, _ in edges_of(self.program, self.blocks, b)]
+                 for label, b in self.blocks.items()}
+
+        def reach(start: str, stop: set[str]) -> set[str]:
+            seen: set[str] = set()
+            todo = [start]
+            while todo:
+                label = todo.pop()
+                if label in seen:
+                    continue
+                seen.add(label)
+                if label not in stop:
+                    todo.extend(succs[label])
+            return seen
+
+        def text(label: str) -> list[str]:
+            start, end = spans[label]
+            return self.lines[start:end]
+
+        in_arm = reach("entry", self.cold_heads)
+        heads = [label for label in order if label in self.cold_heads and label in in_arm]
+        first = spans[order[0]][0]
+        hot = self.lines[:first] + [
+            line for label in order if label in in_arm and label not in self.cold_heads
+            for line in text(label)]
+        hot_names = set(c_names(hot))
+        types = {d.name: d.ctype for d in self.decl_list}
+        arm_lines = self.lines[:first]
+        for label in order:
+            if label not in in_arm:
+                continue
+            if label not in self.cold_heads:
+                arm_lines += text(label)
+                continue
+            region = reach(label, set())
+            body = [line for lb in order if lb in region for line in text(lb)]
+            needed = live_in(label, region, succs, {lb: text(lb) for lb in region},
+                             self.label)
+            live = [(types[n], n) for n in types
+                    if n in needed and n in hot_names and not types[n].endswith("const")]
+            name = f"Cold_{self.prefix.removeprefix('rop_')}_{label}"
+            body = [f"goto {self.label(label)};"] + body
+            self.cold.append(ColdRegion(name, self.label(label), live,
+                                        self.drop_unused_labels(body)))
+            # The lines that a fallthrough into the head ran stay in the arm
+            head_lines = text(label)
+            at = head_lines.index(f"{self.label(label)}:")
+            arm_lines += head_lines[:at + 1]
+            if live:
+                arm_lines.append(f"{{ rop_in_{name} *ir_in = IR_OUTLINE_IN(rop_in_{name});")
+                arm_lines += [f"  ir_in->{n} = {n};" for _, n in live]
+                arm_lines.append("}")
+            arm_lines.append(f"IR_OUTLINE_GOTO({name});")
+        assert heads == [c.head.removeprefix(self.prefix + "_") for c in self.cold], self.arm.name
+        return arm_lines
 
     def payload_words(self) -> str | None:
         """An argument descriptor's homes follow the operand words, four to
@@ -1445,11 +1667,78 @@ def is_span_anchor(s) -> bool:
             and isinstance(s.value.args[0], SpanLit))
 
 
+@dataclass
+class Decl:
+    name: str
+    ctype: str
+
+
+def c_names(lines: list[str]) -> list[str]:
+    """The identifiers in some lines of C"""
+    return re.findall(r"\b[A-Za-z_]\w*\b", "\n".join(lines))
+
+
+def block_uses_defs(lines: list[str]) -> tuple[set[str], set[str], dict[str, set[str]]]:
+    """For a block's C: the names it reads before it sets them; the names
+    it sets on every path through it (an assignment at its top level,
+    before any label of its own); and for each label that a goto in a
+    braced group leaves for, the names the group set before the goto (a
+    jump's payload)"""
+    uses: set[str] = set()
+    defs: set[str] = set()
+    edge: dict[str, set[str]] = {}
+    group: list[str] = []
+    depth = 0
+    straight = True
+    for line in lines[1:] if lines and lines[0].endswith(":") else lines:
+        text = line.strip()
+        if depth == 0 and text.endswith(":"):
+            straight = False
+        m = re.match(r"([A-Za-z_]\w*) = (.*);$", text)
+        g = re.match(r"goto ([A-Za-z_]\w*);$", text)
+        if m:
+            uses |= {n for n in c_names([m.group(2)]) if n not in defs and n not in group}
+            if depth == 0 and straight:
+                defs.add(m.group(1))
+            else:
+                group.append(m.group(1))
+        elif g:
+            edge.setdefault(g.group(1), set()).update(group if depth else ())
+        else:
+            uses |= {n for n in c_names([text]) if n not in defs and n not in group}
+        if text.endswith("{") or text == "}":
+            group = []
+        depth += text.count("{") - text.count("}")
+    return uses, defs, edge
+
+
+def live_in(head: str, region: set[str], succs: Mapping[str, list[str]],
+            texts: Mapping[str, list[str]], label) -> set[str]:
+    """The names that some path from head reads before it sets them"""
+    ud = {lb: block_uses_defs(texts[lb]) for lb in region}
+    live = {lb: set(ud[lb][0]) for lb in region}
+    changed = True
+    while changed:
+        changed = False
+        for lb in region:
+            uses, defs, edge = ud[lb]
+            out: set[str] = set()
+            for s_ in succs[lb]:
+                if s_ in region:
+                    out |= live[s_] - edge.get(label(s_), set())
+            new = uses | (out - defs)
+            if new != live[lb]:
+                live[lb] = new
+                changed = True
+    return live[head]
+
+
 def cname(operand: str) -> str:
     """A C identifier part for an operand or a projection g.p"""
     return operand.replace(".", "_")
 
 
 def lower_arm(program: Program, arm: Arm, numbers: Mapping[str, int],
-              points: Mapping[str, int], generic: Mapping[str, str | None]) -> Lowering:
-    return ArmLowerer(program, arm, numbers, points, generic).lower()
+              points: Mapping[str, int], generic: Mapping[str, str | None],
+              outline_cold: bool = True) -> Lowering:
+    return ArmLowerer(program, arm, numbers, points, generic, outline_cold).lower()

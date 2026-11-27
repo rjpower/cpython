@@ -60,6 +60,22 @@ static const _PyIRTailFn ir_tail_table[IR_TARGETS_COUNT] = {
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wmaybe-musttail-local-addr"
 #endif
+/* The entry of an arm's outlined cold region (IR_OUTLINED_FN) for the
+ * stencils of the baseline JIT, which reach the normal evaluator's copy:
+ * it closes the departure window, as the JIT's other exits below do. */
+#if !IR_OBSERVING && defined(_PY_JIT_SUPPORTED)
+#  define IR_OUTLINED_JIT_ENTRY(NAME) \
+    extern Py_IR_TAIL_CC __attribute__((cold)) PyValue \
+    _PyEval_JitOut_##NAME(Py_IR_TAIL_PARAMS); \
+    Py_IR_TAIL_CC PyValue \
+    _PyEval_JitOut_##NAME(Py_IR_TAIL_PARAMS) \
+    { \
+        ((_PyThreadStateImpl *)tstate)->jit_departing = 0; \
+        IR_TAIL_GOTO(NAME); \
+    }
+#else
+#  define IR_OUTLINED_JIT_ENTRY(NAME)
+#endif
 #include "ceval_labels.h"
 #include "generated_rop_cases.c.h"
 #include "ceval_routines.h"

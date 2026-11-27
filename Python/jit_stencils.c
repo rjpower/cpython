@@ -101,8 +101,31 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
         next_instr = (T); \
         IR_JIT_GOTO(_JIT_TARGET, IR_JIT_NO_WORD()); \
     } while (0)
+/* A frame switch (an entry, a return, a suspension) goes on at next_instr
+ * of frame: at its copy, in the frame's unit, if the code has live entries
+ * and next_instr is not the switch word, as _PyEval_JitDispatch() does.
+ * The copy jumps there itself, through an indirect jump of its own that
+ * the branch predictor keeps apart per site; like every exit from a copy,
+ * it first closes the departure window.  Otherwise it leaves for the
+ * evaluator (_JIT_SWITCH). */
 #undef IR_DISPATCH_SWITCHED
-#define IR_DISPATCH_SWITCHED() IR_JIT_GOTO(_JIT_SWITCH, IR_JIT_NO_WORD())
+#define IR_DISPATCH_SWITCHED() \
+    do { \
+        const void *const *ir_entries = _PyFrame_JitEntries(frame); \
+        if (ir_entries != NULL && next_instr != &_PyEval_SwitchWord && \
+            !IR_JIT_TRACED()) { \
+            ((_PyThreadStateImpl *)tstate)->jit_departing = 0; \
+            IR_JIT_SWITCH_STAT(); \
+            Py_MUSTTAIL return ((_PyIRTailFn)ir_entries[next_instr - frame->ir_words])( \
+                tstate, frame, next_instr, IR_JIT_NO_WORD()); \
+        } \
+        IR_JIT_GOTO(_JIT_SWITCH, IR_JIT_NO_WORD()); \
+    } while (0)
+#ifdef Py_STATS
+#  define IR_JIT_SWITCH_STAT() (tstate->interp->ceval.jit_switches++)
+#else
+#  define IR_JIT_SWITCH_STAT() ((void)0)
+#endif
 #undef IR_DISPATCH_REDIRECTED
 #define IR_DISPATCH_REDIRECTED() IR_JIT_GOTO(_JIT_REDIRECT, IR_JIT_NO_WORD())
 #undef DISPATCH_SAME_OPARG
@@ -114,6 +137,17 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
     } while (0)
 #undef JUMP_TO_LABEL
 #define JUMP_TO_LABEL(name) IR_JIT_GOTO(_JIT_LABEL_##name, IR_JIT_NO_WORD())
+/* An outlined cold region runs in the normal evaluator, from its entry for
+ * compiled code (IR_OUTLINED_JIT_ENTRY, Python/ceval_evaluator.h): a symbol
+ * of libpython, which the reader takes as an EXTERN hole */
+#undef IR_OUTLINE_GOTO
+#define IR_OUTLINE_GOTO(NAME) \
+    do { \
+        extern Py_IR_TAIL_CC __attribute__((visibility("hidden"), cold)) \
+        PyValue _PyEval_JitOut_##NAME(PyThreadState *, _PyInterpreterFrame *, \
+                                      _PyInstr *, _PyIRWord); \
+        Py_MUSTTAIL return _PyEval_JitOut_##NAME(tstate, frame, this_instr, ir_word); \
+    } while (0)
 /* A departing arm opens the thread's departure window (Python/jit.c,
  * _PyJit_Reclaim()): the copy runs on after its frame, and maybe its code,
  * is gone.  The exits into the evaluator close it. */

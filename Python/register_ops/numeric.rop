@@ -85,6 +85,18 @@ extern primitive float_op_admits(op:Enum<Numeric>, a:F64, b:F64, z:F64) -> Bool
             "test and float_pow's cases.",
     contract: "Reads the operator and the doubles: no memory, no failure.");
 
+// The word of a float that is not NaN, which holds the double and owns no
+// count (hit); NaN, which only a box holds, is cold (absent, box_float)
+extern primitive float_word(z:F64)
+  cases(hit(v:O), cold absent())
+  effects()
+  ensures(hit.exact<float>(v))
+  c _PyValue_FloatWord as bool_out_hit
+  evidence(
+    review: "J5. pycore_value.h PyValue_FromDouble's path for a double that is"
+            "not NaN, PyValue_FromDoubleNotNaN.",
+    contract: "Reads the double: no memory, no failure.");
+
 // The float of an admitted result, boxed only when it is NaN
 extern helper box_float(z:F64)
   cases(ok(v:O), err(e:Err))
@@ -234,6 +246,11 @@ arm Binary.Float shared over(op: NB_INPLACE_ADD, NB_SUBTRACT, NB_INPLACE_SUBTRAC
     let b:F64 = number_as_double(r);
     let v:F64 = float_value(op, a, b);
     guard float_op_admits(op, a, b, v) else miss;
+    call float_word(v) {
+      hit -> Finish();
+      absent -> NaN();
+    }
+  NaN():
     call box_float(v) {
       ok -> Finish();
       err -> Failed();

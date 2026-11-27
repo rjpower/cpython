@@ -3280,8 +3280,11 @@ Python/ceval_observing.o: Python/ceval_observing.c
 # each arm's cold part is its own, and no identical-code folding, which
 # would make one arm a jump to its twin.  The object is never linked; the
 # reader writes the table of stencils from it, and refuses any relocation
-# outside its declared kinds, which fails the build.
-CFLAGS_JIT_STENCILS=-fpie -ffunction-sections -fno-ipa-icf
+# outside its declared kinds, which fails the build.  The emitter places
+# each copy at any byte, so the stencils align no jump target or loop: the
+# padding GCC would add is lost in every copy.
+CFLAGS_JIT_STENCILS=-fpie -ffunction-sections -fno-ipa-icf \
+	-falign-jumps=1 -falign-loops=1 -falign-labels=1
 
 Python/jit_stencils.o: Python/jit_stencils.c Python/ceval_normal.c \
 		$(srcdir)/Python/generated_jit_stencil_decls.h

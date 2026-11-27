@@ -88,7 +88,6 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 
 /* Rows declared inline: always inlined into every arm that calls them */
 static Py_ALWAYS_INLINE bool _PyRop_FloatOperands(PyValueBorrow, PyValueBorrow);
-static Py_ALWAYS_INLINE PyValue _PyRop_AddFloats(double, double);
 static Py_ALWAYS_INLINE bool _PyRop_ExactPositional(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);
 static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
 static Py_ALWAYS_INLINE bool _PyRop_ExactPositionalBound(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);

@@ -814,7 +814,21 @@ extern helper retire_frame(t:Thread, d:DeadFrame) -> Unit
     contract: "Closes every owner of the frame in turn, then pops it; a finalizer may"
               "run Python, which sees a consistent frame.");
 
-// The frame's scratch is vacant: only the locals can own values
+// Whether no frame object sees the returning frame and it is not the
+// thread's last profiled frame; the other case, which retire_frame
+// handles, is cold
+extern primitive frame_unobserved(t:Thread, d:DeadFrame)
+  cases(plain(), cold observed())
+  effects(reads)
+  borrows(d)
+  c _PyRop_FrameUnobserved as bool_cases
+  evidence(
+    review: "J5. ceval_shared.h: the test that _PyRop_RetireFrameEmpty made"
+            "before it retired the frame itself.",
+    contract: "Reads the frame and the thread: no memory, no failure.");
+
+// An unobserved frame (frame_unobserved) whose scratch is vacant: only the
+// locals can own values
 extern helper retire_frame_empty(t:Thread, d:DeadFrame) -> Unit
   effects(releases)
   c _PyRop_RetireFrameEmpty as unit inline
@@ -1088,7 +1102,17 @@ arm Return.Empty split select(thread_frame, vacant_scratch)
     let r:O = acquire(value);
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);
+    call frame_unobserved(thread, dying) {
+      plain -> Plain();
+      observed -> Observed();
+    }
+  Plain():
     let _:Unit = retire_frame_empty(thread, dying);
+    goto Deliver();
+  Observed():
+    let _:Unit = retire_frame(thread, dying);
+    goto Deliver();
+  Deliver():
     let h:Head = deliver(caller, r);
     publish [] retire [] at Return.Delivered;
     exit return(caller, h);

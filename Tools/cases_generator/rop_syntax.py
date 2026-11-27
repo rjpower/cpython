@@ -443,8 +443,10 @@ class Parser:
         raise self.error("expected '-> type' or 'cases(...)'")
 
     def case_decl(self, schemas: tuple[str, ...]) -> CaseDecl:
+        # `cold name(...)`; a case may itself be named cold
+        cold = self.peek("cold") and not self.peek("(", 1) and self.accept("cold") is not None
         name = self.ident("a case name")
-        return CaseDecl(name.text, self.params(schemas), name.span)
+        return CaseDecl(name.text, self.params(schemas), name.span, cold)
 
     def contract(self, exits: bool | None, schemas: tuple[str, ...] = ()) -> Contract:
         """`exits` True: an arm's contract, effects, feedback and exits

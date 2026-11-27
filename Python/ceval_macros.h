@@ -1082,3 +1082,21 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * apart from DISPATCH(), which there goes on at the next word. */
 #define IR_DISPATCH_SWITCHED() DISPATCH()
 #define IR_DISPATCH_REDIRECTED() DISPATCH()
+
+/* An arm's cold region, outlined (Tools/cases_generator/rop_cgen.py,
+ * outline_cold()): a region from which every way out is a cold exit (miss,
+ * raise, unwind, redirect, again) and which makes a call is a function
+ * Cold_<arm>_<head> of the evaluator's type, which the arm tail-calls at
+ * the region's head with this_instr as next_instr, after it leaves the
+ * values that the region reads in the activation (IR_OUTLINE_IN).  The
+ * region's code is out of the arm, so the arm's hot path holds none of it
+ * and keeps no register or frame for it.  The stencils of the baseline JIT
+ * (Python/jit_stencils.c) bind IR_OUTLINE_GOTO() to the entry for compiled
+ * code, IR_OUTLINED_JIT_ENTRY (Python/ceval_evaluator.h). */
+#define IR_OUTLINED_FN(NAME) IR_TAIL_FN(NAME)
+#define IR_OUTLINE_GOTO(NAME) \
+    do { \
+        Py_MUSTTAIL return IR_TAIL_ID(NAME)(tstate, frame, this_instr, ir_word); \
+    } while (0)
+#define IR_OUTLINE_IN(TYPE) ((TYPE *)(void *)IR_ACTIVATION()->outline_in)
+#define IR_OUTLINE_IN_SIZE _PyEval_OUTLINE_IN_SIZE

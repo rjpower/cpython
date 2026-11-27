@@ -2795,19 +2795,25 @@ _PyRop_RetireFrame(PyThreadState *tstate, _PyInterpreterFrame *dying)
     (void)retire_thread_frame(tstate, dying, PyValue_NULL, _PyFrame_NumSlots(dying));
 }
 
-/* The same for a frame whose scratch is vacant, so that only its locals can
- * own values (_PyEval_RetireThreadFrameWithResult) */
+/* Whether a frame that returns is seen by no frame object and is not the
+ * thread's last profiled frame: the plain retire (_PyRop_RetireFrameEmpty)
+ * applies, and otherwise the general one (_PyRop_RetireFrame) */
+static inline bool
+_PyRop_FrameUnobserved(PyThreadState *tstate, _PyInterpreterFrame *dying)
+{
+    return dying->frame_obj == NULL && tstate->last_profiled_frame != dying;
+}
+
+/* The same for an unobserved frame (_PyRop_FrameUnobserved) whose scratch
+ * is vacant, so that only its locals can own values
+ * (_PyEval_RetireThreadFrameWithResult) */
 static inline void
 _PyRop_RetireFrameEmpty(PyThreadState *tstate, _PyInterpreterFrame *dying)
 {
     assert(dying->owner == FRAME_OWNED_BY_THREAD);
     assert(tstate->current_frame != dying);
     assert((PyObject **)dying == tstate->datastack_limit);
-    if (Py_UNLIKELY(dying->frame_obj != NULL
-                    || tstate->last_profiled_frame == dying)) {
-        _PyRop_RetireFrame(tstate, dying);
-        return;
-    }
+    assert(_PyRop_FrameUnobserved(tstate, dying));
     _PyFrame_ClearSlots(dying, (int)_PyFrame_Exec(dying)->nfixed);
     assert(dying->f_funcobj != NULL);
     Py_DECREF(dying->f_funcobj);

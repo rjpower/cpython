@@ -6316,6 +6316,29 @@
             ROP_GEN_RETURN(caller, r, dying);
         }
 
+        TARGET(Return_GeneratorEmpty) {
+            // Return.GeneratorEmpty (split)
+            int opcode = ROP_HANDLER_Return_GeneratorEmpty;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Return_GeneratorEmpty);
+            PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+            PyValue r;
+            _PyInterpreterFrame * caller;
+            _PyInterpreterFrame * dying;
+            _PyInterpreterFrame * f;
+            _PyInstr * h;
+            IR_STUB_ESCAPE();
+            IR_PIN_DEPARTING();
+            r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+            caller = _PyRop_PreviousFrame(frame);
+            dying = _PyRop_Depart(tstate, frame);
+            ROP_GEN_RETURN_EMPTY(caller, r, dying);
+        }
+
         TARGET(Return_Observed) {
             // Return.Observed (split)
             int opcode = ROP_HANDLER_Return_Observed;

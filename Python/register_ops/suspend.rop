@@ -167,7 +167,13 @@ arm Yield.Ordinary split
     exit yield(v) resume Yield.Resumed;
 }
 
-arm YieldFrom.Delegated split
+// The resume role of a delegation chain: the generator's resume head is a
+// Resume word, then Jump.Direct back to the Send whose value home is this
+// word's value and resume.  A chain entry (enter_generator) resumes such a
+// frame at its Send without running its words, and a suspension goes on up
+// through every plain consumer whose resume word is this arm (ROP_SUSPEND,
+// Python/ceval_macros.h; _PyRop_SuspendChain).
+arm YieldFrom.Delegated split chain(resume)
   effects(runs_python, reads, writes, releases, switches_frame)
   feedback()
   exits(yield)
@@ -270,19 +276,30 @@ extern helper claimable_generator(t:Thread, g:B, v:B) -> Bool
 // Claim the generator and link its frame under this one, with the value sent
 // as the value it resumes with.  Free-threaded, another thread can claim it
 // first: that is the generic send's ValueError and the value is closed.
+//
+// A chain entry (pyjit G4, golden87's gen_resume): while the frame entered
+// resumes after a chain(resume) word, at the start it would skip, its Send is
+// the chain(send) arm and the next receiver passes that arm's guard, the row
+// runs that level's start, Resume, Jump and Send itself, and enters the next
+// receiver; the frame returned is the deepest.  The free-threaded build
+// enters one level per word, as golden87's generator_thread_is_plain decided
+// (another thread can claim a receiver between the guard and the claim).
 extern helper enter_generator(t:Thread, f:Frame, g:B, v:O)
   cases(entered(c:NewFrame), err(e:Err))
   effects(reads, writes, raises)
   ensures(entered.generator_frame(c))
   c _PyRop_EnterGenerator as pointer_or_raised
   evidence(
-    review: "ceval_shared.h _PyRop_EnterGenerator: IR_ENTER_GENERATOR's links, gen_claim (the"
-            "claim of gen_may_claim's guard, a compare-and-swap free-threaded) and"
-            "_PyFrame_SetResumeValue.",
-    contract: "The receiver is claimed (FRAME_EXECUTING) and its frame returned, whose"
-              "previous is f. The exception chain of the generator hangs off"
-              "tstate->exc_info. v is its resume value, or closed on err. The recursion"
-              "debit and the resume are the frame start's.");
+    review: "ceval_shared.h _PyRop_EnterGenerator and _PyRop_EnterChain: IR_ENTER_GENERATOR's"
+            "links, gen_claim (the claim of gen_may_claim's guard, a compare-and-swap"
+            "free-threaded), golden87's gen_resume loop and _PyFrame_SetResumeValue.",
+    contract: "The receiver is claimed (FRAME_EXECUTING). The frame returned is the deepest"
+              "of the chain that starts at the receiver's frame, whose previous is f; each"
+              "level above it has its recursion debit, instr_ptr at its Send, return_slot"
+              "the Send's value home and return_pc the word after, and has claimed and"
+              "linked the next. Each generator's exception chain hangs off the one above."
+              "v is the deepest frame's resume value, or closed on err. The deepest frame's"
+              "recursion debit and resume are the frame start's.");
 
 // The claim of the old generic _SEND: the guards of claimable_generator and
 // gen_try_set_executing.  A receiver that is not claimed, because it is of
@@ -494,7 +511,7 @@ arm Send.Generic split
 // SEND_GEN: a generator or coroutine that is created or suspended, entered
 // in place.  Free-threaded, another thread can claim it between the guard and
 // the claim: that is the ValueError of an executing generator.
-arm Send.Gen split
+arm Send.Gen split chain(send)
   effects(runs_python, reads, writes, raises, switches_frame)
   feedback()
   exits(enter, raise, miss)

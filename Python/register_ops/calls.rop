@@ -847,6 +847,19 @@ extern helper generator_return(c:Frame, v:O, d:DeadFrame)
             "resumer, as RETURN_VALUE does.",
     contract: "ir_gen_return: clears the generator frame and completes its consumer.");
 
+// generator_return for a frame whose scratch is vacant (the lowering test of
+// Return.Empty): only its locals can own values, and its retirement clears
+// those (IR_GEN_RETURN's EMPTY), as golden87's RETURN_VALUE_EMPTY did
+extern helper generator_return_empty(c:Frame, v:O, d:DeadFrame)
+  cases(return(f:Frame, h:Head), redirect(r:Route), raise(e:Err))
+  effects(runs_python, writes, releases, raises, switches_frame)
+  c ROP_GEN_RETURN_EMPTY as transfer
+  evidence(
+    review: "ceval.c and ceval_routines.h: IR_GEN_RETURN(v, d, 1) with frame the"
+            "resumer, as golden87's RETURN_VALUE_EMPTY in a generator did.",
+    contract: "ir_gen_return: clears the generator frame's fixed slots and completes"
+              "its consumer; the scratch is vacant.");
+
 // The evaluator's entry frame: the value leaves the activation
 extern helper leave_activation(t:Thread, f:Frame) -> Unit
   effects(writes)
@@ -1083,7 +1096,7 @@ arm Return.Empty split select(thread_frame, vacant_scratch)
     exit return(caller, h);
 }
 
-arm Return.Generator split select(generator_frame)
+arm Return.Generator split select(generator_frame, live_scratch)
   effects(runs_python, reads, writes, releases, raises, switches_frame)
   feedback()
   exits(return, raise, redirect)
@@ -1094,6 +1107,29 @@ arm Return.Generator split select(generator_frame)
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);
     call generator_return(caller, r, dying) {
+      return -> Completed();
+      redirect -> Moved();
+      raise -> Failed();
+    }
+  Completed(f:Frame, h:Head):
+    exit return(f, h);
+  Moved(rt:Route):
+    exit redirect(rt);
+  Failed(e:Err):
+    exit raise(Return.ConsumerFailed, e);
+}
+
+arm Return.GeneratorEmpty split select(generator_frame, vacant_scratch)
+  effects(runs_python, reads, writes, releases, raises, switches_frame)
+  feedback()
+  exits(return, raise, redirect)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let r:O = acquire(value);
+    let caller:Frame = previous_frame(frame);
+    let dying:DeadFrame = depart(thread, frame);
+    call generator_return_empty(caller, r, dying) {
       return -> Completed();
       redirect -> Moved();
       raise -> Failed();

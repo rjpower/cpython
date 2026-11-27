@@ -1850,24 +1850,181 @@ _PyRop_ClaimableGenerator(PyThreadState *tstate, PyValueBorrow receiver,
 }
 
 /* Link the claimed generator's frame under frame, which returns it: the
- * links of the old IR_ENTER_GENERATOR.  The recursion debit and the first
- * word are the frame start's. */
+ * links of the old IR_ENTER_GENERATOR, without the resume value. */
 static inline _PyInterpreterFrame *
-_PyRop_LinkGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     PyGenObject *gen, PyValue sent)
+_PyRop_LinkFrame(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 PyGenObject *gen)
 {
     _PyInterpreterFrame *resumed = &gen->gi_iframe;
     resumed->previous = frame;
     gen->gi_exc_state.previous_item = tstate->exc_info;
     tstate->exc_info = &gen->gi_exc_state;
+    return resumed;
+}
+
+/* The links and the value sent in.  The recursion debit and the first word
+ * are the frame start's. */
+static inline _PyInterpreterFrame *
+_PyRop_LinkGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     PyGenObject *gen, PyValue sent)
+{
+    _PyInterpreterFrame *resumed = _PyRop_LinkFrame(tstate, frame, gen);
     _PyFrame_SetResumeValue(resumed, sent);
     return resumed;
 }
 
+/* A delegation chain moves in one transfer (pyjit G4, golden87's
+ * gen_resume and gen_yield): the thread's share of the test, made once per
+ * transfer.  The free-threaded build enters and suspends one level per
+ * word, as golden87's generator_thread_is_plain decided: another thread
+ * can claim a receiver between its guard and its claim.  A DTrace probe
+ * reports each level's entry and return, which a frame start and a
+ * suspension fire. */
+static inline bool
+_PyRop_ChainThreadPlain(void)
+{
+#if defined(Py_GIL_DISABLED)
+    return false;
+#elif defined(WITH_DTRACE)
+    return !PyDTrace_FUNCTION_ENTRY_ENABLED() && !PyDTrace_FUNCTION_RETURN_ENABLED();
+#else
+    return true;
+#endif
+}
+
+/* The Send of the next level of a chain that level, a claimed and linked
+ * generator frame not yet started, would run, or NULL where the walk stops.
+ * Level resumes after the chain(resume) word of a yield-from loop, whose
+ * words are the chain(send) arm, that word, then the resume head (a Resume)
+ * and a Jump.Direct back to the Send; the Send's value home is level's
+ * resume slot; its receiver passes the arm's guard with the value sent in;
+ * level's recursion debit cannot fail, so a RecursionError is raised in the
+ * level that raises it now; and level's start would skip its Resume
+ * (_PyRop_StartSkips: no observed code, no stale instrumentation, no
+ * pending event, no Resume.Warm of code lowered for the JIT).  The start's
+ * test runs last: it counts a signal check under Emscripten, as the start
+ * does.  A created generator, an ordinary yield, a relaxed loop, a Send of
+ * another arm and a non-generator receiver end the walk. */
+static inline Py_ALWAYS_INLINE _PyInstr *
+_PyRop_ChainSend(PyThreadState *tstate, _PyInterpreterFrame *level,
+                 PyValueBorrow sent)
+{
+    _PyInstr *resume = level->instr_ptr;
+    _PyInstr *send = resume - 2;
+    if (level->pending_redirect || send < level->ir_words ||
+        !_PyRop_ChainResumes(IR_HANDLER(resume[-1])) ||
+        tstate->py_recursion_remaining <= 0) {
+        return NULL;
+    }
+#ifdef Py_DEBUG
+    /* lltrace reports each frame's start */
+    if (level->lltrace) {
+        return NULL;
+    }
+#endif
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*send);
+    _PyIRWord jump = FT_ATOMIC_LOAD_UINT64_RELAXED(resume[1]);
+    if (!_PyRop_ChainSends(IR_HANDLER(word)) ||
+        IR_HANDLER(jump) != ROP_HANDLER_Jump_Direct ||
+        _PyIR_FormatDistance(_PyIR_FormatOf(ROP_HANDLER_Jump_Direct), jump) != -4 ||
+        IR_B(word) + 2 != level->return_slot ||
+        !_PyRop_ClaimableGenerator(tstate, PyValue_Borrow(level->base[IR_B(word)]),
+                                   sent) ||
+        !_PyRop_StartSkips(tstate, level, resume)) {
+        return NULL;
+    }
+    return send;
+}
+
+/* The chain entry of enter_generator and enter_for_generator: child is the
+ * receiver's frame, claimed and linked.  While child resumes at the Send of
+ * another level (_PyRop_ChainSend), do what child's start, its Resume, its
+ * Jump.Direct and that Send would do: the recursion debit, instr_ptr at the
+ * Send, return_slot the Send's value home (already) and return_pc the
+ * chain(resume) word after it, and the claim and link of the Send's
+ * receiver, which becomes child.  The value sent in stays with the caller,
+ * for the deepest frame: each level's value home stays vacant, as the Send
+ * that took it left it.  Returns the deepest frame. */
+static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
+_PyRop_EnterChain(PyThreadState *tstate, _PyInterpreterFrame *child,
+                  PyValueBorrow sent)
+{
+    if (!_PyRop_ChainThreadPlain()) {
+        return child;
+    }
+    _PyInstr *send;
+    while ((send = _PyRop_ChainSend(tstate, child, sent)) != NULL) {
+        tstate->py_recursion_remaining--;
+        assert(PyValue_IsNull(child->base[child->return_slot]));
+        child->instr_ptr = send;
+        child->return_pc = send + 1;
+        PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(
+            child->base[IR_B(*send)]);
+        int claimed = gen_claim(tstate, gen);
+        assert(claimed);
+        (void)claimed;
+        child = _PyRop_LinkFrame(tstate, child, gen);
+    }
+    return child;
+}
+
+/* A delegation chain's suspension (pyjit G4, golden87's gen_yield): a
+ * generator has suspended to frame, its consumer.  While frame would run,
+ * at its return_pc, the chain(resume) word of its yield-from loop, whose
+ * value and resume homes are frame's return slot, do what that word would
+ * do: suspend frame too, in the delegating state, and go on to its
+ * consumer.  The value stays with the caller, for the last consumer: each
+ * level's value home stays vacant, as the word that took it left it.  The
+ * walk stops at a frame that is not a generator's, has a pending redirect
+ * (or a switch of evaluator: its return_pc is the switch word), runs
+ * observed code (the word would be its observer, which reports PY_YIELD),
+ * or ran in its code's unit (_PyFrame_JIT_RESUME: it goes back to the
+ * unit, which runs the word), and at any other word (a relaxed loop's
+ * trailing jump, a for loop).  The free-threaded build suspends one level
+ * per word, as golden87's generator_thread_is_plain decided
+ * (_PyRop_ChainThreadPlain).  Returns the last consumer. */
+static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
+_PyRop_SuspendChain(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    if (!_PyRop_ChainThreadPlain()) {
+        return frame;
+    }
+    for (;;) {
+        if (frame->owner != FRAME_OWNED_BY_GENERATOR || frame->pending_redirect ||
+            (frame->jit_flags & _PyFrame_JIT_RESUME) ||
+            _PyCode_IsObserved(_PyFrame_GetCode(frame))) {
+            return frame;
+        }
+#ifdef Py_DEBUG
+        /* lltrace reports each word */
+        if (frame->lltrace) {
+            return frame;
+        }
+#endif
+        _PyInstr *yield = frame->return_pc;
+        _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*yield);
+        if (!_PyRop_ChainResumes(IR_HANDLER(word)) || (word & IR_F_LOCAL_A) ||
+            IR_A(word) != frame->return_slot || IR_B(word) != frame->return_slot) {
+            return frame;
+        }
+        assert(PyValue_IsNull(frame->base[frame->return_slot]));
+        frame->instr_ptr = yield + 1;
+        PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
+        tstate->exc_info = gen->gi_exc_state.previous_item;
+        gen->gi_exc_state.previous_item = NULL;
+        _Py_LeaveRecursiveCallPy(tstate);
+        _PyInterpreterFrame *suspended = frame;
+        _PyThreadState_UpdateLastProfiledFrame(tstate, suspended, suspended->previous);
+        frame = tstate->current_frame = suspended->previous;
+        suspended->previous = NULL;
+        FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
+    }
+}
+
 /* Send.Gen: claim the generator that _PyRop_ClaimableGenerator accepted, as
- * SEND_GEN did, and link its frame.  Free-threaded, another thread can claim
- * it first, and the send raises what the generic send raises for an
- * executing generator. */
+ * SEND_GEN did, link its frame, and enter the chain below it.
+ * Free-threaded, another thread can claim it first, and the send raises
+ * what the generic send raises for an executing generator. */
 static inline _PyInterpreterFrame *
 _PyRop_EnterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
                       PyValueBorrow receiver, PyValue sent)
@@ -1879,7 +2036,10 @@ _PyRop_EnterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyErr_SetRaisedException(error);
         return NULL;
     }
-    return _PyRop_LinkGenerator(tstate, frame, gen, sent);
+    _PyInterpreterFrame *child = _PyRop_EnterChain(
+        tstate, _PyRop_LinkFrame(tstate, frame, gen), PyValue_Borrow(sent));
+    _PyFrame_SetResumeValue(child, sent);
+    return child;
 }
 
 Py_NO_INLINE bool
@@ -1948,8 +2108,8 @@ _PyRop_EnterForClaimed(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 /* Claim the generator that _PyRop_ClaimableForGenerator accepted and link its
- * frame under frame, with None to resume with.  NULL: another thread
- * claimed it first, and ValueError is set. */
+ * frame under frame, with None to resume with, and enter the chain below
+ * it.  NULL: another thread claimed it first, and ValueError is set. */
 static inline _PyInterpreterFrame *
 _PyRop_EnterForGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          PyValueBorrow receiver)
@@ -1958,7 +2118,22 @@ _PyRop_EnterForGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (!gen_claim(tstate, gen)) {
         return NULL;
     }
-    return _PyRop_LinkGenerator(tstate, frame, gen, PyValue_None);
+    _PyInterpreterFrame *child = _PyRop_EnterChain(
+        tstate, _PyRop_LinkFrame(tstate, frame, gen), PyValue_Borrow(PyValue_None));
+    _PyFrame_SetResumeValue(child, PyValue_None);
+    return child;
+}
+
+/* ForIter.Complete's receiver, whose generator the return cleared:
+ * golden87's gen_try_close_completed, else a close */
+static inline void
+_PyRop_CloseCompletedReceiver(PyValue receiver)
+{
+    if (PyValue_RefcountOnObject(PyValue_Borrow(receiver)) &&
+        _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(receiver))) {
+        return;
+    }
+    PyValue_XCLOSE(receiver);
 }
 
 static inline bool

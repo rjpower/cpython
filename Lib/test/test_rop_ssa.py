@@ -125,7 +125,8 @@ arm F.Split shared effects(allocates, writes, releases on (dsts), runs_python) f
                                ("release", rop_check.DebtKind.old)])
 
     def test_a_transfer_row_performs_its_edges_exits(self):
-        for name in ("Jump.Warm", "Return.Generator", "Return.Observed"):
+        for name in ("Jump.Warm", "Return.Generator", "Return.GeneratorEmpty",
+                     "Return.Observed"):
             switches = [b.term for b in SSA[name].blocks.values()
                         if isinstance(b.term, rop_ssa.Switch) and b.term.transfer]
             with self.subTest(arm=name):
@@ -138,6 +139,7 @@ arm F.Split shared effects(allocates, writes, releases on (dsts), runs_python) f
     def test_select_and_observes_are_entry_facts(self):
         self.assertEqual(SSA["LocalRead.Bound"].facts, ("nonnull(local)",))
         self.assertEqual(SSA["Return.Generator"].facts, ("generator_frame(frame)",))
+        self.assertEqual(SSA["Return.GeneratorEmpty"].facts, ("generator_frame(frame)", "vacant_scratch(frame)"))
         self.assertEqual(SSA["Call.Observed"].facts, ("instrumented(site)",))
 
     def test_a_row_with_cases_has_an_edge_per_case(self):
@@ -1318,6 +1320,8 @@ NOT_RUN = {
     "WithExit.Generic": "deferred: no scenario yet (interpreter-first)",
     "Return.Generator":"returns from a generator frame, which rop_transfer_run's "
                         "synthetic caller cannot hold",
+    "Return.GeneratorEmpty": "returns from a generator frame, which "
+                             "rop_transfer_run's synthetic caller cannot hold",
     "NamespaceRead.Name": "LOAD_NAME occurs in module and class code, which the probe "
                           "cannot call as a function",
     "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",

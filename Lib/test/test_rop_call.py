@@ -112,12 +112,13 @@ class ReturnTests(unittest.TestCase):
             yield n
             return n * 2
         list(gen(1))
-        force(gen, "RETURN_VALUE", "Return.Generator")
-        g = gen(3)
-        self.assertEqual(next(g), 3)
-        with self.assertRaises(StopIteration) as cm:
-            next(g)
-        self.assertEqual(cm.exception.value, 6)
+        for arm in ("Return.Generator", "Return.GeneratorEmpty"):
+            force(gen, "RETURN_VALUE", arm)
+            g = gen(3)
+            self.assertEqual(next(g), 3)
+            with self.assertRaises(StopIteration) as cm:
+                next(g)
+            self.assertEqual(cm.exception.value, 6)
 
         def outer():
             result = yield from gen(5)
@@ -914,7 +915,7 @@ class ObservationTests(unittest.TestCase):
         for arm in ("Call.Exact", "Call.BoundExact", "Call.Init",
                     "Call.Len", "Return.Empty"):
             self.assertIn(arm, names)
-        self.assertIn("Return.Generator", word_names(generator.__code__))
+        self.assertIn("Return.GeneratorEmpty", word_names(generator.__code__))
         monitor = Monitor(self)
         self.assertEqual(monitor.run(sample), 15)
         self.assertEqual(monitor.log, SAMPLE_EVENTS)

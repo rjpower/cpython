@@ -1138,6 +1138,7 @@ typedef struct {
             f'{operand_mask(pt.defs, operands)}}},\n')
     out.write("};\n\n")
     write_selectors(out, prog)
+    write_chain_roles(out, prog)
     out.write("#endif\n")
 
 
@@ -1186,6 +1187,20 @@ def write_selectors(out: TextIO, prog: Program) -> None:
                                 for m in a.select)
             out.write(f"    ({tests}) ? ROP_ARM({c_name(a.name)}) : \\\n")
         out.write("    -1)\n")
+    out.write("\n")
+
+
+def write_chain_roles(out: TextIO, prog: Program) -> None:
+    """The arm of each delegation chain role (`chain(...)`), as a test of a
+    handler id: the chain entry and the suspension (Python/ceval_shared.h)
+    read the roles here, not handler names"""
+    out.write("/* The arms of the delegation chain's roles (`chain(...)`): the word\n"
+              " * before a resume head that resumes at its loop's Send, and the Send\n"
+              " * whose entry a chain entry runs for each level */\n")
+    for role, macro in (("resume", "_PyRop_ChainResumes"), ("send", "_PyRop_ChainSends")):
+        arms = [a for a in prog.arms.values() if a.chain == role]
+        tests = " || ".join(f"(H) == {handler(a.name)}" for a in arms) or "0"
+        out.write(f"#define {macro}(H) ({tests})\n")
     out.write("\n")
 
 

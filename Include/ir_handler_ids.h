@@ -13,7 +13,7 @@ extern "C" {
 #define IR_H_IR_OPERANDS                            0
 
 #define IR_FIRST_ARM                             1
-#define IR_NUM_HANDLERS                        303
+#define IR_NUM_HANDLERS                        304
 
 /* What _PyIR_HandlerBase holds for a handler that is no stack op: a number
  * past every stack opcode and pseudo-instruction */

@@ -509,6 +509,7 @@ def check(files: Iterable[SourceFile]) -> Program:
         check_macro(c, m)
     for a in c.arms.values():
         check_arm(c, a)
+    check_chain_roles(c)
     for a in c.completions.values():
         check_completion_arm(c, a)
     for fam in c.families.values():
@@ -1044,6 +1045,62 @@ def check_macro(c: Checker, m: Macro) -> None:
         check_graph(c, m.name, m.graph, m.params, None, m)
 
 
+# The roles of a delegation chain (`chain(...)`, rop_model.Arm.chain) and the
+# row whose entry a chain entry runs for each level
+CHAIN_ROLES = {"resume": "YieldFrom", "send": "Send"}
+CHAIN_ENTRY_ROW = "enter_generator"
+
+
+def arm_terms(a: Arm) -> Iterable[Any]:
+    for b in a.graph.blocks:
+        yield b.term
+
+
+def arm_callees(a: Arm) -> set[str]:
+    """The rows and macros that the arm calls, by status call or in a let"""
+    callees = {t.callee for t in arm_terms(a) if isinstance(t, CallTerm)}
+    for b in a.graph.blocks:
+        for s in b.stmts:
+            if isinstance(s, Let) and isinstance(s.value, Call):
+                callees.add(s.value.callee)
+    return callees
+
+
+def check_chain_role(c: Checker, a: Arm) -> None:
+    """A `resume` arm suspends its generator by `exit yield`; a `send` arm
+    enters a generator by CHAIN_ENTRY_ROW, whose child returns through the
+    family's completion.  Neither observes: an observed level runs its own
+    words."""
+    if a.chain not in CHAIN_ROLES:
+        c.report(a.span, a.name, f"chain({a.chain}): a chain role is one of "
+                 f"{', '.join(CHAIN_ROLES)}")
+        return
+    if a.family != CHAIN_ROLES[a.chain]:
+        c.report(a.span, a.name, f"chain({a.chain}) is an arm of family "
+                 f"{CHAIN_ROLES[a.chain]}")
+    if a.observes:
+        c.report(a.span, a.name, "an observer is not part of a chain: an observed "
+                 "level runs its own words")
+    exits = [t for t in arm_terms(a) if isinstance(t, Exit)]
+    if a.chain == "resume" and not any(t.kind == "yield" for t in exits):
+        c.report(a.span, a.name, "chain(resume): the arm suspends its generator "
+                 "(exit yield)")
+    if a.chain == "send" and (
+            not any(t.kind == "enter" and t.complete is not None for t in exits)
+            or CHAIN_ENTRY_ROW not in arm_callees(a)):
+        c.report(a.span, a.name, f"chain(send): the arm enters a generator by "
+                 f"{CHAIN_ENTRY_ROW} (exit enter ... complete)")
+
+
+def check_chain_roles(c: Checker) -> None:
+    """At most one arm plays each role: the chain entry and the suspension
+    read the roles as single handler ids"""
+    for role in CHAIN_ROLES:
+        arms = [a for a in c.arms.values() if a.chain == role]
+        for a in arms[1:]:
+            c.report(a.span, a.name, f"chain({role}) is {arms[0].name}'s already")
+
+
 def check_arm(c: Checker, a: Arm) -> None:
     parts = a.name.split(".")
     fam = c.families.get(parts[0])
@@ -1056,6 +1113,8 @@ def check_arm(c: Checker, a: Arm) -> None:
     if a.trailing and (a.observes or a.select or a.entry is not None):
         c.report(a.span, a.name, "a trailing arm belongs to the instruction before "
                  "it: it is not selected, observed or adaptive, and fires no event")
+    if a.chain is not None:
+        check_chain_role(c, a)
     edges = {n: () for n in a.contract.exits}
     check_contract(c, a.contract, a.name, fam.params, edges, True)
     for n in a.contract.exits:

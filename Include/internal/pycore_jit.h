@@ -118,8 +118,8 @@ PyAPI_FUNC(int) _PyJit_IsAvailable(void);
  * or switches to code whose unit is invalid.  Returns the code's valid
  * unit; otherwise counts the event, and compiles the code when it is warm
  * or recompiles a stale unit.  Returns the unit to run, or NULL to run the
- * frame in the evaluator.  Declared in every build, for the generated
- * lowerings; defined where the JIT is supported. */
+ * frame in the evaluator.  Declared in every build; defined where the JIT is
+ * supported. */
 extern _PyJitUnit *_PyJit_Event(PyThreadState *tstate,
                                 struct _PyInterpreterFrame *frame);
 

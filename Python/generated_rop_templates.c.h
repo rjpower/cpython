@@ -85,7 +85,7 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->builtins_version, uint32_t: 1, de
 static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
               "recipe Global.index: _PyGlobalRecipe.index is not uint32_t");
 //
-// 54 templates.  Inline arms that keep the call of their form:
+// 56 templates.  Inline arms that keep the call of their form:
 //   AttrWrite.Hint: AttrWrite.Hint: home has no leaf lowering
 //   AttrWrite.Instance: AttrWrite.Instance: home has no leaf lowering
 //   AttrWrite.Shape: AttrWrite.Shape: admitted_store_shape has no leaf lowering
@@ -3120,6 +3120,41 @@ jit_template_Truth_Plain(_PyJitWordCx *cx)
     }
 }
 
+// The leaf graph of BranchTruth.Bool_BRANCH_IF_FALSE_T:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_BoolCheck %1
+//     %3:bool = lnot %2
+//     exit_if EXIT %3
+//     %4:bool = prim PyValue_IsTrue %1
+//     jmp b1(%4)
+//   b1(%0:bool):
+//     %5:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1) %0
+//     br %5, b4, b5
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     jmp b2
+//   b5:
+//     jmp b3
+static void
+jit_template_BranchTruth_Bool_BRANCH_IF_FALSE_T(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    _PyJitLower_PyValue_BoolCheck(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    int c6 = _PyJitLower_PyValue_IsTrue(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    int c7 = ((!((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c6) : (int)c6);
+    _PyJitTemplate_Branch(cx, c7);
+}
+
 // The leaf graph of BranchTruth.Bool_BRANCH_IF_FALSE:
 //   b0:
 //     %1:value = arg value
@@ -3192,6 +3227,76 @@ jit_template_BranchTruth_Bool_BRANCH_IF_TRUE(_PyJitWordCx *cx)
     int c6 = _PyJitLower_PyValue_IsTrue(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
     int c7 = ((!((ROP_BRANCHMODE_BRANCH_IF_TRUE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)c6) : (int)c6);
     _PyJitTemplate_Branch(cx, c7);
+}
+
+// The leaf graph of BranchTruth.Int_BRANCH_IF_FALSE_L:
+//   b0:
+//     %1:value = arg value
+//     %2:bool = prim PyValue_LongCheckExact %1
+//     %3:bool = lnot %2
+//     exit_if EXIT %3
+//     %4:bool = prim PyValue_IsInlineInt %1
+//     br %4, b4, b5
+//   b1(%0:bool):
+//     %12:bool = xorb !((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1) %0
+//     br %12, b7, b8
+//   b2:
+//     branch
+//   b3:
+//     next
+//   b4:
+//     %6:i64 = prim PyValue_InlineInt64 %1
+//     %7:i64 = const 0
+//     %8:bool = cmp ne %6, %7
+//     jmp b6(%8)
+//   b5:
+//     %9:PyObject* = prim PyValue_AsKnownObjectBorrow %1
+//     %10:bool = prim _PyLong_IsZero %9
+//     %11:bool = lnot %10
+//     jmp b6(%11)
+//   b6(%5:bool):
+//     jmp b1(%5)
+//   b7:
+//     jmp b2
+//   b8:
+//     jmp b3
+static void
+jit_template_BranchTruth_Int_BRANCH_IF_FALSE_L(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    _PyJitLower_PyValue_LongCheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX}, (const void *)(intptr_t)(cx->slow + 1));
+    int c7 = _PyJitLower_PyValue_IsInlineInt(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    _PyJitAsm_Jcc(a, c7, L5);
+    _PyJitAsm_Bind(a, L6);
+    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+    int c15 = _PyJitLower__PyLong_IsZero(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Setcc(a, ((1) ? (int)_PyJitCond_Not((_PyJitCond)c15) : (int)c15), _PyJitReg_RCX);
+    _PyJitAsm_AluRI(a, _PyJitAlu_AND, _PyJitReg_RCX, 0xFF);
+    _PyJitAsm_Jmp(a, L7);
+    _PyJitAsm_Bind(a, L5);
+    _PyJitLower_PyValue_InlineInt64(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    _PyJitAsm_Setcc(a, _PyJitCond_NE, _PyJitReg_RCX);
+    _PyJitAsm_AluRI(a, _PyJitAlu_AND, _PyJitReg_RCX, 0xFF);
+    _PyJitAsm_Bind(a, L7);
+    if (0) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), 0);
+    }
+    if (0) {
+        cx->live = 0x2; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    }
+    _PyJitAsm_TestRR(a, _PyJitReg_RCX, _PyJitReg_RCX);
+    int c8 = ((!((ROP_BRANCHMODE_BRANCH_IF_FALSE) & 1)) ? (int)_PyJitCond_Not((_PyJitCond)_PyJitCond_NE) : (int)_PyJitCond_NE);
+    _PyJitTemplate_Branch(cx, c8);
 }
 
 // The leaf graph of BranchTruth.Int_BRANCH_IF_FALSE:
@@ -4196,8 +4301,10 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [ROP_HANDLER_Truth_None] = jit_template_Truth_None,
     [ROP_HANDLER_Truth_Str] = jit_template_Truth_Str,
     [ROP_HANDLER_Truth_Plain] = jit_template_Truth_Plain,
+    [ROP_HANDLER_BranchTruth_Bool_BRANCH_IF_FALSE_T] = jit_template_BranchTruth_Bool_BRANCH_IF_FALSE_T,
     [ROP_HANDLER_BranchTruth_Bool_BRANCH_IF_FALSE] = jit_template_BranchTruth_Bool_BRANCH_IF_FALSE,
     [ROP_HANDLER_BranchTruth_Bool_BRANCH_IF_TRUE] = jit_template_BranchTruth_Bool_BRANCH_IF_TRUE,
+    [ROP_HANDLER_BranchTruth_Int_BRANCH_IF_FALSE_L] = jit_template_BranchTruth_Int_BRANCH_IF_FALSE_L,
     [ROP_HANDLER_BranchTruth_Int_BRANCH_IF_FALSE] = jit_template_BranchTruth_Int_BRANCH_IF_FALSE,
     [ROP_HANDLER_BranchTruth_Int_BRANCH_IF_TRUE] = jit_template_BranchTruth_Int_BRANCH_IF_TRUE,
     [ROP_HANDLER_BranchTruth_List_BRANCH_IF_FALSE] = jit_template_BranchTruth_List_BRANCH_IF_FALSE,

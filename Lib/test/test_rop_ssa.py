@@ -1380,6 +1380,10 @@ NOT_RUN |= {
     "AddElement.Append_TT": MEMBER_WHY,
     "AttrWrite.Shape_TT": MEMBER_WHY,
     "AttrWrite.Slot_TT": MEMBER_WHY,
+    "Binary.Float_NB_INPLACE_ADD_LTT": MEMBER_WHY,
+    "Binary.Float_NB_MULTIPLY_TTL": MEMBER_WHY,
+    "Binary.Float_NB_TRUE_DIVIDE_TLT": MEMBER_WHY,
+    "Binary.Int_NB_INPLACE_SUBTRACT_TTL": MEMBER_WHY,
     "Call.BuiltinFast_LT": MEMBER_WHY,
     "Call.DescriptorFast_LT": MEMBER_WHY,
     "Call.Type1_LT": MEMBER_WHY,
@@ -1394,6 +1398,10 @@ NOT_RUN |= {
     "SetItem.ListIndex_TLT": MEMBER_WHY,
     "SetItem.ListIndex_TTT": MEMBER_WHY,
     "TestBranch.Identity_TT": MEMBER_WHY,
+    "TestBranch.Int_TEST_EQ_TT": MEMBER_WHY,
+    "TestBranch.Int_TEST_GT_TL": MEMBER_WHY,
+    "TestBranch.Int_TEST_NE_TL": MEMBER_WHY,
+    "TestBranch.Int_TEST_NE_TT": MEMBER_WHY,
     "TestBranch.Set_TT": MEMBER_WHY,
 }
 

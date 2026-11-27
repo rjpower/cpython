@@ -850,6 +850,8 @@ arm TestBranch.Identity inline over(locals: TT; rest)
 // The compare tests: an arm per test (`over(test: ...)`), the test its
 // constant; the sense stays the word's
 arm TestBranch.Int shared over(test: TEST_LT, TEST_LE, TEST_EQ, TEST_NE, TEST_GT, TEST_GE)
+  over(locals: TEST_NE.LL, TEST_NE.TT, TEST_NE.TL, TEST_EQ.TT, TEST_GT.TL, TEST_GT.LL,
+               TEST_LE.LL; rest)
   effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)

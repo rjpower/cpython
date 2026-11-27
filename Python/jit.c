@@ -463,7 +463,9 @@ build_unwind(const _PyJitCompiler *c, size_t code_size, uint8_t *buffer)
 /* A form's transfer to another frame, cold: a call, a return, a yield or a
  * resume goes on at its successor through the switch routine, in the unit
  * of that frame's code (g3/design.md section 1); one that raised or exited
- * leaves for the error route.  The form has made the frame current. */
+ * leaves for the error route, and one to the switch word leaves for the
+ * evaluator's switch handler, with the frame's instr_ptr still the word that
+ * ran last in it.  The form has made the frame current. */
 static void
 emit_other_frame(_PyJitCompiler *c, _PyJitLabel other)
 {
@@ -478,6 +480,9 @@ emit_other_frame(_PyJitCompiler *c, _PyJitLabel other)
                     AT(R12, offsetof(PyThreadState, current_frame)));
     _PyJitAsm_Jcc(a, _PyJitCond_NE, c->trap);
 #endif
+    _PyJitAsm_MovImm(a, R(RCX), (int64_t)(uintptr_t)&_PyEval_SwitchWord);
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
+    _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
     _PyJitAsm_MovMR(a, AT(RAX, offsetof(_PyInterpreterFrame, instr_ptr)), R(RDX));
     _PyJitAsm_Call(a, c->switch_routine);
     _PyJitAsm_JmpR(a, R(RAX));

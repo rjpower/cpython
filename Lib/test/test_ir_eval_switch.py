@@ -50,12 +50,16 @@ class MonitoringScope:
         monitoring.set_events(TOOL, 0)
 
 
-def entries_below_caller():
-    """The entries of the frames below the caller after a walk of the stack:
-    restart_events() is a monitoring change, which rebuilds the list.  The
-    caller's own entry goes when this function returns to it."""
+entries = _testinternalcapi.eval_switch_count
+
+
+def walk_stack():
+    """A walk of the stack: restart_events() is a monitoring change, which
+    rebuilds the list.  The caller's own entry, if it has one, goes when this
+    function returns to it, so entries() read then counts the frames below
+    the caller.  Under the JIT a frame that waits in its unit, unobserved,
+    has none."""
     monitoring.restart_events()
-    return _testinternalcapi.eval_switch_count() - 1
 
 
 def handler(n, scope):
@@ -79,14 +83,19 @@ class EvalSwitchTests(unittest.TestCase):
 
     def test_unwind_through_redirected_frames(self):
         with MonitoringScope(handler.__code__, recurse.__code__) as scope:
-            base = entries_below_caller()
+            walk_stack()
+            base = entries()
             self.assertTrue(handler(DEPTH, scope))
-            after = _testinternalcapi.eval_switch_count()
-            scope.off()
+            after = entries()
             # The frames that the error unwound left the list; the frames
-            # below this one keep theirs
-            self.assertEqual(after, base)
-            self.assertEqual(entries_below_caller(), base)
+            # below this one keep theirs, as a new walk gives them.  Under
+            # the JIT the first walk skipped those that wait in their units,
+            # and the change, which observes their code, gave them entries.
+            walk_stack()
+            self.assertEqual(after, entries())
+            scope.off()
+            walk_stack()
+            self.assertEqual(entries(), base)
         # handler went on in the observing evaluator at its except clause
         self.assertIn(("handler", 6), scope.lines)
         self.assertIn(("handler", 7), scope.lines)
@@ -111,10 +120,10 @@ class EvalSwitchTests(unittest.TestCase):
             return caught
 
         def worker():
-            base = entries_below_caller()
             result["caught"] = middle()
-            result["after"] = _testinternalcapi.eval_switch_count()
-            result["base"] = base
+            result["after"] = entries()
+            walk_stack()
+            result["below"] = entries()
 
         with MonitoringScope(middle.__code__, bottom.__code__) as scope:
             thread = threading.Thread(target=worker)
@@ -125,7 +134,7 @@ class EvalSwitchTests(unittest.TestCase):
             thread.join()
             scope.off()
         self.assertTrue(result["caught"])
-        self.assertEqual(result["after"], result["base"])
+        self.assertEqual(result["after"], result["below"])
         self.assertIn(("middle", 4), scope.lines)
         self.assertIn(("middle", 5), scope.lines)
 
@@ -147,7 +156,6 @@ class EvalSwitchTests(unittest.TestCase):
 
         with MonitoringScope(gen.__code__, counter.__code__,
                              consume.__code__) as scope:
-            base = entries_below_caller()
             g = gen()
             self.assertEqual(next(g), 1)
             c = counter(4)
@@ -165,7 +173,9 @@ class EvalSwitchTests(unittest.TestCase):
                 thrown.throw(KeyError)
             closed.close()
             scope.off()
-            self.assertEqual(_testinternalcapi.eval_switch_count(), base)
+            after = entries()
+            walk_stack()
+            self.assertEqual(after, entries())
             lines = list(scope.lines)
             # Resumed after the change, the generators report their lines
             self.assertIn(("gen", 2), lines)

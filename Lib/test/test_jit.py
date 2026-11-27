@@ -349,6 +349,74 @@ class TestCompiled(JitTestCase):
             print(events)
         """)
 
+    def test_return_to_a_frame_at_the_switch_word(self):
+        # Observation ends while outer, observed, waits on mid: the change
+        # sends both to the switch word.  mid goes on in the evaluator,
+        # compiles at its loop and returns from its unit to outer, whose
+        # code compiles again: the unit hands the switch word to the
+        # evaluator.  noop's return takes outer out of its unit first.
+        prelude = """
+            import sys
+            mon = sys.monitoring
+            E = mon.events
+            mon.use_tool_id(3, "test")
+            mon.register_callback(3, E.LINE, lambda code, line: None)
+        """
+        ways = {
+            "settrace": ("sys.settrace(lambda *args: None)", "sys.settrace(None)"),
+            "setprofile": ("sys.setprofile(lambda *args: None)", "sys.setprofile(None)"),
+            "monitoring": ("mon.set_events(3, E.LINE)", "mon.set_events(3, 0)"),
+        }
+        for way, (on, off) in ways.items():
+            with self.subTest(way=way):
+                self.check_same(prelude + f"""
+            def noop():
+                pass
+            def inner():
+                {off}
+            def mid():
+                inner()
+                s = 0
+                for i in range(3):
+                    s += i
+                return s
+            def outer(observe):
+                if observe:
+                    {on}
+                noop()
+                return mid() + 1
+            print(outer(False), outer(True), outer(False))
+        """)
+
+    def test_return_to_a_compiled_frame_after_disable(self):
+        # f waits in its unit on g when LINE goes on, so its resume point is
+        # the switch word; a second call of f returns DISABLE at each of its
+        # lines, which clears the code's observed mark with no walk.  g's
+        # return finds f's unit retired and the code no longer observed:
+        # the switch word stays in the evaluator.
+        self.check_same("""
+            import sys
+            mon = sys.monitoring
+            E = mon.events
+            mon.use_tool_id(3, "test")
+            lines = []
+            def line(code, n):
+                if code is f.__code__:
+                    lines.append(n - f.__code__.co_firstlineno)
+                    return mon.DISABLE
+            mon.register_callback(3, E.LINE, line)
+            def g(mode):
+                if mode == 1:
+                    mon.set_events(3, E.LINE)
+                    f(2)
+                return mode
+            def f(mode):
+                x = g(mode)
+                return x
+            print(f(0), f(1), f(0), sorted(lines))
+            mon.set_events(3, 0)
+        """)
+
     @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
     def test_recompiled_after_specialization(self):
         out = run("""

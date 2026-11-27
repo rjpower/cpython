@@ -30,9 +30,7 @@ extern primitive instance_version(o:Obj, r:Recipe<Attr>) -> Bool
   c _PyAttr_InstanceVersion as bool
   evidence(
     review: "pycore_attr_recipe.h: the type's version tag equals the recipe's, a relaxed load.",
-    contract: "One load of the type, no memory write, no callee.",
-    lowering: "none yet: an arm that calls it keeps the call of its form (rop_leaf has no lowering)",
-    test: "test_rop_getattr row tests");
+    contract: "One load of the type, no memory write, no callee.");
 
 // guard_managed_inline_values_valid
 extern primitive valid_inline_values(o:Obj) -> Bool
@@ -41,9 +39,7 @@ extern primitive valid_inline_values(o:Obj) -> Bool
   c _PyAttr_ValidInlineValues as bool
   evidence(
     review: "pycore_attr_recipe.h: the valid byte of the inline values, an atomic load.",
-    contract: "Requires a type with inline values, which a version match proves.",
-    lowering: "none yet: an arm that calls it keeps the call of its form (rop_leaf has no lowering)",
-    test: "test_rop_getattr row tests");
+    contract: "Requires a type with inline values, which a version match proves.");
 
 // The slot the recipe names; vacant on a valid instance is NULL
 extern primitive borrow_value_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
@@ -52,9 +48,7 @@ extern primitive borrow_value_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
   c _PyAttr_BorrowValueSlot as borrow
   evidence(
     review: "pycore_attr_recipe.h: the word at the recipe's offset in the values, as a borrow.",
-    contract: "A read; NULL is a vacant slot, which is a legal value of the type.",
-    lowering: "none yet: an arm that calls it keeps the call of its form (rop_leaf has no lowering)",
-    test: "test_rop_getattr row tests");
+    contract: "A read; NULL is a vacant slot, which is a legal value of the type.");
 
 arm GetAttr.Instance inline over(locals: TL; rest) entry(instance)
   effects(reads, writes, releases on (dst))
@@ -488,9 +482,7 @@ extern primitive shape_current(o:Obj, r:Recipe<Attr>) -> Bool
   c _PyAttr_ShapeCurrent as bool
   evidence(
     review: "pycore_attr_recipe.h: the shape byte of the inline values equals the recipe's.",
-    contract: "One load. The shape is _Py_SHAPE_NONE for an owner with a dictionary or invalid values.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "One load. The shape is _Py_SHAPE_NONE for an owner with a dictionary or invalid values.");
 
 // A slot that the type version and the shape prove filled
 extern primitive borrow_shape_slot(o:Obj, r:Recipe<Attr>) -> B
@@ -499,9 +491,7 @@ extern primitive borrow_shape_slot(o:Obj, r:Recipe<Attr>) -> B
   c _PyAttr_BorrowValueSlotFilled as borrow
   evidence(
     review: "pycore_attr_recipe.h: the word at the recipe's offset; asserted not NULL.",
-    contract: "A read; the shape names the slot as filled, so the borrow is a value.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "A read; the shape names the slot as filled, so the borrow is a value.");
 
 // The row of a poly table for the owner's type and shape: the whole
 // recipe of that observation.
@@ -579,9 +569,7 @@ extern primitive is_module(o:Obj) -> Bool
   c _PyAttr_IsModule as bool
   evidence(
     review: "pycore_attr_recipe.h: PyModule_CheckExact.",
-    contract: "One load of the type.",
-    lowering: "jit_lower.c LOWERING(PyModule_CheckExact) after Py_TYPE: not wired for this row yet",
-    test: "test_rop_getattr row tests");
+    contract: "One load of the type.");
 
 // The module dictionary's entry when its keys have the recipe's version
 extern primitive module_entry(o:Obj, r:Recipe<Attr>) -> Maybe<B>
@@ -590,9 +578,7 @@ extern primitive module_entry(o:Obj, r:Recipe<Attr>) -> Maybe<B>
   c _PyAttr_ModuleEntry as borrow
   evidence(
     review: "pycore_attr_recipe.h: keys version, entry count and value of the module's dictionary.",
-    contract: "Reads the dictionary and its keys; NULL is absent.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "Reads the dictionary and its keys; NULL is absent.");
 
 // The managed dictionary's entry at the recipe's hint when its key is the name
 extern primitive hinted_entry(o:Obj, n:Name, r:Recipe<Attr>) -> Maybe<B>
@@ -601,9 +587,7 @@ extern primitive hinted_entry(o:Obj, n:Name, r:Recipe<Attr>) -> Maybe<B>
   c _PyAttr_HintedEntry as borrow
   evidence(
     review: "pycore_attr_recipe.h: the managed dict's combined keys at the hint, key identity.",
-    contract: "Reads the dictionary; NULL is absent.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "Reads the dictionary; NULL is absent.");
 
 // A member slot of the owner (a value slot): vacant is absent
 extern primitive borrow_member_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
@@ -612,9 +596,7 @@ extern primitive borrow_member_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
   c _PyAttr_BorrowValueSlot as borrow
   evidence(
     review: "pycore_attr_recipe.h: the word at the recipe's offset in the owner.",
-    contract: "A read; NULL is a vacant slot.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "A read; NULL is a vacant slot.");
 
 extern primitive borrow_pointer_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
   effects(reads)
@@ -622,27 +604,21 @@ extern primitive borrow_pointer_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
   c _PyAttr_BorrowPointerSlot as borrow
   evidence(
     review: "pycore_attr_recipe.h: a PyObject * field of the owner as an object word.",
-    contract: "A read; a NULL field is absent.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "A read; a NULL field is absent.");
 
 extern primitive class_current(o:Obj, r:Recipe<Attr>) -> Bool
   effects(reads)
   c _PyAttr_ClassCurrent as bool
   evidence(
     review: "pycore_attr_recipe.h: the owner is a class of the recipe's version, under the recipe's metaclass version when it has one.",
-    contract: "Loads of two version tags.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "Loads of two version tags.");
 
 extern primitive builtin_metaclass(o:Obj) -> Bool
   effects(reads)
   c _PyAttr_BuiltinMetaclass as bool
   evidence(
     review: "pycore_attr_recipe.h: the owner's type is exactly type; false on a free-threaded build.",
-    contract: "One load of the type.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "One load of the type.");
 
 extern primitive lazy_dict_absent(o:Obj, r:Recipe<Attr>) -> Bool
   effects(reads)
@@ -650,18 +626,14 @@ extern primitive lazy_dict_absent(o:Obj, r:Recipe<Attr>) -> Bool
   c _PyAttr_LazyDictAbsent as bool
   evidence(
     review: "pycore_attr_recipe.h: the dictionary slot at the recipe's offset holds NULL.",
-    contract: "One acquire load.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "One acquire load.");
 
 extern primitive classmethod_function(r:Recipe<Attr>) -> Maybe<B>
   effects(reads)
   c _PyAttr_ClassMethodFunction as borrow
   evidence(
     review: "pycore_attr_recipe.h: the classmethod object's wrapped Python function.",
-    contract: "Reads the classmethod; absent unless it wraps a Python function.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "Reads the classmethod; absent unless it wraps a Python function.");
 
 arm GetAttr.Module inline entry(module)
   effects(reads, writes, releases on (dst))
@@ -853,9 +825,7 @@ extern primitive receiver_valid(o:Obj, r:Recipe<Attr>) -> Bool
   c _PyAttr_ValidReceiver as bool
   evidence(
     review: "pycore_attr_recipe.h: a values-layout row needs the receiver's inline values valid.",
-    contract: "One load of the valid byte, only for a values-layout recipe.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "One load of the valid byte, only for a values-layout recipe.");
 
 extern helper poly_method(fr:Frame, f:Fb<Attr>, o:Obj)
   cases(hit(r:Recipe<Attr>), absent())
@@ -872,9 +842,7 @@ extern primitive borrow_cached_value(r:Recipe<Attr>) -> B
   c _PyAttr_BorrowMethod as borrow
   evidence(
     review: "pycore_attr_recipe.h: _PyValueGuarded_Load of the entry's class value.",
-    contract: "A read of the recipe's own payload; an object with the method-descriptor flag.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_rop_getattr row tests");
+    contract: "A read of the recipe's own payload; an object with the method-descriptor flag.");
 
 // _PyValue_GetMethod on the receiver the anchors hold: the callable and
 // either the receiver (an unbound method) or an absent self

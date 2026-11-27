@@ -1,6 +1,6 @@
 """The inline policy of the register instruction rows holds in the binary:
-the interpreter makes no call to a row declared `inline`, and the forms and
-stubs share one out-of-line copy of it (Tools/cases_generator/rop_cgen.py).
+the interpreter makes no call to a row declared `inline`, and the binary has
+no out-of-line copy of it (Tools/cases_generator/rop_cgen.py).
 An arm whose closes leave it by a tail call (lower_tail_closes) and whose
 name operands are read unchecked makes no call and allocates no stack frame.
 An arm that publishes a span lets no address of its frame escape, so it needs
@@ -108,7 +108,7 @@ class InlineRowBinaryTests(unittest.TestCase):
             with self.subTest(symbol=symbol):
                 # a call or tail jump to the row, or to a clone of it
                 self.assertNotRegex(self.calls,
-                                    rf"(call|jmp)\s+\w+ <{symbol}(_Outlined)?[.>]")
+                                    rf"(call|jmp)\s+\w+ <{symbol}[.>]")
 
     def test_tail_closes_leave_no_call_and_no_frame(self):
         if sysconfig.get_config_var("Py_GIL_DISABLED"):
@@ -133,14 +133,13 @@ class InlineRowBinaryTests(unittest.TestCase):
                 # the canary read of -fstack-protector
                 self.assertNotIn("%fs:0x28", body)
 
-    def test_each_row_has_one_outlined_copy_and_no_other(self):
+    def test_no_row_has_an_out_of_line_copy(self):
         for symbol in self.symbols:
             with self.subTest(symbol=symbol):
-                names = re.findall(rf" [tT] ({symbol}(?:_Outlined)?(?:\.[a-z]+\.\d+|\.\d+)*)$",
+                names = re.findall(rf" [tT] ({symbol}(?:\.[a-z]+\.\d+|\.\d+)*)$",
                                    self.text, re.M)
                 names = [n for n in names if not n.endswith(".cold")]
-                self.assertEqual([n.split(".")[0] for n in names],
-                                 [f"{symbol}_Outlined"], names)
+                self.assertEqual(names, [])
 
 
 @unittest.skipUnless(shutil.which("nm"), "needs nm")

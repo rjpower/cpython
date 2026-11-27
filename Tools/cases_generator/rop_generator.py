@@ -3,10 +3,8 @@
 From the checked `Program` of Python/register_ops/*.rop:
 
 - the interpreter cases (one tail-calling function per arm),
-- the function forms, with the same signature and completion contract as
-  the old `ir_run_*` forms,
-- the completion stubs of the shared arms, with the plan table of the arms,
-- the dispatch table and the form table, which list the arms (arm_entries()),
+- the completion arms, which `gen_return` calls, and their tables,
+- the dispatch tables, which list the arms (arm_entries()),
 - the metadata: family and arm numbers, the arm-to-handler table, the
   point tables.
 
@@ -26,20 +24,16 @@ from pathlib import Path
 from typing import TextIO
 
 import ir_arms
-import jit_backend
 import rop_check
-import rop_leaf
 import rop_verify
 from generators_common import root_relative_path, write_header
 from handler_table import first_arm, handler_ids
-from rop_cgen import (ESCAPING, Lowering, Unsupported, inline_rows, lower_arm,
-                      outlined_name, pending_blockers, row_signature)
+from rop_cgen import Lowering, Unsupported, inline_rows, lower_arm, pending_blockers, row_signature
 from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, FieldKind,
                          Handle, Select, Slot, Wrap)
 from rop_check import Program, enum_c_name, select_dimension
 from rop_model import Arm, Encoding, HandleType, Param, WrapType
 from rop_print import type_text
-from rop_ssa import SsaError
 
 ROOT = Path(__file__).resolve().parents[2]
 ROP_DIR = ROOT / "Python" / "register_ops"
@@ -52,7 +46,6 @@ IR_OPERANDS_ID = handler_ids()["IR_OPERANDS"]
 # The id of the switch word (IR_H_SWITCH in Include/internal/pycore_ir.h):
 # the last id the handler field holds, which no arm or word kind takes
 IR_SWITCH_ID = ir_arms.IR_LIMIT - 1
-FORM_PARAMETERS = "PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr"
 
 
 class GenerateError(Exception):
@@ -81,14 +74,8 @@ class Products:
     lowered: Mapping[str, Lowering]
     left_out: Mapping[str, str]       # arm -> what blocks it
     generic: Mapping[str, str | None]  # family -> its generic arm, if emitted
-    # The same arms for the forms and stubs, which call the out-of-line copy
-    # of a row declared inline; empty when no row is
-    outlined: Mapping[str, Lowering] = dataclasses.field(default_factory=dict)
     # The completion arms, which compile to functions only
     completions: Mapping[str, Lowering] = dataclasses.field(default_factory=dict)
-
-    def for_forms(self, name: str) -> Lowering:
-        return self.outlined.get(name, self.lowered[name])
 
 
 def point_numbers(program: Program) -> dict[str, int]:
@@ -124,25 +111,19 @@ def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
         if is_generic(program, arm):
             generic[arm.family] = c_name(arm.name)
             generic_arms[arm.family] = arm.name
-    outlined: dict[str, Lowering] = {}
-    if inline_rows(program):
-        outlined = {name: lower_arm(program, program.arms[name], numbers, points,
-                                    generic, outline=True)
-                    for name in lowered}
     completions: dict[str, Lowering] = {}
     for arm in program.completions.values():
         try:
-            completions[arm.name] = lower_arm(program, arm, numbers, points, generic,
-                                              outline=True)
+            completions[arm.name] = lower_arm(program, arm, numbers, points, generic)
         except Unsupported as e:
             pending = pending_blockers(program, arm)
             left_out[arm.name] = (f"pending: {', '.join(pending)}" if pending
                                   else str(e))
     return Products(program, numbers, points, lowered, left_out,
-                    generic_arms, outlined, completions)
+                    generic_arms, completions)
 
 
-# Interpreter cases and function forms
+# Interpreter cases
 
 PROLOGUE = """\
 int opcode = {handler};
@@ -231,6 +212,8 @@ def write_inline_declarations(out: TextIO, p: Products, sources: list[str]) -> N
     (Python/ceval_shared.h).  Every translation unit that runs the arms
     includes this file, so that each inlines the row."""
     write_header(__file__, sources, out)
+    out.write("\n")
+    write_layout_checks(out)
     out.write("\n/* Rows declared inline: always inlined into every arm that calls them */\n")
     for x in inline_rows(p.program):
         assert x.c is not None
@@ -242,176 +225,10 @@ def write_inline_declarations(out: TextIO, p: Products, sources: list[str]) -> N
         out.write(f"static Py_ALWAYS_INLINE {ret}{sep}{x.c.symbol}({', '.join(params)});\n")
 
 
-def write_inline_rows(out: TextIO, p: Products) -> None:
-    """The out-of-line copy of each row declared `inline`: the forms and
-    stubs call it, and the interpreter inlines the row itself."""
-    out.write("/* Rows declared inline: one out-of-line copy for the forms and stubs */\n")
-    for x in inline_rows(p.program):
-        assert x.c is not None
-        ret, params = row_signature(x)
-        sep = "" if ret.endswith("*") else " "
-        formals = ", ".join(f"{t}{'' if t.endswith('*') else ' '}p{i}"
-                            for i, t in enumerate(params))
-        actuals = ", ".join(f"p{i}" for i in range(len(params)))
-        keep = "" if ret == "void" else "return "
-        out.write(f"static Py_NO_INLINE {ret}{sep}{outlined_name(x)}({formals})\n"
-                  f"{{ {keep}{x.c.symbol}({actuals}); }}\n")
-    out.write("\n")
-
-
 def emitted_arm_ids(p: Products) -> dict[int, ir_arms.ArmEntry]:
     "The arms that have a case and a form, by handler id"
     first = first_arm()
     return {first + arm.index: arm for arm in arm_entries(p) if arm.emitted}
-
-
-def write_form_table(out: TextIO, p: Products) -> None:
-    """The function form of every handler id, as the target tables have
-    their functions: ir_handler_forms[IR_HANDLER(word)] runs the word, and
-    ir_observing_forms runs it as the observing evaluator does.
-    Python/ceval.c defines the forms of the operand words, of the switch
-    word and of the unknown ids."""
-    by_arm = emitted_arm_ids(p)
-    for table, observing in (("ir_handler_forms", False), ("ir_observing_forms", True)):
-        out.write(f"\nstatic const _PyIRForm {table}[{ir_arms.IR_LIMIT}] = {{\n")
-        for i in range(ir_arms.IR_LIMIT):
-            out.write(f"    [{i}] = ir_run_{target_name(i, by_arm, observing)},\n")
-        out.write("};\n")
-
-
-def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
-    write_header(__file__, sources, out)
-    out.write("\n/* Every form, declared before the forms, which call one another */\n")
-    for arm in sorted(emitted_arm_ids(p).values(), key=lambda arm: arm.name):
-        out.write(f"static _PyIRTransfer ir_run_{arm.name}({FORM_PARAMETERS}, "
-                  "_PyIRWord ir_word);\n")
-    write_left_out(out, p)
-    out.write(MISS_MACRO + "\n")
-    write_inline_rows(out, p)
-    for name in p.lowered:
-        arm, low = p.program.arms[name], p.for_forms(name)
-        out.write(f"\nstatic Py_NO_INLINE _PyIRTransfer\nir_run_{c_name(name)}(\n"
-                  "    PyThreadState *tstate, _PyInterpreterFrame *frame, "
-                  "_PyInstr *next_instr, _PyIRWord ir_word)\n{\n")
-        out.write("\n".join(handler_text(arm, low, "    ")) + "\n}\n")
-    write_form_table(out, p)
-
-
-# Whole-word completion stubs (regions89 G1a) and the plan of each arm
-
-STUB_PREAMBLE = """\
-/* The whole-word completion stubs of the shared register arms (g1a/abi.md):
- * the arm's statements with the transfer macros bound to status returns.
- * Python/ceval_forms.c includes this file after the function forms, whose
- * bindings of the other macros the stubs share. */
-
-/* Whether closing V drops a last count, which runs its destructor: then
- * the path may have reentered Python (ESCAPED) */
-static inline int
-_PyIR_StubDropsLast(PyValue v)
-{
-    return PyValue_RefcountOnObject(v) && Py_REFCNT(BITS_TO_PTR(v)) == 1
-        ? _PyIR_ESCAPED : 0;
-}
-
-/* A release reports ESCAPED exactly when it deallocates */
-#define _PyIR_STUB_RELEASE(CLOSE, V) \\
-    do { \\
-        PyValue ir_released = (V); \\
-        ir_status |= _PyIR_StubDropsLast(ir_released); \\
-        (CLOSE)(ir_released); \\
-    } while (0)
-#pragma push_macro("DISPATCH")
-#undef DISPATCH
-#pragma push_macro("DISPATCH_SAME_OPARG")
-#undef DISPATCH_SAME_OPARG
-#pragma push_macro("JUMP_TO_PREDICTED")
-#undef JUMP_TO_PREDICTED
-#pragma push_macro("PROCESS_ERROR_AT")
-#undef PROCESS_ERROR_AT
-#pragma push_macro("IR_STUB_ESCAPE")
-#undef IR_STUB_ESCAPE
-#pragma push_macro("IR_REDIRECT")
-#undef IR_REDIRECT
-#pragma push_macro("IR_BRANCH")
-#undef IR_BRANCH
-#pragma push_macro("PyValue_CLOSE")
-#undef PyValue_CLOSE
-#pragma push_macro("PyValue_XCLOSE")
-#undef PyValue_XCLOSE
-#define DISPATCH() return ir_status
-#define DISPATCH_SAME_OPARG() return ir_status | _PyIR_AGAIN
-#define JUMP_TO_PREDICTED(name) do { assert(ir_status == 0); return _PyIR_MISS; } while (0)
-#define PROCESS_ERROR_AT(ingress, checkpoint, origin) do { \\
-        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \\
-        ir_exit->exit_kind = _PyIR_EXIT_RAISE; \\
-        ir_exit->exit_next = (origin); \\
-        ir_exit->exit_entry = \\
-            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \\
-        return ir_status | _PyIR_RAISED; \\
-    } while (0)
-#define IR_STUB_ESCAPE() (ir_status |= _PyIR_ESCAPED)
-#define IR_BRANCH(TARGET) return ir_status | _PyIR_BRANCH
-#define IR_REDIRECT() do { \\
-        if (frame->pending_redirect) { \\
-            _PyFrame_CompleteRedirect(frame); \\
-        } \\
-        return ir_status | _PyIR_ESCAPED | _PyIR_REDIRECT; \\
-    } while (0)
-#define PyValue_CLOSE(V) _PyIR_STUB_RELEASE(PyValue_CLOSE, V)
-#define PyValue_XCLOSE(V) _PyIR_STUB_RELEASE(PyValue_XCLOSE, V)
-"""
-
-STUB_EPILOGUE = """\
-#pragma pop_macro("PyValue_XCLOSE")
-#pragma pop_macro("PyValue_CLOSE")
-#pragma pop_macro("IR_BRANCH")
-#pragma pop_macro("IR_REDIRECT")
-#pragma pop_macro("IR_STUB_ESCAPE")
-#pragma pop_macro("PROCESS_ERROR_AT")
-#pragma pop_macro("JUMP_TO_PREDICTED")
-#pragma pop_macro("DISPATCH_SAME_OPARG")
-#pragma pop_macro("DISPATCH")
-"""
-
-
-def stub_name(arm: str) -> str:
-    return f"_PyIR_Rop_Stub_{c_name(arm)}"
-
-
-def declares_escape(arm: Arm) -> bool:
-    return bool(arm.contract.effect_set & ESCAPING)
-
-
-def write_stubs(out: TextIO, p: Products, sources: list[str]) -> None:
-    write_header(__file__, sources, out)
-    shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
-    out.write(f"//\n// {len(shared)} stubs.\n\n")
-    out.write(STUB_PREAMBLE)
-    for name in shared:
-        arm = p.program.arms[name]
-        out.write(f"\nstatic Py_NO_INLINE int\n{stub_name(name)}(\n"
-                  "    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)\n{\n"
-                  "    _PyInstr *next_instr = site;\n    _PyIRWord ir_word = *site;\n"
-                  "    int ir_status = 0;\n\n")
-        out.write("\n".join(handler_text(arm, p.for_forms(name), "    ")) + "\n}\n")
-    write_completions(out, p)
-    out.write("\n" + STUB_EPILOGUE)
-    write_stub_plans(out, p)
-
-
-def write_stub_plans(out: TextIO, p: Products) -> None:
-    """The plan of each handler that has one: its region, whether its
-    completions report ESCAPED, its stub (shared), and its family's generic
-    stub, which runs the word after a miss.  Python/jit.c reads it."""
-    out.write("\n/* The plan of each arm; the stubs are defined above */\n")
-    out.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_arms.IR_LIMIT}] = {{\n")
-    for i, arm in sorted(emitted_arm_ids(p).items()):
-        stub = f"(const void *){arm.stub}" if arm.stub else "NULL"
-        generic = f"(const void *){arm.generic}" if arm.generic else "NULL"
-        out.write(f"    [{i}] = {{_PyIR_PLAN_{arm.region.upper()}, "
-                  f"{int(arm.escapes)}, {i}, {stub}, {generic}}},  // {arm.name}\n")
-    out.write("};\n")
 
 
 def target_name(i: int, by_arm: Mapping[int, ir_arms.ArmEntry], observing: bool) -> str:
@@ -471,14 +288,16 @@ def completion_name(arm: str) -> str:
     return f"_PyRop_Complete_{c_name(arm)}"
 
 
-def write_completions(out: TextIO, p: Products) -> None:
-    """Each completion arm as a function with the stubs' status ABI, which
-    generator_return calls in the consumer's frame with the child's value,
+def write_completions(out: TextIO, p: Products, sources: list[str]) -> None:
+    """Each completion arm as a function returning a status (_PyIR_RAISED,
+    _PyIR_BRANCH or _PyIR_REDIRECT, bound in Python/ceval_steps.c), which the
+    gen_return routine calls in the consumer's frame with the child's value,
     and the tables from every handler of a family that has one to its
     completion, the normal evaluator's and the observing evaluator's,
     which runs the family's observed completion.  The
     consumer word's handler is read when the child returns, so a word
     respecialized or instrumented meanwhile completes as it now is."""
+    write_header(__file__, sources, out)
     if not p.completions:
         return
     for name, low in p.completions.items():
@@ -487,7 +306,7 @@ def write_completions(out: TextIO, p: Products) -> None:
         out.write(f"\nstatic Py_NO_INLINE int\n{completion_name(name)}(\n"
                   "    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site,\n"
                   "    PyValue ir_value)\n{\n"
-                  "    _PyIRWord ir_word = *site;\n    int ir_status = 0;\n")
+                  "    _PyIRWord ir_word = *site;\n")
         lines = [f"// {name} (completion at {arm.completion})",
                  "int opcode = IR_HANDLER(ir_word);", "(void)opcode;",
                  "_PyIRWord *const this_instr = site;", "(void)this_instr;",
@@ -886,42 +705,19 @@ def check_observer_layouts(program: Program) -> None:
 
 
 def arm_entries(p: Products) -> list[ir_arms.ArmEntry]:
-    """Every arm, in handler order, for the per-handler tables.  The forms,
-    targets and stub plans list the emitted ones after the word kinds."""
-    shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
+    """Every arm, in handler order, for the per-handler tables.  The
+    targets list the emitted ones after the word kinds."""
     entries = []
     for name, arm in p.program.arms.items():
         fam = p.program.families[arm.family]
-        # A split arm has no stub and no template: compiled code calls its
-        # function form, the plan of an unplanned handler
-        region = "none" if arm.region.name == "split" else arm.region.name
-        emitted = name in p.lowered
-        generic = p.generic.get(arm.family)
         runs = observed_by(p.program, name)
-        generic_stub = stub_name(generic) if generic in shared else None
-        # A miss of a planned arm's compiled code runs its family's generic
-        # stub (resolve_status() in Python/jit.c).  A generic arm that is
-        # split (it can enter a frame) has no stub: the family's arms that
-        # can miss, inline or shared, are unplanned, and a miss of their
-        # compiled code runs their function form, which goes on in the
-        # generic arm's form on the same word
-        misses = "miss" in arm.contract.exits
-        if (region != "none" and misses and generic
-                and p.program.arms[generic].region.name == "split"):
-            region = "none"
-        if emitted and region != "none" and misses and generic_stub is None:
-            raise GenerateError(
-                f"{name} is planned for the JIT and can miss, but its family "
-                f"{arm.family} has no generic stub for the miss to run")
         entries.append(ir_arms.ArmEntry(
-            c_name(name), p.numbers[name], region, declares_escape(arm),
-            stub_name(name) if name in shared else None,
-            generic_stub,
+            c_name(name), p.numbers[name],
             name,
             () if arm.trailing else tuple(e.value for e in fam.events),
             "again" in fam.exits, is_generic(p.program, arm),
             arm_format(p.program, arm), None if runs is None else c_name(runs),
-            emitted, arm.trailing,
+            name in p.lowered, arm.trailing,
             runs is not None and p.program.arms[runs].gates,
             c_name(name[:-len(arm.locals) - 1]) if arm.locals is not None else None,
             (tuple(c_name(n) for n in p.program.locals_sets[name].row())
@@ -934,46 +730,6 @@ def load_arm_entries(paths: list[Path] | None = None) -> list[ir_arms.ArmEntry]:
     if program.diagnostics:
         raise GenerateError("\n".join(str(d) for d in program.diagnostics))
     return arm_entries(lower_all(program, number_arms(program)))
-
-
-# Baseline templates, from the leaf graphs of the inline arms
-
-def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
-    made: dict[str, list[str]] = {}
-    refused: dict[str, str] = {}
-    for name, arm in p.program.arms.items():
-        if arm.region.name != "inline":
-            continue
-        try:
-            leaf = rop_leaf.leaf_of_arm(p.program, arm)
-            lines = rop_leaf.template_of_arm(p.program, arm, c_name(name), leaf)
-        except (Unsupported, SsaError, jit_backend.Refused) as e:
-            refused[name] = str(e)
-            continue
-        made[name] = ["// The leaf graph of " + name + ":"] + [
-            "//   " + line for line in leaf.body.dump()] + lines
-    return made, refused
-
-
-def write_lowerings(out: TextIO, p: Products, sources: list[str]) -> None:
-    "The prototypes and table of the JIT's lowerings (jit_backend.LOWERINGS)"
-    jit_backend.write_lowerings(out)
-
-
-def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
-    made, refused = template_texts(p)
-    write_header(__file__, sources, out)
-    write_layout_checks(out)
-    out.write(f"//\n// {len(made)} templates.  Inline arms that keep the call of their form:\n")
-    for name, why in sorted(refused.items()):
-        out.write(f"//   {name}: {why}\n")
-    out.write("\n")
-    for lines in made.values():
-        out.write("\n".join(lines) + "\n\n")
-    out.write(f"const _PyJitTemplate _PyJit_Templates[{ir_arms.IR_LIMIT}] = {{\n")
-    for name in made:
-        out.write(f"    [ROP_HANDLER_{c_name(name)}] = jit_template_{c_name(name)},\n")
-    out.write("};\n")
 
 
 # Metadata
@@ -1257,12 +1013,9 @@ def write_stencil_decls(out: TextIO, p: Products, sources: list[str]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--cases", help="the interpreter cases")
-    parser.add_argument("--forms", help="the function forms")
-    parser.add_argument("--stubs", help="the completion stubs")
+    parser.add_argument("--completions", help="the completion arms of gen_return")
     parser.add_argument("--inline", help="the declarations of the inline rows")
     parser.add_argument("--targets", help="the dispatch table of the evaluator")
-    parser.add_argument("--templates", help="the baseline templates")
-    parser.add_argument("--lowerings", help="the baseline JIT's lowerings")
     parser.add_argument("--metadata", help="the metadata header")
     parser.add_argument("--stencil-decls", help="the declarations of the JIT's stencils")
     parser.add_argument("sources", nargs="*", type=Path)
@@ -1277,11 +1030,9 @@ def main(argv: list[str] | None = None) -> int:
     numbers = number_arms(program)
     products = lower_all(program, numbers)
     sources = [root_relative_path(str(s)) for s in paths]
-    for option, writer in (("cases", write_cases), ("forms", write_forms),
-                           ("stubs", write_stubs), ("inline", write_inline_declarations),
+    for option, writer in (("cases", write_cases), ("completions", write_completions),
+                           ("inline", write_inline_declarations),
                            ("targets", write_targets),
-                           ("templates", write_templates),
-                           ("lowerings", write_lowerings),
                            ("metadata", write_metadata),
                            ("stencil_decls", write_stencil_decls)):
         target = getattr(args, option)

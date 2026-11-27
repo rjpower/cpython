@@ -26,9 +26,7 @@ extern primitive int_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
     review: "Reviewed BN. pycore_rop_rows.h: both words inline ints, and the operator"
             "defined for this pair.",
     contract: "Reads the two words and the operator: no memory, no failure, no"
-              "callback.",
-    lowering: "none: the arms that use it are shared and are not compiled inline",
-    test: "test_rop_binary");
+              "callback.");
 
 // The operator admits the decoded divisor or shift count (scaled)
 extern primitive int_op_admits(op:Enum<Numeric>, b:Scaled51) -> Bool
@@ -37,9 +35,7 @@ extern primitive int_op_admits(op:Enum<Numeric>, b:Scaled51) -> Bool
   evidence(
     review: "TB. pycore_rop_rows.h: the operator half of _PyRop_IntBinaryApplies."
             "A scaled value is zero or negative exactly when its int is.",
-    contract: "Reads the operator and the value: no memory, no failure.",
-    lowering: "none: the arms that use it are shared and are not compiled inline",
-    test: "test_rop_binary");
+    contract: "Reads the operator and the value: no memory, no failure.");
 
 extern helper int_binary(op:Enum<Numeric>, a:Scaled51, b:Scaled51)
   cases(ok(z:O), err(e:Err))
@@ -62,9 +58,7 @@ extern primitive float_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
     review: "Reviewed BN; AR adds power. pycore_rop_rows.h: the float operand pair,"
             "and an operator the pair's result admits (float_op_admits).",
     contract: "Reads the two words and the operator: no memory, no failure, no"
-              "callback.",
-    lowering: "none: the arm that uses it is shared and is not compiled inline",
-    test: "test_rop_binary");
+              "callback.");
 
 // The operator's double result of two decoded operands: C's +, -, *, / or
 // pow.  The operator admits it or not (float_op_admits).
@@ -75,9 +69,7 @@ extern primitive float_value(op:Enum<Numeric>, a:F64, b:F64) -> F64
     review: "AR. pycore_rop_rows.h: the operations of floatobject.c's float_add,"
             "float_sub, float_mul, float_div and float_pow, before their checks.",
     contract: "Arithmetic on doubles: no memory, no failure.  pow may set errno,"
-              "which no reader trusts without clearing it first.",
-    lowering: "none: the arm that uses it is shared and is not compiled inline",
-    test: "test_rop_binary");
+              "which no reader trusts without clearing it first.");
 
 // Whether the float operation's result is the language's: always for add,
 // subtract and multiply; for true divide when the divisor is nonzero; for
@@ -91,9 +83,7 @@ extern primitive float_op_admits(op:Enum<Numeric>, a:F64, b:F64, z:F64) -> Bool
   evidence(
     review: "TB; AR adds power. pycore_rop_rows.h: floatobject.c float_div's zero"
             "test and float_pow's cases.",
-    contract: "Reads the operator and the doubles: no memory, no failure.",
-    lowering: "none: the arm that uses it is shared and is not compiled inline",
-    test: "test_rop_binary");
+    contract: "Reads the operator and the doubles: no memory, no failure.");
 
 // The float of an admitted result, boxed only when it is NaN
 extern helper box_float(z:F64)
@@ -116,9 +106,7 @@ extern primitive text_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
     review: "Reviewed BN. pycore_rop_rows.h: the in-place add, and both words"
             "objects of exact type str.",
     contract: "Reads the type words and the operator: no memory, no failure, no"
-              "callback.",
-    lowering: "none: the arm that uses it is shared and is not compiled inline",
-    test: "test_rop_binary");
+              "callback.");
 
 // Records the operand types of the sampled pair as type versions, and clears
 // the rest of the entry.  Evidence only: every arm guards what it relies on.

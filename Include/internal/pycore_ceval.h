@@ -79,8 +79,8 @@ typedef struct _PyEvalActivation {
     _PyInterpreterFrame *source_error_frame;
     _PyExceptionHandler source_error_handler;
     const _PyIRObserverSpec *observer_context;
-    /* Why a function form returned no next word (_PyIRTransfer), and what
-     * its caller needs to go on.  It is written on those exits only and read
+    /* Why a step returned no next word (_PyIRTransfer), and what its caller
+     * needs to go on.  It is written on those exits only and read
      * at once. */
     int exit_kind;
     uint32_t exit_entry;
@@ -93,9 +93,6 @@ typedef struct _PyEvalActivation {
     PyValue gen_value;
     _PyInterpreterFrame *gen_dying;
     int gen_empty;
-    /* Whether the outlined conditional jump that ran last jumped
-     * (IR_REPORT_EDGE()), for the event of its instrumented twin. */
-    int edge;
     /* The thread's jit_departing flag when this activation started
      * (pycore_tstate.h): a window of an outer activation stays open while
      * this one runs, and the activation restores the flag when it exits. */

@@ -14,8 +14,8 @@
 #include "ceval_shared.h"
 
 /* The C rows that the arms inline, with their static helpers.  They stay
- * extern: the observing evaluator, the function forms, the stubs and the
- * baseline JIT call them by symbol.  Here, in the unit of the arms, the
+ * extern: the observing evaluator and the baseline JIT's stencils call them
+ * by symbol.  Here, in the unit of the arms, the
  * compiler inlines them into the arms that run them. */
 
 /* The rows of Convert and Format (Python/register_ops/text.rop): the value

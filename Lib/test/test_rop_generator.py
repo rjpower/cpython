@@ -18,7 +18,6 @@ with test_tools.imports_under_tool("cases_generator"):
     import rop_catalog
     import rop_check
     import rop_generator
-    import rop_leaf
     import rop_model
     import rop_print
     import rop_syntax
@@ -59,41 +58,6 @@ class AddCheckedScaledTests(unittest.TestCase):
                     self.assertEqual(out, exact << shift if fits else exact)
 
 
-def hot_sequence(lines):
-    """The calls of a template's hot path, by name: up to the cold section,
-    without labels, register choices or arguments"""
-    names = []
-    for line in lines:
-        line = line.strip()
-        if line.startswith("_PyJitLower_ColdBegin"):
-            break
-        if m := re.match(r"(?:int c\d+ = )?(_PyJit\w+)\(", line):
-            if "NewLabel" not in m[1] and "Bind" not in m[1]:
-                names.append(m[1])
-        elif line.startswith("if ("):
-            names.append(line.rstrip(" {"))
-    return names
-
-
-class AddIntTemplateTests(unittest.TestCase):
-    def test_hot_path(self):
-        # The old BINARY_OP_ADD_INT template's hot path, with its add and the
-        # branch on overflow spelled as the primitive that is both
-        prog = products().program
-        arm = prog.arms["Add.Int"]
-        new = rop_leaf.template_of_arm(prog, arm, "Add_Int")
-        self.assertEqual(hot_sequence(new), [
-            "_PyJitAsm_MovRM", "_PyJitAsm_MovRM",
-            "_PyJitLower_PyValue_BothInlineInt", "_PyJitAsm_Jcc",
-            "_PyJitLower__PyValue_IntScaled", "_PyJitLower__PyValue_IntScaled",
-            "_PyJitLower__PyValue_AddCheckedScaled",
-            "_PyJitLower__PyValue_FromIntScaled",
-            "if (!(ir_word & IR_F_LOCAL_B))", "_PyJitAsm_MovMI",
-            "if (!(ir_word & IR_F_LOCAL_C))", "_PyJitAsm_MovMI",
-            "if ((ir_word & IR_F_LOCAL_A))", "_PyJitAsm_MovRM", "_PyJitAsm_MovMR",
-            "if ((ir_word & IR_F_LOCAL_A))", "_PyJitLower_PyValue_XCLOSE"])
-
-
 SHARED = """\
 family F(dst:Dst, x:Src) exits(next, miss) generic(Any);
 point F.Done(current, next_head, clear) keep() spent(x) defs(dst);
@@ -101,7 +65,7 @@ extern primitive is_int(v:B) -> Bool
   effects()
   test(inline_int(v))
   c PyValue_IsInlineInt as bool
-  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+  evidence(review: "r", contract: "c");
 arm F.Copy shared effects(writes, releases) feedback() exits(next, miss)
 {
   entry():
@@ -122,12 +86,6 @@ arm F.Any shared effects(writes, releases) feedback() exits(next)
 """
 
 
-# SHARED whose generic arm is split, as one that can enter a frame is
-SPLIT_GENERIC = SHARED.replace("arm F.Any shared", "arm F.Any split")
-
-
-# SHARED with no generic arm: nothing runs the word when F.Copy misses
-NO_GENERIC = SHARED.replace(" generic(Any)", "").partition("arm F.Any")[0]
 
 
 # SHARED with a guard whose fact leaves the value counted
@@ -177,8 +135,8 @@ class LayoutOrderTests(unittest.TestCase):
 
 
 class InlineRowTests(unittest.TestCase):
-    """`c SYMBOL as CONVENTION inline`: the interpreter calls the row's own
-    symbol, the forms and stubs one out-of-line copy"""
+    """`c SYMBOL as CONVENTION inline`: the arms call the row's own symbol,
+    which the inline declarations always inline"""
 
     def generated(self, text=INLINE):
         import io
@@ -186,25 +144,15 @@ class InlineRowTests(unittest.TestCase):
         self.assertEqual(program.diagnostics, ())
         p = rop_generator.lower_all(program, rop_generator.number_arms(program))
         out = {}
-        for name in ("cases", "forms", "stubs", "inline"):
+        for name in ("cases", "inline"):
             out[name] = io.StringIO()
             getattr(rop_generator, "write_inline_declarations" if name == "inline" else f"write_{name}")(out[name], p, [])
         return {k: v.getvalue() for k, v in out.items()}
 
-    def test_the_products_call_the_symbol_they_link(self):
+    def test_the_arms_call_the_symbol_they_link(self):
         text = self.generated()
         self.assertIn("PyValue_IsInlineInt(", text["cases"])
-        self.assertNotIn("PyValue_IsInlineInt_Outlined", text["cases"])
-        # the one plain call in the forms is the outlined copy's own
-        forms = text["forms"].partition("{ return PyValue_IsInlineInt(p0); }")[2]
-        for body in (forms, text["stubs"]):
-            self.assertIn("PyValue_IsInlineInt_Outlined(", body)
-            self.assertNotRegex(body, r"PyValue_IsInlineInt\(")
-
-    def test_the_forms_define_one_outlined_copy_of_the_row(self):
-        text = self.generated()
-        self.assertEqual(text["forms"].count("static Py_NO_INLINE bool "
-                                             "PyValue_IsInlineInt_Outlined(PyValueBorrow p0)"), 1)
+        self.assertNotIn("_Outlined", text["cases"])
         # every unit that runs the arms includes the declaration
         self.assertIn("static Py_ALWAYS_INLINE bool "
                       "PyValue_IsInlineInt(PyValueBorrow);", text["inline"])
@@ -239,51 +187,7 @@ class FailClosedTests(unittest.TestCase):
             self.assertIn("Leak.Owner", err.getvalue())
 
 
-class StubTests(unittest.TestCase):
-    def test_a_shared_arm_gets_a_stub_with_status_returns(self):
-        import io
-        program = rop_check.check([rop_syntax.parse(SHARED, "t.rop")])
-        self.assertEqual(program.diagnostics, ())
-        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
-        out = io.StringIO()
-        rop_generator.write_stubs(out, p, [])
-        text = out.getvalue()
-        self.assertEqual(p.left_out, {})
-        self.assertIn("_PyIR_Rop_Stub_F_Copy", text)
-        self.assertIn("return ir_status", text)
-        entry, _ = rop_generator.arm_entries(p)
-        self.assertEqual((entry.name, entry.region, entry.stub, entry.generic),
-                         ("F_Copy", "shared", "_PyIR_Rop_Stub_F_Copy",
-                          "_PyIR_Rop_Stub_F_Any"))
-
-    def test_an_arm_that_misses_to_a_split_generic_is_unplanned(self):
-        # A split generic arm has no stub for a miss of compiled code to run:
-        # the arms that can miss run their function forms (GetItem.ListSlice)
-        program = rop_check.check([rop_syntax.parse(SPLIT_GENERIC, "t.rop")])
-        self.assertEqual(program.diagnostics, ())
-        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
-        self.assertEqual(p.left_out, {})
-        copy, generic = rop_generator.arm_entries(p)
-        self.assertEqual((copy.region, copy.generic), ("none", None))
-        self.assertEqual(generic.region, "none")
-
-    def test_a_planned_arm_that_misses_without_a_generic_stub_is_refused(self):
-        program = rop_check.check([rop_syntax.parse(NO_GENERIC, "t.rop")])
-        self.assertEqual(program.diagnostics, ())
-        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
-        with self.assertRaisesRegex(rop_generator.GenerateError,
-                                    "F.Copy is planned for the JIT and can miss"):
-            rop_generator.arm_entries(p)
-
-    def test_the_arms_of_families_with_a_split_generic_are_unplanned(self):
-        # GetItem.Generic and GetAttr.Generic can enter a frame; the shared
-        # GetItem.ListSlice once kept its stub with no generic for its miss
-        entries = rop_generator.load_arm_entries()
-        for entry in entries:
-            if entry.dotted.startswith(("GetItem.", "GetAttr.")) and entry.emitted:
-                with self.subTest(arm=entry.dotted):
-                    self.assertEqual((entry.region, entry.generic), ("none", None))
-
+class ArmLoweringTests(unittest.TestCase):
     def test_publish_takes_inputs_then_reads_old_values_then_writes_then_closes(self):
         # A publish home may be a spent input's home (dst and x name the same
         # slot): the home is emptied first, so the old value read after it is
@@ -409,7 +313,7 @@ class StubTests(unittest.TestCase):
         self.assertIn("ROP_ENTER(c, (IR_B(ir_word) + 2));",
                       "\n".join(p.lowered["S.Generator"].body))
         out = io.StringIO()
-        rop_generator.write_stubs(out, p, [])
+        rop_generator.write_completions(out, p, [])
         text = out.getvalue()
         self.assertIn("_PyRop_Complete_S_Complete(\n    PyThreadState *tstate, "
                       "_PyInterpreterFrame *frame, _PyIRWord *site,\n    PyValue ir_value)",
@@ -417,9 +321,6 @@ class StubTests(unittest.TestCase):
         self.assertIn("    v = ir_value;\n", text)
         self.assertIn("[ROP_HANDLER_S_Generator - ROP_FIRST_HANDLER] = "
                       "_PyRop_Complete_S_Complete,", text)
-        # The completion's status returns are the stubs' (pushed macros)
-        self.assertLess(text.index("_PyRop_Complete_S_Complete("),
-                        text.index('#pragma pop_macro("IR_BRANCH")'))
 
     def test_a_yield_names_the_home_the_sent_value_resumes_into(self):
         from test.test_register_verify import YIELD
@@ -470,7 +371,7 @@ extern primitive is_int(v:B) -> Bool
   effects()
   test(inline_int(v))
   c PyValue_IsInlineInt as bool
-  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+  evidence(review: "r", contract: "c");
 family F(dst:Dst, x:Src, fb:Fb<Call>) exits(next, miss)
   events(CALL, C_RETURN);
 family G(dst:Dst, x:Src) exits(next, miss);
@@ -702,7 +603,7 @@ family F(x:Src, op:Enum<Op>) exits(next, miss);
 extern primitive op_ok(op:Enum<Op>, v:B) -> Bool
   effects()
   c op_ok_c as bool
-  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+  evidence(review: "r", contract: "c");
 arm F.Fast shared OVER effects() feedback() exits(next, miss)
 {
   entry():
@@ -814,7 +715,7 @@ family F(dst:Dst, x:Src, y:Src, op:Enum<Op>) exits(next, miss);
 extern primitive op_ok(op:Enum<Op>, v:B) -> Bool
   effects()
   c op_ok_c as bool
-  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+  evidence(review: "r", contract: "c");
 arm F.Fast shared OVERS effects() feedback() exits(next, miss)
 {
   entry():
@@ -923,17 +824,6 @@ class LocalsArmTests(unittest.TestCase):
         row = entries["GetAttr.Shape"].locals_row
         self.assertEqual(len(row), 16)
         self.assertEqual(set(row), {"GetAttr_Shape", "GetAttr_Shape_TL"})
-        # A member keeps its declared arm's plan for the JIT: inline, or
-        # shared with a stub of its own
-        for member, declared in (("GetAttr.Shape_TL", "GetAttr.Shape"),
-                                 ("Add.Int_TLL", "Add.Int"),
-                                 ("Add.Float_TTT", "Add.Float")):
-            with self.subTest(member=member):
-                self.assertEqual(entries[member].region, entries[declared].region)
-                self.assertEqual(entries[member].generic, entries[declared].generic)
-        self.assertEqual(entries["Add.Int_TLL"].region, "inline")
-        self.assertEqual(entries["Add.Float_TTT"].region, "shared")
-        self.assertEqual(entries["Add.Float_TTT"].stub, "_PyIR_Rop_Stub_Add_Float_TTT")
 
 
 class EnvironmentTests(unittest.TestCase):
@@ -941,18 +831,15 @@ class EnvironmentTests(unittest.TestCase):
         import rop_catalog
         self.assertLessEqual(set(rop_catalog.ENVIRONMENT_C), set(rop_catalog.ENVIRONMENT))
 
-    def test_each_name_has_the_same_c_expression_in_every_product(self):
+    def test_each_name_has_its_c_expression_in_the_cases(self):
         import io
         program = rop_check.check([rop_syntax.parse(ENVIRONMENT, "t.rop")])
         self.assertEqual(program.diagnostics, ())
         p = rop_generator.lower_all(program, rop_generator.number_arms(program))
         self.assertEqual(p.left_out, {})
-        for write in (rop_generator.write_cases, rop_generator.write_forms,
-                      rop_generator.write_stubs):
-            out = io.StringIO()
-            write(out, p, [])
-            self.assertIn("probe_c(tstate, frame, this_instr, next_instr)", out.getvalue(),
-                          write.__name__)
+        out = io.StringIO()
+        rop_generator.write_cases(out, p, [])
+        self.assertIn("probe_c(tstate, frame, this_instr, next_instr)", out.getvalue())
 
 
 INDEXED = """\
@@ -1046,7 +933,8 @@ class GeneratedAddIntTests(unittest.TestCase):
 
     def test_generated_files_are_current(self):
         for name, writer in (("Python/generated_rop_cases.c.h", rop_generator.write_cases),
-                             ("Python/generated_rop_forms.c.h", rop_generator.write_forms),
+                             ("Python/generated_rop_completions.c.h",
+                              rop_generator.write_completions),
                              ("Python/generated_jit_stencil_decls.h",
                               rop_generator.write_stencil_decls)):
             import io
@@ -1069,14 +957,13 @@ def c_function(text: str, symbol: str) -> tuple[str, str] | None:
     return m.group(1), text[m.end():i]
 
 
-class TemplateLayoutTests(unittest.TestCase):
-    """Templates read feedback entries through rop_catalog.FB_LAYOUT, the
+class LayoutTests(unittest.TestCase):
+    """The arms read feedback entries through rop_catalog.FB_LAYOUT, the
     one statement of each field's C member and type"""
 
     @classmethod
     def setUpClass(cls):
         cls.products = products()
-        cls.made, cls.refused = rop_generator.template_texts(cls.products)
 
     def test_the_layout_states_every_schema_field(self):
         for schema, layout in rop_catalog.FB_LAYOUT.items():
@@ -1141,32 +1028,6 @@ class TemplateLayoutTests(unittest.TestCase):
                     self.assertIn(f"entry.{field}", declared, f"{x.c.symbol} reads {member}")
             checked += 1
         self.assertGreater(checked, 5)
-
-    def test_a_template_that_reads_its_entry_checks_its_handler(self):
-        for name in ("GetAttr.Shape", "GetAttr.Instance"):
-            self.assertIn(name, self.made)
-        for name, lines in self.made.items():
-            text = "\n".join(lines)
-            with self.subTest(name):
-                self.assertEqual("_PyJitTemplate_CheckHandler(cx);" in text,
-                                 "&fb->" in text)
-
-    def test_reading_an_undeclared_field_refuses(self):
-        prog = self.products.program
-        arm = prog.arms["GetAttr.Shape"]
-        feedback = tuple(a for a in arm.contract.feedback if a.field != "entry.shape")
-        narrowed = dataclasses.replace(
-            arm, contract=dataclasses.replace(arm.contract, feedback=feedback))
-        with self.assertRaisesRegex(rop_generator.Unsupported, "entry.shape"):
-            rop_leaf.leaf_of_arm(prog, narrowed)
-
-    def test_templates_file_is_current(self):
-        out = io.StringIO()
-        sources = sorted(f"Python/register_ops/{p.name}"
-                         for p in (ROOT / "Python" / "register_ops").glob("*.rop"))
-        rop_generator.write_templates(out, self.products, sources)
-        self.assertEqual((ROOT / "Python/generated_rop_templates.c.h").read_text(),
-                         out.getvalue())
 
 
 if __name__ == "__main__":

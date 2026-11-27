@@ -48,18 +48,14 @@ extern primitive test_is_identity(t:Enum<BranchTest>) -> Bool
   c _PyRop_TestIsIdentity as bool
   evidence(
     review: "Reviewed CP. The word's test is IDENTITY.",
-    contract: "A function of the immediate: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "A function of the immediate: no memory, no failure.");
 
 extern primitive test_is_contains(t:Enum<BranchTest>) -> Bool
   effects()
   c _PyRop_TestIsContains as bool
   evidence(
     review: "Reviewed CP. The word's test is CONTAINS.",
-    contract: "A function of the immediate: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "A function of the immediate: no memory, no failure.");
 
 // The relation of a compare test; any other test gives LT, which no arm
 // that asks for a relation reads from such a word
@@ -68,27 +64,21 @@ extern primitive relation_of(t:Enum<BranchTest>) -> Enum<Relation>
   c _PyRop_RelationOf as scalar
   evidence(
     review: "Reviewed CP. TEST_LT to TEST_GE are LT to GE.",
-    contract: "A function of the immediate: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "A function of the immediate: no memory, no failure.");
 
 extern primitive result_is_truth(r:Enum<CompareResult>) -> Bool
   effects()
   c _PyRop_ResultIsTruth as bool
   evidence(
     review: "Reviewed CP. COMPARE_OP's oparg bit 16 converts the result to a bool.",
-    contract: "A function of the immediate: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "A function of the immediate: no memory, no failure.");
 
 extern primitive equality_relation(r:Enum<Relation>) -> Bool
   effects()
   c _PyRop_EqualityRelation as bool
   evidence(
     review: "Reviewed CP. specialize.c: COMPARE_OP_STR admits EQ and NE only.",
-    contract: "A function of the immediate: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "A function of the immediate: no memory, no failure.");
 
 // Identity
 
@@ -98,9 +88,7 @@ extern primitive same_value(a:B, b:B) -> Bool
   evidence(
     review: "Reviewed CP. pycore_value.h: operands are canonical, so identity is a"
             "comparison of their words.",
-    contract: "No memory, no failure, no callback.",
-    lowering: "jit_lower.c LOWERING(PyValue_Is)",
-    test: "test_ir_leaf CASES");
+    contract: "No memory, no failure, no callback.");
 
 // Compare: the relation of two admitted pairs
 
@@ -111,9 +99,7 @@ extern primitive both_inline_float(a:B, b:B) -> Bool
   evidence(
     review: "Reviewed CP. bytecodes.c _GUARD_TOS_FLOAT and _GUARD_NOS_FLOAT: inline"
             "floats; a boxed float is a NaN and takes the generic arm.",
-    contract: "A test of the two words: no memory, no failure.",
-    lowering: "none yet: PyValue_IsInlineFloat on each; add one when a template needs it",
-    test: "test_rop_compare");
+    contract: "A test of the two words: no memory, no failure.");
 
 extern primitive compare_scaled(r:Enum<Relation>, a:Scaled51, b:Scaled51) -> Bool
   effects()
@@ -121,9 +107,7 @@ extern primitive compare_scaled(r:Enum<Relation>, a:Scaled51, b:Scaled51) -> Boo
   evidence(
     review: "Reviewed CP. bytecodes.c _COMPARE_OP_INT: scaled values compare as the"
             "values do.",
-    contract: "Pure arithmetic on two int64 values.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "Pure arithmetic on two int64 values.");
 
 extern primitive compare_floats(r:Enum<Relation>, a:B, b:B) -> Bool
   effects()
@@ -132,9 +116,7 @@ extern primitive compare_floats(r:Enum<Relation>, a:B, b:B) -> Bool
   evidence(
     review: "Reviewed CP. bytecodes.c _COMPARE_OP_FLOAT: IEEE, so every relation but"
             "NE is false when either is NaN.",
-    contract: "Reads two inline floats: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "Reads two inline floats: no memory, no failure.");
 
 extern primitive equal_strings(r:Enum<Relation>, a:B, b:B) -> Bool
   effects(reads)
@@ -144,9 +126,7 @@ extern primitive equal_strings(r:Enum<Relation>, a:B, b:B) -> Bool
     review: "Reviewed CP. bytecodes.c _COMPARE_OP_STR: _PyUnicode_Equal, inverted for"
             "NE.",
     contract: "The relation is EQ or NE (asserted). Reads two exact strs: no memory,"
-              "no failure, no callback.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+              "no failure, no callback.");
 
 // The rich comparison of any two values: the object it returns
 extern helper value_compare(r:Enum<Relation>, a:B, b:B)
@@ -177,18 +157,14 @@ extern primitive exact_any_set(c:B) -> Bool
   c _PyRop_ExactAnySet as bool
   evidence(
     review: "Reviewed CP. bytecodes.c _GUARD_TOS_ANY_SET: PyAnySet_CheckExact.",
-    contract: "Reads the word and the type: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "Reads the word and the type: no memory, no failure.");
 
 extern primitive exact_any_dict(c:B) -> Bool
   effects(reads)
   c _PyRop_ExactAnyDict as bool
   evidence(
     review: "Reviewed CP. bytecodes.c _GUARD_TOS_ANY_DICT: PyAnyDict_CheckExact.",
-    contract: "Reads the word and the type: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "Reads the word and the type: no memory, no failure.");
 
 extern primitive exact_sequence(c:B) -> Bool
   effects(reads)
@@ -196,9 +172,7 @@ extern primitive exact_sequence(c:B) -> Bool
   evidence(
     review: "Reviewed CP. bytecodes.c _GUARD_TOS_STR_TUPLE_LIST: an exact str, tuple or"
             "list.",
-    contract: "Reads the word and the type: no memory, no failure.",
-    lowering: "none yet",
-    test: "test_rop_compare");
+    contract: "Reads the word and the type: no memory, no failure.");
 
 // The membership tests; each reports yes, no or the exception.  The
 // container is the first parameter, as in the C functions.

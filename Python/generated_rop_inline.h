@@ -3,6 +3,89 @@
 //   Python/register_ops/add.rop, Python/register_ops/attrs.rop, Python/register_ops/calls.rop, Python/register_ops/cells.rop, Python/register_ops/cleanup.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/displays.rop, Python/register_ops/exceptions.rop, Python/register_ops/functions.rop, Python/register_ops/getattr.rop, Python/register_ops/items.rop, Python/register_ops/iteration.rop, Python/register_ops/names.rop, Python/register_ops/namespaces.rop, Python/register_ops/numeric.rop, Python/register_ops/patterns.rop, Python/register_ops/resume.rop, Python/register_ops/suspend.rop, Python/register_ops/tests.rop, Python/register_ops/text.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 
+/* The C layout of the feedback schemas and recipes (rop_catalog.FB_LAYOUT,
+ * RECIPE_LAYOUT) */
+static_assert(_Generic(((_PyFbBinary *)0)->descr, const void *: 1, default: 0),
+              "schema Binary.descr: _PyFbBinary.descr is not const void *");
+static_assert(_Generic(((_PyFbAttr *)0)->read_kind, uint32_t: 1, default: 0),
+              "schema Attr.kind: _PyFbAttr.read_kind is not uint32_t");
+static_assert(_Generic(((_PyFbAttr *)0)->type_version, uint32_t: 1, default: 0),
+              "schema Attr.type_version: _PyFbAttr.type_version is not uint32_t");
+static_assert(_Generic(((_PyFbAttr *)0)->offset, uint32_t: 1, default: 0),
+              "schema Attr.offset: _PyFbAttr.offset is not uint32_t");
+static_assert(_Generic(((_PyFbAttr *)0)->shape, uint32_t: 1, default: 0),
+              "schema Attr.shape: _PyFbAttr.shape is not uint32_t");
+static_assert(_Generic(((_PyFbAttr *)0)->dict_version, uint32_t: 1, default: 0),
+              "schema Attr.keys_version: _PyFbAttr.dict_version is not uint32_t");
+static_assert(_Generic(((_PyFbAttr *)0)->index, uint32_t: 1, default: 0),
+              "schema Attr.index: _PyFbAttr.index is not uint32_t");
+static_assert(_Generic(((_PyFbAttr *)0)->descr, PyObject *: 1, default: 0),
+              "schema Attr.descr: _PyFbAttr.descr is not PyObject *");
+static_assert(_Generic(((_PyFbAttr *)0)->h.poly, uint32_t: 1, default: 0),
+              "schema Attr.rows: _PyFbAttr.h.poly is not uint32_t");
+static_assert(_Generic(((_PyFbAttr *)0)->class_value, _PyValueGuarded: 1, default: 0),
+              "schema Attr.class_value: _PyFbAttr.class_value is not _PyValueGuarded");
+static_assert(_Generic(((_PyFbAttr *)0)->shape_to, uint32_t: 1, default: 0),
+              "schema Attr.shape_to: _PyFbAttr.shape_to is not uint32_t");
+static_assert(offsetof(_PyFbAttr, func_version) == offsetof(_PyFbAttr, dict_version),
+              "schema Attr: _PyFbAttr.func_version does not share dict_version's storage");
+static_assert(offsetof(_PyFbAttr, class_version) == offsetof(_PyFbAttr, dict_version),
+              "schema Attr: _PyFbAttr.class_version does not share dict_version's storage");
+static_assert(offsetof(_PyFbAttr, shape) == offsetof(_PyFbAttr, dict_version),
+              "schema Attr: _PyFbAttr.shape does not share dict_version's storage");
+static_assert(offsetof(_PyFbAttr, offset) == offsetof(_PyFbAttr, index),
+              "schema Attr: _PyFbAttr.offset does not share index's storage");
+static_assert(offsetof(_PyFbAttr, hint) == offsetof(_PyFbAttr, index),
+              "schema Attr: _PyFbAttr.hint does not share index's storage");
+static_assert(offsetof(_PyFbAttr, dictoffset) == offsetof(_PyFbAttr, index),
+              "schema Attr: _PyFbAttr.dictoffset does not share index's storage");
+static_assert(offsetof(_PyFbAttr, fget) == offsetof(_PyFbAttr, descr),
+              "schema Attr: _PyFbAttr.fget does not share descr's storage");
+static_assert(offsetof(_PyFbAttr, getattribute) == offsetof(_PyFbAttr, descr),
+              "schema Attr: _PyFbAttr.getattribute does not share descr's storage");
+static_assert(offsetof(_PyFbAttr, shape_to) == offsetof(_PyFbAttr, descr),
+              "schema Attr: _PyFbAttr.shape_to does not share descr's storage");
+static_assert(_Generic(((_PyFbGlobal *)0)->globals_version, uint32_t: 1, default: 0),
+              "schema Global.globals_version: _PyFbGlobal.globals_version is not uint32_t");
+static_assert(_Generic(((_PyFbGlobal *)0)->builtins_version, uint32_t: 1, default: 0),
+              "schema Global.builtins_version: _PyFbGlobal.builtins_version is not uint32_t");
+static_assert(_Generic(((_PyFbGlobal *)0)->index, uint32_t: 1, default: 0),
+              "schema Global.index: _PyFbGlobal.index is not uint32_t");
+static_assert(_Generic(((_PyFbUnary *)0)->type_version, uint32_t: 1, default: 0),
+              "schema Truth.type_version: _PyFbUnary.type_version is not uint32_t");
+static_assert(_Generic(((_PyFbCompare *)0)->kind, uint32_t: 1, default: 0),
+              "schema Compare.kind: _PyFbCompare.kind is not uint32_t");
+static_assert(_Generic(((_PyFbContains *)0)->kind, uint32_t: 1, default: 0),
+              "schema Contains.kind: _PyFbContains.kind is not uint32_t");
+static_assert(_Generic(((_PyFbContains *)0)->type_version, uint32_t: 1, default: 0),
+              "schema Contains.type_version: _PyFbContains.type_version is not uint32_t");
+static_assert(_Generic(((_PyFbCall *)0)->func_version, uint32_t: 1, default: 0),
+              "schema Call.func_version: _PyFbCall.func_version is not uint32_t");
+static_assert(_Generic(((_PyFbCall *)0)->type_version, uint32_t: 1, default: 0),
+              "schema Call.type_version: _PyFbCall.type_version is not uint32_t");
+static_assert(_Generic(((_PyFbCall *)0)->plan, _PyBindPlan: 1, default: 0),
+              "schema Call.plan: _PyFbCall.plan is not _PyBindPlan");
+static_assert(_Generic(((_PyAttrRecipe *)0)->type_version, uint32_t: 1, default: 0),
+              "recipe Attr.type_version: _PyAttrRecipe.type_version is not uint32_t");
+static_assert(_Generic(((_PyAttrRecipe *)0)->aux, uint32_t: 1, default: 0),
+              "recipe Attr.aux: _PyAttrRecipe.aux is not uint32_t");
+static_assert(_Generic(((_PyAttrRecipe *)0)->offset, uint32_t: 1, default: 0),
+              "recipe Attr.offset: _PyAttrRecipe.offset is not uint32_t");
+static_assert(_Generic(((_PyAttrRecipe *)0)->read_kind, uint32_t: 1, default: 0),
+              "recipe Attr.read_kind: _PyAttrRecipe.read_kind is not uint32_t");
+static_assert(_Generic(((_PyAttrRecipe *)0)->shape_to, uint32_t: 1, default: 0),
+              "recipe Attr.shape_to: _PyAttrRecipe.shape_to is not uint32_t");
+static_assert(_Generic(((_PyAttrRecipe *)0)->values_layout, bool: 1, default: 0),
+              "recipe Attr.values_layout: _PyAttrRecipe.values_layout is not bool");
+static_assert(_Generic(((_PyAttrRecipe *)0)->class_value, _PyValueGuarded: 1, default: 0),
+              "recipe Attr.class_value: _PyAttrRecipe.class_value is not _PyValueGuarded");
+static_assert(_Generic(((_PyGlobalRecipe *)0)->globals_version, uint32_t: 1, default: 0),
+              "recipe Global.globals_version: _PyGlobalRecipe.globals_version is not uint32_t");
+static_assert(_Generic(((_PyGlobalRecipe *)0)->builtins_version, uint32_t: 1, default: 0),
+              "recipe Global.builtins_version: _PyGlobalRecipe.builtins_version is not uint32_t");
+static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
+              "recipe Global.index: _PyGlobalRecipe.index is not uint32_t");
+
 /* Rows declared inline: always inlined into every arm that calls them */
 static Py_ALWAYS_INLINE bool _PyRop_FloatOperands(PyValueBorrow, PyValueBorrow);
 static Py_ALWAYS_INLINE PyValue _PyRop_AddFloats(double, double);

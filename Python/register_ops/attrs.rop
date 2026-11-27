@@ -234,9 +234,7 @@ extern primitive store_values_ready(o:Obj, r:Recipe<Attr>) -> Bool
   c _PyAttr_StoreValuesReady as bool
   evidence(
     review: "The old _GUARD_DORV_NO_DICT and the transition check of _STORE_ATTR_INSTANCE_VALUE.",
-    contract: "Reads the owner's dictionary pointer, the valid byte and the shape tree; no memory write, no callee.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_shapes");
+    contract: "Reads the owner's dictionary pointer, the valid byte and the shape tree; no memory write, no callee.");
 
 // The owner's shape is the recipe's and the slot is filled (Shape) or
 // vacant (ShapeAdd)
@@ -247,9 +245,7 @@ extern primitive store_shape_filled(o:Obj, r:Recipe<Attr>) -> Bool
   c _PyAttr_StoreShapeFilled as bool
   evidence(
     review: "shape_current plus a test that the slot holds a value.",
-    contract: "Two loads; no memory write, no callee.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_shapes");
+    contract: "Two loads; no memory write, no callee.");
 
 extern primitive store_shape_vacant(o:Obj, r:Recipe<Attr>) -> Bool
   effects(reads)
@@ -258,9 +254,7 @@ extern primitive store_shape_vacant(o:Obj, r:Recipe<Attr>) -> Bool
   c _PyAttr_StoreShapeVacant as bool
   evidence(
     review: "shape_current plus a test that the slot is NULL.",
-    contract: "Two loads; no memory write, no callee.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_shapes");
+    contract: "Two loads; no memory write, no callee.");
 
 // The managed dictionary has an unwatched entry at the recipe's hint whose
 // key is the name.  A dictionary with watchers declines: its notification
@@ -271,9 +265,7 @@ extern primitive hint_store_ready(o:Obj, n:Name, r:Recipe<Attr>) -> Bool
   c _PyAttr_HintStoreReady as bool
   evidence(
     review: "The guards of the old _STORE_ATTR_WITH_HINT: the dict, the hinted entry's key, a value in the slot, no watcher.",
-    contract: "Reads the dictionary; no memory write, no callee.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_shapes");
+    contract: "Reads the dictionary; no memory write, no callee.");
 
 // The stores that the old handlers made under a lock: the owner's for the
 // inline values and the member slot, the dictionary's for a hinted entry.
@@ -572,9 +564,7 @@ extern primitive super_builtin_ready(parts:Span<Src>) -> Bool
   c _PyRop_SuperBuiltinReady as bool
   evidence(
     review: "The old _GUARD_LOAD_SUPER_ATTR_METHOD and the guards of LOAD_SUPER_ATTR_ATTR: super is PySuper_Type, the class is a type.",
-    contract: "Reads the first two parts; no memory write, no callee.",
-    lowering: "none yet: an arm that calls it keeps the call of its form",
-    test: "test_super");
+    contract: "Reads the first two parts; no memory write, no callee.");
 
 extern helper super_lookup_builtin(parts:Span<Src>, n:Name)
   cases(ok(z:O), err(e:Err))

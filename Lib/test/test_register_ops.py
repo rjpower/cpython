@@ -464,7 +464,7 @@ CHECK_CASES = [
      ]),
     ('evidence', 'scale(v:B) -> Scaled51 effects() pending',
      'scale(v:B) -> Scaled51 effects() c _PyValue_IntScaled as scalar', [
-         (7, 51, 'c _PyValue_IntScaled needs evidence: review, contract, lowering, test'),
+         (7, 51, 'c _PyValue_IntScaled needs evidence: review, contract'),
      ]),
     ('convention', 'effects(allocates, raises) pending',
      'effects(allocates, raises) c _PyValue_BoxInt64 as scalar evidence(review: "r", contract: "c")', [
@@ -498,8 +498,8 @@ CHECK_CASES = [
          (23, 24, 'allocates on (z): no operand z'),
      ]),
     ('evidencekey', 'scale(v:B) -> Scaled51 effects() pending',
-     'scale(v:B) -> Scaled51 effects() c s as scalar evidence(review: "r", contract: "c", lowering: "l", test: "t", why: "w")', [
-         (7, 128, 'evidence why is not one of: review, contract, lowering, test'),
+     'scale(v:B) -> Scaled51 effects() c s as scalar evidence(review: "r", contract: "c", why: "w")', [
+         (7, 102, 'evidence why is not one of: review, contract'),
      ]),
     ('testbool', 'scale(v:B) -> Scaled51 effects() pending',
      'scale(v:B) -> Scaled51 effects() test(inline_int(v)) pending', [

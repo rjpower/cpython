@@ -91,7 +91,7 @@
           WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\py_metadata_generator.py Tools\cases_generator\stack_ops.py"
           WorkingDirectory="$(PySourcePath)" />
-    <Exec Command="$(PythonForBuild) Tools\cases_generator\rop_generator.py --cases Python\generated_rop_cases.c.h --forms Python\generated_rop_forms.c.h --stubs Python\generated_rop_stubs.c.h --inline Python\generated_rop_inline.h --targets Python\ir_targets.h --templates Python\generated_rop_templates.c.h --lowerings Python\jit_lowerings.h --metadata Include\internal\pycore_rop_metadata.h"
+    <Exec Command="$(PythonForBuild) Tools\cases_generator\rop_generator.py --cases Python\generated_rop_cases.c.h --completions Python\generated_rop_completions.c.h --inline Python\generated_rop_inline.h --targets Python\ir_targets.h --metadata Include\internal\pycore_rop_metadata.h"
           WorkingDirectory="$(PySourcePath)" />
     <Exec Command="$(PythonForBuild) Tools\cases_generator\ir_metadata_generator.py"
           WorkingDirectory="$(PySourcePath)" />

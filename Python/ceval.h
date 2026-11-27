@@ -324,19 +324,12 @@ static _PyExceptionHandler get_exception_handler(PyCodeObject *, int);
 #include <errno.h>
 #endif
 
-/* What a function form or a VM routine returns (tiers87, C2): the frame to
- * run and its next word, or a null word for an exit that the activation
- * describes. */
+/* What a step (Python/ceval_steps.c) returns: the frame to run and its next
+ * word, or a null word for an exit that the activation describes. */
 typedef struct {
     _PyInterpreterFrame *frame;
     _PyInstr *next;
 } _PyIRTransfer;
-
-/* A function form: the handler of a word, or a routine that takes the same
- * arguments, as a function (Python/ceval.c) */
-typedef _PyIRTransfer (*_PyIRForm)(PyThreadState *tstate,
-                                   _PyInterpreterFrame *frame,
-                                   _PyInstr *next_instr, _PyIRWord ir_word);
 
 enum {
     _PyIR_EXIT_RAISE,   /* an error: exit_next is the origin, exit_entry the

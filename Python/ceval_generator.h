@@ -8,7 +8,7 @@
  * step jumps into the evaluator.  The steps call one another to continue a
  * transfer.
  *
- * This file is included once, with the exits of the outlined handlers. */
+ * This file is included once, in Python/ceval_steps.c. */
 #define GENERATOR_DISPATCH() DISPATCH()
 #define GEN_STEP(NAME) \
     Py_NO_INLINE _PyIRTransfer \

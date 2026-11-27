@@ -51,10 +51,6 @@ class ArmEntry:
     this generator list it: its handler id is first_arm() + index."""
     name: str                 # the C name: Add_Int
     index: int                # among all arms, in definition order
-    region: str               # the plan: "inline", "shared" or "none" (split)
-    escapes: bool
-    stub: str | None          # the stub function of a shared arm
-    generic: str | None       # the stub function of its family's generic arm
     dotted: str = ""          # Add.Int
     events: tuple[str, ...] = ()   # PY_MONITORING_EVENT_* names
     adaptive: bool = False    # the family adapts: its generic arm specializes

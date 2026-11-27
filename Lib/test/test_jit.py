@@ -726,20 +726,6 @@ class TestHandOff(JitTestCase):
                 self.assertEqual(run(src, f"jit={mode}").strip(),
                                  "['Jump.Warm', 'Resume.Warm']")
 
-    def test_ir_forms_turns_the_jit_off(self):
-        # The forms executor runs no unit, so a JIT mode under -X ir_forms
-        # is off
-        src = """
-            import sys, _testinternalcapi as t
-            def f(): return 1
-            for i in range(100): f()
-            print(sys._jit.is_enabled(), t.jit_stats()["compiles"])
-        """
-        for mode in ("on", "always"):
-            with self.subTest(mode=mode):
-                self.assertEqual(run(src, "ir_forms", f"jit={mode}").split(),
-                                 ["False", "0"])
-
 
 class TestEntries(JitTestCase):
     """A frame switch goes to the target frame's word through its code's
@@ -925,8 +911,8 @@ class TestReclamation(unittest.TestCase):
     until no thread is in a window (Python/jit.c, _PyJit_Reclaim()).  Freed
     unit memory is inaccessible, so a premature free crashes."""
 
-    # The interpreter, the function forms and both JIT modes
-    MODES = (("jit=off",), ("ir_forms",)) + (
+    # The interpreter and both JIT modes
+    MODES = (("jit=off",),) + (
         (("jit=on",), ("jit=always",)) if AVAILABLE else ())
 
     def check_modes(self, source):
@@ -1046,18 +1032,17 @@ class TestReclamation(unittest.TestCase):
 
 
 @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
-class TestCompletionStubs(JitTestCase):
-    """Whole-word completion stubs (g1a/abi.md): UNPACK_SEQUENCE's arms and
-    BINARY_OP's generic are calls of generated C stubs, BINARY_OP's add arms
-    are templates whose misses run the family's generic stub.  The inline,
-    stub and generic paths give the interpreter's results, exceptions,
-    slots and counts, and a finalizer that a release runs sees its events
-    from the next word on."""
+class TestCompiledArms(JitTestCase):
+    """Words of arms that miss, release and specialise, compiled by copying
+    their stencils: a hit, a miss to the family's generic arm and the
+    generic arm itself give the interpreter's results, exceptions, slots and
+    counts, and a finalizer that a release runs sees its events from the
+    next word on."""
 
     def test_resume_check_arm_and_generic(self):
-        # RESUME's words compile to RESUME_CHECK's template.  A pending
+        # RESUME's words are copies of the Resume.Poll stencil.  A pending
         # signal, or monitoring turned on between calls, misses to the
-        # generic RESUME stub, which polls or instruments (and retires the
+        # generic RESUME arm, which polls or instruments (and retires the
         # unit).  A frame with cells reaches its RESUME inside the unit,
         # after the words that make the cells.
         self.check_same("""
@@ -1094,7 +1079,7 @@ class TestCompletionStubs(JitTestCase):
     def test_unpack_arms_and_generic(self):
         # Lists, tuples, other iterables, length failures and non-iterables
         # at one site: the list and tuple arms, their misses to the generic
-        # stub, and the generic's raise
+        # arm, and the generic's raise
         self.check_same("""
             import sys
             def f(seqs):
@@ -1115,10 +1100,9 @@ class TestCompletionStubs(JitTestCase):
         """)
 
     def test_list_slice_misses_to_a_frame_entering_generic(self):
-        # GetItem.Generic can enter a __getitem__ frame, so it has no stub:
-        # a word adapted to GetItem.ListSlice runs ListSlice's form, whose
-        # miss on a str, a tuple or a class with __getitem__ goes on in the
-        # generic's form (it once called a NULL generic stub)
+        # GetItem.Generic can enter a __getitem__ frame: a word adapted to
+        # GetItem.ListSlice runs ListSlice, whose miss on a str, a tuple or a
+        # class with __getitem__ goes on in the generic arm
         self.check_same("""
             class G:
                 def __getitem__(self, k):
@@ -1182,9 +1166,9 @@ class TestCompletionStubs(JitTestCase):
         """)
 
     def test_binary_op_arms_and_generic(self):
-        # The add templates, their misses to BINARY_OP's generic stub (the
+        # The add arms, their misses to BINARY_OP's generic arm (the
         # operation from the word's entry: + and +=), overflow, and the
-        # generic stub's results and raises for other operations
+        # generic arm's results and raises for other operations
         self.check_same("""
             class V:
                 def __init__(self, v): self.v = v
@@ -1210,12 +1194,11 @@ class TestCompletionStubs(JitTestCase):
         """)
 
     def test_monitoring_enabled_by_a_finalizer(self):
-        # A __del__ turns LINE events on: run by the generic unpack stub's
-        # release of its iterable (the stub reports ESCAPED and the site's
-        # cold path finds the unit retired), by the close of a local that an
-        # unpack's store displaces, and by an add's displaced local (the
-        # template's release slow path).  The compiled code leaves at the
-        # next word and the events are the interpreter's from there.
+        # A __del__ turns LINE events on: run by the generic unpack arm's
+        # release of its iterable, by the close of a local that an unpack's
+        # store displaces, and by an add's displaced local.  The compiled
+        # code leaves at the next word and the events are the interpreter's
+        # from there.
         self.check_same("""
             import sys
             mon = sys.monitoring
@@ -1270,7 +1253,7 @@ class TestCompletionStubs(JitTestCase):
 
     def test_settrace_enabled_by_a_finalizer(self):
         # The same with sys.settrace, from a displaced local's close and from
-        # the release of an unpacked iterable (the generic stub).  The
+        # the release of an unpacked iterable (the generic arm).  The
         # finalizer also traces the running frame, whose next line events
         # then show where compiled code left.
         self.check_same("""
@@ -1327,7 +1310,7 @@ class TestCompletionStubs(JitTestCase):
 
     def test_specialization_reruns_the_word(self):
         # The generic arm specializes its word inside the unit (AGAIN): the
-        # word runs again through the generic stub with the right result,
+        # word runs again through the generic arm with the right result,
         # the unit is marked stale and recompiles at the next warm-up event,
         # and the second compile plans the specialized arm
         out = run("""
@@ -1665,9 +1648,9 @@ class TestFrameTransfers(JitTestCase):
                 del f
             print(total)
 
-            # 6. a capped unit's RETURN form loses the last reference to
-            #    its code: the code is at the recompile cap, so its unit
-            #    runs the forms, which mark the departure
+            # 6. a capped unit's return loses the last reference to its
+            #    code: the code is at the recompile cap, so its unit keeps
+            #    running, and the return marks the departure
             for i in range(20):
                 ns = {}
                 exec("def f(drop):\\n"
@@ -1862,40 +1845,6 @@ class TestFrameTransfers(JitTestCase):
                     print(type(e).__name__)
             sys.setrecursionlimit(1000)
         """)
-
-    @unittest.skip("Resume.Warm has no template yet: the interpreter comes first")
-    def test_plans_per_word(self):
-        # Every compiled frame is entered at word 0: RESUME's words compile
-        # to the inline RESUME_CHECK template, and the calls and returns
-        # that switch are the forms' calls (G3a plans no transfer stub)
-        outs = self.check_transfers("""
-            def callee(x):
-                return x + 1
-            def caller(n):
-                return callee(n) + callee(n + 1)
-            for i in range(3):
-                caller(i)
-            before = stats()
-            print(caller(5))
-            report("plans", before)
-            for f in (callee, caller):
-                unit = t.jit_unit(f.__code__)
-                if unit is not None:
-                    for i, plan in sorted(unit["plans"].items()):
-                        print("jit plan", f.__name__, i, *plan)
-        """)
-        plans = [line.split()[2:] for line in outs["always"].splitlines()
-                 if line.startswith("jit plan ")]
-        resumes = [p for p in plans if p[2].startswith("RESUME")]
-        self.assertEqual({tuple(p[0:1]) + tuple(p[3:]) for p in resumes},
-                         {("callee", "inline", "template", "RESUME_CHECK"),
-                          ("caller", "inline", "template", "RESUME_CHECK")}, plans)
-        self.assertEqual([p[1] for p in resumes], ["0", "0"], plans)
-        transfers = [p for p in plans if p[2].startswith(("Call.", "Return."))]
-        self.assertTrue(any(p[2] == "Call.Exact" for p in transfers), plans)
-        for p in transfers:
-            self.assertEqual(p[4], "form", p)
-        self.assert_switched(outs["always"], "plans", 4)
 
     def test_monitoring_turned_on_in_compiled_callees(self):
         # Events turned on inside a compiled callee, a callee that

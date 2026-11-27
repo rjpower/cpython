@@ -561,6 +561,10 @@ class ArmLowerer:
         self.acquired_in: dict[str, frozenset[str]] = {}  # ... on every path into a block
         # Anchors made from a literal span, as scalars: name -> source count
         self.anchors: dict[str, int] = {}
+        # The closes emitted last, which a dispatching exit takes as its
+        # tail closes (lower_tail_closes); any other line emits them first
+        self.pending_closes: list[str] = []
+        self.tails = 0
 
     # Names
 
@@ -582,7 +586,14 @@ class ArmLowerer:
         return name
 
     def emit(self, line: str) -> None:
+        self.lines += [f"PyValue_XCLOSE({v});" for v in self.pending_closes]
+        self.pending_closes = []
         self.lines.append(line)
+
+    def close(self, value: str) -> None:
+        """Close an owned value: at once, or as a tail close if a
+        dispatching exit follows"""
+        self.pending_closes.append(value)
 
     # Operands
 
@@ -712,7 +723,7 @@ class ArmLowerer:
 
     def close_anchors(self, name: str) -> None:
         for i in range(self.anchors[name]):
-            self.emit(f"PyValue_XCLOSE({name}_owned{i});")
+            self.close(f"{name}_owned{i}")
 
     def is_span_operand(self, operand: str) -> bool:
         """A vector operand other than an argument descriptor (Args), whose
@@ -861,9 +872,13 @@ class ArmLowerer:
         p = self.placements[operand]
         first = p.slots[0]
         assert [s.offset for s in p.slots] == [first.offset + 12 * i for i in range(len(p.slots))]
-        sign = 1 << (p.bits - 1)
-        raw = f"((uint32_t)(ir_word >> {first.offset}) & {(1 << p.bits) - 1:#x})"
-        return f"(this_instr + 1 + ((int)({raw} ^ {sign:#x}) - {sign:#x}))"
+        # Shift the field's top bit to the word's, then shift arithmetically
+        # down: two instructions decode and sign-extend it
+        top = first.offset + p.bits
+        assert top <= 64
+        field = (f"Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << {64 - top}), "
+                 f"{64 - p.bits})")
+        return f"(this_instr + 1 + {field})"
 
     def call_expr(self, e: Call) -> str:
         if e.callee == "use":
@@ -942,6 +957,7 @@ class ArmLowerer:
         for i, label in enumerate(order):
             self.next_label = order[i + 1] if i + 1 < len(order) else None
             self.lower_block(self.blocks[label], label)
+        assert not self.pending_closes, self.arm.name
         for b in self.blocks.values():
             for p in b.params:
                 t = c_type(p.type)
@@ -985,7 +1001,8 @@ class ArmLowerer:
         out = []
         for line in lines:
             if line.endswith(":") and not line.startswith(" "):
-                if f"goto {line[:-1]};" not in text:
+                if (f"goto {line[:-1]};" not in text
+                        and f", {line[:-1]});" not in text):
                     continue
             out.append(line)
         return out
@@ -1075,8 +1092,9 @@ class ArmLowerer:
         spent = sorted((d for d in s.debts if d.kind is DebtKind.spent),
                        key=lambda d: order.index(d.subject))
         olds = [d for d in s.debts if d.kind is DebtKind.old]
-        # d[] = v: the items of v are written into d's homes before the
-        # values they displace are closed (_PyRop_PublishItems), which
+        # d[] = v: the items of v are written straight into d's homes with
+        # the arm's constant span geometry, and no displaced value is
+        # deallocated before the last write (_PyRop_PublishItems), which
         # discharges old(d) too; the debts after it close what it read from
         stored = {b.target: b.value.name for b in s.bindings if b.owners}
         vectors = [b for b in s.bindings if b.vector and not b.owners]
@@ -1145,7 +1163,7 @@ class ArmLowerer:
             if d.kind is DebtKind.spent and d.subject in moved:
                 raise Unsupported(f"{self.arm.name}: {d.subject} is moved and spent")
             elif d.kind is DebtKind.owned:
-                self.emit(f"PyValue_XCLOSE({self.expr_text(Name(d.subject))});")
+                self.close(self.expr_text(Name(d.subject)))
             elif d.kind is DebtKind.spent and self.is_span_operand(d.subject):
                 # The closes may run finalizers, which a stub reports
                 self.emit("IR_STUB_ESCAPE();")
@@ -1153,11 +1171,11 @@ class ArmLowerer:
             elif d.kind is DebtKind.spent and self.is_vector(d.subject):
                 self.emit(f"_PyRop_SpendArgs(frame, this_instr, {kept});")
             elif d.kind is DebtKind.spent and owners[d.subject] is not None:
-                self.emit(f"PyValue_XCLOSE({owners[d.subject]});")
+                self.close(owners[d.subject])
             elif d.kind is DebtKind.old and d.subject in stored:
                 pass
             elif d.kind is DebtKind.old:
-                self.emit(f"PyValue_XCLOSE(old_{cname(d.subject)});")
+                self.close(f"old_{cname(d.subject)}")
             elif d.kind is DebtKind.roots and d.subject in self.anchors:
                 self.close_anchors(d.subject)
             elif d.kind is DebtKind.roots:
@@ -1286,7 +1304,9 @@ class ArmLowerer:
         self.jump(target, payload)
 
     def lower_exit(self, t: Exit) -> None:
-        if t.kind == "next":
+        if t.kind in ("next", "branch", "jump") and self.pending_closes:
+            self.lower_tail_closes(t)
+        elif t.kind == "next":
             self.emit("DISPATCH();")
         elif t.kind == "miss":
             self.emit(self.miss())
@@ -1323,6 +1343,47 @@ class ArmLowerer:
         else:
             raise Unsupported(f"{self.arm.name}: exit {t.kind} is not lowered yet")
 
+    def lower_tail_closes(self, t: Exit) -> None:
+        """Rule LR 1: the closes before a dispatching exit leave the arm
+        by a tail call.  Each close drops its count inline
+        (ROP_TAIL_CLOSE); a value that would lose its last count keeps it
+        and goes to a cold block, which parks it and the last count of every
+        later close in the activation and leaves through the VM routine
+        close_dispatch, which closes them in order and dispatches.  So the
+        arm makes no call on any path to its exit, and finalizers run after
+        its last decrement instead of between two.  The bindings
+        (Python/ceval_macros.h, Python/ceval_forms.c) say what the macros
+        do; the forms and stubs close in place."""
+        closes, self.pending_closes = self.pending_closes, []
+        if len(closes) > TAIL_CLOSES:
+            raise ValueError(f"{self.arm.name}: {len(closes)} tail closes, more "
+                             f"than the activation parks ({TAIL_CLOSES})")
+        tail = f"{self.prefix}_Tail{self.tails}"
+        self.tails += 1
+        for k, v in enumerate(closes):
+            self.emit(f"ROP_TAIL_CLOSE({v}, {tail}_{k});")
+        if t.kind == "next":
+            self.emit("DISPATCH();")
+            leave = "ROP_TAIL_DISPATCH();"
+        else:
+            (target,) = t.args
+            assert isinstance(target, Name)
+            value = self.operand_value(target.name)
+            self.emit(f"IR_BRANCH({value});")
+            leave = f"ROP_TAIL_BRANCH({value});"
+        # Cold block k parks close k's value, then runs the later closes
+        # in parking mode (Rest k + 1 onwards) and leaves
+        n = len(closes)
+        for k, v in enumerate(closes):
+            self.emit(f"{tail}_{k}:")
+            self.emit(f"ROP_TAIL_PARK_FIRST({v});")
+            if n > 1:
+                self.emit(f"goto {tail}_Rest{k + 1};")
+        for j in range(1, n + 1):
+            if n > 1:
+                self.emit(f"{tail}_Rest{j}:")
+            self.emit(f"ROP_TAIL_PARK({closes[j]});" if j < n else leave)
+
     def resume_slot(self, t: Exit) -> str:
         """The home that the child's return value, or the value sent to a
         yielding generator, goes to: the resume point's definition"""
@@ -1333,6 +1394,10 @@ class ArmLowerer:
         (dst,) = defs
         return self.home_index(dst)
 
+
+# The values that an arm's tail closes may park in the activation
+# (_PyEvalActivation.tail_close, Include/internal/pycore_ceval.h)
+TAIL_CLOSES = 8
 
 # The families whose yield suspends in the delegating state
 DELEGATING_FAMILIES = frozenset({"YieldFrom"})

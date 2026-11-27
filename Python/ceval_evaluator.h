@@ -27,6 +27,7 @@ IR_TAIL_FN(start_frame);
 IR_TAIL_FN(throw_error);
 IR_TAIL_FN(process_error);
 IR_TAIL_FN(gen_return);
+IR_TAIL_FN(close_dispatch);
 #if IR_OBSERVING
 IR_TAIL_FN(observe_word);
 #endif
@@ -87,6 +88,29 @@ IR_TAIL_FN(observe_word)
     DISPATCH_GOTO();
 }
 #endif
+
+/* The cold exit of an arm's tail closes (ROP_TAIL_CLOSE,
+ * Python/ceval_macros.h): give the values that it parked, which have no
+ * count, their last counts back before any code runs, close them in close
+ * order, then dispatch next_instr.  The values leave the activation first,
+ * so that the closes, which run code, see none parked. */
+IR_TAIL_FN(close_dispatch)
+{
+    _PyEvalActivation *activation = IR_ACTIVATION();
+    int n = activation->tail_closes;
+    assert(0 < n && n <= _PyEval_TAIL_CLOSES);
+    PyValue parked[_PyEval_TAIL_CLOSES];
+    for (int i = 0; i < n; i++) {
+        parked[i] = activation->tail_close[i];
+        _PyValue_RestoreLast(parked[i]);
+    }
+    activation->tail_closes = 0;
+    for (int i = 0; i < n; i++) {
+        PyValue_XCLOSE(parked[i]);
+    }
+    int opcode;
+    DISPATCH();
+}
 
 /* The switch word: go on at the word that it stands for, in this
  * evaluator or the other one (_PyEval_SwitchesLoop()) */

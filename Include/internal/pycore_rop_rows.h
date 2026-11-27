@@ -119,15 +119,16 @@ PyAPI_FUNC(int) _PyRop_MergeKeywords(PyValue *fn, PyValue *dict, PyValue *update
  * home, a local source in its home (parked if a destination displaces it),
  * or hold, a count of the container (a tuple the row made, or a tuple
  * source too long for one park).  No code runs between the row and the last
- * write of the first park, so a list's items stay as the row found them. */
+ * write of the first park, so a list's items stay as the row found them
+ * (_PyRop_PublishItems()). */
 typedef struct {
     const PyValue *items;
     PyObject *hold;
     Py_ssize_t count;
 } _PyRopItems;
 
-/* The displaced values that a publish of items holds until every home of
- * the park is written */
+/* The displaced values that the rest of a publish holds until every home
+ * of the park is written (_PyRop_PublishItemsRest()) */
 #define _PY_ROP_PARK 16
 
 PyAPI_FUNC(int) _PyRop_UnpackIterable(PyValue *source, Py_ssize_t n, _PyRopItems *out);
@@ -150,27 +151,110 @@ _PyRop_UnpackTuple(PyValue *source_home, size_t n)
                          (Py_ssize_t)n};
 }
 
-/* The publish `d[] = v` of a Span<O>: item i goes to home i of d.  Up to a
- * park of homes at a time, every home is written before any value it
- * displaced is closed, so a finalizer sees the park published and cannot
- * change the items still to be read (a longer span's items are a held
- * tuple's).  A vacant home displaces NULL, whose close does nothing. */
+/* The count that ref owns is dropped, as PyValue_XCLOSE() drops it, but an
+ * object that this leaves with no count is not deallocated: the result is
+ * true, and the caller gives the object its last count back
+ * (_PyValue_RestoreLast()) before any code runs, then closes it once no
+ * code that the close could run may observe a half-done write.  The count
+ * must be back before any code runs: a finalizer may collect garbage, which
+ * must not find an object with no count.  The fast path is the decrement
+ * and test of PyValue_XCLOSE().  The free-threaded build closes at once. */
+static inline Py_ALWAYS_INLINE bool
+_PyValue_DropNoDealloc(PyValue ref)
+{
+#ifdef Py_GIL_DISABLED
+    PyValue_XCLOSE(ref);
+    return false;
+#else
+    if (!PyValue_RefcountOnObject(ref)) {
+        return false;
+    }
+    PyObject *op = BITS_TO_PTR(ref);
+    assert(!_Py_IsStaticImmortal(op));
+#ifdef Py_REF_DEBUG
+    if (op->ob_refcnt <= 0) {
+        _Py_NegativeRefcount(__FILE__, __LINE__, op);
+    }
+#endif
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
+        return true;
+    }
+#ifdef Py_REF_DEBUG
+    if (!_Py_IsImmortal(op)) {
+        _Py_DECREF_DecRefTotal();
+    }
+#endif
+    _Py_DECREF_STAT_INC();
+    return false;
+#endif
+}
+
+/* The last count of an object that _PyValue_DropNoDealloc() left with none,
+ * which ref owns again */
+static inline void
+_PyValue_RestoreLast(PyValue ref)
+{
+    PyObject *op = BITS_TO_PTR(ref);
+    assert(op->ob_refcnt == 0);
+    op->ob_refcnt = 1;
+}
+
+/* The rest of a publish whose element i displaced last, a value that
+ * _PyValue_DropNoDealloc() left with no count (in ceval.c) */
+PyAPI_FUNC(void) _PyRop_PublishItemsRest(const _PyRopSpan *d, _PyRopItems *v,
+                                         int i, PyValue last);
+
+/* The publish `d[] = v` of a Span<O>: item i goes to home i of d, straight
+ * through the word's element fields with the arm's constant layout (the
+ * head's elements, then four to an operand word), and the value each home
+ * held loses its count at once.  A value that would lose its last count
+ * hands the rest of the publish to _PyRop_PublishItemsRest(), which parks
+ * it and the values the later homes displace and closes them after the
+ * last write: no code runs before every home is written, so a finalizer
+ * sees the publish done and the items, a tuple's or a list's, cannot change
+ * under it (a span longer than a park holds a count: a park's closes may
+ * close a local source that a destination displaced).  A vacant home
+ * displaces NULL. */
 static inline Py_ALWAYS_INLINE void
 _PyRop_PublishItems(const _PyRopSpan *d, _PyRopItems *v)
 {
     assert(v->count == d->count);
     assert(d->count <= _PY_ROP_PARK || v->hold != NULL);
-    PyValue park[_PY_ROP_PARK];
-    for (int base = 0; base < d->count; base += _PY_ROP_PARK) {
-        int m = Py_MIN(d->count - base, _PY_ROP_PARK);
-        for (int i = 0; i < m; i++) {
-            PyValue *home = &d->frame->base[_PyRopSpan_Slot(d, base + i)];
-            park[i] = _PyFrame_TakeHome(d->frame, home);
-            _PyFrame_WriteHome(d->frame, home,
-                               PyValue_DUP(PyValue_Borrow(v->items[base + i])));
+    PyValue *homes = d->frame->base;
+    int i = 0;
+    int j = d->first;
+    /* The head's fields, the last nhead of its four */
+    for (; i < d->count && j < d->nhead; i++, j++) {
+        PyValue *home = &homes[_PyIR_SpanElementAt(d->head, d->nhead, d->fixed, j)];
+        PyValue old = *home;
+        _PyFrame_WriteHome(d->frame, home, PyValue_DUP(PyValue_Borrow(v->items[i])));
+        if (_PyValue_DropNoDealloc(old)) {
+            _PyRop_PublishItemsRest(d, v, i, old);
+            return;
         }
-        for (int i = 0; i < m; i++) {
-            PyValue_XCLOSE(park[i]);
+    }
+    /* The operand words: one load for four fields */
+    int k = j - d->nhead;
+    const _PyIRWord *w = d->head + 1 + d->fixed + k / IR_OPERANDS_PER_WORD;
+    int left = 0;
+    uint64_t fields = 0;
+    if (i < d->count && k % IR_OPERANDS_PER_WORD) {
+        left = IR_OPERANDS_PER_WORD - k % IR_OPERANDS_PER_WORD;
+        fields = *w++ >> (16 + 12 * (k % IR_OPERANDS_PER_WORD));
+    }
+    for (; i < d->count; i++) {
+        if (left == 0) {
+            fields = *w++ >> 16;
+            left = IR_OPERANDS_PER_WORD;
+        }
+        PyValue *home = &homes[fields & IR_FIELD_MAX];
+        fields >>= 12;
+        left--;
+        PyValue old = *home;
+        _PyFrame_WriteHome(d->frame, home, PyValue_DUP(PyValue_Borrow(v->items[i])));
+        if (_PyValue_DropNoDealloc(old)) {
+            _PyRop_PublishItemsRest(d, v, i, old);
+            return;
         }
     }
     Py_XDECREF(v->hold);

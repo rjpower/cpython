@@ -272,9 +272,27 @@ class StubTests(unittest.TestCase):
         text = "\n".join(p.lowered["F.Copy"].body)
         order = [text.index(mark) for mark in (
             "own_x = _PyFrame_TakeHome(", "old_dst = *", "_PyFrame_WriteHome(frame, home_dst",
-            "PyValue_XCLOSE(own_x)", "PyValue_XCLOSE(old_dst)")]
+            "ROP_TAIL_CLOSE(own_x,", "ROP_TAIL_CLOSE(old_dst,")]
         self.assertEqual(order, sorted(order))
-        self.assertEqual(text.count("PyValue_XCLOSE(own_x)"), 1)
+        self.assertEqual(text.count("ROP_TAIL_CLOSE(own_x,"), 1)
+
+    def test_the_closes_before_a_dispatch_leave_by_a_tail_call(self):
+        # Each close drops its count inline; close k's cold block parks its
+        # value, then the later closes' values in parking mode, and leaves
+        # through close_dispatch (lower_tail_closes)
+        program = rop_check.check([rop_syntax.parse(COUNTED, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        text = "\n".join(p.lowered["F.Copy"].body)
+        self.assertNotIn("PyValue_XCLOSE(", text)
+        tail = "rop_F_Copy_Tail0"
+        self.assertIn(f"ROP_TAIL_CLOSE(own_x, {tail}_0);\n"
+                      f"ROP_TAIL_CLOSE(old_dst, {tail}_1);\n"
+                      "DISPATCH();\n", text)
+        self.assertIn(f"{tail}_0:\nROP_TAIL_PARK_FIRST(own_x);\ngoto {tail}_Rest1;\n"
+                      f"{tail}_1:\nROP_TAIL_PARK_FIRST(old_dst);\ngoto {tail}_Rest2;\n"
+                      f"{tail}_Rest1:\nROP_TAIL_PARK(old_dst);\n"
+                      f"{tail}_Rest2:\nROP_TAIL_DISPATCH();", text)
 
     def test_a_guarded_uncounted_input_is_cleared_and_not_closed(self):
         # The guard in the publish's own block proves x an inline int, which
@@ -285,7 +303,7 @@ class StubTests(unittest.TestCase):
         text = "\n".join(p.lowered["F.Copy"].body)
         self.assertIn("_PyFrame_WriteHome(frame, home_x, PyValue_NULL);", text)
         self.assertNotIn("own_x", text)
-        self.assertEqual(text.count("PyValue_XCLOSE("), 1)
+        self.assertEqual(text.count("ROP_TAIL_CLOSE("), 1)
 
     def test_an_owners_binding_publishes_the_items_in_one_call(self):
         # d[] = v writes every item into its home before any displaced value
@@ -319,7 +337,15 @@ class StubTests(unittest.TestCase):
                       ": PyValue_NULL;", text)
         hot = text[:text.index("DISPATCH();")]
         self.assertNotIn("_PyRopAnchors", hot)
-        self.assertIn("PyValue_XCLOSE(a_owned0);\nPyValue_XCLOSE(a_owned1);", hot)
+        self.assertIn("ROP_TAIL_CLOSE(a_owned0, rop_Binary_Generic_Tail0_0);\n"
+                      "ROP_TAIL_CLOSE(a_owned1, rop_Binary_Generic_Tail0_1);", hot)
+
+    def test_a_target_is_decoded_by_two_shifts(self):
+        # Jump.Poll's signed 24-bit distance at bit 16: shifted up to the
+        # word's top bit, then arithmetically down
+        text = "\n".join(products().lowered["Jump.Poll"].body)
+        self.assertIn("this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, "
+                      "(int64_t)(ir_word << 24), 40)", text)
 
     def test_unwind_enters_the_unwinder_without_a_raise_event(self):
         program = rop_check.check([rop_syntax.parse(UNWIND, "t.rop")])
@@ -346,7 +372,7 @@ class StubTests(unittest.TestCase):
         self.assertNotIn("IR_F_LOCAL", text)
         order = [text.index(mark) for mark in (
             "own_window_cursor = _PyFrame_TakeHome(", "own_window_value = _PyFrame_TakeHome(",
-            "PyValue_XCLOSE(own_window_value)", "PyValue_XCLOSE(own_window_cursor)")]
+            "ROP_TAIL_CLOSE(own_window_value,", "ROP_TAIL_CLOSE(own_window_cursor,")]
         self.assertEqual(order, sorted(order))
 
     def test_a_completion_is_a_function_every_handler_of_its_family_finds(self):

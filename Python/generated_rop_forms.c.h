@@ -420,12 +420,37 @@ ir_run_Add_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Add_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Add_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_Add_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_Add_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Add_Generic_Tail0_4);
     DISPATCH();
+    rop_Add_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Add_Generic_Tail0_Rest1;
+    rop_Add_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Add_Generic_Tail0_Rest2;
+    rop_Add_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Add_Generic_Tail0_Rest3;
+    rop_Add_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Add_Generic_Tail0_Rest4;
+    rop_Add_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Add_Generic_Tail0_Rest5;
+    rop_Add_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Add_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_Add_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_Add_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_Add_Generic_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Add_Generic_adapt_before_use_add2_Sample:
     if (PyValue_BothInlineInt(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
         goto rop_Add_Generic_adapt_before_use_add2_Chosen;
@@ -579,11 +604,31 @@ ir_run_AttrWrite_Generic(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_AttrWrite_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_AttrWrite_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_value, rop_AttrWrite_Generic_Tail0_3);
     DISPATCH();
+    rop_AttrWrite_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_AttrWrite_Generic_Tail0_Rest1;
+    rop_AttrWrite_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_AttrWrite_Generic_Tail0_Rest2;
+    rop_AttrWrite_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Generic_Tail0_Rest3;
+    rop_AttrWrite_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_AttrWrite_Generic_Tail0_Rest4;
+    rop_AttrWrite_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_AttrWrite_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_obj);
+    rop_AttrWrite_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_value);
+    rop_AttrWrite_Generic_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Generic_Delete:
     d_view0 = PyValue_Borrow(*home_obj);
     d_owned0 = (ir_word & IR_F_LOCAL_A) ? PyValue_DUP(d_view0) : PyValue_NULL;
@@ -598,9 +643,19 @@ ir_run_AttrWrite_Generic(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_obj = _PyFrame_TakeHome(frame, home_obj);
     }
-    PyValue_XCLOSE(d_owned0);
-    PyValue_XCLOSE(own_obj);
+    ROP_TAIL_CLOSE(d_owned0, rop_AttrWrite_Generic_Tail1_0);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Generic_Tail1_1);
     DISPATCH();
+    rop_AttrWrite_Generic_Tail1_0:
+    ROP_TAIL_PARK_FIRST(d_owned0);
+    goto rop_AttrWrite_Generic_Tail1_Rest1;
+    rop_AttrWrite_Generic_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Generic_Tail1_Rest2;
+    rop_AttrWrite_Generic_Tail1_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_AttrWrite_Generic_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Generic_delattr_at_origin1_Failed:
     IR_STUB_ESCAPE();
     d_all3 = (_PyRopAnchors){1, {d_view0}, {d_owned0}};
@@ -737,8 +792,11 @@ ir_run_SuperAttr_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_SuperAttr_Generic_Tail0_0);
     DISPATCH();
+    rop_SuperAttr_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_SuperAttr_Generic_adapt_before_use_super1_Sample:
     span3 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
     ret4 = _PyRop_ClassifySuper(&span3, this_instr, ((_PyFbUnary *)IR_FB(IR_D(ir_word))));
@@ -798,8 +856,11 @@ ir_run_SuperAttrExplicit_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_SuperAttrExplicit_Generic_Tail0_0);
     DISPATCH();
+    rop_SuperAttrExplicit_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_SuperAttrExplicit_Generic_adapt_before_use_super_explicit1_Sample:
     span3 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
     ret4 = _PyRop_ClassifySuper(&span3, this_instr, ((_PyFbUnary *)IR_FB(IR_D(ir_word))));
@@ -871,9 +932,19 @@ ir_run_SuperMethod_Generic(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, s);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_SuperMethod_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_SuperMethod_Generic_Tail0_1);
     DISPATCH();
+    rop_SuperMethod_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_SuperMethod_Generic_Tail0_Rest1;
+    rop_SuperMethod_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_SuperMethod_Generic_Tail0_Rest2;
+    rop_SuperMethod_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_SuperMethod_Generic_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_SuperMethod_Generic_adapt_before_use_super_method1_Sample:
     span6 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
     ret7 = _PyRop_ClassifySuper(&span6, this_instr, ((_PyFbUnary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))));
@@ -945,9 +1016,19 @@ ir_run_SuperMethodExplicit_Generic(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, s);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_SuperMethodExplicit_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_SuperMethodExplicit_Generic_Tail0_1);
     DISPATCH();
+    rop_SuperMethodExplicit_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_SuperMethodExplicit_Generic_Tail0_Rest1;
+    rop_SuperMethodExplicit_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_SuperMethodExplicit_Generic_Tail0_Rest2;
+    rop_SuperMethodExplicit_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_SuperMethodExplicit_Generic_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_SuperMethodExplicit_Generic_adapt_before_use_super_method_explicit1_Sample:
     span6 = (_PyRopSpan){frame, this_instr, 0, IR_C(ir_word), 0, 1};
     ret7 = _PyRop_ClassifySuper(&span6, this_instr, ((_PyFbUnary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))));
@@ -1728,8 +1809,11 @@ ir_run_Unpack_Generic(
     IR_STUB_ESCAPE();
     span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
     _PyRop_PublishItems(&span3, &vals);
-    PyValue_XCLOSE(own_source);
+    ROP_TAIL_CLOSE(own_source, rop_Unpack_Generic_Tail0_0);
     DISPATCH();
+    rop_Unpack_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
     rop_Unpack_Generic_adapt_before_use_unpack1_Sample:
     ret4 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), adapt_before_use_unpack1_n);
     if (ret4 == 1) {
@@ -2058,10 +2142,25 @@ ir_run_GetAttr_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_GetAttr_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_Generic_Tail0_2);
     DISPATCH();
+    rop_GetAttr_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_GetAttr_Generic_Tail0_Rest1;
+    rop_GetAttr_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_Generic_Tail0_Rest2;
+    rop_GetAttr_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_Generic_Tail0_Rest3;
+    rop_GetAttr_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_GetAttr_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_Generic_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_Generic_getattr_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all17 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -2176,11 +2275,31 @@ ir_run_GetMethod_Generic(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, s);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_GetMethod_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_obj, rop_GetMethod_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_callable, rop_GetMethod_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_self_dst, rop_GetMethod_Generic_Tail0_3);
     DISPATCH();
+    rop_GetMethod_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_GetMethod_Generic_Tail0_Rest1;
+    rop_GetMethod_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetMethod_Generic_Tail0_Rest2;
+    rop_GetMethod_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_GetMethod_Generic_Tail0_Rest3;
+    rop_GetMethod_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_GetMethod_Generic_Tail0_Rest4;
+    rop_GetMethod_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_GetMethod_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_callable);
+    rop_GetMethod_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_GetMethod_Generic_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_GetMethod_Generic_adapt_before_use_getmethod2_Sample:
     ret12 = _PyAttr_ClassifyGetMethod(PyValue_Borrow(*home_obj), this_instr, ((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out11);
     if (ret12 == 1) {
@@ -2462,12 +2581,37 @@ ir_run_GetItem_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_key);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_GetItem_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_GetItem_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_key, rop_GetItem_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_obj, rop_GetItem_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_GetItem_Generic_Tail0_4);
     DISPATCH();
+    rop_GetItem_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_GetItem_Generic_Tail0_Rest1;
+    rop_GetItem_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_GetItem_Generic_Tail0_Rest2;
+    rop_GetItem_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_key);
+    goto rop_GetItem_Generic_Tail0_Rest3;
+    rop_GetItem_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetItem_Generic_Tail0_Rest4;
+    rop_GetItem_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetItem_Generic_Tail0_Rest5;
+    rop_GetItem_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_GetItem_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_key);
+    rop_GetItem_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_obj);
+    rop_GetItem_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetItem_Generic_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_GetItem_Generic_getitem_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -2544,13 +2688,43 @@ ir_run_SetItem_Generic(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(own_key);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_SetItem_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_SetItem_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_SetItem_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_key, rop_SetItem_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(own_obj, rop_SetItem_Generic_Tail0_4);
+    ROP_TAIL_CLOSE(own_value, rop_SetItem_Generic_Tail0_5);
     DISPATCH();
+    rop_SetItem_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_SetItem_Generic_Tail0_Rest1;
+    rop_SetItem_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_SetItem_Generic_Tail0_Rest2;
+    rop_SetItem_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_SetItem_Generic_Tail0_Rest3;
+    rop_SetItem_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_key);
+    goto rop_SetItem_Generic_Tail0_Rest4;
+    rop_SetItem_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_SetItem_Generic_Tail0_Rest5;
+    rop_SetItem_Generic_Tail0_5:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_SetItem_Generic_Tail0_Rest6;
+    rop_SetItem_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_SetItem_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_SetItem_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_key);
+    rop_SetItem_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(own_obj);
+    rop_SetItem_Generic_Tail0_Rest5:
+    ROP_TAIL_PARK(own_value);
+    rop_SetItem_Generic_Tail0_Rest6:
+    ROP_TAIL_DISPATCH();
     rop_SetItem_Generic_adapt_before_use_setitem2_Sample:
     ret2 = _PyRop_ClassifySetItem(((_PyFbBinary *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_obj), PyValue_Borrow(*home_key));
     if (ret2 == 1) {
@@ -2653,11 +2827,31 @@ ir_run_IterOpen_Generic(
     _PyFrame_WriteHome(frame, home_pair_receiver, pr);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, PyValue_NULL);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_source);
-    PyValue_XCLOSE(old_pair_receiver);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(a_owned0, rop_IterOpen_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_source, rop_IterOpen_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Generic_Tail0_3);
     DISPATCH();
+    rop_IterOpen_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_IterOpen_Generic_Tail0_Rest1;
+    rop_IterOpen_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_source);
+    goto rop_IterOpen_Generic_Tail0_Rest2;
+    rop_IterOpen_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Generic_Tail0_Rest3;
+    rop_IterOpen_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Generic_Tail0_Rest4;
+    rop_IterOpen_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_source);
+    rop_IterOpen_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_pair_receiver);
+    rop_IterOpen_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Generic_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_IterOpen_Generic_adapt_before_use_iter1_Sample:
     if (PyValue_IsObject(PyValue_Borrow(*home_source))) {
         goto rop_IterOpen_Generic_adapt_before_use_iter1_TryIndexed;
@@ -2728,11 +2922,31 @@ ir_run_IterOpen_Generic(
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, z);
     _PyValue_CheckTemp(*home_pair_cursor);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_source);
-    PyValue_XCLOSE(old_pair_receiver);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(a_owned0, rop_IterOpen_Generic_Tail1_0);
+    ROP_TAIL_CLOSE(own_source, rop_IterOpen_Generic_Tail1_1);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Generic_Tail1_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Generic_Tail1_3);
     DISPATCH();
+    rop_IterOpen_Generic_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_IterOpen_Generic_Tail1_Rest1;
+    rop_IterOpen_Generic_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_source);
+    goto rop_IterOpen_Generic_Tail1_Rest2;
+    rop_IterOpen_Generic_Tail1_2:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Generic_Tail1_Rest3;
+    rop_IterOpen_Generic_Tail1_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Generic_Tail1_Rest4;
+    rop_IterOpen_Generic_Tail1_Rest1:
+    ROP_TAIL_PARK(own_source);
+    rop_IterOpen_Generic_Tail1_Rest2:
+    ROP_TAIL_PARK(old_pair_receiver);
+    rop_IterOpen_Generic_Tail1_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Generic_Tail1_Rest4:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -2924,11 +3138,31 @@ ir_run_ForIter_Generic(
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
     _PyValue_CheckTemp(*home_pair_cursor);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(old_item);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(a_owned0, rop_ForIter_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_ForIter_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_item, rop_ForIter_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_ForIter_Generic_Tail0_3);
     DISPATCH();
+    rop_ForIter_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_ForIter_Generic_Tail0_Rest1;
+    rop_ForIter_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_ForIter_Generic_Tail0_Rest2;
+    rop_ForIter_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_item);
+    goto rop_ForIter_Generic_Tail0_Rest3;
+    rop_ForIter_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_ForIter_Generic_Tail0_Rest4;
+    rop_ForIter_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_ForIter_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_item);
+    rop_ForIter_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_ForIter_Generic_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_ForIter_Generic_Failed:
     IR_STUB_ESCAPE();
     a_all11 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -2941,12 +3175,37 @@ ir_run_ForIter_Generic(
     }
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
     own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_pair_receiver);
-    PyValue_XCLOSE(own_pair_cursor);
-    PyValue_XCLOSE(ev);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_ForIter_Generic_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_ForIter_Generic_Tail1_1);
+    ROP_TAIL_CLOSE(own_pair_receiver, rop_ForIter_Generic_Tail1_2);
+    ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_Generic_Tail1_3);
+    ROP_TAIL_CLOSE(ev, rop_ForIter_Generic_Tail1_4);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_ForIter_Generic_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_ForIter_Generic_Tail1_Rest1;
+    rop_ForIter_Generic_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_ForIter_Generic_Tail1_Rest2;
+    rop_ForIter_Generic_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_pair_receiver);
+    goto rop_ForIter_Generic_Tail1_Rest3;
+    rop_ForIter_Generic_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_pair_cursor);
+    goto rop_ForIter_Generic_Tail1_Rest4;
+    rop_ForIter_Generic_Tail1_4:
+    ROP_TAIL_PARK_FIRST(ev);
+    goto rop_ForIter_Generic_Tail1_Rest5;
+    rop_ForIter_Generic_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_ForIter_Generic_Tail1_Rest2:
+    ROP_TAIL_PARK(own_pair_receiver);
+    rop_ForIter_Generic_Tail1_Rest3:
+    ROP_TAIL_PARK(own_pair_cursor);
+    rop_ForIter_Generic_Tail1_Rest4:
+    ROP_TAIL_PARK(ev);
+    rop_ForIter_Generic_Tail1_Rest5:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_ForIter_Generic_EndGone:
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(ev);
@@ -3012,8 +3271,11 @@ ir_run_GlobalRead_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_GlobalRead_Generic_Tail0_0);
     DISPATCH();
+    rop_GlobalRead_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_GlobalRead_Generic_adapt_before_use_global2_Sample:
     ret3 = _PyGlobal_Classify(frame, this_instr, ((_PyFbGlobal *)IR_FB(IR_C(ir_word))), GETITEM(FRAME_CO_NAMES, IR_B(ir_word)), &out2);
     if (ret3 == 1) {
@@ -3124,12 +3386,37 @@ ir_run_Binary_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Binary_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Binary_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_Binary_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_Binary_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Generic_Tail0_4);
     DISPATCH();
+    rop_Binary_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Binary_Generic_Tail0_Rest1;
+    rop_Binary_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Binary_Generic_Tail0_Rest2;
+    rop_Binary_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Binary_Generic_Tail0_Rest3;
+    rop_Binary_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Binary_Generic_Tail0_Rest4;
+    rop_Binary_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Binary_Generic_Tail0_Rest5;
+    rop_Binary_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Binary_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_Binary_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_Binary_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_Binary_Generic_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Binary_Generic_adapt_before_use_binary2_Sample:
     _PyRop_RecordOperands(((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y));
     if (_PyRop_IntBinaryApplies((uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
@@ -3277,12 +3564,37 @@ ir_run_AppendText_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_AppendText_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_AppendText_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_AppendText_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_AppendText_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_AppendText_Generic_Tail0_4);
     DISPATCH();
+    rop_AppendText_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_AppendText_Generic_Tail0_Rest1;
+    rop_AppendText_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_AppendText_Generic_Tail0_Rest2;
+    rop_AppendText_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_AppendText_Generic_Tail0_Rest3;
+    rop_AppendText_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_AppendText_Generic_Tail0_Rest4;
+    rop_AppendText_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_AppendText_Generic_Tail0_Rest5;
+    rop_AppendText_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_AppendText_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_AppendText_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_AppendText_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_AppendText_Generic_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_AppendText_Generic_adapt_before_use_append2_Sample:
     _PyRop_RecordOperands(((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y));
     if (_PyRop_IntBinaryApplies((uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
@@ -3511,12 +3823,37 @@ ir_run_Send_Generic(
     _PyValue_CheckTemp(*home_send_cursor);
     _PyFrame_WriteHome(frame, home_send_value, y);
     _PyValue_CheckHome(*home_send_value);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(old_send_cursor);
-    PyValue_XCLOSE(old_send_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_Send_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Send_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_Send_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_send_cursor, rop_Send_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_send_value, rop_Send_Generic_Tail0_4);
     DISPATCH();
+    rop_Send_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Send_Generic_Tail0_Rest1;
+    rop_Send_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Send_Generic_Tail0_Rest2;
+    rop_Send_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_Send_Generic_Tail0_Rest3;
+    rop_Send_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_send_cursor);
+    goto rop_Send_Generic_Tail0_Rest4;
+    rop_Send_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_send_value);
+    goto rop_Send_Generic_Tail0_Rest5;
+    rop_Send_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Send_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_Send_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_send_cursor);
+    rop_Send_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_send_value);
+    rop_Send_Generic_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Send_Generic_Failed:
     IR_STUB_ESCAPE();
     a_all8 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
@@ -3533,14 +3870,49 @@ ir_run_Send_Generic(
     old_completed = *home_completed;
     _PyFrame_WriteHome(frame, home_completed, rv);
     _PyValue_CheckHome(*home_completed);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(own_send_receiver);
-    PyValue_XCLOSE(own_send_cursor);
-    PyValue_XCLOSE(own_send_value);
-    PyValue_XCLOSE(old_completed);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_Send_Generic_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Send_Generic_Tail1_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_Send_Generic_Tail1_2);
+    ROP_TAIL_CLOSE(own_send_receiver, rop_Send_Generic_Tail1_3);
+    ROP_TAIL_CLOSE(own_send_cursor, rop_Send_Generic_Tail1_4);
+    ROP_TAIL_CLOSE(own_send_value, rop_Send_Generic_Tail1_5);
+    ROP_TAIL_CLOSE(old_completed, rop_Send_Generic_Tail1_6);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_Send_Generic_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Send_Generic_Tail1_Rest1;
+    rop_Send_Generic_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Send_Generic_Tail1_Rest2;
+    rop_Send_Generic_Tail1_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_Send_Generic_Tail1_Rest3;
+    rop_Send_Generic_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_send_receiver);
+    goto rop_Send_Generic_Tail1_Rest4;
+    rop_Send_Generic_Tail1_4:
+    ROP_TAIL_PARK_FIRST(own_send_cursor);
+    goto rop_Send_Generic_Tail1_Rest5;
+    rop_Send_Generic_Tail1_5:
+    ROP_TAIL_PARK_FIRST(own_send_value);
+    goto rop_Send_Generic_Tail1_Rest6;
+    rop_Send_Generic_Tail1_6:
+    ROP_TAIL_PARK_FIRST(old_completed);
+    goto rop_Send_Generic_Tail1_Rest7;
+    rop_Send_Generic_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Send_Generic_Tail1_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_Send_Generic_Tail1_Rest3:
+    ROP_TAIL_PARK(own_send_receiver);
+    rop_Send_Generic_Tail1_Rest4:
+    ROP_TAIL_PARK(own_send_cursor);
+    rop_Send_Generic_Tail1_Rest5:
+    ROP_TAIL_PARK(own_send_value);
+    rop_Send_Generic_Tail1_Rest6:
+    ROP_TAIL_PARK(old_completed);
+    rop_Send_Generic_Tail1_Rest7:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_Send_Generic_DoneGone:
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(rv);
@@ -3640,12 +4012,37 @@ ir_run_Compare_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Compare_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Compare_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_Compare_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_Compare_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Generic_Tail0_4);
     DISPATCH();
+    rop_Compare_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Compare_Generic_Tail0_Rest1;
+    rop_Compare_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Compare_Generic_Tail0_Rest2;
+    rop_Compare_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Compare_Generic_Tail0_Rest3;
+    rop_Compare_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Compare_Generic_Tail0_Rest4;
+    rop_Compare_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Compare_Generic_Tail0_Rest5;
+    rop_Compare_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Compare_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_Compare_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_Compare_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_Compare_Generic_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Compare_Generic_adapt_before_use_compare3_Sample:
     if (PyValue_BothInlineInt(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
         goto rop_Compare_Generic_adapt_before_use_compare3_ChosenInt;
@@ -3813,12 +4210,37 @@ ir_run_Contains_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_container);
-    PyValue_XCLOSE(own_item);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Contains_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Contains_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_container, rop_Contains_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_item, rop_Contains_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Contains_Generic_Tail0_4);
     DISPATCH();
+    rop_Contains_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Contains_Generic_Tail0_Rest1;
+    rop_Contains_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Contains_Generic_Tail0_Rest2;
+    rop_Contains_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_container);
+    goto rop_Contains_Generic_Tail0_Rest3;
+    rop_Contains_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_item);
+    goto rop_Contains_Generic_Tail0_Rest4;
+    rop_Contains_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Contains_Generic_Tail0_Rest5;
+    rop_Contains_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Contains_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_container);
+    rop_Contains_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_item);
+    rop_Contains_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_Contains_Generic_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Contains_Generic_adapt_before_use_contains2_Sample:
     ret2 = _PyRop_ClassifyContains(PyValue_Borrow(*home_container));
     if (ret2 == 1) {
@@ -3935,9 +4357,19 @@ ir_run_TestBranch_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Generic_Tail0_1);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_TestBranch_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Generic_Tail0_Rest1;
+    rop_TestBranch_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Generic_Tail0_Rest2;
+    rop_TestBranch_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Generic_Tail0_Rest2:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Generic_Adapt:
     if (!_PyFb_TickQuiet(&((_PyFbCompare *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h)) {
         goto rop_TestBranch_Generic_adapt_before_use_test3_Sample;
@@ -3985,11 +4417,31 @@ ir_run_TestBranch_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_TestBranch_Generic_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Generic_Tail1_1);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Generic_Tail1_2);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Generic_Tail1_3);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_TestBranch_Generic_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_TestBranch_Generic_Tail1_Rest1;
+    rop_TestBranch_Generic_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_TestBranch_Generic_Tail1_Rest2;
+    rop_TestBranch_Generic_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Generic_Tail1_Rest3;
+    rop_TestBranch_Generic_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Generic_Tail1_Rest4;
+    rop_TestBranch_Generic_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_TestBranch_Generic_Tail1_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_TestBranch_Generic_Tail1_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Generic_Tail1_Rest4:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Generic_adapt_before_use_test3_Sample:
     if (_PyRop_TestIsContains((((uint32_t)IR_C(ir_word) >> 0) & 0x7))) {
         goto rop_TestBranch_Generic_adapt_before_use_test3_Contained;
@@ -4151,11 +4603,31 @@ ir_run_TestBranch_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
+    ROP_TAIL_CLOSE(a_owned0, rop_TestBranch_Generic_Tail2_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Generic_Tail2_1);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Generic_Tail2_2);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Generic_Tail2_3);
     DISPATCH();
+    rop_TestBranch_Generic_Tail2_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_TestBranch_Generic_Tail2_Rest1;
+    rop_TestBranch_Generic_Tail2_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_TestBranch_Generic_Tail2_Rest2;
+    rop_TestBranch_Generic_Tail2_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Generic_Tail2_Rest3;
+    rop_TestBranch_Generic_Tail2_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Generic_Tail2_Rest4;
+    rop_TestBranch_Generic_Tail2_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_TestBranch_Generic_Tail2_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_TestBranch_Generic_Tail2_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Generic_Tail2_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_TestBranch_Generic_IdentityFall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_x = _PyFrame_TakeHome(frame, home_x);
@@ -4163,9 +4635,19 @@ ir_run_TestBranch_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Generic_Tail3_0);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Generic_Tail3_1);
     DISPATCH();
+    rop_TestBranch_Generic_Tail3_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Generic_Tail3_Rest1;
+    rop_TestBranch_Generic_Tail3_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Generic_Tail3_Rest2;
+    rop_TestBranch_Generic_Tail3_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Generic_Tail3_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -4239,10 +4721,25 @@ ir_run_Truth_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Truth_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_value, rop_Truth_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Truth_Generic_Tail0_2);
     DISPATCH();
+    rop_Truth_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Truth_Generic_Tail0_Rest1;
+    rop_Truth_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_Truth_Generic_Tail0_Rest2;
+    rop_Truth_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Truth_Generic_Tail0_Rest3;
+    rop_Truth_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_Truth_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Truth_Generic_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_Truth_Generic_adapt_before_use_truth2_Sample:
     _PyRop_BeginTruth(((_PyFbUnary *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_value));
     if (PyValue_BoolCheck(PyValue_Borrow(*home_value))) {
@@ -4450,8 +4947,11 @@ ir_run_BranchTruth_Generic(
     }
     goto rop_BranchTruth_Generic_Dropped;
     rop_BranchTruth_Generic_Kept:
-    PyValue_XCLOSE(a_owned0);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Generic_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Tick:
     if (_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_B(ir_word)))->h)) {
         goto rop_BranchTruth_Generic_adapt_before_use_branch_truth2_Run;
@@ -4590,16 +5090,36 @@ ir_run_BranchTruth_Generic(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Generic_Tail1_0);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Generic_Tail1_1);
     DISPATCH();
+    rop_BranchTruth_Generic_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_BranchTruth_Generic_Tail1_Rest1;
+    rop_BranchTruth_Generic_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_BranchTruth_Generic_Tail1_Rest2;
+    rop_BranchTruth_Generic_Tail1_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_BranchTruth_Generic_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_BranchTruth_Generic_Dropped:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Generic_Tail2_0);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Generic_Tail2_1);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Generic_Tail2_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_BranchTruth_Generic_Tail2_Rest1;
+    rop_BranchTruth_Generic_Tail2_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_BranchTruth_Generic_Tail2_Rest2;
+    rop_BranchTruth_Generic_Tail2_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_BranchTruth_Generic_Tail2_Rest2:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -4650,8 +5170,11 @@ ir_run_Add_Int(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Add_Int_Tail0_0);
     DISPATCH();
+    rop_Add_Int_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Add_Int_Overflow:
     ret2 = _PyValue_BoxInt64(full);
     if (!PyValue_IsNull(ret2)) {
@@ -4704,8 +5227,11 @@ ir_run_Add_Float(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Add_Float_Tail0_0);
     DISPATCH();
+    rop_Add_Float_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Add_Float_Failed:
     PROCESS_ERROR_AT(RAISE, 1, this_instr);
 }
@@ -4751,10 +5277,25 @@ ir_run_Add_Text(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_y, rop_Add_Text_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_Add_Text_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Add_Text_Tail0_2);
     DISPATCH();
+    rop_Add_Text_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Add_Text_Tail0_Rest1;
+    rop_Add_Text_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Add_Text_Tail0_Rest2;
+    rop_Add_Text_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Add_Text_Tail0_Rest3;
+    rop_Add_Text_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_Add_Text_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Add_Text_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_Add_Text_Failed:
     PROCESS_ERROR_AT(RAISE, 1, this_instr);
 }
@@ -4821,12 +5362,37 @@ ir_run_Add_Extended(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Add_Extended_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Add_Extended_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_Add_Extended_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_Add_Extended_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Add_Extended_Tail0_4);
     DISPATCH();
+    rop_Add_Extended_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Add_Extended_Tail0_Rest1;
+    rop_Add_Extended_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Add_Extended_Tail0_Rest2;
+    rop_Add_Extended_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Add_Extended_Tail0_Rest3;
+    rop_Add_Extended_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Add_Extended_Tail0_Rest4;
+    rop_Add_Extended_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Add_Extended_Tail0_Rest5;
+    rop_Add_Extended_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Add_Extended_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_Add_Extended_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_Add_Extended_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_Add_Extended_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Add_Extended_extension_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -4904,9 +5470,19 @@ ir_run_AttrWrite_Instance(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Instance_Tail0_0);
+    ROP_TAIL_CLOSE(own_value, rop_AttrWrite_Instance_Tail0_1);
     DISPATCH();
+    rop_AttrWrite_Instance_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Instance_Tail0_Rest1;
+    rop_AttrWrite_Instance_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_AttrWrite_Instance_Tail0_Rest2;
+    rop_AttrWrite_Instance_Tail0_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_AttrWrite_Instance_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Instance_Miss:
     JUMP_TO_PREDICTED(AttrWrite_Generic);
     rop_AttrWrite_Instance_Slow:
@@ -4928,11 +5504,31 @@ ir_run_AttrWrite_Instance(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_AttrWrite_Instance_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_AttrWrite_Instance_Tail1_1);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Instance_Tail1_2);
+    ROP_TAIL_CLOSE(own_value, rop_AttrWrite_Instance_Tail1_3);
     DISPATCH();
+    rop_AttrWrite_Instance_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_AttrWrite_Instance_Tail1_Rest1;
+    rop_AttrWrite_Instance_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_AttrWrite_Instance_Tail1_Rest2;
+    rop_AttrWrite_Instance_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Instance_Tail1_Rest3;
+    rop_AttrWrite_Instance_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_AttrWrite_Instance_Tail1_Rest4;
+    rop_AttrWrite_Instance_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_AttrWrite_Instance_Tail1_Rest2:
+    ROP_TAIL_PARK(own_obj);
+    rop_AttrWrite_Instance_Tail1_Rest3:
+    ROP_TAIL_PARK(own_value);
+    rop_AttrWrite_Instance_Tail1_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Instance_setattr_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -4990,9 +5586,19 @@ ir_run_AttrWrite_Shape(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_obj = _PyFrame_TakeHome(frame, home_obj);
     }
-    PyValue_XCLOSE(old);
-    PyValue_XCLOSE(own_obj);
+    ROP_TAIL_CLOSE(old, rop_AttrWrite_Shape_Tail0_0);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Shape_Tail0_1);
     DISPATCH();
+    rop_AttrWrite_Shape_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old);
+    goto rop_AttrWrite_Shape_Tail0_Rest1;
+    rop_AttrWrite_Shape_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Shape_Tail0_Rest2;
+    rop_AttrWrite_Shape_Tail0_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_AttrWrite_Shape_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Shape_Miss:
     JUMP_TO_PREDICTED(AttrWrite_Generic);
 }
@@ -5040,8 +5646,11 @@ ir_run_AttrWrite_ShapeAdd(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_obj = _PyFrame_TakeHome(frame, home_obj);
     }
-    PyValue_XCLOSE(own_obj);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_ShapeAdd_Tail0_0);
     DISPATCH();
+    rop_AttrWrite_ShapeAdd_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_ShapeAdd_Miss:
     JUMP_TO_PREDICTED(AttrWrite_Generic);
 }
@@ -5106,10 +5715,25 @@ ir_run_AttrWrite_Hint(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(old);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(old, rop_AttrWrite_Hint_Tail0_0);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Hint_Tail0_1);
+    ROP_TAIL_CLOSE(own_value, rop_AttrWrite_Hint_Tail0_2);
     DISPATCH();
+    rop_AttrWrite_Hint_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old);
+    goto rop_AttrWrite_Hint_Tail0_Rest1;
+    rop_AttrWrite_Hint_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Hint_Tail0_Rest2;
+    rop_AttrWrite_Hint_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_AttrWrite_Hint_Tail0_Rest3;
+    rop_AttrWrite_Hint_Tail0_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_AttrWrite_Hint_Tail0_Rest2:
+    ROP_TAIL_PARK(own_value);
+    rop_AttrWrite_Hint_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Hint_Miss:
     JUMP_TO_PREDICTED(AttrWrite_Generic);
     rop_AttrWrite_Hint_Slow:
@@ -5131,11 +5755,31 @@ ir_run_AttrWrite_Hint(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_AttrWrite_Hint_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_AttrWrite_Hint_Tail1_1);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Hint_Tail1_2);
+    ROP_TAIL_CLOSE(own_value, rop_AttrWrite_Hint_Tail1_3);
     DISPATCH();
+    rop_AttrWrite_Hint_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_AttrWrite_Hint_Tail1_Rest1;
+    rop_AttrWrite_Hint_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_AttrWrite_Hint_Tail1_Rest2;
+    rop_AttrWrite_Hint_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Hint_Tail1_Rest3;
+    rop_AttrWrite_Hint_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_AttrWrite_Hint_Tail1_Rest4;
+    rop_AttrWrite_Hint_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_AttrWrite_Hint_Tail1_Rest2:
+    ROP_TAIL_PARK(own_obj);
+    rop_AttrWrite_Hint_Tail1_Rest3:
+    ROP_TAIL_PARK(own_value);
+    rop_AttrWrite_Hint_Tail1_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Hint_setattr_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -5208,9 +5852,19 @@ ir_run_AttrWrite_Slot(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Slot_Tail0_0);
+    ROP_TAIL_CLOSE(own_value, rop_AttrWrite_Slot_Tail0_1);
     DISPATCH();
+    rop_AttrWrite_Slot_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Slot_Tail0_Rest1;
+    rop_AttrWrite_Slot_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_AttrWrite_Slot_Tail0_Rest2;
+    rop_AttrWrite_Slot_Tail0_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_AttrWrite_Slot_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Slot_Miss:
     JUMP_TO_PREDICTED(AttrWrite_Generic);
     rop_AttrWrite_Slot_Slow:
@@ -5232,11 +5886,31 @@ ir_run_AttrWrite_Slot(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_AttrWrite_Slot_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_AttrWrite_Slot_Tail1_1);
+    ROP_TAIL_CLOSE(own_obj, rop_AttrWrite_Slot_Tail1_2);
+    ROP_TAIL_CLOSE(own_value, rop_AttrWrite_Slot_Tail1_3);
     DISPATCH();
+    rop_AttrWrite_Slot_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_AttrWrite_Slot_Tail1_Rest1;
+    rop_AttrWrite_Slot_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_AttrWrite_Slot_Tail1_Rest2;
+    rop_AttrWrite_Slot_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_AttrWrite_Slot_Tail1_Rest3;
+    rop_AttrWrite_Slot_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_AttrWrite_Slot_Tail1_Rest4;
+    rop_AttrWrite_Slot_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_AttrWrite_Slot_Tail1_Rest2:
+    ROP_TAIL_PARK(own_obj);
+    rop_AttrWrite_Slot_Tail1_Rest3:
+    ROP_TAIL_PARK(own_value);
+    rop_AttrWrite_Slot_Tail1_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_AttrWrite_Slot_setattr_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all4 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -5282,8 +5956,11 @@ ir_run_SuperAttr_Builtin(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_SuperAttr_Builtin_Tail0_0);
     DISPATCH();
+    rop_SuperAttr_Builtin_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_SuperAttr_Builtin_Failed:
     PROCESS_ERROR_AT(RAISE, 180, this_instr);
 }
@@ -5315,8 +5992,11 @@ ir_run_SuperAttr_Observed(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_SuperAttr_Observed_Tail0_0);
     DISPATCH();
+    rop_SuperAttr_Observed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_SuperAttr_Observed_Failed:
     PROCESS_ERROR_AT(RAISE, 180, this_instr);
 }
@@ -5353,8 +6033,11 @@ ir_run_SuperAttrExplicit_Builtin(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_SuperAttrExplicit_Builtin_Tail0_0);
     DISPATCH();
+    rop_SuperAttrExplicit_Builtin_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_SuperAttrExplicit_Builtin_Failed:
     PROCESS_ERROR_AT(RAISE, 182, this_instr);
 }
@@ -5386,8 +6069,11 @@ ir_run_SuperAttrExplicit_Observed(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_SuperAttrExplicit_Observed_Tail0_0);
     DISPATCH();
+    rop_SuperAttrExplicit_Observed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_SuperAttrExplicit_Observed_Failed:
     PROCESS_ERROR_AT(RAISE, 182, this_instr);
 }
@@ -5436,9 +6122,19 @@ ir_run_SuperMethod_Builtin(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, s);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_SuperMethod_Builtin_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_SuperMethod_Builtin_Tail0_1);
     DISPATCH();
+    rop_SuperMethod_Builtin_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_SuperMethod_Builtin_Tail0_Rest1;
+    rop_SuperMethod_Builtin_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_SuperMethod_Builtin_Tail0_Rest2;
+    rop_SuperMethod_Builtin_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_SuperMethod_Builtin_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_SuperMethod_Builtin_Failed:
     PROCESS_ERROR_AT(RAISE, 184, this_instr);
 }
@@ -5482,9 +6178,19 @@ ir_run_SuperMethod_Observed(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, s);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_SuperMethod_Observed_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_SuperMethod_Observed_Tail0_1);
     DISPATCH();
+    rop_SuperMethod_Observed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_SuperMethod_Observed_Tail0_Rest1;
+    rop_SuperMethod_Observed_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_SuperMethod_Observed_Tail0_Rest2;
+    rop_SuperMethod_Observed_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_SuperMethod_Observed_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_SuperMethod_Observed_Failed:
     PROCESS_ERROR_AT(RAISE, 184, this_instr);
 }
@@ -5533,9 +6239,19 @@ ir_run_SuperMethodExplicit_Builtin(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, s);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_SuperMethodExplicit_Builtin_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_SuperMethodExplicit_Builtin_Tail0_1);
     DISPATCH();
+    rop_SuperMethodExplicit_Builtin_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_SuperMethodExplicit_Builtin_Tail0_Rest1;
+    rop_SuperMethodExplicit_Builtin_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_SuperMethodExplicit_Builtin_Tail0_Rest2;
+    rop_SuperMethodExplicit_Builtin_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_SuperMethodExplicit_Builtin_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_SuperMethodExplicit_Builtin_Failed:
     PROCESS_ERROR_AT(RAISE, 186, this_instr);
 }
@@ -5579,9 +6295,19 @@ ir_run_SuperMethodExplicit_Observed(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, s);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_SuperMethodExplicit_Observed_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_SuperMethodExplicit_Observed_Tail0_1);
     DISPATCH();
+    rop_SuperMethodExplicit_Observed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_SuperMethodExplicit_Observed_Tail0_Rest1;
+    rop_SuperMethodExplicit_Observed_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_SuperMethodExplicit_Observed_Tail0_Rest2;
+    rop_SuperMethodExplicit_Observed_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_SuperMethodExplicit_Observed_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_SuperMethodExplicit_Observed_Failed:
     PROCESS_ERROR_AT(RAISE, 186, this_instr);
 }
@@ -5662,11 +6388,31 @@ ir_run_SpecialLookup_Generic(
     _PyValue_CheckHome(*home_fn);
     _PyFrame_WriteHome(frame, home_self_dst, s);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_fn);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_SpecialLookup_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_obj, rop_SpecialLookup_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_fn, rop_SpecialLookup_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_self_dst, rop_SpecialLookup_Generic_Tail0_3);
     DISPATCH();
+    rop_SpecialLookup_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_SpecialLookup_Generic_Tail0_Rest1;
+    rop_SpecialLookup_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_SpecialLookup_Generic_Tail0_Rest2;
+    rop_SpecialLookup_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_fn);
+    goto rop_SpecialLookup_Generic_Tail0_Rest3;
+    rop_SpecialLookup_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_SpecialLookup_Generic_Tail0_Rest4;
+    rop_SpecialLookup_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_SpecialLookup_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_fn);
+    rop_SpecialLookup_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_SpecialLookup_Generic_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_SpecialLookup_Generic_special_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all11 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -5828,8 +6574,11 @@ ir_run_Call_Generator(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Call_Generator_Tail0_0);
     DISPATCH();
+    rop_Call_Generator_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Call_Generator_Failed:
     PROCESS_ERROR_AT(RAISE, 40, this_instr);
 }
@@ -5856,8 +6605,11 @@ ir_run_InitResult_Check(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_InitResult_Check_Tail0_0);
     DISPATCH();
+    rop_InitResult_Check_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
     rop_InitResult_Check_Wrong:
     _PyRop_InitResultError(PyValue_Borrow(*home_value));
     PROCESS_ERROR_AT(RAISE, 112, this_instr);
@@ -6143,8 +6895,11 @@ ir_run_MaterializeKwargs_Pending(
     old_local = *home_local;
     _PyFrame_WriteHome(frame, home_local, z);
     _PyValue_CheckHome(*home_local);
-    PyValue_XCLOSE(old_local);
+    ROP_TAIL_CLOSE(old_local, rop_MaterializeKwargs_Pending_Tail0_0);
     DISPATCH();
+    rop_MaterializeKwargs_Pending_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_local);
+    ROP_TAIL_DISPATCH();
     rop_MaterializeKwargs_Pending_Done:
     DISPATCH();
     rop_MaterializeKwargs_Pending_Failed:
@@ -6258,8 +7013,11 @@ ir_run_Call_PlanGenerator(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Call_PlanGenerator_Tail0_0);
     DISPATCH();
+    rop_Call_PlanGenerator_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Call_PlanGenerator_Vector:
     IR_STUB_ESCAPE();
     ret2 = _PyRop_CallNative_Outlined(tstate, frame, home_fn, this_instr);
@@ -6274,9 +7032,19 @@ ir_run_Call_PlanGenerator(
     _PyFrame_WriteHome(frame, home_dst, r);
     _PyValue_CheckHome(*home_dst);
     _PyRop_SpendArgs(frame, this_instr, home_dst);
-    PyValue_XCLOSE(own_fn);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_fn, rop_Call_PlanGenerator_Tail1_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Call_PlanGenerator_Tail1_1);
     DISPATCH();
+    rop_Call_PlanGenerator_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_fn);
+    goto rop_Call_PlanGenerator_Tail1_Rest1;
+    rop_Call_PlanGenerator_Tail1_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Call_PlanGenerator_Tail1_Rest2;
+    rop_Call_PlanGenerator_Tail1_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Call_PlanGenerator_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_Call_PlanGenerator_NativeFailed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
@@ -6340,9 +7108,19 @@ ir_run_Call_BoundGeneral(
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     _PyRop_SpendArgs(frame, this_instr, home_dst);
-    PyValue_XCLOSE(own_fn);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_fn, rop_Call_BoundGeneral_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Call_BoundGeneral_Tail0_1);
     DISPATCH();
+    rop_Call_BoundGeneral_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_fn);
+    goto rop_Call_BoundGeneral_Tail0_Rest1;
+    rop_Call_BoundGeneral_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Call_BoundGeneral_Tail0_Rest2;
+    rop_Call_BoundGeneral_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Call_BoundGeneral_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_Call_BoundGeneral_NativeFailed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
@@ -6382,9 +7160,19 @@ ir_run_Call_Type1(
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     _PyRop_SpendArgs(frame, this_instr, home_dst);
-    PyValue_XCLOSE(own_fn);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_fn, rop_Call_Type1_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Call_Type1_Tail0_1);
     DISPATCH();
+    rop_Call_Type1_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_fn);
+    goto rop_Call_Type1_Tail0_Rest1;
+    rop_Call_Type1_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Call_Type1_Tail0_Rest2;
+    rop_Call_Type1_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Call_Type1_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -6814,9 +7602,19 @@ ir_run_Call_Len(
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     _PyRop_SpendArgs(frame, this_instr, home_dst);
-    PyValue_XCLOSE(own_fn);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_fn, rop_Call_Len_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Call_Len_Tail0_1);
     DISPATCH();
+    rop_Call_Len_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_fn);
+    goto rop_Call_Len_Tail0_Rest1;
+    rop_Call_Len_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Call_Len_Tail0_Rest2;
+    rop_Call_Len_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Call_Len_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_Call_Len_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
@@ -6860,9 +7658,19 @@ ir_run_Call_Isinstance(
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     _PyRop_SpendArgs(frame, this_instr, home_dst);
-    PyValue_XCLOSE(own_fn);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_fn, rop_Call_Isinstance_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Call_Isinstance_Tail0_1);
     DISPATCH();
+    rop_Call_Isinstance_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_fn);
+    goto rop_Call_Isinstance_Tail0_Rest1;
+    rop_Call_Isinstance_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Call_Isinstance_Tail0_Rest2;
+    rop_Call_Isinstance_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Call_Isinstance_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_Call_Isinstance_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
@@ -6908,9 +7716,19 @@ ir_run_Call_ListAppend(
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     _PyRop_SpendArgs(frame, this_instr, home_dst);
-    PyValue_XCLOSE(own_fn);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_fn, rop_Call_ListAppend_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Call_ListAppend_Tail0_1);
     DISPATCH();
+    rop_Call_ListAppend_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_fn);
+    goto rop_Call_ListAppend_Tail0_Rest1;
+    rop_Call_ListAppend_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Call_ListAppend_Tail0_Rest2;
+    rop_Call_ListAppend_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Call_ListAppend_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_Call_ListAppend_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
@@ -7220,8 +8038,11 @@ ir_run_CallKw_Generator(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_CallKw_Generator_Tail0_0);
     DISPATCH();
+    rop_CallKw_Generator_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_CallKw_Generator_Vector:
     IR_STUB_ESCAPE();
     ret2 = _PyRop_CallNative_Outlined(tstate, frame, home_fn, this_instr);
@@ -7236,9 +8057,19 @@ ir_run_CallKw_Generator(
     _PyFrame_WriteHome(frame, home_dst, r);
     _PyValue_CheckHome(*home_dst);
     _PyRop_SpendArgs(frame, this_instr, home_dst);
-    PyValue_XCLOSE(own_fn);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_fn, rop_CallKw_Generator_Tail1_0);
+    ROP_TAIL_CLOSE(old_dst, rop_CallKw_Generator_Tail1_1);
     DISPATCH();
+    rop_CallKw_Generator_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_fn);
+    goto rop_CallKw_Generator_Tail1_Rest1;
+    rop_CallKw_Generator_Tail1_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_CallKw_Generator_Tail1_Rest2;
+    rop_CallKw_Generator_Tail1_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_CallKw_Generator_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_CallKw_Generator_NativeFailed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
@@ -7876,8 +8707,11 @@ ir_run_CellMake_Wrap(
     old_local = *home_local;
     _PyFrame_WriteHome(frame, home_local, c);
     _PyValue_CheckHome(*home_local);
-    PyValue_XCLOSE(old_local);
+    ROP_TAIL_CLOSE(old_local, rop_CellMake_Wrap_Tail0_0);
     DISPATCH();
+    rop_CellMake_Wrap_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_local);
+    ROP_TAIL_DISPATCH();
     rop_CellMake_Wrap_Failed:
     PROCESS_ERROR_AT(RAISE, 54, this_instr);
 }
@@ -7906,8 +8740,11 @@ ir_run_CellRead_Get(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, v);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_CellRead_Get_Tail0_0);
     DISPATCH();
+    rop_CellRead_Get_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_CellRead_Get_Empty:
     _PyRop_UnboundCell(frame, home_cell);
     PROCESS_ERROR_AT(RAISE, 58, this_instr);
@@ -7955,10 +8792,25 @@ ir_run_CellMapRead_Lookup(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_mapping);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_CellMapRead_Lookup_Tail0_0);
+    ROP_TAIL_CLOSE(own_mapping, rop_CellMapRead_Lookup_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_CellMapRead_Lookup_Tail0_2);
     DISPATCH();
+    rop_CellMapRead_Lookup_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_CellMapRead_Lookup_Tail0_Rest1;
+    rop_CellMapRead_Lookup_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_mapping);
+    goto rop_CellMapRead_Lookup_Tail0_Rest2;
+    rop_CellMapRead_Lookup_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_CellMapRead_Lookup_Tail0_Rest3;
+    rop_CellMapRead_Lookup_Tail0_Rest1:
+    ROP_TAIL_PARK(own_mapping);
+    rop_CellMapRead_Lookup_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_CellMapRead_Lookup_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_CellMapRead_Lookup_Own:
     if (_PyRop_CellContents(home_cell, &out2)) {
         z = out2;
@@ -7995,8 +8847,11 @@ ir_run_CellStore_Set(
         goto rop_CellStore_Set_Filled;
     }
     old = out1;
-    PyValue_XCLOSE(old);
+    ROP_TAIL_CLOSE(old, rop_CellStore_Set_Tail0_0);
     DISPATCH();
+    rop_CellStore_Set_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old);
+    ROP_TAIL_DISPATCH();
     rop_CellStore_Set_Filled:
     DISPATCH();
 }
@@ -8020,8 +8875,11 @@ ir_run_CellDelete_Unbind(
         goto rop_CellDelete_Unbind_Empty;
     }
     old = out1;
-    PyValue_XCLOSE(old);
+    ROP_TAIL_CLOSE(old, rop_CellDelete_Unbind_Tail0_0);
     DISPATCH();
+    rop_CellDelete_Unbind_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old);
+    ROP_TAIL_DISPATCH();
     rop_CellDelete_Unbind_Empty:
     _PyRop_UnboundCell(frame, home_cell);
     PROCESS_ERROR_AT(RAISE, 52, this_instr);
@@ -8067,12 +8925,37 @@ ir_run_CleanupThrow_Generic(
     old_completed = *home_completed;
     _PyFrame_WriteHome(frame, home_completed, v);
     _PyValue_CheckHome(*home_completed);
-    PyValue_XCLOSE(own_exc);
-    PyValue_XCLOSE(own_send_receiver);
-    PyValue_XCLOSE(own_send_cursor);
-    PyValue_XCLOSE(own_send_value);
-    PyValue_XCLOSE(old_completed);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_exc, rop_CleanupThrow_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_send_receiver, rop_CleanupThrow_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_send_cursor, rop_CleanupThrow_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_send_value, rop_CleanupThrow_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_completed, rop_CleanupThrow_Generic_Tail0_4);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_CleanupThrow_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_exc);
+    goto rop_CleanupThrow_Generic_Tail0_Rest1;
+    rop_CleanupThrow_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_send_receiver);
+    goto rop_CleanupThrow_Generic_Tail0_Rest2;
+    rop_CleanupThrow_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_send_cursor);
+    goto rop_CleanupThrow_Generic_Tail0_Rest3;
+    rop_CleanupThrow_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_send_value);
+    goto rop_CleanupThrow_Generic_Tail0_Rest4;
+    rop_CleanupThrow_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_completed);
+    goto rop_CleanupThrow_Generic_Tail0_Rest5;
+    rop_CleanupThrow_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_send_receiver);
+    rop_CleanupThrow_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_send_cursor);
+    rop_CleanupThrow_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_send_value);
+    rop_CleanupThrow_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_completed);
+    rop_CleanupThrow_Generic_Tail0_Rest5:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_CleanupThrow_Generic_Reraise:
     IR_STUB_ESCAPE();
     _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
@@ -8108,9 +8991,19 @@ ir_run_EndAsyncFor_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_exc = _PyFrame_TakeHome(frame, home_exc);
     }
-    PyValue_XCLOSE(own_iter);
-    PyValue_XCLOSE(own_exc);
+    ROP_TAIL_CLOSE(own_iter, rop_EndAsyncFor_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_exc, rop_EndAsyncFor_Generic_Tail0_1);
     DISPATCH();
+    rop_EndAsyncFor_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_iter);
+    goto rop_EndAsyncFor_Generic_Tail0_Rest1;
+    rop_EndAsyncFor_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_exc);
+    goto rop_EndAsyncFor_Generic_Tail0_Rest2;
+    rop_EndAsyncFor_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_exc);
+    rop_EndAsyncFor_Generic_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_EndAsyncFor_Generic_Reraise:
     IR_STUB_ESCAPE();
     _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
@@ -8155,9 +9048,19 @@ ir_run_EndAsyncFor_Observed(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_exc = _PyFrame_TakeHome(frame, home_exc);
     }
-    PyValue_XCLOSE(own_iter);
-    PyValue_XCLOSE(own_exc);
+    ROP_TAIL_CLOSE(own_iter, rop_EndAsyncFor_Observed_Tail0_0);
+    ROP_TAIL_CLOSE(own_exc, rop_EndAsyncFor_Observed_Tail0_1);
     DISPATCH();
+    rop_EndAsyncFor_Observed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_iter);
+    goto rop_EndAsyncFor_Observed_Tail0_Rest1;
+    rop_EndAsyncFor_Observed_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_exc);
+    goto rop_EndAsyncFor_Observed_Tail0_Rest2;
+    rop_EndAsyncFor_Observed_Tail0_Rest1:
+    ROP_TAIL_PARK(own_exc);
+    rop_EndAsyncFor_Observed_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_EndAsyncFor_Observed_EventFailed:
     PROCESS_ERROR_AT(RAISE, 72, this_instr);
     rop_EndAsyncFor_Observed_Moved:
@@ -8223,11 +9126,31 @@ ir_run_WithExit_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_WithExit_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_WithExit_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_WithExit_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_dst, rop_WithExit_Generic_Tail0_3);
     DISPATCH();
+    rop_WithExit_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_WithExit_Generic_Tail0_Rest1;
+    rop_WithExit_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_WithExit_Generic_Tail0_Rest2;
+    rop_WithExit_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_WithExit_Generic_Tail0_Rest3;
+    rop_WithExit_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_WithExit_Generic_Tail0_Rest4;
+    rop_WithExit_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_WithExit_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_WithExit_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_dst);
+    rop_WithExit_Generic_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_WithExit_Generic_Bound:
     b_view0 = PyValue_Borrow(*home_exit_fn);
     b_owned0 = (ir_word & IR_F_LOCAL_B) ? PyValue_DUP(b_view0) : PyValue_NULL;
@@ -8242,10 +9165,25 @@ ir_run_WithExit_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, y);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(b_owned0);
-    PyValue_XCLOSE(b_owned1);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(b_owned0, rop_WithExit_Generic_Tail1_0);
+    ROP_TAIL_CLOSE(b_owned1, rop_WithExit_Generic_Tail1_1);
+    ROP_TAIL_CLOSE(old_dst, rop_WithExit_Generic_Tail1_2);
     DISPATCH();
+    rop_WithExit_Generic_Tail1_0:
+    ROP_TAIL_PARK_FIRST(b_owned0);
+    goto rop_WithExit_Generic_Tail1_Rest1;
+    rop_WithExit_Generic_Tail1_1:
+    ROP_TAIL_PARK_FIRST(b_owned1);
+    goto rop_WithExit_Generic_Tail1_Rest2;
+    rop_WithExit_Generic_Tail1_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_WithExit_Generic_Tail1_Rest3;
+    rop_WithExit_Generic_Tail1_Rest1:
+    ROP_TAIL_PARK(b_owned1);
+    rop_WithExit_Generic_Tail1_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_WithExit_Generic_Tail1_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_WithExit_Generic_BoundFailed:
     IR_STUB_ESCAPE();
     b_all3 = (_PyRopAnchors){2, {b_view0, b_view1}, {b_owned0, b_owned1}};
@@ -8287,8 +9225,11 @@ ir_run_Build_Tuple(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Build_Tuple_Tail0_0);
     DISPATCH();
+    rop_Build_Tuple_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Build_Tuple_Failed:
     PROCESS_ERROR_AT(RAISE, 34, this_instr);
 }
@@ -8320,8 +9261,11 @@ ir_run_Build_List(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Build_List_Tail0_0);
     DISPATCH();
+    rop_Build_List_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Build_List_Failed:
     PROCESS_ERROR_AT(RAISE, 34, this_instr);
 }
@@ -8353,8 +9297,11 @@ ir_run_Build_Set(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Build_Set_Tail0_0);
     DISPATCH();
+    rop_Build_Set_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Build_Set_Failed:
     PROCESS_ERROR_AT(RAISE, 34, this_instr);
 }
@@ -8386,8 +9333,11 @@ ir_run_Build_Map(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Build_Map_Tail0_0);
     DISPATCH();
+    rop_Build_Map_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Build_Map_Failed:
     PROCESS_ERROR_AT(RAISE, 34, this_instr);
 }
@@ -8500,8 +9450,11 @@ ir_run_UpdateContainer_Extend(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    PyValue_XCLOSE(own_source);
+    ROP_TAIL_CLOSE(own_source, rop_UpdateContainer_Extend_Tail0_0);
     DISPATCH();
+    rop_UpdateContainer_Extend_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
     rop_UpdateContainer_Extend_Failed:
     PROCESS_ERROR_AT(RAISE, 200, this_instr);
 }
@@ -8530,8 +9483,11 @@ ir_run_UpdateContainer_Union(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    PyValue_XCLOSE(own_source);
+    ROP_TAIL_CLOSE(own_source, rop_UpdateContainer_Union_Tail0_0);
     DISPATCH();
+    rop_UpdateContainer_Union_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
     rop_UpdateContainer_Union_Failed:
     PROCESS_ERROR_AT(RAISE, 200, this_instr);
 }
@@ -8560,8 +9516,11 @@ ir_run_UpdateContainer_Overlay(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    PyValue_XCLOSE(own_source);
+    ROP_TAIL_CLOSE(own_source, rop_UpdateContainer_Overlay_Tail0_0);
     DISPATCH();
+    rop_UpdateContainer_Overlay_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
     rop_UpdateContainer_Overlay_Failed:
     PROCESS_ERROR_AT(RAISE, 200, this_instr);
 }
@@ -8591,8 +9550,11 @@ ir_run_MergeKeywords_Merge(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    PyValue_XCLOSE(own_source);
+    ROP_TAIL_CLOSE(own_source, rop_MergeKeywords_Merge_Tail0_0);
     DISPATCH();
+    rop_MergeKeywords_Merge_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
     rop_MergeKeywords_Merge_Failed:
     PROCESS_ERROR_AT(RAISE, 133, this_instr);
 }
@@ -8625,8 +9587,11 @@ ir_run_Unpack_Tuple(
     IR_STUB_ESCAPE();
     span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
     _PyRop_PublishItems(&span1, &vals);
-    PyValue_XCLOSE(own_source);
+    ROP_TAIL_CLOSE(own_source, rop_Unpack_Tuple_Tail0_0);
     DISPATCH();
+    rop_Unpack_Tuple_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -8664,8 +9629,11 @@ ir_run_Unpack_List(
     IR_STUB_ESCAPE();
     span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
     _PyRop_PublishItems(&span3, &vals);
-    PyValue_XCLOSE(own_source);
+    ROP_TAIL_CLOSE(own_source, rop_Unpack_List_Tail0_0);
     DISPATCH();
+    rop_Unpack_List_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
     rop_Unpack_List_Failed:
     PROCESS_ERROR_AT(RAISE, 196, this_instr);
 }
@@ -8700,8 +9668,11 @@ ir_run_UnpackStar_Iterable(
     IR_STUB_ESCAPE();
     span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 0, 0};
     _PyRop_PublishItems(&span3, &vals);
-    PyValue_XCLOSE(own_source);
+    ROP_TAIL_CLOSE(own_source, rop_UnpackStar_Iterable_Tail0_0);
     DISPATCH();
+    rop_UnpackStar_Iterable_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
     rop_UnpackStar_Iterable_Failed:
     PROCESS_ERROR_AT(RAISE, 198, this_instr);
 }
@@ -8802,9 +9773,19 @@ ir_run_ExceptEnter_Install(
     _PyValue_CheckHome(*home_prev);
     _PyFrame_WriteHome(frame, home_held, x);
     _PyValue_CheckHome(*home_held);
-    PyValue_XCLOSE(old_prev);
-    PyValue_XCLOSE(old_held);
+    ROP_TAIL_CLOSE(old_prev, rop_ExceptEnter_Install_Tail0_0);
+    ROP_TAIL_CLOSE(old_held, rop_ExceptEnter_Install_Tail0_1);
     DISPATCH();
+    rop_ExceptEnter_Install_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_prev);
+    goto rop_ExceptEnter_Install_Tail0_Rest1;
+    rop_ExceptEnter_Install_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_held);
+    goto rop_ExceptEnter_Install_Tail0_Rest2;
+    rop_ExceptEnter_Install_Tail0_Rest1:
+    ROP_TAIL_PARK(old_held);
+    rop_ExceptEnter_Install_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -8859,9 +9840,19 @@ ir_run_ExceptMatch_Match(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, r);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_pattern);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_pattern, rop_ExceptMatch_Match_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_ExceptMatch_Match_Tail0_1);
     DISPATCH();
+    rop_ExceptMatch_Match_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_pattern);
+    goto rop_ExceptMatch_Match_Tail0_Rest1;
+    rop_ExceptMatch_Match_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_ExceptMatch_Match_Tail0_Rest2;
+    rop_ExceptMatch_Match_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_ExceptMatch_Match_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_ExceptMatch_Match_Invalid:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedOperand(frame, home_pattern);
@@ -8912,9 +9903,19 @@ ir_run_ExceptGroupMatch_Split(
     _PyValue_CheckHome(*home_rest);
     _PyFrame_WriteHome(frame, home_match, m);
     _PyValue_CheckHome(*home_match);
-    PyValue_XCLOSE(old_rest);
-    PyValue_XCLOSE(old_match);
+    ROP_TAIL_CLOSE(old_rest, rop_ExceptGroupMatch_Split_Tail0_0);
+    ROP_TAIL_CLOSE(old_match, rop_ExceptGroupMatch_Split_Tail0_1);
     DISPATCH();
+    rop_ExceptGroupMatch_Split_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_rest);
+    goto rop_ExceptGroupMatch_Split_Tail0_Rest1;
+    rop_ExceptGroupMatch_Split_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_match);
+    goto rop_ExceptGroupMatch_Split_Tail0_Rest2;
+    rop_ExceptGroupMatch_Split_Tail0_Rest1:
+    ROP_TAIL_PARK(old_match);
+    rop_ExceptGroupMatch_Split_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_ExceptGroupMatch_Split_Invalid:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedOperand(frame, home_pattern);
@@ -8955,8 +9956,11 @@ ir_run_Function_Make(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, fn);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Function_Make_Tail0_0);
     DISPATCH();
+    rop_Function_Make_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Function_Make_NewFailed:
     PROCESS_ERROR_AT(RAISE, 93, this_instr);
 }
@@ -8989,8 +9993,11 @@ ir_run_Intrinsic_Unary(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Intrinsic_Unary_Tail0_0);
     DISPATCH();
+    rop_Intrinsic_Unary_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Intrinsic_Unary_Failed:
     PROCESS_ERROR_AT(RAISE, 114, this_instr);
 }
@@ -9023,8 +10030,11 @@ ir_run_Intrinsic_ImportStar(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Intrinsic_ImportStar_Tail0_0);
     DISPATCH();
+    rop_Intrinsic_ImportStar_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Intrinsic_ImportStar_Failed:
     PROCESS_ERROR_AT(RAISE, 114, this_instr);
 }
@@ -9057,8 +10067,11 @@ ir_run_Intrinsic_StopIteration(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Intrinsic_StopIteration_Tail0_0);
     DISPATCH();
+    rop_Intrinsic_StopIteration_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Intrinsic_StopIteration_Failed:
     PROCESS_ERROR_AT(RAISE, 114, this_instr);
 }
@@ -9094,8 +10107,11 @@ ir_run_IntrinsicPair_Binary(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_IntrinsicPair_Binary_Tail0_0);
     DISPATCH();
+    rop_IntrinsicPair_Binary_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_IntrinsicPair_Binary_Failed:
     PROCESS_ERROR_AT(RAISE, 116, this_instr);
 }
@@ -9131,8 +10147,11 @@ ir_run_IntrinsicPair_Attr(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_IntrinsicPair_Attr_Tail0_0);
     DISPATCH();
+    rop_IntrinsicPair_Attr_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_IntrinsicPair_Attr_Failed:
     PROCESS_ERROR_AT(RAISE, 116, this_instr);
 }
@@ -9185,9 +10204,19 @@ ir_run_GetAttr_Instance(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_Instance_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_Instance_Tail0_1);
     DISPATCH();
+    rop_GetAttr_Instance_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_Instance_Tail0_Rest1;
+    rop_GetAttr_Instance_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_Instance_Tail0_Rest2;
+    rop_GetAttr_Instance_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_Instance_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_Instance_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9254,10 +10283,25 @@ ir_run_GetAttr_GetSet(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_GetAttr_GetSet_Tail0_0);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_GetSet_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_GetSet_Tail0_2);
     DISPATCH();
+    rop_GetAttr_GetSet_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_GetAttr_GetSet_Tail0_Rest1;
+    rop_GetAttr_GetSet_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_GetSet_Tail0_Rest2;
+    rop_GetAttr_GetSet_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_GetSet_Tail0_Rest3;
+    rop_GetAttr_GetSet_Tail0_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_GetAttr_GetSet_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_GetSet_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_GetSet_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
     rop_GetAttr_GetSet_getset_at_origin1_Failed:
@@ -9404,9 +10448,19 @@ ir_run_GetAttr_Shape(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_Shape_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_Shape_Tail0_1);
     DISPATCH();
+    rop_GetAttr_Shape_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_Shape_Tail0_Rest1;
+    rop_GetAttr_Shape_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_Shape_Tail0_Rest2;
+    rop_GetAttr_Shape_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_Shape_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_Shape_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9448,9 +10502,19 @@ ir_run_GetAttr_PolyShape(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_PolyShape_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_PolyShape_Tail0_1);
     DISPATCH();
+    rop_GetAttr_PolyShape_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_PolyShape_Tail0_Rest1;
+    rop_GetAttr_PolyShape_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_PolyShape_Tail0_Rest2;
+    rop_GetAttr_PolyShape_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_PolyShape_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_PolyShape_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9500,9 +10564,19 @@ ir_run_GetAttr_Module(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_Module_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_Module_Tail0_1);
     DISPATCH();
+    rop_GetAttr_Module_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_Module_Tail0_Rest1;
+    rop_GetAttr_Module_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_Module_Tail0_Rest2;
+    rop_GetAttr_Module_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_Module_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_Module_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9552,9 +10626,19 @@ ir_run_GetAttr_Hint(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_Hint_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_Hint_Tail0_1);
     DISPATCH();
+    rop_GetAttr_Hint_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_Hint_Tail0_Rest1;
+    rop_GetAttr_Hint_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_Hint_Tail0_Rest2;
+    rop_GetAttr_Hint_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_Hint_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_Hint_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9604,9 +10688,19 @@ ir_run_GetAttr_ValueSlot(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_ValueSlot_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_ValueSlot_Tail0_1);
     DISPATCH();
+    rop_GetAttr_ValueSlot_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_ValueSlot_Tail0_Rest1;
+    rop_GetAttr_ValueSlot_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_ValueSlot_Tail0_Rest2;
+    rop_GetAttr_ValueSlot_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_ValueSlot_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_ValueSlot_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9656,9 +10750,19 @@ ir_run_GetAttr_PointerSlot(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_PointerSlot_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_PointerSlot_Tail0_1);
     DISPATCH();
+    rop_GetAttr_PointerSlot_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_PointerSlot_Tail0_Rest1;
+    rop_GetAttr_PointerSlot_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_PointerSlot_Tail0_Rest2;
+    rop_GetAttr_PointerSlot_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_PointerSlot_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_PointerSlot_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9703,9 +10807,19 @@ ir_run_GetAttr_Class(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_Class_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_Class_Tail0_1);
     DISPATCH();
+    rop_GetAttr_Class_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_Class_Tail0_Rest1;
+    rop_GetAttr_Class_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_Class_Tail0_Rest2;
+    rop_GetAttr_Class_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_Class_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_Class_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9753,9 +10867,19 @@ ir_run_GetAttr_NonDescriptorValues(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_NonDescriptorValues_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_NonDescriptorValues_Tail0_1);
     DISPATCH();
+    rop_GetAttr_NonDescriptorValues_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_NonDescriptorValues_Tail0_Rest1;
+    rop_GetAttr_NonDescriptorValues_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_NonDescriptorValues_Tail0_Rest2;
+    rop_GetAttr_NonDescriptorValues_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_NonDescriptorValues_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_NonDescriptorValues_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9800,9 +10924,19 @@ ir_run_GetAttr_NonDescriptorNoDict(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetAttr_NonDescriptorNoDict_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetAttr_NonDescriptorNoDict_Tail0_1);
     DISPATCH();
+    rop_GetAttr_NonDescriptorNoDict_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetAttr_NonDescriptorNoDict_Tail0_Rest1;
+    rop_GetAttr_NonDescriptorNoDict_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetAttr_NonDescriptorNoDict_Tail0_Rest2;
+    rop_GetAttr_NonDescriptorNoDict_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetAttr_NonDescriptorNoDict_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetAttr_NonDescriptorNoDict_Miss:
     JUMP_TO_PREDICTED(GetAttr_Generic);
 }
@@ -9853,9 +10987,19 @@ ir_run_GetMethod_MethodValues(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, receiver);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_GetMethod_MethodValues_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_GetMethod_MethodValues_Tail0_1);
     DISPATCH();
+    rop_GetMethod_MethodValues_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_GetMethod_MethodValues_Tail0_Rest1;
+    rop_GetMethod_MethodValues_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_GetMethod_MethodValues_Tail0_Rest2;
+    rop_GetMethod_MethodValues_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_GetMethod_MethodValues_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetMethod_MethodValues_Miss:
     JUMP_TO_PREDICTED(GetMethod_Generic);
 }
@@ -9903,9 +11047,19 @@ ir_run_GetMethod_PolyMethod(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, receiver);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_GetMethod_PolyMethod_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_GetMethod_PolyMethod_Tail0_1);
     DISPATCH();
+    rop_GetMethod_PolyMethod_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_GetMethod_PolyMethod_Tail0_Rest1;
+    rop_GetMethod_PolyMethod_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_GetMethod_PolyMethod_Tail0_Rest2;
+    rop_GetMethod_PolyMethod_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_GetMethod_PolyMethod_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetMethod_PolyMethod_Miss:
     JUMP_TO_PREDICTED(GetMethod_Generic);
 }
@@ -9953,9 +11107,19 @@ ir_run_GetMethod_NoDict(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, receiver);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_GetMethod_NoDict_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_GetMethod_NoDict_Tail0_1);
     DISPATCH();
+    rop_GetMethod_NoDict_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_GetMethod_NoDict_Tail0_Rest1;
+    rop_GetMethod_NoDict_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_GetMethod_NoDict_Tail0_Rest2;
+    rop_GetMethod_NoDict_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_GetMethod_NoDict_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetMethod_NoDict_Miss:
     JUMP_TO_PREDICTED(GetMethod_Generic);
 }
@@ -10006,9 +11170,19 @@ ir_run_GetMethod_LazyDict(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, receiver);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_GetMethod_LazyDict_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_GetMethod_LazyDict_Tail0_1);
     DISPATCH();
+    rop_GetMethod_LazyDict_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_GetMethod_LazyDict_Tail0_Rest1;
+    rop_GetMethod_LazyDict_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_GetMethod_LazyDict_Tail0_Rest2;
+    rop_GetMethod_LazyDict_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_GetMethod_LazyDict_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetMethod_LazyDict_Miss:
     JUMP_TO_PREDICTED(GetMethod_Generic);
 }
@@ -10064,9 +11238,19 @@ ir_run_GetMethod_ClassMethod(
     _PyValue_CheckHome(*home_callable);
     _PyFrame_WriteHome(frame, home_self_dst, receiver);
     _PyValue_CheckHome(*home_self_dst);
-    PyValue_XCLOSE(old_callable);
-    PyValue_XCLOSE(old_self_dst);
+    ROP_TAIL_CLOSE(old_callable, rop_GetMethod_ClassMethod_Tail0_0);
+    ROP_TAIL_CLOSE(old_self_dst, rop_GetMethod_ClassMethod_Tail0_1);
     DISPATCH();
+    rop_GetMethod_ClassMethod_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_callable);
+    goto rop_GetMethod_ClassMethod_Tail0_Rest1;
+    rop_GetMethod_ClassMethod_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_self_dst);
+    goto rop_GetMethod_ClassMethod_Tail0_Rest2;
+    rop_GetMethod_ClassMethod_Tail0_Rest1:
+    ROP_TAIL_PARK(old_self_dst);
+    rop_GetMethod_ClassMethod_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_GetMethod_ClassMethod_Miss:
     JUMP_TO_PREDICTED(GetMethod_Generic);
 }
@@ -10139,11 +11323,31 @@ ir_run_DelItem_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_key = _PyFrame_TakeHome(frame, home_key);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_key);
-    PyValue_XCLOSE(own_obj);
+    ROP_TAIL_CLOSE(a_owned0, rop_DelItem_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_DelItem_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(own_key, rop_DelItem_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_obj, rop_DelItem_Generic_Tail0_3);
     DISPATCH();
+    rop_DelItem_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_DelItem_Generic_Tail0_Rest1;
+    rop_DelItem_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_DelItem_Generic_Tail0_Rest2;
+    rop_DelItem_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_key);
+    goto rop_DelItem_Generic_Tail0_Rest3;
+    rop_DelItem_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_DelItem_Generic_Tail0_Rest4;
+    rop_DelItem_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_DelItem_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(own_key);
+    rop_DelItem_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_obj);
+    rop_DelItem_Generic_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_DelItem_Generic_delitem_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -10221,14 +11425,49 @@ ir_run_SliceRead_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(own_stop);
-    PyValue_XCLOSE(own_start);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_SliceRead_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_SliceRead_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_SliceRead_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(own_stop, rop_SliceRead_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(own_start, rop_SliceRead_Generic_Tail0_4);
+    ROP_TAIL_CLOSE(own_obj, rop_SliceRead_Generic_Tail0_5);
+    ROP_TAIL_CLOSE(old_dst, rop_SliceRead_Generic_Tail0_6);
     DISPATCH();
+    rop_SliceRead_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_SliceRead_Generic_Tail0_Rest1;
+    rop_SliceRead_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_SliceRead_Generic_Tail0_Rest2;
+    rop_SliceRead_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_SliceRead_Generic_Tail0_Rest3;
+    rop_SliceRead_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_stop);
+    goto rop_SliceRead_Generic_Tail0_Rest4;
+    rop_SliceRead_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(own_start);
+    goto rop_SliceRead_Generic_Tail0_Rest5;
+    rop_SliceRead_Generic_Tail0_5:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_SliceRead_Generic_Tail0_Rest6;
+    rop_SliceRead_Generic_Tail0_6:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_SliceRead_Generic_Tail0_Rest7;
+    rop_SliceRead_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_SliceRead_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_SliceRead_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(own_stop);
+    rop_SliceRead_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(own_start);
+    rop_SliceRead_Generic_Tail0_Rest5:
+    ROP_TAIL_PARK(own_obj);
+    rop_SliceRead_Generic_Tail0_Rest6:
+    ROP_TAIL_PARK(old_dst);
+    rop_SliceRead_Generic_Tail0_Rest7:
+    ROP_TAIL_DISPATCH();
     rop_SliceRead_Generic_binary_slice_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
@@ -10304,15 +11543,55 @@ ir_run_SliceWrite_Generic(
     if (!(ir_word & IR_F_LOCAL_D)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(a_owned3);
-    PyValue_XCLOSE(own_stop);
-    PyValue_XCLOSE(own_start);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_SliceWrite_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_SliceWrite_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_SliceWrite_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(a_owned3, rop_SliceWrite_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(own_stop, rop_SliceWrite_Generic_Tail0_4);
+    ROP_TAIL_CLOSE(own_start, rop_SliceWrite_Generic_Tail0_5);
+    ROP_TAIL_CLOSE(own_obj, rop_SliceWrite_Generic_Tail0_6);
+    ROP_TAIL_CLOSE(own_value, rop_SliceWrite_Generic_Tail0_7);
     DISPATCH();
+    rop_SliceWrite_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_SliceWrite_Generic_Tail0_Rest1;
+    rop_SliceWrite_Generic_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_SliceWrite_Generic_Tail0_Rest2;
+    rop_SliceWrite_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_SliceWrite_Generic_Tail0_Rest3;
+    rop_SliceWrite_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(a_owned3);
+    goto rop_SliceWrite_Generic_Tail0_Rest4;
+    rop_SliceWrite_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(own_stop);
+    goto rop_SliceWrite_Generic_Tail0_Rest5;
+    rop_SliceWrite_Generic_Tail0_5:
+    ROP_TAIL_PARK_FIRST(own_start);
+    goto rop_SliceWrite_Generic_Tail0_Rest6;
+    rop_SliceWrite_Generic_Tail0_6:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_SliceWrite_Generic_Tail0_Rest7;
+    rop_SliceWrite_Generic_Tail0_7:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_SliceWrite_Generic_Tail0_Rest8;
+    rop_SliceWrite_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_SliceWrite_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_SliceWrite_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(a_owned3);
+    rop_SliceWrite_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(own_stop);
+    rop_SliceWrite_Generic_Tail0_Rest5:
+    ROP_TAIL_PARK(own_start);
+    rop_SliceWrite_Generic_Tail0_Rest6:
+    ROP_TAIL_PARK(own_obj);
+    rop_SliceWrite_Generic_Tail0_Rest7:
+    ROP_TAIL_PARK(own_value);
+    rop_SliceWrite_Generic_Tail0_Rest8:
+    ROP_TAIL_DISPATCH();
     rop_SliceWrite_Generic_store_slice_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){4, {a_view0, a_view1, a_view2, a_view3}, {a_owned0, a_owned1, a_owned2, a_owned3}};
@@ -10353,8 +11632,11 @@ ir_run_BuildSlice_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_BuildSlice_Generic_Tail0_0);
     DISPATCH();
+    rop_BuildSlice_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_BuildSlice_Generic_Failed:
     PROCESS_ERROR_AT(RAISE, 36, this_instr);
 }
@@ -10402,9 +11684,19 @@ ir_run_GetItem_ListIndex(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetItem_ListIndex_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetItem_ListIndex_Tail0_1);
     DISPATCH();
+    rop_GetItem_ListIndex_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetItem_ListIndex_Tail0_Rest1;
+    rop_GetItem_ListIndex_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetItem_ListIndex_Tail0_Rest2;
+    rop_GetItem_ListIndex_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetItem_ListIndex_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -10450,9 +11742,19 @@ ir_run_GetItem_TupleIndex(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetItem_TupleIndex_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetItem_TupleIndex_Tail0_1);
     DISPATCH();
+    rop_GetItem_TupleIndex_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetItem_TupleIndex_Tail0_Rest1;
+    rop_GetItem_TupleIndex_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetItem_TupleIndex_Tail0_Rest2;
+    rop_GetItem_TupleIndex_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetItem_TupleIndex_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -10498,9 +11800,19 @@ ir_run_GetItem_Ascii(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetItem_Ascii_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetItem_Ascii_Tail0_1);
     DISPATCH();
+    rop_GetItem_Ascii_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetItem_Ascii_Tail0_Rest1;
+    rop_GetItem_Ascii_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetItem_Ascii_Tail0_Rest2;
+    rop_GetItem_Ascii_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetItem_Ascii_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -10549,9 +11861,19 @@ ir_run_GetItem_UnicodeAsciiChar(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_obj, rop_GetItem_UnicodeAsciiChar_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_GetItem_UnicodeAsciiChar_Tail0_1);
     DISPATCH();
+    rop_GetItem_UnicodeAsciiChar_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetItem_UnicodeAsciiChar_Tail0_Rest1;
+    rop_GetItem_UnicodeAsciiChar_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetItem_UnicodeAsciiChar_Tail0_Rest2;
+    rop_GetItem_UnicodeAsciiChar_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetItem_UnicodeAsciiChar_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -10619,12 +11941,37 @@ ir_run_GetItem_ListSlice(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_key);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_GetItem_ListSlice_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_GetItem_ListSlice_Tail0_1);
+    ROP_TAIL_CLOSE(own_key, rop_GetItem_ListSlice_Tail0_2);
+    ROP_TAIL_CLOSE(own_obj, rop_GetItem_ListSlice_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_GetItem_ListSlice_Tail0_4);
     DISPATCH();
+    rop_GetItem_ListSlice_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_GetItem_ListSlice_Tail0_Rest1;
+    rop_GetItem_ListSlice_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_GetItem_ListSlice_Tail0_Rest2;
+    rop_GetItem_ListSlice_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_key);
+    goto rop_GetItem_ListSlice_Tail0_Rest3;
+    rop_GetItem_ListSlice_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetItem_ListSlice_Tail0_Rest4;
+    rop_GetItem_ListSlice_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetItem_ListSlice_Tail0_Rest5;
+    rop_GetItem_ListSlice_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_GetItem_ListSlice_Tail0_Rest2:
+    ROP_TAIL_PARK(own_key);
+    rop_GetItem_ListSlice_Tail0_Rest3:
+    ROP_TAIL_PARK(own_obj);
+    rop_GetItem_ListSlice_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetItem_ListSlice_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_GetItem_ListSlice_list_slice_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -10692,10 +12039,25 @@ ir_run_GetItem_Dict(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, first);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_key);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_key, rop_GetItem_Dict_Tail0_0);
+    ROP_TAIL_CLOSE(own_obj, rop_GetItem_Dict_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_GetItem_Dict_Tail0_2);
     DISPATCH();
+    rop_GetItem_Dict_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_key);
+    goto rop_GetItem_Dict_Tail0_Rest1;
+    rop_GetItem_Dict_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetItem_Dict_Tail0_Rest2;
+    rop_GetItem_Dict_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetItem_Dict_Tail0_Rest3;
+    rop_GetItem_Dict_Tail0_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_GetItem_Dict_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetItem_Dict_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_GetItem_Dict_Slow:
     a_view0 = PyValue_Borrow(*home_obj);
     a_owned0 = (ir_word & IR_F_LOCAL_B) ? PyValue_DUP(a_view0) : PyValue_NULL;
@@ -10722,12 +12084,37 @@ ir_run_GetItem_Dict(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_key);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_GetItem_Dict_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_GetItem_Dict_Tail1_1);
+    ROP_TAIL_CLOSE(own_key, rop_GetItem_Dict_Tail1_2);
+    ROP_TAIL_CLOSE(own_obj, rop_GetItem_Dict_Tail1_3);
+    ROP_TAIL_CLOSE(old_dst, rop_GetItem_Dict_Tail1_4);
     DISPATCH();
+    rop_GetItem_Dict_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_GetItem_Dict_Tail1_Rest1;
+    rop_GetItem_Dict_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_GetItem_Dict_Tail1_Rest2;
+    rop_GetItem_Dict_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_key);
+    goto rop_GetItem_Dict_Tail1_Rest3;
+    rop_GetItem_Dict_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_GetItem_Dict_Tail1_Rest4;
+    rop_GetItem_Dict_Tail1_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_GetItem_Dict_Tail1_Rest5;
+    rop_GetItem_Dict_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_GetItem_Dict_Tail1_Rest2:
+    ROP_TAIL_PARK(own_key);
+    rop_GetItem_Dict_Tail1_Rest3:
+    ROP_TAIL_PARK(own_obj);
+    rop_GetItem_Dict_Tail1_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_GetItem_Dict_Tail1_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_GetItem_Dict_getitem_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all3 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -10800,10 +12187,25 @@ ir_run_SetItem_ListIndex(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(old);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(old, rop_SetItem_ListIndex_Tail0_0);
+    ROP_TAIL_CLOSE(own_obj, rop_SetItem_ListIndex_Tail0_1);
+    ROP_TAIL_CLOSE(own_value, rop_SetItem_ListIndex_Tail0_2);
     DISPATCH();
+    rop_SetItem_ListIndex_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old);
+    goto rop_SetItem_ListIndex_Tail0_Rest1;
+    rop_SetItem_ListIndex_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_SetItem_ListIndex_Tail0_Rest2;
+    rop_SetItem_ListIndex_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_SetItem_ListIndex_Tail0_Rest3;
+    rop_SetItem_ListIndex_Tail0_Rest1:
+    ROP_TAIL_PARK(own_obj);
+    rop_SetItem_ListIndex_Tail0_Rest2:
+    ROP_TAIL_PARK(own_value);
+    rop_SetItem_ListIndex_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_SetItem_ListIndex_Slow:
     a_view0 = PyValue_Borrow(*home_obj);
     a_owned0 = (ir_word & IR_F_LOCAL_A) ? PyValue_DUP(a_view0) : PyValue_NULL;
@@ -10828,12 +12230,37 @@ ir_run_SetItem_ListIndex(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_SetItem_ListIndex_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_SetItem_ListIndex_Tail1_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_SetItem_ListIndex_Tail1_2);
+    ROP_TAIL_CLOSE(own_obj, rop_SetItem_ListIndex_Tail1_3);
+    ROP_TAIL_CLOSE(own_value, rop_SetItem_ListIndex_Tail1_4);
     DISPATCH();
+    rop_SetItem_ListIndex_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_SetItem_ListIndex_Tail1_Rest1;
+    rop_SetItem_ListIndex_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_SetItem_ListIndex_Tail1_Rest2;
+    rop_SetItem_ListIndex_Tail1_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_SetItem_ListIndex_Tail1_Rest3;
+    rop_SetItem_ListIndex_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_SetItem_ListIndex_Tail1_Rest4;
+    rop_SetItem_ListIndex_Tail1_4:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_SetItem_ListIndex_Tail1_Rest5;
+    rop_SetItem_ListIndex_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_SetItem_ListIndex_Tail1_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_SetItem_ListIndex_Tail1_Rest3:
+    ROP_TAIL_PARK(own_obj);
+    rop_SetItem_ListIndex_Tail1_Rest4:
+    ROP_TAIL_PARK(own_value);
+    rop_SetItem_ListIndex_Tail1_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_SetItem_ListIndex_setitem_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all3 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
@@ -10903,13 +12330,43 @@ ir_run_SetItem_Dict(
     if (!(ir_word & IR_F_LOCAL_C)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(own_key);
-    PyValue_XCLOSE(own_obj);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_SetItem_Dict_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_SetItem_Dict_Tail0_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_SetItem_Dict_Tail0_2);
+    ROP_TAIL_CLOSE(own_key, rop_SetItem_Dict_Tail0_3);
+    ROP_TAIL_CLOSE(own_obj, rop_SetItem_Dict_Tail0_4);
+    ROP_TAIL_CLOSE(own_value, rop_SetItem_Dict_Tail0_5);
     DISPATCH();
+    rop_SetItem_Dict_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_SetItem_Dict_Tail0_Rest1;
+    rop_SetItem_Dict_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_SetItem_Dict_Tail0_Rest2;
+    rop_SetItem_Dict_Tail0_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_SetItem_Dict_Tail0_Rest3;
+    rop_SetItem_Dict_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_key);
+    goto rop_SetItem_Dict_Tail0_Rest4;
+    rop_SetItem_Dict_Tail0_4:
+    ROP_TAIL_PARK_FIRST(own_obj);
+    goto rop_SetItem_Dict_Tail0_Rest5;
+    rop_SetItem_Dict_Tail0_5:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_SetItem_Dict_Tail0_Rest6;
+    rop_SetItem_Dict_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_SetItem_Dict_Tail0_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_SetItem_Dict_Tail0_Rest3:
+    ROP_TAIL_PARK(own_key);
+    rop_SetItem_Dict_Tail0_Rest4:
+    ROP_TAIL_PARK(own_obj);
+    rop_SetItem_Dict_Tail0_Rest5:
+    ROP_TAIL_PARK(own_value);
+    rop_SetItem_Dict_Tail0_Rest6:
+    ROP_TAIL_DISPATCH();
     rop_SetItem_Dict_dict_store_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
@@ -10955,9 +12412,19 @@ ir_run_IterOpen_Self(
     _PyFrame_WriteHome(frame, home_pair_receiver, moved);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, PyValue_NULL);
-    PyValue_XCLOSE(old_pair_receiver);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Self_Tail0_0);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Self_Tail0_1);
     DISPATCH();
+    rop_IterOpen_Self_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Self_Tail0_Rest1;
+    rop_IterOpen_Self_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Self_Tail0_Rest2;
+    rop_IterOpen_Self_Tail0_Rest1:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Self_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -10995,9 +12462,19 @@ ir_run_IterOpen_Indexed(
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, z);
     _PyValue_CheckTemp(*home_pair_cursor);
-    PyValue_XCLOSE(old_pair_receiver);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Indexed_Tail0_0);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Indexed_Tail0_1);
     DISPATCH();
+    rop_IterOpen_Indexed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Indexed_Tail0_Rest1;
+    rop_IterOpen_Indexed_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Indexed_Tail0_Rest2;
+    rop_IterOpen_Indexed_Tail0_Rest1:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Indexed_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -11048,11 +12525,31 @@ ir_run_IterOpen_GenMethod(
     _PyFrame_WriteHome(frame, home_pair_receiver, g);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, PyValue_NULL);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_source);
-    PyValue_XCLOSE(old_pair_receiver);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(a_owned0, rop_IterOpen_GenMethod_Tail0_0);
+    ROP_TAIL_CLOSE(own_source, rop_IterOpen_GenMethod_Tail0_1);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_GenMethod_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_GenMethod_Tail0_3);
     DISPATCH();
+    rop_IterOpen_GenMethod_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_IterOpen_GenMethod_Tail0_Rest1;
+    rop_IterOpen_GenMethod_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_source);
+    goto rop_IterOpen_GenMethod_Tail0_Rest2;
+    rop_IterOpen_GenMethod_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_GenMethod_Tail0_Rest3;
+    rop_IterOpen_GenMethod_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_GenMethod_Tail0_Rest4;
+    rop_IterOpen_GenMethod_Tail0_Rest1:
+    ROP_TAIL_PARK(own_source);
+    rop_IterOpen_GenMethod_Tail0_Rest2:
+    ROP_TAIL_PARK(old_pair_receiver);
+    rop_IterOpen_GenMethod_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_GenMethod_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_IterOpen_GenMethod_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -11107,16 +12604,41 @@ ir_run_ForIter_List(
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
     _PyValue_CheckTemp(*home_pair_cursor);
-    PyValue_XCLOSE(old_item);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(old_item, rop_ForIter_List_Tail0_0);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_ForIter_List_Tail0_1);
     DISPATCH();
+    rop_ForIter_List_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_item);
+    goto rop_ForIter_List_Tail0_Rest1;
+    rop_ForIter_List_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_ForIter_List_Tail0_Rest2;
+    rop_ForIter_List_Tail0_Rest1:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_ForIter_List_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_ForIter_List_Exhausted:
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
     own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
-    PyValue_XCLOSE(own_pair_receiver);
-    PyValue_XCLOSE(own_pair_cursor);
-    PyValue_XCLOSE(ev);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_pair_receiver, rop_ForIter_List_Tail1_0);
+    ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_List_Tail1_1);
+    ROP_TAIL_CLOSE(ev, rop_ForIter_List_Tail1_2);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_ForIter_List_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_pair_receiver);
+    goto rop_ForIter_List_Tail1_Rest1;
+    rop_ForIter_List_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_pair_cursor);
+    goto rop_ForIter_List_Tail1_Rest2;
+    rop_ForIter_List_Tail1_2:
+    ROP_TAIL_PARK_FIRST(ev);
+    goto rop_ForIter_List_Tail1_Rest3;
+    rop_ForIter_List_Tail1_Rest1:
+    ROP_TAIL_PARK(own_pair_cursor);
+    rop_ForIter_List_Tail1_Rest2:
+    ROP_TAIL_PARK(ev);
+    rop_ForIter_List_Tail1_Rest3:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -11165,16 +12687,41 @@ ir_run_ForIter_Tuple(
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
     _PyValue_CheckTemp(*home_pair_cursor);
-    PyValue_XCLOSE(old_item);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(old_item, rop_ForIter_Tuple_Tail0_0);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_ForIter_Tuple_Tail0_1);
     DISPATCH();
+    rop_ForIter_Tuple_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_item);
+    goto rop_ForIter_Tuple_Tail0_Rest1;
+    rop_ForIter_Tuple_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_ForIter_Tuple_Tail0_Rest2;
+    rop_ForIter_Tuple_Tail0_Rest1:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_ForIter_Tuple_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_ForIter_Tuple_Exhausted:
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
     own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
-    PyValue_XCLOSE(own_pair_receiver);
-    PyValue_XCLOSE(own_pair_cursor);
-    PyValue_XCLOSE(ev);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_pair_receiver, rop_ForIter_Tuple_Tail1_0);
+    ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_Tuple_Tail1_1);
+    ROP_TAIL_CLOSE(ev, rop_ForIter_Tuple_Tail1_2);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_ForIter_Tuple_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_pair_receiver);
+    goto rop_ForIter_Tuple_Tail1_Rest1;
+    rop_ForIter_Tuple_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_pair_cursor);
+    goto rop_ForIter_Tuple_Tail1_Rest2;
+    rop_ForIter_Tuple_Tail1_2:
+    ROP_TAIL_PARK_FIRST(ev);
+    goto rop_ForIter_Tuple_Tail1_Rest3;
+    rop_ForIter_Tuple_Tail1_Rest1:
+    ROP_TAIL_PARK(own_pair_cursor);
+    rop_ForIter_Tuple_Tail1_Rest2:
+    ROP_TAIL_PARK(ev);
+    rop_ForIter_Tuple_Tail1_Rest3:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -11218,17 +12765,35 @@ ir_run_ForIter_Range(
     old_item = *home_item;
     _PyFrame_WriteHome(frame, home_item, iv);
     _PyValue_CheckHome(*home_item);
-    PyValue_XCLOSE(old_item);
+    ROP_TAIL_CLOSE(old_item, rop_ForIter_Range_Tail0_0);
     DISPATCH();
+    rop_ForIter_Range_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_item);
+    ROP_TAIL_DISPATCH();
     rop_ForIter_Range_Failed:
     PROCESS_ERROR_AT(RAISE, 85, this_instr);
     rop_ForIter_Range_Exhausted:
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
     own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
-    PyValue_XCLOSE(own_pair_receiver);
-    PyValue_XCLOSE(own_pair_cursor);
-    PyValue_XCLOSE(ev);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_pair_receiver, rop_ForIter_Range_Tail1_0);
+    ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_Range_Tail1_1);
+    ROP_TAIL_CLOSE(ev, rop_ForIter_Range_Tail1_2);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_ForIter_Range_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_pair_receiver);
+    goto rop_ForIter_Range_Tail1_Rest1;
+    rop_ForIter_Range_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_pair_cursor);
+    goto rop_ForIter_Range_Tail1_Rest2;
+    rop_ForIter_Range_Tail1_2:
+    ROP_TAIL_PARK_FIRST(ev);
+    goto rop_ForIter_Range_Tail1_Rest3;
+    rop_ForIter_Range_Tail1_Rest1:
+    ROP_TAIL_PARK(own_pair_cursor);
+    rop_ForIter_Range_Tail1_Rest2:
+    ROP_TAIL_PARK(ev);
+    rop_ForIter_Range_Tail1_Rest3:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -11289,11 +12854,31 @@ ir_run_ForIter_Indexed(
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
     _PyValue_CheckTemp(*home_pair_cursor);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(old_item);
-    PyValue_XCLOSE(old_pair_cursor);
+    ROP_TAIL_CLOSE(a_owned0, rop_ForIter_Indexed_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_ForIter_Indexed_Tail0_1);
+    ROP_TAIL_CLOSE(old_item, rop_ForIter_Indexed_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_ForIter_Indexed_Tail0_3);
     DISPATCH();
+    rop_ForIter_Indexed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_ForIter_Indexed_Tail0_Rest1;
+    rop_ForIter_Indexed_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_ForIter_Indexed_Tail0_Rest2;
+    rop_ForIter_Indexed_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_item);
+    goto rop_ForIter_Indexed_Tail0_Rest3;
+    rop_ForIter_Indexed_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_ForIter_Indexed_Tail0_Rest4;
+    rop_ForIter_Indexed_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_ForIter_Indexed_Tail0_Rest2:
+    ROP_TAIL_PARK(old_item);
+    rop_ForIter_Indexed_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_ForIter_Indexed_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_ForIter_Indexed_Failed:
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -11303,12 +12888,37 @@ ir_run_ForIter_Indexed(
     rop_ForIter_Indexed_Exhausted:
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
     own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_pair_receiver);
-    PyValue_XCLOSE(own_pair_cursor);
-    PyValue_XCLOSE(ev);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_ForIter_Indexed_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_ForIter_Indexed_Tail1_1);
+    ROP_TAIL_CLOSE(own_pair_receiver, rop_ForIter_Indexed_Tail1_2);
+    ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_Indexed_Tail1_3);
+    ROP_TAIL_CLOSE(ev, rop_ForIter_Indexed_Tail1_4);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_ForIter_Indexed_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_ForIter_Indexed_Tail1_Rest1;
+    rop_ForIter_Indexed_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_ForIter_Indexed_Tail1_Rest2;
+    rop_ForIter_Indexed_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_pair_receiver);
+    goto rop_ForIter_Indexed_Tail1_Rest3;
+    rop_ForIter_Indexed_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_pair_cursor);
+    goto rop_ForIter_Indexed_Tail1_Rest4;
+    rop_ForIter_Indexed_Tail1_4:
+    ROP_TAIL_PARK_FIRST(ev);
+    goto rop_ForIter_Indexed_Tail1_Rest5;
+    rop_ForIter_Indexed_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_ForIter_Indexed_Tail1_Rest2:
+    ROP_TAIL_PARK(own_pair_receiver);
+    rop_ForIter_Indexed_Tail1_Rest3:
+    ROP_TAIL_PARK(own_pair_cursor);
+    rop_ForIter_Indexed_Tail1_Rest4:
+    ROP_TAIL_PARK(ev);
+    rop_ForIter_Indexed_Tail1_Rest5:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -11392,9 +13002,19 @@ ir_run_ForIter_Slot(
     old_item = *home_item;
     _PyFrame_WriteHome(frame, home_item, iv);
     _PyValue_CheckHome(*home_item);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(old_item);
+    ROP_TAIL_CLOSE(a_owned0, rop_ForIter_Slot_Tail0_0);
+    ROP_TAIL_CLOSE(old_item, rop_ForIter_Slot_Tail0_1);
     DISPATCH();
+    rop_ForIter_Slot_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_ForIter_Slot_Tail0_Rest1;
+    rop_ForIter_Slot_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_item);
+    goto rop_ForIter_Slot_Tail0_Rest2;
+    rop_ForIter_Slot_Tail0_Rest1:
+    ROP_TAIL_PARK(old_item);
+    rop_ForIter_Slot_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_ForIter_Slot_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -11404,11 +13024,31 @@ ir_run_ForIter_Slot(
     rop_ForIter_Slot_Exhausted:
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
     own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_pair_receiver);
-    PyValue_XCLOSE(own_pair_cursor);
-    PyValue_XCLOSE(ev);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_ForIter_Slot_Tail1_0);
+    ROP_TAIL_CLOSE(own_pair_receiver, rop_ForIter_Slot_Tail1_1);
+    ROP_TAIL_CLOSE(own_pair_cursor, rop_ForIter_Slot_Tail1_2);
+    ROP_TAIL_CLOSE(ev, rop_ForIter_Slot_Tail1_3);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_ForIter_Slot_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_ForIter_Slot_Tail1_Rest1;
+    rop_ForIter_Slot_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_pair_receiver);
+    goto rop_ForIter_Slot_Tail1_Rest2;
+    rop_ForIter_Slot_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_pair_cursor);
+    goto rop_ForIter_Slot_Tail1_Rest3;
+    rop_ForIter_Slot_Tail1_3:
+    ROP_TAIL_PARK_FIRST(ev);
+    goto rop_ForIter_Slot_Tail1_Rest4;
+    rop_ForIter_Slot_Tail1_Rest1:
+    ROP_TAIL_PARK(own_pair_receiver);
+    rop_ForIter_Slot_Tail1_Rest2:
+    ROP_TAIL_PARK(own_pair_cursor);
+    rop_ForIter_Slot_Tail1_Rest3:
+    ROP_TAIL_PARK(ev);
+    rop_ForIter_Slot_Tail1_Rest4:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -11511,7 +13151,7 @@ ir_run_ForIter_Observed(
     if (ret9 < 0) {
         goto rop_ForIter_Observed_ExitEventFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_ForIter_Observed_StopFailed:
     PyValue_XCLOSE(a_owned0);
     PyValue_XCLOSE(a_owned1);
@@ -11548,9 +13188,19 @@ ir_run_IterClose_Retire(
     PyValue own_pair_cursor = PyValue_NULL;
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
     own_pair_cursor = _PyFrame_TakeHome(frame, home_pair_cursor);
-    PyValue_XCLOSE(own_pair_receiver);
-    PyValue_XCLOSE(own_pair_cursor);
+    ROP_TAIL_CLOSE(own_pair_receiver, rop_IterClose_Retire_Tail0_0);
+    ROP_TAIL_CLOSE(own_pair_cursor, rop_IterClose_Retire_Tail0_1);
     DISPATCH();
+    rop_IterClose_Retire_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_pair_receiver);
+    goto rop_IterClose_Retire_Tail0_Rest1;
+    rop_IterClose_Retire_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_pair_cursor);
+    goto rop_IterClose_Retire_Tail0_Rest2;
+    rop_IterClose_Retire_Tail0_Rest1:
+    ROP_TAIL_PARK(own_pair_cursor);
+    rop_IterClose_Retire_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -11622,8 +13272,11 @@ ir_run_GlobalRead_Module(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_GlobalRead_Module_Tail0_0);
     DISPATCH();
+    rop_GlobalRead_Module_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_GlobalRead_Module_Miss:
     JUMP_TO_PREDICTED(GlobalRead_Generic);
 }
@@ -11664,8 +13317,11 @@ ir_run_GlobalRead_Builtin(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, result);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_GlobalRead_Builtin_Tail0_0);
     DISPATCH();
+    rop_GlobalRead_Builtin_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_GlobalRead_Builtin_Miss:
     JUMP_TO_PREDICTED(GlobalRead_Generic);
 }
@@ -11695,8 +13351,11 @@ ir_run_NamespaceRead_Name(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_NamespaceRead_Name_Tail0_0);
     DISPATCH();
+    rop_NamespaceRead_Name_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_NamespaceRead_Name_Failed:
     PROCESS_ERROR_AT(RAISE, 137, this_instr);
 }
@@ -11725,8 +13384,11 @@ ir_run_NamespaceRead_Locals(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_NamespaceRead_Locals_Tail0_0);
     DISPATCH();
+    rop_NamespaceRead_Locals_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_NamespaceRead_Locals_Failed:
     PROCESS_ERROR_AT(RAISE, 137, this_instr);
 }
@@ -11756,8 +13418,11 @@ ir_run_NamespaceRead_BuildClass(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_NamespaceRead_BuildClass_Tail0_0);
     DISPATCH();
+    rop_NamespaceRead_BuildClass_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_NamespaceRead_BuildClass_Failed:
     PROCESS_ERROR_AT(RAISE, 137, this_instr);
 }
@@ -11803,10 +13468,25 @@ ir_run_NamespaceReadFrom_Mapping(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_mapping);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_NamespaceReadFrom_Mapping_Tail0_0);
+    ROP_TAIL_CLOSE(own_mapping, rop_NamespaceReadFrom_Mapping_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_NamespaceReadFrom_Mapping_Tail0_2);
     DISPATCH();
+    rop_NamespaceReadFrom_Mapping_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_NamespaceReadFrom_Mapping_Tail0_Rest1;
+    rop_NamespaceReadFrom_Mapping_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_mapping);
+    goto rop_NamespaceReadFrom_Mapping_Tail0_Rest2;
+    rop_NamespaceReadFrom_Mapping_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_NamespaceReadFrom_Mapping_Tail0_Rest3;
+    rop_NamespaceReadFrom_Mapping_Tail0_Rest1:
+    ROP_TAIL_PARK(own_mapping);
+    rop_NamespaceReadFrom_Mapping_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_NamespaceReadFrom_Mapping_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_NamespaceReadFrom_Mapping_Fallback:
     IR_STUB_ESCAPE();
     ret2 = _PyRop_LoadGlobalOrBuiltin(frame, ((uint32_t)IR_C(ir_word) | ((uint32_t)IR_D(ir_word) << 12)));
@@ -11958,8 +13638,11 @@ ir_run_Import_Eager(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Import_Eager_Tail0_0);
     DISPATCH();
+    rop_Import_Eager_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Import_Eager_Failed:
     PROCESS_ERROR_AT(RAISE, 106, this_instr);
 }
@@ -11995,8 +13678,11 @@ ir_run_Import_Policy(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Import_Policy_Tail0_0);
     DISPATCH();
+    rop_Import_Policy_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Import_Policy_Failed:
     PROCESS_ERROR_AT(RAISE, 106, this_instr);
 }
@@ -12032,8 +13718,11 @@ ir_run_Import_Lazy(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Import_Lazy_Tail0_0);
     DISPATCH();
+    rop_Import_Lazy_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Import_Lazy_Failed:
     PROCESS_ERROR_AT(RAISE, 106, this_instr);
 }
@@ -12066,8 +13755,11 @@ ir_run_ImportFrom_From(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_ImportFrom_From_Tail0_0);
     DISPATCH();
+    rop_ImportFrom_From_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_ImportFrom_From_Failed:
     PROCESS_ERROR_AT(RAISE, 108, this_instr);
 }
@@ -12100,8 +13792,11 @@ ir_run_ImportFrom_FromLast(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_ImportFrom_FromLast_Tail0_0);
     DISPATCH();
+    rop_ImportFrom_FromLast_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_ImportFrom_FromLast_Failed:
     PROCESS_ERROR_AT(RAISE, 110, this_instr);
 }
@@ -12152,8 +13847,11 @@ ir_run_Binary_Int_NB_INPLACE_ADD(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_INPLACE_ADD_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_INPLACE_ADD_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_INPLACE_ADD_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12204,8 +13902,11 @@ ir_run_Binary_Int_NB_SUBTRACT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_SUBTRACT_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_SUBTRACT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_SUBTRACT_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12256,8 +13957,11 @@ ir_run_Binary_Int_NB_INPLACE_SUBTRACT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_INPLACE_SUBTRACT_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_INPLACE_SUBTRACT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_INPLACE_SUBTRACT_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12308,8 +14012,11 @@ ir_run_Binary_Int_NB_MULTIPLY(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_MULTIPLY_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_MULTIPLY_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_MULTIPLY_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12360,8 +14067,11 @@ ir_run_Binary_Int_NB_INPLACE_MULTIPLY(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_INPLACE_MULTIPLY_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_INPLACE_MULTIPLY_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_INPLACE_MULTIPLY_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12412,8 +14122,11 @@ ir_run_Binary_Int_NB_FLOOR_DIVIDE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_FLOOR_DIVIDE_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_FLOOR_DIVIDE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_FLOOR_DIVIDE_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12464,8 +14177,11 @@ ir_run_Binary_Int_NB_REMAINDER(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_REMAINDER_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_REMAINDER_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_REMAINDER_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12516,8 +14232,11 @@ ir_run_Binary_Int_NB_AND(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_AND_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_AND_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_AND_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12568,8 +14287,11 @@ ir_run_Binary_Int_NB_OR(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_OR_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_OR_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_OR_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12620,8 +14342,11 @@ ir_run_Binary_Int_NB_XOR(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_XOR_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_XOR_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_XOR_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12672,8 +14397,11 @@ ir_run_Binary_Int_NB_LSHIFT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_LSHIFT_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_LSHIFT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_LSHIFT_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12724,8 +14452,11 @@ ir_run_Binary_Int_NB_RSHIFT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_NB_RSHIFT_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_NB_RSHIFT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_NB_RSHIFT_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12776,8 +14507,11 @@ ir_run_Binary_Int(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Int_Tail0_0);
     DISPATCH();
+    rop_Binary_Int_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Int_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12830,8 +14564,11 @@ ir_run_Binary_Float_NB_INPLACE_ADD(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_ADD_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_INPLACE_ADD_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_INPLACE_ADD_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12884,8 +14621,11 @@ ir_run_Binary_Float_NB_SUBTRACT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_SUBTRACT_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_SUBTRACT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_SUBTRACT_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12938,8 +14678,11 @@ ir_run_Binary_Float_NB_INPLACE_SUBTRACT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_SUBTRACT_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_INPLACE_SUBTRACT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_INPLACE_SUBTRACT_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -12992,8 +14735,11 @@ ir_run_Binary_Float_NB_MULTIPLY(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_MULTIPLY_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_MULTIPLY_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_MULTIPLY_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -13046,8 +14792,11 @@ ir_run_Binary_Float_NB_INPLACE_MULTIPLY(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_MULTIPLY_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_INPLACE_MULTIPLY_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_INPLACE_MULTIPLY_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -13100,8 +14849,11 @@ ir_run_Binary_Float_NB_TRUE_DIVIDE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_TRUE_DIVIDE_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_TRUE_DIVIDE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_TRUE_DIVIDE_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -13154,8 +14906,11 @@ ir_run_Binary_Float_NB_INPLACE_TRUE_DIVIDE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -13208,8 +14963,11 @@ ir_run_Binary_Float_NB_POWER(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_POWER_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_POWER_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_POWER_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -13262,8 +15020,11 @@ ir_run_Binary_Float_NB_INPLACE_POWER(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Float_NB_INPLACE_POWER_Tail0_0);
     DISPATCH();
+    rop_Binary_Float_NB_INPLACE_POWER_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Binary_Float_NB_INPLACE_POWER_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -13309,10 +15070,25 @@ ir_run_Binary_Text(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_y, rop_Binary_Text_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_Binary_Text_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Text_Tail0_2);
     DISPATCH();
+    rop_Binary_Text_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Binary_Text_Tail0_Rest1;
+    rop_Binary_Text_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Binary_Text_Tail0_Rest2;
+    rop_Binary_Text_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Binary_Text_Tail0_Rest3;
+    rop_Binary_Text_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_Binary_Text_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Binary_Text_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_Binary_Text_Failed:
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
@@ -13379,12 +15155,37 @@ ir_run_Binary_Extended(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Binary_Extended_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Binary_Extended_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_Binary_Extended_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_Binary_Extended_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Extended_Tail0_4);
     DISPATCH();
+    rop_Binary_Extended_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Binary_Extended_Tail0_Rest1;
+    rop_Binary_Extended_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Binary_Extended_Tail0_Rest2;
+    rop_Binary_Extended_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Binary_Extended_Tail0_Rest3;
+    rop_Binary_Extended_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Binary_Extended_Tail0_Rest4;
+    rop_Binary_Extended_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Binary_Extended_Tail0_Rest5;
+    rop_Binary_Extended_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Binary_Extended_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_Binary_Extended_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_Binary_Extended_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_Binary_Extended_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Binary_Extended_extension_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -13428,8 +15229,11 @@ ir_run_Unary_Generic(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Unary_Generic_Tail0_0);
     DISPATCH();
+    rop_Unary_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Unary_Generic_Failed:
     PROCESS_ERROR_AT(RAISE, 194, this_instr);
 }
@@ -13478,10 +15282,25 @@ ir_run_AppendText_Text(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_AppendText_Text_Tail0_0);
+    ROP_TAIL_CLOSE(own_y, rop_AppendText_Text_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_AppendText_Text_Tail0_2);
     DISPATCH();
+    rop_AppendText_Text_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_AppendText_Text_Tail0_Rest1;
+    rop_AppendText_Text_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_AppendText_Text_Tail0_Rest2;
+    rop_AppendText_Text_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_AppendText_Text_Tail0_Rest3;
+    rop_AppendText_Text_Tail0_Rest1:
+    ROP_TAIL_PARK(own_y);
+    rop_AppendText_Text_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_AppendText_Text_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_AppendText_Text_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -13532,9 +15351,19 @@ ir_run_Length_Size(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Length_Size_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Length_Size_Tail0_1);
     DISPATCH();
+    rop_Length_Size_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Length_Size_Tail0_Rest1;
+    rop_Length_Size_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Length_Size_Tail0_Rest2;
+    rop_Length_Size_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Length_Size_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_Length_Size_length_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -13572,8 +15401,11 @@ ir_run_Pattern_Flag(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Pattern_Flag_Tail0_0);
     DISPATCH();
+    rop_Pattern_Flag_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -13620,8 +15452,11 @@ ir_run_PatternClass_Match(
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     _PyRop_CloseAnchors(&a);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_PatternClass_Match_Tail0_0);
     DISPATCH();
+    rop_PatternClass_Match_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_PatternClass_Match_match_class_at_origin1_Failed:
     IR_STUB_ESCAPE();
     span4 = (_PyRopSpan){frame, this_instr, 0, IR_B(ir_word), 0, 0};
@@ -13682,10 +15517,25 @@ ir_run_PatternKeys_Match(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_PatternKeys_Match_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_PatternKeys_Match_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_PatternKeys_Match_Tail0_2);
     DISPATCH();
+    rop_PatternKeys_Match_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_PatternKeys_Match_Tail0_Rest1;
+    rop_PatternKeys_Match_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_PatternKeys_Match_Tail0_Rest2;
+    rop_PatternKeys_Match_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_PatternKeys_Match_Tail0_Rest3;
+    rop_PatternKeys_Match_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_PatternKeys_Match_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_PatternKeys_Match_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_PatternKeys_Match_match_keys_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -13909,8 +15759,11 @@ ir_run_Awaitable_Await(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, v);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Awaitable_Await_Tail0_0);
     DISPATCH();
+    rop_Awaitable_Await_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Awaitable_Await_Protocol:
     xo = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_source) : _PyFrame_TakeHome(frame, home_source));
     IR_STUB_ESCAPE();
@@ -13922,8 +15775,11 @@ ir_run_Awaitable_Await(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Awaitable_Await_Tail1_0);
     DISPATCH();
+    rop_Awaitable_Await_Tail1_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_Awaitable_Await_Failed:
     PROCESS_ERROR_AT(RAISE, 20, this_instr);
 }
@@ -13956,8 +15812,11 @@ ir_run_AsyncIterOpen_Open(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_AsyncIterOpen_Open_Tail0_0);
     DISPATCH();
+    rop_AsyncIterOpen_Open_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_AsyncIterOpen_Open_Failed:
     PROCESS_ERROR_AT(RAISE, 14, this_instr);
 }
@@ -13988,8 +15847,11 @@ ir_run_AsyncIterNext_Next(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_AsyncIterNext_Next_Tail0_0);
     DISPATCH();
+    rop_AsyncIterNext_Next_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_AsyncIterNext_Next_Failed:
     PROCESS_ERROR_AT(RAISE, 12, this_instr);
 }
@@ -14197,11 +16059,31 @@ ir_run_Send_Virtual(
     _PyValue_CheckTemp(*home_send_cursor);
     _PyFrame_WriteHome(frame, home_send_value, y);
     _PyValue_CheckHome(*home_send_value);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(old_send_cursor);
-    PyValue_XCLOSE(old_send_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_Send_Virtual_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Send_Virtual_Tail0_1);
+    ROP_TAIL_CLOSE(old_send_cursor, rop_Send_Virtual_Tail0_2);
+    ROP_TAIL_CLOSE(old_send_value, rop_Send_Virtual_Tail0_3);
     DISPATCH();
+    rop_Send_Virtual_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Send_Virtual_Tail0_Rest1;
+    rop_Send_Virtual_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Send_Virtual_Tail0_Rest2;
+    rop_Send_Virtual_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_send_cursor);
+    goto rop_Send_Virtual_Tail0_Rest3;
+    rop_Send_Virtual_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_send_value);
+    goto rop_Send_Virtual_Tail0_Rest4;
+    rop_Send_Virtual_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Send_Virtual_Tail0_Rest2:
+    ROP_TAIL_PARK(old_send_cursor);
+    rop_Send_Virtual_Tail0_Rest3:
+    ROP_TAIL_PARK(old_send_value);
+    rop_Send_Virtual_Tail0_Rest4:
+    ROP_TAIL_DISPATCH();
     rop_Send_Virtual_Failed:
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -14215,13 +16097,43 @@ ir_run_Send_Virtual(
     old_completed = *home_completed;
     _PyFrame_WriteHome(frame, home_completed, rv);
     _PyValue_CheckHome(*home_completed);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_send_receiver);
-    PyValue_XCLOSE(own_send_cursor);
-    PyValue_XCLOSE(own_send_value);
-    PyValue_XCLOSE(old_completed);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_Send_Virtual_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Send_Virtual_Tail1_1);
+    ROP_TAIL_CLOSE(own_send_receiver, rop_Send_Virtual_Tail1_2);
+    ROP_TAIL_CLOSE(own_send_cursor, rop_Send_Virtual_Tail1_3);
+    ROP_TAIL_CLOSE(own_send_value, rop_Send_Virtual_Tail1_4);
+    ROP_TAIL_CLOSE(old_completed, rop_Send_Virtual_Tail1_5);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_Send_Virtual_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Send_Virtual_Tail1_Rest1;
+    rop_Send_Virtual_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Send_Virtual_Tail1_Rest2;
+    rop_Send_Virtual_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_send_receiver);
+    goto rop_Send_Virtual_Tail1_Rest3;
+    rop_Send_Virtual_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_send_cursor);
+    goto rop_Send_Virtual_Tail1_Rest4;
+    rop_Send_Virtual_Tail1_4:
+    ROP_TAIL_PARK_FIRST(own_send_value);
+    goto rop_Send_Virtual_Tail1_Rest5;
+    rop_Send_Virtual_Tail1_5:
+    ROP_TAIL_PARK_FIRST(old_completed);
+    goto rop_Send_Virtual_Tail1_Rest6;
+    rop_Send_Virtual_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Send_Virtual_Tail1_Rest2:
+    ROP_TAIL_PARK(own_send_receiver);
+    rop_Send_Virtual_Tail1_Rest3:
+    ROP_TAIL_PARK(own_send_cursor);
+    rop_Send_Virtual_Tail1_Rest4:
+    ROP_TAIL_PARK(own_send_value);
+    rop_Send_Virtual_Tail1_Rest5:
+    ROP_TAIL_PARK(old_completed);
+    rop_Send_Virtual_Tail1_Rest6:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14289,12 +16201,37 @@ ir_run_Send_AsyncGen(
     _PyValue_CheckTemp(*home_send_cursor);
     _PyFrame_WriteHome(frame, home_send_value, y);
     _PyValue_CheckHome(*home_send_value);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(old_send_cursor);
-    PyValue_XCLOSE(old_send_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_Send_AsyncGen_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Send_AsyncGen_Tail0_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_Send_AsyncGen_Tail0_2);
+    ROP_TAIL_CLOSE(old_send_cursor, rop_Send_AsyncGen_Tail0_3);
+    ROP_TAIL_CLOSE(old_send_value, rop_Send_AsyncGen_Tail0_4);
     DISPATCH();
+    rop_Send_AsyncGen_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Send_AsyncGen_Tail0_Rest1;
+    rop_Send_AsyncGen_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Send_AsyncGen_Tail0_Rest2;
+    rop_Send_AsyncGen_Tail0_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_Send_AsyncGen_Tail0_Rest3;
+    rop_Send_AsyncGen_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_send_cursor);
+    goto rop_Send_AsyncGen_Tail0_Rest4;
+    rop_Send_AsyncGen_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_send_value);
+    goto rop_Send_AsyncGen_Tail0_Rest5;
+    rop_Send_AsyncGen_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Send_AsyncGen_Tail0_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_Send_AsyncGen_Tail0_Rest3:
+    ROP_TAIL_PARK(old_send_cursor);
+    rop_Send_AsyncGen_Tail0_Rest4:
+    ROP_TAIL_PARK(old_send_value);
+    rop_Send_AsyncGen_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Send_AsyncGen_Failed:
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
@@ -14308,14 +16245,49 @@ ir_run_Send_AsyncGen(
     old_completed = *home_completed;
     _PyFrame_WriteHome(frame, home_completed, rv);
     _PyValue_CheckHome(*home_completed);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(own_send_receiver);
-    PyValue_XCLOSE(own_send_cursor);
-    PyValue_XCLOSE(own_send_value);
-    PyValue_XCLOSE(old_completed);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_Send_AsyncGen_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Send_AsyncGen_Tail1_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_Send_AsyncGen_Tail1_2);
+    ROP_TAIL_CLOSE(own_send_receiver, rop_Send_AsyncGen_Tail1_3);
+    ROP_TAIL_CLOSE(own_send_cursor, rop_Send_AsyncGen_Tail1_4);
+    ROP_TAIL_CLOSE(own_send_value, rop_Send_AsyncGen_Tail1_5);
+    ROP_TAIL_CLOSE(old_completed, rop_Send_AsyncGen_Tail1_6);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_Send_AsyncGen_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Send_AsyncGen_Tail1_Rest1;
+    rop_Send_AsyncGen_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Send_AsyncGen_Tail1_Rest2;
+    rop_Send_AsyncGen_Tail1_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_Send_AsyncGen_Tail1_Rest3;
+    rop_Send_AsyncGen_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_send_receiver);
+    goto rop_Send_AsyncGen_Tail1_Rest4;
+    rop_Send_AsyncGen_Tail1_4:
+    ROP_TAIL_PARK_FIRST(own_send_cursor);
+    goto rop_Send_AsyncGen_Tail1_Rest5;
+    rop_Send_AsyncGen_Tail1_5:
+    ROP_TAIL_PARK_FIRST(own_send_value);
+    goto rop_Send_AsyncGen_Tail1_Rest6;
+    rop_Send_AsyncGen_Tail1_6:
+    ROP_TAIL_PARK_FIRST(old_completed);
+    goto rop_Send_AsyncGen_Tail1_Rest7;
+    rop_Send_AsyncGen_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Send_AsyncGen_Tail1_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_Send_AsyncGen_Tail1_Rest3:
+    ROP_TAIL_PARK(own_send_receiver);
+    rop_Send_AsyncGen_Tail1_Rest4:
+    ROP_TAIL_PARK(own_send_cursor);
+    rop_Send_AsyncGen_Tail1_Rest5:
+    ROP_TAIL_PARK(own_send_value);
+    rop_Send_AsyncGen_Tail1_Rest6:
+    ROP_TAIL_PARK(old_completed);
+    rop_Send_AsyncGen_Tail1_Rest7:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14400,12 +16372,37 @@ ir_run_Send_Observed(
     _PyValue_CheckTemp(*home_send_cursor);
     _PyFrame_WriteHome(frame, home_send_value, y);
     _PyValue_CheckHome(*home_send_value);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(a_owned2);
-    PyValue_XCLOSE(old_send_cursor);
-    PyValue_XCLOSE(old_send_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_Send_Observed_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Send_Observed_Tail0_1);
+    ROP_TAIL_CLOSE(a_owned2, rop_Send_Observed_Tail0_2);
+    ROP_TAIL_CLOSE(old_send_cursor, rop_Send_Observed_Tail0_3);
+    ROP_TAIL_CLOSE(old_send_value, rop_Send_Observed_Tail0_4);
     DISPATCH();
+    rop_Send_Observed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Send_Observed_Tail0_Rest1;
+    rop_Send_Observed_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Send_Observed_Tail0_Rest2;
+    rop_Send_Observed_Tail0_2:
+    ROP_TAIL_PARK_FIRST(a_owned2);
+    goto rop_Send_Observed_Tail0_Rest3;
+    rop_Send_Observed_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_send_cursor);
+    goto rop_Send_Observed_Tail0_Rest4;
+    rop_Send_Observed_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_send_value);
+    goto rop_Send_Observed_Tail0_Rest5;
+    rop_Send_Observed_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Send_Observed_Tail0_Rest2:
+    ROP_TAIL_PARK(a_owned2);
+    rop_Send_Observed_Tail0_Rest3:
+    ROP_TAIL_PARK(old_send_cursor);
+    rop_Send_Observed_Tail0_Rest4:
+    ROP_TAIL_PARK(old_send_value);
+    rop_Send_Observed_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Send_Observed_Failed:
     IR_STUB_ESCAPE();
     a_all5 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
@@ -14443,7 +16440,7 @@ ir_run_Send_Observed(
     if (ret8 < 0) {
         goto rop_Send_Observed_ExitFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_Send_Observed_StopFailed:
     IR_STUB_ESCAPE();
     a_all9 = (_PyRopAnchors){3, {a_view0, a_view1, a_view2}, {a_owned0, a_owned1, a_owned2}};
@@ -14501,8 +16498,11 @@ ir_run_Compare_Int_LT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Int_LT_Tail0_0);
     DISPATCH();
+    rop_Compare_Int_LT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14539,8 +16539,11 @@ ir_run_Compare_Int_LE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Int_LE_Tail0_0);
     DISPATCH();
+    rop_Compare_Int_LE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14577,8 +16580,11 @@ ir_run_Compare_Int_EQ(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Int_EQ_Tail0_0);
     DISPATCH();
+    rop_Compare_Int_EQ_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14615,8 +16621,11 @@ ir_run_Compare_Int_NE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Int_NE_Tail0_0);
     DISPATCH();
+    rop_Compare_Int_NE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14653,8 +16662,11 @@ ir_run_Compare_Int_GT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Int_GT_Tail0_0);
     DISPATCH();
+    rop_Compare_Int_GT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14691,8 +16703,11 @@ ir_run_Compare_Int_GE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Int_GE_Tail0_0);
     DISPATCH();
+    rop_Compare_Int_GE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14729,8 +16744,11 @@ ir_run_Compare_Float_LT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Float_LT_Tail0_0);
     DISPATCH();
+    rop_Compare_Float_LT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14767,8 +16785,11 @@ ir_run_Compare_Float_LE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Float_LE_Tail0_0);
     DISPATCH();
+    rop_Compare_Float_LE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14805,8 +16826,11 @@ ir_run_Compare_Float_EQ(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Float_EQ_Tail0_0);
     DISPATCH();
+    rop_Compare_Float_EQ_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14843,8 +16867,11 @@ ir_run_Compare_Float_NE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Float_NE_Tail0_0);
     DISPATCH();
+    rop_Compare_Float_NE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14881,8 +16908,11 @@ ir_run_Compare_Float_GT(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Float_GT_Tail0_0);
     DISPATCH();
+    rop_Compare_Float_GT_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14919,8 +16949,11 @@ ir_run_Compare_Float_GE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Float_GE_Tail0_0);
     DISPATCH();
+    rop_Compare_Float_GE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14959,10 +16992,25 @@ ir_run_Compare_Str_EQ(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_y, rop_Compare_Str_EQ_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_Compare_Str_EQ_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Str_EQ_Tail0_2);
     DISPATCH();
+    rop_Compare_Str_EQ_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Compare_Str_EQ_Tail0_Rest1;
+    rop_Compare_Str_EQ_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Compare_Str_EQ_Tail0_Rest2;
+    rop_Compare_Str_EQ_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Compare_Str_EQ_Tail0_Rest3;
+    rop_Compare_Str_EQ_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_Compare_Str_EQ_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Compare_Str_EQ_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -15001,10 +17049,25 @@ ir_run_Compare_Str_NE(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_y, rop_Compare_Str_NE_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_Compare_Str_NE_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Compare_Str_NE_Tail0_2);
     DISPATCH();
+    rop_Compare_Str_NE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Compare_Str_NE_Tail0_Rest1;
+    rop_Compare_Str_NE_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Compare_Str_NE_Tail0_Rest2;
+    rop_Compare_Str_NE_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Compare_Str_NE_Tail0_Rest3;
+    rop_Compare_Str_NE_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_Compare_Str_NE_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Compare_Str_NE_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -15040,10 +17103,25 @@ ir_run_Identity_Test(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_y, rop_Identity_Test_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_Identity_Test_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Identity_Test_Tail0_2);
     DISPATCH();
+    rop_Identity_Test_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Identity_Test_Tail0_Rest1;
+    rop_Identity_Test_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Identity_Test_Tail0_Rest2;
+    rop_Identity_Test_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Identity_Test_Tail0_Rest3;
+    rop_Identity_Test_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_Identity_Test_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Identity_Test_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -15110,12 +17188,37 @@ ir_run_Contains_Set(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_container);
-    PyValue_XCLOSE(own_item);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Contains_Set_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Contains_Set_Tail0_1);
+    ROP_TAIL_CLOSE(own_container, rop_Contains_Set_Tail0_2);
+    ROP_TAIL_CLOSE(own_item, rop_Contains_Set_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Contains_Set_Tail0_4);
     DISPATCH();
+    rop_Contains_Set_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Contains_Set_Tail0_Rest1;
+    rop_Contains_Set_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Contains_Set_Tail0_Rest2;
+    rop_Contains_Set_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_container);
+    goto rop_Contains_Set_Tail0_Rest3;
+    rop_Contains_Set_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_item);
+    goto rop_Contains_Set_Tail0_Rest4;
+    rop_Contains_Set_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Contains_Set_Tail0_Rest5;
+    rop_Contains_Set_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Contains_Set_Tail0_Rest2:
+    ROP_TAIL_PARK(own_container);
+    rop_Contains_Set_Tail0_Rest3:
+    ROP_TAIL_PARK(own_item);
+    rop_Contains_Set_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_Contains_Set_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Contains_Set_set_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -15201,12 +17304,37 @@ ir_run_Contains_Dict(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_container);
-    PyValue_XCLOSE(own_item);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Contains_Dict_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Contains_Dict_Tail0_1);
+    ROP_TAIL_CLOSE(own_container, rop_Contains_Dict_Tail0_2);
+    ROP_TAIL_CLOSE(own_item, rop_Contains_Dict_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Contains_Dict_Tail0_4);
     DISPATCH();
+    rop_Contains_Dict_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Contains_Dict_Tail0_Rest1;
+    rop_Contains_Dict_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_Contains_Dict_Tail0_Rest2;
+    rop_Contains_Dict_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_container);
+    goto rop_Contains_Dict_Tail0_Rest3;
+    rop_Contains_Dict_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_item);
+    goto rop_Contains_Dict_Tail0_Rest4;
+    rop_Contains_Dict_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Contains_Dict_Tail0_Rest5;
+    rop_Contains_Dict_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_Contains_Dict_Tail0_Rest2:
+    ROP_TAIL_PARK(own_container);
+    rop_Contains_Dict_Tail0_Rest3:
+    ROP_TAIL_PARK(own_item);
+    rop_Contains_Dict_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_Contains_Dict_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_Contains_Dict_dict_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -15261,9 +17389,19 @@ ir_run_TestBranch_Identity(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Identity_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Identity_Tail0_1);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_TestBranch_Identity_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Identity_Tail0_Rest1;
+    rop_TestBranch_Identity_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Identity_Tail0_Rest2;
+    rop_TestBranch_Identity_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Identity_Tail0_Rest2:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Identity_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_x = _PyFrame_TakeHome(frame, home_x);
@@ -15271,9 +17409,19 @@ ir_run_TestBranch_Identity(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Identity_Tail1_0);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Identity_Tail1_1);
     DISPATCH();
+    rop_TestBranch_Identity_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Identity_Tail1_Rest1;
+    rop_TestBranch_Identity_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Identity_Tail1_Rest2;
+    rop_TestBranch_Identity_Tail1_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Identity_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -15310,7 +17458,7 @@ ir_run_TestBranch_Int_TEST_LT(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_LT_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15355,7 +17503,7 @@ ir_run_TestBranch_Int_TEST_LE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_LE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15400,7 +17548,7 @@ ir_run_TestBranch_Int_TEST_EQ(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_EQ_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15445,7 +17593,7 @@ ir_run_TestBranch_Int_TEST_NE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_NE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15490,7 +17638,7 @@ ir_run_TestBranch_Int_TEST_GT(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_GT_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15535,7 +17683,7 @@ ir_run_TestBranch_Int_TEST_GE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Int_TEST_GE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15580,7 +17728,7 @@ ir_run_TestBranch_Float_TEST_LT(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_LT_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15625,7 +17773,7 @@ ir_run_TestBranch_Float_TEST_LE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_LE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15670,7 +17818,7 @@ ir_run_TestBranch_Float_TEST_EQ(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_EQ_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15715,7 +17863,7 @@ ir_run_TestBranch_Float_TEST_NE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_NE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15760,7 +17908,7 @@ ir_run_TestBranch_Float_TEST_GT(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_GT_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15805,7 +17953,7 @@ ir_run_TestBranch_Float_TEST_GE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Float_TEST_GE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
@@ -15852,9 +18000,19 @@ ir_run_TestBranch_Str_TEST_EQ(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Str_TEST_EQ_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Str_TEST_EQ_Tail0_1);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_TestBranch_Str_TEST_EQ_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Str_TEST_EQ_Tail0_Rest1;
+    rop_TestBranch_Str_TEST_EQ_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Str_TEST_EQ_Tail0_Rest2;
+    rop_TestBranch_Str_TEST_EQ_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Str_TEST_EQ_Tail0_Rest2:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Str_TEST_EQ_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_x = _PyFrame_TakeHome(frame, home_x);
@@ -15862,9 +18020,19 @@ ir_run_TestBranch_Str_TEST_EQ(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Str_TEST_EQ_Tail1_0);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Str_TEST_EQ_Tail1_1);
     DISPATCH();
+    rop_TestBranch_Str_TEST_EQ_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Str_TEST_EQ_Tail1_Rest1;
+    rop_TestBranch_Str_TEST_EQ_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Str_TEST_EQ_Tail1_Rest2;
+    rop_TestBranch_Str_TEST_EQ_Tail1_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Str_TEST_EQ_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -15903,9 +18071,19 @@ ir_run_TestBranch_Str_TEST_NE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Str_TEST_NE_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Str_TEST_NE_Tail0_1);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_TestBranch_Str_TEST_NE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Str_TEST_NE_Tail0_Rest1;
+    rop_TestBranch_Str_TEST_NE_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Str_TEST_NE_Tail0_Rest2;
+    rop_TestBranch_Str_TEST_NE_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Str_TEST_NE_Tail0_Rest2:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Str_TEST_NE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_x = _PyFrame_TakeHome(frame, home_x);
@@ -15913,9 +18091,19 @@ ir_run_TestBranch_Str_TEST_NE(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Str_TEST_NE_Tail1_0);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Str_TEST_NE_Tail1_1);
     DISPATCH();
+    rop_TestBranch_Str_TEST_NE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Str_TEST_NE_Tail1_Rest1;
+    rop_TestBranch_Str_TEST_NE_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Str_TEST_NE_Tail1_Rest2;
+    rop_TestBranch_Str_TEST_NE_Tail1_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Str_TEST_NE_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -15982,11 +18170,31 @@ ir_run_TestBranch_Set(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_TestBranch_Set_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Set_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Set_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Set_Tail0_3);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_TestBranch_Set_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_TestBranch_Set_Tail0_Rest1;
+    rop_TestBranch_Set_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_TestBranch_Set_Tail0_Rest2;
+    rop_TestBranch_Set_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Set_Tail0_Rest3;
+    rop_TestBranch_Set_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Set_Tail0_Rest4;
+    rop_TestBranch_Set_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_TestBranch_Set_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_TestBranch_Set_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Set_Tail0_Rest4:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Set_set_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -16013,11 +18221,31 @@ ir_run_TestBranch_Set(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
+    ROP_TAIL_CLOSE(a_owned0, rop_TestBranch_Set_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Set_Tail1_1);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Set_Tail1_2);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Set_Tail1_3);
     DISPATCH();
+    rop_TestBranch_Set_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_TestBranch_Set_Tail1_Rest1;
+    rop_TestBranch_Set_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_TestBranch_Set_Tail1_Rest2;
+    rop_TestBranch_Set_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Set_Tail1_Rest3;
+    rop_TestBranch_Set_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Set_Tail1_Rest4;
+    rop_TestBranch_Set_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_TestBranch_Set_Tail1_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_TestBranch_Set_Tail1_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Set_Tail1_Rest4:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -16084,11 +18312,31 @@ ir_run_TestBranch_Dict(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_TestBranch_Dict_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Dict_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Dict_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Dict_Tail0_3);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_TestBranch_Dict_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_TestBranch_Dict_Tail0_Rest1;
+    rop_TestBranch_Dict_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_TestBranch_Dict_Tail0_Rest2;
+    rop_TestBranch_Dict_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Dict_Tail0_Rest3;
+    rop_TestBranch_Dict_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Dict_Tail0_Rest4;
+    rop_TestBranch_Dict_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_TestBranch_Dict_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_TestBranch_Dict_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Dict_Tail0_Rest4:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Dict_dict_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -16115,11 +18363,31 @@ ir_run_TestBranch_Dict(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
+    ROP_TAIL_CLOSE(a_owned0, rop_TestBranch_Dict_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Dict_Tail1_1);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Dict_Tail1_2);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Dict_Tail1_3);
     DISPATCH();
+    rop_TestBranch_Dict_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_TestBranch_Dict_Tail1_Rest1;
+    rop_TestBranch_Dict_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_TestBranch_Dict_Tail1_Rest2;
+    rop_TestBranch_Dict_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Dict_Tail1_Rest3;
+    rop_TestBranch_Dict_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Dict_Tail1_Rest4;
+    rop_TestBranch_Dict_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_TestBranch_Dict_Tail1_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_TestBranch_Dict_Tail1_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Dict_Tail1_Rest4:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -16186,11 +18454,31 @@ ir_run_TestBranch_Sequence(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_TestBranch_Sequence_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Sequence_Tail0_1);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Sequence_Tail0_2);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Sequence_Tail0_3);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_TestBranch_Sequence_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_TestBranch_Sequence_Tail0_Rest1;
+    rop_TestBranch_Sequence_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_TestBranch_Sequence_Tail0_Rest2;
+    rop_TestBranch_Sequence_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Sequence_Tail0_Rest3;
+    rop_TestBranch_Sequence_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Sequence_Tail0_Rest4;
+    rop_TestBranch_Sequence_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_TestBranch_Sequence_Tail0_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_TestBranch_Sequence_Tail0_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Sequence_Tail0_Rest4:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Sequence_sequence_test_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -16217,11 +18505,31 @@ ir_run_TestBranch_Sequence(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_y = _PyFrame_TakeHome(frame, home_y);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_y);
-    PyValue_XCLOSE(own_x);
+    ROP_TAIL_CLOSE(a_owned0, rop_TestBranch_Sequence_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_TestBranch_Sequence_Tail1_1);
+    ROP_TAIL_CLOSE(own_y, rop_TestBranch_Sequence_Tail1_2);
+    ROP_TAIL_CLOSE(own_x, rop_TestBranch_Sequence_Tail1_3);
     DISPATCH();
+    rop_TestBranch_Sequence_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_TestBranch_Sequence_Tail1_Rest1;
+    rop_TestBranch_Sequence_Tail1_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_TestBranch_Sequence_Tail1_Rest2;
+    rop_TestBranch_Sequence_Tail1_2:
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_TestBranch_Sequence_Tail1_Rest3;
+    rop_TestBranch_Sequence_Tail1_3:
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_TestBranch_Sequence_Tail1_Rest4;
+    rop_TestBranch_Sequence_Tail1_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_TestBranch_Sequence_Tail1_Rest2:
+    ROP_TAIL_PARK(own_y);
+    rop_TestBranch_Sequence_Tail1_Rest3:
+    ROP_TAIL_PARK(own_x);
+    rop_TestBranch_Sequence_Tail1_Rest4:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -16285,7 +18593,7 @@ ir_run_TestBranch_Observed(
     if (ret1 < 0) {
         goto rop_TestBranch_Observed_IdentityEventFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Observed_Anchor:
     a_view0 = PyValue_Borrow(*home_x);
     a_owned0 = (ir_word & IR_F_LOCAL_A) ? PyValue_DUP(a_view0) : PyValue_NULL;
@@ -16340,7 +18648,7 @@ ir_run_TestBranch_Observed(
     if (ret3 < 0) {
         goto rop_TestBranch_Observed_EventFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_TestBranch_Observed_RunCompare:
     rel = _PyRop_RelationOf((((uint32_t)IR_C(ir_word) >> 0) & 0x7));
     IR_STUB_ESCAPE();
@@ -16470,8 +18778,11 @@ ir_run_BuildText_Join(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_BuildText_Join_Tail0_0);
     DISPATCH();
+    rop_BuildText_Join_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_BuildText_Join_Failed:
     PROCESS_ERROR_AT(RAISE, 38, this_instr);
 }
@@ -16503,8 +18814,11 @@ ir_run_BuildText_Interpolation(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_BuildText_Interpolation_Tail0_0);
     DISPATCH();
+    rop_BuildText_Interpolation_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_BuildText_Interpolation_Failed:
     PROCESS_ERROR_AT(RAISE, 38, this_instr);
 }
@@ -16536,8 +18850,11 @@ ir_run_BuildText_Template(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_BuildText_Template_Tail0_0);
     DISPATCH();
+    rop_BuildText_Template_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_BuildText_Template_Failed:
     PROCESS_ERROR_AT(RAISE, 38, this_instr);
 }
@@ -16588,10 +18905,25 @@ ir_run_Convert_Text(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Convert_Text_Tail0_0);
+    ROP_TAIL_CLOSE(own_value, rop_Convert_Text_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Convert_Text_Tail0_2);
     DISPATCH();
+    rop_Convert_Text_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Convert_Text_Tail0_Rest1;
+    rop_Convert_Text_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_Convert_Text_Tail0_Rest2;
+    rop_Convert_Text_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Convert_Text_Tail0_Rest3;
+    rop_Convert_Text_Tail0_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_Convert_Text_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Convert_Text_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_Convert_Text_convert_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -16653,10 +18985,25 @@ ir_run_Format_Simple(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Format_Simple_Tail0_0);
+    ROP_TAIL_CLOSE(own_value, rop_Format_Simple_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Format_Simple_Tail0_2);
     DISPATCH();
+    rop_Format_Simple_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Format_Simple_Tail0_Rest1;
+    rop_Format_Simple_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_Format_Simple_Tail0_Rest2;
+    rop_Format_Simple_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Format_Simple_Tail0_Rest3;
+    rop_Format_Simple_Tail0_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_Format_Simple_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Format_Simple_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_Format_Simple_format_plain_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -16727,12 +19074,37 @@ ir_run_FormatSpec_Value(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(a_owned1);
-    PyValue_XCLOSE(own_spec);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_FormatSpec_Value_Tail0_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_FormatSpec_Value_Tail0_1);
+    ROP_TAIL_CLOSE(own_spec, rop_FormatSpec_Value_Tail0_2);
+    ROP_TAIL_CLOSE(own_value, rop_FormatSpec_Value_Tail0_3);
+    ROP_TAIL_CLOSE(old_dst, rop_FormatSpec_Value_Tail0_4);
     DISPATCH();
+    rop_FormatSpec_Value_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_FormatSpec_Value_Tail0_Rest1;
+    rop_FormatSpec_Value_Tail0_1:
+    ROP_TAIL_PARK_FIRST(a_owned1);
+    goto rop_FormatSpec_Value_Tail0_Rest2;
+    rop_FormatSpec_Value_Tail0_2:
+    ROP_TAIL_PARK_FIRST(own_spec);
+    goto rop_FormatSpec_Value_Tail0_Rest3;
+    rop_FormatSpec_Value_Tail0_3:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_FormatSpec_Value_Tail0_Rest4;
+    rop_FormatSpec_Value_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_FormatSpec_Value_Tail0_Rest5;
+    rop_FormatSpec_Value_Tail0_Rest1:
+    ROP_TAIL_PARK(a_owned1);
+    rop_FormatSpec_Value_Tail0_Rest2:
+    ROP_TAIL_PARK(own_spec);
+    rop_FormatSpec_Value_Tail0_Rest3:
+    ROP_TAIL_PARK(own_value);
+    rop_FormatSpec_Value_Tail0_Rest4:
+    ROP_TAIL_PARK(old_dst);
+    rop_FormatSpec_Value_Tail0_Rest5:
+    ROP_TAIL_DISPATCH();
     rop_FormatSpec_Value_format_value_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
@@ -16776,8 +19148,11 @@ ir_run_Truth_Bool(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Truth_Bool_Tail0_0);
     DISPATCH();
+    rop_Truth_Bool_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -16809,9 +19184,19 @@ ir_run_Truth_Int(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_value, rop_Truth_Int_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Truth_Int_Tail0_1);
     DISPATCH();
+    rop_Truth_Int_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_Truth_Int_Tail0_Rest1;
+    rop_Truth_Int_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Truth_Int_Tail0_Rest2;
+    rop_Truth_Int_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Truth_Int_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -16843,9 +19228,19 @@ ir_run_Truth_List(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_value, rop_Truth_List_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Truth_List_Tail0_1);
     DISPATCH();
+    rop_Truth_List_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_Truth_List_Tail0_Rest1;
+    rop_Truth_List_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Truth_List_Tail0_Rest2;
+    rop_Truth_List_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Truth_List_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -16876,8 +19271,11 @@ ir_run_Truth_None(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Truth_None_Tail0_0);
     DISPATCH();
+    rop_Truth_None_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -16909,9 +19307,19 @@ ir_run_Truth_Str(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_value, rop_Truth_Str_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Truth_Str_Tail0_1);
     DISPATCH();
+    rop_Truth_Str_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_Truth_Str_Tail0_Rest1;
+    rop_Truth_Str_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Truth_Str_Tail0_Rest2;
+    rop_Truth_Str_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Truth_Str_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -16943,9 +19351,19 @@ ir_run_Truth_Plain(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(own_value, rop_Truth_Plain_Tail0_0);
+    ROP_TAIL_CLOSE(old_dst, rop_Truth_Plain_Tail0_1);
     DISPATCH();
+    rop_Truth_Plain_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_Truth_Plain_Tail0_Rest1;
+    rop_Truth_Plain_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Truth_Plain_Tail0_Rest2;
+    rop_Truth_Plain_Tail0_Rest1:
+    ROP_TAIL_PARK(old_dst);
+    rop_Truth_Plain_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17008,10 +19426,25 @@ ir_run_Truth_Slot(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(a_owned0, rop_Truth_Slot_Tail0_0);
+    ROP_TAIL_CLOSE(own_value, rop_Truth_Slot_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Truth_Slot_Tail0_2);
     DISPATCH();
+    rop_Truth_Slot_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_Truth_Slot_Tail0_Rest1;
+    rop_Truth_Slot_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_Truth_Slot_Tail0_Rest2;
+    rop_Truth_Slot_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Truth_Slot_Tail0_Rest3;
+    rop_Truth_Slot_Tail0_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_Truth_Slot_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Truth_Slot_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
     rop_Truth_Slot_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -17061,7 +19494,7 @@ ir_run_BranchTruth_Bool_BRANCH_IF_FALSE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Bool_BRANCH_IF_FALSE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
@@ -17097,7 +19530,7 @@ ir_run_BranchTruth_Bool_BRANCH_IF_TRUE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Bool_BRANCH_IF_TRUE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
@@ -17134,14 +19567,20 @@ ir_run_BranchTruth_Int_BRANCH_IF_FALSE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Int_BRANCH_IF_FALSE_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Int_BRANCH_IF_FALSE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Int_BRANCH_IF_FALSE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Int_BRANCH_IF_FALSE_Tail1_0);
     DISPATCH();
+    rop_BranchTruth_Int_BRANCH_IF_FALSE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17173,14 +19612,20 @@ ir_run_BranchTruth_Int_BRANCH_IF_TRUE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Int_BRANCH_IF_TRUE_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Int_BRANCH_IF_TRUE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Int_BRANCH_IF_TRUE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Int_BRANCH_IF_TRUE_Tail1_0);
     DISPATCH();
+    rop_BranchTruth_Int_BRANCH_IF_TRUE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17212,14 +19657,20 @@ ir_run_BranchTruth_List_BRANCH_IF_FALSE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_List_BRANCH_IF_FALSE_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_List_BRANCH_IF_FALSE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_List_BRANCH_IF_FALSE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_List_BRANCH_IF_FALSE_Tail1_0);
     DISPATCH();
+    rop_BranchTruth_List_BRANCH_IF_FALSE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17251,14 +19702,20 @@ ir_run_BranchTruth_List_BRANCH_IF_TRUE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_List_BRANCH_IF_TRUE_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_List_BRANCH_IF_TRUE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_List_BRANCH_IF_TRUE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_List_BRANCH_IF_TRUE_Tail1_0);
     DISPATCH();
+    rop_BranchTruth_List_BRANCH_IF_TRUE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17289,7 +19746,7 @@ ir_run_BranchTruth_None_BRANCH_IF_FALSE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_None_BRANCH_IF_FALSE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
@@ -17325,7 +19782,7 @@ ir_run_BranchTruth_None_BRANCH_IF_TRUE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_None_BRANCH_IF_TRUE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         _PyFrame_WriteHome(frame, home_value, PyValue_NULL);
@@ -17362,14 +19819,20 @@ ir_run_BranchTruth_Str_BRANCH_IF_FALSE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Str_BRANCH_IF_FALSE_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Str_BRANCH_IF_FALSE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Str_BRANCH_IF_FALSE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Str_BRANCH_IF_FALSE_Tail1_0);
     DISPATCH();
+    rop_BranchTruth_Str_BRANCH_IF_FALSE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17401,14 +19864,20 @@ ir_run_BranchTruth_Str_BRANCH_IF_TRUE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Str_BRANCH_IF_TRUE_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Str_BRANCH_IF_TRUE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Str_BRANCH_IF_TRUE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Str_BRANCH_IF_TRUE_Tail1_0);
     DISPATCH();
+    rop_BranchTruth_Str_BRANCH_IF_TRUE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17440,14 +19909,20 @@ ir_run_BranchTruth_Plain_BRANCH_IF_FALSE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Plain_BRANCH_IF_FALSE_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Plain_BRANCH_IF_FALSE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Plain_BRANCH_IF_FALSE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Plain_BRANCH_IF_FALSE_Tail1_0);
     DISPATCH();
+    rop_BranchTruth_Plain_BRANCH_IF_FALSE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17479,14 +19954,20 @@ ir_run_BranchTruth_Plain_BRANCH_IF_TRUE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Plain_BRANCH_IF_TRUE_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Plain_BRANCH_IF_TRUE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Plain_BRANCH_IF_TRUE_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Plain_BRANCH_IF_TRUE_Tail1_0);
     DISPATCH();
+    rop_BranchTruth_Plain_BRANCH_IF_TRUE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17549,9 +20030,19 @@ ir_run_BranchTruth_Slot_BRANCH_IF_FALSE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_0);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_1);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest1;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest2;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail0_Rest2:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -17575,9 +20066,19 @@ ir_run_BranchTruth_Slot_BRANCH_IF_FALSE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_0);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_1);
     DISPATCH();
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_Rest1;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_Rest2;
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_BranchTruth_Slot_BRANCH_IF_FALSE_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17640,9 +20141,19 @@ ir_run_BranchTruth_Slot_BRANCH_IF_TRUE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_0);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_1);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest1;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest2;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail0_Rest2:
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Slot_BRANCH_IF_TRUE_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all2 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -17666,9 +20177,19 @@ ir_run_BranchTruth_Slot_BRANCH_IF_TRUE(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(a_owned0);
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(a_owned0, rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail1_0);
+    ROP_TAIL_CLOSE(own_value, rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail1_1);
     DISPATCH();
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail1_0:
+    ROP_TAIL_PARK_FIRST(a_owned0);
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail1_Rest1;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail1_1:
+    ROP_TAIL_PARK_FIRST(own_value);
+    goto rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail1_Rest2;
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail1_Rest1:
+    ROP_TAIL_PARK(own_value);
+    rop_BranchTruth_Slot_BRANCH_IF_TRUE_Tail1_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17697,14 +20218,20 @@ ir_run_BranchNone_Test(
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 40) & 0xfff) ^ 0x800) - 0x800)));
+    ROP_TAIL_CLOSE(own_value, rop_BranchNone_Test_Tail0_0);
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 12), 52)));
+    rop_BranchNone_Test_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 12), 52)));
     rop_BranchNone_Test_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
     }
-    PyValue_XCLOSE(own_value);
+    ROP_TAIL_CLOSE(own_value, rop_BranchNone_Test_Tail1_0);
     DISPATCH();
+    rop_BranchNone_Test_Tail1_0:
+    ROP_TAIL_PARK_FIRST(own_value);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17773,7 +20300,7 @@ ir_run_BranchTruth_Observed(
     if (ret2 < 0) {
         goto rop_BranchTruth_Observed_KeptEventFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Observed_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
@@ -17822,7 +20349,7 @@ ir_run_BranchTruth_Observed(
     if (ret7 < 0) {
         goto rop_BranchTruth_Observed_EventFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 52) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 0), 52)));
     rop_BranchTruth_Observed_EventFailed:
     PROCESS_ERROR_AT(RAISE, 27, this_instr);
     rop_BranchTruth_Observed_Moved:
@@ -17870,7 +20397,7 @@ ir_run_BranchNone_Observed(
     if (ret1 < 0) {
         goto rop_BranchNone_Observed_EventFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 40) & 0xfff) ^ 0x800) - 0x800)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 12), 52)));
     rop_BranchNone_Observed_Fall:
     if (!(ir_word & IR_F_LOCAL_A)) {
         own_value = _PyFrame_TakeHome(frame, home_value);
@@ -17903,7 +20430,7 @@ ir_run_Jump_Direct(
     frame->instr_ptr = next_instr;
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Jump_Direct);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17917,7 +20444,7 @@ ir_run_Jump_Trailing(
     (void)this_instr;
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Jump_Trailing);
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -17947,7 +20474,7 @@ ir_run_Jump_Poll(
         goto rop_Jump_Poll_Failed;
     }
     rop_Jump_Poll_Go:
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
     rop_Jump_Poll_Failed:
     PROCESS_ERROR_AT(RAISE, 122, this_instr);
     rop_Jump_Poll_PollSwitched:
@@ -17982,7 +20509,7 @@ ir_run_Jump_Warm(
         goto rop_Jump_Warm_Failed;
     }
     rop_Jump_Warm_Go:
-    ROP_JIT_WARM((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+    ROP_JIT_WARM((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
     rop_Jump_Warm_Failed:
     PROCESS_ERROR_AT(RAISE, 122, this_instr);
     rop_Jump_Warm_PollSwitched:
@@ -18003,7 +20530,7 @@ ir_run_Jump_Observed(
     INSTRUCTION_STATS(ROP_HANDLER_Jump_Observed);
     int ret1;
     int ret2;
-    if (_PyRop_GoesBack(this_instr, (this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)))) {
+    if (_PyRop_GoesBack(this_instr, (this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)))) {
         goto rop_Jump_Observed_Back;
     }
     goto rop_Jump_Observed_Event;
@@ -18030,7 +20557,7 @@ ir_run_Jump_Observed(
     if (ret2 < 0) {
         goto rop_Jump_Observed_EventFailed;
     }
-    IR_BRANCH((this_instr + 1 + ((int)(((uint32_t)(ir_word >> 16) & 0xffffff) ^ 0x800000) - 0x800000)));
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
     rop_Jump_Observed_PollFailed:
     PROCESS_ERROR_AT(RAISE, 122, this_instr);
     rop_Jump_Observed_PollSwitched:
@@ -18060,8 +20587,11 @@ ir_run_Const_Pool(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, v);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Const_Pool_Tail0_0);
     DISPATCH();
+    rop_Const_Pool_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -18083,8 +20613,11 @@ ir_run_Const_Small(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, v);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Const_Small_Tail0_0);
     DISPATCH();
+    rop_Const_Small_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -18106,8 +20639,11 @@ ir_run_Const_Common(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, v);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_Const_Common_Tail0_0);
     DISPATCH();
+    rop_Const_Common_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -18130,8 +20666,11 @@ ir_run_LocalRead_Bound(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, v);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_LocalRead_Bound_Tail0_0);
     DISPATCH();
+    rop_LocalRead_Bound_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -18161,8 +20700,11 @@ ir_run_LocalRead_Checked(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, v);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_LocalRead_Checked_Tail0_0);
     DISPATCH();
+    rop_LocalRead_Checked_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
     rop_LocalRead_Checked_Unbound:
     _PyRop_UnboundLocal(frame, home_local);
     PROCESS_ERROR_AT(RAISE, 128, this_instr);
@@ -18188,8 +20730,11 @@ ir_run_LocalWrite_Store(
     old_local = *home_local;
     _PyFrame_WriteHome(frame, home_local, v);
     _PyValue_CheckHome(*home_local);
-    PyValue_XCLOSE(old_local);
+    ROP_TAIL_CLOSE(old_local, rop_LocalWrite_Store_Tail0_0);
     DISPATCH();
+    rop_LocalWrite_Store_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_local);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -18212,8 +20757,11 @@ ir_run_LocalWrite_Restore(
     old_local = *home_local;
     _PyFrame_WriteHome(frame, home_local, v);
     _PyValue_CheckHome(*home_local);
-    PyValue_XCLOSE(old_local);
+    ROP_TAIL_CLOSE(old_local, rop_LocalWrite_Restore_Tail0_0);
     DISPATCH();
+    rop_LocalWrite_Restore_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_local);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -18236,8 +20784,11 @@ ir_run_SaveLocal_Take(
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, v);
     _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
+    ROP_TAIL_CLOSE(old_dst, rop_SaveLocal_Take_Tail0_0);
     DISPATCH();
+    rop_SaveLocal_Take_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_dst);
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -18263,9 +20814,19 @@ ir_run_LocalDelete_Checked(
     old = ret1;
     old_local = *home_local;
     _PyFrame_WriteHome(frame, home_local, PyValue_NULL);
-    PyValue_XCLOSE(old_local);
-    PyValue_XCLOSE(old);
+    ROP_TAIL_CLOSE(old_local, rop_LocalDelete_Checked_Tail0_0);
+    ROP_TAIL_CLOSE(old, rop_LocalDelete_Checked_Tail0_1);
     DISPATCH();
+    rop_LocalDelete_Checked_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_local);
+    goto rop_LocalDelete_Checked_Tail0_Rest1;
+    rop_LocalDelete_Checked_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old);
+    goto rop_LocalDelete_Checked_Tail0_Rest2;
+    rop_LocalDelete_Checked_Tail0_Rest1:
+    ROP_TAIL_PARK(old);
+    rop_LocalDelete_Checked_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
     rop_LocalDelete_Checked_Failed:
     PROCESS_ERROR_AT(RAISE, 126, this_instr);
 }

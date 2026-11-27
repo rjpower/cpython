@@ -217,6 +217,39 @@ class HomeWriterTests(unittest.TestCase):
                     for _ in range(100):
                         self.assertEqual(function(factory(values)), values)
 
+    @support.requires_specialization
+    def test_tail_closes_finalize_in_order_after_the_write(self):
+        # GetItem.ListIndex closes the list, then the value that its
+        # destination held.  A close that drops a last count leaves the arm
+        # (lower_tail_closes): the finalizers run in close order, after the
+        # write, and a collection that one runs finds the other value alive.
+        log = []
+
+        class Log:
+            def __init__(self, name):
+                self.name = name
+
+            def __del__(self):
+                gc.collect()
+                log.append((self.name, sys._getframe(1).f_locals["x"]))
+
+        def make(i):
+            return [Log(f"item{i}"), i]
+
+        def f(n):
+            x = None
+            for i in range(n):
+                x = Log(f"old{i}")
+                x = make(i)[1]
+            return x
+
+        f(300)
+        self.assertIn("GetItem.ListIndex",
+                      {row[0] for row in _testinternalcapi.get_ir(f.__code__, True)})
+        log.clear()
+        self.assertEqual(f(2), 1)
+        self.assertEqual(log, [("item0", 0), ("old0", 0), ("item1", 1), ("old1", 1)])
+
     def test_empty_set_builder_needs_no_input_home(self):
         def build():
             return {*()}

@@ -101,8 +101,31 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
         next_instr = (T); \
         IR_JIT_GOTO(_JIT_TARGET, IR_JIT_NO_WORD()); \
     } while (0)
+/* A frame switch (an entry, a return, a suspension) goes on at next_instr
+ * of frame: at its copy, in the frame's unit, if the code has live entries
+ * and next_instr is not the switch word, as _PyEval_JitDispatch() does.
+ * The copy jumps there itself, through an indirect jump of its own that
+ * the branch predictor keeps apart per site; like every exit from a copy,
+ * it first closes the departure window.  Otherwise it leaves for the
+ * evaluator (_JIT_SWITCH). */
 #undef IR_DISPATCH_SWITCHED
-#define IR_DISPATCH_SWITCHED() IR_JIT_GOTO(_JIT_SWITCH, IR_JIT_NO_WORD())
+#define IR_DISPATCH_SWITCHED() \
+    do { \
+        const void *const *ir_entries = _PyFrame_JitEntries(frame); \
+        if (ir_entries != NULL && next_instr != &_PyEval_SwitchWord && \
+            !IR_JIT_TRACED()) { \
+            ((_PyThreadStateImpl *)tstate)->jit_departing = 0; \
+            IR_JIT_SWITCH_STAT(); \
+            Py_MUSTTAIL return ((_PyIRTailFn)ir_entries[next_instr - frame->ir_words])( \
+                tstate, frame, next_instr, IR_JIT_NO_WORD()); \
+        } \
+        IR_JIT_GOTO(_JIT_SWITCH, IR_JIT_NO_WORD()); \
+    } while (0)
+#ifdef Py_STATS
+#  define IR_JIT_SWITCH_STAT() (tstate->interp->ceval.jit_switches++)
+#else
+#  define IR_JIT_SWITCH_STAT() ((void)0)
+#endif
 #undef IR_DISPATCH_REDIRECTED
 #define IR_DISPATCH_REDIRECTED() IR_JIT_GOTO(_JIT_REDIRECT, IR_JIT_NO_WORD())
 #undef DISPATCH_SAME_OPARG

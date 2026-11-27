@@ -10471,6 +10471,43 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Observed_NativeFailed)
             ROP_RETURN(caller, h);
         }
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValue r;
+    _PyInterpreterFrame * caller;
+    _PyInterpreterFrame * dying;
+} rop_in_Cold_Return_Empty_Observed;
+static_assert(sizeof(rop_in_Cold_Return_Empty_Observed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Return_Empty_Observed) {
+    // Return.Empty: the cold region from rop_Return_Empty_Observed
+    int opcode = ROP_HANDLER_Return_Empty;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValue r;
+    _PyInterpreterFrame * caller;
+    _PyInterpreterFrame * dying;
+    _PyInstr * h;
+    { const rop_in_Cold_Return_Empty_Observed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Return_Empty_Observed);
+      r = ir_in->r;
+      caller = ir_in->caller;
+      dying = ir_in->dying;
+    }
+    goto rop_Return_Empty_Observed;
+    rop_Return_Empty_Deliver:
+    IR_STUB_ESCAPE();
+    h = _PyRop_Deliver(caller, r);
+    ROP_RETURN(caller, h);
+    rop_Return_Empty_Observed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFrame(tstate, dying);
+    goto rop_Return_Empty_Deliver;
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Return_Empty_Observed)
+#endif
+
         TARGET(Return_Empty) {
             // Return.Empty (split)
             int opcode = ROP_HANDLER_Return_Empty;
@@ -10489,11 +10526,21 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Observed_NativeFailed)
             r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
             caller = _PyRop_PreviousFrame(frame);
             dying = _PyRop_Depart(tstate, frame);
+            if (!_PyRop_FrameUnobserved(tstate, dying)) {
+                goto rop_Return_Empty_Observed;
+            }
             IR_STUB_ESCAPE();
             _PyRop_RetireFrameEmpty(tstate, dying);
             IR_STUB_ESCAPE();
             h = _PyRop_Deliver(caller, r);
             ROP_RETURN(caller, h);
+            rop_Return_Empty_Observed:
+            { rop_in_Cold_Return_Empty_Observed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Return_Empty_Observed);
+              ir_in->r = r;
+              ir_in->caller = caller;
+              ir_in->dying = dying;
+            }
+            IR_OUTLINE_GOTO(Cold_Return_Empty_Observed);
         }
 
         TARGET(Return_Generator) {

@@ -455,6 +455,18 @@ class ColdRegionTests(unittest.TestCase):
                 self.assertEqual(len(c.live), 1)
                 self.assertIn("PyValue_FromDouble(", "\n".join(c.body))
 
+    def test_an_observed_frame_returns_out_of_line(self):
+        # frame_unobserved's observed case is cold: Return.Empty retires a
+        # frame with a frame object, or the profiled one, out of line
+        arm = "\n".join(self.p.lowered["Return.Empty"].body)
+        c = self.region("Return.Empty", "Observed")
+        self.assertIn("_PyRop_RetireFrameEmpty(tstate, dying);", arm)
+        self.assertNotIn("_PyRop_RetireFrame(", arm)
+        self.assertEqual(sorted(n for _, n in c.live), ["caller", "dying", "r"])
+        body = "\n".join(c.body)
+        self.assertIn("_PyRop_RetireFrame(tstate, dying);", body)
+        self.assertIn("ROP_RETURN(caller, h);", body)
+
     def test_the_cases_print_the_outlined_functions_before_their_arm(self):
         out = io.StringIO()
         rop_generator.write_cases(out, self.p, [])

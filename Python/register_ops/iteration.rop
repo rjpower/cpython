@@ -15,7 +15,7 @@ family IterOpen(pair:Out<IterPair>, source:Src, fb:Fb<Iter>, mode:Enum<IterMode>
 
 family ForIter(item:Dst, pair:IterPair, fb:Fb<Iter>, done:NearHead)
   exits(next, branch, enter, raise, miss, again, redirect) generic(Generic)
-  events(BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION) vacant(pair.cursor);
+  events(BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION) vacant(pair.cursor) hot;
 
 family IterClose(pair:IterPair)
   exits(next, raise, redirect)

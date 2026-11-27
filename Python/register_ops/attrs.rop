@@ -10,7 +10,7 @@ enum Special(ENTER, EXIT, AENTER, AEXIT);
 // compiler writes a deletion as PUSH_NULL and the store, so the word names
 // the NULL temporary and the arm tests the home at run time.
 family AttrWrite(obj:Src, name:Name, value:Maybe<Src>, fb:Fb<Attr>)
-  exits(next, miss, again, raise, redirect) generic(Generic);
+  exits(next, miss, again, raise, redirect) generic(Generic) hot;
 
 point AttrWrite.Done(current, next_head, clear) keep() spent(obj, value) defs();
 point AttrWrite.Failed(current, site, pending) keep() spent(obj, value) defs();

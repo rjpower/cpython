@@ -3,10 +3,10 @@
 // call-boundary macros.
 
 family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
-  exits(next, enter, raise, redirect, miss, again) generic(Generic);
+  exits(next, enter, raise, redirect, miss, again) generic(Generic) hot;
 
 family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
-  exits(next, raise, redirect, miss, again) generic(Generic);
+  exits(next, raise, redirect, miss, again) generic(Generic) hot;
 
 family DelItem(obj:Src, key:Src)
   exits(next, raise, redirect);

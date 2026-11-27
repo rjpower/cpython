@@ -82,7 +82,7 @@ arm Const.Common inline select(common)
 // A local's binding.  Bound: the compiler proved the local bound.  Checked:
 // it may be unbound, which raises UnboundLocalError.
 family LocalRead(dst:Dst, local:Src)
-  exits(next, raise);
+  exits(next, raise) hot;
 
 point LocalRead.Unbound(current, site, pending) keep(local) spent() defs();
 point LocalRead.Done(current, next_head, clear) keep(local) spent() defs(dst);
@@ -148,7 +148,7 @@ arm LocalRead.Checked shared select(checked)
 // A store.  Store: the value is present.  Restore: the value is a binding
 // that SaveLocal took, which may be absent.
 family LocalWrite(local:Local, value:Src)
-  exits(next);
+  exits(next) hot;
 
 point LocalWrite.Done(current, next_head, clear) keep() spent(value, local) defs(local);
 
@@ -344,13 +344,13 @@ family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>)
 // JUMP_BACKWARD, Warm is JUMP_BACKWARD with the JIT's warm-up event
 family Jump(target:FarHead)
   exits(jump, raise, redirect, exit)
-  events(JUMP);
+  events(JUMP) hot;
 
 // The operands are in the order of the old conditional jump words: the
 // value in A, the entry in B, the mode in C and the target in D
 family BranchTruth(value:Src, fb:Fb<Truth>, mode:Enum<BranchMode>, target:NearHead)
   exits(next, branch, raise, miss, again, redirect) generic(Generic)
-  events(BRANCH_LEFT, BRANCH_RIGHT);
+  events(BRANCH_LEFT, BRANCH_RIGHT) hot;
 
 family BranchNone(value:Src, sense:Bool, target:NearHead)
   exits(next, branch, raise, redirect)

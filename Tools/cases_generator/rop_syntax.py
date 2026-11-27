@@ -279,8 +279,9 @@ class Parser:
         vacant: tuple[str, ...] = ()
         if self.accept("vacant"):
             vacant = self.names()
+        hot = self.accept("hot") is not None
         self.expect(";")
-        return Family(name.text, params, exits, events, start.span, generic, vacant)
+        return Family(name.text, params, exits, events, start.span, generic, vacant, hot)
 
     def point(self) -> Point:
         start = self.take()

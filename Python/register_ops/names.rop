@@ -3,7 +3,7 @@
 // family: the translator pushes it as an elided PUSH_NULL.
 
 family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
-  exits(next, raise, redirect, miss, again) generic(Generic);
+  exits(next, raise, redirect, miss, again) generic(Generic) hot;
 
 point GlobalRead.Failed(current, site, pending) keep() spent() defs();
 point GlobalRead.Done(current, next_head, clear) keep() spent() defs(dst);

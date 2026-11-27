@@ -11,14 +11,14 @@ enum Interrupt(INTERRUPTIBLE, UNINTERRUPTED);
 
 family Call(dst:Dst, fn:Src, args:Args, fb:Fb<Call>, interrupt:Enum<Interrupt>)
   exits(next, enter, raise, redirect, miss, again) generic(Generic)
-  events(CALL, C_RETURN, C_RAISE);
+  events(CALL, C_RETURN, C_RAISE) hot;
 
 family InitResult(value:Src)
   exits(next, raise);
 
 family Return(value:Src)
   exits(return, exit, raise, redirect)
-  events(PY_RETURN);
+  events(PY_RETURN) hot;
 
 // The caller goes on here when the child returns: the child's value is dst
 point Call.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst);

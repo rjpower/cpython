@@ -28,7 +28,7 @@ family Contains(dst:Dst, item:Src, container:Src, sense:Bool, fb:Fb<Contains>)
 family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, sense:Bool,
                   target:NearHead, fb:Fb<Compare>)
   exits(next, branch, raise, miss, again, redirect) generic(Generic)
-  events(BRANCH_LEFT, BRANCH_RIGHT);
+  events(BRANCH_LEFT, BRANCH_RIGHT) hot;
 
 point Compare.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
 point Compare.Failed(current, site, pending) keep() spent(y, x) defs();

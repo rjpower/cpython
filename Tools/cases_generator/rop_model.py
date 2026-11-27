@@ -412,6 +412,9 @@ class Family:
     # The home operands and group projections that may hold nothing when the
     # word starts (`vacant(...)`); a Maybe<Src> operand is one by its type
     vacant: tuple[str, ...] = ()
+    # `hot`: the family's arms run on the interpreter's common paths, so the
+    # evaluator's functions place them first (Python/ceval_tail.h)
+    hot: bool = False
 
 
 @dataclass(frozen=True, slots=True)

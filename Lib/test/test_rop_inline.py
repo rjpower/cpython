@@ -110,5 +110,50 @@ class InlineRowBinaryTests(unittest.TestCase):
                                  [f"{symbol}_Outlined"], names)
 
 
+@unittest.skipUnless(shutil.which("nm"), "needs nm")
+class EvaluatorLayoutTests(unittest.TestCase):
+    """The normal evaluator's functions are one contiguous block, in the order
+    IR_TARGET_LAYOUT states: the arms of the families declared `hot` in the
+    .rop sources, less their generic arms, before every other arm
+    (Python/ceval_tail.h)"""
+
+    @classmethod
+    def setUpClass(cls):
+        text = run("nm", "-n", sys.executable)
+        cls.addr = {}
+        cls.order = []          # every text symbol, by address
+        for m in re.finditer(r"^([0-9a-f]+) [tT] (\S+)$", text, re.M):
+            cls.order.append(m.group(2))
+            cls.addr.setdefault(m.group(2), int(m.group(1), 16))
+        if "ir_tail_Call_Exact" not in cls.addr:
+            raise unittest.SkipTest("the interpreter's functions are not in this executable's symbols")
+        program = rop_check.load(sorted((ROOT / "Python" / "register_ops").glob("*.rop")))
+        assert not program.diagnostics
+        cls.hot, cls.rest = [], []
+        for name, arm in program.arms.items():
+            fam = program.families[arm.family]
+            symbol = "ir_tail_" + name.replace(".", "_")
+            if symbol not in cls.addr:
+                continue
+            is_hot = fam.hot and name != f"{fam.name}.{fam.generic}"
+            (cls.hot if is_hot else cls.rest).append(symbol)
+
+    def test_hot_arms_come_before_the_others(self):
+        self.assertGreater(len(self.hot), 20)
+        last_hot = max(self.addr[s] for s in self.hot)
+        first_rest = min(self.addr[s] for s in self.rest)
+        self.assertLess(last_hot, first_rest)
+
+    def test_the_arms_are_one_block_with_no_other_function_in_it(self):
+        arms = self.hot + self.rest
+        first = min(self.addr[s] for s in arms)
+        last = max(self.addr[s] for s in arms)
+        inside = [s for s in self.order
+                  if first <= self.addr[s] <= last
+                  and not s.startswith("ir_tail_")
+                  and not s.startswith("ir_observe_")]
+        self.assertEqual(inside, [])
+
+
 if __name__ == "__main__":
     unittest.main()

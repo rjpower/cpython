@@ -451,9 +451,11 @@ PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate,
  * at, in the evaluator that its code asks for (Python/ceval_shared.h).  It
  * lies in no executing copy, so no compiled unit has an entry for it: a
  * transfer that names it goes to an evaluator, whose switch handler resolves
- * it, whichever frame the transfer leaves and wherever that frame ran.  The
- * baseline JIT's two entries that take a transfer's word, its switch routine
- * (Python/jit.c) and _PyEval_JitResume(), hand it back. */
+ * it, whichever frame the transfer leaves and wherever that frame ran, and
+ * the frame's instr_ptr stays the word that ran last in it.  The baseline
+ * JIT's two places that take a transfer's word for a unit, a unit's
+ * transfer to another frame (emit_other_frame(), Python/jit.c) and
+ * _PyEval_JitResume(), hand it back. */
 extern _PyInstr _PyEval_SwitchWord;
 
 /* Distinct semantic outcomes share one completion/ownership protocol. */

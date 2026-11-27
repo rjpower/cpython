@@ -162,7 +162,7 @@ arm Yield.Ordinary split
   exits(yield)
 {
   entry():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let v:O = acquire(value);
     exit yield(v) resume Yield.Resumed;
 }
@@ -179,7 +179,7 @@ arm YieldFrom.Delegated split chain(resume)
   exits(yield)
 {
   entry():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let v:O = acquire(value);
     exit yield(v) resume YieldFrom.Resumed;
 }
@@ -201,7 +201,7 @@ arm Yield.Observed split observes
   Moved(r:Route):
     exit redirect(r);
   Go():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let v:O = acquire(value);
     exit yield(v) resume Yield.Resumed;
 }
@@ -222,7 +222,7 @@ arm YieldFrom.Observed split observes
   Moved(r:Route):
     exit redirect(r);
   Go():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let v:O = acquire(value);
     exit yield(v) resume YieldFrom.Resumed;
 }

@@ -1095,17 +1095,23 @@ _PyEval_SwitchesLoop(_PyInterpreterFrame *frame, int observing)
     return observing && frame->owner != FRAME_OWNED_BY_GENERATOR;
 }
 
-/* A frame that runs in its code's compiled unit goes back to the unit when
- * its child returns (IR_JIT_RESUME()), and the unit runs only code that is
- * not observed: the frame needs no switch.  Monitoring retires the unit of
- * code that it observes.  Any other frame may still be resumed by a unit's
- * transfer, which hands the switch word to an evaluator. */
+/* A frame whose code has live entries goes on in the code's unit when its
+ * child returns, from a unit or the evaluator (IR_JIT_SWITCH()), and only
+ * code that is not observed has live entries: monitoring retires the unit
+ * of code that it observes, which unpublishes them (_PyJit_Retire()), before
+ * the walk.  So the frame needs no switch.  Any other frame may still be
+ * resumed by a unit's transfer, which hands the switch word to an
+ * evaluator. */
 static inline bool
 _PyEval_SwitchSkips(_PyInterpreterFrame *frame)
 {
+#ifdef _PY_JIT_SUPPORTED
     return frame->owner != FRAME_OWNED_BY_INTERPRETER &&
-           (frame->jit_flags & _PyFrame_JIT_RESUME) &&
-           !_PyCode_IsObserved(_PyFrame_GetCode(frame));
+           _PyFrame_JitEntries(frame) != NULL;
+#else
+    (void)frame;
+    return false;
+#endif
 }
 
 /* Make frame go on at real through the switch word: push the switch and
@@ -1899,7 +1905,9 @@ _PyRop_ChainThreadPlain(void)
  * level's recursion debit cannot fail, so a RecursionError is raised in the
  * level that raises it now; and level's start would skip its Resume
  * (_PyRop_StartSkips: no observed code, no stale instrumentation, no
- * pending event, no Resume.Warm of code lowered for the JIT).  The start's
+ * pending event, no Resume.Warm of code lowered for the JIT that has no
+ * live entries: compile rewrites the heads of compiled code to Resume.Poll,
+ * so the walk passes compiled levels).  The start's
  * test runs last: it counts a signal check under Emscripten, as the start
  * does.  A created generator, an ordinary yield, a relaxed loop, a Send of
  * another arm and a non-generator receiver end the walk. */
@@ -1976,8 +1984,7 @@ _PyRop_EnterChain(PyThreadState *tstate, _PyInterpreterFrame *child,
  * walk stops at a frame that is not a generator's, has a pending redirect
  * (or a switch of evaluator: its return_pc is the switch word), runs
  * observed code (the word would be its observer, which reports PY_YIELD),
- * or ran in its code's unit (_PyFrame_JIT_RESUME: it goes back to the
- * unit, which runs the word), and at any other word (a relaxed loop's
+ * and at any other word (a relaxed loop's
  * trailing jump, a for loop).  The free-threaded build suspends one level
  * per word, as golden87's generator_thread_is_plain decided
  * (_PyRop_ChainThreadPlain).  Returns the last consumer. */
@@ -1989,7 +1996,6 @@ _PyRop_SuspendChain(PyThreadState *tstate, _PyInterpreterFrame *frame)
     }
     for (;;) {
         if (frame->owner != FRAME_OWNED_BY_GENERATOR || frame->pending_redirect ||
-            (frame->jit_flags & _PyFrame_JIT_RESUME) ||
             _PyCode_IsObserved(_PyFrame_GetCode(frame))) {
             return frame;
         }
@@ -4619,10 +4625,10 @@ PyValue _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 #ifdef _PY_JIT_SUPPORTED
 /* The baseline JIT's hand-offs (Python/ceval.c), which the evaluators call
- * (jit_run and jit_resume in Python/ceval_evaluator.h) */
+ * (jit_run and jit_switch in Python/ceval_evaluator.h) */
 _PyIRTransfer _PyEval_JitRun(PyThreadState *tstate, _PyJitUnit *unit,
                              _PyInterpreterFrame *frame, _PyInstr *next);
-_PyIRTransfer _PyEval_JitResume(PyThreadState *tstate,
+_PyIRTransfer _PyEval_JitSwitch(PyThreadState *tstate,
                                 _PyInterpreterFrame *frame, _PyInstr *next);
 #endif
 

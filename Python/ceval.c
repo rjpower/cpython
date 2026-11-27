@@ -2787,13 +2787,16 @@ _PyRop_SliceFromParts(const _PyRopSpan *parts)
 }
 
 #ifdef _PY_JIT_SUPPORTED
-/* The unit that frame goes on in, or NULL to go on in the evaluator: its
- * code's newest unit, unless that is invalid, when the warm-up event
- * decides (a stale unit is recompiled; a retired one is not run).  It is
- * looked up afresh each time: monitoring retires units and a recompile
- * replaces them while the frame waits. */
+/* The unit that frame goes on in after a unit left it, or NULL to go on in
+ * the evaluator: its code's newest unit, unless that is retired.  A stale
+ * unit runs on as it is (it runs the live handler of a changed word): the
+ * next switch to the code or backward jump in it recompiles, as the warm-up
+ * event decides.  A unit leaves a frame at a word that it does not run
+ * natively, as after a specialisation, or at a switch that found no unit to
+ * run.  It is looked up afresh each time: monitoring retires units and a
+ * recompile replaces them while the frame waits. */
 static inline _PyJitUnit *
-jit_unit_of(PyThreadState *tstate, _PyInterpreterFrame *frame)
+jit_unit_of(_PyInterpreterFrame *frame)
 {
     if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
         return NULL;
@@ -2804,8 +2807,8 @@ jit_unit_of(PyThreadState *tstate, _PyInterpreterFrame *frame)
     }
 #endif
     _PyJitUnit *unit = _PyFrame_Exec(frame)->jit_unit;
-    if (unit != NULL && unit->invalid != 0) {
-        unit = _PyJit_Event(tstate, frame);
+    if (unit == NULL || (unit->invalid & _PyJIT_RETIRED)) {
+        return NULL;
     }
     return unit;
 }
@@ -2815,50 +2818,32 @@ typedef _PyIRTransfer (*jit_entry)(PyThreadState *tstate,
                                    const void *entry);
 
 /* The baseline JIT's driver, which the evaluator calls when frame, at the
- * word next, is to go on in unit (IR_JIT_EVENT(), IR_JIT_RESUME() in
+ * word next, is to go on in unit (IR_JIT_EVENT(), IR_JIT_SWITCH() in
  * Python/ceval_macros.h).  Its native call runs frames by switching between
- * units (the switch routine) until a transfer has no unit to go on in, has
- * raised, or leaves the last entered frame for a word that its unit does not
- * run; the driver goes on only in that last case, while the frame's newest
- * unit is not retired.  The switch routine names the last entered frame in
- * jit_frame; a leave in another frame is one that the routine declined
- * (g3/design.md section 1, "jit_run after G3a").  The C stack stays one unit
- * deep. */
+ * units through their entries (Python/jit.c, emit_other_frame()) until a
+ * transfer raised or exited, names the switch word, or goes to a frame
+ * whose code publishes no entries, or a word leaves its unit.  The driver
+ * goes on while the transfer's frame has a unit to run (jit_unit_of()),
+ * and otherwise hands the transfer to the evaluator.  The C stack stays one
+ * unit deep. */
 Py_NO_INLINE _PyIRTransfer
 _PyEval_JitRun(PyThreadState *tstate, _PyJitUnit *unit,
                _PyInterpreterFrame *frame, _PyInstr *next)
 {
-    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
-    _PyInterpreterFrame *outer = impl->jit_frame;
-    _PyEvalActivation *activation = IR_ACTIVATION();
     for (;;) {
         /* The unit addresses the words from frame->ir_words */
         assert(frame->ir_words == unit->words);
         assert(next >= frame->ir_words && next < frame->ir_words + unit->nwords);
-        frame->jit_flags |= _PyFrame_JIT_RESUME;
-        impl->jit_frame = frame;
-#ifndef NDEBUG
-        activation->jit_unit = unit;
-#endif
         tstate->interp->ceval.jit_turns++;
         _PyIRTransfer t = ((jit_entry)unit->code.start)(
             tstate, frame, unit->entries[next - frame->ir_words]);
-        _PyInterpreterFrame *entered = impl->jit_frame;
-        impl->jit_frame = outer;
-#ifndef NDEBUG
-        /* Before the release, which may free the unit just left */
-        activation->jit_unit = NULL;
-#endif
-        /* No unit runs: the code that a unit departed from last may go */
-        Py_CLEAR(activation->jit_pin);
-        if (t.next == NULL || t.frame != entered) {
+        /* No unit runs: the window of the unit's last departure is closed */
+        ((_PyThreadStateImpl *)tstate)->jit_departing = 0;
+        if (t.next == NULL || t.next == &_PyEval_SwitchWord) {
             return t;
         }
-        /* Not a warm-up event: a unit leaves for a word that it does not run
-         * natively, as after a specialisation, and the newest unit runs on
-         * as it is while it is only stale */
-        unit = _PyFrame_Exec(t.frame)->jit_unit;
-        if (unit->invalid & _PyJIT_RETIRED) {
+        unit = jit_unit_of(t.frame);
+        if (unit == NULL) {
             return t;
         }
         frame = t.frame;
@@ -2866,20 +2851,18 @@ _PyEval_JitRun(PyThreadState *tstate, _PyJitUnit *unit,
     }
 }
 
-/* Control has come back to frame, which ran in its code's unit, at next in
- * the evaluator (IR_JIT_RESUME()): it goes back to the unit if the code has
- * one to run; otherwise it stays in the evaluator, and is no longer marked.
- * At the switch word it stays in the evaluator, still marked. */
+/* Control has switched to frame, whose code has live entries, at next in
+ * the evaluator (IR_JIT_SWITCH()): it goes on in the code's unit.  At the
+ * switch word it stays in the evaluator. */
 Py_NO_INLINE _PyIRTransfer
-_PyEval_JitResume(PyThreadState *tstate, _PyInterpreterFrame *frame,
+_PyEval_JitSwitch(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   _PyInstr *next)
 {
     if (next == &_PyEval_SwitchWord) {
         return (_PyIRTransfer){frame, next};
     }
-    _PyJitUnit *unit = jit_unit_of(tstate, frame);
+    _PyJitUnit *unit = jit_unit_of(frame);
     if (unit == NULL) {
-        frame->jit_flags &= ~_PyFrame_JIT_RESUME;
         return (_PyIRTransfer){frame, next};
     }
     return _PyEval_JitRun(tstate, unit, frame, next);
@@ -3009,8 +2992,8 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     activation.source_error_frame = NULL;
     activation.source_error_handler = (_PyExceptionHandler){0};
     activation.observer_context = NULL;
-    activation.jit_pin = NULL;
-    activation.jit_unit = NULL;
+    activation.jit_departing = tstate_impl->jit_departing;
+    tstate_impl->jit_departing = 0;
 #ifdef Py_STATS
     /* Handler 0 is no pair predecessor (INSTRUCTION_STATS()) */
     activation.last_handler = 0;
@@ -3048,7 +3031,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.return_pc = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.pending_kwargs = IR_NO_DST;
     entry->frame.pending_redirect = 0;
-    entry->frame.jit_flags = 0;
 #ifdef Py_DEBUG
     entry->frame.lltrace = 0;
 #endif
@@ -3089,11 +3071,13 @@ early_exit:
     result = PyValue_NULL;
 
 leave:
-    /* The pin of the last departure that compiled code or a function form
-     * made in this activation, now that nothing of it runs (the backstop of
-     * -X ir_forms, which has no jit_run()).  A callback that its release
-     * runs runs in a loop of its own. */
-    Py_CLEAR(activation.jit_pin);
+    /* Reopen the outer activation's window, if it was in one.  Leaving the
+     * thread's outermost activation is a point where the units of dead
+     * codes may go (Python/jit.c, _PyJit_Reclaim()). */
+    tstate_impl->jit_departing = activation.jit_departing;
+    if (activation.previous == NULL && tstate->interp->ceval.jit_dead != NULL) {
+        _PyJit_Reclaim(tstate->interp);
+    }
     assert(borrow->eval_floor == floor);
     _PyBorrowScope_Exit(tstate, floor);
     borrow->eval_floor = outer_floor;

@@ -7343,8 +7343,7 @@ ir_run_Return_Ordinary(
     _PyInterpreterFrame * caller;
     _PyInterpreterFrame * dying;
     _PyInstr * h;
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     caller = _PyRop_PreviousFrame(frame);
     dying = _PyRop_Depart(tstate, frame);
@@ -7372,8 +7371,7 @@ ir_run_Return_Empty(
     _PyInterpreterFrame * caller;
     _PyInterpreterFrame * dying;
     _PyInstr * h;
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     caller = _PyRop_PreviousFrame(frame);
     dying = _PyRop_Depart(tstate, frame);
@@ -7402,8 +7400,7 @@ ir_run_Return_Generator(
     _PyInterpreterFrame * dying;
     _PyInterpreterFrame * f;
     _PyInstr * h;
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     caller = _PyRop_PreviousFrame(frame);
     dying = _PyRop_Depart(tstate, frame);
@@ -7428,8 +7425,7 @@ ir_run_Return_GeneratorEmpty(
     _PyInterpreterFrame * dying;
     _PyInterpreterFrame * f;
     _PyInstr * h;
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     caller = _PyRop_PreviousFrame(frame);
     dying = _PyRop_Depart(tstate, frame);
@@ -7466,8 +7462,7 @@ ir_run_Return_Observed(
         goto rop_Return_Observed_Failed;
     }
     v = ret1;
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     if (_PyRop_GeneratorFrame(frame)) {
         goto rop_Return_Observed_Generator;
     }
@@ -18746,8 +18741,7 @@ ir_run_Yield_Ordinary(
     INSTRUCTION_STATS(ROP_HANDLER_Yield_Ordinary);
     PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
     PyValue v;
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     v = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     ROP_YIELD(v, IR_B(ir_word));
 }
@@ -18766,8 +18760,7 @@ ir_run_YieldFrom_Delegated(
     INSTRUCTION_STATS(ROP_HANDLER_YieldFrom_Delegated);
     PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
     PyValue v;
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     v = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     ROP_YIELD_FROM(v, IR_B(ir_word));
 }
@@ -18795,8 +18788,7 @@ ir_run_Yield_Observed(
     if (ret1 < 0) {
         goto rop_Yield_Observed_Failed;
     }
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     v = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     ROP_YIELD(v, IR_B(ir_word));
     rop_Yield_Observed_Failed:
@@ -18828,8 +18820,7 @@ ir_run_YieldFrom_Observed(
     if (ret1 < 0) {
         goto rop_YieldFrom_Observed_Failed;
     }
-    IR_STUB_ESCAPE();
-    IR_PIN_DEPARTING();
+    IR_MARK_DEPARTURE();
     v = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     ROP_YIELD_FROM(v, IR_B(ir_word));
     rop_YieldFrom_Observed_Failed:

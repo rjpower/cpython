@@ -146,7 +146,8 @@
  * ROP_ENTER: `exit enter(NEW) resume P`.  The caller goes on at next_instr
  * with the child's value in SLOT, P's definition, when NEW returns.
  * ROP_RETURN: `exit return(CALLER, HEAD)`.  The value is in the caller's
- * slot already; the caller goes on at HEAD, in its unit if it ran in one.
+ * slot already; the caller goes on at HEAD, in its code's unit if it has
+ * live entries (IR_JIT_SWITCH()).
  * ROP_GEN_RETURN: `tail generator_return(CALLER, V, DYING)`;
  * ROP_GEN_RETURN_EMPTY: generator_return_empty's, for a frame whose scratch
  * is vacant, whose retirement clears only its fixed slots. */
@@ -160,7 +161,7 @@
     do { \
         frame = (CALLER); \
         next_instr = (HEAD); \
-        IR_JIT_RESUME(); \
+        IR_JIT_SWITCH(); \
         LLTRACE_RESUME_FRAME(); \
         DISPATCH(); \
     } while (0)
@@ -973,7 +974,9 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
 /* The start of frame, which has just become the current frame: its
  * recursion debit, which raises RecursionError in the frame before its
  * first word runs, then its first word, past a RESUME that would do nothing
- * (ROP_ENTER_GATE()).  An arm that enters a frame runs it in place
+ * (ROP_ENTER_GATE()), in its code's unit if the code has live entries
+ * (IR_JIT_SWITCH(): a compiled code's heads are Resume.Poll, which no longer
+ * counts the event that entered the unit).  An arm that enters a frame runs it in place
  * (DISPATCH_INLINED); the start_frame label runs it for the C entry and the
  * function forms (Python/ceval_labels.h). */
 #ifdef Py_DEBUG
@@ -998,29 +1001,31 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
         next_instr = frame->instr_ptr; \
         ROP_ENTER_GATE(); \
         IR_START_FRAME_LLTRACE(); \
+        IR_JIT_SWITCH(); \
         int opcode; \
         DISPATCH(); \
     } while (0)
 
 /* After a frame switch, V goes to the slot of the frame that control came
- * back to (frame->return_slot).  If the frame has run in its code's unit, it
- * goes back to it (IR_JIT_RESUME()). */
+ * back to (frame->return_slot), and the frame goes on in its code's unit if
+ * it has live entries (IR_JIT_SWITCH()). */
 #define IR_STORE_RETURN(V) \
     do { \
         assert(_PyValue_IsHome(V)); \
         if (_PyFrame_SetReturnValue(frame, (V))) { \
             next_instr = frame->return_pc; \
-            IR_JIT_RESUME(); \
         } \
+        IR_JIT_SWITCH(); \
     } while (0)
 
 /* The baseline JIT's hand-offs from the evaluator (Python/jit.c), which
- * jit_run() and jit_resume() in Python/ceval.c drive.  IR_JIT_EVENT(), the
- * end of RESUME_JIT and JUMP_BACKWARD_JIT, is a warm-up event of the frame's
- * code; once the code has a unit, the frame goes on in it at next_instr.
- * IR_JIT_RESUME(): control has come back to frame at next_instr, and the
- * frame goes back to its unit if it ran in one.  The function forms, which
- * compiled code calls, bind both to nothing. */
+ * jit_run() and jit_switch() in Python/ceval.c drive.  IR_JIT_EVENT(), the
+ * end of Resume.Warm and Jump.Warm, is a warm-up event of the frame's code;
+ * once the code has a unit, the frame goes on in it at next_instr.
+ * IR_JIT_SWITCH(): control has switched to frame at next_instr, and the
+ * frame goes on in its code's unit if the code has live entries, as a
+ * switch in compiled code does.  The function forms, which compiled code
+ * calls, bind both to nothing. */
 #ifdef _PY_JIT_SUPPORTED
 #define IR_JIT_EVENT() IR_JIT_EVENT_AT(next_instr)
 #define IR_JIT_EVENT_AT(NEXT) \
@@ -1039,16 +1044,16 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
             } \
         } \
     } while (0)
-#define IR_JIT_RESUME() \
+#define IR_JIT_SWITCH() \
     do { \
-        if (frame->jit_flags & _PyFrame_JIT_RESUME) { \
-            IR_STEP_DONE(jit_resume(tstate, frame, next_instr)); \
+        if (_PyFrame_JitEntries(frame) != NULL) { \
+            IR_STEP_DONE(jit_switch(tstate, frame, next_instr)); \
         } \
     } while (0)
 #else
 #define IR_JIT_EVENT() ((void)0)
 #define IR_JIT_EVENT_AT(NEXT) ((void)(NEXT))
-#define IR_JIT_RESUME() ((void)0)
+#define IR_JIT_SWITCH() ((void)0)
 #endif
 
 /* A backward jump's warm-up event (Jump.Warm): go on at TARGET in the
@@ -1061,10 +1066,10 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
         IR_BRANCH(rop_target); \
     } while (0)
 
-/* The execution pin (g3/design.md section 2) that a departing arm takes
- * after its last guard.  The evaluator runs in no unit: nothing to keep
- * alive.  The function forms and the stubs bind it to _PyJit_PinDeparting(). */
-#define IR_PIN_DEPARTING() ((void)0)
+/* A departing arm opens the thread's departure window after its last guard
+ * (Python/jit.c, _PyJit_Reclaim()).  The evaluator runs in no unit: nothing
+ * to mark.  The function forms bind it to the thread's flag. */
+#define IR_MARK_DEPARTURE() ((void)0)
 
 /* The feedback entry of another instruction of the frame. */
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \

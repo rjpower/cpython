@@ -68,18 +68,9 @@ struct _PyInterpreterFrame {
 #ifdef Py_DEBUG
     uint8_t lltrace:5;
 #endif
-    /* The baseline JIT's flags (_PyFrame_JIT_*).  A whole byte with named
-     * masks, because compiled code reads and writes it by the same names
-     * (Python/jit.c). */
-    uint8_t jit_flags;
     /* The slots of a frame that owns them, which base then points to */
     PyValue owned_slots[1];
 };
-
-/* _PyInterpreterFrame.jit_flags.  JIT_RESUME: the frame has run in its
- * code's compiled unit, so control that comes back to it in the interpreter
- * goes back to the unit. */
-#define _PyFrame_JIT_RESUME 1
 
 #if SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
 static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 96,

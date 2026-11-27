@@ -96,8 +96,8 @@ IR_ROUTINE(process_error)
     if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) {
         frame = tstate->current_frame;
         next_instr = ir_error_result.next;
-        /* A handler of a frame that ran in its unit runs there */
-        IR_JIT_RESUME();
+        /* A handler in code with live entries runs in its unit */
+        IR_JIT_SWITCH();
         /* A frame that unwound into the evaluator that its code does not
          * ask for goes on in the other one */
         IR_ERROR_SWITCH();

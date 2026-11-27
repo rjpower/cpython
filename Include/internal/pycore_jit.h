@@ -18,33 +18,51 @@ extern "C" {
    is a call of the function form of the handler that the word named when the
    unit was compiled, followed by a native jump when the form's transfer is
    the same frame and a word known at compile time (the next word or the
-   word's jump target).  Any other transfer leaves the unit with the
-   transfer, and the driver (jit_run() in Python/ceval.c) enters the unit of
-   the transfer's frame through the unit's entry table, or returns the
-   transfer to the evaluator, ir_evaluate(), which is the cold tier.
+   word's jump target).
 
-   The evaluator hands a frame to its unit at three kinds of point: the
-   handlers RESUME_JIT (a frame's entry, a generator's resume) and
-   JUMP_BACKWARD_JIT (a backward jump), which the lowering gives a code
+   The transfer protocol is one rule: a frame switch goes to the target
+   frame's word through its executing copy's entry table,
+   _PyCodeExec.jit_entries, which is the entry table of the code's newest
+   unit while that unit is valid, else NULL (Python/jit.c, publish()).  So
+   a frame runs compiled whenever its code has live entries.  A switch in
+   compiled code jumps through the table on the same native frame
+   (emit_other_frame()); one whose code publishes none, or that names the
+   switch word, leaves the unit with the transfer, and the driver (jit_run()
+   in Python/ceval.c) recompiles a stale unit, refuses a retired one, or
+   returns the transfer to the evaluator, ir_evaluate(), the cold tier.  The
+   evaluator tests the table at its own switches, a return, a yield and an
+   exception handled in a frame (IR_JIT_SWITCH()), and hands the frame to
+   the unit; Resume.Warm and Jump.Warm, which the lowering gives a code
    under a mode other than off, count a warm-up event and enter the unit
-   once the code has one; and a return or yield into a frame that has run in
-   its unit (_PyFrame_JIT_RESUME), or an exception handled in it,
-   goes back to the unit.
+   once the code has one.
 
    A unit is entered by calling its code as
 
        _PyIRTransfer enter(PyThreadState *tstate, _PyInterpreterFrame *frame,
                            const void *entry);
 
-   where entry is entries[word index].  A frame switch inside a unit goes
-   through the unit's switch routine, which enters the unit of the frame
-   that is now current on the same native frame (g3/design.md section 1).
-   At every word boundary of the code
+   where entry is entries[word index].  At every word boundary of the code
    r12 holds tstate, r13 frame, r14 word 0 of the frame's executing copy, r15
    frame->base and rbx the unit; the stack is 16-byte aligned; every value
    is in the frame.  A word that specialisation can rewrite runs the handler
    it named at compile time only while the word still names it, since
    specialisation rewrites the handler and its feedback entry together.
+
+   A unit outlives its code while a thread may still run it.  A departing
+   word (a return or a yield) clears its frame, which may drop the code's
+   last reference, and the unit runs on until its next frame switch: the
+   thread is in a departure window.  The word opens it by setting the
+   thread's jit_departing flag (IR_MARK_DEPARTURE() in the forms); the
+   compiled switch and the driver close it.  A dead code's units wait on
+   the interpreter's dead list (_PyJit_FreeUnits()), which is freed once no
+   thread is in a window (_PyJit_Reclaim()): at a compile, when a thread
+   leaves its outermost activation, and at finalization.  A thread that
+   releases the GIL is quiescent for this purpose only once it has left the
+   unit's code, which its cleared flag records.  On a free-threaded build
+   the list would be a QSBR deferral (Python/qsbr.c) whose detaches and
+   polls count as quiescent only while the flag is clear: QSBR alone counts
+   a thread that detaches inside its window, in a finalizer of the frame it
+   clears, as quiescent with a return address into the unit live.
 
    The JIT runs in the GIL build on Linux x86-64 (_PY_JIT_SUPPORTED). */
 
@@ -55,8 +73,9 @@ extern "C" {
  * raise checkpoint in force; BRANCH the word completed at its static
  * target; AGAIN the word is untouched and runs again under its current
  * handler (a specialisation's redispatch); REDIRECT the word completed and
- * the frame's control moved while it ran (a debugger's jump): the word's
- * successor is frame->instr_ptr, not the next word. */
+ * the frame's control moved while it ran (a debugger's jump, or a switch
+ * of evaluator, which names the switch word): the word's successor is
+ * frame->return_pc, not the next word. */
 #define _PyIR_MISS      1
 #define _PyIR_ESCAPED   2
 #define _PyIR_RAISED    4
@@ -117,6 +136,10 @@ typedef struct _PyJitUnit {
      * offset 0: RETIRED after each word that may run Python, both at each
      * backward jump. */
     uint8_t invalid;
+    /* Its compile rewrote the code's Resume.Warm heads to Resume.Poll, which
+     * publish() and unpublish() keep in step with the entries
+     * (Python/jit.c) */
+    uint8_t warm_heads;
     uint32_t nwords;
     const _PyIRWord *words;         // word 0 of the exec, r14 in the code
 #ifdef _PY_JIT_SUPPORTED
@@ -128,8 +151,6 @@ typedef struct _PyJitUnit {
 #endif
     /* An address per word, in the code block; an operand word's traps */
     const void *const *entries;
-    /* The unit's switch routine (Python/jit.c, emit_frame()), in the code */
-    const void *switch_routine;
     struct _PyJitUnit *older;       // the unit this one replaced, or NULL
 } _PyJitUnit;
 
@@ -175,19 +196,9 @@ extern PyStatus _PyJit_InitInterpreter(PyInterpreterState *interp);
 /* Whether the JIT can run in this process (its code memory is reserved). */
 PyAPI_FUNC(int) _PyJit_IsAvailable(void);
 
-/* The execution pin (g3/design.md section 2): compiled code (a stub or a
- * function form) that departs frame by a return or a yield calls this after
- * the arm's last guard, before anything can drop the last reference to the
- * frame's code.  Stores a new reference to the code in the evaluation
- * loop's activation, then releases the previous pin: store first, so that a
- * pin of the same code never drops it.  Returns _PyIR_ESCAPED if the
- * release deallocated (a code's weakref callbacks run Python), else 0. */
-PyAPI_FUNC(int) _PyJit_PinDeparting(PyThreadState *tstate,
-                                    struct _PyInterpreterFrame *frame);
-
 /* A warm-up event of frame: the frame enters or resumes its code, or jumps
- * back (RESUME_JIT, JUMP_BACKWARD_JIT, a unit's backward jump when it is
- * invalid), or goes back to an invalid unit.  Returns the code's valid
+ * back (Resume.Warm, Jump.Warm, a unit's backward jump when it is invalid),
+ * or switches to code whose unit is invalid.  Returns the code's valid
  * unit; otherwise counts the event, and compiles the code when it is warm
  * or recompiles a stale unit.  Returns the unit to run, or NULL to run the
  * frame in the evaluator.  Declared in every build, for the generated
@@ -197,18 +208,19 @@ extern _PyJitUnit *_PyJit_Event(PyThreadState *tstate,
 
 #ifdef _PY_JIT_SUPPORTED
 
-/* The code of exec is monitored: compiled code leaves its unit at the next
- * test (Python/instrumentation.c). */
-static inline void
-_PyJit_Retire(_PyCodeExec *exec)
-{
-    if (exec->jit_unit != NULL) {
-        exec->jit_unit->invalid |= _PyJIT_RETIRED;
-    }
-}
+/* The code of exec is monitored (Python/instrumentation.c): its entries
+ * are unpublished, so no switch enters its unit, and compiled code running
+ * in the unit leaves at the next test. */
+PyAPI_FUNC(void) _PyJit_Retire(_PyCodeExec *exec);
 
-/* Free the units of exec, which is being freed. */
+/* exec is being freed: its units go to the interpreter's dead list. */
 extern void _PyJit_FreeUnits(_PyCodeExec *exec);
+
+/* Free the dead list unless a thread of interp is in a departure window. */
+extern void _PyJit_Reclaim(PyInterpreterState *interp);
+
+/* Free the dead list: interp is being cleared and runs no code. */
+extern void _PyJit_FiniInterpreter(PyInterpreterState *interp);
 
 /* Compile the code of exec now, whatever its warm-up: the new unit, or NULL
  * if the code cannot be compiled (monitored, or no code memory).  For
@@ -223,6 +235,8 @@ PyAPI_FUNC(const void *const *) _PyEval_HandlerForms(void);
 
 static inline void _PyJit_Retire(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_FreeUnits(_PyCodeExec *Py_UNUSED(exec)) {}
+static inline void _PyJit_Reclaim(PyInterpreterState *Py_UNUSED(interp)) {}
+static inline void _PyJit_FiniInterpreter(PyInterpreterState *Py_UNUSED(interp)) {}
 
 #endif  /* _PY_JIT_SUPPORTED */
 

@@ -781,16 +781,16 @@ extern helper init_result_error(v:B)
 
 // Return
 
-// Compiled code may still run in the departing frame's code: the pin keeps
-// it alive until the next pin (G3a)
-extern helper pin_departing() -> Unit
-  effects(releases)
-  c IR_PIN_DEPARTING as unit
+// Compiled code may still run in the departing frame's unit after the frame
+// drops its code: the mark keeps the unit until the thread's next frame
+// switch (Python/jit.c, _PyJit_Reclaim())
+extern helper mark_departure() -> Unit
+  effects(writes)
+  c IR_MARK_DEPARTURE as unit
   evidence(
-    review: "G3a. ceval.c and ceval_macros.h: nothing in the evaluator, which runs in"
-            "no unit; _PyJit_PinDeparting in the forms.",
-    contract: "Stores the new pin before releasing the old one, whose release can"
-              "free a unit's code.");
+    review: "J1. ceval_macros.h: nothing in the evaluator, which runs in no unit;"
+            "the thread's jit_departing flag in the forms.",
+    contract: "Sets the thread's departure flag: releases nothing, runs no Python.");
 
 extern helper previous_frame(f:Frame) -> Frame
   effects(reads)
@@ -1070,7 +1070,7 @@ arm Return.Ordinary split select(thread_frame, live_scratch)
   exits(return)
 {
   entry():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let r:O = acquire(value);
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);
@@ -1086,7 +1086,7 @@ arm Return.Empty split select(thread_frame, vacant_scratch)
   exits(return)
 {
   entry():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let r:O = acquire(value);
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);
@@ -1102,7 +1102,7 @@ arm Return.Generator split select(generator_frame, live_scratch)
   exits(return, raise, redirect)
 {
   entry():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let r:O = acquire(value);
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);
@@ -1125,7 +1125,7 @@ arm Return.GeneratorEmpty split select(generator_frame, vacant_scratch)
   exits(return, raise, redirect)
 {
   entry():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let r:O = acquire(value);
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);
@@ -1159,7 +1159,7 @@ arm Return.Observed split observes
   Failed(e:Err):
     exit raise(Return.EventFailed, e);
   Observed(v:O):
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     branch generator_frame(frame) -> Generator(), Thread();
   Generator():
     let gcaller:Frame = previous_frame(frame);

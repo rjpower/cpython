@@ -53,41 +53,38 @@ class JitBacktraceTests(unittest.TestCase):
                 for line in frames[units[-1] + 1:]),
             out)
 
-    def test_bt_from_the_switch_routine(self):
-        # A callee whose unit is invalid (monitoring retired it) is entered
-        # by its compiled caller's switch routine, whose cold path calls
-        # _PyJit_Event(): the walk goes through the caller's unit to
-        # _PyEval_JitRun() and the evaluation loop (g3/design.md section 5)
+    def test_bt_from_a_call_in_a_unit(self):
+        # Under always a code compiles at its first event, before its words
+        # specialise; the first word that specialises afterwards marks the
+        # unit stale from its compiled code (Python/jit.c, mark_stale()): the
+        # walk goes through the unit to _PyEval_JitRun() and the evaluation
+        # loop (g3/design.md section 5)
         source = textwrap.dedent("""
-            import sys, _testinternalcapi
+            import _testinternalcapi
 
-            def callee(o):
-                return o
-            def caller(o):
-                return callee(o)
-            for i in range(50):
-                caller(i)
-            sys.monitoring.use_tool_id(3, "test")
-            sys.monitoring.set_local_events(
-                3, callee.__code__, sys.monitoring.events.LINE)
-            # The marker: _PyJit_Event() is broken on from here
+            class O:
+                x = 1
+            def loop(o):
+                for i in range(100):
+                    o.x
+            # The marker: mark_stale() is broken on from here
             _testinternalcapi.gnu_backtrace_unwind()
-            caller(1)
+            loop(O())
         """)
         out, err = run_gdb(
             '--eval-command=set breakpoint pending yes',
             '--eval-command=break gnu_backtrace_unwind',
             '--eval-command=run',
-            '--eval-command=break _PyJit_Event',
+            '--eval-command=break mark_stale',
             '--eval-command=continue',
             '--eval-command=bt',
             '--args', sys.executable, '-X', 'jit=always', '-S', '-c', source)
         frames = [line for line in out.splitlines() if line.startswith("#")]
-        self.assertIn("_PyJit_Event", frames[0], out)
+        self.assertIn("mark_stale", frames[0], out)
         names = [re.sub(r"^#\d+\s+(0x\w+ in )?", "", line).split(" ")[0]
                  for line in frames]
         unit = next(i for i, name in enumerate(names)
-                    if name.startswith("py::jit:caller:"))
+                    if name.startswith("py::jit:loop:"))
         self.assertEqual(names[unit + 1], "_PyEval_JitRun", out)
         self.assertTrue(
             any(name.startswith("_PyEval_EvalFrame") for name in names[unit + 2:]),

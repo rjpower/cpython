@@ -958,7 +958,7 @@ arm K.Exact split
 family R(value:Src) exits(return, exit, raise);
 point R.Delivered(caller, resume_head, clear) keep() spent(value) defs();
 point R.ConsumerFailed(consumer, saved_origin, pending) keep() spent(value) defs();
-extern helper pin_departing() -> Unit effects(writes) pending;
+extern helper mark_departure() -> Unit effects(writes) pending;
 extern primitive caller_of(f:Frame) -> Frame effects(reads) pending;
 extern helper unlink(t:Thread, f:Frame) -> DeadFrame effects(writes) pending;
 extern helper retire_frame(t:Thread, d:DeadFrame) -> Unit effects(releases) pending;
@@ -972,7 +972,7 @@ arm R.Ordinary split select(thread_frame)
   exits(return)
 {
   entry():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let v:O = acquire(value);
     let caller:Frame = caller_of(frame);
     let d:DeadFrame = unlink(thread, frame);
@@ -987,7 +987,7 @@ arm R.Generator split select(generator_frame)
   exits(return, raise)
 {
   entry():
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     let v:O = acquire(value);
     call gen_return(thread, v) {
       return -> Returned();
@@ -1057,7 +1057,7 @@ TRANSFER_CASES = [
      ]),
     ('transfer edge with a statement',
      '  Returned(f:Frame, h:Head):\n    exit return(f, h);',
-     '  Returned(f:Frame, h:Head):\n    let _:Unit = pin_departing();\n    exit return(f, h);', [
+     '  Returned(f:Frame, h:Head):\n    let _:Unit = mark_departure();\n    exit return(f, h);', [
          (51, 7, 'R.Generator', "call gen_return at t.rop:50: edge return: the callee performs exit return, so Returned is entered by this edge only and is exactly `exit return(...)` of the case's payload"),
      ]),
     ('transfer edge to another exit',
@@ -1083,14 +1083,14 @@ TRANSFER_CASES = [
          (14, 5, 'K.Exact', 'points: exit enter resume K.Returned: K.Returned lists a in spent, but a is intact'),
      ]),
     ('return unpinned',
-     '    let _:Unit = pin_departing();\n    let v:O = acquire(value);\n    let caller',
+     '    let _:Unit = mark_departure();\n    let v:O = acquire(value);\n    let caller',
      '    let v:O = acquire(value);\n    let caller', [
-         (39, 5, 'R.Ordinary', 'control: exit return releases the departing frame, whose code is not pinned on this path: call pin_departing() first'),
+         (39, 5, 'R.Ordinary', 'control: exit return releases the departing frame, whose departure is not marked on this path: call mark_departure() first'),
      ]),
     ('transfer unpinned',
-     '    let _:Unit = pin_departing();\n    let v:O = acquire(value);\n    call gen_return',
+     '    let _:Unit = mark_departure();\n    let v:O = acquire(value);\n    call gen_return',
      '    let v:O = acquire(value);\n    call gen_return', [
-         (54, 5, 'R.Generator', 'control: exit return releases the departing frame, whose code is not pinned on this path: call pin_departing() first'),
+         (54, 5, 'R.Generator', 'control: exit return releases the departing frame, whose departure is not marked on this path: call mark_departure() first'),
      ]),
     ('transfer leaves an owner',
      '    call gen_return(thread, v) {',
@@ -1503,7 +1503,7 @@ class CompletionTests(unittest.TestCase):
 YIELD = """\
 family Y(value:Src, resume:Dst) exits(yield);
 point Y.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
-extern helper pin_departing() -> Unit
+extern helper mark_departure() -> Unit
   effects()
   c PIN as unit
   evidence(review: "r", contract: "c");
@@ -1511,7 +1511,7 @@ arm Y.Value split effects(runs_python, writes, switches_frame) feedback() exits(
 {
   entry():
     let v:O = acquire(value);
-    let _:Unit = pin_departing();
+    let _:Unit = mark_departure();
     exit yield(v) resume Y.Resumed;
 }
 """
@@ -1540,10 +1540,10 @@ YIELD_CASES = [
      'let v:B = use(value);', [
          (12, 16, 'Y.Value', 'v is B, expected O'),
      ]),
-    ('a yield on a path without pin_departing',
-     '    let _:Unit = pin_departing();\n',
+    ('a yield on a path without mark_departure',
+     '    let _:Unit = mark_departure();\n',
      '', [
-         (11, 5, 'Y.Value', 'control: exit yield releases the departing frame, whose code is not pinned on this path: call pin_departing() first'),
+         (11, 5, 'Y.Value', 'control: exit yield releases the departing frame, whose departure is not marked on this path: call mark_departure() first'),
      ]),
     ('a yield that names a completion',
      ' resume Y.Resumed;',

@@ -87,9 +87,9 @@ REFERENCE_HANDLES = frozenset({Handle.B, Handle.Obj, Handle.Fun, Handle.Gen,
 # computed (a completion target), not a target operand or next_head
 CONTROL_HANDLES = frozenset({Handle.Head})
 
-# The row that pins the departing frame's code before a return or yield
-# releases the frame: compiled code may still be running in it
-PIN_DEPARTING = "pin_departing"
+# The row that marks the departure before a return or yield releases the
+# frame: compiled code may still be running in the frame's unit
+MARK_DEPARTURE = "mark_departure"
 DEPARTING_EXITS = frozenset({"return", "yield"})
 
 
@@ -191,12 +191,12 @@ class State:
     points: frozenset[str] = frozenset()
     # The homes as the last publish left them, checked against its point
     published: frozenset[tuple[str, HomeState]] | None = None
-    pinned: Event | None = None        # pin_departing on this path
+    marked: Event | None = None        # mark_departure on this path
 
     def copy(self) -> "State":
         return State(dict(self.live), dict(self.gone), dict(self.homes), set(self.facts),
                      dict(self.refs), dict(self.dead), dict(self.alias), self.action,
-                     self.commit, self.points, self.published, self.pinned)
+                     self.commit, self.points, self.published, self.marked)
 
     def canonical(self, name: str) -> str:
         while name in self.alias:
@@ -212,7 +212,7 @@ class State:
     def signature(self) -> tuple[object, ...]:
         return (frozenset(self.live), frozenset(self.gone), frozenset(self.homes.items()),
                 frozenset(self.facts), frozenset(self.dead), self.points,
-                self.pinned is not None)
+                self.marked is not None)
 
 
 Callee = Extern | Macro
@@ -656,8 +656,8 @@ def merge(w: Walk, b: Block, edges: list[tuple[str, State]],
         out.points = out.points | s.points if out.points and s.points else frozenset()
         if out.published != s.published:
             out.published = None
-        if s.pinned is None:
-            out.pinned = None
+        if s.marked is None:
+            out.marked = None
     for k in list(out.live):
         if k not in params and not visible(w, k, label):
             del out.live[k]
@@ -947,8 +947,8 @@ def apply_call(w: Walk, st: State, callee: Callee, exprs: tuple[Expr, ...],
                     spend(w, st, item.name, item.span, what)
     for e in sorted(effects, key=lambda x: x.value):
         use_effect(w, st, e, span, what)
-    if callee.name == PIN_DEPARTING and st.pinned is None:
-        st.pinned = (span, what)
+    if callee.name == MARK_DEPARTURE and st.marked is None:
+        st.marked = (span, what)
     if effects - {Effect.reads}:
         adapt = is_feedback_write(c) and effects <= ADAPTATION
         set_action(st, span, what, adaptation=adapt)
@@ -1346,7 +1346,7 @@ def do_exit(w: Walk, st: State, t: Exit, transfer: bool = False) -> None:
         check_completion(w, st, t, what, accounted)
     record_edge(w, st, t)
     if kind in DEPARTING_EXITS:
-        check_pinned(w, st, t.span, what)
+        check_marked(w, st, t.span, what)
     for n, tok in sorted(st.live.items()):
         if n in accounted:
             continue
@@ -1418,10 +1418,10 @@ def check_completion(w: Walk, st: State, t: Exit, what: str,
                      f"{hs.text()}, but no publish names a point for it")
 
 
-def check_pinned(w: Walk, st: State, span: SrcSpan, what: str) -> None:
-    if st.pinned is None:
+def check_marked(w: Walk, st: State, span: SrcSpan, what: str) -> None:
+    if st.marked is None:
         w.report(span, Rule.control, f"{what} releases the departing frame, whose "
-                 f"code is not pinned on this path: call {PIN_DEPARTING}() first")
+                 f"departure is not marked on this path: call {MARK_DEPARTURE}() first")
 
 
 def check_enter(w: Walk, st: State, t: Exit, frame: str | None) -> None:

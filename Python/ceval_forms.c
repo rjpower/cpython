@@ -54,12 +54,12 @@
 #undef IR_JIT_EVENT
 #pragma push_macro("IR_JIT_EVENT_AT")
 #undef IR_JIT_EVENT_AT
-#pragma push_macro("IR_JIT_RESUME")
-#undef IR_JIT_RESUME
+#pragma push_macro("IR_JIT_SWITCH")
+#undef IR_JIT_SWITCH
 #pragma push_macro("IR_STORE_RETURN")
 #undef IR_STORE_RETURN
-#pragma push_macro("IR_PIN_DEPARTING")
-#undef IR_PIN_DEPARTING
+#pragma push_macro("IR_MARK_DEPARTURE")
+#undef IR_MARK_DEPARTURE
 #pragma push_macro("IR_ERROR_SWITCH")
 #undef IR_ERROR_SWITCH
 #pragma push_macro("IR_COMPLETIONS")
@@ -151,16 +151,15 @@ ir_frame_observed(_PyInterpreterFrame *frame)
 /* The error that a completion arm reported in the activation, for the
  * caller to resolve */
 #define GEN_RAISED() return (_PyIRTransfer){frame, NULL}
-/* Compiled code runs the forms: it is in its unit already, and leaves it
- * at every frame switch for the driver, which finds the next frame's unit
- * itself.  So a return store tests only a pending redirect, not the
- * frame's _PyFrame_JIT_RESUME flag. */
+/* Compiled code runs the forms: it is in its unit already, and makes every
+ * frame switch itself, through the next frame's entries (Python/jit.c,
+ * emit_other_frame()).  So a return store tests only a pending redirect. */
 #define IR_JIT_EVENT() ((void)0)
 #define IR_JIT_EVENT_AT(NEXT) ((void)(NEXT))
-#define IR_JIT_RESUME() ((void)0)
-/* The pin's release status is not needed: every pinned arm runs Python, so
- * the form's continuation tests RETIRED when the word stays in its frame */
-#define IR_PIN_DEPARTING() ((void)_PyJit_PinDeparting(tstate, frame))
+#define IR_JIT_SWITCH() ((void)0)
+/* The unit runs on after the frame drops its code, until its next frame
+ * switch clears the flag (Python/jit.c, _PyJit_Reclaim()) */
+#define IR_MARK_DEPARTURE() (((_PyThreadStateImpl *)tstate)->jit_departing = 1)
 #define IR_STORE_RETURN(V) \
     do { \
         assert(_PyValue_IsHome(V)); \
@@ -383,9 +382,9 @@ _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame, int thro
 #pragma pop_macro("GEN_RAISED")
 #pragma pop_macro("IR_JIT_EVENT_AT")
 #pragma pop_macro("IR_JIT_EVENT")
-#pragma pop_macro("IR_JIT_RESUME")
+#pragma pop_macro("IR_JIT_SWITCH")
 #pragma pop_macro("IR_STORE_RETURN")
-#pragma pop_macro("IR_PIN_DEPARTING")
+#pragma pop_macro("IR_MARK_DEPARTURE")
 #pragma pop_macro("IR_ERROR_SWITCH")
 #pragma pop_macro("IR_COMPLETIONS")
 #pragma pop_macro("ROP_TAIL_CLOSE")

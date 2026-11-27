@@ -5603,7 +5603,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         Py_DECREF(ranges);
         return NULL;
     }
-    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsnsy#sN}",
+    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsNsy#sN}",
         "nwords", unit->nwords,
         "heads", heads,
         "guarded", guarded,
@@ -5613,7 +5613,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         "compiles", exec->jit_compiles,
         "units", units,
         "ranges", ranges,
-        "switch", (Py_ssize_t)((const uint8_t *)unit->switch_routine - unit->code.start),
+        "published", PyBool_FromLong(exec->jit_entries == unit->entries),
         "eh_frame", (const char *)unit->unwind.eh_frame,
         (Py_ssize_t)(unit->code.size - frame_offset),
         "plans", plans);
@@ -5624,85 +5624,33 @@ jit_unit(PyObject *self, PyObject *code_object)
 #endif
 }
 
-/* Code objects compiled, compiles, words compiled, frames entered by a
- * switch routine and the driver's native calls of units, since startup */
+/* Code objects compiled, compiles, words compiled and the driver's native
+ * calls of units since startup, and with Py_STATS the frame switches made
+ * in compiled code */
 static PyObject *
 jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return Py_BuildValue("{sKsKsKsKsK}",
+    /* "dead": units of dead codes not yet reclaimed (_PyJit_Reclaim()) */
+    Py_ssize_t dead = 0;
+    for (_PyJitUnit *u = interp->ceval.jit_dead; u != NULL; u = u->older) {
+        dead++;
+    }
+    PyObject *stats = Py_BuildValue("{sKsKsKsKsn}",
         "codes", (unsigned long long)interp->ceval.jit_compiled_codes,
         "compiles", (unsigned long long)interp->ceval.jit_compiles,
         "words", (unsigned long long)interp->ceval.jit_compiled_words,
-        "switches", (unsigned long long)interp->ceval.jit_switches,
-        "turns", (unsigned long long)interp->ceval.jit_turns);
-}
-
-/* The execution pin of the calling activation (_PyJit_PinDeparting()).
- * jit_pin_departing() pins the calling frame's code, as a return or a yield
- * of that frame would, and returns the status: 2 (ESCAPED) if releasing the
- * previous pin deallocated it.  jit_pin_departing(items) works through a
- * list within the one call, so that no unit leaves (and no jit_run()
- * releases the pin) in between: it takes each item out of the list and pins
- * it if it is a code object, pins the pinned code again if it is None (only
- * the pin may hold it), or calls it, and returns the statuses and the
- * calls' results. */
-static PyObject *
-jit_pin_departing(PyObject *self, PyObject *args)
-{
-    PyObject *items = NULL;
-    if (!PyArg_ParseTuple(args, "|O!:jit_pin_departing", &PyList_Type, &items)) {
-        return NULL;
+        "turns", (unsigned long long)interp->ceval.jit_turns,
+        "dead", dead);
+#ifdef Py_STATS
+    PyObject *switches = PyLong_FromUnsignedLongLong(interp->ceval.jit_switches);
+    if (stats != NULL &&
+        (switches == NULL || PyDict_SetItemString(stats, "switches", switches) < 0)) {
+        Py_CLEAR(stats);
     }
-    PyThreadState *tstate = PyThreadState_Get();
-    _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
-    /* The pin reads only the frame's code */
-    _PyInterpreterFrame frame = {0};
-    if (items == NULL) {
-        frame.f_executable = tstate->current_frame->f_executable;
-        return PyLong_FromLong(_PyJit_PinDeparting(tstate, &frame));
-    }
-    PyObject *results = PyList_New(0);
-    if (results == NULL) {
-        return NULL;
-    }
-    while (PyList_GET_SIZE(items) > 0) {
-        PyObject *item = PyList_GetItemRef(items, 0);
-        if (item == NULL) {
-            goto error;
-        }
-        if (PyList_SetSlice(items, 0, 1, NULL) < 0) {
-            Py_DECREF(item);
-            goto error;
-        }
-        PyObject *result;
-        if (PyCode_Check(item) || item == Py_None) {
-            if (item == Py_None && activation->jit_pin == NULL) {
-                PyErr_SetString(PyExc_ValueError, "nothing is pinned");
-                Py_DECREF(item);
-                goto error;
-            }
-            /* None pins the pinned code by the pin's own reference, which
-             * may be its last */
-            frame.f_executable = (PyCodeObject *)(item == Py_None ? activation->jit_pin : item);
-            int status = _PyJit_PinDeparting(tstate, &frame);
-            Py_DECREF(item);
-            result = PyLong_FromLong(status);
-        }
-        else {
-            result = PyObject_CallNoArgs(item);
-            Py_DECREF(item);
-        }
-        if (result == NULL || PyList_Append(results, result) < 0) {
-            Py_XDECREF(result);
-            goto error;
-        }
-        Py_DECREF(result);
-    }
-    return results;
-error:
-    Py_DECREF(results);
-    return NULL;
+    Py_XDECREF(switches);
+#endif
+    return stats;
 }
 
 /* Set the warm-up events before a code object compiles under -X jit=on
@@ -5750,7 +5698,6 @@ static PyMethodDef module_functions[] = {
     {"jit_unit", jit_unit, METH_O},
     {"jit_compile", jit_compile, METH_O},
     {"jit_stats", jit_stats, METH_NOARGS},
-    {"jit_pin_departing", jit_pin_departing, METH_VARARGS},
     {"set_jit_warmup", set_jit_warmup, METH_O},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),

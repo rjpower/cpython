@@ -664,6 +664,13 @@ class ArmLowerer:
             return False
         return self.fixed_local.get(operand)
 
+    def is_vacant(self, operand: str) -> bool:
+        """Whether the member arm fixes the operand's home as a temporary:
+        a destination temporary is vacant by construction
+        (rop_check.check_contract), so it has no old value to close.  A
+        projection is a temporary too, but not a vacant one."""
+        return self.fixed_local.get(operand) is False
+
     def flag_test(self, operand: str) -> str:
         """The C condition that the operand's home is a local"""
         fixed = self.is_local(operand)
@@ -1172,9 +1179,7 @@ class ArmLowerer:
         for d in olds:
             if d.subject in stored:
                 continue
-            if self.is_local(d.subject) is False:
-                # A temporary destination is vacant by construction
-                # (rop_check.check_contract): no old value to close
+            if self.is_vacant(d.subject):
                 self.emit(f"assert(PyValue_IsNull(*{self.home(d.subject)}));")
                 continue
             self.declare("old_" + cname(d.subject), "PyValue")
@@ -1210,7 +1215,7 @@ class ArmLowerer:
                 self.close(owners[d.subject])
             elif d.kind is DebtKind.old and d.subject in stored:
                 pass
-            elif d.kind is DebtKind.old and self.is_local(d.subject) is False:
+            elif d.kind is DebtKind.old and self.is_vacant(d.subject):
                 pass
             elif d.kind is DebtKind.old:
                 self.close(f"old_{cname(d.subject)}")

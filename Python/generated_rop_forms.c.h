@@ -2848,7 +2848,9 @@ ir_run_IterOpen_Generic(
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
     _PyStatusValue ret1;
     PyValue own_source = PyValue_NULL;
+    PyValue old_pair_receiver;
     PyValue *const home_pair_receiver = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
     int adapt_before_use_iter1_c_indexed;
     int ret2;
@@ -2881,13 +2883,15 @@ ir_run_IterOpen_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    assert(PyValue_IsNull(*home_pair_receiver));
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_receiver = *home_pair_receiver;
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_pair_receiver, pr);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, PyValue_NULL);
     ROP_TAIL_CLOSE(a_owned0, rop_IterOpen_Generic_Tail0_0);
     ROP_TAIL_CLOSE(own_source, rop_IterOpen_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Generic_Tail0_3);
     DISPATCH();
     rop_IterOpen_Generic_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -2895,9 +2899,19 @@ ir_run_IterOpen_Generic(
     rop_IterOpen_Generic_Tail0_1:
     ROP_TAIL_PARK_FIRST(own_source);
     goto rop_IterOpen_Generic_Tail0_Rest2;
+    rop_IterOpen_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Generic_Tail0_Rest3;
+    rop_IterOpen_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Generic_Tail0_Rest4;
     rop_IterOpen_Generic_Tail0_Rest1:
     ROP_TAIL_PARK(own_source);
     rop_IterOpen_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_pair_receiver);
+    rop_IterOpen_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Generic_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_IterOpen_Generic_adapt_before_use_iter1_Sample:
     if (PyValue_IsObject(PyValue_Borrow(*home_source))) {
@@ -2963,14 +2977,16 @@ ir_run_IterOpen_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    assert(PyValue_IsNull(*home_pair_receiver));
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_receiver = *home_pair_receiver;
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_pair_receiver, ir);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, z);
     _PyValue_CheckTemp(*home_pair_cursor);
     ROP_TAIL_CLOSE(a_owned0, rop_IterOpen_Generic_Tail1_0);
     ROP_TAIL_CLOSE(own_source, rop_IterOpen_Generic_Tail1_1);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Generic_Tail1_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Generic_Tail1_3);
     DISPATCH();
     rop_IterOpen_Generic_Tail1_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -2978,9 +2994,19 @@ ir_run_IterOpen_Generic(
     rop_IterOpen_Generic_Tail1_1:
     ROP_TAIL_PARK_FIRST(own_source);
     goto rop_IterOpen_Generic_Tail1_Rest2;
+    rop_IterOpen_Generic_Tail1_2:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Generic_Tail1_Rest3;
+    rop_IterOpen_Generic_Tail1_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Generic_Tail1_Rest4;
     rop_IterOpen_Generic_Tail1_Rest1:
     ROP_TAIL_PARK(own_source);
     rop_IterOpen_Generic_Tail1_Rest2:
+    ROP_TAIL_PARK(old_pair_receiver);
+    rop_IterOpen_Generic_Tail1_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Generic_Tail1_Rest4:
     ROP_TAIL_DISPATCH();
 }
 
@@ -3025,6 +3051,7 @@ ir_run_ForIter_Generic(
     PyValue arg10;
     PyValue old_item;
     PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     _PyRopAnchors a_all11;
     _PyRopSrcs srcs12;
     PyValue own_pair_receiver = PyValue_NULL;
@@ -3167,7 +3194,7 @@ ir_run_ForIter_Generic(
         goto rop_ForIter_Generic_ItemGone;
     }
     old_item = *home_item;
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_item, iv);
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
@@ -3175,6 +3202,7 @@ ir_run_ForIter_Generic(
     ROP_TAIL_CLOSE(a_owned0, rop_ForIter_Generic_Tail0_0);
     ROP_TAIL_CLOSE(a_owned1, rop_ForIter_Generic_Tail0_1);
     ROP_TAIL_CLOSE(old_item, rop_ForIter_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_ForIter_Generic_Tail0_3);
     DISPATCH();
     rop_ForIter_Generic_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -3185,11 +3213,16 @@ ir_run_ForIter_Generic(
     rop_ForIter_Generic_Tail0_2:
     ROP_TAIL_PARK_FIRST(old_item);
     goto rop_ForIter_Generic_Tail0_Rest3;
+    rop_ForIter_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_ForIter_Generic_Tail0_Rest4;
     rop_ForIter_Generic_Tail0_Rest1:
     ROP_TAIL_PARK(a_owned1);
     rop_ForIter_Generic_Tail0_Rest2:
     ROP_TAIL_PARK(old_item);
     rop_ForIter_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_ForIter_Generic_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_ForIter_Generic_Failed:
     IR_STUB_ESCAPE();
@@ -3740,6 +3773,8 @@ ir_run_Send_Generic(
     _PyStatusValue ret5;
     PyValue arg6;
     PyValue arg7;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
     _PyRopAnchors a_all8;
     _PyRopSrcs srcs9;
     PyValue own_send_receiver = PyValue_NULL;
@@ -3843,8 +3878,8 @@ ir_run_Send_Generic(
     if (_PyRop_RedirectPending(frame)) {
         goto rop_Send_Generic_YieldGone;
     }
-    assert(PyValue_IsNull(*home_send_cursor));
-    assert(PyValue_IsNull(*home_send_value));
+    old_send_cursor = *home_send_cursor;
+    old_send_value = *home_send_value;
     _PyFrame_WriteHome(frame, home_send_cursor, nc);
     _PyValue_CheckTemp(*home_send_cursor);
     _PyFrame_WriteHome(frame, home_send_value, y);
@@ -3852,6 +3887,8 @@ ir_run_Send_Generic(
     ROP_TAIL_CLOSE(a_owned0, rop_Send_Generic_Tail0_0);
     ROP_TAIL_CLOSE(a_owned1, rop_Send_Generic_Tail0_1);
     ROP_TAIL_CLOSE(a_owned2, rop_Send_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_send_cursor, rop_Send_Generic_Tail0_3);
+    ROP_TAIL_CLOSE(old_send_value, rop_Send_Generic_Tail0_4);
     DISPATCH();
     rop_Send_Generic_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -3862,11 +3899,21 @@ ir_run_Send_Generic(
     rop_Send_Generic_Tail0_2:
     ROP_TAIL_PARK_FIRST(a_owned2);
     goto rop_Send_Generic_Tail0_Rest3;
+    rop_Send_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_send_cursor);
+    goto rop_Send_Generic_Tail0_Rest4;
+    rop_Send_Generic_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_send_value);
+    goto rop_Send_Generic_Tail0_Rest5;
     rop_Send_Generic_Tail0_Rest1:
     ROP_TAIL_PARK(a_owned1);
     rop_Send_Generic_Tail0_Rest2:
     ROP_TAIL_PARK(a_owned2);
     rop_Send_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_send_cursor);
+    rop_Send_Generic_Tail0_Rest4:
+    ROP_TAIL_PARK(old_send_value);
+    rop_Send_Generic_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_Send_Generic_Failed:
     IR_STUB_ESCAPE();
@@ -14444,7 +14491,9 @@ ir_run_IterOpen_Self(
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
     PyValueBorrow v;
     PyValue moved;
+    PyValue old_pair_receiver;
     PyValue *const home_pair_receiver = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
     v = PyValue_Borrow(*home_source);
     if (!PyValue_IsObject(v)) {
@@ -14454,12 +14503,24 @@ ir_run_IterOpen_Self(
         JUMP_TO_PREDICTED(IterOpen_Generic);
     }
     moved = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_source) : _PyFrame_TakeHome(frame, home_source));
-    assert(PyValue_IsNull(*home_pair_receiver));
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_receiver = *home_pair_receiver;
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_pair_receiver, moved);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, PyValue_NULL);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Self_Tail0_0);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Self_Tail0_1);
     DISPATCH();
+    rop_IterOpen_Self_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Self_Tail0_Rest1;
+    rop_IterOpen_Self_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Self_Tail0_Rest2;
+    rop_IterOpen_Self_Tail0_Rest1:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Self_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14478,7 +14539,9 @@ ir_run_IterOpen_Indexed(
     PyValueBorrow v;
     PyValue z;
     PyValue moved;
+    PyValue old_pair_receiver;
     PyValue *const home_pair_receiver = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
     v = PyValue_Borrow(*home_source);
     if (!PyValue_IsObject(v)) {
@@ -14489,13 +14552,25 @@ ir_run_IterOpen_Indexed(
     }
     z = _PyRop_TaggedZero();
     moved = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_source) : _PyFrame_TakeHome(frame, home_source));
-    assert(PyValue_IsNull(*home_pair_receiver));
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_receiver = *home_pair_receiver;
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_pair_receiver, moved);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, z);
     _PyValue_CheckTemp(*home_pair_cursor);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Indexed_Tail0_0);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Indexed_Tail0_1);
     DISPATCH();
+    rop_IterOpen_Indexed_Tail0_0:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Indexed_Tail0_Rest1;
+    rop_IterOpen_Indexed_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Indexed_Tail0_Rest2;
+    rop_IterOpen_Indexed_Tail0_Rest1:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Indexed_Tail0_Rest2:
+    ROP_TAIL_DISPATCH();
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -14516,7 +14591,9 @@ ir_run_IterOpen_GenMethod(
     PyValue a_owned0;
     PyValue ret1;
     PyValue own_source = PyValue_NULL;
+    PyValue old_pair_receiver;
     PyValue *const home_pair_receiver = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
     _PyRopAnchors a_all2;
     _PyRopSrcs srcs3;
@@ -14539,13 +14616,15 @@ ir_run_IterOpen_GenMethod(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    assert(PyValue_IsNull(*home_pair_receiver));
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_receiver = *home_pair_receiver;
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_pair_receiver, g);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, PyValue_NULL);
     ROP_TAIL_CLOSE(a_owned0, rop_IterOpen_GenMethod_Tail0_0);
     ROP_TAIL_CLOSE(own_source, rop_IterOpen_GenMethod_Tail0_1);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_GenMethod_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_GenMethod_Tail0_3);
     DISPATCH();
     rop_IterOpen_GenMethod_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -14553,9 +14632,19 @@ ir_run_IterOpen_GenMethod(
     rop_IterOpen_GenMethod_Tail0_1:
     ROP_TAIL_PARK_FIRST(own_source);
     goto rop_IterOpen_GenMethod_Tail0_Rest2;
+    rop_IterOpen_GenMethod_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_GenMethod_Tail0_Rest3;
+    rop_IterOpen_GenMethod_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_GenMethod_Tail0_Rest4;
     rop_IterOpen_GenMethod_Tail0_Rest1:
     ROP_TAIL_PARK(own_source);
     rop_IterOpen_GenMethod_Tail0_Rest2:
+    ROP_TAIL_PARK(old_pair_receiver);
+    rop_IterOpen_GenMethod_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_GenMethod_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_IterOpen_GenMethod_Failed:
     IR_STUB_ESCAPE();
@@ -14586,6 +14675,7 @@ ir_run_ForIter_List(
     PyValue arg4;
     PyValue old_item;
     PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     PyValue own_pair_receiver = PyValue_NULL;
     PyValue own_pair_cursor = PyValue_NULL;
     PyValue iv;
@@ -14605,15 +14695,23 @@ ir_run_ForIter_List(
     iv = arg3;
     nc = arg4;
     old_item = *home_item;
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_item, iv);
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
     _PyValue_CheckTemp(*home_pair_cursor);
     ROP_TAIL_CLOSE(old_item, rop_ForIter_List_Tail0_0);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_ForIter_List_Tail0_1);
     DISPATCH();
     rop_ForIter_List_Tail0_0:
     ROP_TAIL_PARK_FIRST(old_item);
+    goto rop_ForIter_List_Tail0_Rest1;
+    rop_ForIter_List_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_ForIter_List_Tail0_Rest2;
+    rop_ForIter_List_Tail0_Rest1:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_ForIter_List_Tail0_Rest2:
     ROP_TAIL_DISPATCH();
     rop_ForIter_List_Exhausted:
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
@@ -14660,6 +14758,7 @@ ir_run_ForIter_Tuple(
     PyValue arg4;
     PyValue old_item;
     PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     PyValue own_pair_receiver = PyValue_NULL;
     PyValue own_pair_cursor = PyValue_NULL;
     PyValue iv;
@@ -14679,15 +14778,23 @@ ir_run_ForIter_Tuple(
     iv = arg3;
     nc = arg4;
     old_item = *home_item;
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_item, iv);
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
     _PyValue_CheckTemp(*home_pair_cursor);
     ROP_TAIL_CLOSE(old_item, rop_ForIter_Tuple_Tail0_0);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_ForIter_Tuple_Tail0_1);
     DISPATCH();
     rop_ForIter_Tuple_Tail0_0:
     ROP_TAIL_PARK_FIRST(old_item);
+    goto rop_ForIter_Tuple_Tail0_Rest1;
+    rop_ForIter_Tuple_Tail0_1:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_ForIter_Tuple_Tail0_Rest2;
+    rop_ForIter_Tuple_Tail0_Rest1:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_ForIter_Tuple_Tail0_Rest2:
     ROP_TAIL_DISPATCH();
     rop_ForIter_Tuple_Exhausted:
     own_pair_receiver = _PyFrame_TakeHome(frame, home_pair_receiver);
@@ -14809,6 +14916,7 @@ ir_run_ForIter_Indexed(
     PyValue arg4;
     PyValue old_item;
     PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     _PyRopAnchors a_all5;
     _PyRopSrcs srcs6;
     PyValue own_pair_receiver = PyValue_NULL;
@@ -14837,7 +14945,7 @@ ir_run_ForIter_Indexed(
     iv = arg3;
     nc = arg4;
     old_item = *home_item;
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_item, iv);
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
@@ -14845,6 +14953,7 @@ ir_run_ForIter_Indexed(
     ROP_TAIL_CLOSE(a_owned0, rop_ForIter_Indexed_Tail0_0);
     ROP_TAIL_CLOSE(a_owned1, rop_ForIter_Indexed_Tail0_1);
     ROP_TAIL_CLOSE(old_item, rop_ForIter_Indexed_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_ForIter_Indexed_Tail0_3);
     DISPATCH();
     rop_ForIter_Indexed_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -14855,11 +14964,16 @@ ir_run_ForIter_Indexed(
     rop_ForIter_Indexed_Tail0_2:
     ROP_TAIL_PARK_FIRST(old_item);
     goto rop_ForIter_Indexed_Tail0_Rest3;
+    rop_ForIter_Indexed_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_ForIter_Indexed_Tail0_Rest4;
     rop_ForIter_Indexed_Tail0_Rest1:
     ROP_TAIL_PARK(a_owned1);
     rop_ForIter_Indexed_Tail0_Rest2:
     ROP_TAIL_PARK(old_item);
     rop_ForIter_Indexed_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_ForIter_Indexed_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_ForIter_Indexed_Failed:
     IR_STUB_ESCAPE();
@@ -15057,6 +15171,7 @@ ir_run_ForIter_Observed(
     PyValue arg4;
     PyValue old_item;
     PyValue *const home_item = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     int ret5;
     _PyRopAnchors a_all6;
     _PyRopSrcs srcs7;
@@ -15085,7 +15200,7 @@ ir_run_ForIter_Observed(
     iv = arg3;
     nc = arg4;
     old_item = *home_item;
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_item, iv);
     _PyValue_CheckHome(*home_item);
     _PyFrame_WriteHome(frame, home_pair_cursor, nc);
@@ -15093,6 +15208,7 @@ ir_run_ForIter_Observed(
     PyValue_XCLOSE(a_owned0);
     PyValue_XCLOSE(a_owned1);
     PyValue_XCLOSE(old_item);
+    PyValue_XCLOSE(old_pair_cursor);
     IR_STUB_ESCAPE();
     ret5 = _PyRop_BranchEvent(tstate, frame, this_instr, false);
     if (ret5 > 0) {
@@ -18661,6 +18777,8 @@ ir_run_Send_Virtual(
     _PyStatusValue ret2;
     PyValue arg3;
     PyValue arg4;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
     _PyRopAnchors a_all5;
     _PyRopSrcs srcs6;
     PyValue own_send_receiver = PyValue_NULL;
@@ -18694,14 +18812,16 @@ ir_run_Send_Virtual(
     arg4 = out1;
     y = arg3;
     nc = arg4;
-    assert(PyValue_IsNull(*home_send_cursor));
-    assert(PyValue_IsNull(*home_send_value));
+    old_send_cursor = *home_send_cursor;
+    old_send_value = *home_send_value;
     _PyFrame_WriteHome(frame, home_send_cursor, nc);
     _PyValue_CheckTemp(*home_send_cursor);
     _PyFrame_WriteHome(frame, home_send_value, y);
     _PyValue_CheckHome(*home_send_value);
     ROP_TAIL_CLOSE(a_owned0, rop_Send_Virtual_Tail0_0);
     ROP_TAIL_CLOSE(a_owned1, rop_Send_Virtual_Tail0_1);
+    ROP_TAIL_CLOSE(old_send_cursor, rop_Send_Virtual_Tail0_2);
+    ROP_TAIL_CLOSE(old_send_value, rop_Send_Virtual_Tail0_3);
     DISPATCH();
     rop_Send_Virtual_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -18709,9 +18829,19 @@ ir_run_Send_Virtual(
     rop_Send_Virtual_Tail0_1:
     ROP_TAIL_PARK_FIRST(a_owned1);
     goto rop_Send_Virtual_Tail0_Rest2;
+    rop_Send_Virtual_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_send_cursor);
+    goto rop_Send_Virtual_Tail0_Rest3;
+    rop_Send_Virtual_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_send_value);
+    goto rop_Send_Virtual_Tail0_Rest4;
     rop_Send_Virtual_Tail0_Rest1:
     ROP_TAIL_PARK(a_owned1);
     rop_Send_Virtual_Tail0_Rest2:
+    ROP_TAIL_PARK(old_send_cursor);
+    rop_Send_Virtual_Tail0_Rest3:
+    ROP_TAIL_PARK(old_send_value);
+    rop_Send_Virtual_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_Send_Virtual_Failed:
     IR_STUB_ESCAPE();
@@ -18790,6 +18920,8 @@ ir_run_Send_AsyncGen(
     _PyStatusValue ret2;
     PyValue arg3;
     PyValue arg4;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
     _PyRopAnchors a_all5;
     _PyRopSrcs srcs6;
     PyValue own_send_receiver = PyValue_NULL;
@@ -18822,8 +18954,8 @@ ir_run_Send_AsyncGen(
     arg4 = out1;
     y = arg3;
     nc = arg4;
-    assert(PyValue_IsNull(*home_send_cursor));
-    assert(PyValue_IsNull(*home_send_value));
+    old_send_cursor = *home_send_cursor;
+    old_send_value = *home_send_value;
     _PyFrame_WriteHome(frame, home_send_cursor, nc);
     _PyValue_CheckTemp(*home_send_cursor);
     _PyFrame_WriteHome(frame, home_send_value, y);
@@ -18831,6 +18963,8 @@ ir_run_Send_AsyncGen(
     ROP_TAIL_CLOSE(a_owned0, rop_Send_AsyncGen_Tail0_0);
     ROP_TAIL_CLOSE(a_owned1, rop_Send_AsyncGen_Tail0_1);
     ROP_TAIL_CLOSE(a_owned2, rop_Send_AsyncGen_Tail0_2);
+    ROP_TAIL_CLOSE(old_send_cursor, rop_Send_AsyncGen_Tail0_3);
+    ROP_TAIL_CLOSE(old_send_value, rop_Send_AsyncGen_Tail0_4);
     DISPATCH();
     rop_Send_AsyncGen_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -18841,11 +18975,21 @@ ir_run_Send_AsyncGen(
     rop_Send_AsyncGen_Tail0_2:
     ROP_TAIL_PARK_FIRST(a_owned2);
     goto rop_Send_AsyncGen_Tail0_Rest3;
+    rop_Send_AsyncGen_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_send_cursor);
+    goto rop_Send_AsyncGen_Tail0_Rest4;
+    rop_Send_AsyncGen_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_send_value);
+    goto rop_Send_AsyncGen_Tail0_Rest5;
     rop_Send_AsyncGen_Tail0_Rest1:
     ROP_TAIL_PARK(a_owned1);
     rop_Send_AsyncGen_Tail0_Rest2:
     ROP_TAIL_PARK(a_owned2);
     rop_Send_AsyncGen_Tail0_Rest3:
+    ROP_TAIL_PARK(old_send_cursor);
+    rop_Send_AsyncGen_Tail0_Rest4:
+    ROP_TAIL_PARK(old_send_value);
+    rop_Send_AsyncGen_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_Send_AsyncGen_Failed:
     IR_STUB_ESCAPE();
@@ -18934,6 +19078,8 @@ ir_run_Send_Observed(
     _PyStatusValue ret2;
     PyValue arg3;
     PyValue arg4;
+    PyValue old_send_cursor;
+    PyValue old_send_value;
     _PyRopAnchors a_all5;
     _PyRopSrcs srcs6;
     _PyStatusValue ret7;
@@ -18979,8 +19125,8 @@ ir_run_Send_Observed(
     arg4 = out1;
     y = arg3;
     nc = arg4;
-    assert(PyValue_IsNull(*home_send_cursor));
-    assert(PyValue_IsNull(*home_send_value));
+    old_send_cursor = *home_send_cursor;
+    old_send_value = *home_send_value;
     _PyFrame_WriteHome(frame, home_send_cursor, nc);
     _PyValue_CheckTemp(*home_send_cursor);
     _PyFrame_WriteHome(frame, home_send_value, y);
@@ -18988,6 +19134,8 @@ ir_run_Send_Observed(
     ROP_TAIL_CLOSE(a_owned0, rop_Send_Observed_Tail0_0);
     ROP_TAIL_CLOSE(a_owned1, rop_Send_Observed_Tail0_1);
     ROP_TAIL_CLOSE(a_owned2, rop_Send_Observed_Tail0_2);
+    ROP_TAIL_CLOSE(old_send_cursor, rop_Send_Observed_Tail0_3);
+    ROP_TAIL_CLOSE(old_send_value, rop_Send_Observed_Tail0_4);
     DISPATCH();
     rop_Send_Observed_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -18998,11 +19146,21 @@ ir_run_Send_Observed(
     rop_Send_Observed_Tail0_2:
     ROP_TAIL_PARK_FIRST(a_owned2);
     goto rop_Send_Observed_Tail0_Rest3;
+    rop_Send_Observed_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_send_cursor);
+    goto rop_Send_Observed_Tail0_Rest4;
+    rop_Send_Observed_Tail0_4:
+    ROP_TAIL_PARK_FIRST(old_send_value);
+    goto rop_Send_Observed_Tail0_Rest5;
     rop_Send_Observed_Tail0_Rest1:
     ROP_TAIL_PARK(a_owned1);
     rop_Send_Observed_Tail0_Rest2:
     ROP_TAIL_PARK(a_owned2);
     rop_Send_Observed_Tail0_Rest3:
+    ROP_TAIL_PARK(old_send_cursor);
+    rop_Send_Observed_Tail0_Rest4:
+    ROP_TAIL_PARK(old_send_value);
+    rop_Send_Observed_Tail0_Rest5:
     ROP_TAIL_DISPATCH();
     rop_Send_Observed_Failed:
     IR_STUB_ESCAPE();

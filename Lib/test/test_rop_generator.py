@@ -883,6 +883,18 @@ class LocalsArmTests(unittest.TestCase):
         self.assertIn("if (!(ir_word & IR_F_LOCAL_B))", rest)
         self.assertIn("old_dst = *home_dst;", rest)
 
+    def test_only_a_member_drops_an_old_value(self):
+        # A projection is a temporary but not vacant: an arm without members
+        # (ForIter.Generic's pair cursor) loads and closes its old value
+        p = products()
+        out = io.StringIO()
+        rop_generator.write_cases(out, p, [])
+        text = out.getvalue()
+        body = text[text.index("TARGET(ForIter_Generic)"):]
+        body = body[:body.index("\n        }\n")]
+        self.assertIn("old_pair_cursor = *home_pair_cursor;", body)
+        self.assertNotIn("assert(PyValue_IsNull(", body)
+
     def test_the_metadata_lists_rows_and_declared_arms(self):
         entries = {e.dotted: e for e in rop_generator.arm_entries(products())}
         self.assertEqual(entries["GetAttr.Shape_TL"].declared, "GetAttr_Shape")

@@ -1272,7 +1272,9 @@ _PyIR_Rop_Stub_IterOpen_Generic(
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
     _PyStatusValue ret1;
     PyValue own_source = PyValue_NULL;
+    PyValue old_pair_receiver;
     PyValue *const home_pair_receiver = &IR_SLOT(IR_A(ir_word));
+    PyValue old_pair_cursor;
     PyValue *const home_pair_cursor = &IR_SLOT((IR_A(ir_word) + 1));
     int adapt_before_use_iter1_c_indexed;
     int ret2;
@@ -1305,13 +1307,15 @@ _PyIR_Rop_Stub_IterOpen_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    assert(PyValue_IsNull(*home_pair_receiver));
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_receiver = *home_pair_receiver;
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_pair_receiver, pr);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, PyValue_NULL);
     ROP_TAIL_CLOSE(a_owned0, rop_IterOpen_Generic_Tail0_0);
     ROP_TAIL_CLOSE(own_source, rop_IterOpen_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Generic_Tail0_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Generic_Tail0_3);
     DISPATCH();
     rop_IterOpen_Generic_Tail0_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -1319,9 +1323,19 @@ _PyIR_Rop_Stub_IterOpen_Generic(
     rop_IterOpen_Generic_Tail0_1:
     ROP_TAIL_PARK_FIRST(own_source);
     goto rop_IterOpen_Generic_Tail0_Rest2;
+    rop_IterOpen_Generic_Tail0_2:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Generic_Tail0_Rest3;
+    rop_IterOpen_Generic_Tail0_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Generic_Tail0_Rest4;
     rop_IterOpen_Generic_Tail0_Rest1:
     ROP_TAIL_PARK(own_source);
     rop_IterOpen_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_pair_receiver);
+    rop_IterOpen_Generic_Tail0_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Generic_Tail0_Rest4:
     ROP_TAIL_DISPATCH();
     rop_IterOpen_Generic_adapt_before_use_iter1_Sample:
     if (PyValue_IsObject(PyValue_Borrow(*home_source))) {
@@ -1387,14 +1401,16 @@ _PyIR_Rop_Stub_IterOpen_Generic(
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
-    assert(PyValue_IsNull(*home_pair_receiver));
-    assert(PyValue_IsNull(*home_pair_cursor));
+    old_pair_receiver = *home_pair_receiver;
+    old_pair_cursor = *home_pair_cursor;
     _PyFrame_WriteHome(frame, home_pair_receiver, ir);
     _PyValue_CheckHome(*home_pair_receiver);
     _PyFrame_WriteHome(frame, home_pair_cursor, z);
     _PyValue_CheckTemp(*home_pair_cursor);
     ROP_TAIL_CLOSE(a_owned0, rop_IterOpen_Generic_Tail1_0);
     ROP_TAIL_CLOSE(own_source, rop_IterOpen_Generic_Tail1_1);
+    ROP_TAIL_CLOSE(old_pair_receiver, rop_IterOpen_Generic_Tail1_2);
+    ROP_TAIL_CLOSE(old_pair_cursor, rop_IterOpen_Generic_Tail1_3);
     DISPATCH();
     rop_IterOpen_Generic_Tail1_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
@@ -1402,9 +1418,19 @@ _PyIR_Rop_Stub_IterOpen_Generic(
     rop_IterOpen_Generic_Tail1_1:
     ROP_TAIL_PARK_FIRST(own_source);
     goto rop_IterOpen_Generic_Tail1_Rest2;
+    rop_IterOpen_Generic_Tail1_2:
+    ROP_TAIL_PARK_FIRST(old_pair_receiver);
+    goto rop_IterOpen_Generic_Tail1_Rest3;
+    rop_IterOpen_Generic_Tail1_3:
+    ROP_TAIL_PARK_FIRST(old_pair_cursor);
+    goto rop_IterOpen_Generic_Tail1_Rest4;
     rop_IterOpen_Generic_Tail1_Rest1:
     ROP_TAIL_PARK(own_source);
     rop_IterOpen_Generic_Tail1_Rest2:
+    ROP_TAIL_PARK(old_pair_receiver);
+    rop_IterOpen_Generic_Tail1_Rest3:
+    ROP_TAIL_PARK(old_pair_cursor);
+    rop_IterOpen_Generic_Tail1_Rest4:
     ROP_TAIL_DISPATCH();
 }
 

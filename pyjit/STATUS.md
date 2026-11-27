@@ -434,13 +434,42 @@ nbody 1.56) and generators 2.42; C-bound cases run 1.0-1.05.  At the pilot
 join the JIT ran 1.04 of that day's interpreter: the interpreter's gains
 since then have not reached the forms and stubs most compiled words call.
 
+The full suites at `6f54a4f5c04` with the JIT off pass on release and
+assert (`test_gdb`'s pretty-print failures excluded): test parity at this
+join.
+
+**JA, done 2026-11-26** (`E59/rir90/ja/account.md`, `design.md`): the JIT
+executes 1.27 times the interpreter's instructions (nine kernels, exact),
+and every cause is a mechanism, not an arm:
+- frame transfers: a call and return costs 494 instructions compiled
+  against 276 interpreted, with the bodies at parity; the excess is the
+  switch routine, the pin, a return store every compiled frame takes, and
+  `Resume.Warm` as a form;
+- GN's chain walk stops at compiled frames (generators 2.01);
+- forms and stubs are SysV functions with frame pointers that call
+  outlined copies of rows the interpreter inlines (float multiply 90
+  against 56).
+
+The inline templates already beat the arm (`Add.Int` 22 against 54).
+Prototypes bound the repairs at 1.075 of the interpreter's instructions,
+and even then a form or stub word runs 6-18 instructions over its arm.  JA
+recommends stencils: the interpreter's own arms compiled once more with
+operand and continuation holes (copy-and-patch), so a compiled word is the
+arm without its dispatch and decode, on a frame-transfer protocol that
+jumps through the target code's entry table.  It deletes the forms, stubs,
+resolver, switch routine and pins, and takes the templates out of the
+baseline.  Estimated at 0.75-0.85 of the interpreter's instructions, not
+yet measured.  The choice is the user's.
+
+JA also found a crash from plain Python under `PYTHON_JIT=always`: a test
+method that sets `sys.settrace`, then `test_patma` in the same process,
+enters a compiled frame at a word that is not an entry.  It first appears
+with OB.  The full suites miss it, because each module runs in its own
+worker.
+
 Running:
-- the full suites at this join (release and assert, JIT off and always);
-- JA: an account of the JIT's extra instructions against the interpreter,
-  by word kind and cause, then a design for the baseline JIT on rir90 in
-  which no compiled word runs more than the interpreter's arm for the same
-  word, generated from the same arm graph.  The recommendation goes to the
-  user.
+- the full suites at this join with the JIT always (release and assert);
+- JT: the cause and fix of that crash.
 
 HS, a unit to shrink the arms that still run more instructions than
 golden87's, is held until the JIT plan says whether it comes first.

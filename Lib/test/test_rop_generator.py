@@ -236,7 +236,8 @@ class ArmLoweringTests(unittest.TestCase):
         # is closed (_PyRop_PublishItemsFast), which discharges old(d); the
         # span carries the layout's constant geometry.  A displaced value
         # left with no count sends the rest of the publish, and of the arm,
-        # out of line (_PyRop_PublishItemsRest)
+        # out of line (_PyRop_PublishItemsRest).  The region sets the span
+        # again from the word rather than receiving it
         program = rop_check.check([rop_syntax.parse(OWNERS, "t.rop")])
         self.assertEqual(program.diagnostics, ())
         p = rop_generator.lower_all(program, rop_generator.number_arms(program))
@@ -253,6 +254,8 @@ class ArmLoweringTests(unittest.TestCase):
         self.assertNotIn("_PyRop_PublishItemsRest(", text)
         (c,) = [c for c in p.lowered["F.Split"].cold if "PublishRest" in c.name]
         self.assertIn("v", [n for _, n in c.live])
+        self.assertFalse([n for _, n in c.live if n.startswith("span")])
+        self.assertRegex(c.body[0], r"span\d+ = \(_PyRopSpan\)\{frame, this_instr, ")
         self.assertRegex("\n".join(c.body),
                          r"_PyRop_PublishItemsRest\(span\d+, v.items, v.hold, pub\d+, last\d+\);")
 

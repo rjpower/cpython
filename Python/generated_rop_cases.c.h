@@ -2010,7 +2010,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Generic_NativeFailed)
 
 typedef struct __attribute__((__may_alias__)) {
     PyValue own_source;
-    _PyRopSpan span3;
     int pub4;
     PyValue last5;
     _PyRopItems vals;
@@ -2040,11 +2039,11 @@ IR_OUTLINED_FN(Cold_Unpack_Generic_PublishRest0) {
     _PyRopItems vals;
     { const rop_in_Cold_Unpack_Generic_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Generic_PublishRest0);
       own_source = ir_in->own_source;
-      span3 = ir_in->span3;
       pub4 = ir_in->pub4;
       last5 = ir_in->last5;
       vals = ir_in->vals;
     }
+    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
     _PyRop_PublishItemsRest(span3, vals.items, vals.hold, pub4, last5);
     vals.hold = NULL;
     goto rop_Unpack_Generic_Published0;
@@ -2144,7 +2143,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_PublishRest0)
             rop_Unpack_Generic_PublishRest0:
             { rop_in_Cold_Unpack_Generic_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Generic_PublishRest0);
               ir_in->own_source = own_source;
-              ir_in->span3 = span3;
               ir_in->pub4 = pub4;
               ir_in->last5 = last5;
               ir_in->vals = vals;
@@ -14468,7 +14466,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_WithExit_Generic_MethodFailed)
 typedef struct __attribute__((__may_alias__)) {
     _PyRopItems vals;
     PyValue own_source;
-    _PyRopSpan span1;
     int pub2;
     PyValue last3;
 } rop_in_Cold_Unpack_Tuple_PublishRest0;
@@ -14491,10 +14488,10 @@ IR_OUTLINED_FN(Cold_Unpack_Tuple_PublishRest0) {
     { const rop_in_Cold_Unpack_Tuple_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Tuple_PublishRest0);
       vals = ir_in->vals;
       own_source = ir_in->own_source;
-      span1 = ir_in->span1;
       pub2 = ir_in->pub2;
       last3 = ir_in->last3;
     }
+    span1 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
     _PyRop_PublishItemsRest(span1, vals.items, vals.hold, pub2, last3);
     vals.hold = NULL;
     goto rop_Unpack_Tuple_Published0;
@@ -14547,7 +14544,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Tuple_PublishRest0)
             { rop_in_Cold_Unpack_Tuple_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Tuple_PublishRest0);
               ir_in->vals = vals;
               ir_in->own_source = own_source;
-              ir_in->span1 = span1;
               ir_in->pub2 = pub2;
               ir_in->last3 = last3;
             }
@@ -14556,7 +14552,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Tuple_PublishRest0)
 
 typedef struct __attribute__((__may_alias__)) {
     PyValue own_source;
-    _PyRopSpan span3;
     int pub4;
     PyValue last5;
     _PyRopItems vals;
@@ -14581,11 +14576,11 @@ IR_OUTLINED_FN(Cold_Unpack_List_PublishRest0) {
     _PyRopItems vals;
     { const rop_in_Cold_Unpack_List_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_List_PublishRest0);
       own_source = ir_in->own_source;
-      span3 = ir_in->span3;
       pub4 = ir_in->pub4;
       last5 = ir_in->last5;
       vals = ir_in->vals;
     }
+    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
     _PyRop_PublishItemsRest(span3, vals.items, vals.hold, pub4, last5);
     vals.hold = NULL;
     goto rop_Unpack_List_Published0;
@@ -14646,7 +14641,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_List_PublishRest0)
             rop_Unpack_List_PublishRest0:
             { rop_in_Cold_Unpack_List_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_List_PublishRest0);
               ir_in->own_source = own_source;
-              ir_in->span3 = span3;
               ir_in->pub4 = pub4;
               ir_in->last5 = last5;
               ir_in->vals = vals;
@@ -14656,7 +14650,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_List_PublishRest0)
 
 typedef struct __attribute__((__may_alias__)) {
     PyValue own_source;
-    _PyRopSpan span3;
     int pub4;
     PyValue last5;
     _PyRopItems vals;
@@ -14680,11 +14673,11 @@ IR_OUTLINED_FN(Cold_UnpackStar_Iterable_PublishRest0) {
     _PyRopItems vals;
     { const rop_in_Cold_UnpackStar_Iterable_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_UnpackStar_Iterable_PublishRest0);
       own_source = ir_in->own_source;
-      span3 = ir_in->span3;
       pub4 = ir_in->pub4;
       last5 = ir_in->last5;
       vals = ir_in->vals;
     }
+    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 0, 0};
     _PyRop_PublishItemsRest(span3, vals.items, vals.hold, pub4, last5);
     vals.hold = NULL;
     goto rop_UnpackStar_Iterable_Published0;
@@ -14740,7 +14733,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_UnpackStar_Iterable_PublishRest0)
             rop_UnpackStar_Iterable_PublishRest0:
             { rop_in_Cold_UnpackStar_Iterable_PublishRest0 *ir_in = IR_OUTLINE_IN(rop_in_Cold_UnpackStar_Iterable_PublishRest0);
               ir_in->own_source = own_source;
-              ir_in->span3 = span3;
               ir_in->pub4 = pub4;
               ir_in->last5 = last5;
               ir_in->vals = vals;

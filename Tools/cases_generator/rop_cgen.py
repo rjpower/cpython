@@ -1205,8 +1205,9 @@ class ArmLowerer:
                              self.label)
             live = [(types[n], n) for n in types
                     if n in needed and n in hot_names and not types[n].endswith("const")]
+            live, again = split_rematerial(live, hot)
             name = f"Cold_{self.prefix.removeprefix('rop_')}_{label}"
-            body = [f"goto {self.label(label)};"] + body
+            body = again + [f"goto {self.label(label)};"] + body
             self.cold.append(ColdRegion(name, self.label(label), live,
                                         self.drop_unused_labels(body)))
             # The lines that a fallthrough into the head ran stay in the arm
@@ -1231,8 +1232,9 @@ class ArmLowerer:
                              lambda lb: lb if lb == mid.cold else self.label(lb))
             live = [(types[n], n) for n in types
                     if n in needed and n in hot_names and not types[n].endswith("const")]
+            live, again = split_rematerial(live, hot)
             name = f"Cold_{mid.cold.removeprefix('rop_')}"
-            body = rest + [line for lb in order if lb in region for line in text(lb)]
+            body = again + rest + [line for lb in order if lb in region for line in text(lb)]
             self.cold.append(ColdRegion(name, mid.cold, live, self.drop_unused_labels(body)))
             stub = [f"{mid.cold}:"] + outline_stub(name, live)
             if any(f"goto {mid.cold};" in line for line in arm_lines):
@@ -1718,6 +1720,30 @@ class Decl:
 def c_names(lines: list[str]) -> list[str]:
     """The identifiers in some lines of C"""
     return re.findall(r"\b[A-Za-z_]\w*\b", "\n".join(lines))
+
+
+def split_rematerial(live: list[tuple[str, str]], hot: list[str]
+                     ) -> tuple[list[tuple[str, str]], list[str]]:
+    """Of a cold region's inputs, those the arm sets once from the word
+    alone (a span's descriptor, a decoded field): the region sets them again
+    from its own this_instr and ir_word, rather than the arm keeping them
+    live to its exit and storing them in the activation.  Returns the
+    inputs that travel and the region's lines that set the others."""
+    if any(re.match(r"\s*frame\s*=[^=]", line) for line in hot):
+        return live, []
+    travel, again = [], []
+    for ctype, n in live:
+        defs = [line for line in hot if re.match(rf"\s*{n}\s*=[^=]", line)]
+        if len(defs) == 1:
+            rhs = defs[0].split("=", 1)[1]
+            # Only the word's fields and the span literal: a call may read
+            # state that changed after the arm set the input
+            if all(m in ("frame", "this_instr", "ir_word", "_PyRopSpan") or m.startswith("IR_")
+                   for m in c_names([rhs])):
+                again.append(defs[0].strip())
+                continue
+        travel.append((ctype, n))
+    return travel, again
 
 
 def outline_stub(name: str, live: list[tuple[str, str]]) -> list[str]:

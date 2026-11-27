@@ -276,7 +276,7 @@ extern helper enter_generator(t:Thread, f:Frame, g:B, v:O)
   ensures(entered.generator_frame(c))
   c _PyRop_EnterGenerator as pointer_or_raised
   evidence(
-    review: "ceval.c _PyRop_EnterGenerator: IR_ENTER_GENERATOR's links, gen_claim (the"
+    review: "ceval_shared.h _PyRop_EnterGenerator: IR_ENTER_GENERATOR's links, gen_claim (the"
             "claim of gen_may_claim's guard, a compare-and-swap free-threaded) and"
             "_PyFrame_SetResumeValue.",
     contract: "The receiver is claimed (FRAME_EXECUTING) and its frame returned, whose"

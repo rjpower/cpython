@@ -386,7 +386,6 @@ arm GetAttr.Property split entry(property)
     guard instance_version(o, r) else miss;
     guard default_eval_frame(thread) else miss;
     guard attr_frame_ready(thread, r) else miss;
-    guard recursion_budget(thread) else miss;
     let c:NewFrame = push_property(thread, frame, site, obj, r);
     exit enter(c) resume GetAttr.Returned;
   Miss():
@@ -410,7 +409,6 @@ arm GetAttr.GetattributeOverridden split entry(getattribute_overridden)
     guard instance_version(o, r) else miss;
     guard default_eval_frame(thread) else miss;
     guard attr_frame_ready(thread, r) else miss;
-    guard recursion_budget(thread) else miss;
     let c:NewFrame = push_getattribute(thread, frame, site, obj, name, r);
     exit enter(c) resume GetAttr.Returned;
   Miss():

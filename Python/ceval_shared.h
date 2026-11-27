@@ -1864,9 +1864,23 @@ _PyRop_LinkGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return resumed;
 }
 
-Py_NO_INLINE _PyInterpreterFrame *
+/* Send.Gen: claim the generator that _PyRop_ClaimableGenerator accepted, as
+ * SEND_GEN did, and link its frame.  Free-threaded, another thread can claim
+ * it first, and the send raises what the generic send raises for an
+ * executing generator. */
+static inline _PyInterpreterFrame *
 _PyRop_EnterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                      PyValueBorrow receiver, PyValue sent);
+                      PyValueBorrow receiver, PyValue sent)
+{
+    PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+    if (!gen_claim(tstate, gen)) {
+        PyObject *error = PyErr_GetRaisedException();
+        PyValue_XCLOSE(sent);
+        PyErr_SetRaisedException(error);
+        return NULL;
+    }
+    return _PyRop_LinkGenerator(tstate, frame, gen, sent);
+}
 
 Py_NO_INLINE bool
 _PyRop_ClaimGenerator(PyThreadState *tstate, PyValueBorrow receiver,
@@ -3670,12 +3684,12 @@ _PyRop_CallDescriptorNoargs(PyThreadState *tstate, _PyInterpreterFrame *frame,
         tstate, method->d_method->ml_meth, rop_call_arg(frame, head, 0));
 }
 
-/* The rows of CallKw.Plan (Python/register_ops/calls.rop): a call of a
- * function whose keyword names the site's plan places.  plan_fits is every
- * test that call_bind_core makes before it changes anything, so that
- * push_plan has no decline: the plan is valid for this call's self slot, the
- * frame fits the arena, the function's own defaults cover what the plan
- * leaves to them, and its keyword-only defaults are there. */
+/* The row of the generator-creating plan arms (Python/register_ops/calls.rop):
+ * plan_fits is every test that call_bind_core makes before it changes
+ * anything, so that plan_generator has no decline: the plan is valid for this
+ * call's self slot, the frame fits the arena, the function's own defaults
+ * cover what the plan leaves to them, and its keyword-only defaults are
+ * there.  (push_plan takes the binder's own decline instead.) */
 static inline bool
 _PyRop_PlanFits(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 PyValueBorrow fn, const _PyIRWord *head, const _PyFbCall *fb)

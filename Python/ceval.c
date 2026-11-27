@@ -2297,23 +2297,6 @@ _PyRop_GetANext(PyValue *aiter_home)
     return PyValue_FromObjectSteal(awaitable_o);
 }
 
-/* Send.Gen: claim the generator that _PyRop_ClaimableGenerator accepted, as
- * SEND_GEN did.  Free-threaded, another thread can claim it first, and the
- * send raises what the generic send raises for an executing generator. */
-Py_NO_INLINE _PyInterpreterFrame *
-_PyRop_EnterGenerator(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                      PyValueBorrow receiver, PyValue sent)
-{
-    PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
-    if (!gen_claim(tstate, gen)) {
-        PyObject *error = PyErr_GetRaisedException();
-        PyValue_XCLOSE(sent);
-        PyErr_SetRaisedException(error);
-        return NULL;
-    }
-    return _PyRop_LinkGenerator(tstate, frame, gen, sent);
-}
-
 /* Send.Generic: the claim of the old generic _SEND.  A receiver that is not
  * claimable, or that another thread has claimed or is reading (its state is
  * SUSPENDED_YIELD_FROM_LOCKED), is stepped by _PyValue_Send, which waits. */
@@ -5062,8 +5045,10 @@ _PyRop_PushPlan(PyThreadState *tstate, _PyInterpreterFrame *frame,
     assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
     _PyCallResult pushed = _PyEval_call_bind_positional(tstate, frame, head, *fn,
                                                 PyValue_NULL, &fb->plan);
-    /* plan_fits proved every test of the binding: it does not decline */
-    assert(pushed.status <= 0);
+    if (pushed.status > 0) {
+        /* The plan does not fit this call, and the binder changed nothing */
+        return _PyRop_PushPython(tstate, frame, fn, head);
+    }
     if (pushed.status < 0) {
         _PyEval_rop_call_retire_operands(frame, head);
         return NULL;

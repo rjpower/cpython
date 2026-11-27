@@ -5710,9 +5710,6 @@ ir_run_Call_Exact(
     if (!_PyRop_FrameSpace(tstate, PyValue_Borrow(*home_fn))) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
-    if (!_PyRop_RecursionBudget(tstate)) {
-        JUMP_TO_PREDICTED(Call_Generic);
-    }
     IR_STUB_ESCAPE();
     c = _PyRop_PushExact_Outlined(tstate, frame, home_fn, this_instr);
     ROP_ENTER(c, IR_A(ir_word));
@@ -5748,9 +5745,6 @@ ir_run_Call_BoundExact(
         JUMP_TO_PREDICTED(Call_Generic);
     }
     if (!_PyRop_FrameSpaceBound(tstate, PyValue_Borrow(*home_fn))) {
-        JUMP_TO_PREDICTED(Call_Generic);
-    }
-    if (!_PyRop_RecursionBudget(tstate)) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
     IR_STUB_ESCAPE();
@@ -6171,7 +6165,6 @@ ir_run_CallKw_Plan(
     INSTRUCTION_STATS(ROP_HANDLER_CallKw_Plan);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
     void * ret1;
-    void * ret2;
     _PyInterpreterFrame * c;
     if (!_PyRop_DefaultEvalFrame(tstate)) {
         JUMP_TO_PREDICTED(CallKw_Generic);
@@ -6179,29 +6172,13 @@ ir_run_CallKw_Plan(
     if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
         JUMP_TO_PREDICTED(CallKw_Generic);
     }
-    if (!_PyRop_RecursionBudget(tstate)) {
-        JUMP_TO_PREDICTED(CallKw_Generic);
-    }
-    if (_PyRop_PlanFits_Outlined(tstate, frame, PyValue_Borrow(*home_fn), this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-        goto rop_CallKw_Plan_Planned;
-    }
-    goto rop_CallKw_Plan_General;
-    rop_CallKw_Plan_Planned:
     IR_STUB_ESCAPE();
     ret1 = _PyRop_PushPlan(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
     if (ret1 == NULL) {
         goto rop_CallKw_Plan_Failed;
     }
     c = ret1;
-    rop_CallKw_Plan_Enter:
     ROP_ENTER(c, IR_A(ir_word));
-    rop_CallKw_Plan_General:
-    IR_STUB_ESCAPE();
-    ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
-    if (ret2 != NULL) {
-        c = ret2;
-        goto rop_CallKw_Plan_Enter;
-    }
     rop_CallKw_Plan_Failed:
     PROCESS_ERROR_AT(RAISE, 48, this_instr);
 }
@@ -6220,7 +6197,6 @@ ir_run_Call_PyGeneral(
     INSTRUCTION_STATS(ROP_HANDLER_Call_PyGeneral);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
     void * ret1;
-    void * ret2;
     _PyInterpreterFrame * c;
     if (!_PyRop_DefaultEvalFrame(tstate)) {
         JUMP_TO_PREDICTED(Call_Generic);
@@ -6228,29 +6204,13 @@ ir_run_Call_PyGeneral(
     if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
-    if (!_PyRop_RecursionBudget(tstate)) {
-        JUMP_TO_PREDICTED(Call_Generic);
-    }
-    if (_PyRop_PlanFits_Outlined(tstate, frame, PyValue_Borrow(*home_fn), this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-        goto rop_Call_PyGeneral_Planned;
-    }
-    goto rop_Call_PyGeneral_General;
-    rop_Call_PyGeneral_Planned:
     IR_STUB_ESCAPE();
     ret1 = _PyRop_PushPlan(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
     if (ret1 == NULL) {
         goto rop_Call_PyGeneral_Failed;
     }
     c = ret1;
-    rop_Call_PyGeneral_Enter:
     ROP_ENTER(c, IR_A(ir_word));
-    rop_Call_PyGeneral_General:
-    IR_STUB_ESCAPE();
-    ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
-    if (ret2 != NULL) {
-        c = ret2;
-        goto rop_Call_PyGeneral_Enter;
-    }
     rop_Call_PyGeneral_Failed:
     PROCESS_ERROR_AT(RAISE, 40, this_instr);
 }
@@ -6352,9 +6312,6 @@ ir_run_Call_BoundGeneral(
         JUMP_TO_PREDICTED(Call_Generic);
     }
     if (!_PyRop_MethodVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-        JUMP_TO_PREDICTED(Call_Generic);
-    }
-    if (!_PyRop_RecursionBudget(tstate)) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
     if (_PyRop_PythonTarget(tstate, frame, home_fn, this_instr)) {
@@ -9354,9 +9311,6 @@ ir_run_GetAttr_Property(
     if (!_PyAttr_FrameReady(tstate, r)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
-    if (!_PyRop_RecursionBudget(tstate)) {
-        JUMP_TO_PREDICTED(GetAttr_Generic);
-    }
     IR_STUB_ESCAPE();
     c = _PyAttr_PushProperty(tstate, frame, this_instr, home_obj, r);
     ROP_ENTER(c, IR_A(ir_word));
@@ -9398,9 +9352,6 @@ ir_run_GetAttr_GetattributeOverridden(
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     if (!_PyAttr_FrameReady(tstate, r)) {
-        JUMP_TO_PREDICTED(GetAttr_Generic);
-    }
-    if (!_PyRop_RecursionBudget(tstate)) {
         JUMP_TO_PREDICTED(GetAttr_Generic);
     }
     IR_STUB_ESCAPE();
@@ -10139,9 +10090,6 @@ ir_run_GetItem_Getitem(
         JUMP_TO_PREDICTED(GetItem_Generic);
     }
     if (!_PyRop_GetItemFrameReady(tstate, PyValue_Borrow(*home_obj))) {
-        JUMP_TO_PREDICTED(GetItem_Generic);
-    }
-    if (!_PyRop_RecursionBudget(tstate)) {
         JUMP_TO_PREDICTED(GetItem_Generic);
     }
     IR_STUB_ESCAPE();

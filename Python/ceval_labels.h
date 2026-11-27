@@ -40,23 +40,7 @@ IR_HANDLER_BEGIN(UNKNOWN_OPCODE)
 IR_END
 
 IR_ENTRY_BEGIN(start_frame)
-    int too_deep = _Py_EnterRecursivePy(tstate);
-    if (too_deep) {
-        PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
-    }
-    DTRACE_FUNCTION_ENTRY();
-    next_instr = frame->instr_ptr;
-    ROP_ENTER_GATE();
-#ifdef Py_DEBUG
-    int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS());
-    if (lltrace < 0) {
-        PROCESS_ERROR_AT(EXIT, 0, frame->instr_ptr);
-    }
-    frame->lltrace = lltrace;
-    assert(!_PyErr_Occurred(tstate));
-#endif
-    int opcode;
-    DISPATCH();
+    IR_START_FRAME();
 IR_END
 
 IR_ENTRY_BEGIN(throw_error)

@@ -114,6 +114,11 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
     } while (0)
 #undef JUMP_TO_LABEL
 #define JUMP_TO_LABEL(name) IR_JIT_GOTO(_JIT_LABEL_##name, IR_JIT_NO_WORD())
+/* A departing arm opens the thread's departure window (Python/jit.c,
+ * _PyJit_Reclaim()): the copy runs on after its frame, and maybe its code,
+ * is gone.  The exits into the evaluator close it. */
+#undef IR_MARK_DEPARTURE
+#define IR_MARK_DEPARTURE() (((_PyThreadStateImpl *)tstate)->jit_departing = 1)
 /* Compiled code is the unit: no warm-up event, no switch into it */
 #undef IR_JIT_EVENT_AT
 #define IR_JIT_EVENT_AT(NEXT) ((void)(NEXT))

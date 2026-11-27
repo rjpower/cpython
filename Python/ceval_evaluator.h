@@ -17,12 +17,6 @@
 #include "ir_targets.h"
 #include "ceval_tail.h"
 
-#ifdef _PY_JIT_SUPPORTED
-/* The baseline JIT's hand-offs (Python/ceval_shared.h) */
-#define jit_run _PyEval_JitRun
-#define jit_switch _PyEval_JitSwitch
-#endif
-
 /* Every function of the interpreter, declared before the table and the
  * functions, which tail-call one another (an id without a handler repeats
  * its declaration).  The first declaration fixes the function's place in its
@@ -119,6 +113,8 @@ IR_TAIL_FN(close_dispatch)
     for (int i = 0; i < n; i++) {
         PyValue_XCLOSE(parked[i]);
     }
+    /* The cold exit of a compiled arm: the frame goes back to its unit */
+    IR_JIT_SWITCH();
     int opcode;
     DISPATCH();
 }
@@ -159,3 +155,80 @@ IR_THIS_EVALUATOR(Py_IR_TAIL_PARAMS)
     int opcode;
     DISPATCH();
 }
+
+#if !IR_OBSERVING && defined(_PY_JIT_SUPPORTED)
+/* The baseline JIT's exits (Python/jit.c, bind_hole()): the functions that
+ * compiled code tail-calls when it leaves a word for anything but the next
+ * word's or the target's copy.  Each first closes the thread's departure
+ * window (_PyJit_Reclaim()): control has left the unit's code, and a tail
+ * call leaves no return address into it. */
+#define IR_JIT_LEAVE() (((_PyThreadStateImpl *)tstate)->jit_departing = 0)
+
+/* A frame switch, or a jump whose target has no copy: go on at next_instr
+ * of frame, in its code's unit if the code has live entries, otherwise in
+ * this evaluator */
+Py_IR_TAIL_CC PyValue
+_PyEval_JitDispatch(Py_IR_TAIL_PARAMS)
+{
+    IR_JIT_LEAVE();
+#ifdef Py_STATS
+    tstate->interp->ceval.jit_switches++;
+#endif
+    const void *const *ir_entries = _PyFrame_JitEntries(frame);
+    if (ir_entries != NULL && next_instr != &_PyEval_SwitchWord &&
+        !IR_JIT_TRACED()) {
+        Py_MUSTTAIL return ((_PyIRTailFn)ir_entries[next_instr - frame->ir_words])(
+            tstate, frame, next_instr, ir_word);
+    }
+    int opcode;
+    DISPATCH();
+}
+
+/* A redirect, or a word that runs again under the arm that it now names:
+ * the word at next_instr, in this evaluator */
+Py_IR_TAIL_CC PyValue
+_PyEval_JitInterpret(Py_IR_TAIL_PARAMS)
+{
+    IR_JIT_LEAVE();
+    int opcode;
+    DISPATCH();
+}
+
+/* A guard of the word's arm failed with the word untouched: its family's
+ * generic arm runs the word in this evaluator, with ir_word the word */
+Py_IR_TAIL_CC PyValue
+_PyEval_JitMiss(Py_IR_TAIL_PARAMS)
+{
+    IR_JIT_LEAVE();
+    int generic = _PyJit_GenericOf(IR_HANDLER(ir_word));
+    Py_MUSTTAIL return ir_tail_table[generic](tstate, frame, next_instr, ir_word);
+}
+
+Py_IR_TAIL_CC PyValue
+_PyEval_JitProcessError(Py_IR_TAIL_PARAMS)
+{
+    IR_JIT_LEAVE();
+    IR_TAIL_GOTO(process_error);
+}
+
+Py_IR_TAIL_CC PyValue
+_PyEval_JitCloseDispatch(Py_IR_TAIL_PARAMS)
+{
+    IR_JIT_LEAVE();
+    IR_TAIL_GOTO(close_dispatch);
+}
+
+Py_IR_TAIL_CC PyValue
+_PyEval_JitGenReturn(Py_IR_TAIL_PARAMS)
+{
+    IR_JIT_LEAVE();
+    IR_TAIL_GOTO(gen_return);
+}
+
+/* The entry of an operand word, which no transfer names */
+Py_IR_TAIL_CC PyValue
+_PyEval_JitBadEntry(Py_IR_TAIL_PARAMS)
+{
+    Py_FatalError("baseline JIT: an operand word was entered");
+}
+#endif

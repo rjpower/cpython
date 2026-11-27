@@ -792,6 +792,38 @@ class TestEntries(JitTestCase):
         """, "jit=always")
         self.assertEqual(out.split(), ["True", "0", "1", "True", "0", "True"])
 
+    def test_a_frame_in_a_stale_copy_leaves_at_the_changed_word(self):
+        # The outer frame's loop runs o.x's copy for A.  Its inner call
+        # runs the same word on B's until it specialises for B: the copy
+        # that the outer frame goes on in now reads feedback that A's arm
+        # did not write, so it goes to the evaluator at the word
+        # (Python/jit.c, divert_copy()), and the outer loop's results stay
+        # the interpreter's
+        out = self.check_same("""
+            import sys, _testinternalcapi as t
+            class A:
+                def __init__(self, x):
+                    self.x = x
+            class B:
+                __slots__ = ("x",)
+                def __init__(self, x):
+                    self.x = x
+            def f(objs, inner):
+                total = 0
+                for o in objs:
+                    total += o.x
+                    if o is objs[10] and inner is not None:
+                        total += f(inner, None)
+                return total
+            outer = [A(i) for i in range(20)]
+            inner = [B(i) for i in range(1000)]
+            print(f(outer, inner))
+            u = t.jit_unit(f.__code__)
+            print(sys._jit.is_active() == (u is not None and u["diverted"] > 0))
+        """, modes=("always",))
+        self.assertEqual(out.split(), [str(sum(range(20)) + sum(range(1000))),
+                                       "True"])
+
     def test_a_compiled_head_moves_its_frame_to_the_observing_evaluator(self):
         # f is compiled and off the stack when LINE events start, so its
         # unit is still published: the frame start enters it, and its
@@ -961,6 +993,41 @@ class TestReclamation(unittest.TestCase):
             print(t.jit_stats()["dead"])
         """, "jit=always")
         self.assertEqual(out.split(), ["True", "0"])
+
+    @unittest.skipUnless(AVAILABLE, "the JIT is not available")
+    def test_a_raising_unit_leaves_no_window(self):
+        # f replaces its function's code and raises, directly or from a
+        # callee, so the unwinding of its compiled frame drops the code's
+        # last reference.  The return of the compiled leaf before it opens
+        # the thread's departure window.  f's caller, which is not warm,
+        # goes on in the evaluator: the window is closed, and the next
+        # compile frees the dead units.
+        out = run("""
+            import sys, _testinternalcapi as t
+            def leaf(i):
+                return i
+            t.jit_compile(leaf.__code__)
+            for i in range(10):
+                ns = {"leaf": leaf}
+                exec("def f(self, i):\\n"
+                     "    self.__code__ = (lambda self, i: None).__code__\\n"
+                     "    i = leaf(i)\\n"
+                     "    if i % 2:\\n"
+                     "        raise ValueError(i)\\n"
+                     "    return int('x')\\n", ns)
+                f = ns.pop("f")
+                t.jit_compile(f.__code__)
+                try:
+                    f(f, i)
+                except ValueError:
+                    pass
+                del f, ns
+            print(t.jit_unit(sys._getframe().f_code) is None)
+            print(t.jit_stats()["dead"] > 0)
+            t.jit_compile((lambda: None).__code__)
+            print(t.jit_stats()["dead"])
+        """, "jit=on")
+        self.assertEqual(out.split(), ["True", "True", "0"])
 
     def test_codes_come_and_go(self):
         self.check_modes("""
@@ -1348,12 +1415,13 @@ import sys, weakref, _testinternalcapi as t
 def stats():
     # Compiled code counts its switches only with Py_STATS: -1 without
     s = t.jit_stats()
-    return s["turns"], s.get("switches", -1)
+    return s["handoffs"], s.get("switches", -1)
 def report(name, before):
-    # What the JIT did meanwhile: driver turns and switches, for the record
-    turns, switches = stats()
+    # What the JIT did meanwhile: the evaluator's hand-offs into units and
+    # compiled code's switches, for the record
+    handoffs, switches = stats()
     switched = switches - before[1] if switches >= 0 else -1
-    print(f"jit {name} turns={turns - before[0]} switches={switched}")
+    print(f"jit {name} handoffs={handoffs - before[0]} switches={switched}")
 """
 
 
@@ -1362,25 +1430,31 @@ class TestFrameTransfers(JitTestCase):
     """Calls, returns, yields and resumes between compiled frames
     (g3/design.md section 8, Tests).  Each script prints the same with the
     JIT off, on and always, apart from its 'jit' lines, which record the
-    driver turns and switches each part took, and its 'active' lines, which
-    hold sys._jit.is_active() inside callees and must be True under
-    always.  A frame switch between compiled frames is a tail transfer
-    through the switch routine, so a part that calls compiled code counts
-    switches and only the driver turns of the few leaves: an interpreter
-    fallback, which the driver enters again at the next switch, fails
-    assert_switched()."""
+    evaluator's hand-offs into units and the switches each part took, and
+    its 'active' lines, which hold sys._jit.is_active() inside callees and
+    must be True under always.  A frame switch between compiled frames is a
+    tail call through the target's entries, so a part that calls compiled
+    code counts switches and only the hand-offs of the few leaves: an
+    interpreter fallback, which hands the frame back to its unit at the next
+    switch, fails assert_switched()."""
 
-    def assert_switched(self, out, name, switches, turns=16):
-        """The part name of out took at most turns driver turns: the few
-        leaves (a thread's or C's entry, a warm-up event, a recompile),
-        where each switch was a turn before; and, where compiled code counts
-        them (Py_STATS), at least switches switches."""
+    def assert_switched(self, out, name, switches, handoffs=None):
+        """The part name of out took at most handoffs hand-offs from the
+        evaluator: the few leaves (a thread's or C's entry, a warm-up event,
+        a recompile), and one for each guard miss, after which the frame
+        runs in the evaluator until its next switch (a call whose frame
+        needs a new chunk of the data stack misses, about once in 100
+        levels); by default 16 and 1 in 50 of the switches.  And, where
+        compiled code counts them (Py_STATS), at least switches
+        switches."""
+        if handoffs is None:
+            handoffs = 16 + switches // 50
         for line in out.splitlines():
             if line.startswith(f"jit {name} "):
                 fields = dict(f.split("=") for f in line.split()[2:])
                 if int(fields["switches"]) >= 0:
                     self.assertGreaterEqual(int(fields["switches"]), switches, line)
-                self.assertLessEqual(int(fields["turns"]), turns, line)
+                self.assertLessEqual(int(fields["handoffs"]), handoffs, line)
                 return
         self.fail(f"no 'jit {name}' line in {out}")
 
@@ -2038,12 +2112,12 @@ def cfi_rows(program, initial):
     while i < len(program):
         op = program[i]
         i += 1
-        if op >> 6 == 1 or op in (0x02, 0x03):          # advance_loc, loc1, loc2
+        if op >> 6 == 1 or op in (0x02, 0x03, 0x04):    # advance_loc, loc1, loc2, loc4
             flush()
             if op >> 6 == 1:
                 location += op & 0x3F
             else:
-                width = op - 1
+                width = {0x02: 1, 0x03: 2, 0x04: 4}[op]
                 location += int.from_bytes(program[i:i + width], "little")
                 i += width
         elif op >> 6 == 2:                              # offset
@@ -2071,10 +2145,9 @@ def cfi_rows(program, initial):
 @unittest.skipUnless(AVAILABLE, "the JIT is not available")
 @unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
 class TestUnwind(unittest.TestCase):
-    """A unit registers unwind info that states its frame exactly."""
+    """A unit registers unwind info that states its copies' frames."""
 
-    RBX, RSP, RBP, RIP = 3, 7, 6, 16        # DWARF register numbers
-    PUSHED = (3, 12, 13, 14, 15)            # rbx, r12 to r15, in push order
+    RSP, RIP = 7, 16                        # DWARF register numbers
 
     def unit_of(self, source):
         namespace = {}
@@ -2112,16 +2185,17 @@ class TestUnwind(unittest.TestCase):
         self.assertEqual(frame[fde_start + 4 + fde_size:], bytes(4))   # the end
         return frame[pc_field + 9:fde_start + 4 + fde_size]
 
-    def test_frame_states_the_code_exactly(self):
+    def test_rows_follow_the_copies(self):
+        """A unit has no frame of its own: its rows are its copies' own,
+        each starting from the CIE's rule, which is the rule at every head
+        word's entry."""
         function, unit = self.unit_of("""
             def f(n, total=0):
                 for i in range(n):
                     total += i
                 return total
         """)
-        ctypes = import_helper.import_module("ctypes")
         start, size = unit["ranges"][0]
-        code = ctypes.string_at(start, size)
         program = self.parse_frame(unit["eh_frame"], size)
         entry = (self.RSP, 8, {self.RIP: -8})
         rows = cfi_rows(program, entry)
@@ -2129,41 +2203,17 @@ class TestUnwind(unittest.TestCase):
         def rule_at(pc):
             return [rule for at, rule in rows if at <= pc][-1]
 
-        # The prologue, instruction by instruction
-        self.assertEqual(code[0], 0x55)                      # push rbp
-        self.assertEqual(rule_at(0), entry)
-        pushed_rbp = (self.RSP, 16, {self.RIP: -8, self.RBP: -16})
-        self.assertEqual(rule_at(1), pushed_rbp)
-        self.assertEqual(code[1:4], bytes([0x48, 0x89, 0xE5]))   # mov rbp, rsp
-        self.assertEqual(rule_at(3), pushed_rbp)
-        saved = {self.RIP: -8, self.RBP: -16}
-        self.assertEqual(rule_at(4), (self.RBP, 16, saved))
-        pc = 4
-        for n, reg in enumerate(self.PUSHED):                # push rbx, r12..r15
-            self.assertEqual(code[pc:pc + (1 if reg < 8 else 2)],
-                             bytes([0x50 + reg]) if reg < 8
-                             else bytes([0x41, 0x50 + reg - 8]))
-            self.assertEqual(rule_at(pc), (self.RBP, 16, saved))
-            pc += 1 if reg < 8 else 2
-            saved = {**saved, reg: -24 - 8 * n}
-            self.assertEqual(rule_at(pc), (self.RBP, 16, saved))
-        body = (self.RBP, 16, saved)
-        # The body's rule holds to the end of the code except in the shared
-        # exit, where each pop restores a register and pop rbp, at the ret,
-        # leaves the frame
-        leaving = [at for at, (reg, _, _) in rows if reg == self.RSP and at > 4]
-        self.assertEqual(len(leaving), 1)
-        ret = leaving[0]
-        self.assertEqual(code[ret - 1:ret + 1], bytes([0x5D, 0xC3]))   # pop rbp; ret
-        self.assertEqual(rule_at(ret), (self.RSP, 8, {self.RIP: -8}))
-        popped = dict(saved)
-        for reg in reversed(self.PUSHED):
-            del popped[reg]
-            at = [at for at, rule in rows
-                  if pc < at < ret and rule == (self.RBP, 16, popped)]
-            self.assertEqual(len(at), 1, popped)
-        self.assertEqual(rule_at(ret + 1), body)
-        self.assertEqual(rule_at(size - 1), body)
+        self.assertTrue(unit["entries"])
+        for index, offset in unit["entries"].items():
+            self.assertEqual(rule_at(offset), entry, index)
+        # The copies run on the driver's frame, as the arms do: the CFA is
+        # the stack pointer's, the return address the driver's, and the
+        # stack adjustments of the copies are stated
+        for at, (reg, offset, saved) in rows:
+            self.assertEqual(reg, self.RSP, at)
+            self.assertGreaterEqual(offset, 8, at)
+            self.assertEqual(saved.get(self.RIP), -8, at)
+        self.assertTrue(any(offset > 8 for _, (_, offset, _) in rows))
 
     def test_backtrace_walks_through_units(self):
         """backtrace(), which has no frame pointers to follow, finds the
@@ -2175,7 +2225,13 @@ class TestUnwind(unittest.TestCase):
                 if n == 0:
                     return t.gnu_backtrace_unwind()
                 return operator.call(build, n - 1)
-            stack = build(DEPTH)
+            # The module's names are bound before build runs: a new global
+            # would fail the global reads' guards, and a frame that misses
+            # goes on in the evaluator.  Until specialisation settles, a
+            # recompile may leave a frame in the evaluator (a stale unit).
+            stack = ranges = labels = i = None
+            for i in range(4):
+                stack = build(DEPTH)
             ranges = t.jit_unit(build.__code__)["ranges"]
             print(sum(any(start <= a < start + size for start, size in ranges)
                       for a in stack))
@@ -2186,6 +2242,29 @@ class TestUnwind(unittest.TestCase):
         self.assertGreaterEqual(in_unit, 11)    # build(10) down to build(0)
         self.assertGreaterEqual(python, 10)
 
+    def test_faulthandler_walks_through_units(self):
+        """faulthandler's C stack dump goes through every compiled frame,
+        which has no symbol, down to the program's entry."""
+        out = run("""
+            import faulthandler, operator, sys
+            def build(n, dump):
+                if n == 0:
+                    if dump:
+                        faulthandler.dump_c_stack(sys.stdout)
+                    return
+                return operator.call(build, n - 1, dump)
+            # Until specialisation settles, a frame may go on in the
+            # evaluator
+            for i in range(3):
+                build(3, False)
+            build(3, True)
+        """, "jit=always")
+        lines = out.splitlines()
+        units = [i for i, line in enumerate(lines) if "'<unknown>'" in line]
+        self.assertGreaterEqual(len(units), 4, out)  # build(3) to build(0)
+        self.assertTrue(any("Py_BytesMain" in line
+                            for line in lines[units[-1] + 1:]), out)
+
     def test_backtrace_in_one_activation(self):
         """Direct recursion ten compiled frames deep runs in one native
         activation: backtrace() finds one return address in the units."""
@@ -2195,8 +2274,8 @@ class TestUnwind(unittest.TestCase):
                 if n == 0:
                     return t.gnu_backtrace_unwind()
                 return build(n - 1)
-            build(10)
-            stack = build(10)
+            for _ in range(4):
+                stack = build(10)
             ranges = t.jit_unit(build.__code__)["ranges"]
             print(sum(any(start <= a < start + size for start, size in ranges)
                       for a in stack))

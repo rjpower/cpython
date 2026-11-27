@@ -34,11 +34,18 @@ class JitBacktraceTests(unittest.TestCase):
                     return _testinternalcapi.gnu_backtrace_unwind()
                 return operator.call(build, n - 1)
 
+            # Under always a code compiles before its words specialise, and
+            # a word specialises at its second run: a word that specialises
+            # in a unit goes on in the evaluator until the frame's next
+            # switch.  The third walk is the one checked.
+            build(3)
+            build(3)
             build(3)
         """)
         out, err = run_gdb(
             '--eval-command=set breakpoint pending yes',
             '--eval-command=break gnu_backtrace_unwind',
+            '--eval-command=ignore 1 2',
             '--eval-command=run',
             '--eval-command=bt',
             '--args', sys.executable, '-X', 'jit=always', '-S', '-c', source)
@@ -57,8 +64,8 @@ class JitBacktraceTests(unittest.TestCase):
         # Under always a code compiles at its first event, before its words
         # specialise; the first word that specialises afterwards marks the
         # unit stale from its compiled code (Python/jit.c, mark_stale()): the
-        # walk goes through the unit to _PyEval_JitRun() and the evaluation
-        # loop (g3/design.md section 5)
+        # walk goes through the unit, which runs on the driver's frame, to
+        # ir_evaluate() and the evaluation loop
         source = textwrap.dedent("""
             import _testinternalcapi
 
@@ -85,7 +92,7 @@ class JitBacktraceTests(unittest.TestCase):
                  for line in frames]
         unit = next(i for i, name in enumerate(names)
                     if name.startswith("py::jit:loop:"))
-        self.assertEqual(names[unit + 1], "_PyEval_JitRun", out)
+        self.assertEqual(names[unit + 1], "ir_evaluate", out)
         self.assertTrue(
             any(name.startswith("_PyEval_EvalFrame") for name in names[unit + 2:]),
             out)

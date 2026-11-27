@@ -12,6 +12,7 @@
 #include "pycore_function.h"      // _PyFunction_GetVersionForCurrentState()
 #include "pycore_global_recipe.h" // _PyGlobalRecipe
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
+#include "pycore_jit.h"           // _PyJit_MarkWordChanged()
 #include "pycore_lazyimportobject.h" // PyLazyImport_CheckExact
 #include "pycore_list.h"          // _PyListIterObject, _PyList_Concat
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
@@ -306,8 +307,14 @@ set_opcode(_PyInstr *instr, int opcode)
     return 1;
 #else
     _PyIR_SetHandler(instr, _PyIR_LocalsArm(opcode, *instr));
-    /* No unit is marked here: a unit is stale only when its code finds the
-     * word's handler changed (Python/jit.c, resolve_status()) */
+    /* The units of the code compiled the word's old arm (Python/jit.c).  The
+     * word is the current frame's. */
+#ifdef _PY_JIT_SUPPORTED
+    _PyCodeExec *exec = _PyFrame_Exec(current_frame());
+    if (exec->jit_unit != NULL) {
+        _PyJit_MarkWordChanged(exec, instr);
+    }
+#endif
     return 1;
 #endif
 }

@@ -4623,13 +4623,4 @@ _PyIRTransfer _PyEval_ir_GEN_REDIRECT_EFFECT(PyThreadState *tstate, _PyInterpret
 PyValue _PyEval_ExecuteForms(PyThreadState *tstate, _PyInterpreterFrame *frame,
                              int throwflag);
 
-#ifdef _PY_JIT_SUPPORTED
-/* The baseline JIT's hand-offs (Python/ceval.c), which the evaluators call
- * (jit_run and jit_switch in Python/ceval_evaluator.h) */
-_PyIRTransfer _PyEval_JitRun(PyThreadState *tstate, _PyJitUnit *unit,
-                             _PyInterpreterFrame *frame, _PyInstr *next);
-_PyIRTransfer _PyEval_JitSwitch(PyThreadState *tstate,
-                                _PyInterpreterFrame *frame, _PyInstr *next);
-#endif
-
 #endif /* Py_CEVAL_SHARED_H */

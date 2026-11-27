@@ -211,6 +211,20 @@ _PyJitMemory_Seal(const _PyJitCode *code)
     return mprotect(code->start, length, PROT_READ | PROT_EXEC);
 }
 
+int
+_PyJitMemory_Patch(uint8_t *at, const void *bytes, size_t n)
+{
+    uintptr_t mask = ~(uintptr_t)(memory.page_size - 1);
+    uint8_t *start = (uint8_t *)((uintptr_t)at & mask);
+    size_t length = (((uintptr_t)at + n + memory.page_size - 1) & mask) -
+                    (uintptr_t)start;
+    if (mprotect(start, length, PROT_READ | PROT_WRITE) < 0) {
+        return -1;
+    }
+    memcpy(at, bytes, n);
+    return mprotect(start, length, PROT_READ | PROT_EXEC);
+}
+
 void
 _PyJitMemory_Free(_PyJitCode *code)
 {

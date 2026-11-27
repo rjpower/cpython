@@ -5,7 +5,9 @@ Python/generated_jit_stencils.h."""
 
 import platform
 import re
+import shutil
 import struct
+import subprocess
 import sys
 import sysconfig
 import unittest
@@ -80,6 +82,23 @@ class TableTests(unittest.TestCase):
         self.assertGreater(len(arms), 300)
         self.assertEqual(self.by_name.keys() | stencils.GAPS.keys(), arms)
         self.assertFalse(self.by_name.keys() & stencils.GAPS.keys())
+
+    @unittest.skipIf(shutil.which("objdump") is None, "needs objdump")
+    def test_no_branch_into_the_diversion(self):
+        # A copy whose word changes its arm is diverted by a jmp rel32 over
+        # the five bytes after its endbr64 (Python/jit.c, divert_copy()): no
+        # branch of a stencil may land inside them
+        out = subprocess.run(["objdump", "-d", "--no-show-raw-insn", str(OBJECT)],
+                             capture_output=True, text=True, check=True).stdout
+        starts = re.findall(r"^[0-9a-f]+ <(%s\w+)>:" % stencils.STENCIL, out, re.M)
+        self.assertTrue(starts)
+        inside = re.findall(r"\bj\w+\s+[0-9a-f]+ <(%s\w+)\+0x([4-8])>"
+                            % stencils.STENCIL, out)
+        self.assertEqual(inside, [])
+        table = stencils.read_stencils(object_bytes())
+        for st in table.stencils:
+            with self.subTest(arm=st.name):
+                self.assertTrue(st.parts[0].data.startswith(stencils.ENDBR64))
 
     def test_holes_are_declared(self):
         for s in self.table.stencils:
@@ -179,6 +198,7 @@ class TableTests(unittest.TestCase):
             for h in s.holes:
                 if h.kind is Kind.SUPPORT:
                     with self.subTest(arm=s.name, hole=h):
+                        # The addend places the item in the image
                         self.assertTrue(-8 <= h.addend < size + 8)
 
 
@@ -271,7 +291,27 @@ class RelaxationTests(unittest.TestCase):
                if h.kind is Kind.SUPPORT and h.symbol.startswith(stencils.GOT)]
         self.assertTrue(got)
         slots = [h for h in table.support_holes if h.patch is stencils.Patch.ABS64]
-        self.assertEqual(len(slots), len({h.symbol for h in got}))
+        # One slot per symbol, for the loads and for the PLT's jumps
+        self.assertEqual(len(slots), len({h.symbol[len(stencils.GOT):] for h in got}
+                                         | table.plt.keys()))
+
+    def test_plt(self):
+        # Every symbol that a call or a jump names has a PLT entry, a jmp
+        # through its GOT slot, so that a copy reaches it from anywhere
+        table = stencils.read_stencils(object_bytes())
+        image = table.support.data
+        slots = {h.symbol: h.offset for h in table.support_holes
+                 if h.patch is stencils.Patch.ABS64}
+        called = {h.symbol for s in table.stencils for h in s.holes
+                  if h.kind is Kind.EXTERN and h.part != 2
+                  and stencils.is_call_or_branch(s.parts[h.part].data, h.offset)}
+        self.assertIn("__stack_chk_fail", called)
+        self.assertLessEqual(called, table.plt.keys())
+        for name, at in table.plt.items():
+            with self.subTest(symbol=name):
+                self.assertEqual(image[at:at + 2], b"\xff\x25")
+                rel = struct.unpack_from("<i", image, at + 2)[0]
+                self.assertEqual(at + 6 + rel, slots[name])
 
 
 if __name__ == "__main__":

@@ -134,9 +134,18 @@ struct _ceval_state {
     uint64_t jit_compiled_codes;
     uint64_t jit_compiles;
     uint64_t jit_compiled_words;
-    /* Native calls of a unit by the driver (jit_run()), and, with Py_STATS,
-       frame switches made in compiled code, since startup */
-    uint64_t jit_turns;
+    /* The bytes of the copies those compiles made: hot parts (with the
+       entry table) and cold parts (with the jump tables) */
+    uint64_t jit_hot_bytes;
+    uint64_t jit_cold_bytes;
+    /* Holes of those copies bound to a symbol's PLT entry in the support
+       image, because rel32 does not reach the symbol (libc's) */
+    uint64_t jit_plt_holes;
+    /* Hand-offs from the evaluator into a unit (IR_JIT_EVENT(),
+       IR_JIT_SWITCH() in Python/ceval_macros.h): each follows compiled code
+       falling back to the evaluator, or a first entry.  With Py_STATS, frame
+       switches made by compiled code.  Since startup. */
+    uint64_t jit_handoffs;
 #ifdef Py_STATS
     uint64_t jit_switches;
 #endif

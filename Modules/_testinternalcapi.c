@@ -5603,7 +5603,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         Py_DECREF(ranges);
         return NULL;
     }
-    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsnsy#sN}",
+    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsNsy#sN}",
         "nwords", unit->nwords,
         "heads", heads,
         "guarded", guarded,
@@ -5613,7 +5613,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         "compiles", exec->jit_compiles,
         "units", units,
         "ranges", ranges,
-        "switch", (Py_ssize_t)((const uint8_t *)unit->switch_routine - unit->code.start),
+        "published", PyBool_FromLong(exec->jit_entries == unit->entries),
         "eh_frame", (const char *)unit->unwind.eh_frame,
         (Py_ssize_t)(unit->code.size - frame_offset),
         "plans", plans);
@@ -5624,18 +5624,27 @@ jit_unit(PyObject *self, PyObject *code_object)
 #endif
 }
 
-/* Code objects compiled, compiles, words compiled, frames entered by a
- * switch routine and the driver's native calls of units, since startup */
+/* Code objects compiled, compiles, words compiled and the driver's native
+ * calls of units since startup, and with Py_STATS the frame switches made
+ * in compiled code */
 static PyObject *
 jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return Py_BuildValue("{sKsKsKsKsK}",
+    PyObject *stats = Py_BuildValue("{sKsKsKsK}",
         "codes", (unsigned long long)interp->ceval.jit_compiled_codes,
         "compiles", (unsigned long long)interp->ceval.jit_compiles,
         "words", (unsigned long long)interp->ceval.jit_compiled_words,
-        "switches", (unsigned long long)interp->ceval.jit_switches,
         "turns", (unsigned long long)interp->ceval.jit_turns);
+#ifdef Py_STATS
+    PyObject *switches = PyLong_FromUnsignedLongLong(interp->ceval.jit_switches);
+    if (stats != NULL &&
+        (switches == NULL || PyDict_SetItemString(stats, "switches", switches) < 0)) {
+        Py_CLEAR(stats);
+    }
+    Py_XDECREF(switches);
+#endif
+    return stats;
 }
 
 /* The execution pin of the calling activation (_PyJit_PinDeparting()).

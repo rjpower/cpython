@@ -550,9 +550,9 @@ def compiled(f):
 @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
 class TestHandOff(JitTestCase):
     """The evaluator hands a frame to its code's unit at a frame entry, a
-    return or yield into a frame that ran in its unit, a generator resume, a
-    backward jump and a handled exception; compiled code hands back at
-    every frame switch."""
+    return or yield into a frame whose code has live entries, a generator
+    resume, a backward jump and a handled exception; compiled code goes to
+    the evaluator at a switch to code that publishes no entries."""
 
     def check_hand_off(self, source):
         """The script prints the same in both modes and with the JIT off,
@@ -739,6 +739,58 @@ class TestHandOff(JitTestCase):
             with self.subTest(mode=mode):
                 self.assertEqual(run(src, "ir_forms", f"jit={mode}").split(),
                                  ["False", "0"])
+
+
+class TestEntries(JitTestCase):
+    """A frame switch goes to the target frame's word through its code's
+    entry table, which the code publishes while its newest unit is valid
+    (Python/jit.c, publish()): a retire or a stale mark unpublishes it, and
+    the switch that finds none recompiles a stale unit."""
+
+    def test_monitoring_unpublishes_until_the_code_recompiles(self):
+        out = run("""
+            import sys, _testinternalcapi as t
+            def g():
+                return sys._jit.is_active()
+            def published():
+                return t.jit_unit(g.__code__)["published"]
+            print(g(), published())
+            sys.monitoring.use_tool_id(3, "test")
+            sys.monitoring.set_local_events(3, g.__code__,
+                                            sys.monitoring.events.LINE)
+            sys.monitoring.register_callback(3, sys.monitoring.events.LINE,
+                                             lambda *a: None)
+            print(g(), published())
+            sys.monitoring.set_local_events(3, g.__code__, 0)
+            sys.monitoring.free_tool_id(3)
+            for i in range(3):
+                g()
+            print(g(), published())
+        """, "jit=always")
+        self.assertEqual(out.split(), ["True", "True", "False", "False",
+                                       "True", "True"])
+
+    def test_a_stale_unit_recompiles_at_the_next_switch(self):
+        # f has no loop, so no backward jump of its own recompiles it: the
+        # stale mark unpublishes the entries, and the next call from the
+        # compiled loop goes through the driver, which recompiles
+        out = run("""
+            import _testinternalcapi as t
+            class O:
+                x = 1
+            def f(o):
+                return o.x
+            # Compiled before any word of f has specialised
+            t.jit_compile(f.__code__)
+            u = t.jit_unit(f.__code__)
+            print(u["published"], u["invalid"], u["compiles"])
+            o = O()
+            for i in range(100):
+                f(o)
+            u = t.jit_unit(f.__code__)
+            print(u["published"], u["invalid"], u["compiles"] > 1)
+        """, "jit=always")
+        self.assertEqual(out.split(), ["True", "0", "1", "True", "0", "True"])
 
 
 @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
@@ -1237,12 +1289,14 @@ class TestCompletionStubs(JitTestCase):
 TRANSFER_PRELUDE = """
 import sys, weakref, _testinternalcapi as t
 def stats():
+    # Compiled code counts its switches only with Py_STATS: -1 without
     s = t.jit_stats()
-    return s["turns"], s["switches"]
+    return s["turns"], s.get("switches", -1)
 def report(name, before):
     # What the JIT did meanwhile: driver turns and switches, for the record
     turns, switches = stats()
-    print(f"jit {name} turns={turns - before[0]} switches={switches - before[1]}")
+    switched = switches - before[1] if switches >= 0 else -1
+    print(f"jit {name} turns={turns - before[0]} switches={switched}")
 def settle():
     # The activation's pin keeps the code that compiled code departed last
     # until the next departure (g3/design.md section 2), which may be later
@@ -1261,16 +1315,19 @@ class TestFrameTransfers(JitTestCase):
     always.  A frame switch between compiled frames is a tail transfer
     through the switch routine, so a part that calls compiled code counts
     switches and only the driver turns of the few leaves: an interpreter
-    fallback fails assert_switched()."""
+    fallback, which the driver enters again at the next switch, fails
+    assert_switched()."""
 
     def assert_switched(self, out, name, switches, turns=16):
-        """The part name of out switched at least switches times in at most
-        turns driver turns: the few leaves (a thread's or C's entry, a
-        warm-up event, a recompile), where each switch was a turn before."""
+        """The part name of out took at most turns driver turns: the few
+        leaves (a thread's or C's entry, a warm-up event, a recompile),
+        where each switch was a turn before; and, where compiled code counts
+        them (Py_STATS), at least switches switches."""
         for line in out.splitlines():
             if line.startswith(f"jit {name} "):
                 fields = dict(f.split("=") for f in line.split()[2:])
-                self.assertGreaterEqual(int(fields["switches"]), switches, line)
+                if int(fields["switches"]) >= 0:
+                    self.assertGreaterEqual(int(fields["switches"]), switches, line)
                 self.assertLessEqual(int(fields["turns"]), turns, line)
                 return
         self.fail(f"no 'jit {name}' line in {out}")
@@ -2062,9 +2119,6 @@ class TestUnwind(unittest.TestCase):
             self.assertEqual(len(at), 1, popped)
         self.assertEqual(rule_at(ret + 1), body)
         self.assertEqual(rule_at(size - 1), body)
-        # The switch routine, after the shared exit, keeps the body's rule
-        self.assertGreater(unit["switch"], ret)
-        self.assertEqual(rule_at(unit["switch"]), body)
 
     def test_backtrace_walks_through_units(self):
         """backtrace(), which has no frame pointers to follow, finds the

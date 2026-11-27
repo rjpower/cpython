@@ -103,12 +103,6 @@ typedef struct _PyEvalActivation {
      * departs.  Released by the next pin, by jit_run() after each native
      * call, and when the loop exits. */
     PyObject *jit_pin;
-    /* Assert builds: the unit that this activation is running natively, or
-     * NULL; set where a unit is entered, cleared when it has left and before
-     * the pin is released.  _PyJit_FreeUnits() checks that it frees no unit
-     * named here.  The field is in every build, so that the layout does not
-     * depend on NDEBUG, which the test modules undefine. */
-    struct _PyJitUnit *jit_unit;
     /* The last counts that an arm's tail closes parked (ROP_TAIL_PARK,
      * Python/ceval_macros.h), in close order, for the routine
      * close_dispatch: written on that exit only and read at once */
@@ -453,9 +447,9 @@ PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate,
  * transfer that names it goes to an evaluator, whose switch handler resolves
  * it, whichever frame the transfer leaves and wherever that frame ran, and
  * the frame's instr_ptr stays the word that ran last in it.  The baseline
- * JIT's two places that take a transfer's word for a unit, a unit's
- * transfer to another frame (emit_other_frame(), Python/jit.c) and
- * _PyEval_JitResume(), hand it back. */
+ * JIT's places that take a transfer's word for a unit, a unit's transfer to
+ * another frame (emit_other_frame(), Python/jit.c), the driver and
+ * _PyEval_JitSwitch() (Python/ceval.c), hand it back. */
 extern _PyInstr _PyEval_SwitchWord;
 
 /* Distinct semantic outcomes share one completion/ownership protocol. */

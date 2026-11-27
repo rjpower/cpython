@@ -267,8 +267,7 @@ _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 // moved the resume point of the frame.
 void _Py_COLD_FUNCTION _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
 
-/* _PyFrame_SetReturnValue() when f has a pending redirect or has run in its
- * code's compiled unit (_PyFrame_JIT_RESUME): returns 1. */
+/* _PyFrame_SetReturnValue() when f has a pending redirect: returns 1. */
 int _Py_COLD_FUNCTION _PyFrame_SetReturnValueRare(_PyInterpreterFrame *f,
                                                   PyValue v);
 
@@ -277,7 +276,7 @@ int _Py_COLD_FUNCTION _PyFrame_SetReturnValueRare(_PyInterpreterFrame *f,
 static inline int
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 {
-    if (f->pending_redirect || (f->jit_flags & _PyFrame_JIT_RESUME)) {
+    if (f->pending_redirect) {
         return _PyFrame_SetReturnValueRare(f, v);
     }
     _PyFrame_PublishReturnSlot(f, v);
@@ -285,8 +284,7 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 }
 
 /* V, the value a generator frame f resumes with, goes to the slot that f
- * named.  Control does not come back to f by a return, so its
- * _PyFrame_JIT_RESUME flag does not apply: f goes back to its unit at its RESUME_JIT. */
+ * named. */
 static inline void
 _PyFrame_SetResumeValue(_PyInterpreterFrame *f, PyValue v)
 {
@@ -398,7 +396,6 @@ _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
     dest->pending_kwargs = src->pending_kwargs;
     dest->pending_redirect = src->pending_redirect;
     /* The copy has not run in a unit */
-    dest->jit_flags = 0;
     /* Copy/takeover has a different lifecycle until a supported producer
      * publishes its exact site/phase. */
     // visited is GC bookkeeping for the current stack walk, not frame state.
@@ -502,7 +499,6 @@ _PyFrame_Initialize(
     frame->return_slot = 0;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
-    frame->jit_flags = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG
@@ -909,7 +905,6 @@ _PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
     frame->return_pc = frame->instr_ptr;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
-    frame->jit_flags = 0;
 }
 
 /* Pushes a trampoline frame without checking for space.

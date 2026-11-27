@@ -99,9 +99,6 @@ typedef struct _PyThreadStateImpl {
     // _PyEvalActivation), or NULL.  Stack-switching code saves and restores
     // it with current_frame.
     struct _PyEvalActivation *eval_activation;
-    /* The frame that is running in its code's compiled unit (jit_run() in
-     * Python/ceval.c), or NULL: what sys._jit.is_active() reports. */
-    struct _PyInterpreterFrame *jit_frame;
     /* Frame whose observer callback is running; callback frames themselves
      * are not suspended semantic children of this frame. */
     struct _PyInterpreterFrame *observed_frame;

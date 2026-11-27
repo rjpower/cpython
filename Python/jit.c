@@ -1,4 +1,4 @@
-/* The baseline JIT: units, warm-up and the switches
+/* The baseline JIT: units, warm-up and frame switches
  * (Include/internal/pycore_jit.h, pyjit/design/proposals/tiers87.md Phase 2).
  *
  * B1 compiles every word as a call of the function form of the handler that
@@ -199,7 +199,6 @@ typedef struct {
     _PyJitLabel backedge;   // a backward jump of an invalid unit, in its frame
     _PyJitLabel live;       // call the live handler of the word at rdx
     _PyJitLabel trap;       // an operand word's entry, a broken invariant
-    _PyJitLabel switch_routine; // enter the current frame's unit (emit_frame)
     _PyJitFrameMarks marks;
     _PyJitLabel eh_frame;   // the unwind info, after the code
     /* The code has no compile left after this one: its unit is never marked
@@ -218,110 +217,13 @@ mark(_PyJitAsm *a)
 
 #ifdef Py_DEBUG
 /* A frame that lltrace traces at level 5 runs in the evaluator, as
- * jit_unit_of() in Python/ceval.c decides */
+ * jit_unit_of() in Python/ceval.c decides (emit_other_frame()) */
 static int
 frame_traced(_PyInterpreterFrame *frame)
 {
     return frame->lltrace >= 5;
 }
 #endif
-
-/* The switch routine of emit_frame() (g3/design.md section 1), called at a
- * frame switch, when only r12 is known: the frame to run is
- * tstate->current_frame at its instr_ptr, an instruction head of its
- * executing copy, which the switching code has published.  It loads r13,
- * r14, r15 and rbx for that frame and returns the address to jump to in rax:
- * the entry of the frame's word in its code's newest unit.  A unit is
- * entered on the native frame that is running, whichever unit built it: every
- * unit's frame is this function's.  The cold paths are the driver's rules: a
- * frame whose code has no unit leaves the unit, with the frame and its word,
- * for jit_run(); an invalid unit goes through the warm-up event, which
- * recompiles a stale one (or clears STALE at the cap) and refuses a retired
- * one.  It sets the frame's _PyFrame_JIT_RESUME flag and tstate's jit_frame
- * as jit_run() does, and counts the switch. */
-static void
-emit_switch_routine(_PyJitCompiler *c)
-{
-    _PyJitAsm *a = c->a;
-    _PyJitLabel enter = _PyJitAsm_NewLabel(a);
-    _PyJitLabel invalid = _PyJitAsm_NewLabel(a);
-    _PyJitLabel none = _PyJitAsm_NewLabel(a);
-#ifndef NDEBUG
-    _PyJitLabel bad = _PyJitAsm_NewLabel(a);
-#endif
-    _PyJitAsm_Bind(a, c->switch_routine);
-    _PyJitAsm_MovRM(a, R(R13), AT(R12, offsetof(PyThreadState, current_frame)));
-#ifdef Py_DEBUG
-    _PyJitAsm_AluRI(a, _PyJitAlu_SUB, R(RSP), 8);
-    _PyJitAsm_MovRR(a, R(RDI), R(R13));
-    _PyJitAsm_CallAbs(a, (const void *)frame_traced);
-    _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), 8);
-    _PyJitAsm_TestRR32(a, R(RAX), R(RAX));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, none);
-#endif
-    /* The executing copy's header lies before its words (_PyFrame_Exec()) */
-    _PyJitAsm_MovRM(a, R(R14), AT(R13, offsetof(_PyInterpreterFrame, ir_words)));
-    _PyJitAsm_MovRM(a, R(RAX), AT(R14, (int32_t)offsetof(_PyCodeExec, jit_unit) -
-                                       (int32_t)sizeof(_PyCodeExec)));
-    _PyJitAsm_TestRR(a, R(RAX), R(RAX));
-    _PyJitAsm_Jcc(a, _PyJitCond_E, none);
-    _PyJitAsm_MovzxRM8(a, R(RCX), AT(RAX, offsetof(_PyJitUnit, invalid)));
-    _PyJitAsm_TestRR(a, R(RCX), R(RCX));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, invalid);
-    _PyJitAsm_Bind(a, enter);
-    _PyJitAsm_MovRR(a, R(RBX), R(RAX));
-    _PyJitAsm_MovRM(a, R(R15), AT(R13, offsetof(_PyInterpreterFrame, base)));
-    _PyJitAsm_MovzxRM8(a, R(RCX), AT(R13, offsetof(_PyInterpreterFrame, jit_flags)));
-    _PyJitAsm_AluRI(a, _PyJitAlu_OR, R(RCX), _PyFrame_JIT_RESUME);
-    _PyJitAsm_MovMR8(a, AT(R13, offsetof(_PyInterpreterFrame, jit_flags)), R(RCX));
-    _PyJitAsm_MovMR(a, AT(R12, offsetof(_PyThreadStateImpl, jit_frame)), R(R13));
-    _PyJitAsm_MovRM(a, R(RCX), AT(R12, offsetof(PyThreadState, interp)));
-    _PyJitAsm_UnaryM(a, _PyJitUnary_INC,
-                     AT(RCX, offsetof(PyInterpreterState, ceval.jit_switches)));
-    /* Words and entries are both 8 bytes: the word's offset indexes both */
-    static_assert(sizeof(_PyIRWord) == sizeof(void *), "a word is an entry's size");
-    _PyJitAsm_MovRM(a, R(RDX), AT(R13, offsetof(_PyInterpreterFrame, instr_ptr)));
-    _PyJitAsm_AluRR(a, _PyJitAlu_SUB, R(RDX), R(R14));
-#ifndef NDEBUG
-    /* A successor out of the frame's words is a broken invariant (a payload
-     * word's entry is trap in every build); the activation's record names
-     * the unit entered */
-    _PyJitAsm_MovRM32(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, nwords)));
-    _PyJitAsm_ShiftRI(a, _PyJitShift_SHL, R(RCX), 3);
-    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-    _PyJitAsm_Jcc(a, _PyJitCond_AE, bad);
-    _PyJitAsm_MovRM(a, R(RCX), AT(R12, offsetof(_PyThreadStateImpl, eval_activation)));
-    _PyJitAsm_MovMR(a, AT(RCX, offsetof(_PyEvalActivation, jit_unit)), R(RBX));
-#endif
-    _PyJitAsm_MovRM(a, R(RAX), AT(RBX, offsetof(_PyJitUnit, entries)));
-    _PyJitAsm_MovRM(a, R(RAX), _PyJitMem_Indexed(R(RAX), R(RDX), 0, 0));
-    _PyJitAsm_Ret(a);
-
-    _PyJitSection section = a->current;
-    _PyJitAsm_Section(a, _PyJitSection_COLD);
-    _PyJitAsm_Bind(a, invalid);
-    _PyJitAsm_AluRI(a, _PyJitAlu_SUB, R(RSP), 8);
-    _PyJitAsm_MovRR(a, R(RDI), R(R12));
-    _PyJitAsm_MovRR(a, R(RSI), R(R13));
-    _PyJitAsm_CallAbs(a, (const void *)_PyJit_Event);
-    _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), 8);
-    _PyJitAsm_TestRR(a, R(RAX), R(RAX));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, enter);
-    /* No unit to run: drop the return address and leave with the frame and
-     * its word */
-    _PyJitAsm_Bind(a, none);
-    _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), 8);
-    _PyJitAsm_MovRR(a, R(RAX), R(R13));
-    _PyJitAsm_MovRM(a, R(RDX), AT(R13, offsetof(_PyInterpreterFrame, instr_ptr)));
-    _PyJitAsm_Jmp(a, c->leave);
-#ifndef NDEBUG
-    /* trap, with the stack as at a word boundary */
-    _PyJitAsm_Bind(a, bad);
-    _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), 8);
-    _PyJitAsm_Jmp(a, c->trap);
-#endif
-    _PyJitAsm_Section(a, section);
-}
 
 /* The entry, the shared exits and the stubs.  Registers at a word boundary:
  * r12 tstate, r13 frame, r14 word 0, r15 frame->base, rbx the unit; rsp is
@@ -368,7 +270,6 @@ emit_frame(_PyJitCompiler *c)
     m->popped_rbp = mark(a);
     _PyJitAsm_Ret(a);
     m->returned = mark(a);
-    emit_switch_routine(c);
 
     /* The stubs are cold */
     _PyJitAsm_Section(a, _PyJitSection_COLD);
@@ -460,16 +361,34 @@ build_unwind(const _PyJitCompiler *c, size_t code_size, uint8_t *buffer)
     return _PyJitUnwind_Terminate(&u);
 }
 
-/* A form's transfer to another frame, cold: a call, a return, a yield or a
- * resume goes on at its successor through the switch routine, in the unit
- * of that frame's code (g3/design.md section 1); one that raised or exited
- * leaves for the error route, and one to the switch word leaves for the
- * evaluator's switch handler, with the frame's instr_ptr still the word that
- * ran last in it.  The form has made the frame current. */
+/* The cold path of a switch to frame, whose code publishes no entries but
+ * has a unit, which is invalid: the warm-up event recompiles a stale unit
+ * (or clears STALE at the cap) and refuses a retired one.  Returns the
+ * entries that the event published, or NULL to leave for the driver. */
+static const void *const *
+switch_event(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    _PyJitUnit *unit = _PyJit_Event(tstate, frame);
+    return unit != NULL ? unit->entries : NULL;
+}
+
+/* A form's transfer to another frame, cold: the frame switch of a call, a
+ * return, a yield or a resume.  It goes to the frame's word through the
+ * entry table that the frame's code publishes (publish()), which names a
+ * valid unit, after the warm-up event if the code's unit is invalid
+ * (switch_event()); one that raised or exited, one to the switch word
+ * (which no unit has an entry for: the evaluator's switch handler resolves
+ * it), and one to a frame whose code has no unit to run leave the unit with
+ * the transfer, for the driver.  The frame's instr_ptr stays the word that
+ * ran last in it, as in the evaluator.  The form has made the frame
+ * current. */
 static void
 emit_other_frame(_PyJitCompiler *c, _PyJitLabel other)
 {
     _PyJitAsm *a = c->a;
+    const int32_t header = -(int32_t)sizeof(_PyCodeExec);
+    _PyJitLabel unpublished = _PyJitAsm_NewLabel(a);
+    _PyJitLabel entries = _PyJitAsm_NewLabel(a);
     _PyJitSection section = a->current;
     _PyJitAsm_Section(a, _PyJitSection_COLD);
     _PyJitAsm_Bind(a, other);
@@ -483,15 +402,68 @@ emit_other_frame(_PyJitCompiler *c, _PyJitLabel other)
     _PyJitAsm_MovImm(a, R(RCX), (int64_t)(uintptr_t)&_PyEval_SwitchWord);
     _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
     _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
-    _PyJitAsm_MovMR(a, AT(RAX, offsetof(_PyInterpreterFrame, instr_ptr)), R(RDX));
-    _PyJitAsm_Call(a, c->switch_routine);
-    _PyJitAsm_JmpR(a, R(RAX));
+#ifdef Py_DEBUG
+    _PyJitAsm_Push(a, R(RAX));
+    _PyJitAsm_Push(a, R(RDX));
+    _PyJitAsm_MovRR(a, R(RDI), R(RAX));
+    _PyJitAsm_CallAbs(a, (const void *)frame_traced);
+    _PyJitAsm_TestRR32(a, R(RAX), R(RAX));
+    _PyJitAsm_Pop(a, R(RDX));
+    _PyJitAsm_Pop(a, R(RAX));
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);
+#endif
+    /* The executing copy's header lies before its words (_PyFrame_Exec()) */
+    _PyJitAsm_MovRM(a, R(RCX), AT(RAX, offsetof(_PyInterpreterFrame, ir_words)));
+    _PyJitAsm_MovRM(a, R(RSI), AT(RCX, header + (int32_t)offsetof(_PyCodeExec, jit_entries)));
+    _PyJitAsm_TestRR(a, R(RSI), R(RSI));
+    _PyJitAsm_Jcc(a, _PyJitCond_E, unpublished);
+    _PyJitAsm_Bind(a, entries);
+    _PyJitAsm_MovRR(a, R(R13), R(RAX));
+    _PyJitAsm_MovRR(a, R(R14), R(RCX));
+    _PyJitAsm_MovRM(a, R(R15), AT(R13, offsetof(_PyInterpreterFrame, base)));
+    _PyJitAsm_MovRM(a, R(RBX), AT(R14, header + (int32_t)offsetof(_PyCodeExec, jit_unit)));
+    /* Words and entries are both 8 bytes: the word's offset indexes both */
+    static_assert(sizeof(_PyIRWord) == sizeof(void *), "a word is an entry's size");
+    _PyJitAsm_AluRR(a, _PyJitAlu_SUB, R(RDX), R(R14));
+#ifndef NDEBUG
+    /* A word out of the frame's words is a broken invariant (an operand
+     * word's entry is trap in every build) */
+    _PyJitAsm_MovRM32(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, nwords)));
+    _PyJitAsm_ShiftRI(a, _PyJitShift_SHL, R(RCX), 3);
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
+    _PyJitAsm_Jcc(a, _PyJitCond_AE, c->trap);
+#endif
+#ifdef Py_STATS
+    _PyJitAsm_MovRM(a, R(RCX), AT(R12, offsetof(PyThreadState, interp)));
+    _PyJitAsm_UnaryM(a, _PyJitUnary_INC,
+                     AT(RCX, offsetof(PyInterpreterState, ceval.jit_switches)));
+#endif
+    _PyJitAsm_JmpM(a, _PyJitMem_Indexed(R(RSI), R(RDX), 0, 0));
+
+    /* No entries: none to run if the code has no unit; otherwise the
+     * warm-up event, with the transfer kept (rsp stays 16-byte aligned) */
+    _PyJitAsm_Bind(a, unpublished);
+    _PyJitAsm_MovRM(a, R(RSI), AT(RCX, header + (int32_t)offsetof(_PyCodeExec, jit_unit)));
+    _PyJitAsm_TestRR(a, R(RSI), R(RSI));
+    _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
+    _PyJitAsm_Push(a, R(RAX));
+    _PyJitAsm_Push(a, R(RDX));
+    _PyJitAsm_MovRR(a, R(RDI), R(R12));
+    _PyJitAsm_MovRR(a, R(RSI), R(RAX));
+    _PyJitAsm_CallAbs(a, (const void *)switch_event);
+    _PyJitAsm_MovRR(a, R(RSI), R(RAX));
+    _PyJitAsm_Pop(a, R(RDX));
+    _PyJitAsm_Pop(a, R(RAX));
+    _PyJitAsm_TestRR(a, R(RSI), R(RSI));
+    _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
+    _PyJitAsm_MovRM(a, R(RCX), AT(RAX, offsetof(_PyInterpreterFrame, ir_words)));
+    _PyJitAsm_Jmp(a, entries);
     _PyJitAsm_Section(a, section);
 }
 
 /* The continuation of word i, with its transfer in rax:rdx: the next word or
  * the word's static target in the same frame by a native jump, another
- * frame by the switch routine, anything else by leaving.  The unit's invalid
+ * frame through its entries (emit_other_frame()), anything else by leaving.  The unit's invalid
  * byte is tested after a word that may run Python (RETIRED: monitoring went
  * on) and at a backward jump (either: the backedge stub may recompile).  A
  * word that writes a home releases the home's old value, whose finalizer may
@@ -534,8 +506,46 @@ emit_continuation(_PyJitCompiler *c, uint32_t i)
     _PyJitAsm_Jmp(a, c->leave);
 }
 
-/* STALE into the unit's invalid byte, RETIRED kept; nothing in a capped
- * unit.  Clobbers rcx. */
+/* The executing copy whose words unit compiled: its header lies before
+ * them (_PyFrame_Exec()) */
+static _PyCodeExec *
+exec_of(const _PyJitUnit *unit)
+{
+    return (_PyCodeExec *)unit->words - 1;
+}
+
+/* Every frame switch to the words of exec goes through the entries of its
+ * valid newest unit, which a compile or a stale unit's reprieve at the cap
+ * publishes. */
+static void
+publish(_PyCodeExec *exec, _PyJitUnit *unit)
+{
+    assert(exec->jit_unit == unit && unit->invalid == 0);
+    exec->jit_entries = unit->entries;
+}
+
+/* The newest unit of exec is invalid (retired, stale): switches to its
+ * words go through the warm-up event (_PyJit_Event()). */
+static void
+unpublish(_PyCodeExec *exec)
+{
+    exec->jit_entries = NULL;
+}
+
+/* STALE into the unit's invalid byte, RETIRED kept, and the newest unit's
+ * entries unpublished: the next switch to the code recompiles it */
+static void
+mark_stale(_PyJitUnit *unit)
+{
+    unit->invalid |= _PyJIT_STALE;
+    _PyCodeExec *exec = exec_of(unit);
+    if (exec->jit_unit == unit) {
+        unpublish(exec);
+    }
+}
+
+/* mark_stale() of the unit, at a word boundary; nothing in a capped unit.
+ * Clobbers the caller-saved registers. */
 static void
 emit_mark_stale(_PyJitCompiler *c)
 {
@@ -543,9 +553,8 @@ emit_mark_stale(_PyJitCompiler *c)
         return;
     }
     _PyJitAsm *a = c->a;
-    _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
-    _PyJitAsm_AluRI(a, _PyJitAlu_OR, R(RCX), _PyJIT_STALE);
-    _PyJitAsm_MovMR8(a, AT(RBX, offsetof(_PyJitUnit, invalid)), R(RCX));
+    _PyJitAsm_MovRR(a, R(RDI), R(RBX));
+    _PyJitAsm_CallAbs(a, (const void *)mark_stale);
 }
 
 /* Leave the unit for word dest of the frame */
@@ -646,7 +655,7 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
      * or a specialisation found it (MISS, AGAIN), or a generic arm, which
      * never misses, ran on a word that specialised elsewhere */
     if ((*site & 0xFFFF) != (compiled & COMPILED_HANDLER_BITS)) {
-        unit->invalid |= _PyJIT_STALE;
+        mark_stale(unit);
     }
     if (status & _PyIR_RAISED) {
         return (resolved_status){frame, NULL};
@@ -979,7 +988,6 @@ emit_unit(_PyJitCompiler *c)
     c->backedge = _PyJitAsm_NewLabel(a);
     c->live = _PyJitAsm_NewLabel(a);
     c->trap = _PyJitAsm_NewLabel(a);
-    c->switch_routine = _PyJitAsm_NewLabel(a);
     for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
         c->labels[i] = _PyJitAsm_NewLabel(a);
     }
@@ -1061,7 +1069,6 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     int placed = _PyJitAsm_Place(&a, &unit->code);
     size_t table_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, table);
     size_t frame_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, c.eh_frame);
-    size_t switch_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, c.switch_routine);
     _PyJitAsm_Fini(&a);
     PyMem_RawFree(labels);
     exec->jit_compiles++;
@@ -1076,9 +1083,9 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
         return NULL;
     }
     unit->entries = (const void *const *)(unit->code.start + table_offset);
-    unit->switch_routine = unit->code.start + switch_offset;
     unit->older = exec->jit_unit;
     exec->jit_unit = unit;
+    publish(exec, unit);
     /* The unit's name for gdb and for the perf map */
     char name[512] = "py::jit";
     PyObject *exc = PyErr_GetRaisedException();
@@ -1115,6 +1122,7 @@ _PyJit_Event(PyThreadState *tstate, _PyInterpreterFrame *frame)
     if (unit != NULL && unit->invalid == _PyJIT_STALE) {
         if (exec->jit_compiles >= _PyJIT_MAX_COMPILES) {
             unit->invalid = 0;
+            publish(exec, unit);
             return unit;
         }
     }
@@ -1138,35 +1146,22 @@ _PyJit_Compile(PyCodeObject *code)
     return compile(code, exec);
 }
 
-#ifndef NDEBUG
-/* Whether an activation of the evaluation loop on this thread is running
- * unit natively (its active-unit record): freeing it would pull the code
- * from under it, which the execution pins exist to prevent. */
-static int
-unit_is_active(const _PyJitUnit *unit)
+void
+_PyJit_Retire(_PyCodeExec *exec)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate == NULL) {
-        return 0;
+    if (exec->jit_unit != NULL) {
+        exec->jit_unit->invalid |= _PyJIT_RETIRED;
+        unpublish(exec);
     }
-    for (_PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
-         activation != NULL; activation = activation->previous)
-    {
-        if (activation->jit_unit == unit) {
-            return 1;
-        }
-    }
-    return 0;
 }
-#endif
 
 void
 _PyJit_FreeUnits(_PyCodeExec *exec)
 {
     _PyJitUnit *unit = exec->jit_unit;
+    unpublish(exec);
     exec->jit_unit = NULL;
     while (unit != NULL) {
-        assert(!unit_is_active(unit));
         _PyJitUnit *older = unit->older;
         free_unit(unit);
         unit = older;

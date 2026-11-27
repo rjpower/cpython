@@ -134,10 +134,12 @@ struct _ceval_state {
     uint64_t jit_compiled_codes;
     uint64_t jit_compiles;
     uint64_t jit_compiled_words;
-    /* Frames entered by a unit's switch routine, and native calls of a unit
-       by the driver (jit_run()), since startup */
-    uint64_t jit_switches;
+    /* Native calls of a unit by the driver (jit_run()), and, with Py_STATS,
+       frame switches made in compiled code, since startup */
     uint64_t jit_turns;
+#ifdef Py_STATS
+    uint64_t jit_switches;
+#endif
 };
 
 

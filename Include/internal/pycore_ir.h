@@ -578,8 +578,11 @@ typedef struct _PyCodeExec {
     uint8_t *observe;
     /* The baseline JIT (Include/internal/pycore_jit.h): the newest unit
      * compiled from these words, valid or not, which chains the older ones;
+     * the entry table of that unit while it is valid, else NULL, through
+     * which every frame switch to these words goes (Python/jit.c, publish());
      * the warm-up events since the last compile attempt; and the compiles. */
     struct _PyJitUnit *jit_unit;
+    const void *const *jit_entries;
     uint32_t jit_heat;
     uint32_t jit_compiles;
     uint32_t first_traceable;   // word index of the entry RESUME

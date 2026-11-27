@@ -20,7 +20,7 @@
 #ifdef _PY_JIT_SUPPORTED
 /* The baseline JIT's hand-offs (Python/ceval_shared.h) */
 #define jit_run _PyEval_JitRun
-#define jit_resume _PyEval_JitResume
+#define jit_switch _PyEval_JitSwitch
 #endif
 
 /* Every function of the interpreter, declared before the table and the

@@ -4517,12 +4517,16 @@ _jit_is_active_impl(PyObject *module)
 /*[clinic end generated code: output=7facca06b10064d4 input=081ee32563dc2086]*/
 {
 #ifdef _PY_JIT_SUPPORTED
-    /* The driver records the frame that runs in a unit (jit_run() in
-       Python/ceval.c) */
+    /* A frame runs compiled while its code has a unit that is not retired:
+       a valid one publishes its entries, and a stale one runs on until the
+       next switch to the code recompiles it (Python/jit.c, publish()) */
     PyThreadState *tstate = _PyThreadState_GET();
     _PyInterpreterFrame *frame = tstate->current_frame;
-    return frame != NULL &&
-        frame == ((_PyThreadStateImpl *)tstate)->jit_frame;
+    if (frame == NULL || frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
+        return 0;
+    }
+    _PyJitUnit *unit = _PyFrame_Exec(frame)->jit_unit;
+    return unit != NULL && !(unit->invalid & _PyJIT_RETIRED);
 #else
     return 0;
 #endif

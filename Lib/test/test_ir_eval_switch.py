@@ -95,7 +95,13 @@ class EvalSwitchTests(unittest.TestCase):
             self.assertEqual(after, entries())
             scope.off()
             walk_stack()
-            self.assertEqual(entries(), base)
+            if sys._jit.is_enabled():
+                # The change retired the units of the frames below, which
+                # publish no entries until their code compiles again: they
+                # keep their switches
+                self.assertGreaterEqual(entries(), base)
+            else:
+                self.assertEqual(entries(), base)
         # handler went on in the observing evaluator at its except clause
         self.assertIn(("handler", 6), scope.lines)
         self.assertIn(("handler", 7), scope.lines)

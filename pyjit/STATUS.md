@@ -425,11 +425,25 @@ chaos (1.09) are furthest; nbody (0.86) and deltablue (0.90) are fastest.
 The timed binary drew a good page placement: logging_silent takes 0.91M
 instruction-fetch misses, as golden87 does (0.9M).
 
-Next: the full suites at this join (release and assert, JIT off and
-always), then the baseline JIT, starting from one timing of the JIT
-against this interpreter and golden87.  HS, a unit to shrink the arms that
-still run more instructions than golden87's, is held until the JIT plan
-says whether it comes first.
+Baseline JIT timing on the same code (`6f54a4f5c04`, all-29, CPU 15,
+against golden87 with its JIT off): `always` runs 1.338 cold / 1.326 warm
+and `on` 1.326 / 1.319, so the JIT runs **1.30 times the time of rir90's
+own interpreter**.  Call- and attribute-heavy kernels run 1.35-1.6 times
+the interpreter (unpack_sequence 1.62, raytrace 1.58, deltablue 1.57,
+nbody 1.56) and generators 2.42; C-bound cases run 1.0-1.05.  At the pilot
+join the JIT ran 1.04 of that day's interpreter: the interpreter's gains
+since then have not reached the forms and stubs most compiled words call.
+
+Running:
+- the full suites at this join (release and assert, JIT off and always);
+- JA: an account of the JIT's extra instructions against the interpreter,
+  by word kind and cause, then a design for the baseline JIT on rir90 in
+  which no compiled word runs more than the interpreter's arm for the same
+  word, generated from the same arm graph.  The recommendation goes to the
+  user.
+
+HS, a unit to shrink the arms that still run more instructions than
+golden87's, is held until the JIT plan says whether it comes first.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

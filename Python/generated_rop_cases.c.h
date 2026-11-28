@@ -1106,7 +1106,90 @@ IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_setattr_at_origin2_Moved)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Out_Call_Generic_Python);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_Generic_NativeFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 1
+IR_OUTLINED_FN(Out_Call_Generic_Python) {
+    // Call.Generic: the region from rop_Call_Generic_Python
+    int opcode = ROP_HANDLER_Call_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    void * ret1;
+    int ret2;
+    int adapt_before_use_call1_ce;
+    int ret3;
+    int adapt_before_use_call1_cdescriptor_noargs;
+    int ret4;
+    int adapt_before_use_call1_cdescriptor_fast_keywords;
+    int ret5;
+    int adapt_before_use_call1_cdescriptor_fast;
+    int ret6;
+    int adapt_before_use_call1_cdescriptor_o;
+    int ret7;
+    int adapt_before_use_call1_clist_append;
+    int ret8;
+    int adapt_before_use_call1_cisinstance;
+    int ret9;
+    int adapt_before_use_call1_clen;
+    int ret10;
+    int adapt_before_use_call1_cbuiltin_fast_keywords;
+    int ret11;
+    int adapt_before_use_call1_cbuiltin_fast;
+    int ret12;
+    int adapt_before_use_call1_cbuiltin_o;
+    int ret13;
+    int adapt_before_use_call1_cbuiltin_class;
+    int ret14;
+    int adapt_before_use_call1_ctuple_1;
+    int ret15;
+    int adapt_before_use_call1_cstr_1;
+    int ret16;
+    int adapt_before_use_call1_ctype_1;
+    int ret17;
+    int adapt_before_use_call1_cbg;
+    int ret18;
+    int adapt_before_use_call1_cpg;
+    int ret19;
+    int adapt_before_use_call1_cp;
+    int ret20;
+    int adapt_before_use_call1_cg;
+    int ret21;
+    int adapt_before_use_call1_ci;
+    int ret22;
+    int adapt_before_use_call1_cb;
+    int ret23;
+    PyValue ret24;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret25;
+    _PyInterpreterFrame * c;
+    PyValue z;
+    goto rop_Call_Generic_Python;
+    rop_Call_Generic_Python:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
+    if (ret1 == NULL) {
+        goto rop_Call_Generic_Failed;
+    }
+    c = ret1;
+    ROP_ENTER(c, IR_A(ir_word));
+    rop_Call_Generic_Failed:
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
+}
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 0
+IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Generic_Python)
 #endif
 
 #ifndef IR_JIT_STENCILS
@@ -1249,13 +1332,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Generic_NativeFailed)
             }
             goto rop_Call_Generic_Native;
             rop_Call_Generic_Python:
-            IR_STUB_ESCAPE();
-            ret1 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
-            if (ret1 == NULL) {
-                goto rop_Call_Generic_Failed;
-            }
-            c = ret1;
-            ROP_ENTER(c, IR_A(ir_word));
+            IR_OUTLINE_HOT_GOTO(Out_Call_Generic_Python);
             rop_Call_Generic_adapt_before_use_call1_Sample:
             ret2 = _PyRop_ClassifyCall(this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_fn), this_instr);
             if (ret2 == 1) {
@@ -1572,12 +1649,59 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Generic_NativeFailed)
             PROCESS_ERROR_AT(RAISE, 41, this_instr);
             rop_Call_Generic_PollSwitched:
             IR_REDIRECT();
-            rop_Call_Generic_Failed:
-            PROCESS_ERROR_AT(RAISE, 40, this_instr);
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Out_CallKw_Generic_Python);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallKw_Generic_NativeFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 1
+IR_OUTLINED_FN(Out_CallKw_Generic_Python) {
+    // CallKw.Generic: the region from rop_CallKw_Generic_Python
+    int opcode = ROP_HANDLER_CallKw_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    void * ret1;
+    int ret2;
+    int adapt_before_use_call_kw1_cp;
+    int ret3;
+    int adapt_before_use_call_kw1_cn;
+    int ret4;
+    int adapt_before_use_call_kw1_cb;
+    int ret5;
+    int adapt_before_use_call_kw1_cg;
+    int ret6;
+    PyValue ret7;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret8;
+    _PyInterpreterFrame * c;
+    PyValue z;
+    goto rop_CallKw_Generic_Python;
+    rop_CallKw_Generic_Python:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
+    if (ret1 == NULL) {
+        goto rop_CallKw_Generic_Failed;
+    }
+    c = ret1;
+    ROP_ENTER(c, IR_A(ir_word));
+    rop_CallKw_Generic_Failed:
+    PROCESS_ERROR_AT(RAISE, 48, this_instr);
+}
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 0
+IR_OUTLINED_HOT_JIT_ENTRY(Out_CallKw_Generic_Python)
 #endif
 
 #ifndef IR_JIT_STENCILS
@@ -1652,13 +1776,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_CallKw_Generic_NativeFailed)
             }
             goto rop_CallKw_Generic_Native;
             rop_CallKw_Generic_Python:
-            IR_STUB_ESCAPE();
-            ret1 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
-            if (ret1 == NULL) {
-                goto rop_CallKw_Generic_Failed;
-            }
-            c = ret1;
-            ROP_ENTER(c, IR_A(ir_word));
+            IR_OUTLINE_HOT_GOTO(Out_CallKw_Generic_Python);
             rop_CallKw_Generic_adapt_before_use_call_kw1_Sample:
             ret2 = _PyRop_ClassifyCallKw(this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_fn), this_instr);
             if (ret2 == 1) {
@@ -1748,8 +1866,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_CallKw_Generic_NativeFailed)
             PROCESS_ERROR_AT(RAISE, 49, this_instr);
             rop_CallKw_Generic_PollSwitched:
             IR_REDIRECT();
-            rop_CallKw_Generic_Failed:
-            PROCESS_ERROR_AT(RAISE, 48, this_instr);
         }
 
 typedef struct __attribute__((__may_alias__)) {

@@ -968,7 +968,9 @@ arm Call.Generic split
     exit again(t);
   Run():
     branch python_target(thread, frame, fn, args) -> Python(), Native();
-  Python():
+  // The new frame and the switch into a Python callee: one function, as
+  // Call.Exact's
+  Python() outline:
     call push_python(thread, frame, fn, args) {
       entered -> Enter();
       err -> Failed();
@@ -2135,7 +2137,9 @@ arm CallKw.Generic split
     exit again(t);
   Run():
     branch python_target(thread, frame, fn, args) -> Python(), Native();
-  Python():
+  // The new frame and the switch into a Python callee: one function, as
+  // Call.Exact's
+  Python() outline:
     call push_python(thread, frame, fn, args) {
       entered -> Enter();
       err -> Failed();

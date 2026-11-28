@@ -552,15 +552,25 @@ class ArmKindTests(unittest.TestCase):
         return [message for _, _, message in check_source(src)]
 
     def test_outline_in_an_arm_only(self):
-        arm = ("family F() exits(next);\n"
-               "arm F.A split effects() feedback() exits(next)\n"
-               "{ entry(): goto Rest(); Rest() outline: exit next(); }\n")
+        arm = ("family F() exits(next, miss);\n"
+               "arm F.A split effects() feedback() exits(miss)\n"
+               "{ entry(): goto Rest(); Rest() outline: exit miss(); }\n")
         self.assertEqual(self.messages(arm), [])
         macro = ("macro m() cases(ok()) effects() feedback()\n"
                  "{ entry() outline: exit ok(); }\n")
         self.assertEqual(self.messages(macro),
                          ["entry outline: a macro's blocks are its consumers'; "
                           "outline the consumer's block"])
+
+    def test_an_outlined_region_leaves_the_unit(self):
+        # Its function runs in the evaluator: an exit that goes on in the
+        # copy is refused, also in a block that the region reaches
+        arm = ("family F() exits(next);\n"
+               "arm F.A split effects() feedback() exits(next)\n"
+               "{ entry() outline: goto Rest(); Rest(): exit next(); }\n")
+        self.assertEqual(self.messages(arm),
+                         ["Rest: exit next in an outlined region, whose function "
+                          "runs in the evaluator: end the region before it"])
 
     def test_observer_gates(self):
         src = ("family F() exits(next) events(CALL);\n"

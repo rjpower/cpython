@@ -1254,7 +1254,9 @@ static_assert(IR_TARGETS_COUNT == IR_HANDLER_MASK + 1,
     X(SuperMethod_Generic) \
     X(SuperMethodExplicit_Generic) \
     X(Call_Generic) \
+    X(Out_Call_Generic_Python) \
     X(CallKw_Generic) \
+    X(Out_CallKw_Generic_Python) \
     X(CallEx_Generic) \
     X(Unpack_Generic) \
     X(GetAttr_Generic) \

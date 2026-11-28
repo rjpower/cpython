@@ -1304,7 +1304,34 @@ def check_arm(c: Checker, a: Arm) -> None:
                  f"{fam.name} has no Maybe<Src> operand")
     if a.observes:
         check_observer(c, a, fam)
+    check_outline(c, a)
     check_graph(c, a.name, a.graph, fam.params, fam, None)
+
+
+# The exits that go on at a word of the arm's own unit.  A declared region
+# (`outline`) runs in a function of the evaluator, which every compiled copy
+# of the arm tail-calls: from there these would continue in the evaluator,
+# and the frame would leave its unit until its next switch.
+COPY_EXITS = frozenset({"next", "branch", "jump"})
+
+
+def check_outline(c: Checker, a: Arm) -> None:
+    """A declared region, every block that an `outline` block reaches, ends
+    only in exits that leave the arm's unit: a frame switch, or one the
+    evaluator takes (miss, again, raise, redirect)."""
+    blocks = {b.label: b for b in a.graph.blocks}
+    todo = [b.label for b in a.graph.blocks if b.outline]
+    seen = set(todo)
+    while todo:
+        b = blocks[todo.pop()]
+        if isinstance(b.term, Exit) and b.term.kind in COPY_EXITS:
+            c.report(b.term.span, a.name, f"{b.label}: exit {b.term.kind} in an "
+                     "outlined region, whose function runs in the evaluator: end "
+                     "the region before it")
+        for label, _ in successors(b):
+            if label in blocks and label not in seen:
+                seen.add(label)
+                todo.append(label)
 
 
 def observer_of(arms: Iterable[Arm], family: str) -> Arm | None:

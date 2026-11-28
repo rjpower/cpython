@@ -105,7 +105,10 @@ arm Resume.Poll shared select(jit_off)
   Current():
     branch resume_polls(kind) -> Due(), Done();
   Due():
-    branch events_pending(thread) -> Pending(), Done();
+    call events_pending(thread) {
+      pending -> Pending();
+      quiet -> Done();
+    }
   Pending():
     call poll(thread, frame, site) {
       ok -> Done();
@@ -139,7 +142,10 @@ arm Resume.Warm split select(jit_on)
   Current():
     branch resume_polls(kind) -> Due(), Warm();
   Due():
-    branch events_pending(thread) -> Pending(), Warm();
+    call events_pending(thread) {
+      pending -> Pending();
+      quiet -> Warm();
+    }
   Pending():
     call poll(thread, frame, site) {
       ok -> Warm();
@@ -181,7 +187,10 @@ arm Resume.Observed split observes gates
   Current():
     branch resume_polls(kind) -> Due(), Event();
   Due():
-    branch events_pending(thread) -> Pending(), Event();
+    call events_pending(thread) {
+      pending -> Pending();
+      quiet -> Event();
+    }
   Pending():
     call poll(thread, frame, site) {
       ok -> Event();

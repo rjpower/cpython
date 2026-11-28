@@ -216,6 +216,22 @@
 
 /* A uop that may reenter Python: nothing to record */
 #define IR_STUB_ESCAPE() ((void)0)
+/* The frame's pc (instr_ptr), rule HT-R1: the generator publishes it before
+ * the first escape point of an arm's path (a call that may allocate, raise,
+ * release, poll, run Python or switch frames, a row that takes the frame, a
+ * close that may deallocate, an exit to a routine that reads it), not on
+ * entry: what reads it (a traceback, f_lineno, tracemalloc, a finalizer, the
+ * call protocol) runs only from there.  An arm without one, such as an
+ * integer add, never stores it.  The observing evaluator stores it on entry
+ * for every arm, as its LINE events compare the word with the one that ran
+ * last, and needs no other store. */
+#if IR_OBSERVING
+#  define IR_PUBLISH_IP() ((void)0)
+#  define IR_PUBLISH_IP_ENTRY() (frame->instr_ptr = next_instr)
+#else
+#  define IR_PUBLISH_IP() (frame->instr_ptr = this_instr)
+#  define IR_PUBLISH_IP_ENTRY() ((void)0)
+#endif
 /* The word's frame had its control moved while it ran (a debugger's jump:
  * pending_redirect and the continuation in return_pc): commit the jump and
  * go on there.  The word's results were discarded before. */

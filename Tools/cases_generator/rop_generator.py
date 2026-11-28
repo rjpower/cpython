@@ -146,11 +146,24 @@ def advance_text(arm: Arm, low: Lowering) -> str:
     return advance
 
 
+def save_ip_text(arm: Arm, low: Lowering) -> str:
+    """The pc on entry: a trailing arm belongs to the word before it; an arm
+    that publishes at its escape points (rule HT-R1,
+    rop_cgen.ArmLowerer.resolve_publish) stores it on entry only in the
+    observing evaluator, whose LINE events compare with the word that ran
+    last (IR_PUBLISH_IP_ENTRY, Python/ceval_macros.h)"""
+    if arm.trailing:
+        return ""
+    if low.publish_entry:
+        return "frame->instr_ptr = next_instr;\n"
+    return "IR_PUBLISH_IP_ENTRY();\n"
+
+
 def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     lines = [f"// {arm.name} ({arm.region.name})"]
     lines += PROLOGUE.format(
         handler=handler(arm.name), advance=advance_text(arm, low),
-        save_ip="" if arm.trailing else "frame->instr_ptr = next_instr;\n").splitlines()
+        save_ip=save_ip_text(arm, low)).splitlines()
     lines += low.decls
     lines += low.body
     return [indent + line if line else line for line in lines]

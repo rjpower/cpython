@@ -215,8 +215,12 @@ class ArmLoweringTests(unittest.TestCase):
         self.assertIn(f"ROP_TAIL_CLOSE(own_x, {tail}_0);\n"
                       f"ROP_TAIL_CLOSE(old_dst, {tail}_1);\n"
                       "DISPATCH();\n", text)
-        self.assertIn(f"{tail}_0:\nROP_TAIL_PARK_FIRST(own_x);\ngoto {tail}_Rest1;\n"
-                      f"{tail}_1:\nROP_TAIL_PARK_FIRST(old_dst);\ngoto {tail}_Rest2;\n"
+        # A park leaves for close_dispatch, whose deallocations may read the
+        # frame's pc: each publishes it, as no escape point came before
+        self.assertIn(f"{tail}_0:\nIR_PUBLISH_IP();\nROP_TAIL_PARK_FIRST(own_x);\n"
+                      f"goto {tail}_Rest1;\n"
+                      f"{tail}_1:\nIR_PUBLISH_IP();\nROP_TAIL_PARK_FIRST(old_dst);\n"
+                      f"goto {tail}_Rest2;\n"
                       f"{tail}_Rest1:\nROP_TAIL_PARK(old_dst);\n"
                       f"{tail}_Rest2:\nROP_TAIL_DISPATCH();", text)
 
@@ -1056,7 +1060,7 @@ class GeneratedAddIntTests(unittest.TestCase):
         low = self.products.lowered["Add.Int"]
         hot = []
         for line in low.body:
-            if line.startswith("rop_Add_Int_Overflow:"):
+            if line.startswith(("rop_Add_Int_Overflow:", "rop_Add_Int_Tail0_0:")):
                 break
             hot.append(line.strip())
         statements = [line for line in hot
@@ -1065,6 +1069,56 @@ class GeneratedAddIntTests(unittest.TestCase):
         tests = [line for line in hot if "BothInlineInt" in line]
         self.assertEqual(len(tests), 1)
         self.assertFalse(any("IsNull" in line for line in hot))
+
+    def test_pc_is_published_at_escape_points(self):
+        # Rule HT-R1: an arm without an escape point on its fast path never
+        # stores the pc there; its outlined overflow region publishes it
+        # before the allocation that may read it
+        low = self.products.lowered["Add.Int_TLL"]
+        self.assertFalse(low.publish_entry)
+        self.assertNotIn("IR_PUBLISH_IP();", low.body)
+        (region,) = low.cold
+        body = [line.strip() for line in region.body]
+        publish = body.index("IR_PUBLISH_IP();")
+        box = next(i for i, line in enumerate(body) if "_PyValue_BoxInt64" in line)
+        self.assertLess(publish, box)
+        # The poll publishes only on its slow path, out of line, before
+        # the poll
+        low = self.products.lowered["Jump.Poll"]
+        self.assertFalse(low.publish_entry)
+        self.assertNotIn("IR_PUBLISH_IP();", low.body)
+        (region,) = low.cold
+        body = [line.strip() for line in region.body]
+        self.assertEqual(body.count("IR_PUBLISH_IP();"), 1)
+        self.assertEqual(body[body.index("IR_PUBLISH_IP();") + 2][:25],
+                         "ret1 = _PyRop_Poll(tstate")
+        # A block reached both after a row that may set the pc and without
+        # an escape point: the arm publishes on entry, as before
+        self.assertTrue(self.products.lowered["Resume.Poll"].publish_entry)
+
+    def test_the_poll_is_cold(self):
+        # Rule HT-R3: an event is rare beside the words that test for one,
+        # so every arm that polls does it out of line, the split ones too,
+        # whose blocks after a transfer are their completions'
+        polls = [name for name, low in self.products.lowered.items()
+                 if any("_PyRop_Poll(" in line for line in low.body)]
+        self.assertEqual(polls, [])
+        for name in ("Jump.Poll", "Jump.Warm", "Resume.Poll", "Resume.Warm"):
+            low = self.products.lowered[name]
+            self.assertTrue(any(any("_PyRop_Poll(" in line for line in c.body)
+                                for c in low.cold), name)
+
+    def test_handler_entry_stores_the_pc_by_rule(self):
+        out = io.StringIO()
+        rop_generator.write_cases(out, self.products, [])
+        text = out.getvalue()
+        add = text[text.index("TARGET(Add_Int_TLL)"):]
+        add = add[:add.index("TARGET(", 10)]
+        self.assertIn("IR_PUBLISH_IP_ENTRY();", add)
+        self.assertNotIn("frame->instr_ptr = next_instr;", add)
+        poll = text[text.index("TARGET(Resume_Poll)"):]
+        poll = poll[:poll.index("TARGET(", 10)]
+        self.assertIn("frame->instr_ptr = next_instr;", poll)
 
     def test_value_api_only(self):
         for low in self.products.lowered.values():

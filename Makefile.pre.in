@@ -2334,7 +2334,10 @@ regen-slots: Python/slots.toml
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/build/generate_slots.py \
 		--generate-all
 
-$(LIBRARY_OBJS) $(MODOBJS) Programs/python.o $(PLATFORM_MAIN_OBJS): $(PYTHON_HEADERS)
+# Python/jit_stencils.o is never linked, so it is in no list of objects; it
+# includes the headers the evaluator's objects do
+$(LIBRARY_OBJS) $(MODOBJS) Programs/python.o $(PLATFORM_MAIN_OBJS) \
+		Python/jit_stencils.o: $(PYTHON_HEADERS)
 
 
 ######################################################################

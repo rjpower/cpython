@@ -1279,8 +1279,10 @@ class ArmLowerer:
         code before the head set and the region reads, which it leaves in
         the activation.  It decodes the word again, from this_instr.  A
         region that reaches another region's head tail-calls that one's
-        function there, as the arm does."""
-        succs = {label: [t.label for t, _ in edges_of(self.program, self.blocks, b)]
+        function there, as the arm does.  The blocks after a transfer run
+        in the arm's completions, not in the arm: no region holds them."""
+        succs = {label: [t.label for t, _ in edges_of(self.program, self.blocks, b)
+                         if t.label not in self.transfer_blocks]
                  for label, b in self.blocks.items()}
         heads = self.cold_heads
 

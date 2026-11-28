@@ -1078,16 +1078,31 @@ class GeneratedAddIntTests(unittest.TestCase):
         publish = body.index("IR_PUBLISH_IP();")
         box = next(i for i, line in enumerate(body) if "_PyValue_BoxInt64" in line)
         self.assertLess(publish, box)
-        # The poll publishes only on its slow path, before the poll
+        # The poll publishes only on its slow path, out of line, before
+        # the poll
         low = self.products.lowered["Jump.Poll"]
         self.assertFalse(low.publish_entry)
-        body = [line.strip() for line in low.body]
+        self.assertNotIn("IR_PUBLISH_IP();", low.body)
+        (region,) = low.cold
+        body = [line.strip() for line in region.body]
         self.assertEqual(body.count("IR_PUBLISH_IP();"), 1)
         self.assertEqual(body[body.index("IR_PUBLISH_IP();") + 2][:25],
                          "ret1 = _PyRop_Poll(tstate")
         # A block reached both after a row that may set the pc and without
         # an escape point: the arm publishes on entry, as before
         self.assertTrue(self.products.lowered["Resume.Poll"].publish_entry)
+
+    def test_the_poll_is_cold(self):
+        # Rule HT-R3: an event is rare beside the words that test for one,
+        # so every arm that polls does it out of line, the split ones too,
+        # whose blocks after a transfer are their completions'
+        polls = [name for name, low in self.products.lowered.items()
+                 if any("_PyRop_Poll(" in line for line in low.body)]
+        self.assertEqual(polls, [])
+        for name in ("Jump.Poll", "Jump.Warm", "Resume.Poll", "Resume.Warm"):
+            low = self.products.lowered[name]
+            self.assertTrue(any(any("_PyRop_Poll(" in line for line in c.body)
+                                for c in low.cold), name)
 
     def test_handler_entry_stores_the_pc_by_rule(self):
         out = io.StringIO()

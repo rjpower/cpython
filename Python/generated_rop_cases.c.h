@@ -28596,6 +28596,39 @@ IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Moved)
             IR_OUTLINE_GOTO(Cold_PatternKeys_Match_match_keys_at_origin1_Moved);
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Resume_Poll_Pending);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Resume_Poll_Pending) {
+    // Resume.Poll: the cold region from rop_Resume_Poll_Pending
+    int opcode = ROP_HANDLER_Resume_Poll;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    int ret1;
+    int ret2;
+    goto rop_Resume_Poll_Pending;
+    rop_Resume_Poll_Pending:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_Poll(tstate, frame, this_instr);
+    if (ret1 > 0) {
+        goto rop_Resume_Poll_Moved;
+    }
+    if (ret1 < 0) {
+        goto rop_Resume_Poll_PollFailed;
+    }
+    DISPATCH();
+    rop_Resume_Poll_Moved:
+    IR_REDIRECT();
+    rop_Resume_Poll_PollFailed:
+    PROCESS_ERROR_AT(RAISE, 155, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Resume_Poll_Pending)
+#endif
+
         TARGET(Resume_Poll) {
             // Resume.Poll (shared)
             int opcode = ROP_HANDLER_Resume_Poll;
@@ -28617,19 +28650,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Moved)
             }
             goto rop_Resume_Poll_Done;
             rop_Resume_Poll_Due:
-            if (_PyRop_EventsPending(tstate)) {
-                goto rop_Resume_Poll_Pending;
+            if (!_PyRop_EventsPending(tstate)) {
+                goto rop_Resume_Poll_Done;
             }
-            goto rop_Resume_Poll_Done;
-            rop_Resume_Poll_Pending:
-            IR_STUB_ESCAPE();
-            ret1 = _PyRop_Poll(tstate, frame, this_instr);
-            if (ret1 > 0) {
-                goto rop_Resume_Poll_Moved;
-            }
-            if (ret1 < 0) {
-                goto rop_Resume_Poll_PollFailed;
-            }
+            IR_OUTLINE_GOTO(Cold_Resume_Poll_Pending);
             rop_Resume_Poll_Done:
             DISPATCH();
             rop_Resume_Poll_Stale:
@@ -28641,13 +28665,44 @@ IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Moved)
             if (ret2 < 0) {
                 goto rop_Resume_Poll_InstrumentFailed;
             }
-            rop_Resume_Poll_Moved:
             IR_REDIRECT();
             rop_Resume_Poll_InstrumentFailed:
             PROCESS_ERROR_AT(RAISE, 154, this_instr);
-            rop_Resume_Poll_PollFailed:
-            PROCESS_ERROR_AT(RAISE, 155, this_instr);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Resume_Warm_Pending);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Resume_Warm_Pending) {
+    // Resume.Warm: the cold region from rop_Resume_Warm_Pending
+    int opcode = ROP_HANDLER_Resume_Warm;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    int ret1;
+    int ret2;
+    _PyInstr * h;
+    goto rop_Resume_Warm_Pending;
+    rop_Resume_Warm_Pending:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_Poll(tstate, frame, this_instr);
+    if (ret1 > 0) {
+        goto rop_Resume_Warm_Moved;
+    }
+    if (ret1 < 0) {
+        goto rop_Resume_Warm_PollFailed;
+    }
+    ROP_JIT_WARM(next_instr);
+    rop_Resume_Warm_Moved:
+    IR_REDIRECT();
+    rop_Resume_Warm_PollFailed:
+    PROCESS_ERROR_AT(RAISE, 155, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Resume_Warm_Pending)
+#endif
 
         TARGET(Resume_Warm) {
             // Resume.Warm (split)
@@ -28671,19 +28726,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Moved)
             }
             goto rop_Resume_Warm_Warm;
             rop_Resume_Warm_Due:
-            if (_PyRop_EventsPending(tstate)) {
-                goto rop_Resume_Warm_Pending;
+            if (!_PyRop_EventsPending(tstate)) {
+                goto rop_Resume_Warm_Warm;
             }
-            goto rop_Resume_Warm_Warm;
-            rop_Resume_Warm_Pending:
-            IR_STUB_ESCAPE();
-            ret1 = _PyRop_Poll(tstate, frame, this_instr);
-            if (ret1 > 0) {
-                goto rop_Resume_Warm_Moved;
-            }
-            if (ret1 < 0) {
-                goto rop_Resume_Warm_PollFailed;
-            }
+            IR_OUTLINE_GOTO(Cold_Resume_Warm_Pending);
             rop_Resume_Warm_Warm:
             ROP_JIT_WARM(next_instr);
             rop_Resume_Warm_Stale:
@@ -28695,13 +28741,54 @@ IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Moved)
             if (ret2 < 0) {
                 goto rop_Resume_Warm_InstrumentFailed;
             }
-            rop_Resume_Warm_Moved:
             IR_REDIRECT();
             rop_Resume_Warm_InstrumentFailed:
             PROCESS_ERROR_AT(RAISE, 154, this_instr);
-            rop_Resume_Warm_PollFailed:
-            PROCESS_ERROR_AT(RAISE, 155, this_instr);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Resume_Observed_Pending);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Resume_Observed_Pending) {
+    // Resume.Observed: the cold region from rop_Resume_Observed_Pending
+    int opcode = ROP_HANDLER_Resume_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    int ret1;
+    int ret2;
+    int ret3;
+    goto rop_Resume_Observed_Pending;
+    rop_Resume_Observed_Pending:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_Poll(tstate, frame, this_instr);
+    if (ret1 > 0) {
+        goto rop_Resume_Observed_Moved;
+    }
+    if (ret1 < 0) {
+        goto rop_Resume_Observed_PollFailed;
+    }
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_ResumeEvent(tstate, frame, this_instr, (((uint32_t)IR_A(ir_word) >> 0) & 0x7));
+    if (ret2 > 0) {
+        goto rop_Resume_Observed_Moved;
+    }
+    if (ret2 < 0) {
+        goto rop_Resume_Observed_EventFailed;
+    }
+    DISPATCH();
+    rop_Resume_Observed_Moved:
+    IR_REDIRECT();
+    rop_Resume_Observed_PollFailed:
+    PROCESS_ERROR_AT(RAISE, 155, this_instr);
+    rop_Resume_Observed_EventFailed:
+    PROCESS_ERROR_AT(RAISE, 153, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Resume_Observed_Pending)
+#endif
 
         TARGET(Resume_Observed) {
             // Resume.Observed (split)
@@ -28725,19 +28812,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Moved)
             }
             goto rop_Resume_Observed_Event;
             rop_Resume_Observed_Due:
-            if (_PyRop_EventsPending(tstate)) {
-                goto rop_Resume_Observed_Pending;
+            if (!_PyRop_EventsPending(tstate)) {
+                goto rop_Resume_Observed_Event;
             }
-            goto rop_Resume_Observed_Event;
-            rop_Resume_Observed_Pending:
-            IR_STUB_ESCAPE();
-            ret1 = _PyRop_Poll(tstate, frame, this_instr);
-            if (ret1 > 0) {
-                goto rop_Resume_Observed_Moved;
-            }
-            if (ret1 < 0) {
-                goto rop_Resume_Observed_PollFailed;
-            }
+            IR_OUTLINE_GOTO(Cold_Resume_Observed_Pending);
             rop_Resume_Observed_Event:
             IR_STUB_ESCAPE();
             ret2 = _PyRop_ResumeEvent(tstate, frame, this_instr, (((uint32_t)IR_A(ir_word) >> 0) & 0x7));
@@ -28761,8 +28839,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Moved)
             IR_REDIRECT();
             rop_Resume_Observed_InstrumentFailed:
             PROCESS_ERROR_AT(RAISE, 154, this_instr);
-            rop_Resume_Observed_PollFailed:
-            PROCESS_ERROR_AT(RAISE, 155, this_instr);
             rop_Resume_Observed_EventFailed:
             PROCESS_ERROR_AT(RAISE, 153, this_instr);
         }
@@ -35603,6 +35679,39 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Moved)
             IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Jump_Poll_Poll);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Jump_Poll_Poll) {
+    // Jump.Poll: the cold region from rop_Jump_Poll_Poll
+    int opcode = ROP_HANDLER_Jump_Poll;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    int ret1;
+    goto rop_Jump_Poll_Poll;
+    rop_Jump_Poll_Poll:
+    IR_PUBLISH_IP();
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_Poll(tstate, frame, this_instr);
+    if (ret1 > 0) {
+        goto rop_Jump_Poll_PollSwitched;
+    }
+    if (ret1 < 0) {
+        goto rop_Jump_Poll_Failed;
+    }
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
+    rop_Jump_Poll_Failed:
+    PROCESS_ERROR_AT(RAISE, 122, this_instr);
+    rop_Jump_Poll_PollSwitched:
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Jump_Poll_Poll)
+#endif
+
         TARGET(Jump_Poll) {
             // Jump.Poll (inline)
             int opcode = ROP_HANDLER_Jump_Poll;
@@ -35613,27 +35722,46 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Moved)
             next_instr += 1;
             INSTRUCTION_STATS(ROP_HANDLER_Jump_Poll);
             int ret1;
-            if (_PyRop_EventsPending(tstate)) {
-                goto rop_Jump_Poll_Poll;
+            if (!_PyRop_EventsPending(tstate)) {
+                goto rop_Jump_Poll_Go;
             }
-            goto rop_Jump_Poll_Go;
-            rop_Jump_Poll_Poll:
-            IR_PUBLISH_IP();
-            IR_STUB_ESCAPE();
-            ret1 = _PyRop_Poll(tstate, frame, this_instr);
-            if (ret1 > 0) {
-                goto rop_Jump_Poll_PollSwitched;
-            }
-            if (ret1 < 0) {
-                goto rop_Jump_Poll_Failed;
-            }
+            IR_OUTLINE_GOTO(Cold_Jump_Poll_Poll);
             rop_Jump_Poll_Go:
             IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
-            rop_Jump_Poll_Failed:
-            PROCESS_ERROR_AT(RAISE, 122, this_instr);
-            rop_Jump_Poll_PollSwitched:
-            IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Jump_Warm_Poll);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Jump_Warm_Poll) {
+    // Jump.Warm: the cold region from rop_Jump_Warm_Poll
+    int opcode = ROP_HANDLER_Jump_Warm;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    int ret1;
+    _PyInstr * h;
+    goto rop_Jump_Warm_Poll;
+    rop_Jump_Warm_Poll:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_Poll(tstate, frame, this_instr);
+    if (ret1 > 0) {
+        goto rop_Jump_Warm_PollSwitched;
+    }
+    if (ret1 < 0) {
+        goto rop_Jump_Warm_Failed;
+    }
+    ROP_JIT_WARM((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
+    rop_Jump_Warm_Failed:
+    PROCESS_ERROR_AT(RAISE, 122, this_instr);
+    rop_Jump_Warm_PollSwitched:
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Jump_Warm_Poll)
+#endif
 
         TARGET(Jump_Warm) {
             // Jump.Warm (split)
@@ -35646,26 +35774,58 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Moved)
             INSTRUCTION_STATS(ROP_HANDLER_Jump_Warm);
             int ret1;
             _PyInstr * h;
-            if (_PyRop_EventsPending(tstate)) {
-                goto rop_Jump_Warm_Poll;
+            if (!_PyRop_EventsPending(tstate)) {
+                goto rop_Jump_Warm_Go;
             }
-            goto rop_Jump_Warm_Go;
-            rop_Jump_Warm_Poll:
-            IR_STUB_ESCAPE();
-            ret1 = _PyRop_Poll(tstate, frame, this_instr);
-            if (ret1 > 0) {
-                goto rop_Jump_Warm_PollSwitched;
-            }
-            if (ret1 < 0) {
-                goto rop_Jump_Warm_Failed;
-            }
+            IR_OUTLINE_GOTO(Cold_Jump_Warm_Poll);
             rop_Jump_Warm_Go:
             ROP_JIT_WARM((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
-            rop_Jump_Warm_Failed:
-            PROCESS_ERROR_AT(RAISE, 122, this_instr);
-            rop_Jump_Warm_PollSwitched:
-            IR_REDIRECT();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Jump_Observed_Poll);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Jump_Observed_Poll) {
+    // Jump.Observed: the cold region from rop_Jump_Observed_Poll
+    int opcode = ROP_HANDLER_Jump_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    int ret1;
+    int ret2;
+    goto rop_Jump_Observed_Poll;
+    rop_Jump_Observed_Poll:
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_Poll(tstate, frame, this_instr);
+    if (ret1 > 0) {
+        goto rop_Jump_Observed_PollSwitched;
+    }
+    if (ret1 < 0) {
+        goto rop_Jump_Observed_PollFailed;
+    }
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_JumpEvent(tstate, frame, this_instr);
+    if (ret2 > 0) {
+        goto rop_Jump_Observed_Moved;
+    }
+    if (ret2 < 0) {
+        goto rop_Jump_Observed_EventFailed;
+    }
+    IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
+    rop_Jump_Observed_PollFailed:
+    PROCESS_ERROR_AT(RAISE, 122, this_instr);
+    rop_Jump_Observed_PollSwitched:
+    IR_REDIRECT();
+    rop_Jump_Observed_EventFailed:
+    PROCESS_ERROR_AT(RAISE, 121, this_instr);
+    rop_Jump_Observed_Moved:
+    IR_REDIRECT();
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Jump_Observed_Poll)
+#endif
 
         TARGET(Jump_Observed) {
             // Jump.Observed (split)
@@ -35683,19 +35843,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Moved)
             }
             goto rop_Jump_Observed_Event;
             rop_Jump_Observed_Back:
-            if (_PyRop_EventsPending(tstate)) {
-                goto rop_Jump_Observed_Poll;
+            if (!_PyRop_EventsPending(tstate)) {
+                goto rop_Jump_Observed_Event;
             }
-            goto rop_Jump_Observed_Event;
-            rop_Jump_Observed_Poll:
-            IR_STUB_ESCAPE();
-            ret1 = _PyRop_Poll(tstate, frame, this_instr);
-            if (ret1 > 0) {
-                goto rop_Jump_Observed_PollSwitched;
-            }
-            if (ret1 < 0) {
-                goto rop_Jump_Observed_PollFailed;
-            }
+            IR_OUTLINE_GOTO(Cold_Jump_Observed_Poll);
             rop_Jump_Observed_Event:
             IR_STUB_ESCAPE();
             ret2 = _PyRop_JumpEvent(tstate, frame, this_instr);
@@ -35706,10 +35857,6 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Moved)
                 goto rop_Jump_Observed_EventFailed;
             }
             IR_BRANCH((this_instr + 1 + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, (int64_t)(ir_word << 24), 40)));
-            rop_Jump_Observed_PollFailed:
-            PROCESS_ERROR_AT(RAISE, 122, this_instr);
-            rop_Jump_Observed_PollSwitched:
-            IR_REDIRECT();
             rop_Jump_Observed_EventFailed:
             PROCESS_ERROR_AT(RAISE, 121, this_instr);
             rop_Jump_Observed_Moved:

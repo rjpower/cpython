@@ -179,6 +179,7 @@ IR_THIS_EVALUATOR(Py_IR_TAIL_PARAMS)
  * window (_PyJit_Reclaim()): control has left the unit's code, and a tail
  * call leaves no return address into it. */
 #define IR_JIT_LEAVE() (((_PyThreadStateImpl *)tstate)->jit_departing = 0)
+#define IR_JIT_EXIT_COUNT(KIND) (tstate->interp->ceval.jit_exits[(KIND)]++)
 
 /* A frame switch, or a jump whose target has no copy: go on at next_instr
  * of frame, in its code's unit if the code has live entries, otherwise in
@@ -196,6 +197,7 @@ _PyEval_JitDispatch(Py_IR_TAIL_PARAMS)
         Py_MUSTTAIL return ((_PyIRTailFn)ir_entries[next_instr - frame->ir_words])(
             tstate, frame, next_instr, ir_word);
     }
+    IR_JIT_EXIT_COUNT(_PyJIT_EXIT_SWITCH);
     int opcode;
     DISPATCH();
 }
@@ -206,6 +208,31 @@ Py_IR_TAIL_CC PyValue
 _PyEval_JitInterpret(Py_IR_TAIL_PARAMS)
 {
     IR_JIT_LEAVE();
+    IR_JIT_EXIT_COUNT(_PyJIT_EXIT_INTERPRET);
+    int opcode;
+    DISPATCH();
+}
+
+/* The copy of a word that changed its arm (Python/jit.c, divert_copy()):
+ * the word at next_instr, in this evaluator, under its new arm */
+Py_IR_TAIL_CC PyValue
+_PyEval_JitDiverted(Py_IR_TAIL_PARAMS)
+{
+    IR_JIT_LEAVE();
+    IR_JIT_EXIT_COUNT(_PyJIT_EXIT_DIVERTED);
+    int opcode;
+    DISPATCH();
+}
+
+/* The stub of a word that had not run when its unit compiled (Python/jit.c,
+ * emit_unit()): the word runs in this evaluator, and the stub counts
+ * toward the code's recompile (_PyJit_StubReached()) */
+Py_IR_TAIL_CC PyValue
+_PyEval_JitStub(Py_IR_TAIL_PARAMS)
+{
+    IR_JIT_LEAVE();
+    IR_JIT_EXIT_COUNT(_PyJIT_EXIT_STUB);
+    _PyJit_StubReached(tstate, frame, next_instr);
     int opcode;
     DISPATCH();
 }
@@ -216,6 +243,7 @@ Py_IR_TAIL_CC PyValue
 _PyEval_JitMiss(Py_IR_TAIL_PARAMS)
 {
     IR_JIT_LEAVE();
+    IR_JIT_EXIT_COUNT(_PyJIT_EXIT_MISS);
     int generic = _PyJit_GenericOf(IR_HANDLER(ir_word));
     Py_MUSTTAIL return ir_tail_table[generic](tstate, frame, next_instr, ir_word);
 }
@@ -224,6 +252,7 @@ Py_IR_TAIL_CC PyValue
 _PyEval_JitProcessError(Py_IR_TAIL_PARAMS)
 {
     IR_JIT_LEAVE();
+    IR_JIT_EXIT_COUNT(_PyJIT_EXIT_ERROR);
     IR_TAIL_GOTO(process_error);
 }
 
@@ -231,6 +260,7 @@ Py_IR_TAIL_CC PyValue
 _PyEval_JitCloseDispatch(Py_IR_TAIL_PARAMS)
 {
     IR_JIT_LEAVE();
+    IR_JIT_EXIT_COUNT(_PyJIT_EXIT_CLOSE);
     IR_TAIL_GOTO(close_dispatch);
 }
 
@@ -238,6 +268,7 @@ Py_IR_TAIL_CC PyValue
 _PyEval_JitGenReturn(Py_IR_TAIL_PARAMS)
 {
     IR_JIT_LEAVE();
+    IR_JIT_EXIT_COUNT(_PyJIT_EXIT_GEN_RETURN);
     IR_TAIL_GOTO(gen_return);
 }
 

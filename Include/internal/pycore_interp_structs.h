@@ -143,6 +143,15 @@ struct _ceval_state {
        falling back to the evaluator, or a first entry.  With Py_STATS, frame
        switches made by compiled code.  Since startup. */
     uint64_t jit_handoffs;
+    /* Exits from compiled code into the evaluator, by kind
+       (_PyJIT_EXIT_MISS ..., pycore_jit.h), counted on the exit paths
+       only (Python/ceval_evaluator.h); and codes declined at warm-up */
+    uint64_t jit_exits[8];
+    uint64_t jit_declined;
+    /* The most recompiles of one code object that changed words ask for:
+       _PyJIT_MAX_DEOPTS_ON under on, _PyJIT_MAX_COMPILES under always
+       (Python/jit.c) */
+    uint32_t jit_max_deopts;
 #ifdef Py_STATS
     uint64_t jit_switches;
 #endif

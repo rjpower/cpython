@@ -116,6 +116,8 @@ extern Py_IR_TAIL_CC PyValue _PyEval_ThrowFrame(Py_IR_TAIL_PARAMS);
  * them) */
 extern Py_IR_TAIL_CC PyValue _PyEval_JitDispatch(Py_IR_TAIL_PARAMS);
 extern Py_IR_TAIL_CC PyValue _PyEval_JitInterpret(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_JitDiverted(Py_IR_TAIL_PARAMS);
+extern Py_IR_TAIL_CC PyValue _PyEval_JitStub(Py_IR_TAIL_PARAMS);
 extern Py_IR_TAIL_CC PyValue _PyEval_JitMiss(Py_IR_TAIL_PARAMS);
 extern Py_IR_TAIL_CC PyValue _PyEval_JitProcessError(Py_IR_TAIL_PARAMS);
 extern Py_IR_TAIL_CC PyValue _PyEval_JitCloseDispatch(Py_IR_TAIL_PARAMS);

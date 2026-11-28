@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `caeded6d91c` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3, J4, TR and J5 merged, below) holds:
+`pyjit/rir90` at `94fccfcb111` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3, J4, TR, J5 and CR merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -627,11 +627,43 @@ deltablue 1.14 are furthest.  Heuristics that skip the method JIT where it
 will not help are welcome.  Making the common operations and call and
 return fast should pay, and it helps both evaluators.
 
-Unit JP is profiling the losses.  unpack_sequence is accounted:
-- its runs alternate a tuple and a list, so its 400 unpack words
-  re-specialise every run, and the unit recompiles up to the cap of 8;
-- while compiled, its 400 copies of the item-publish loop overflow the
-  branch predictor (8-9M branch misses per run against 20k interpreted).
+JP accounted the default mode's losses (`jp/account.md`, `proposals.md` in
+the rir90 evidence).  Compiled code runs 0.92-0.98 of the interpreter's
+instructions and loses it in the front end: 4-24 times the L1i fills from
+beyond L2.  Three causes:
+- copies of words that never ran: 20-67% of the hot units' bytes;
+- `Call.Exact` and `Return.Empty`, copied whole at every call site (1,359
+  and 921 bytes);
+- words that flip between arms, so the whole code recompiles up to the
+  cap of 8 (unpack_sequence, raytrace, regex_compile).
+
+The user's direction (2026-11-27): fix the basic, obvious issues, as a V8
+engineer would: tight generated code and the right compile and fallback
+heuristics, preferring fixes that also help the interpreter.  Then one
+performance sweep.  No 2 MB pages or other workarounds for code size.
+
+**CR, merged at `94fccfcb111`**: call and return, in both evaluators.
+- A call site's feedback caches its callee's slot count, start word,
+  argument count and closure flag.
+- A return clears a frame's fixed slots by the code's layout.
+- The `.rop` language gains `outline` blocks.  `Call.Exact`,
+  `Call.BoundExact` and `Return.Empty` run whole in one shared generated
+  function each.  The interpreter's arm and every compiled copy tail-call
+  it, as V8's interpreter and baseline code share the Call builtin.  The
+  copies are 23 bytes, down from 921-1,709.
+- Adaptation samples (`tick`'s due case) are cold, so every adaptive
+  generic arm loses a third to a half of its hot bytes.
+
+Results:
+- A call and return takes 249 instructions with the JIT off, down from 278.
+- A compiled call loop runs at the interpreter's speed: 80 cycles a call,
+  down from 108.5.
+- With the JIT off, the call-heavy kernels run 0.974-0.996 of their
+  instructions.
+
+Running: JC (compile policy: stubs for words that never ran, feedback that
+only moves toward generic with fast generic arms, recompile backoff) and HT
+(the hottest arms' instructions, in both evaluators).
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

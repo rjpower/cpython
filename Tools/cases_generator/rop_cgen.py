@@ -64,6 +64,38 @@ ESCAPING = frozenset({Effect.runs_python, Effect.polls})
 # A call that may release an owner may run a finalizer
 ESCAPING_CALL = ESCAPING | {Effect.releases}
 
+# Rule HT-R1: the effects after which something may read the frame's pc
+# (a traceback, f_lineno, tracemalloc, a finalizer, the call protocol)
+PC_EFFECTS = frozenset({Effect.allocates, Effect.raises, Effect.releases,
+                        Effect.runs_python, Effect.polls, Effect.switches_frame})
+# The frame handles: a row that takes one may read or set the pc
+FRAME_HANDLES = frozenset({Handle.Frame, Handle.NewFrame, Handle.DeadFrame})
+# The exits that leave the word's frame to code that reads its pc
+PC_EXITS = frozenset({"raise", "unwind", "enter", "yield", "return", "exit", "redirect"})
+# A publication point of the pc, which ArmLowerer.resolve_publish keeps or drops
+PUBLISH_MARK = "IR_PUBLISH_IP(); // in "
+
+
+def row_sets_pc(x: Extern) -> bool:
+    """Whether row x may set the frame's pc: it takes the frame (as
+    set_origin does) or is a transfer.  Python that a row runs cannot: a
+    running frame's pc moves under a debugger only in the observing
+    evaluator, which publishes on entry."""
+    if x.c is not None and CONVENTIONS[x.c.convention].transfer:
+        return True
+    return any(isinstance(p.type, HandleType) and p.type.handle in FRAME_HANDLES
+               for p in x.params)
+
+
+def row_reads_pc(x: Extern) -> bool:
+    """Rule HT-R1: whether a call of row x is an escape point: it has an
+    effect after which the frame's pc may be read, or it may set the pc.  A
+    primitive is pure by its contract."""
+    if x.kind is RowKind.primitive:
+        return False
+    return bool(x.contract.effect_set & PC_EFFECTS) or row_sets_pc(x)
+
+
 # Names the handler's C scope owns
 RESERVED = frozenset({
     "frame", "tstate", "next_instr", "ir_word", "opcode", "this_instr",
@@ -646,6 +678,9 @@ class Lowering:
     body: list[str] = field(default_factory=list)
     # The arm's cold regions, each a function of its own (outline_cold)
     cold: list["ColdRegion"] = field(default_factory=list)
+    # Rule HT-R1: the arm publishes its pc on entry, not at its escape
+    # points (ArmLowerer.resolve_publish)
+    publish_entry: bool = True
 
 
 @dataclass
@@ -709,6 +744,12 @@ class ArmLowerer:
         # A slot-class member arm (`over(locals: ...)`): each locals
         # operand's class, a constant, True for a local
         self.fixed_local: dict[str, bool] = fixed_locals(program, arm)
+        # Rule HT-R1: the block being lowered, the blocks with an escape
+        # point, and whether the arm publishes its pc on entry instead
+        self.cur_label: str | None = None
+        self.escaped: set[str] = set()
+        self.sets_pc: set[str] = set()
+        self.publish_entry = True
 
     # Names
 
@@ -730,7 +771,24 @@ class ArmLowerer:
         self.declare(name, ctype)
         return name
 
+    def escape(self, sets_pc: bool = False) -> None:
+        """Rule HT-R1: an escape point follows, one that may set the pc if
+        sets_pc.  The first of a block is preceded by a publication of the
+        pc, which resolve_publish keeps where some path into the block
+        passed no escape point."""
+        if self.cur_label is None:
+            return
+        if sets_pc:
+            self.sets_pc.add(self.cur_label)
+        if self.cur_label in self.escaped:
+            return
+        self.escaped.add(self.cur_label)
+        self.lines.append(PUBLISH_MARK + self.cur_label)
+
     def emit(self, line: str) -> None:
+        if self.pending_closes:
+            # A close may deallocate, and a finalizer may read the pc
+            self.escape()
         self.lines += [f"PyValue_XCLOSE({v});" for v in self.pending_closes]
         self.pending_closes = []
         self.lines.append(line)
@@ -1106,6 +1164,8 @@ class ArmLowerer:
         conv = CONVENTIONS[x.c.convention]
         if not conv.single:
             raise Unsupported(f"{self.arm.name}: {e.callee} has cases; use a call")
+        if row_reads_pc(x):
+            self.escape(row_sets_pc(x))
         return f"{self.row_symbol(x)}({', '.join(self.c_args(e.args, x.params))})"
 
     # Statements
@@ -1150,16 +1210,63 @@ class ArmLowerer:
                 t = c_type(p.type)
                 if t is not None:
                     self.declare(self.local(p.name), t)
+        self.resolve_publish()
         if self.cold_heads:
             self.lines = self.outline_cold(order, spans)
+        for c in self.cold:
+            c.body = [line for line in c.body if line != ""]
         body = []
         for line in self.lines:
-            body.append(line)
+            if line != "":
+                body.append(line)
         return Lowering(self.arm.name, self.enc.words, self.payload_words(),
                         self.span_words(),
                         self.decls,
                         self.drop_unused_labels(body),
-                        self.cold)
+                        self.cold, self.publish_entry)
+
+    def resolve_publish(self) -> None:
+        """Rule HT-R1: the frame's pc (instr_ptr) is published at the arm's
+        escape points, not on entry.  A block that every path reaches after
+        an escape point does not publish; one that some path reaches without
+        one publishes before its first, unless another path into it passed
+        a row that may have set the pc, which a second store would
+        overwrite: then the arm publishes on entry, as before.  A
+        completion runs with the pc at its site already.  The marks become
+        IR_PUBLISH_IP() or empty lines, which keeps the block spans of
+        outline_cold."""
+        succs = {label: [t.label for t, _ in edges_of(self.program, self.blocks, b)]
+                 for label, b in self.blocks.items()}
+        preds: dict[str, list[str]] = {label: [] for label in self.blocks}
+        for label, ss in succs.items():
+            for s_ in ss:
+                preds[s_].append(label)
+        reach, todo = set(), ["entry"]
+        while todo:
+            label = todo.pop()
+            if label not in reach:
+                reach.add(label)
+                todo.extend(succs[label])
+        # sets: some path into the block passed a row that may set the pc;
+        # must: every path passed an escape point
+        sets = {label: False for label in self.blocks}
+        must = {label: label != "entry" for label in self.blocks}
+        changed = True
+        while changed:
+            changed = False
+            for label in reach - {"entry"}:
+                ps = [p for p in preds[label] if p in reach]
+                m = any(sets[p] or p in self.sets_pc for p in ps)
+                n = bool(ps) and all(must[p] or p in self.escaped for p in ps)
+                if (m, n) != (sets[label], must[label]):
+                    sets[label], must[label] = m, n
+                    changed = True
+        mixed = any(sets[b] and not must[b] for b in self.escaped if b in reach)
+        self.publish_entry = mixed or not self.outline_cold_regions
+        for i, line in enumerate(self.lines):
+            if line.startswith(PUBLISH_MARK):
+                keep = not self.publish_entry and not must[line[len(PUBLISH_MARK):]]
+                self.lines[i] = "IR_PUBLISH_IP();" if keep else ""
 
     def outline_cold(self, order: list[str], spans: Mapping[str, tuple[int, int]]) -> list[str]:
         """Rule J5-R1: each cold region (cold_region_heads), and each
@@ -1312,6 +1419,7 @@ class ArmLowerer:
         return done
 
     def lower_block(self, block, label: str) -> None:
+        self.cur_label = label
         if label != "entry":
             self.emit(f"{self.label(label)}:")
         # An acquire() takes the owner on its own path only
@@ -1431,6 +1539,7 @@ class ArmLowerer:
             self.emit(f"old_{cname(d.subject)} = *{self.home(d.subject)};")
         for target, value in stored.items():
             # The closes may run finalizers, which a stub reports
+            self.escape()
             self.emit("IR_STUB_ESCAPE();")
             self.emit(f"_PyRop_PublishItems({self.span(target)}, &{value});")
         for b in s.bindings:
@@ -1452,9 +1561,11 @@ class ArmLowerer:
                 self.close(self.expr_text(Name(d.subject)))
             elif d.kind is DebtKind.spent and self.is_span_operand(d.subject):
                 # The closes may run finalizers, which a stub reports
+                self.escape()
                 self.emit("IR_STUB_ESCAPE();")
                 self.emit(f"_PyRop_CloseSpan({self.span(d.subject)});")
             elif d.kind is DebtKind.spent and self.is_vector(d.subject):
+                self.escape()
                 self.emit(f"_PyRop_SpendArgs(frame, this_instr, {kept});")
             elif d.kind is DebtKind.spent and owners[d.subject] is not None:
                 self.close(owners[d.subject])
@@ -1467,6 +1578,7 @@ class ArmLowerer:
             elif d.kind is DebtKind.roots and d.subject in self.anchors:
                 self.close_anchors(d.subject)
             elif d.kind is DebtKind.roots:
+                self.escape()
                 self.emit(f"_PyRop_CloseAnchors(&{d.subject});")
 
     def emit_temporary(self, flag: str | None, line: str) -> None:
@@ -1525,6 +1637,8 @@ class ArmLowerer:
         args = self.c_args(t.args, x.params)
         cases = x.result.cases
         edges = {e.case: e for e in t.edges}
+        if row_reads_pc(x):
+            self.escape(row_sets_pc(x))
         if conv.transfer:
             # The callee leaves the word by the exit of the case it takes
             self.emit(f"{self.row_symbol(x)}({', '.join(args)});")
@@ -1577,6 +1691,8 @@ class ArmLowerer:
         if payload_case is not None:
             out = self.new_temp(c_type(payload_case.params[0].type), "out")
             args.append(f"&{out}")
+        if row_reads_pc(x):
+            self.escape(row_sets_pc(x))
         if x.contract.effect_set & ESCAPING:
             self.emit("IR_STUB_ESCAPE();")
         ret = self.new_temp("int", "ret")
@@ -1592,6 +1708,8 @@ class ArmLowerer:
         self.jump(target, payload)
 
     def lower_exit(self, t: Exit) -> None:
+        if t.kind in PC_EXITS:
+            self.escape(True)
         if t.kind in ("next", "branch", "jump") and self.pending_closes:
             self.lower_tail_closes(t)
         elif t.kind == "next":
@@ -1661,8 +1779,13 @@ class ArmLowerer:
         # Cold block k parks close k's value, then runs the later closes
         # in parking mode (Rest k + 1 onwards) and leaves
         n = len(closes)
+        # A park leaves for close_dispatch, whose deallocations may read the
+        # pc: each publishes it unless an escape point came before
+        first = self.cur_label is not None and self.cur_label not in self.escaped
         for k, v in enumerate(closes):
             self.emit(f"{tail}_{k}:")
+            if first:
+                self.lines.append(PUBLISH_MARK + self.cur_label)
             self.emit(f"ROP_TAIL_PARK_FIRST({v});")
             if n > 1:
                 self.emit(f"goto {tail}_Rest{k + 1};")
@@ -1670,6 +1793,8 @@ class ArmLowerer:
             if n > 1:
                 self.emit(f"{tail}_Rest{j}:")
             self.emit(f"ROP_TAIL_PARK({closes[j]});" if j < n else leave)
+        if first:
+            self.escaped.add(self.cur_label)
 
     def resume_slot(self, t: Exit) -> str:
         """The home that the child's return value, or the value sent to a

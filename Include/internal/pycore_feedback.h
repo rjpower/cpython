@@ -198,19 +198,21 @@ typedef struct {
 #define _Py_CALL_BIND_SLOTS_MAX 16
 #define _Py_CALL_BIND_EXTRAS_MAX 8
 
-/* The facts of an exact call's callee (Call.Exact, Call.Generator), which
- * follow from its code alone: a function's version is its code's
- * (co_version, unique to the code), so they hold while the site's version
- * guard passes, and the function keeps the code and its executing copy
- * alive.  Classification checked co_argcount against the site's operands,
- * with the self operand present or not as self_present says; the word
- * fixes the rest of the count. */
+/* The facts of an exact call's callee (Call.Exact, Call.BoundExact,
+ * Call.Generator) and of the site, which follow from the callee's code and
+ * the word: a function's version is its code's (co_version, unique to the
+ * code), so they hold while the site's version guard passes, and the
+ * function keeps the code and its executing copy alive.  Classification
+ * checked co_argcount against the site's operands, with the self operand
+ * present or not as self_present says, which the guards test again. */
 typedef struct {
     const struct _PyCodeExec *exec; // the code's executing copy
-    uint32_t framesize;             // co_framesize
     uint16_t nslots;                // the frame's slots
+    uint16_t operands;              // the operands the callee takes ...
+    uint8_t first;                  // ... from this one (1: past a NULL self)
     uint8_t closure;                // the code has free variables
     uint8_t self_present;
+    uint8_t _pad;
 } _PyFbCallee;
 
 static_assert(sizeof(_PyFbCallee) == sizeof(_PyBindPlan),

@@ -808,66 +808,45 @@ call_exact_function(PyValue *slots, _PyIRWord word, PyValue callable,
 
 /* Move the operands of the call at head, whose callee takes exactly these
  * arguments, to arguments, the first slots of its frame: a temporary moves
- * and a local is counted.  expanded: callable is a bound method, whose
- * receiver comes first, counted, and the method operand is released. */
+ * and a local is counted.  The self operand is NULL at run time for a class
+ * attribute that is not a method: the arguments follow its slot. */
 static inline Py_ALWAYS_INLINE void
-call_fill_exact(PyValue *slots, _PyInterpreterFrame *frame,
-                const _PyIRWord *head, _PyIRWord word, PyValue callable,
+call_fill_exact(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
                 int call_state, PyValue *arguments)
 {
-    int expanded = (call_state & CALL_EXPANDED) != 0;
+    int skip = (word & IR_F_NO_SELF) == 0 && !(call_state & CALL_SELF_PRESENT);
+    call_take_operands(slots, head, skip, (int)IR_C(word) - skip, arguments);
+}
+
+/* Push the frame of the Python function callable for the call at head, whose
+ * operands fill its first arguments; with expanded, of the function of the
+ * bound method callable, with its receiver first, counted, and the method
+ * operand released.  The guards checked the stack space and that the callee
+ * takes exactly these arguments.  callee holds the facts of the function's
+ * code and of the site: the operands to take, from the first, which follows
+ * a self slot that is NULL (a class attribute that is not a method, or the
+ * bound-method operand); a temporary moves and a local is counted. */
+static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
+call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                const _PyIRWord *head, _PyIRWord word, PyValue callable,
+                int expanded, const _PyFbCallee *callee)
+{
+    PyValue *slots = _PyFrame_Slots(frame);
+    PyValue function = call_exact_function(slots, word, callable, expanded);
+    _PyInterpreterFrame *pushed = _PyFrame_PushKnownUnchecked(
+        tstate, function, frame, callee->nslots, callee->exec, callee->closure);
+    PyValue *arguments = pushed->base;
     if (expanded) {
         PyMethodObject *method =
             (PyMethodObject *)PyValue_AsKnownObjectBorrow(callable);
         *arguments++ = PyValue_DUP(method->im_self);
     }
-    int n = (int)IR_C(word);
-    // The self operand is NULL at run time for a class attribute that is
-    // not a method, and for a bound-method operand: the arguments follow
-    // its slot
-    int skip = (word & IR_F_NO_SELF) == 0 &&
-        (expanded || !(call_state & CALL_SELF_PRESENT));
-    if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
-        _PyEval_call_take_loop(slots, head, skip, n - skip, arguments);
-    }
-    else if (n > skip) {
-        // All the operands are in the first operand word; a skipped self
-        // slot is its first field
-        _PyIRWord ops = head[1];
-        uint64_t fields = ops >> 16;
-        unsigned int locals = (unsigned int)(ops >> 9) & 15;
-        if (Py_UNLIKELY(skip)) {
-            fields >>= 12;
-            locals >>= 1;
-            n--;
-        }
-        call_take_fields(slots, fields, locals, n, arguments);
+    if (callee->operands) {
+        call_take_operands(slots, head, callee->first, callee->operands, arguments);
     }
     if (expanded) {
         call_release_callable(frame, word);
     }
-}
-
-/* Push the frame of the Python function callable for the call at head, whose
- * operands fill its first arguments; with CALL_EXPANDED, of the function of
- * the bound method callable, with its receiver first.  The guards checked the
- * stack space and that the callee takes exactly these arguments
- * (call_fill_exact()); callee holds the facts of the function's code. */
-static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
-call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                const _PyIRWord *head, _PyIRWord word, PyValue callable,
-                PyValue self, int call_state, const _PyFbCallee *callee)
-{
-    int expanded = (call_state & CALL_EXPANDED) != 0;
-    // The self operand moves from its home with the arguments; a bound
-    // method's is NULL
-    assert(!expanded || PyValue_IsNull(self));
-    (void)self;
-    PyValue *slots = _PyFrame_Slots(frame);
-    PyValue function = call_exact_function(slots, word, callable, expanded);
-    _PyInterpreterFrame *pushed = _PyFrame_PushKnownUnchecked(
-        tstate, function, frame, callee->nslots, callee->exec, callee->closure);
-    call_fill_exact(slots, frame, head, word, callable, call_state, pushed->base);
     return pushed;
 }
 
@@ -933,7 +912,8 @@ _PyRop_ExactPositional(_PyInterpreterFrame *frame, const _PyIRWord *head,
 static inline bool
 _PyRop_FrameSpace(PyThreadState *tstate, const _PyFbCall *fb)
 {
-    return _PyThreadState_HasStackSpace(tstate, (int)fb->callee.framesize);
+    return _PyThreadState_HasStackSpace(tstate,
+                                        fb->callee.nslots + FRAME_SPECIALS_SIZE);
 }
 
 static inline bool
@@ -948,8 +928,7 @@ _PyRop_PushExact(PyThreadState *tstate, _PyInterpreterFrame *frame,
 {
     _PyIRWord word = head[0];
     assert(fn == &_PyFrame_Slots(frame)[IR_B(word)]);
-    return call_push_exact(tstate, frame, head, word, *fn, PyValue_NULL,
-                           rop_call_self_state(frame, head), &fb->callee);
+    return call_push_exact(tstate, frame, head, word, *fn, 0, &fb->callee);
 }
 
 static inline bool
@@ -985,8 +964,7 @@ _PyRop_PushBoundExact(PyThreadState *tstate, _PyInterpreterFrame *frame,
 {
     _PyIRWord word = head[0];
     assert(fn == &_PyFrame_Slots(frame)[IR_B(word)]);
-    return call_push_exact(tstate, frame, head, word, *fn, PyValue_NULL,
-                           CALL_EXPANDED, &fb->callee);
+    return call_push_exact(tstate, frame, head, word, *fn, 1, &fb->callee);
 }
 
 static inline bool
@@ -1724,8 +1702,7 @@ call_new_generator(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (gen == NULL) {
         return PyValue_NULL;
     }
-    call_fill_exact(slots, frame, head, word, PyValue_NULL, call_state,
-                    gen->gi_iframe.base);
+    call_fill_exact(slots, head, word, call_state, gen->gi_iframe.base);
     if (gen_prologue(tstate, gen, code) < 0) {
         _PyGen_DiscardCall(gen);
         return PyValue_NULL;

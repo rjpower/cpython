@@ -551,6 +551,17 @@ class ArmKindTests(unittest.TestCase):
     def messages(self, src: str) -> list[str]:
         return [message for _, _, message in check_source(src)]
 
+    def test_outline_in_an_arm_only(self):
+        arm = ("family F() exits(next);\n"
+               "arm F.A split effects() feedback() exits(next)\n"
+               "{ entry(): goto Rest(); Rest() outline: exit next(); }\n")
+        self.assertEqual(self.messages(arm), [])
+        macro = ("macro m() cases(ok()) effects() feedback()\n"
+                 "{ entry() outline: exit ok(); }\n")
+        self.assertEqual(self.messages(macro),
+                         ["entry outline: a macro's blocks are its consumers'; "
+                          "outline the consumer's block"])
+
     def test_observer_gates(self):
         src = ("family F() exits(next) events(CALL);\n"
                "arm F.A inline effects() feedback() exits(next)\n"

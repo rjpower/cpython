@@ -73,8 +73,17 @@ static const _PyIRTailFn ir_tail_table[IR_TARGETS_COUNT] = {
         ((_PyThreadStateImpl *)tstate)->jit_departing = 0; \
         IR_TAIL_GOTO(NAME); \
     }
+/* A declared region (`outline`) is hot: compiled code tail-calls the
+ * function itself, by a name of its own, after closing the window in the
+ * copy (Python/jit_stencils.c, IR_OUTLINE_HOT_GOTO). */
+#  define IR_OUTLINED_STR_(S) #S
+#  define IR_OUTLINED_STR(S) IR_OUTLINED_STR_(S)
+#  define IR_OUTLINED_HOT_JIT_ENTRY(NAME) \
+    extern Py_IR_TAIL_CC PyValue _PyEval_JitOut_##NAME(Py_IR_TAIL_PARAMS) \
+        __attribute__((alias(IR_OUTLINED_STR(IR_TAIL_ID(NAME)))));
 #else
 #  define IR_OUTLINED_JIT_ENTRY(NAME)
+#  define IR_OUTLINED_HOT_JIT_ENTRY(NAME)
 #endif
 #include "ceval_labels.h"
 #include "generated_rop_cases.c.h"

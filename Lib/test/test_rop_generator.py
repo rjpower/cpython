@@ -456,26 +456,55 @@ class ColdRegionTests(unittest.TestCase):
                 self.assertIn("PyValue_FromDouble(", "\n".join(c.body))
 
     def test_an_observed_frame_returns_out_of_line(self):
-        # frame_unobserved's observed case is cold: Return.Empty retires a
-        # frame with a frame object, or the profiled one, out of line
-        arm = "\n".join(self.p.lowered["Return.Empty"].body)
+        # frame_unobserved's observed case is cold: Return.Empty's declared
+        # region retires a frame with a frame object, or the profiled one,
+        # in a cold region of its own, which the declared one tail-calls
+        pop = "\n".join(self.region("Return.Empty", "entry").body)
         c = self.region("Return.Empty", "Observed")
-        self.assertIn("_PyRop_RetireFrameEmpty(tstate, dying);", arm)
-        self.assertNotIn("_PyRop_RetireFrame(", arm)
+        self.assertIn("_PyRop_RetireFrameEmpty(tstate, dying);", pop)
+        self.assertNotIn("_PyRop_RetireFrame(", pop)
+        self.assertIn(f"IR_OUTLINE_GOTO({c.name});", pop)
         self.assertEqual(sorted(n for _, n in c.live), ["caller", "dying", "r"])
         body = "\n".join(c.body)
         self.assertIn("_PyRop_RetireFrame(tstate, dying);", body)
         self.assertIn("ROP_RETURN(caller, h);", body)
 
-    def test_the_cases_print_the_outlined_functions_before_their_arm(self):
+    def test_a_declared_region_is_a_hot_function(self):
+        # `Callee() outline:` in Call.Exact: the arm keeps its guards and
+        # tail-calls the callee's new frame and the switch into it
+        arm = "\n".join(self.p.lowered["Call.Exact"].body)
+        c = self.region("Call.Exact", "Callee")
+        self.assertTrue(c.hot)
+        self.assertEqual(c.name, "Out_Call_Exact_Callee")
+        self.assertEqual(c.live, [])
+        self.assertIn("_PyRop_FunctionVersion(", arm)
+        self.assertNotIn("_PyRop_PushExact(", arm)
+        self.assertIn(f"IR_OUTLINE_HOT_GOTO({c.name});", arm)
+        body = "\n".join(c.body)
+        self.assertIn("_PyRop_PushExact(", body)
+        self.assertIn("ROP_ENTER(c, ", body)
+
+    def test_an_outlined_entry_leaves_the_arm_its_decode(self):
+        # `entry() outline:` in Return.Empty: the whole retirement is the
+        # function
+        arm = self.p.lowered["Return.Empty"].body
+        self.assertEqual([line for line in arm if "IR_OUTLINE" in line],
+                         ["IR_OUTLINE_HOT_GOTO(Out_Return_Empty_entry);"])
+        self.assertNotIn("_PyRop_Depart(", "\n".join(arm))
+
+    def test_a_declared_region_follows_its_arm_in_the_layout(self):
+        order = rop_generator.layout_order(self.p)
+        at = order.index("Call_Exact")
+        self.assertEqual(order[at + 1], "Out_Call_Exact_Callee")
         out = io.StringIO()
         rop_generator.write_cases(out, self.p, [])
         text = out.getvalue()
-        name = "Cold_Add_Int_TLL_Overflow"
-        self.assertLess(text.index(f"IR_OUTLINED_FN({name})"),
-                        text.index("TARGET(Add_Int_TLL)"))
-        self.assertIn(f"}} rop_in_{name};", text)
-        self.assertIn(f"IR_OUTLINED_JIT_ENTRY({name})", text)
+        self.assertIn("IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_Callee)", text)
+        # Its frame switch is the copies' own (IR_SHARED_REGION)
+        start = text.index("IR_OUTLINED_FN(Out_Call_Exact_Callee) {")
+        self.assertEqual(text[:start].rsplit("#define IR_SHARED_REGION", 1)[1][:3], " 1\n")
+        end = text.index("IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_Callee)")
+        self.assertIn("#define IR_SHARED_REGION 0", text[start:end])
 
     def test_arms_share_a_region_of_the_same_text(self):
         # Every outlined function is printed once, with the first arm that
@@ -483,7 +512,8 @@ class ColdRegionTests(unittest.TestCase):
         defined = []
         for name, low in self.p.lowered.items():
             defined += [c.name for c in low.cold]
-            for called in re.findall(r"IR_OUTLINE_GOTO\((\w+)\)", "\n".join(low.body)):
+            for called in re.findall(r"IR_OUTLINE_(?:HOT_)?GOTO\((\w+)\)",
+                                     "\n".join(low.body)):
                 self.assertIn(called, defined, name)
         self.assertEqual(len(defined), len(set(defined)))
         sub = "\n".join(self.p.lowered["Binary.Float_NB_SUBTRACT_TTT"].body)
@@ -495,6 +525,14 @@ class ColdRegionTests(unittest.TestCase):
             with self.subTest(name):
                 self.assertEqual(low.cold, [])
                 self.assertNotIn("IR_OUTLINE_GOTO", "\n".join(low.body))
+
+    def test_an_outline_block_prints_as_parsed(self):
+        source = ("family F() exits(next);\n"
+                  "arm F.A split effects() feedback() exits(next)\n"
+                  "{ entry(): goto Rest(); Rest() outline: exit next(); }\n")
+        arm = rop_syntax.parse(source, "o.rop").decls[1]
+        self.assertEqual([b.outline for b in arm.graph.blocks], [False, True])
+        self.assertIn("  Rest() outline:", "\n".join(rop_print.decl_lines(arm)))
 
     def test_a_cold_case_prints_as_parsed(self):
         source = ("extern primitive split(a:I64) cases(fits(s:I64), cold big(w:I64))\n"

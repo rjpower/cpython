@@ -303,7 +303,8 @@ def flatten(program: Program, arm: Arm) -> FlatGraph:
                                               tuple(first + stmts), new)
             work.append(prefix + mb.label)
         blocks[label] = Block(label, block.params, block.stmts,
-                              Goto(Target(prefix + "entry", ())))
+                              Goto(Target(prefix + "entry", ())), block.span,
+                              block.outline)
     seen: set[str] = set()
     post: list[str] = []
 
@@ -649,13 +650,15 @@ class Lowering:
 
 @dataclass
 class ColdRegion:
-    """A cold region of an arm, outlined: the function NAME runs it from
-    its head, given the values that the arm computed before the head and
-    the region reads, which travel in the activation (IR_OUTLINE_IN)"""
-    name: str                               # the function, Cold_<arm>_<head>
+    """A region of an arm, outlined: the function NAME runs it from its
+    head, given the values that the arm computed before the head and the
+    region reads, which travel in the activation (IR_OUTLINE_IN).  A cold
+    region (J5) is rare; a declared one (`outline`) is hot."""
+    name: str                               # the function, Cold_ or Out_<arm>_<head>
     head: str                               # the head's C label
     live: list[tuple[str, str]]             # (C type, local) of each value
     body: list[str]
+    hot: bool = False
 
 
 class ArmLowerer:
@@ -1120,7 +1123,11 @@ class ArmLowerer:
             st.name: len(st.value.args[0].items)
             for b in self.blocks.values() for st in b.stmts if is_span_anchor(st)}
         order = [label for label in self.layout() if label not in self.transfer_blocks]
-        self.cold_heads = (
+        # The declared regions (`outline`) and the cold ones
+        self.outline_heads = (
+            {label for label, b in self.blocks.items() if b.outline}
+            if self.outline_cold_regions else set())
+        self.cold_heads = self.outline_heads | (
             cold_region_heads(self.program, self.blocks, self.transfer_blocks)
             | cold_case_heads(self.program, self.blocks, self.transfer_blocks)
             if self.outline_cold_regions else set())
@@ -1155,16 +1162,20 @@ class ArmLowerer:
                         self.cold)
 
     def outline_cold(self, order: list[str], spans: Mapping[str, tuple[int, int]]) -> list[str]:
-        """Rule J5-R1: each cold region (cold_region_heads) becomes a
-        function of the evaluator's type, which the arm tail-calls at the
-        region's head (IR_OUTLINE_GOTO): the arm's hot path keeps no copy of
-        it, and a stencil of the baseline JIT reaches the one in the binary.
-        The function is the arm's own text from the head: the arm's
-        declarations, the region's blocks, and the locals that the arm set
-        before the head and the region reads, which the arm leaves in the
-        activation.  It decodes the word again, from this_instr."""
+        """Rule J5-R1: each cold region (cold_region_heads), and each
+        declared one (`outline`), becomes a function of the evaluator's
+        type, which the arm tail-calls at the region's head
+        (IR_OUTLINE_GOTO, IR_OUTLINE_HOT_GOTO): the arm's hot path keeps no
+        copy of it, and a stencil of the baseline JIT reaches the one in the
+        binary.  The function is the arm's own text from the head: the
+        arm's declarations, the region's blocks, and the locals that the
+        code before the head set and the region reads, which it leaves in
+        the activation.  It decodes the word again, from this_instr.  A
+        region that reaches another region's head tail-calls that one's
+        function there, as the arm does."""
         succs = {label: [t.label for t, _ in edges_of(self.program, self.blocks, b)]
                  for label, b in self.blocks.items()}
+        heads = self.cold_heads
 
         def reach(start: str, stop: set[str]) -> set[str]:
             seen: set[str] = set()
@@ -1182,41 +1193,61 @@ class ArmLowerer:
             start, end = spans[label]
             return self.lines[start:end]
 
-        in_arm = reach("entry", self.cold_heads)
-        heads = [label for label in order if label in self.cold_heads and label in in_arm]
         first = spans[order[0]][0]
-        hot = self.lines[:first] + [
-            line for label in order if label in in_arm and label not in self.cold_heads
-            for line in text(label)]
-        hot_names = set(c_names(hot))
+        prelude = self.lines[:first]
         types = {d.name: d.ctype for d in self.decl_list}
-        arm_lines = self.lines[:first]
-        for label in order:
-            if label not in in_arm:
-                continue
-            if label not in self.cold_heads:
-                arm_lines += text(label)
-                continue
-            region = reach(label, set())
-            body = [line for lb in order if lb in region for line in text(lb)]
-            needed = live_in(label, region, succs, {lb: text(lb) for lb in region},
+        functions: dict[str, ColdRegion] = {}
+
+        def name_of(label: str) -> str:
+            kind = "Out" if label in self.outline_heads else "Cold"
+            return f"{kind}_{self.prefix.removeprefix('rop_')}_{label}"
+
+        def emit(start: str | None) -> list[str]:
+            """The text that runs from start (the arm's entry, None, or a
+            head), with a tail call at every other head it reaches"""
+            stop = heads - {start} if start is not None else heads
+            region = reach(start or "entry", stop)
+            lines: list[str] = []
+            for label in order:
+                if label not in region:
+                    continue
+                if label not in stop:
+                    lines += text(label)
+                    continue
+                enter(label)
+                c = functions[label]
+                # The lines that a fallthrough into the head ran stay
+                head_lines = text(label)
+                marker = f"{self.label(label)}:"
+                at = head_lines.index(marker) if marker in head_lines else -1
+                lines += head_lines[:at + 1]
+                if c.live:
+                    lines.append(f"{{ rop_in_{c.name} *ir_in = IR_OUTLINE_IN(rop_in_{c.name});")
+                    lines += [f"  ir_in->{n} = {n};" for _, n in c.live]
+                    lines.append("}")
+                goto = "IR_OUTLINE_HOT_GOTO" if c.hot else "IR_OUTLINE_GOTO"
+                lines.append(f"{goto}({c.name});")
+            return lines
+
+        def enter(label: str) -> None:
+            if label in functions:
+                return
+            whole = reach(label, set())
+            needed = live_in(label, whole, succs, {lb: text(lb) for lb in whole},
                              self.label)
+            # Set before the head: in the code of the blocks outside its region
+            outside = set(c_names(prelude + [
+                line for lb in order if lb not in whole for line in text(lb)]))
             live = [(types[n], n) for n in types
-                    if n in needed and n in hot_names and not types[n].endswith("const")]
-            name = f"Cold_{self.prefix.removeprefix('rop_')}_{label}"
-            body = [f"goto {self.label(label)};"] + body
-            self.cold.append(ColdRegion(name, self.label(label), live,
-                                        self.drop_unused_labels(body)))
-            # The lines that a fallthrough into the head ran stay in the arm
-            head_lines = text(label)
-            at = head_lines.index(f"{self.label(label)}:")
-            arm_lines += head_lines[:at + 1]
-            if live:
-                arm_lines.append(f"{{ rop_in_{name} *ir_in = IR_OUTLINE_IN(rop_in_{name});")
-                arm_lines += [f"  ir_in->{n} = {n};" for _, n in live]
-                arm_lines.append("}")
-            arm_lines.append(f"IR_OUTLINE_GOTO({name});")
-        assert heads == [c.head.removeprefix(self.prefix + "_") for c in self.cold], self.arm.name
+                    if n in needed and n in outside and not types[n].endswith("const")]
+            c = ColdRegion(name_of(label), self.label(label), live, [],
+                           hot=label in self.outline_heads)
+            functions[label] = c
+            body = ([] if label == "entry" else [f"goto {self.label(label)};"]) + emit(label)
+            c.body = self.drop_unused_labels(body)
+
+        arm_lines = prelude + emit(None)
+        self.cold = [functions[label] for label in order if label in functions]
         return arm_lines
 
     def payload_words(self) -> str | None:

@@ -18,7 +18,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_Add_Generic_binary_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Add_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Add_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Generic_binary_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue binary_at_origin1_dropped;
+} rop_in_Cold_Add_Generic_binary_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Add_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Generic_binary_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Generic_binary_at_origin1_Failed) {
     // Add.Generic: the cold region from rop_Add_Generic_binary_at_origin1_Failed
@@ -70,14 +86,6 @@ IR_OUTLINED_FN(Cold_Add_Generic_binary_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Add_Generic_binary_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue binary_at_origin1_dropped;
-} rop_in_Cold_Add_Generic_binary_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Add_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Generic_binary_at_origin1_Moved) {
     // Add.Generic: the cold region from rop_Add_Generic_binary_at_origin1_Moved
@@ -313,7 +321,42 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow d_view0;
     PyValue d_owned0;
 } rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Generic_delattr_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow d_view0;
+    PyValue d_owned0;
+} rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Generic_delattr_at_origin1_Moved);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Generic_setattr_at_origin2_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Generic_setattr_at_origin2_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Generic_delattr_at_origin1_Failed) {
     // AttrWrite.Generic: the cold region from rop_AttrWrite_Generic_delattr_at_origin1_Failed
@@ -372,11 +415,6 @@ IR_OUTLINED_FN(Cold_AttrWrite_Generic_delattr_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_delattr_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow d_view0;
-    PyValue d_owned0;
-} rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_delattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Generic_delattr_at_origin1_Moved) {
     // AttrWrite.Generic: the cold region from rop_AttrWrite_Generic_delattr_at_origin1_Moved
@@ -434,13 +472,6 @@ IR_OUTLINED_FN(Cold_AttrWrite_Generic_delattr_at_origin1_Moved) {
 IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_delattr_at_origin1_Moved)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Generic_setattr_at_origin2_Failed) {
     // AttrWrite.Generic: the cold region from rop_AttrWrite_Generic_setattr_at_origin2_Failed
@@ -501,13 +532,6 @@ IR_OUTLINED_FN(Cold_AttrWrite_Generic_setattr_at_origin2_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_setattr_at_origin2_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Generic_setattr_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Generic_setattr_at_origin2_Moved) {
     // AttrWrite.Generic: the cold region from rop_AttrWrite_Generic_setattr_at_origin2_Moved
@@ -1082,6 +1106,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Generic_setattr_at_origin2_Moved)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Generic_NativeFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_Generic_NativeFailed) {
     // Call.Generic: the cold region from rop_Call_Generic_NativeFailed
     int opcode = ROP_HANDLER_Call_Generic;
@@ -1549,6 +1577,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Generic_NativeFailed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_Generic_NativeFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallKw_Generic_NativeFailed) {
     // CallKw.Generic: the cold region from rop_CallKw_Generic_NativeFailed
     int opcode = ROP_HANDLER_CallKw_Generic;
@@ -1724,7 +1756,15 @@ typedef struct __attribute__((__may_alias__)) {
     PyValue tfo;
     PyValue tko;
 } rop_in_Cold_CallEx_Generic_TupleFailed;
-static_assert(sizeof(rop_in_Cold_CallEx_Generic_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_CallEx_Generic_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Generic_TupleFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Generic_NativeFailed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallEx_Generic_TupleFailed) {
     // CallEx.Generic: the cold region from rop_CallEx_Generic_TupleFailed
@@ -2092,7 +2132,21 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetAttr_Generic_getattr_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue getattr_at_origin1_dropped;
+} rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetAttr_Generic_getattr_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetAttr_Generic_getattr_at_origin1_Failed) {
     // GetAttr.Generic: the cold region from rop_GetAttr_Generic_getattr_at_origin1_Failed
@@ -2172,12 +2226,6 @@ IR_OUTLINED_FN(Cold_GetAttr_Generic_getattr_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetAttr_Generic_getattr_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValue getattr_at_origin1_dropped;
-} rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetAttr_Generic_getattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetAttr_Generic_getattr_at_origin1_Moved) {
     // GetAttr.Generic: the cold region from rop_GetAttr_Generic_getattr_at_origin1_Moved
@@ -2586,7 +2634,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetMethod_Generic_getmethod_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue getmethod_at_origin1_dropped;
+    PyValue getmethod_at_origin1_self_dropped;
+} rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetMethod_Generic_getmethod_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetMethod_Generic_getmethod_at_origin1_Failed) {
     // GetMethod.Generic: the cold region from rop_GetMethod_Generic_getmethod_at_origin1_Failed
@@ -2660,13 +2723,6 @@ IR_OUTLINED_FN(Cold_GetMethod_Generic_getmethod_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetMethod_Generic_getmethod_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValue getmethod_at_origin1_dropped;
-    PyValue getmethod_at_origin1_self_dropped;
-} rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetMethod_Generic_getmethod_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetMethod_Generic_getmethod_at_origin1_Moved) {
     // GetMethod.Generic: the cold region from rop_GetMethod_Generic_getmethod_at_origin1_Moved
@@ -2987,7 +3043,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Generic_getitem_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue getitem_at_origin1_dropped;
+} rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Generic_getitem_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_Generic_getitem_at_origin1_Failed) {
     // GetItem.Generic: the cold region from rop_GetItem_Generic_getitem_at_origin1_Failed
@@ -3047,14 +3119,6 @@ IR_OUTLINED_FN(Cold_GetItem_Generic_getitem_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Generic_getitem_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue getitem_at_origin1_dropped;
-} rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetItem_Generic_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_Generic_getitem_at_origin1_Moved) {
     // GetItem.Generic: the cold region from rop_GetItem_Generic_getitem_at_origin1_Moved
@@ -3353,7 +3417,24 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_Generic_setitem_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_Generic_setitem_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SetItem_Generic_setitem_at_origin1_Failed) {
     // SetItem.Generic: the cold region from rop_SetItem_Generic_setitem_at_origin1_Failed
@@ -3402,15 +3483,6 @@ IR_OUTLINED_FN(Cold_SetItem_Generic_setitem_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_SetItem_Generic_setitem_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-} rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_SetItem_Generic_setitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SetItem_Generic_setitem_at_origin1_Moved) {
     // SetItem.Generic: the cold region from rop_SetItem_Generic_setitem_at_origin1_Moved
@@ -3611,7 +3683,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_IterOpen_Generic_Failed;
-static_assert(sizeof(rop_in_Cold_IterOpen_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_IterOpen_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_IterOpen_Generic_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_IterOpen_Generic_Failed) {
     // IterOpen.Generic: the cold region from rop_IterOpen_Generic_Failed
@@ -3837,7 +3913,36 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_ForIter_Generic_Failed;
-static_assert(sizeof(rop_in_Cold_ForIter_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_ForIter_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Generic_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ev;
+} rop_in_Cold_ForIter_Generic_EndGone;
+static_assert(sizeof(rop_in_Cold_ForIter_Generic_EndGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Generic_EndGone);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue iv;
+    PyValue nc;
+} rop_in_Cold_ForIter_Generic_ItemGone;
+static_assert(sizeof(rop_in_Cold_ForIter_Generic_ItemGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Generic_ItemGone);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ForIter_Generic_Failed) {
     // ForIter.Generic: the cold region from rop_ForIter_Generic_Failed
@@ -3902,14 +4007,6 @@ IR_OUTLINED_FN(Cold_ForIter_Generic_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Generic_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue ev;
-} rop_in_Cold_ForIter_Generic_EndGone;
-static_assert(sizeof(rop_in_Cold_ForIter_Generic_EndGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ForIter_Generic_EndGone) {
     // ForIter.Generic: the cold region from rop_ForIter_Generic_EndGone
@@ -3976,15 +4073,6 @@ IR_OUTLINED_FN(Cold_ForIter_Generic_EndGone) {
 IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Generic_EndGone)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue iv;
-    PyValue nc;
-} rop_in_Cold_ForIter_Generic_ItemGone;
-static_assert(sizeof(rop_in_Cold_ForIter_Generic_ItemGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ForIter_Generic_ItemGone) {
     // ForIter.Generic: the cold region from rop_ForIter_Generic_ItemGone
@@ -4334,7 +4422,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Generic_ItemGone)
 typedef struct __attribute__((__may_alias__)) {
     PyValue global_at_origin1_dropped;
 } rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GlobalRead_Generic_global_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GlobalRead_Generic_global_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GlobalRead_Generic_global_at_origin1_Moved) {
     // GlobalRead.Generic: the cold region from rop_GlobalRead_Generic_global_at_origin1_Moved
@@ -4468,7 +4560,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_Binary_Generic_binary_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Binary_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue binary_at_origin1_dropped;
+} rop_in_Cold_Binary_Generic_binary_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Binary_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Failed) {
     // Binary.Generic: the cold region from rop_Binary_Generic_binary_at_origin1_Failed
@@ -4520,14 +4628,6 @@ IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_binary_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue binary_at_origin1_dropped;
-} rop_in_Cold_Binary_Generic_binary_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Binary_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Moved) {
     // Binary.Generic: the cold region from rop_Binary_Generic_binary_at_origin1_Moved
@@ -4766,7 +4866,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_AppendText_Generic_binary_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AppendText_Generic_binary_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue binary_at_origin1_dropped;
+} rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AppendText_Generic_binary_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AppendText_Generic_binary_at_origin1_Failed) {
     // AppendText.Generic: the cold region from rop_AppendText_Generic_binary_at_origin1_Failed
@@ -4818,14 +4934,6 @@ IR_OUTLINED_FN(Cold_AppendText_Generic_binary_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_AppendText_Generic_binary_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue binary_at_origin1_dropped;
-} rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_AppendText_Generic_binary_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AppendText_Generic_binary_at_origin1_Moved) {
     // AppendText.Generic: the cold region from rop_AppendText_Generic_binary_at_origin1_Moved
@@ -5066,7 +5174,40 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_Send_Generic_Failed;
-static_assert(sizeof(rop_in_Cold_Send_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Send_Generic_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Generic_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue rv;
+} rop_in_Cold_Send_Generic_DoneGone;
+static_assert(sizeof(rop_in_Cold_Send_Generic_DoneGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Generic_DoneGone);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue y;
+    PyValue nc;
+} rop_in_Cold_Send_Generic_YieldGone;
+static_assert(sizeof(rop_in_Cold_Send_Generic_YieldGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Generic_YieldGone);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Send_Generic_Failed) {
     // Send.Generic: the cold region from rop_Send_Generic_Failed
@@ -5134,16 +5275,6 @@ IR_OUTLINED_FN(Cold_Send_Generic_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Send_Generic_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-    PyValue rv;
-} rop_in_Cold_Send_Generic_DoneGone;
-static_assert(sizeof(rop_in_Cold_Send_Generic_DoneGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Send_Generic_DoneGone) {
     // Send.Generic: the cold region from rop_Send_Generic_DoneGone
@@ -5213,17 +5344,6 @@ IR_OUTLINED_FN(Cold_Send_Generic_DoneGone) {
 IR_OUTLINED_JIT_ENTRY(Cold_Send_Generic_DoneGone)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-    PyValue y;
-    PyValue nc;
-} rop_in_Cold_Send_Generic_YieldGone;
-static_assert(sizeof(rop_in_Cold_Send_Generic_YieldGone) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Send_Generic_YieldGone) {
     // Send.Generic: the cold region from rop_Send_Generic_YieldGone
@@ -5568,7 +5688,44 @@ typedef struct __attribute__((__may_alias__)) {
     PyValue a_owned1;
     PyValue compare_at_origin1_dropped;
 } rop_in_Cold_Compare_Generic_compare_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Compare_Generic_compare_at_origin1_Moved);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed;
+static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Compare_Generic_compare_test_at_origin2_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Compare_Generic_compare_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Compare_Generic_compare_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved;
+static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Compare_Generic_compare_test_at_origin2_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Compare_Generic_compare_at_origin1_Moved) {
     // Compare.Generic: the cold region from rop_Compare_Generic_compare_at_origin1_Moved
@@ -5622,13 +5779,6 @@ IR_OUTLINED_FN(Cold_Compare_Generic_compare_at_origin1_Moved) {
 IR_OUTLINED_JIT_ENTRY(Cold_Compare_Generic_compare_at_origin1_Moved)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed;
-static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Compare_Generic_compare_test_at_origin2_Failed) {
     // Compare.Generic: the cold region from rop_Compare_Generic_compare_test_at_origin2_Failed
@@ -5671,22 +5821,17 @@ IR_OUTLINED_FN(Cold_Compare_Generic_compare_test_at_origin2_Failed) {
     }
     goto rop_Compare_Generic_compare_test_at_origin2_Failed;
     rop_Compare_Generic_compare_test_at_origin2_Failed:
-    IR_STUB_ESCAPE();
-    a_all7 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-    srcs8 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
-    _PyRop_RetireFailedCall(&a_all7, &srcs8);
-    PROCESS_ERROR_AT(RAISE, 63, this_instr);
+    { rop_in_Cold_Compare_Generic_compare_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Compare_Generic_compare_at_origin1_Failed);
+      ir_in->a_view0 = a_view0;
+      ir_in->a_owned0 = a_owned0;
+      ir_in->a_view1 = a_view1;
+      ir_in->a_owned1 = a_owned1;
+    }
+    IR_OUTLINE_GOTO(Cold_Compare_Generic_compare_at_origin1_Failed);
 }
 IR_OUTLINED_JIT_ENTRY(Cold_Compare_Generic_compare_test_at_origin2_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_Compare_Generic_compare_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Compare_Generic_compare_at_origin1_Failed) {
     // Compare.Generic: the cold region from rop_Compare_Generic_compare_at_origin1_Failed
@@ -5738,13 +5883,6 @@ IR_OUTLINED_FN(Cold_Compare_Generic_compare_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Compare_Generic_compare_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved;
-static_assert(sizeof(rop_in_Cold_Compare_Generic_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Compare_Generic_compare_test_at_origin2_Moved) {
     // Compare.Generic: the cold region from rop_Compare_Generic_compare_test_at_origin2_Moved
@@ -6024,7 +6162,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Generic_contains_test_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Generic_contains_test_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Contains_Generic_contains_test_at_origin1_Failed) {
     // Contains.Generic: the cold region from rop_Contains_Generic_contains_test_at_origin1_Failed
@@ -6071,13 +6224,6 @@ IR_OUTLINED_FN(Cold_Contains_Generic_contains_test_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Contains_Generic_contains_test_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Contains_Generic_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Contains_Generic_contains_test_at_origin1_Moved) {
     // Contains.Generic: the cold region from rop_Contains_Generic_contains_test_at_origin1_Moved
@@ -6289,7 +6435,44 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed;
-static_assert(sizeof(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Generic_compare_test_at_origin2_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Generic_compare_test_at_origin2_Moved);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Generic_contains_test_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Generic_contains_test_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Generic_compare_test_at_origin2_Failed) {
     // TestBranch.Generic: the cold region from rop_TestBranch_Generic_compare_test_at_origin2_Failed
@@ -6346,13 +6529,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Generic_compare_test_at_origin2_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Generic_compare_test_at_origin2_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved;
-static_assert(sizeof(rop_in_Cold_TestBranch_Generic_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Generic_compare_test_at_origin2_Moved) {
     // TestBranch.Generic: the cold region from rop_TestBranch_Generic_compare_test_at_origin2_Moved
@@ -6408,13 +6584,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Generic_compare_test_at_origin2_Moved) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Generic_compare_test_at_origin2_Moved)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Generic_contains_test_at_origin1_Failed) {
     // TestBranch.Generic: the cold region from rop_TestBranch_Generic_contains_test_at_origin1_Failed
@@ -6473,13 +6642,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Generic_contains_test_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Generic_contains_test_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_TestBranch_Generic_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Generic_contains_test_at_origin1_Moved) {
     // TestBranch.Generic: the cold region from rop_TestBranch_Generic_contains_test_at_origin1_Moved
@@ -6906,7 +7068,20 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_Truth_Generic_truth_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Truth_Generic_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Truth_Generic_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Truth_Generic_truth_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Truth_Generic_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Truth_Generic_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Truth_Generic_truth_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Truth_Generic_truth_at_origin1_Failed) {
     // Truth.Generic: the cold region from rop_Truth_Generic_truth_at_origin1_Failed
@@ -6956,11 +7131,6 @@ IR_OUTLINED_FN(Cold_Truth_Generic_truth_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Truth_Generic_truth_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-} rop_in_Cold_Truth_Generic_truth_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Truth_Generic_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Truth_Generic_truth_at_origin1_Moved) {
     // Truth.Generic: the cold region from rop_Truth_Generic_truth_at_origin1_Moved
@@ -7234,7 +7404,20 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Generic_truth_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Generic_truth_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_BranchTruth_Generic_truth_at_origin1_Failed) {
     // BranchTruth.Generic: the cold region from rop_BranchTruth_Generic_truth_at_origin1_Failed
@@ -7282,11 +7465,6 @@ IR_OUTLINED_FN(Cold_BranchTruth_Generic_truth_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-} rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_BranchTruth_Generic_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_BranchTruth_Generic_truth_at_origin1_Moved) {
     // BranchTruth.Generic: the cold region from rop_BranchTruth_Generic_truth_at_origin1_Moved
@@ -7583,7 +7761,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Generic_truth_at_origin1_Moved)
 typedef struct __attribute__((__may_alias__)) {
     int64_t full;
 } rop_in_Cold_Add_Int_TLL_Overflow;
-static_assert(sizeof(rop_in_Cold_Add_Int_TLL_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Add_Int_TLL_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Int_TLL_Overflow);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Int_TLL_Overflow) {
     // Add.Int_TLL: the cold region from rop_Add_Int_TLL_Overflow
@@ -7673,7 +7855,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_TLL_Overflow)
 typedef struct __attribute__((__may_alias__)) {
     int64_t full;
 } rop_in_Cold_Add_Int_TTL_Overflow;
-static_assert(sizeof(rop_in_Cold_Add_Int_TTL_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Add_Int_TTL_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Int_TTL_Overflow);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Int_TTL_Overflow) {
     // Add.Int_TTL: the cold region from rop_Add_Int_TTL_Overflow
@@ -7765,7 +7951,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_TTL_Overflow)
 typedef struct __attribute__((__may_alias__)) {
     int64_t full;
 } rop_in_Cold_Add_Int_Overflow;
-static_assert(sizeof(rop_in_Cold_Add_Int_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Add_Int_Overflow) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Int_Overflow);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Int_Overflow) {
     // Add.Int: the cold region from rop_Add_Int_Overflow
@@ -7876,7 +8066,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Int_Overflow)
 typedef struct __attribute__((__may_alias__)) {
     double s;
 } rop_in_Cold_Add_Float_TTT_NaN;
-static_assert(sizeof(rop_in_Cold_Add_Float_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Add_Float_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Float_TTT_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Float_TTT_NaN) {
     // Add.Float_TTT: the cold region from rop_Add_Float_TTT_NaN
@@ -7967,7 +8161,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Add_Float_TTT_NaN)
 typedef struct __attribute__((__may_alias__)) {
     double s;
 } rop_in_Cold_Add_Float_NaN;
-static_assert(sizeof(rop_in_Cold_Add_Float_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Add_Float_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Float_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Float_NaN) {
     // Add.Float: the cold region from rop_Add_Float_NaN
@@ -8139,7 +8337,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_Add_Extended_extension_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Add_Extended_extension_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Add_Extended_extension_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Extended_extension_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue extension_at_origin1_dropped;
+} rop_in_Cold_Add_Extended_extension_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Add_Extended_extension_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Add_Extended_extension_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Extended_extension_at_origin1_Failed) {
     // Add.Extended: the cold region from rop_Add_Extended_extension_at_origin1_Failed
@@ -8185,14 +8399,6 @@ IR_OUTLINED_FN(Cold_Add_Extended_extension_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Add_Extended_extension_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue extension_at_origin1_dropped;
-} rop_in_Cold_Add_Extended_extension_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Add_Extended_extension_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Add_Extended_extension_at_origin1_Moved) {
     // Add.Extended: the cold region from rop_Add_Extended_extension_at_origin1_Moved
@@ -8355,7 +8561,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Instance_setattr_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Instance_setattr_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Instance_setattr_at_origin1_Failed) {
     // AttrWrite.Instance: the cold region from rop_AttrWrite_Instance_setattr_at_origin1_Failed
@@ -8400,13 +8621,6 @@ IR_OUTLINED_FN(Cold_AttrWrite_Instance_setattr_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Instance_setattr_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Instance_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Instance_setattr_at_origin1_Moved) {
     // AttrWrite.Instance: the cold region from rop_AttrWrite_Instance_setattr_at_origin1_Moved
@@ -8985,7 +9199,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed) {
     // AttrWrite.Slot_LT: the cold region from rop_AttrWrite_Slot_LT_setattr_at_origin1_Failed
@@ -9029,13 +9258,6 @@ IR_OUTLINED_FN(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Slot_LT_setattr_at_origin1_Moved) {
     // AttrWrite.Slot_LT: the cold region from rop_AttrWrite_Slot_LT_setattr_at_origin1_Moved
@@ -9193,7 +9415,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AttrWrite_Slot_TT_setattr_at_origin1_Failed) {
     // AttrWrite.Slot_TT: the cold region from rop_AttrWrite_Slot_TT_setattr_at_origin1_Failed
@@ -9865,7 +10091,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SpecialLookup_Generic_special_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue special_at_origin1_dropped;
+    PyValue special_at_origin1_self_dropped;
+} rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SpecialLookup_Generic_special_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SpecialLookup_Generic_special_at_origin1_Failed) {
     // SpecialLookup.Generic: the cold region from rop_SpecialLookup_Generic_special_at_origin1_Failed
@@ -9918,13 +10159,6 @@ IR_OUTLINED_FN(Cold_SpecialLookup_Generic_special_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValue special_at_origin1_dropped;
-    PyValue special_at_origin1_self_dropped;
-} rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_SpecialLookup_Generic_special_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SpecialLookup_Generic_special_at_origin1_Moved) {
     // SpecialLookup.Generic: the cold region from rop_SpecialLookup_Generic_special_at_origin1_Moved
@@ -10096,6 +10330,33 @@ IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
             IR_OUTLINE_GOTO(Cold_SpecialLookup_Generic_special_at_origin1_Moved);
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Out_Call_Exact_Callee);
+#endif
+
+#ifndef IR_JIT_STENCILS
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 1
+IR_OUTLINED_FN(Out_Call_Exact_Callee) {
+    // Call.Exact: the region from rop_Call_Exact_Callee
+    int opcode = ROP_HANDLER_Call_Exact;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    _PyInterpreterFrame * c;
+    goto rop_Call_Exact_Callee;
+    rop_Call_Exact_Callee:
+    IR_STUB_ESCAPE();
+    c = _PyRop_PushExact(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
+    ROP_ENTER(c, IR_A(ir_word));
+}
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 0
+IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_Callee)
+#endif
+
         TARGET(Call_Exact) {
             // Call.Exact (split)
             int opcode = ROP_HANDLER_Call_Exact;
@@ -10119,10 +10380,35 @@ IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
             if (!_PyRop_FrameSpace(tstate, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
-            IR_STUB_ESCAPE();
-            c = _PyRop_PushExact(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
-            ROP_ENTER(c, IR_A(ir_word));
+            IR_OUTLINE_HOT_GOTO(Out_Call_Exact_Callee);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Out_Call_BoundExact_Callee);
+#endif
+
+#ifndef IR_JIT_STENCILS
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 1
+IR_OUTLINED_FN(Out_Call_BoundExact_Callee) {
+    // Call.BoundExact: the region from rop_Call_BoundExact_Callee
+    int opcode = ROP_HANDLER_Call_BoundExact;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    _PyInterpreterFrame * c;
+    goto rop_Call_BoundExact_Callee;
+    rop_Call_BoundExact_Callee:
+    IR_STUB_ESCAPE();
+    c = _PyRop_PushBoundExact(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
+    ROP_ENTER(c, IR_A(ir_word));
+}
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 0
+IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_BoundExact_Callee)
+#endif
 
         TARGET(Call_BoundExact) {
             // Call.BoundExact (split)
@@ -10150,9 +10436,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
             if (!_PyRop_FrameSpace(tstate, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
-            IR_STUB_ESCAPE();
-            c = _PyRop_PushBoundExact(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
-            ROP_ENTER(c, IR_A(ir_word));
+            IR_OUTLINE_HOT_GOTO(Out_Call_BoundExact_Callee);
         }
 
         TARGET(Call_Init) {
@@ -10235,6 +10519,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_InitResult_Check_Wrong);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_InitResult_Check_Wrong) {
     // InitResult.Check: the cold region from rop_InitResult_Check_Wrong
     int opcode = ROP_HANDLER_InitResult_Check;
@@ -10283,7 +10571,15 @@ IR_OUTLINED_JIT_ENTRY(Cold_InitResult_Check_Wrong)
 typedef struct __attribute__((__may_alias__)) {
     PyValue efo;
 } rop_in_Cold_Call_Observed_EventFailed;
-static_assert(sizeof(rop_in_Cold_Call_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Call_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Observed_EventFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Observed_NativeFailed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_Observed_EventFailed) {
     // Call.Observed: the cold region from rop_Call_Observed_EventFailed
@@ -10468,12 +10764,60 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Observed_NativeFailed)
             ROP_RETURN(caller, h);
         }
 
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Out_Return_Empty_entry);
+#endif
+
 typedef struct __attribute__((__may_alias__)) {
     PyValue r;
     _PyInterpreterFrame * caller;
     _PyInterpreterFrame * dying;
 } rop_in_Cold_Return_Empty_Observed;
-static_assert(sizeof(rop_in_Cold_Return_Empty_Observed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Return_Empty_Observed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Return_Empty_Observed);
+#endif
+
+#ifndef IR_JIT_STENCILS
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 1
+IR_OUTLINED_FN(Out_Return_Empty_entry) {
+    // Return.Empty: the region from rop_Return_Empty_entry
+    int opcode = ROP_HANDLER_Return_Empty;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1;
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValue r;
+    _PyInterpreterFrame * caller;
+    _PyInterpreterFrame * dying;
+    _PyInstr * h;
+    IR_MARK_DEPARTURE();
+    r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+    caller = _PyRop_PreviousFrame(frame);
+    dying = _PyRop_Depart(tstate, frame);
+    if (!_PyRop_FrameUnobserved(tstate, dying)) {
+        goto rop_Return_Empty_Observed;
+    }
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFrameEmpty(tstate, dying);
+    IR_STUB_ESCAPE();
+    h = _PyRop_Deliver(caller, r);
+    ROP_RETURN(caller, h);
+    rop_Return_Empty_Observed:
+    { rop_in_Cold_Return_Empty_Observed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Return_Empty_Observed);
+      ir_in->r = r;
+      ir_in->caller = caller;
+      ir_in->dying = dying;
+    }
+    IR_OUTLINE_GOTO(Cold_Return_Empty_Observed);
+}
+#undef IR_SHARED_REGION
+#define IR_SHARED_REGION 0
+IR_OUTLINED_HOT_JIT_ENTRY(Out_Return_Empty_entry)
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Return_Empty_Observed) {
     // Return.Empty: the cold region from rop_Return_Empty_Observed
@@ -10519,25 +10863,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Return_Empty_Observed)
             _PyInterpreterFrame * caller;
             _PyInterpreterFrame * dying;
             _PyInstr * h;
-            IR_MARK_DEPARTURE();
-            r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
-            caller = _PyRop_PreviousFrame(frame);
-            dying = _PyRop_Depart(tstate, frame);
-            if (!_PyRop_FrameUnobserved(tstate, dying)) {
-                goto rop_Return_Empty_Observed;
-            }
-            IR_STUB_ESCAPE();
-            _PyRop_RetireFrameEmpty(tstate, dying);
-            IR_STUB_ESCAPE();
-            h = _PyRop_Deliver(caller, r);
-            ROP_RETURN(caller, h);
-            rop_Return_Empty_Observed:
-            { rop_in_Cold_Return_Empty_Observed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Return_Empty_Observed);
-              ir_in->r = r;
-              ir_in->caller = caller;
-              ir_in->dying = dying;
-            }
-            IR_OUTLINE_GOTO(Cold_Return_Empty_Observed);
+            IR_OUTLINE_HOT_GOTO(Out_Return_Empty_entry);
         }
 
         TARGET(Return_Generator) {
@@ -10744,6 +11070,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Return_Empty_Observed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_PlanGenerator_NativeFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_PlanGenerator_NativeFailed) {
     // Call.PlanGenerator: the cold region from rop_Call_PlanGenerator_NativeFailed
     int opcode = ROP_HANDLER_Call_PlanGenerator;
@@ -10845,6 +11175,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_PlanGenerator_NativeFailed)
             rop_Call_PlanGenerator_Failed:
             PROCESS_ERROR_AT(RAISE, 40, this_instr);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BoundGeneral_NativeFailed);
+#endif
 
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_BoundGeneral_NativeFailed) {
@@ -11026,6 +11360,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_BoundGeneral_NativeFailed)
             rop_Call_Type1_Tail0_Rest2:
             ROP_TAIL_DISPATCH();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Str1_Failed);
+#endif
 
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_Str1_Failed) {
@@ -11351,6 +11689,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Str1_Failed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_BuiltinFast_TT_Failed);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_BuiltinFast_TT_Failed) {
     // Call.BuiltinFast_TT: the cold region from rop_Call_BuiltinFast_TT_Failed
     int opcode = ROP_HANDLER_Call_BuiltinFast_TT;
@@ -11551,6 +11893,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_BuiltinFast_TT_Failed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Len_Failed);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_Len_Failed) {
     // Call.Len: the cold region from rop_Call_Len_Failed
     int opcode = ROP_HANDLER_Call_Len;
@@ -11623,6 +11969,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Len_Failed)
             rop_Call_Len_Failed:
             IR_OUTLINE_GOTO(Cold_Call_Len_Failed);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Call_Isinstance_TT_Failed);
+#endif
 
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Call_Isinstance_TT_Failed) {
@@ -12148,6 +12498,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Call_Isinstance_TT_Failed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_Generator_NativeFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallKw_Generator_NativeFailed) {
     // CallKw.Generator: the cold region from rop_CallKw_Generator_NativeFailed
     int opcode = ROP_HANDLER_CallKw_Generator;
@@ -12283,6 +12637,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_CallKw_Generator_NativeFailed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_NonPy_NativeFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallKw_NonPy_NativeFailed) {
     // CallKw.NonPy: the cold region from rop_CallKw_NonPy_NativeFailed
     int opcode = ROP_HANDLER_CallKw_NonPy;
@@ -12360,7 +12718,15 @@ IR_OUTLINED_JIT_ENTRY(Cold_CallKw_NonPy_NativeFailed)
 typedef struct __attribute__((__may_alias__)) {
     PyValue efo;
 } rop_in_Cold_CallKw_Observed_EventFailed;
-static_assert(sizeof(rop_in_Cold_CallKw_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_CallKw_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_Observed_EventFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallKw_Observed_NativeFailed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallKw_Observed_EventFailed) {
     // CallKw.Observed: the cold region from rop_CallKw_Observed_EventFailed
@@ -12518,7 +12884,15 @@ typedef struct __attribute__((__may_alias__)) {
     PyValue tfo;
     PyValue tko;
 } rop_in_Cold_CallEx_Py_TupleFailed;
-static_assert(sizeof(rop_in_Cold_CallEx_Py_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_CallEx_Py_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Py_TupleFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Py_NativeFailed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallEx_Py_TupleFailed) {
     // CallEx.Py: the cold region from rop_CallEx_Py_TupleFailed
@@ -12888,7 +13262,24 @@ typedef struct __attribute__((__may_alias__)) {
     PyValue tfo;
     PyValue tko;
 } rop_in_Cold_CallEx_Observed_TupleFailed;
-static_assert(sizeof(rop_in_Cold_CallEx_Observed_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_CallEx_Observed_TupleFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Observed_TupleFailed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue efo;
+    PyValue eko;
+} rop_in_Cold_CallEx_Observed_EventFailed;
+static_assert(sizeof(rop_in_Cold_CallEx_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Observed_EventFailed);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CallEx_Observed_NativeFailed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallEx_Observed_TupleFailed) {
     // CallEx.Observed: the cold region from rop_CallEx_Observed_TupleFailed
@@ -12955,11 +13346,6 @@ IR_OUTLINED_FN(Cold_CallEx_Observed_TupleFailed) {
 IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Observed_TupleFailed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValue efo;
-    PyValue eko;
-} rop_in_Cold_CallEx_Observed_EventFailed;
-static_assert(sizeof(rop_in_Cold_CallEx_Observed_EventFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CallEx_Observed_EventFailed) {
     // CallEx.Observed: the cold region from rop_CallEx_Observed_EventFailed
@@ -13277,6 +13663,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_CallEx_Observed_NativeFailed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CellRead_Get_Empty);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CellRead_Get_Empty) {
     // CellRead.Get: the cold region from rop_CellRead_Get_Empty
     int opcode = ROP_HANDLER_CellRead_Get;
@@ -13331,7 +13721,20 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_CellMapRead_Lookup_Empty;
-static_assert(sizeof(rop_in_Cold_CellMapRead_Lookup_Empty) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_CellMapRead_Lookup_Empty) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CellMapRead_Lookup_Empty);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_CellMapRead_Lookup_Failed;
+static_assert(sizeof(rop_in_Cold_CellMapRead_Lookup_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CellMapRead_Lookup_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CellMapRead_Lookup_Empty) {
     // CellMapRead.Lookup: the cold region from rop_CellMapRead_Lookup_Empty
@@ -13359,20 +13762,15 @@ IR_OUTLINED_FN(Cold_CellMapRead_Lookup_Empty) {
     goto rop_CellMapRead_Lookup_Empty;
     rop_CellMapRead_Lookup_Empty:
     _PyRop_UnboundCell(frame, home_cell);
-    IR_STUB_ESCAPE();
-    a_all3 = (_PyRopAnchors){1, {a_view0}, {a_owned0}};
-    srcs4 = (_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}};
-    _PyRop_RetireFailedCall(&a_all3, &srcs4);
-    PROCESS_ERROR_AT(RAISE, 56, this_instr);
+    { rop_in_Cold_CellMapRead_Lookup_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_CellMapRead_Lookup_Failed);
+      ir_in->a_view0 = a_view0;
+      ir_in->a_owned0 = a_owned0;
+    }
+    IR_OUTLINE_GOTO(Cold_CellMapRead_Lookup_Failed);
 }
 IR_OUTLINED_JIT_ENTRY(Cold_CellMapRead_Lookup_Empty)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-} rop_in_Cold_CellMapRead_Lookup_Failed;
-static_assert(sizeof(rop_in_Cold_CellMapRead_Lookup_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CellMapRead_Lookup_Failed) {
     // CellMapRead.Lookup: the cold region from rop_CellMapRead_Lookup_Failed
@@ -13513,6 +13911,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_CellMapRead_Lookup_Failed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CellDelete_Unbind_Empty);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CellDelete_Unbind_Empty) {
     // CellDelete.Unbind: the cold region from rop_CellDelete_Unbind_Empty
     int opcode = ROP_HANDLER_CellDelete_Unbind;
@@ -13555,6 +13957,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_CellDelete_Unbind_Empty)
             rop_CellDelete_Unbind_Empty:
             IR_OUTLINE_GOTO(Cold_CellDelete_Unbind_Empty);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_CleanupThrow_Generic_Reraise);
+#endif
 
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_CleanupThrow_Generic_Reraise) {
@@ -13658,6 +14064,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_CleanupThrow_Generic_Reraise)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_EndAsyncFor_Generic_Reraise);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_EndAsyncFor_Generic_Reraise) {
     // EndAsyncFor.Generic: the cold region from rop_EndAsyncFor_Generic_Reraise
     int opcode = ROP_HANDLER_EndAsyncFor_Generic;
@@ -13721,6 +14131,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_EndAsyncFor_Generic_Reraise)
             rop_EndAsyncFor_Generic_Reraise:
             IR_OUTLINE_GOTO(Cold_EndAsyncFor_Generic_Reraise);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_EndAsyncFor_Observed_Reraise);
+#endif
 
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_EndAsyncFor_Observed_Reraise) {
@@ -13807,7 +14221,24 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow b_view1;
     PyValue b_owned1;
 } rop_in_Cold_WithExit_Generic_BoundFailed;
-static_assert(sizeof(rop_in_Cold_WithExit_Generic_BoundFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_WithExit_Generic_BoundFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_WithExit_Generic_BoundFailed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_WithExit_Generic_MethodFailed;
+static_assert(sizeof(rop_in_Cold_WithExit_Generic_MethodFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_WithExit_Generic_MethodFailed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_WithExit_Generic_BoundFailed) {
     // WithExit.Generic: the cold region from rop_WithExit_Generic_BoundFailed
@@ -13856,15 +14287,6 @@ IR_OUTLINED_FN(Cold_WithExit_Generic_BoundFailed) {
 IR_OUTLINED_JIT_ENTRY(Cold_WithExit_Generic_BoundFailed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-} rop_in_Cold_WithExit_Generic_MethodFailed;
-static_assert(sizeof(rop_in_Cold_WithExit_Generic_MethodFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_WithExit_Generic_MethodFailed) {
     // WithExit.Generic: the cold region from rop_WithExit_Generic_MethodFailed
@@ -14508,6 +14930,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_WithExit_Generic_MethodFailed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Raise_Throw_Bare);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Raise_Throw_Bare) {
     // Raise.Throw: the cold region from rop_Raise_Throw_Bare
     int opcode = ROP_HANDLER_Raise_Throw;
@@ -14549,6 +14975,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Raise_Throw_Bare)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Reraise_Plain_Failed);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Reraise_Plain_Failed) {
     // Reraise.Plain: the cold region from rop_Reraise_Plain_Failed
     int opcode = ROP_HANDLER_Reraise_Plain;
@@ -14580,6 +15010,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Reraise_Plain_Failed)
             _PyRop_RestoreException(tstate, frame, this_instr, home_exc);
             IR_OUTLINE_GOTO(Cold_Reraise_Plain_Failed);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Reraise_Origin_Failed);
+#endif
 
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Reraise_Origin_Failed) {
@@ -14674,6 +15108,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Reraise_Origin_Failed)
         }
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ExceptMatch_Match_Invalid);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ExceptMatch_Match_Invalid) {
     // ExceptMatch.Match: the cold region from rop_ExceptMatch_Match_Invalid
     int opcode = ROP_HANDLER_ExceptMatch_Match;
@@ -14743,6 +15181,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_ExceptMatch_Match_Invalid)
             rop_ExceptMatch_Match_Invalid:
             IR_OUTLINE_GOTO(Cold_ExceptMatch_Match_Invalid);
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ExceptGroupMatch_Split_Invalid);
+#endif
 
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ExceptGroupMatch_Split_Invalid) {
@@ -15160,7 +15602,21 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetAttr_GetSet_getset_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue getset_at_origin1_dropped;
+} rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetAttr_GetSet_getset_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetAttr_GetSet_getset_at_origin1_Failed) {
     // GetAttr.GetSet: the cold region from rop_GetAttr_GetSet_getset_at_origin1_Failed
@@ -15202,12 +15658,6 @@ IR_OUTLINED_FN(Cold_GetAttr_GetSet_getset_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetAttr_GetSet_getset_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValue getset_at_origin1_dropped;
-} rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetAttr_GetSet_getset_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetAttr_GetSet_getset_at_origin1_Moved) {
     // GetAttr.GetSet: the cold region from rop_GetAttr_GetSet_getset_at_origin1_Moved
@@ -16630,7 +17080,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_DelItem_Generic_delitem_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_DelItem_Generic_delitem_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_DelItem_Generic_delitem_at_origin1_Failed) {
     // DelItem.Generic: the cold region from rop_DelItem_Generic_delitem_at_origin1_Failed
@@ -16668,13 +17133,6 @@ IR_OUTLINED_FN(Cold_DelItem_Generic_delitem_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_DelItem_Generic_delitem_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_DelItem_Generic_delitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_DelItem_Generic_delitem_at_origin1_Moved) {
     // DelItem.Generic: the cold region from rop_DelItem_Generic_delitem_at_origin1_Moved
@@ -16801,7 +17259,25 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SliceRead_Generic_binary_slice_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValue binary_slice_at_origin1_dropped;
+} rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SliceRead_Generic_binary_slice_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SliceRead_Generic_binary_slice_at_origin1_Failed) {
     // SliceRead.Generic: the cold region from rop_SliceRead_Generic_binary_slice_at_origin1_Failed
@@ -16851,16 +17327,6 @@ IR_OUTLINED_FN(Cold_SliceRead_Generic_binary_slice_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_SliceRead_Generic_binary_slice_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-    PyValue binary_slice_at_origin1_dropped;
-} rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_SliceRead_Generic_binary_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SliceRead_Generic_binary_slice_at_origin1_Moved) {
     // SliceRead.Generic: the cold region from rop_SliceRead_Generic_binary_slice_at_origin1_Moved
@@ -17049,7 +17515,26 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view3;
     PyValue a_owned3;
 } rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SliceWrite_Generic_store_slice_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+    PyValueBorrow a_view3;
+    PyValue a_owned3;
+} rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SliceWrite_Generic_store_slice_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SliceWrite_Generic_store_slice_at_origin1_Failed) {
     // SliceWrite.Generic: the cold region from rop_SliceWrite_Generic_store_slice_at_origin1_Failed
@@ -17099,17 +17584,6 @@ IR_OUTLINED_FN(Cold_SliceWrite_Generic_store_slice_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_SliceWrite_Generic_store_slice_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-    PyValueBorrow a_view3;
-    PyValue a_owned3;
-} rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_SliceWrite_Generic_store_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SliceWrite_Generic_store_slice_at_origin1_Moved) {
     // SliceWrite.Generic: the cold region from rop_SliceWrite_Generic_store_slice_at_origin1_Moved
@@ -17707,7 +18181,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue list_slice_at_origin1_dropped;
+} rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed) {
     // GetItem.ListSlice_TTT: the cold region from rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed
@@ -17752,14 +18242,6 @@ IR_OUTLINED_FN(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue list_slice_at_origin1_dropped;
-} rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved) {
     // GetItem.ListSlice_TTT: the cold region from rop_GetItem_ListSlice_TTT_list_slice_at_origin1_Moved
@@ -17914,7 +18396,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_ListSlice_list_slice_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue list_slice_at_origin1_dropped;
+} rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_ListSlice_list_slice_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_ListSlice_list_slice_at_origin1_Failed) {
     // GetItem.ListSlice: the cold region from rop_GetItem_ListSlice_list_slice_at_origin1_Failed
@@ -17960,14 +18458,6 @@ IR_OUTLINED_FN(Cold_GetItem_ListSlice_list_slice_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetItem_ListSlice_list_slice_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue list_slice_at_origin1_dropped;
-} rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetItem_ListSlice_list_slice_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_ListSlice_list_slice_at_origin1_Moved) {
     // GetItem.ListSlice: the cold region from rop_GetItem_ListSlice_list_slice_at_origin1_Moved
@@ -18133,7 +18623,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue getitem_at_origin1_dropped;
+} rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed) {
     // GetItem.Dict_TTL: the cold region from rop_GetItem_Dict_TTL_getitem_at_origin1_Failed
@@ -18179,14 +18685,6 @@ IR_OUTLINED_FN(Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_TTL_getitem_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue getitem_at_origin1_dropped;
-} rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_Dict_TTL_getitem_at_origin1_Moved) {
     // GetItem.Dict_TTL: the cold region from rop_GetItem_Dict_TTL_getitem_at_origin1_Moved
@@ -18347,7 +18845,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue getitem_at_origin1_dropped;
+} rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed) {
     // GetItem.Dict_TTT: the cold region from rop_GetItem_Dict_TTT_getitem_at_origin1_Failed
@@ -18394,14 +18908,6 @@ IR_OUTLINED_FN(Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_TTT_getitem_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue getitem_at_origin1_dropped;
-} rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_Dict_TTT_getitem_at_origin1_Moved) {
     // GetItem.Dict_TTT: the cold region from rop_GetItem_Dict_TTT_getitem_at_origin1_Moved
@@ -18580,7 +19086,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_getitem_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue getitem_at_origin1_dropped;
+} rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_GetItem_Dict_getitem_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_Dict_getitem_at_origin1_Failed) {
     // GetItem.Dict: the cold region from rop_GetItem_Dict_getitem_at_origin1_Failed
@@ -18628,14 +19150,6 @@ IR_OUTLINED_FN(Cold_GetItem_Dict_getitem_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_GetItem_Dict_getitem_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue getitem_at_origin1_dropped;
-} rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_GetItem_Dict_getitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_GetItem_Dict_getitem_at_origin1_Moved) {
     // GetItem.Dict: the cold region from rop_GetItem_Dict_getitem_at_origin1_Moved
@@ -18837,7 +19351,24 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed) {
     // SetItem.ListIndex_TLT: the cold region from rop_SetItem_ListIndex_TLT_setitem_at_origin1_Failed
@@ -18885,15 +19416,6 @@ IR_OUTLINED_FN(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-} rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SetItem_ListIndex_TLT_setitem_at_origin1_Moved) {
     // SetItem.ListIndex_TLT: the cold region from rop_SetItem_ListIndex_TLT_setitem_at_origin1_Moved
@@ -19085,7 +19607,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SetItem_ListIndex_TTT_setitem_at_origin1_Failed) {
     // SetItem.ListIndex_TTT: the cold region from rop_SetItem_ListIndex_TTT_setitem_at_origin1_Failed
@@ -19280,7 +19806,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_SetItem_ListIndex_setitem_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_ListIndex_setitem_at_origin1_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SetItem_ListIndex_setitem_at_origin1_Failed) {
     // SetItem.ListIndex: the cold region from rop_SetItem_ListIndex_setitem_at_origin1_Failed
@@ -19486,7 +20016,24 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_Dict_dict_store_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_SetItem_Dict_dict_store_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SetItem_Dict_dict_store_at_origin1_Failed) {
     // SetItem.Dict: the cold region from rop_SetItem_Dict_dict_store_at_origin1_Failed
@@ -19531,15 +20078,6 @@ IR_OUTLINED_FN(Cold_SetItem_Dict_dict_store_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_SetItem_Dict_dict_store_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-} rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_SetItem_Dict_dict_store_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_SetItem_Dict_dict_store_at_origin1_Moved) {
     // SetItem.Dict: the cold region from rop_SetItem_Dict_dict_store_at_origin1_Moved
@@ -19790,7 +20328,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_IterOpen_GenMethod_Failed;
-static_assert(sizeof(rop_in_Cold_IterOpen_GenMethod_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_IterOpen_GenMethod_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_IterOpen_GenMethod_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_IterOpen_GenMethod_Failed) {
     // IterOpen.GenMethod: the cold region from rop_IterOpen_GenMethod_Failed
@@ -20140,7 +20682,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_ForIter_Indexed_Failed;
-static_assert(sizeof(rop_in_Cold_ForIter_Indexed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_ForIter_Indexed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Indexed_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ForIter_Indexed_Failed) {
     // ForIter.Indexed: the cold region from rop_ForIter_Indexed_Failed
@@ -20343,7 +20889,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_ForIter_Slot_Failed;
-static_assert(sizeof(rop_in_Cold_ForIter_Slot_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_ForIter_Slot_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Slot_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ForIter_Slot_Failed) {
     // ForIter.Slot: the cold region from rop_ForIter_Slot_Failed
@@ -20481,7 +21031,29 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_ForIter_Observed_Failed;
-static_assert(sizeof(rop_in_Cold_ForIter_Observed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_ForIter_Observed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Observed_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue a_owned0;
+    PyValue a_owned1;
+} rop_in_Cold_ForIter_Observed_StopFailed;
+static_assert(sizeof(rop_in_Cold_ForIter_Observed_StopFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Observed_StopFailed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue a_owned0;
+    PyValue a_owned1;
+} rop_in_Cold_ForIter_Observed_StopMoved;
+static_assert(sizeof(rop_in_Cold_ForIter_Observed_StopMoved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_ForIter_Observed_StopMoved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ForIter_Observed_Failed) {
     // ForIter.Observed: the cold region from rop_ForIter_Observed_Failed
@@ -20530,11 +21102,6 @@ IR_OUTLINED_FN(Cold_ForIter_Observed_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Observed_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValue a_owned0;
-    PyValue a_owned1;
-} rop_in_Cold_ForIter_Observed_StopFailed;
-static_assert(sizeof(rop_in_Cold_ForIter_Observed_StopFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ForIter_Observed_StopFailed) {
     // ForIter.Observed: the cold region from rop_ForIter_Observed_StopFailed
@@ -20579,11 +21146,6 @@ IR_OUTLINED_FN(Cold_ForIter_Observed_StopFailed) {
 IR_OUTLINED_JIT_ENTRY(Cold_ForIter_Observed_StopFailed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValue a_owned0;
-    PyValue a_owned1;
-} rop_in_Cold_ForIter_Observed_StopMoved;
-static_assert(sizeof(rop_in_Cold_ForIter_Observed_StopMoved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_ForIter_Observed_StopMoved) {
     // ForIter.Observed: the cold region from rop_ForIter_Observed_StopMoved
@@ -21063,7 +21625,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_NamespaceReadFrom_Mapping_Failed;
-static_assert(sizeof(rop_in_Cold_NamespaceReadFrom_Mapping_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_NamespaceReadFrom_Mapping_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_NamespaceReadFrom_Mapping_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_NamespaceReadFrom_Mapping_Failed) {
     // NamespaceReadFrom.Mapping: the cold region from rop_NamespaceReadFrom_Mapping_Failed
@@ -22300,7 +22866,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
 typedef struct __attribute__((__may_alias__)) {
     double v;
 } rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN) {
     // Binary.Float_NB_INPLACE_ADD_TTT: the cold region from rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN
@@ -22394,7 +22964,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN)
 typedef struct __attribute__((__may_alias__)) {
     double v;
 } rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) {
     // Binary.Float_NB_INPLACE_ADD_LTT: the cold region from rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN
@@ -22498,7 +23072,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN)
 typedef struct __attribute__((__may_alias__)) {
     double v;
 } rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_NaN) {
     // Binary.Float_NB_INPLACE_ADD: the cold region from rop_Binary_Float_NB_INPLACE_ADD_NaN
@@ -22658,7 +23236,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_NaN)
 typedef struct __attribute__((__may_alias__)) {
     double v;
 } rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) {
     // Binary.Float_NB_SUBTRACT_LLL: the cold region from rop_Binary_Float_NB_SUBTRACT_LLL_NaN
@@ -22872,7 +23454,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
 typedef struct __attribute__((__may_alias__)) {
     double v;
 } rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN) {
     // Binary.Float_NB_MULTIPLY_TLL: the cold region from rop_Binary_Float_NB_MULTIPLY_TLL_NaN
@@ -23011,7 +23597,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN)
 typedef struct __attribute__((__may_alias__)) {
     double v;
 } rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN) {
     // Binary.Float_NB_MULTIPLY_TTL: the cold region from rop_Binary_Float_NB_MULTIPLY_TTL_NaN
@@ -23217,7 +23807,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
 typedef struct __attribute__((__may_alias__)) {
     double v;
 } rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN) {
     // Binary.Float_NB_TRUE_DIVIDE_TLT: the cold region from rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN
@@ -23601,7 +24195,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_Binary_Extended_extension_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Binary_Extended_extension_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Binary_Extended_extension_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Extended_extension_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue extension_at_origin1_dropped;
+} rop_in_Cold_Binary_Extended_extension_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Binary_Extended_extension_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Extended_extension_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Extended_extension_at_origin1_Failed) {
     // Binary.Extended: the cold region from rop_Binary_Extended_extension_at_origin1_Failed
@@ -23647,14 +24257,6 @@ IR_OUTLINED_FN(Cold_Binary_Extended_extension_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Binary_Extended_extension_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue extension_at_origin1_dropped;
-} rop_in_Cold_Binary_Extended_extension_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Binary_Extended_extension_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Binary_Extended_extension_at_origin1_Moved) {
     // Binary.Extended: the cold region from rop_Binary_Extended_extension_at_origin1_Moved
@@ -23849,7 +24451,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_AppendText_Text_Failed;
-static_assert(sizeof(rop_in_Cold_AppendText_Text_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_AppendText_Text_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_AppendText_Text_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_AppendText_Text_Failed) {
     // AppendText.Text: the cold region from rop_AppendText_Text_Failed
@@ -23958,7 +24564,21 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_Length_Size_length_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Length_Size_length_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Length_Size_length_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Length_Size_length_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue length_at_origin1_dropped;
+} rop_in_Cold_Length_Size_length_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Length_Size_length_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Length_Size_length_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Length_Size_length_at_origin1_Failed) {
     // Length.Size: the cold region from rop_Length_Size_length_at_origin1_Failed
@@ -23995,12 +24615,6 @@ IR_OUTLINED_FN(Cold_Length_Size_length_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Length_Size_length_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValue length_at_origin1_dropped;
-} rop_in_Cold_Length_Size_length_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Length_Size_length_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Length_Size_length_at_origin1_Moved) {
     // Length.Size: the cold region from rop_Length_Size_length_at_origin1_Moved
@@ -24135,7 +24749,20 @@ IR_OUTLINED_JIT_ENTRY(Cold_Length_Size_length_at_origin1_Moved)
 typedef struct __attribute__((__may_alias__)) {
     _PyRopAnchors a;
 } rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_PatternClass_Match_match_class_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    _PyRopAnchors a;
+    PyValue match_class_at_origin1_dropped;
+} rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_PatternClass_Match_match_class_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_PatternClass_Match_match_class_at_origin1_Failed) {
     // PatternClass.Match: the cold region from rop_PatternClass_Match_match_class_at_origin1_Failed
@@ -24168,11 +24795,6 @@ IR_OUTLINED_FN(Cold_PatternClass_Match_match_class_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_PatternClass_Match_match_class_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    _PyRopAnchors a;
-    PyValue match_class_at_origin1_dropped;
-} rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_PatternClass_Match_match_class_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_PatternClass_Match_match_class_at_origin1_Moved) {
     // PatternClass.Match: the cold region from rop_PatternClass_Match_match_class_at_origin1_Moved
@@ -24272,7 +24894,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_PatternKeys_Match_match_keys_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue match_keys_at_origin1_dropped;
+} rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_PatternKeys_Match_match_keys_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_PatternKeys_Match_match_keys_at_origin1_Failed) {
     // PatternKeys.Match: the cold region from rop_PatternKeys_Match_match_keys_at_origin1_Failed
@@ -24314,14 +24952,6 @@ IR_OUTLINED_FN(Cold_PatternKeys_Match_match_keys_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_PatternKeys_Match_match_keys_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue match_keys_at_origin1_dropped;
-} rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_PatternKeys_Match_match_keys_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_PatternKeys_Match_match_keys_at_origin1_Moved) {
     // PatternKeys.Match: the cold region from rop_PatternKeys_Match_match_keys_at_origin1_Moved
@@ -24860,7 +25490,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_Send_Virtual_Failed;
-static_assert(sizeof(rop_in_Cold_Send_Virtual_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Send_Virtual_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Virtual_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Send_Virtual_Failed) {
     // Send.Virtual: the cold region from rop_Send_Virtual_Failed
@@ -25057,7 +25691,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_Send_AsyncGen_Failed;
-static_assert(sizeof(rop_in_Cold_Send_AsyncGen_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Send_AsyncGen_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_AsyncGen_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Send_AsyncGen_Failed) {
     // Send.AsyncGen: the cold region from rop_Send_AsyncGen_Failed
@@ -25273,7 +25911,34 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view2;
     PyValue a_owned2;
 } rop_in_Cold_Send_Observed_Failed;
-static_assert(sizeof(rop_in_Cold_Send_Observed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Send_Observed_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Observed_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValueBorrow a_view2;
+    PyValue a_owned2;
+} rop_in_Cold_Send_Observed_StopFailed;
+static_assert(sizeof(rop_in_Cold_Send_Observed_StopFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Observed_StopFailed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue a_owned0;
+    PyValue a_owned1;
+    PyValue a_owned2;
+} rop_in_Cold_Send_Observed_Moved;
+static_assert(sizeof(rop_in_Cold_Send_Observed_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Send_Observed_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Send_Observed_Failed) {
     // Send.Observed: the cold region from rop_Send_Observed_Failed
@@ -25335,15 +26000,6 @@ IR_OUTLINED_FN(Cold_Send_Observed_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Send_Observed_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValueBorrow a_view2;
-    PyValue a_owned2;
-} rop_in_Cold_Send_Observed_StopFailed;
-static_assert(sizeof(rop_in_Cold_Send_Observed_StopFailed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Send_Observed_StopFailed) {
     // Send.Observed: the cold region from rop_Send_Observed_StopFailed
@@ -25405,12 +26061,6 @@ IR_OUTLINED_FN(Cold_Send_Observed_StopFailed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Send_Observed_StopFailed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValue a_owned0;
-    PyValue a_owned1;
-    PyValue a_owned2;
-} rop_in_Cold_Send_Observed_Moved;
-static_assert(sizeof(rop_in_Cold_Send_Observed_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Send_Observed_Moved) {
     // Send.Observed: the cold region from rop_Send_Observed_Moved
@@ -26270,7 +26920,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_Contains_Set_set_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Contains_Set_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Contains_Set_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Set_set_test_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Set_set_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Contains_Set_set_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Set_set_test_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Contains_Set_set_test_at_origin1_Failed) {
     // Contains.Set: the cold region from rop_Contains_Set_set_test_at_origin1_Failed
@@ -26312,13 +26977,6 @@ IR_OUTLINED_FN(Cold_Contains_Set_set_test_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Contains_Set_set_test_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_Contains_Set_set_test_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Contains_Set_set_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Contains_Set_set_test_at_origin1_Moved) {
     // Contains.Set: the cold region from rop_Contains_Set_set_test_at_origin1_Moved
@@ -26483,7 +27141,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Dict_dict_test_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Contains_Dict_dict_test_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Contains_Dict_dict_test_at_origin1_Failed) {
     // Contains.Dict: the cold region from rop_Contains_Dict_dict_test_at_origin1_Failed
@@ -26525,13 +27198,6 @@ IR_OUTLINED_FN(Cold_Contains_Dict_dict_test_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Contains_Dict_dict_test_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Contains_Dict_dict_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Contains_Dict_dict_test_at_origin1_Moved) {
     // Contains.Dict: the cold region from rop_Contains_Dict_dict_test_at_origin1_Moved
@@ -27688,7 +28354,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Set_TT_set_test_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Set_TT_set_test_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Set_TT_set_test_at_origin1_Failed) {
     // TestBranch.Set_TT: the cold region from rop_TestBranch_Set_TT_set_test_at_origin1_Failed
@@ -27728,13 +28409,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Set_TT_set_test_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Set_TT_set_test_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_TestBranch_Set_TT_set_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Set_TT_set_test_at_origin1_Moved) {
     // TestBranch.Set_TT: the cold region from rop_TestBranch_Set_TT_set_test_at_origin1_Moved
@@ -27916,7 +28590,11 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_TestBranch_Set_set_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Set_set_test_at_origin1_Failed);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Set_set_test_at_origin1_Failed) {
     // TestBranch.Set: the cold region from rop_TestBranch_Set_set_test_at_origin1_Failed
@@ -28106,7 +28784,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Dict_dict_test_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Dict_dict_test_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Dict_dict_test_at_origin1_Failed) {
     // TestBranch.Dict: the cold region from rop_TestBranch_Dict_dict_test_at_origin1_Failed
@@ -28146,13 +28839,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Dict_dict_test_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Dict_dict_test_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_TestBranch_Dict_dict_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Dict_dict_test_at_origin1_Moved) {
     // TestBranch.Dict: the cold region from rop_TestBranch_Dict_dict_test_at_origin1_Moved
@@ -28341,7 +29027,22 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed) {
     // TestBranch.Sequence: the cold region from rop_TestBranch_Sequence_sequence_test_at_origin1_Failed
@@ -28381,13 +29082,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Sequence_sequence_test_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Sequence_sequence_test_at_origin1_Moved) {
     // TestBranch.Sequence: the cold region from rop_TestBranch_Sequence_sequence_test_at_origin1_Moved
@@ -28576,7 +29270,44 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed;
-static_assert(sizeof(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Observed_compare_test_at_origin2_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Observed_compare_test_at_origin2_Moved);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed;
+static_assert(sizeof(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Observed_contains_test_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+} rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_TestBranch_Observed_contains_test_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Observed_compare_test_at_origin2_Failed) {
     // TestBranch.Observed: the cold region from rop_TestBranch_Observed_compare_test_at_origin2_Failed
@@ -28624,13 +29355,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Observed_compare_test_at_origin2_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Observed_compare_test_at_origin2_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved;
-static_assert(sizeof(rop_in_Cold_TestBranch_Observed_compare_test_at_origin2_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Observed_compare_test_at_origin2_Moved) {
     // TestBranch.Observed: the cold region from rop_TestBranch_Observed_compare_test_at_origin2_Moved
@@ -28677,13 +29401,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Observed_compare_test_at_origin2_Moved) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Observed_compare_test_at_origin2_Moved)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Observed_contains_test_at_origin1_Failed) {
     // TestBranch.Observed: the cold region from rop_TestBranch_Observed_contains_test_at_origin1_Failed
@@ -28733,13 +29450,6 @@ IR_OUTLINED_FN(Cold_TestBranch_Observed_contains_test_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_TestBranch_Observed_contains_test_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-} rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_TestBranch_Observed_contains_test_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_TestBranch_Observed_contains_test_at_origin1_Moved) {
     // TestBranch.Observed: the cold region from rop_TestBranch_Observed_contains_test_at_origin1_Moved
@@ -29122,7 +29832,21 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_Convert_Text_convert_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Convert_Text_convert_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Convert_Text_convert_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Convert_Text_convert_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue convert_at_origin1_dropped;
+} rop_in_Cold_Convert_Text_convert_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Convert_Text_convert_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Convert_Text_convert_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Convert_Text_convert_at_origin1_Failed) {
     // Convert.Text: the cold region from rop_Convert_Text_convert_at_origin1_Failed
@@ -29160,12 +29884,6 @@ IR_OUTLINED_FN(Cold_Convert_Text_convert_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Convert_Text_convert_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValue convert_at_origin1_dropped;
-} rop_in_Cold_Convert_Text_convert_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Convert_Text_convert_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Convert_Text_convert_at_origin1_Moved) {
     // Convert.Text: the cold region from rop_Convert_Text_convert_at_origin1_Moved
@@ -29286,7 +30004,21 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Format_Simple_format_plain_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Format_Simple_format_plain_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValue format_plain_at_origin1_dropped;
+} rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Format_Simple_format_plain_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Format_Simple_format_plain_at_origin1_Failed) {
     // Format.Simple: the cold region from rop_Format_Simple_format_plain_at_origin1_Failed
@@ -29324,12 +30056,6 @@ IR_OUTLINED_FN(Cold_Format_Simple_format_plain_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Format_Simple_format_plain_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValue format_plain_at_origin1_dropped;
-} rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Format_Simple_format_plain_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Format_Simple_format_plain_at_origin1_Moved) {
     // Format.Simple: the cold region from rop_Format_Simple_format_plain_at_origin1_Moved
@@ -29452,7 +30178,23 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view1;
     PyValue a_owned1;
 } rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_FormatSpec_Value_format_value_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue format_value_at_origin1_dropped;
+} rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_FormatSpec_Value_format_value_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_FormatSpec_Value_format_value_at_origin1_Failed) {
     // FormatSpec.Value: the cold region from rop_FormatSpec_Value_format_value_at_origin1_Failed
@@ -29496,14 +30238,6 @@ IR_OUTLINED_FN(Cold_FormatSpec_Value_format_value_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_FormatSpec_Value_format_value_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
-    PyValue format_value_at_origin1_dropped;
-} rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_FormatSpec_Value_format_value_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_FormatSpec_Value_format_value_at_origin1_Moved) {
     // FormatSpec.Value: the cold region from rop_FormatSpec_Value_format_value_at_origin1_Moved
@@ -29883,7 +30617,20 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Truth_Slot_slot_truth_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Truth_Slot_slot_truth_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Truth_Slot_slot_truth_at_origin1_Failed) {
     // Truth.Slot: the cold region from rop_Truth_Slot_slot_truth_at_origin1_Failed
@@ -29920,11 +30667,6 @@ IR_OUTLINED_FN(Cold_Truth_Slot_slot_truth_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_Truth_Slot_slot_truth_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-} rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_Truth_Slot_slot_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Truth_Slot_slot_truth_at_origin1_Moved) {
     // Truth.Slot: the cold region from rop_Truth_Slot_slot_truth_at_origin1_Moved
@@ -30588,7 +31330,20 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed) {
     // BranchTruth.Slot_BRANCH_IF_FALSE: the cold region from rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed
@@ -30623,11 +31378,6 @@ IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Faile
 IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-} rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved) {
     // BranchTruth.Slot_BRANCH_IF_FALSE: the cold region from rop_BranchTruth_Slot_BRANCH_IF_FALSE_slot_truth_at_origin1_Moved
@@ -30947,7 +31697,20 @@ typedef struct __attribute__((__may_alias__)) {
     PyValueBorrow a_view0;
     PyValue a_owned0;
 } rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed;
-static_assert(sizeof(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
+static_assert(sizeof(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Failed) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Observed_truth_at_origin1_Failed);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+} rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved;
+static_assert(sizeof(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_BranchTruth_Observed_truth_at_origin1_Moved);
+#endif
+
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_BranchTruth_Observed_truth_at_origin1_Failed) {
     // BranchTruth.Observed: the cold region from rop_BranchTruth_Observed_truth_at_origin1_Failed
@@ -30984,11 +31747,6 @@ IR_OUTLINED_FN(Cold_BranchTruth_Observed_truth_at_origin1_Failed) {
 IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Failed)
 #endif
 
-typedef struct __attribute__((__may_alias__)) {
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
-} rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved;
-static_assert(sizeof(rop_in_Cold_BranchTruth_Observed_truth_at_origin1_Moved) <= IR_OUTLINE_IN_SIZE, "the activation holds a cold region's inputs");
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_BranchTruth_Observed_truth_at_origin1_Moved) {
     // BranchTruth.Observed: the cold region from rop_BranchTruth_Observed_truth_at_origin1_Moved
@@ -31488,6 +32246,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_BranchTruth_Observed_truth_at_origin1_Moved)
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
         }
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_LocalRead_Checked_Unbound);
+#endif
 
 #ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_LocalRead_Checked_Unbound) {

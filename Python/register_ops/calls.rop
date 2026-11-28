@@ -883,6 +883,10 @@ arm Call.Exact split
     guard function_version(use(fn), fb) else miss;
     guard exact_positional(frame, args, fb) else miss;
     guard frame_space(thread, fb) else miss;
+    goto Callee();
+  // The new frame and the switch into the callee: one function, which the
+  // interpreter's arm and every compiled copy tail-call
+  Callee() outline:
     let c:NewFrame = push_exact(thread, frame, fn, args, fb);
     exit enter(c) resume Call.Returned;
 }
@@ -900,6 +904,8 @@ arm Call.BoundExact split
     // Classification admitted the receiver and these arguments, with the
     // self operand absent, which self_absent tests: the count holds
     guard frame_space(thread, fb) else miss;
+    goto Callee();
+  Callee() outline:
     let c:NewFrame = push_bound_exact(thread, frame, fn, args, fb);
     exit enter(c) resume Call.Returned;
 }
@@ -1088,7 +1094,9 @@ arm Return.Empty split select(thread_frame, vacant_scratch)
   feedback()
   exits(return)
 {
-  entry():
+  // The frame's retirement and the switch back to the caller: one
+  // function, which the interpreter's arm and every compiled copy tail-call
+  entry() outline:
     let _:Unit = mark_departure();
     let r:O = acquire(value);
     let caller:Frame = previous_frame(frame);

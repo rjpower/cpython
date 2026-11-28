@@ -570,6 +570,7 @@ class Parser:
     def block(self, schemas: tuple[str, ...]) -> Block:
         label = self.ident("a block label")
         params = self.params(schemas)
+        outline = self.accept("outline") is not None
         self.expect(":")
         stmts: list[Stmt] = []
         while True:
@@ -579,7 +580,7 @@ class Parser:
             else:
                 break
         term = self.term()
-        return Block(label.text, params, tuple(stmts), term, label.span)
+        return Block(label.text, params, tuple(stmts), term, label.span, outline)
 
     def stmt(self, schemas: tuple[str, ...]) -> Stmt:
         tok = self.take()

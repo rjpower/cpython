@@ -156,22 +156,32 @@ def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     return [indent + line if line else line for line in lines]
 
 
+def cold_region_inputs(c: ColdRegion) -> list[str]:
+    """The type of an outlined region's inputs, which every unit sees"""
+    if not c.live:
+        return []
+    out = ["typedef struct __attribute__((__may_alias__)) {"]
+    out += [f"    {t} {n};" for t, n in c.live]
+    out.append(f"}} rop_in_{c.name};")
+    out.append(f"static_assert(sizeof(rop_in_{c.name}) <= IR_OUTLINE_IN_SIZE, "
+               '"the activation holds a region\'s inputs");')
+    return out
+
+
 def cold_region_text(arm: Arm, low: Lowering, c: ColdRegion) -> list[str]:
-    """An outlined cold region of an arm (rop_cgen.ArmLowerer.outline_cold):
-    the arm tail-calls it with this_instr as next_instr.  The evaluators
-    compile the function (IR_OUTLINED_FN), and the normal one an entry for
-    the baseline JIT (IR_OUTLINED_JIT_ENTRY), which the stencils tail-call;
-    the type of its inputs is every unit's."""
-    out = []
-    if c.live:
-        out.append("typedef struct __attribute__((__may_alias__)) {")
-        out += [f"    {t} {n};" for t, n in c.live]
-        out.append(f"}} rop_in_{c.name};")
-        out.append(f"static_assert(sizeof(rop_in_{c.name}) <= IR_OUTLINE_IN_SIZE, "
-                   '"the activation holds a cold region\'s inputs");')
-    out.append("#ifndef IR_JIT_STENCILS")
+    """An outlined region of an arm (rop_cgen.ArmLowerer.outline_cold): the
+    arm tail-calls it with this_instr as next_instr.  The evaluators compile
+    the function (IR_OUTLINED_FN), and the normal one an entry for the
+    baseline JIT, which the stencils tail-call: IR_OUTLINED_JIT_ENTRY, a
+    cold function that closes the departure window, for a cold region, and
+    IR_OUTLINED_HOT_JIT_ENTRY, the function itself, for a declared one.  A
+    declared region's function is compiled with IR_SHARED_REGION set, so its
+    frame switch counts as compiled code's own (Python/ceval_macros.h)."""
+    out = ["#ifndef IR_JIT_STENCILS"]
+    if c.hot:
+        out += ["#undef IR_SHARED_REGION", "#define IR_SHARED_REGION 1"]
     out.append(f"IR_OUTLINED_FN({c.name}) {{")
-    body = [f"// {arm.name}: the cold region from {c.head}"]
+    body = [f"// {arm.name}: the {'' if c.hot else 'cold '}region from {c.head}"]
     body += PROLOGUE.format(handler=handler(arm.name), advance=advance_text(arm, low),
                             save_ip="").splitlines()[:-1]
     body += low.decls
@@ -182,22 +192,25 @@ def cold_region_text(arm: Arm, low: Lowering, c: ColdRegion) -> list[str]:
     body += c.body
     out += ["    " + line if line else line for line in body]
     out.append("}")
-    out.append(f"IR_OUTLINED_JIT_ENTRY({c.name})")
+    if c.hot:
+        out += ["#undef IR_SHARED_REGION", "#define IR_SHARED_REGION 0"]
+    entry = "IR_OUTLINED_HOT_JIT_ENTRY" if c.hot else "IR_OUTLINED_JIT_ENTRY"
+    out.append(f"{entry}({c.name})")
     out.append("#endif")
     return out
 
 
 def share_cold_regions(program: Program, lowered: Mapping[str, Lowering]) -> None:
-    """Arms whose cold regions are the same text, but for the arm's labels
-    and handler id (which nothing in a region reads before it sets it),
-    share one function: the first, in the order the cases are printed"""
+    """Arms whose outlined regions are the same text, but for the arm's
+    labels and handler id (which nothing in a region reads before it sets
+    it), share one function: the first, in the order the cases are printed"""
     first: dict[str, str] = {}
     for name, low in lowered.items():
         arm = program.arms[name]
         own = f"rop_{c_name(name)}_"
         kept, renames = [], {}
         for c in low.cold:
-            text = cold_region_text(arm, low, c)[:-2]
+            text = cold_region_inputs(c) + cold_region_text(arm, low, c)[:-2]
             key = "\n".join(line.replace(c.name, "NAME").replace(own, "rop_ARM_")
                             for line in text if "int opcode = " not in line
                             and "// " not in line)
@@ -209,11 +222,17 @@ def share_cold_regions(program: Program, lowered: Mapping[str, Lowering]) -> Non
         if not renames:
             continue
         low.cold = kept
-        for old, new in renames.items():
-            low.body = [line.replace(f"rop_in_{old} ", f"rop_in_{new} ")
-                            .replace(f"rop_in_{old})", f"rop_in_{new})")
-                            .replace(f"IR_OUTLINE_GOTO({old})", f"IR_OUTLINE_GOTO({new})")
-                        for line in low.body]
+
+        def rename(lines: list[str]) -> list[str]:
+            for old, new in renames.items():
+                lines = [line.replace(f"rop_in_{old} ", f"rop_in_{new} ")
+                             .replace(f"rop_in_{old})", f"rop_in_{new})")
+                             .replace(f"GOTO({old})", f"GOTO({new})")
+                         for line in lines]
+            return lines
+        low.body = rename(low.body)
+        for c in kept:
+            c.body = rename(c.body)
 
 
 def indented(lines: list[str], by: str) -> list[str]:
@@ -235,6 +254,11 @@ def write_cases(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write(MISS_MACRO)
     for name, low in p.lowered.items():
         arm = p.program.arms[name]
+        # The inputs and declarations first: a region may tail-call another
+        for c in low.cold:
+            text = cold_region_inputs(c) + ["#ifndef IR_JIT_STENCILS",
+                                            f"IR_OUTLINED_FN({c.name});", "#endif"]
+            out.write("\n" + "\n".join(text) + "\n")
         for c in low.cold:
             out.write("\n" + "\n".join(cold_region_text(arm, low, c)) + "\n")
         out.write(f"\n        TARGET({c_name(name)}) {{\n")
@@ -321,13 +345,17 @@ def layout_order(p: Products) -> list[str]:
     functions of a section follow the order of their first declaration,
     Python/ceval_evaluator.h): the arms of the families declared `hot`, less
     their generic arms, which a miss reaches, first; each group in source
-    order."""
+    order.  An arm's declared regions (`outline`) follow it: its words run
+    them every time."""
     def is_hot(name: str) -> bool:
         fam = p.program.families[p.program.arms[name].family]
         return fam.hot and name != f"{fam.name}.{fam.generic}"
+
+    def with_regions(name: str) -> list[str]:
+        return [c_name(name)] + [c.name for c in p.lowered[name].cold if c.hot]
     names = list(p.lowered)
-    return [c_name(n) for n in names if is_hot(n)] + \
-           [c_name(n) for n in names if not is_hot(n)]
+    return [f for n in names if is_hot(n) for f in with_regions(n)] + \
+           [f for n in names if not is_hot(n) for f in with_regions(n)]
 
 
 def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:

@@ -889,6 +889,31 @@ free_unit(_PyJitUnit *unit)
     PyMem_RawFree(unit);
 }
 
+static _PyJitUnit *compile(PyCodeObject *code, _PyCodeExec *exec);
+
+/* The __init__ shim (_Py_InitCleanup, _PyIR_InitCleanupExec), which every
+ * object built by Call.Init returns through, is compiled once per process
+ * with the first compile, so that a construction in compiled code returns
+ * into compiled code.  Its two words (InitResult.Check and a return) have
+ * no feedback and never change: the unit is never stale, and like the
+ * static exec it lives until the process ends.  The exec is shared by
+ * every interpreter, so its entries are published once, under the lock. */
+static struct {
+    PyMutex lock;
+    int state;                      // 0 not tried, 1 compiled, -1 failed
+} shim;
+
+static void
+shim_init(void)
+{
+    PyMutex_Lock(&shim.lock);
+    if (shim.state == 0) {
+        shim.state = compile((PyCodeObject *)&_Py_InitCleanup,
+                             &_PyIR_InitCleanupExec) != NULL ? 1 : -1;
+    }
+    PyMutex_Unlock(&shim.lock);
+}
+
 /* Compile the words of exec, the executing copy of code, into a new unit
  * and make it the exec's.  Returns NULL if the code is observed, which runs
  * in the observing evaluator, or cannot be placed. */
@@ -909,6 +934,10 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
          * will compile */
         never_again(exec);
         return NULL;
+    }
+    int is_shim = exec == &_PyIR_InitCleanupExec;
+    if (!is_shim && shim.state == 0) {
+        shim_init();
     }
     const _PyIRWord *words = exec->words;
     uint32_t nwords = exec->nwords;
@@ -933,7 +962,7 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
                                      ROP_HANDLER_Resume_Poll) > 0;
     /* always, a test mode, compiles every word */
     _PyJitCompiler c = {.code = code, .exec = exec,
-                        .stubs = interp->ceval.jit == _PyJIT_ON,
+                        .stubs = interp->ceval.jit == _PyJIT_ON && !is_shim,
                         .words = words, .nwords = nwords, .copies = copies};
     size_t frame_offset = emit_unit(&c, unit);
     PyMem_RawFree(copies);

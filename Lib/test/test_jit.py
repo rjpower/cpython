@@ -1611,6 +1611,27 @@ class TestCompilePolicy(JitTestCase):
         self.assertEqual(lines[11:21], ["10"] * 10)
         self.assertEqual(lines[-1], "2 1")
 
+    def test_a_construction_returns_into_compiled_code(self):
+        # The __init__ shim has a unit: an object built in compiled code
+        # returns from __init__ into it, and from it into the caller's
+        # copy, with no switch to code without entries
+        out = run("""
+            import _testinternalcapi as t
+            class P:
+                def __init__(self, x):
+                    self.x = x
+            def build(n):
+                s = 0
+                for i in range(n):
+                    s += P(i).x
+                return s
+            build(100)
+            before = t.jit_stats()["exits"]["switch"]
+            print(build(1000))
+            print(t.jit_stats()["exits"]["switch"] - before < 10)
+        """, "jit=always")
+        self.assertEqual(out.splitlines(), [str(sum(range(1000))), "True"])
+
 TRANSFER_PRELUDE = """
 import sys, weakref, _testinternalcapi as t
 def stats():

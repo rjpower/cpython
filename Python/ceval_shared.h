@@ -1105,7 +1105,10 @@ static inline bool
 _PyEval_SwitchSkips(_PyInterpreterFrame *frame)
 {
 #ifdef _PY_JIT_SUPPORTED
+    /* The __init__ shim has entries (Python/jit.c, shim_init()) but goes on
+     * in its caller's evaluator, which may be the observing one */
     return frame->owner != FRAME_OWNED_BY_INTERPRETER &&
+           _PyFrame_Exec(frame) != &_PyIR_InitCleanupExec &&
            _PyFrame_JitEntries(frame) != NULL;
 #else
     (void)frame;

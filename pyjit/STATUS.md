@@ -724,6 +724,9 @@ off; `bench/rir90-basics-fdec1631680.md` in the rir90 evidence):
   fannkuch (1.051 to 1.207 timed; 1.097 by `perf stat`) runs 2.8% more
   instructions since JC.
 
+Full suites at this join (175,873 tests each, no re-runs) pass on release
+and assert, with the JIT `on`, `always` and off.
+
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation
 contracts (V8-style declarations, verified, replacing inference) and shared

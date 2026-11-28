@@ -313,7 +313,7 @@ set_opcode(_PyInstr *instr, int opcode)
     _PyCodeExec *exec = _PyFrame_Exec(current_frame());
     if (exec->jit_unit != NULL) {
         _PyFbHeader *h = instr_fb(instr);
-        _PyJit_MarkWordChanged(exec, instr, h != NULL && h->state == FB_MEGA);
+        _PyJit_MarkWordChanged(exec, instr, h != NULL && h->state >= FB_POLY);
     }
 #endif
     return 1;

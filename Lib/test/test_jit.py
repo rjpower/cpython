@@ -1510,6 +1510,39 @@ class TestCompilePolicy(JitTestCase):
         self.assertEqual(out.splitlines()[-1],
                          str([("Unpack.Generic", "stencil")] * 4) + " 0")
 
+    def test_words_going_polymorphic_do_not_use_the_deopts(self):
+        # Three attribute reads go from one shape to two, one after
+        # another: each move to the poly arm is up the lattice and free, so
+        # the last unit compiles the three poly arms and diverts none
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            class A:
+                def __init__(self): self.x = 1
+            class B:
+                def __init__(self): self.y = 0; self.x = 2
+            def g(xs, ys, zs):
+                s = 0
+                for i in range(len(xs)):
+                    s += xs[i].x
+                    s += ys[i].x
+                    s += zs[i].x
+                return s
+            a, b = [A()] * 50, [B()] * 50
+            for _ in range(8):
+                g(a, a, a)
+            for k in range(3):
+                args = [a] * 3
+                args[k] = b
+                for _ in range(8):
+                    g(*args)
+            u = t.jit_unit(g.__code__)
+            print(sorted((a, how) for a, how in u["plans"].values()
+                         if a.startswith("GetAttr.")), u["deopts"], u["invalid"])
+        """, "jit=on")
+        self.assertEqual(out.splitlines()[-1],
+                         str([("GetAttr.PolyShape", "stencil")] * 3) + " 0 0")
+
     def test_recompiles_back_off(self):
         # A word that leaves its specialised arm makes the unit stale; the
         # code recompiles once it has earned another warm-up, and after two

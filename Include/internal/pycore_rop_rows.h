@@ -516,8 +516,10 @@ _PyRop_IntBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
 /* The result of an admitted pair: inline unless it leaves the int51 range,
  * where it is boxed.  Python's // rounds towards minus infinity and % takes
  * the sign of the divisor, where C truncates; int51 operands do not trap in
- * int64 division. */
-static inline PyValue
+ * int64 division.  Always inlined: Binary.Generic's operator is the word's,
+ * and a copy may keep the switch's jump table as its own, while an outlined
+ * row's table would be data that the support image cannot take. */
+static inline Py_ALWAYS_INLINE PyValue
 _PyRop_IntBinary(uint32_t op, int64_t a, int64_t b)
 {
     assert(_PyRop_IntOpAdmits(op, b));

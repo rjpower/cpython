@@ -2787,7 +2787,7 @@ _PyRop_SliceFromParts(const _PyRopSpan *parts)
 
 #include "ceval_tail.h"           // _PyEval_StartFrame(), _PyEval_ThrowFrame()
 
-void
+_Py_COLD_FUNCTION void
 _PyEval_CloseParked(PyThreadState *tstate)
 {
     _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;

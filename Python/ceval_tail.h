@@ -104,8 +104,9 @@ typedef PyValue (Py_IR_TAIL_CC *_PyIRTailFn)(Py_IR_TAIL_PARAMS);
  * any code runs, then close them in close order.  The values leave the
  * activation first, so that the closes, which run code, see none parked.
  * close_dispatch calls it, and compiled code calls it before it goes on to
- * its next copy (Python/jit_stencils.c). */
-extern void _PyEval_CloseParked(PyThreadState *tstate);
+ * its next copy (Python/jit_stencils.c).  Cold, so that a copy keeps the
+ * path that calls it in its cold part. */
+extern _Py_COLD_FUNCTION void _PyEval_CloseParked(PyThreadState *tstate);
 
 /* The entries of the two evaluators, where a frame goes on at next_instr
  * after the other one switched it (the switch word, IR_H_SWITCH, or an

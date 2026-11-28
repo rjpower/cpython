@@ -1560,6 +1560,57 @@ class TestCompilePolicy(JitTestCase):
         self.assertEqual(lines[5], "30")
 
 
+    def test_a_loop_over_the_l1i_is_declined(self):
+        # A loop whose compiled body would not fit the L1i is declined at
+        # warm-up: the code keeps no unit.  A small one compiles.
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            def make(n):
+                body = "".join(f"        a{k}, b{k} = x\\n" for k in range(n))
+                ns = {}
+                exec(f"def f(seq):\\n    for x in seq:\\n{body}    return a0", ns)
+                return ns["f"]
+            big, small = make(400), make(4)
+            before = t.jit_stats()["declined"]
+            for i in range(10):
+                print(big([(1, 2)] * 10), small([(1, 2)] * 10))
+            print(t.jit_unit(big.__code__) is None,
+                  t.jit_unit(small.__code__) is not None,
+                  t.jit_stats()["declined"] - before)
+        """, "jit=on")
+        lines = out.splitlines()
+        self.assertEqual(lines[:10], ["1 1"] * 10)
+        self.assertEqual(lines[-1], "True True 1")
+
+    def test_a_loop_that_grows_over_the_l1i_is_retired(self):
+        # The body compiles while its unpacks have not run (stubs); once
+        # they run, the recompile would not fit the L1i: the unit is
+        # retired and the code runs in the evaluator from then on
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            body = "".join(f"            a{k}, b{k} = x\\n" for k in range(400))
+            ns = {}
+            exec("def f(seq, run):\\n    s = 0\\n    for x in seq:\\n"
+                 f"        if run:\\n{body}            s += a0\\n    return s", ns)
+            f = ns["f"]
+            for i in range(10):
+                print(f([(1, 2)] * 10, False))
+            u = t.jit_unit(f.__code__)
+            print(u["invalid"], u["stubs"] >= 400)
+            before = t.jit_stats()["declined"]
+            for i in range(10):
+                print(f([(1, 2)] * 10, True))
+            print(t.jit_unit(f.__code__)["invalid"] & 2,
+                  t.jit_stats()["declined"] - before)
+        """, "jit=on")
+        lines = out.splitlines()
+        self.assertEqual(lines[:10], ["0"] * 10)
+        self.assertEqual(lines[10], "0 True")
+        self.assertEqual(lines[11:21], ["10"] * 10)
+        self.assertEqual(lines[-1], "2 1")
+
 TRANSFER_PRELUDE = """
 import sys, weakref, _testinternalcapi as t
 def stats():

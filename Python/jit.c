@@ -979,6 +979,48 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     return unit;
 }
 
+/* The most hot bytes that the compiled body of one loop of exec would take:
+ * the copies (or stubs) of the head words from a backward jump's target to
+ * the jump, from the stencil table.  A loop whose body does not fit the L1i
+ * runs its copies from beyond it, and each copy predicts its branches on
+ * its own: compiled, it runs slower than the interpreter's one copy of each
+ * arm.  Returns 0 if the hot bytes cannot be counted (no memory). */
+static size_t
+loop_body_bytes(PyCodeObject *code, _PyCodeExec *exec)
+{
+    const _PyIRWord *words = exec->words;
+    uint32_t nwords = exec->nwords;
+    /* before[i]: the hot bytes of the head words before word i */
+    size_t *before = PyMem_RawMalloc((nwords + 1) * sizeof(size_t));
+    if (before == NULL) {
+        return 0;
+    }
+    size_t hot = 0;
+    for (uint32_t i = 0; i < nwords;) {
+        uint32_t next = i + (uint32_t)_PyIR_WordLength(words[i]);
+        for (uint32_t k = i; k < next && k <= nwords; k++) {
+            before[k] = hot;
+        }
+        const _PyJitStencil *st = &_PyJit_Stencils[IR_HANDLER(words[i])];
+        if (st->name != NULL) {
+            hot += word_has_run(code, exec, i)
+                   ? st->parts[_PyJit_PART_HOT].size : STUB_SIZE;
+        }
+        i = next;
+    }
+    before[nwords] = hot;
+    size_t most = 0;
+    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+        int target = static_target(words, i);
+        if (0 <= target && (uint32_t)target <= i) {
+            size_t body = before[i + _PyIR_WordLength(words[i])] - before[target];
+            most = Py_MAX(most, body);
+        }
+    }
+    PyMem_RawFree(before);
+    return most;
+}
+
 _PyJitUnit *
 _PyJit_Event(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
@@ -1008,7 +1050,22 @@ _PyJit_Event(PyThreadState *tstate, _PyInterpreterFrame *frame)
         return NULL;
     }
     exec->jit_heat = 0;
-    return compile(_PyFrame_GetCode(frame), exec);
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    /* Under on, a code whose loop body would not fit the L1i is declined
+     * (V8 declines to optimise a function over a size limit), at its first
+     * compile or at a recompile whose words grew: a stale unit is retired,
+     * so that the code runs in the evaluator rather than through its
+     * diverted copies */
+    if (tstate->interp->ceval.jit == _PyJIT_ON &&
+        loop_body_bytes(code, exec) > _PyJIT_MAX_LOOP_BYTES) {
+        if (unit != NULL) {
+            _PyJit_Retire(exec);
+        }
+        never_again(exec);
+        tstate->interp->ceval.jit_declined++;
+        return NULL;
+    }
+    return compile(code, exec);
 }
 
 _PyJitUnit *

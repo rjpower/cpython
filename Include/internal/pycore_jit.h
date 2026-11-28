@@ -83,10 +83,17 @@ enum {
 #define _PyJIT_MAX_COMPILES         8
 
 /* Under on, a code whose compiled loop body would not fit the L1i is
- * declined at warm-up: the hot bytes of the copies between a backward
- * jump and its target, from the stencil table (Python/jit.c,
- * loop_body_bytes()). */
-#define _PyJIT_MAX_LOOP_BYTES   (32 * 1024)
+ * declined when it would compile: the hot bytes of the copies (or stubs)
+ * between a backward jump and its target, from the stencil table
+ * (Python/jit.c, loop_body_bytes()).  The body counts every path through
+ * the loop, of which an iteration runs one, so the bound is eight times a
+ * 32 KB L1i: it declines a body of straight-line copies that no L1i holds
+ * (unpack_sequence's 400 unpacks, 374 KB) but not a parser's long chain of
+ * branches whose iterations each run a few (re's _parse and _compile,
+ * 138 and 144 KB with the generic arms' sampling inline, 92 and 87 KB with
+ * it outlined).  At a 32 KB bound, which declines them, regex_compile runs
+ * 3% more instructions and cycles in the evaluator. */
+#define _PyJIT_MAX_LOOP_BYTES   (256 * 1024)
 
 /* The exits from compiled code into the evaluator, by kind
  * (interp->ceval.jit_exits, Python/ceval_evaluator.h) */

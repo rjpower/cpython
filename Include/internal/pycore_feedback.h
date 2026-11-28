@@ -203,6 +203,26 @@ typedef struct {
 #define _Py_CALL_BIND_SLOTS_MAX 16
 #define _Py_CALL_BIND_EXTRAS_MAX 8
 
+/* The facts of an exact call's callee (Call.Exact, Call.BoundExact,
+ * Call.Generator) and of the site, which follow from the callee's code and
+ * the word: a function's version is its code's (co_version, unique to the
+ * code), so they hold while the site's version guard passes, and the
+ * function keeps the code and its executing copy alive.  Classification
+ * checked co_argcount against the site's operands, with the self operand
+ * present or not as self_present says, which the guards test again. */
+typedef struct {
+    const struct _PyCodeExec *exec; // the code's executing copy
+    uint16_t nslots;                // the frame's slots
+    uint16_t operands;              // the operands the callee takes ...
+    uint8_t first;                  // ... from this one (1: past a NULL self)
+    uint8_t closure;                // the code has free variables
+    uint8_t self_present;
+    uint8_t _pad;
+} _PyFbCallee;
+
+static_assert(sizeof(_PyFbCallee) == sizeof(_PyBindPlan),
+              "the callee's facts share the plan's storage");
+
 typedef struct {
     _PyFbHeader h;
     union {
@@ -210,7 +230,11 @@ typedef struct {
         uint32_t type_version;      // CALL_ALLOC_AND_ENTER_INIT: the class
     };
     uint32_t callable_type_version; // recorded but not guarded
-    _PyBindPlan plan;
+    // A general call's plan, or an exact call's callee
+    union {
+        _PyBindPlan plan;
+        _PyFbCallee callee;
+    };
 } _PyFbCall;
 
 // COMPARE_OP: the arm the operand types selected (Python/register_ops/tests.rop)

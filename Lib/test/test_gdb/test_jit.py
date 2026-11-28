@@ -61,31 +61,31 @@ class JitBacktraceTests(unittest.TestCase):
             out)
 
     def test_bt_from_a_call_in_a_unit(self):
-        # Under always a code compiles at its first event; the copy of the
-        # call calls the builtin from the unit (the specialisers are reached
-        # by tail calls to outlined cold code, which leave the unit): the
+        # A native call from compiled code: the third call of the loop runs
+        # in its unit (a site that specialises leaves the unit by its cold
+        # sample, and the code compiles again at the loop's next event).  The
         # walk goes through the unit, which runs on the driver's frame, to
         # ir_evaluate() and the evaluation loop
         source = textwrap.dedent("""
             import _testinternalcapi
 
-            def loop(o):
-                for i in range(100):
-                    len(o)
-            # The marker: builtin_len() is broken on from here
+            def loop(f):
+                for i in range(3):
+                    f()
+            # The marker, the breakpoint's first hit
             _testinternalcapi.gnu_backtrace_unwind()
-            loop([])
+            loop(_testinternalcapi.gnu_backtrace_unwind)
         """)
         out, err = run_gdb(
             '--eval-command=set breakpoint pending yes',
             '--eval-command=break gnu_backtrace_unwind',
             '--eval-command=run',
-            '--eval-command=break builtin_len',
+            '--eval-command=ignore 1 2',
             '--eval-command=continue',
             '--eval-command=bt',
             '--args', sys.executable, '-X', 'jit=always', '-S', '-c', source)
         frames = [line for line in out.splitlines() if line.startswith("#")]
-        self.assertIn("builtin_len", frames[0], out)
+        self.assertIn("gnu_backtrace_unwind", frames[0], out)
         names = [re.sub(r"^#\d+\s+(0x\w+ in )?", "", line).split(" ")[0]
                  for line in frames]
         unit = next(i for i, name in enumerate(names)

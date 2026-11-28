@@ -285,8 +285,9 @@ class RelaxationTests(unittest.TestCase):
         self.assertFalse(stencils.relax_gottpoff(bytearray(b"\x48\x03\x05" + bytes(4)), 3))
 
     def test_got_slot_in_object(self):
-        # A stencil that compares a type with a symbol's address keeps a
-        # GOT slot (test_gotpcrelx): whether any does is up to GCC
+        # A copy that compares with a GOT slot's address (IterOpen_Generic's
+        # adaptation sample did, before the sample became cold) shares the
+        # slot that the PLT's jumps use
         table = stencils.read_stencils(object_bytes())
         got = [h for s in table.stencils for h in s.holes
                if h.kind is Kind.SUPPORT and h.symbol.startswith(stencils.GOT)]

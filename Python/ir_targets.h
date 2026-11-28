@@ -1056,12 +1056,15 @@ static_assert(IR_TARGETS_COUNT == IR_HANDLER_MASK + 1,
     X(AttrWrite_Slot_TT) \
     X(AttrWrite_Slot) \
     X(Call_Exact) \
+    X(Out_Call_Exact_entry) \
     X(Call_BoundExact) \
+    X(Out_Call_BoundExact_entry) \
     X(Call_Init) \
     X(Call_Generator) \
     X(Call_Observed) \
     X(Return_Ordinary) \
     X(Return_Empty) \
+    X(Out_Return_Empty_entry) \
     X(Return_Generator) \
     X(Return_GeneratorEmpty) \
     X(Return_Observed) \
@@ -1251,7 +1254,9 @@ static_assert(IR_TARGETS_COUNT == IR_HANDLER_MASK + 1,
     X(SuperMethod_Generic) \
     X(SuperMethodExplicit_Generic) \
     X(Call_Generic) \
+    X(Out_Call_Generic_Python) \
     X(CallKw_Generic) \
+    X(Out_CallKw_Generic_Python) \
     X(CallEx_Generic) \
     X(Unpack_Generic) \
     X(GetAttr_Generic) \

@@ -121,11 +121,6 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
         } \
         IR_JIT_GOTO(_JIT_SWITCH, IR_JIT_NO_WORD()); \
     } while (0)
-#ifdef Py_STATS
-#  define IR_JIT_SWITCH_STAT() (tstate->interp->ceval.jit_switches++)
-#else
-#  define IR_JIT_SWITCH_STAT() ((void)0)
-#endif
 #undef IR_DISPATCH_REDIRECTED
 #define IR_DISPATCH_REDIRECTED() IR_JIT_GOTO(_JIT_REDIRECT, IR_JIT_NO_WORD())
 #undef DISPATCH_SAME_OPARG
@@ -163,6 +158,18 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
         extern Py_IR_TAIL_CC __attribute__((visibility("hidden"), cold)) \
         PyValue _PyEval_JitOut_##NAME(PyThreadState *, _PyInterpreterFrame *, \
                                       _PyInstr *, _PyIRWord); \
+        Py_MUSTTAIL return _PyEval_JitOut_##NAME(tstate, frame, this_instr, ir_word); \
+    } while (0)
+/* A declared region (`outline`): the function itself, which every copy of
+ * the arm and the evaluator's arm run, after the copy closes the departure
+ * window as its other exits do */
+#undef IR_OUTLINE_HOT_GOTO
+#define IR_OUTLINE_HOT_GOTO(NAME) \
+    do { \
+        extern Py_IR_TAIL_CC __attribute__((visibility("hidden"))) \
+        PyValue _PyEval_JitOut_##NAME(PyThreadState *, _PyInterpreterFrame *, \
+                                      _PyInstr *, _PyIRWord); \
+        ((_PyThreadStateImpl *)tstate)->jit_departing = 0; \
         Py_MUSTTAIL return _PyEval_JitOut_##NAME(tstate, frame, this_instr, ir_word); \
     } while (0)
 /* A departing arm opens the thread's departure window (Python/jit.c,

@@ -44,9 +44,10 @@ extern primitive present(m:Maybe<B>) -> Bool
 // the coherent recipe store.  No C code picks a handler number.
 
 // True (quiet) when the counter has not triggered, and then advances it; a
-// shared or absent entry never triggers and is not written.
+// shared or absent entry never triggers and is not written.  The sample
+// runs once per backoff interval: its path is cold, out of the arm's copies.
 extern helper tick<K>(f:Fb<K>)
-  cases(quiet(), due())
+  cases(quiet(), cold due())
   effects(reads, writes)
   feedback(read(counter), write(counter))
   c _PyFb_TickQuiet as bool_cases

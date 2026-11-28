@@ -379,6 +379,11 @@ class Block:
     stmts: tuple[Stmt, ...]
     term: Term
     span: SrcSpan = _span()
+    # `Label(...) outline:`: the block and every block that it reaches run
+    # in one function of their own, which the arm tail-calls at the block
+    # (rop_cgen.ArmLowerer.outline_cold): the arm's copies keep only the
+    # code before it.  Identical regions of several arms share the function.
+    outline: bool = False
 
 
 @dataclass(frozen=True, slots=True)

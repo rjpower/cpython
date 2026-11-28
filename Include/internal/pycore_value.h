@@ -412,12 +412,30 @@ static inline bool
 _PyValue_AddCheckedScaled(int64_t a, int64_t b, int64_t *out)
 {
     int64_t sum;
+#if defined(__GNUC__) && defined(__x86_64__)
+    /* The overflow is a jump of our own: GCC's expansion of
+     * __builtin_add_overflow gives its overflow edge a small, not a zero,
+     * count, so the rare path that boxes the sum would stay in the hot
+     * part, after the arm's dispatch (in a stencil, after its continue
+     * jump).  An asm goto edge takes the count of its target, which leads
+     * only to cold code. */
+    __asm__ goto("mov %1, %0\n\t"
+                 "add %2, %0\n\t"
+                 "jo %l[overflow]"
+                 : "=&r"(sum) : "r"(a), "r"(b) : "cc" : overflow);
+    *out = sum;
+    return false;
+overflow:
+    *out = _PyValue_UnscaleInt(a) + _PyValue_UnscaleInt(b);
+    return true;
+#else
     if (__builtin_add_overflow(a, b, &sum)) {
         *out = _PyValue_UnscaleInt(a) + _PyValue_UnscaleInt(b);
         return true;
     }
     *out = sum;
     return false;
+#endif
 }
 
 static inline int64_t

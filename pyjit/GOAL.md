@@ -5,13 +5,16 @@ on canonical eight-byte PyValues and a register IR. Rebuild and port
 extensions. Preserve Python behavior, explicit ownership and useful
 observation APIs.
 
-Selected runtime: golden87, `684a98eb30e` (`pyjit/round87-golden`, tag
-`pyjit-golden-20261123-contract87`), selected on 2026-11-23. It adds
-[contract87](issues/register-semantics59/contract87.md)'s ten units to
-golden86: the operation contract, a function form for every handler, and
-stack bytecode in `co_code` and `.pyc`. It runs 0.876 of upstream's time on
-the timed all-29 geomean (golden86 0.877). Comprehensions, nqueens, pickle,
-deepcopy, unpack_sequence and logging_simple remain slower than upstream.
+Selected runtime: `pyjit/golden`, the one running golden branch, at
+`fdec1631680` (tag `pyjit-golden-20261128-basics90`), selected on
+2026-11-28.  It is rir90: register families as the one statement of
+semantics, a tail-calling interpreter, and a copy-and-patch baseline JIT
+compiled from the interpreter's own arms.  In its default warm-up mode it
+runs 0.995 of golden87's time on the timed all-29 geomean (golden87 with
+its JIT off), and 0.976 of its own interpreter's.  The interpreter alone
+runs 1.019 of golden87.  golden87 (`684a98eb30e`, tag
+`pyjit-golden-20261123-contract87`) ran 0.876 of upstream's time and stays
+the timing control.  Earlier goldens are tags (`pyjit-golden-*`).
 
 ## Next steps
 

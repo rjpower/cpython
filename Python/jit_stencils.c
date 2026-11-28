@@ -13,11 +13,10 @@
  * patches where it copies the stencil:
  *
  *   the fields A to D of the word: _JIT_A to _JIT_D, hidden symbols whose
- *   address is the field's value.  The arm reads a field as
- *   (uint32_t)(uintptr_t)_JIT_A, which GCC computes as lea _JIT_A(%rip)
- *   into a 32-bit register: the patched displacement is the value less the
- *   end of the instruction, modulo 2^32.  The reader refuses a field hole
- *   in any other instruction;
+ *   address is the field's value.  The arm reads a field with lea
+ *   _JIT_A(%rip) into a 32-bit register (IR_JIT_FIELD below): the patched
+ *   displacement is the value less the end of the instruction, modulo
+ *   2^32.  The reader refuses a field hole in any other instruction;
  *
  *   the exits: tail calls of the code holes below, each with the arm's
  *   state.  The declared cold exits are tail calls of functions declared

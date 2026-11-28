@@ -72,6 +72,16 @@ _PyFrame_InstrAt(_PyInterpreterFrame *f, int offset)
 
 /* Start a frame of code, whose executing copy exists: _PyCode_GetExec()
  * has succeeded for it, which the call paths ensure.  Returns the copy. */
+static inline void
+_PyFrame_InitIRInstrPtrExec(_PyInterpreterFrame *frame, const _PyCodeExec *exec)
+{
+    frame->instr_ptr = exec->words;
+    frame->ir_words = exec->words;
+#ifdef Py_GIL_DISABLED
+    frame->tlbc_index = 0;
+#endif
+}
+
 static inline const _PyCodeExec *
 _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
 {
@@ -487,13 +497,14 @@ _PyFrame_ZeroConstSlots(PyValue *dst, int n)
     }
 }
 
-/* Consumes func and locals. The caller supplies initialized value storage. */
+/* _PyFrame_Initialize() given exec, code's executing copy. */
 static inline Py_ALWAYS_INLINE void
-_PyFrame_Initialize(
+_PyFrame_InitializeExec(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
-    PyObject *locals, PyCodeObject *code, PyValue *base,
-    _PyInterpreterFrame *previous)
+    PyObject *locals, PyCodeObject *code, const _PyCodeExec *exec,
+    PyValue *base, _PyInterpreterFrame *previous)
 {
+    assert(exec == code->_co_exec);
     frame->previous = previous;
     frame->base = base;
     PyFunctionObject *func_obj = _PyValue_FunctionOwnerSteal(func);
@@ -504,7 +515,7 @@ _PyFrame_Initialize(
     frame->f_locals = locals;
     frame->frame_obj = NULL;
     (void)tstate;
-    const _PyCodeExec *exec = _PyFrame_InitIRInstrPtr(frame, code);
+    _PyFrame_InitIRInstrPtrExec(frame, exec);
     frame->return_pc = frame->instr_ptr;
     frame->return_slot = 0;
     frame->pending_kwargs = IR_NO_DST;
@@ -520,6 +531,20 @@ _PyFrame_Initialize(
         _PyFrame_CopyConstSlots(base + exec->const_first, exec->const_image,
                                 exec->nconst);
     }
+}
+
+/* Consumes func and locals. The caller supplies initialized value storage. */
+static inline Py_ALWAYS_INLINE void
+_PyFrame_Initialize(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
+    PyObject *locals, PyCodeObject *code, PyValue *base,
+    _PyInterpreterFrame *previous)
+{
+    const _PyCodeExec *exec =
+        (const _PyCodeExec *)FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
+    assert(exec != NULL);
+    _PyFrame_InitializeExec(tstate, frame, func, locals, code, exec, base,
+                            previous);
 }
 
 /* The free variables of a frame that is about to run: a new owner of each of
@@ -876,6 +901,29 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame 
     _PyFrame_Initialize(tstate, new_frame, func, NULL, code,
                         new_frame->base, previous);
     _PyFrame_CopyFreeVars(new_frame, code);
+    return new_frame;
+}
+
+/* _PyFrame_PushUnchecked() for a function whose code's facts a call site
+ * holds (_PyFbCallee): its frame's slots, its executing copy and whether it
+ * has free variables. */
+static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
+_PyFrame_PushKnownUnchecked(PyThreadState *tstate, PyValue func,
+                            _PyInterpreterFrame *previous, int nslots,
+                            const _PyCodeExec *exec, bool closure)
+{
+    CALL_STAT_INC(frames_pushed);
+    PyFunctionObject *func_obj =
+        (PyFunctionObject *)_PyValue_AsKnownObjectBorrowPointer(func);
+    PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
+    assert(nslots == _PyFrame_NumSlotsForCodeObject(code));
+    assert(closure == (code->co_nfreevars != 0));
+    _PyInterpreterFrame *new_frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
+    _PyFrame_InitializeExec(tstate, new_frame, func, NULL, code, exec,
+                            new_frame->base, previous);
+    if (closure) {
+        _PyFrame_CopyFreeVars(new_frame, code);
+    }
     return new_frame;
 }
 

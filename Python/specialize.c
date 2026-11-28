@@ -2787,6 +2787,11 @@ call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs,
         return false;
     }
     fb->func_version = version;
+    // The callee's facts, which the exact arms read instead of the code
+    fb->callee.exec = code->_co_exec;
+    fb->callee.framesize = (uint32_t)code->co_framesize;
+    fb->callee.nslots = (uint16_t)_PyFrame_NumSlotsForCodeObject(code);
+    fb->callee.closure = code->co_nfreevars != 0;
     return true;
 }
 
@@ -2968,9 +2973,11 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
     if (PyFunction_Check(callable)) {
         PyFunctionObject *func = (PyFunctionObject *)callable;
         if (call_classify_function(fb, func, nargs, false)) {
+            fb->callee.self_present = (uint8_t)self_present;
             return CALL_CASE_EXACT;
         }
         if (call_classify_function(fb, func, nargs, true)) {
+            fb->callee.self_present = (uint8_t)self_present;
             return CALL_CASE_GENERATOR;
         }
         if (!call_classify_plan(fb, func, nargs, self_slot && !self_present)) {

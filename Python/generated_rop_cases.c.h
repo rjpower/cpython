@@ -10113,14 +10113,14 @@ IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
             if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
-            if (!_PyRop_ExactPositional(frame, PyValue_Borrow(*home_fn), this_instr)) {
+            if (!_PyRop_ExactPositional(frame, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
-            if (!_PyRop_FrameSpace(tstate, PyValue_Borrow(*home_fn))) {
+            if (!_PyRop_FrameSpace(tstate, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
             IR_STUB_ESCAPE();
-            c = _PyRop_PushExact(tstate, frame, home_fn, this_instr);
+            c = _PyRop_PushExact(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
             ROP_ENTER(c, IR_A(ir_word));
         }
 
@@ -10147,14 +10147,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
             if (!_PyRop_NoWeakrefs(PyValue_Borrow(*home_fn))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
-            if (!_PyRop_ExactPositionalBound(frame, PyValue_Borrow(*home_fn), this_instr)) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            if (!_PyRop_FrameSpaceBound(tstate, PyValue_Borrow(*home_fn))) {
+            if (!_PyRop_FrameSpace(tstate, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
             IR_STUB_ESCAPE();
-            c = _PyRop_PushBoundExact(tstate, frame, home_fn, this_instr);
+            c = _PyRop_PushBoundExact(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
             ROP_ENTER(c, IR_A(ir_word));
         }
 
@@ -10216,7 +10213,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
             if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
-            if (!_PyRop_ExactPositional(frame, PyValue_Borrow(*home_fn), this_instr)) {
+            if (!_PyRop_ExactPositional(frame, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 JUMP_TO_PREDICTED(Call_Generic);
             }
             IR_STUB_ESCAPE();

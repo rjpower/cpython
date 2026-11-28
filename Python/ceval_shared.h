@@ -830,7 +830,7 @@ call_fill_exact(PyValue *slots, _PyInterpreterFrame *frame,
     if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
         _PyEval_call_take_loop(slots, head, skip, n - skip, arguments);
     }
-    else {
+    else if (n > skip) {
         // All the operands are in the first operand word; a skipped self
         // slot is its first field
         _PyIRWord ops = head[1];
@@ -852,11 +852,11 @@ call_fill_exact(PyValue *slots, _PyInterpreterFrame *frame,
  * operands fill its first arguments; with CALL_EXPANDED, of the function of
  * the bound method callable, with its receiver first.  The guards checked the
  * stack space and that the callee takes exactly these arguments
- * (call_fill_exact()). */
+ * (call_fill_exact()); callee holds the facts of the function's code. */
 static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
 call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 const _PyIRWord *head, _PyIRWord word, PyValue callable,
-                PyValue self, int call_state)
+                PyValue self, int call_state, const _PyFbCallee *callee)
 {
     int expanded = (call_state & CALL_EXPANDED) != 0;
     // The self operand moves from its home with the arguments; a bound
@@ -865,7 +865,8 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
     (void)self;
     PyValue *slots = _PyFrame_Slots(frame);
     PyValue function = call_exact_function(slots, word, callable, expanded);
-    _PyInterpreterFrame *pushed = _PyFrame_PushUnchecked(tstate, function, frame);
+    _PyInterpreterFrame *pushed = _PyFrame_PushKnownUnchecked(
+        tstate, function, frame, callee->nslots, callee->exec, callee->closure);
     call_fill_exact(slots, frame, head, word, callable, call_state, pushed->base);
     return pushed;
 }
@@ -916,21 +917,23 @@ rop_call_argcount(_PyInterpreterFrame *frame, const _PyIRWord *head)
     return n;
 }
 
+/* Classification checked co_argcount, which the version fixes, against the
+ * word's operands, with the self operand present or not (_PyFbCallee): of
+ * the count, only that presence varies at run time. */
 static inline bool
-_PyRop_ExactPositional(_PyInterpreterFrame *frame, PyValueBorrow fn,
-                       const _PyIRWord *head)
+_PyRop_ExactPositional(_PyInterpreterFrame *frame, const _PyIRWord *head,
+                       const _PyFbCall *fb)
 {
-    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(fn);
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
-    return code->co_argcount == rop_call_argcount(frame, head);
+    if (!_PyIR_CallHasSelf(head[0])) {
+        return true;
+    }
+    return (rop_call_self_state(frame, head) != 0) == fb->callee.self_present;
 }
 
 static inline bool
-_PyRop_FrameSpace(PyThreadState *tstate, PyValueBorrow fn)
+_PyRop_FrameSpace(PyThreadState *tstate, const _PyFbCall *fb)
 {
-    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(fn);
-    PyCodeObject *code = (PyCodeObject *)func->func_code;
-    return _PyThreadState_HasStackSpace(tstate, code->co_framesize);
+    return _PyThreadState_HasStackSpace(tstate, (int)fb->callee.framesize);
 }
 
 static inline bool
@@ -941,12 +944,12 @@ _PyRop_RecursionBudget(PyThreadState *tstate)
 
 static inline _PyInterpreterFrame *
 _PyRop_PushExact(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                 PyValue *fn, const _PyIRWord *head)
+                 PyValue *fn, const _PyIRWord *head, const _PyFbCall *fb)
 {
     _PyIRWord word = head[0];
     assert(fn == &_PyFrame_Slots(frame)[IR_B(word)]);
     return call_push_exact(tstate, frame, head, word, *fn, PyValue_NULL,
-                           rop_call_self_state(frame, head));
+                           rop_call_self_state(frame, head), &fb->callee);
 }
 
 static inline bool
@@ -976,35 +979,14 @@ _PyRop_NoWeakrefs(PyValueBorrow fn)
     return ((PyMethodObject *)PyValue_AsKnownObjectBorrow(fn))->im_weakreflist == NULL;
 }
 
-/* The code of the function of a bound method that method_version admitted */
-static inline PyCodeObject *
-rop_method_code(PyValueBorrow fn)
-{
-    PyMethodObject *method = (PyMethodObject *)PyValue_AsKnownObjectBorrow(fn);
-    return (PyCodeObject *)((PyFunctionObject *)method->im_func)->func_code;
-}
-
-static inline bool
-_PyRop_ExactPositionalBound(_PyInterpreterFrame *frame, PyValueBorrow fn,
-                            const _PyIRWord *head)
-{
-    return rop_method_code(fn)->co_argcount == rop_call_argcount(frame, head) + 1;
-}
-
-static inline bool
-_PyRop_FrameSpaceBound(PyThreadState *tstate, PyValueBorrow fn)
-{
-    return _PyThreadState_HasStackSpace(tstate, rop_method_code(fn)->co_framesize);
-}
-
 static inline _PyInterpreterFrame *
 _PyRop_PushBoundExact(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                      PyValue *fn, const _PyIRWord *head)
+                      PyValue *fn, const _PyIRWord *head, const _PyFbCall *fb)
 {
     _PyIRWord word = head[0];
     assert(fn == &_PyFrame_Slots(frame)[IR_B(word)]);
     return call_push_exact(tstate, frame, head, word, *fn, PyValue_NULL,
-                           CALL_EXPANDED);
+                           CALL_EXPANDED, &fb->callee);
 }
 
 static inline bool

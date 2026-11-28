@@ -154,7 +154,7 @@ SCHEMA_FIELDS: dict[Schema, tuple[str, ...]] = {
     Schema.Iter: ("kind", "type_version", "func_version"),
     Schema.Send: ("kind", "func_version"),
     Schema.Call: ("kind", "func_version", "type_version", "argcount", "convention",
-                  "plan"),
+                  "plan", "callee"),
     Schema.Super: ("kind", "type_version"),
 }
 
@@ -253,7 +253,10 @@ FB_LAYOUT: dict[Schema, CLayout] = {
         "kind": _NONE, "func_version": CField("func_version", _U32),
         "type_version": CField("type_version", _U32),
         "argcount": _NONE, "convention": _NONE,
-        "plan": CField("plan", "_PyBindPlan")}),
+        "plan": CField("plan", "_PyBindPlan"),
+        "callee": CField("callee", "_PyFbCallee")},
+        # A general call's plan, or an exact call's callee
+        unions=(CUnion(("plan", "callee"), ("plan", "callee")),)),
 }
 
 # A recipe (Recipe<S>): the fields that an admission row copies out of an

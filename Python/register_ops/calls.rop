@@ -57,22 +57,28 @@ extern helper function_version(fn:B, f:Fb<Call>) -> Bool
             "is the site's (_CHECK_FUNCTION_VERSION).",
     contract: "Reads the word, the type and func_version; no memory, no failure.");
 
-extern helper exact_positional(f:Frame, fn:B, a:Args) -> Bool
+// The callee's facts (`entry.callee`) follow from the code that the version
+// guard pins: classification checked co_argcount against the site's
+// operands, with the self operand present or not, and cached the frame's
+// size, the code's executing copy and whether it has free variables
+extern helper exact_positional(f:Frame, a:Args, fb:Fb<Call>) -> Bool
   effects(reads)
-  requires(exact<function>(fn))
+  feedback(read(entry.callee))
   c _PyRop_ExactPositional as bool inline
   evidence(
     review: "P4. ceval.c: co_argcount equals the arguments of the call, counting a"
-            "self that is present at run time (_CHECK_FUNCTION_EXACT_ARGS).",
-    contract: "Reads the code and the self operand's home; no memory, no failure.");
+            "self that is present at run time (_CHECK_FUNCTION_EXACT_ARGS);"
+            "CR: classification compared the count, so only the self's presence"
+            "is tested.",
+    contract: "Reads the self operand's home and the entry; no memory, no failure.");
 
-extern helper frame_space(t:Thread, fn:B) -> Bool
+extern helper frame_space(t:Thread, fb:Fb<Call>) -> Bool
   effects(reads)
-  requires(exact<function>(fn))
+  feedback(read(entry.callee))
   c _PyRop_FrameSpace as bool
   evidence(
     review: "P4. ceval.c: _PyThreadState_HasStackSpace for co_framesize"
-            "(_CHECK_STACK_SPACE).",
+            "(_CHECK_STACK_SPACE), cached in the entry.",
     contract: "Reads the arena bounds; no memory, no failure.");
 
 extern helper recursion_budget(t:Thread) -> Bool
@@ -85,8 +91,9 @@ extern helper recursion_budget(t:Thread) -> Bool
 // The child frame of an exact call: the function and the arguments move
 // to it (a temporary moves, a local is counted), at the arena top, whose
 // space frame_space checked
-extern helper push_exact(t:Thread, f:Frame, fn:Src, a:Args) -> NewFrame
+extern helper push_exact(t:Thread, f:Frame, fn:Src, a:Args, fb:Fb<Call>) -> NewFrame
   effects(reads, writes, releases)
+  feedback(read(entry.callee))
   spends(fn, a)
   requires(exact<function>(fn))
   c _PyRop_PushExact as pointer inline
@@ -126,30 +133,13 @@ extern helper no_weakrefs(fn:B) -> Bool
             "releasing the method then runs no callback before the frame is filled.",
     contract: "One read; no memory, no failure.");
 
-extern helper exact_positional_bound(f:Frame, fn:B, a:Args) -> Bool
-  effects(reads)
-  requires(exact<method>(fn))
-  c _PyRop_ExactPositionalBound as bool inline
-  evidence(
-    review: "P4. ceval.c: the function's co_argcount is the arguments and the"
-            "receiver (_CHECK_METHOD_EXACT_ARGS).",
-    contract: "Reads the code and the self operand's home; no memory, no failure.");
-
-extern helper frame_space_bound(t:Thread, fn:B) -> Bool
-  effects(reads)
-  requires(exact<method>(fn))
-  c _PyRop_FrameSpaceBound as bool
-  evidence(
-    review: "P4. ceval.c: _PyThreadState_HasStackSpace for the function's"
-            "co_framesize (_CHECK_METHOD_STACK_SPACE).",
-    contract: "Reads the arena bounds; no memory, no failure.");
-
 // The child takes the receiver and the function, counted, and the arguments
 // (a temporary moves, a local is counted); the method is released, which
 // runs no callback (no_weakrefs) and no finalizer: the child counts both
 // of its parts
-extern helper push_bound_exact(t:Thread, f:Frame, fn:Src, a:Args) -> NewFrame
+extern helper push_bound_exact(t:Thread, f:Frame, fn:Src, a:Args, fb:Fb<Call>) -> NewFrame
   effects(reads, writes, releases)
+  feedback(read(entry.callee))
   spends(fn, a)
   requires(exact<method>(fn))
   c _PyRop_PushBoundExact as pointer inline
@@ -885,21 +875,21 @@ extern helper leave_activation(t:Thread, f:Frame) -> Unit
 
 arm Call.Exact split
   effects(runs_python, reads, writes, releases, switches_frame)
-  feedback(read(entry.func_version))
+  feedback(read(entry.func_version), read(entry.callee))
   exits(enter, miss)
 {
   entry():
     guard default_eval_frame(thread) else miss;
     guard function_version(use(fn), fb) else miss;
-    guard exact_positional(frame, use(fn), args) else miss;
-    guard frame_space(thread, use(fn)) else miss;
-    let c:NewFrame = push_exact(thread, frame, fn, args);
+    guard exact_positional(frame, args, fb) else miss;
+    guard frame_space(thread, fb) else miss;
+    let c:NewFrame = push_exact(thread, frame, fn, args, fb);
     exit enter(c) resume Call.Returned;
 }
 
 arm Call.BoundExact split
   effects(runs_python, reads, writes, releases, switches_frame)
-  feedback(read(entry.func_version))
+  feedback(read(entry.func_version), read(entry.callee))
   exits(enter, miss)
 {
   entry():
@@ -907,9 +897,10 @@ arm Call.BoundExact split
     guard self_absent(frame, args) else miss;
     guard method_version(use(fn), fb) else miss;
     guard no_weakrefs(use(fn)) else miss;
-    guard exact_positional_bound(frame, use(fn), args) else miss;
-    guard frame_space_bound(thread, use(fn)) else miss;
-    let c:NewFrame = push_bound_exact(thread, frame, fn, args);
+    // Classification admitted the receiver and these arguments, with the
+    // self operand absent, which self_absent tests: the count holds
+    guard frame_space(thread, fb) else miss;
+    let c:NewFrame = push_bound_exact(thread, frame, fn, args, fb);
     exit enter(c) resume Call.Returned;
 }
 
@@ -939,13 +930,13 @@ arm Call.Init split
 
 arm Call.Generator split
   effects(runs_python, allocates, raises, releases on (dst))
-  feedback(read(entry.func_version))
+  feedback(read(entry.func_version), read(entry.callee))
   exits(next, raise, miss)
 {
   entry():
     guard default_eval_frame(thread) else miss;
     guard function_version(use(fn), fb) else miss;
-    guard exact_positional(frame, use(fn), args) else miss;
+    guard exact_positional(frame, args, fb) else miss;
     call new_generator(thread, frame, fn, args) {
       ok -> Result();
       err -> Failed();

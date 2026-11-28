@@ -704,6 +704,42 @@ class CallGenericTests(unittest.TestCase):
         warm(f, "ab")
         self.assertIn("Call.Len", word_names(f.__code__))
 
+    def test_exact_closure(self):
+        # The site's entry says the callee has free variables
+        k = 3
+
+        def g(a):
+            return a + k
+
+        def f(x):
+            return g(x)
+        force(f, "CALL", "Call.Generic")
+        warm(f, 1)
+        self.assertIn("Call.Exact", word_names(f.__code__))
+        self.assertEqual(f(1), 4)
+
+    def test_exact_misses_when_the_self_is_absent(self):
+        # Classified with the receiver present: the same function as an
+        # instance attribute takes one argument fewer at the same site
+        def g(a, b):
+            return (a, b)
+
+        class C:
+            m = g
+
+        def f(o):
+            return o.m(1)
+        c = C()
+        force(f, "CALL", "Call.Generic")
+        warm(f, c)
+        self.assertIn("Call.Exact", word_names(f.__code__))
+        self.assertEqual(f(c), (c, 1))
+        d = C()
+        d.m = g
+        with self.assertRaises(TypeError):
+            f(d)
+        self.assertEqual(f(c), (c, 1))
+
     def test_exact_misses_after_redefinition(self):
         def g(a):
             return a

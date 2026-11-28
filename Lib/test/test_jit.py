@@ -1473,7 +1473,42 @@ class TestCompilePolicy(JitTestCase):
             print([a for a, how in u["plans"].values() if a.startswith("Unpack.")],
                   u["deopts"], u["invalid"])
         """, "jit=on")
-        self.assertEqual(out.splitlines()[-1], "['Unpack.Generic'] 2 0")
+        # Tuple to list deoptimises once; the move to the generic arm is the
+        # word's last and is not counted
+        self.assertEqual(out.splitlines()[-1], "['Unpack.Generic'] 1 0")
+
+    def test_words_going_generic_do_not_use_the_deopts(self):
+        # Four words flip one after another, each deoptimising once: past
+        # the two deopts a code has, the third and fourth stay diverted
+        # until they go generic, a final move whose recompile is free, so
+        # the last unit compiles all four generic arms and diverts none
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            def g(xs, ys, zs, ws):
+                s = 0
+                for i in range(len(xs)):
+                    a, b = xs[i]
+                    c, d = ys[i]
+                    e, f = zs[i]
+                    h, j = ws[i]
+                    s += a + d + e + j
+                return s
+            T, L = [(1, 2)] * 50, [[1, 2]] * 50
+            for _ in range(8):
+                g(T, T, T, T)
+            for k in range(4):
+                for seq in (L, T):
+                    args = [T] * 4
+                    args[k] = seq
+                    for _ in range(8):
+                        g(*args)
+            u = t.jit_unit(g.__code__)
+            print(sorted((a, how) for a, how in u["plans"].values()
+                         if a.startswith("Unpack.")), u["invalid"])
+        """, "jit=on")
+        self.assertEqual(out.splitlines()[-1],
+                         str([("Unpack.Generic", "stencil")] * 4) + " 0")
 
     def test_recompiles_back_off(self):
         # A word that leaves its specialised arm makes the unit stale; the

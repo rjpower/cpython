@@ -312,7 +312,8 @@ set_opcode(_PyInstr *instr, int opcode)
 #ifdef _PY_JIT_SUPPORTED
     _PyCodeExec *exec = _PyFrame_Exec(current_frame());
     if (exec->jit_unit != NULL) {
-        _PyJit_MarkWordChanged(exec, instr);
+        _PyFbHeader *h = instr_fb(instr);
+        _PyJit_MarkWordChanged(exec, instr, h != NULL && h->state == FB_MEGA);
     }
 #endif
     return 1;

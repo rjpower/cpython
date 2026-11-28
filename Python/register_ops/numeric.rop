@@ -108,6 +108,45 @@ extern helper box_float(z:F64)
     contract: "NULL with MemoryError only if the NaN box fails. No finalizer, no"
               "Python.");
 
+// The pairs that the generic arm computes inline, as Binary.Int and
+// Binary.Float do: two inline ints the operator admits; a float pair whose
+// operator admits it before the result (all but power); any other pair is
+// the generic arm's cold path
+extern primitive binary_inline_kind(op:Enum<Numeric>, a:B, b:B)
+  cases(int(), float(), cold other())
+  effects()
+  ensures(int.inline_int(a), int.inline_int(b),
+          float.inline_number(a), float.inline_number(b))
+  c _PyRop_BinaryInlineKind as case_index
+  evidence(
+    review: "JC. pycore_rop_rows.h: _PyRop_IntBinaryApplies, then the float"
+            "operand pair with _PyRop_FloatOpAdmits on the operands alone.",
+    contract: "Reads the two words and the operator: no memory, no failure, no"
+              "callback.");
+
+// The word of a float result: the double itself, or a box for NaN
+macro float_result(v:F64)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, raises)
+  feedback()
+  ensures(ok.exact<float>(z))
+{
+  entry():
+    call float_word(v) {
+      hit -> Done();
+      absent -> NaN();
+    }
+  NaN():
+    call box_float(v) {
+      ok -> Done();
+      err -> Failed();
+    }
+  Done(z:O):
+    exit ok(z);
+  Failed(e:Err):
+    exit err(e);
+}
+
 // Text rows: the in-place add of two exact strings
 
 extern primitive text_binary_applies(op:Enum<Numeric>, a:B, b:B) -> Bool
@@ -246,12 +285,7 @@ arm Binary.Float shared over(op: NB_INPLACE_ADD, NB_SUBTRACT, NB_INPLACE_SUBTRAC
     let b:F64 = number_as_double(r);
     let v:F64 = float_value(op, a, b);
     guard float_op_admits(op, a, b, v) else miss;
-    call float_word(v) {
-      hit -> Finish();
-      absent -> NaN();
-    }
-  NaN():
-    call box_float(v) {
+    call float_result(v) {
       ok -> Finish();
       err -> Failed();
     }
@@ -310,8 +344,10 @@ arm Binary.Extended shared
     exit redirect(current_route);
 }
 
+// Inline int and float pairs run as in Binary.Int and Binary.Float, with the
+// operator read from the word; every other pair calls the operator's slots
 arm Binary.Generic shared
-  effects(runs_python, raises, releases on (dst))
+  effects(runs_python, writes, allocates, raises, releases on (dst))
   feedback(read(entry), write(entry), write(handler))
   exits(next, again, raise, redirect)
 {
@@ -323,6 +359,29 @@ arm Binary.Generic shared
   Retry(t:Ticket<Binary>):
     exit again(t);
   Run():
+    let l:B = use(x);
+    let r:B = use(y);
+    call binary_inline_kind(op, l, r) {
+      int -> Int();
+      float -> Float();
+      other -> Slots();
+    }
+  Int():
+    call int_binary(op, int_scaled(l), int_scaled(r)) {
+      ok -> Inline();
+      err -> BoxFailed();
+    }
+  Float():
+    call float_result(float_value(op, number_as_double(l), number_as_double(r))) {
+      ok -> Inline();
+      err -> BoxFailed();
+    }
+  BoxFailed(box_error:Err):
+    exit raise(Binary.BoxFailed, box_error);
+  Inline(inline_result:O):
+    publish [dst = inline_result] retire [spent(y), spent(x), old(dst)] at Binary.Done;
+    exit next();
+  Slots():
     let a:Anchors = anchor_for_call([x, y]);
     call binary_at_origin(op, a) {
       ok -> Result();

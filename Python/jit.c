@@ -701,9 +701,13 @@ _PyJit_StubReached(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * reoptimisation the same way).  A code that has used its compiles, or a
  * word that deoptimises once the code has used its recompiles for those
  * (jit_max_deopts), leaves the unit as it is: it runs on, its changed
- * words in the evaluator. */
+ * words in the evaluator.  A word that leaves a specialised arm for its
+ * generic arm for good (final: Python/specialize.c's toward_generic())
+ * makes its last change, so the recompile that answers it is not counted
+ * against the deopts: each word does so at most once, and a code whose
+ * flipping words go generic one by one still compiles them all. */
 void
-_PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr)
+_PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr, int final)
 {
     assert(instr >= exec->words && instr < exec->words + exec->nwords);
     uint32_t i = (uint32_t)(instr - exec->words);
@@ -723,7 +727,9 @@ _PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr)
      * specialised arm deoptimises, which only jit_max_deopts recompiles
      * answer */
     int old = unit->arms[i];
-    int deopt = old != 0 && _PyJit_GenericOf(old) != old;
+    int now = IR_HANDLER(*instr);
+    int deopt = old != 0 && _PyJit_GenericOf(old) != old &&
+                !(final && _PyJit_GenericOf(now) == now);
     if (deopt &&
         exec->jit_deopts >= _PyInterpreterState_GET()->ceval.jit_max_deopts) {
         return;

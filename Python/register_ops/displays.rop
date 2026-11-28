@@ -383,9 +383,10 @@ extern helper list_items(source:Src, n:Size)
     contract: "Reads the source home and keeps it. The n items of the exact list, read in its critical section: its own items when n is at most a park (no code runs until the publish has written them), else, and in the free-threaded build, a tuple copied under the lock that the items hold; err: that copy failed, MemoryError set. A list whose length changed since the guard unpacks as any iterable.");
 
 // The specializer's evidence: an inline int or an exact tuple or list of
-// another length is not nominated
+// another length is not nominated.  The generic arm unpacks the first two as
+// Unpack.Tuple and Unpack.List do; any other iterable is its cold path.
 extern helper classify_unpack(v:B, n:Size)
-  cases(tuple(), list(), other())
+  cases(tuple(), list(), cold other())
   effects(reads)
   c _PyRop_ClassifyUnpack as case_index
   evidence(
@@ -444,6 +445,19 @@ arm Unpack.Generic shared
   Retry(t:Ticket<Unpack>):
     exit again(t);
   Run():
+    call classify_unpack(use(source), count(dsts)) {
+      tuple -> Tuple();
+      list -> List();
+      other -> Iterable();
+    }
+  Tuple():
+    goto Finish(tuple_items(source, count(dsts)));
+  List():
+    call list_items(source, count(dsts)) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Iterable():
     call unpack_iterable(source, count(dsts)) {
       ok -> Finish();
       err -> Failed();

@@ -46,7 +46,7 @@ extern primitive present(m:Maybe<B>) -> Bool
 // True (quiet) when the counter has not triggered, and then advances it; a
 // shared or absent entry never triggers and is not written.
 extern helper tick<K>(f:Fb<K>)
-  cases(quiet(), due())
+  cases(quiet(), cold due())
   effects(reads, writes)
   feedback(read(counter), write(counter))
   c _PyFb_TickQuiet as bool_cases

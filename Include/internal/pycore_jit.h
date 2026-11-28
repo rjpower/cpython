@@ -167,8 +167,11 @@ extern void _PyJit_FiniInterpreter(PyInterpreterState *interp);
 
 /* Word instr of exec's code now names another arm (set_opcode(),
  * Python/specialize.c): its copy in every unit of the code goes to the
- * evaluator, and the newest unit, unless at the recompile cap, is stale. */
-extern void _PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr);
+ * evaluator, and the newest unit, unless at the recompile cap, is stale.
+ * final: the word's entry is megamorphic, so an arm it takes now is its
+ * last. */
+extern void _PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr,
+                                   int final);
 
 /* The stub of word instr of frame's code was reached (_PyEval_JitStub()):
  * the word has run, and the reach counts as a warm-up event of the code;
@@ -199,7 +202,8 @@ PyAPI_FUNC(_PyJitUnit *) _PyJit_Compile(PyCodeObject *code);
 static inline void _PyJit_Retire(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_FreeUnits(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_MarkWordChanged(_PyCodeExec *Py_UNUSED(exec),
-                                          const _PyInstr *Py_UNUSED(instr)) {}
+                                          const _PyInstr *Py_UNUSED(instr),
+                                          int Py_UNUSED(final)) {}
 static inline void _PyJit_Reclaim(PyInterpreterState *Py_UNUSED(interp)) {}
 static inline void _PyJit_FiniInterpreter(PyInterpreterState *Py_UNUSED(interp)) {}
 

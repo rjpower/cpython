@@ -654,6 +654,25 @@ _PyRop_FloatBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
            && _PyRop_FloatOpAdmits(op, x, y, _PyRop_FloatValue(op, x, y));
 }
 
+/* The pairs that Binary.Generic computes inline (binary_inline_kind,
+ * Python/register_ops/numeric.rop): 0, two inline ints that the operator
+ * admits; 1, a float pair whose operator admits it before the result is
+ * known (every float operator but power); 2, any other pair */
+static inline int
+_PyRop_BinaryInlineKind(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+{
+    if (_PyRop_IntBinaryApplies(op, a, b)) {
+        return 0;
+    }
+    double x, y;
+    if (op != NB_POWER && op != NB_INPLACE_POWER &&
+        PyValue_FloatOperandValues(a, b, &x, &y) &&
+        _PyRop_FloatOpAdmits(op, x, y, 0.0)) {
+        return 1;
+    }
+    return 2;
+}
+
 /* Text: only the in-place add of two exact strings reaches Binary; the
  * plain add is Add's. */
 static inline bool

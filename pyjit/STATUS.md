@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `94fccfcb111` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3, J4, TR, J5 and CR merged, below) holds:
+`pyjit/rir90` at `a342fadb645` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3, J4, TR, J5, CR and JC merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -661,9 +661,32 @@ Results:
 - With the JIT off, the call-heavy kernels run 0.974-0.996 of their
   instructions.
 
-Running: JC (compile policy: stubs for words that never ran, feedback that
-only moves toward generic with fast generic arms, recompile backoff) and HT
-(the hottest arms' instructions, in both evaluators).
+**JC, merged at `a342fadb645`**: the default mode compiles what pays.
+- A word that has not run compiles as a 9-byte stub.
+- Feedback moves only toward generic, as in V8's ICs.  A word that would
+  reinstall an arm it held before takes the family's generic arm for good,
+  in both evaluators.  `Unpack.Generic` and `Binary.Generic` compute
+  tuples, lists, ints and floats inline.
+- A stale unit recompiles only after another warm-up, at most twice
+  outside `always`.
+- A code whose loop body would exceed 256 KB of hot copies is declined.
+  Of the kernels, this declines only unpack_sequence.
+- The `__init__` shim compiles once per process, and tail closes stay in
+  the unit.
+
+Results:
+- Live hot bytes fall to 0.35-0.51 of their size before.
+- unpack_sequence under `on` runs 207M cycles against 348M (`off` 205M).
+- raytrace's 788k diverted exits per run are gone; its shim exits fall from
+  865k to 309k.
+- chaos's 300k close exits are gone.
+- Cost: raytrace runs 2.5% more instructions with the JIT off (8 sites
+  now generic).
+
+Left as a design: binding a miss to a compiled generic copy.
+
+Running: HT (the hottest arms' instructions in both evaluators, and the
+generator path, which runs 2-3 times golden87's instructions).
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

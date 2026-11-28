@@ -617,9 +617,21 @@ evidence):
 - slower under the JIT: unpack_sequence 1.37 (400 copies of large arms),
   logging_format 1.20, logging_simple 1.14, deltablue 1.11.
 
-Full suites at this join are running.  The next step for the JIT waits for
-the user: account the benchmarks where it is slower, then decide how to
-shrink the inlined helpers.
+Full suites at this join (175,851 tests each) pass on release and assert,
+with the JIT always on and off.
+
+The user's direction (2026-11-27): only the default warm-up mode's
+performance matters.  In that mode the JIT runs 1.018 of the interpreter's
+time; unpack_sequence 1.47, logging_format 1.27, logging_simple 1.21 and
+deltablue 1.14 are furthest.  Heuristics that skip the method JIT where it
+will not help are welcome.  Making the common operations and call and
+return fast should pay, and it helps both evaluators.
+
+Unit JP is profiling the losses.  unpack_sequence is accounted:
+- its runs alternate a tuple and a list, so its 400 unpack words
+  re-specialise every run, and the unit recompiles up to the cap of 8;
+- while compiled, its 400 copies of the item-publish loop overflow the
+  branch predictor (8-9M branch misses per run against 20k interpreted).
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

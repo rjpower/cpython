@@ -1056,9 +1056,9 @@ static_assert(IR_TARGETS_COUNT == IR_HANDLER_MASK + 1,
     X(AttrWrite_Slot_TT) \
     X(AttrWrite_Slot) \
     X(Call_Exact) \
-    X(Out_Call_Exact_Callee) \
+    X(Out_Call_Exact_entry) \
     X(Call_BoundExact) \
-    X(Out_Call_BoundExact_Callee) \
+    X(Out_Call_BoundExact_entry) \
     X(Call_Init) \
     X(Call_Generator) \
     X(Call_Observed) \

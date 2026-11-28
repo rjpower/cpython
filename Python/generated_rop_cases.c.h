@@ -13446,14 +13446,14 @@ IR_OUTLINED_JIT_ENTRY(Cold_SpecialLookup_Generic_special_at_origin1_Moved)
         }
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Out_Call_Exact_Callee);
+IR_OUTLINED_FN(Out_Call_Exact_entry);
 #endif
 
 #ifndef IR_JIT_STENCILS
 #undef IR_SHARED_REGION
 #define IR_SHARED_REGION 1
-IR_OUTLINED_FN(Out_Call_Exact_Callee) {
-    // Call.Exact: the region from rop_Call_Exact_Callee
+IR_OUTLINED_FN(Out_Call_Exact_entry) {
+    // Call.Exact: the region from rop_Call_Exact_entry
     int opcode = ROP_HANDLER_Call_Exact;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -13461,15 +13461,25 @@ IR_OUTLINED_FN(Out_Call_Exact_Callee) {
     next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
     _PyInterpreterFrame * c;
-    goto rop_Call_Exact_Callee;
-    rop_Call_Exact_Callee:
+    if (!_PyRop_DefaultEvalFrame(tstate)) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
+    if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
+    if (!_PyRop_ExactPositional(frame, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
+    if (!_PyRop_FrameSpace(tstate, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
     IR_STUB_ESCAPE();
     c = _PyRop_PushExact(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
     ROP_ENTER(c, IR_A(ir_word));
 }
 #undef IR_SHARED_REGION
 #define IR_SHARED_REGION 0
-IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_Callee)
+IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_entry)
 #endif
 
         TARGET(Call_Exact) {
@@ -13483,30 +13493,18 @@ IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_Callee)
             INSTRUCTION_STATS(ROP_HANDLER_Call_Exact);
             PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
             _PyInterpreterFrame * c;
-            if (!_PyRop_DefaultEvalFrame(tstate)) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            if (!_PyRop_ExactPositional(frame, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            if (!_PyRop_FrameSpace(tstate, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            IR_OUTLINE_HOT_GOTO(Out_Call_Exact_Callee);
+            IR_OUTLINE_HOT_GOTO(Out_Call_Exact_entry);
         }
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Out_Call_BoundExact_Callee);
+IR_OUTLINED_FN(Out_Call_BoundExact_entry);
 #endif
 
 #ifndef IR_JIT_STENCILS
 #undef IR_SHARED_REGION
 #define IR_SHARED_REGION 1
-IR_OUTLINED_FN(Out_Call_BoundExact_Callee) {
-    // Call.BoundExact: the region from rop_Call_BoundExact_Callee
+IR_OUTLINED_FN(Out_Call_BoundExact_entry) {
+    // Call.BoundExact: the region from rop_Call_BoundExact_entry
     int opcode = ROP_HANDLER_Call_BoundExact;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -13514,15 +13512,28 @@ IR_OUTLINED_FN(Out_Call_BoundExact_Callee) {
     next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
     PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
     _PyInterpreterFrame * c;
-    goto rop_Call_BoundExact_Callee;
-    rop_Call_BoundExact_Callee:
+    if (!_PyRop_DefaultEvalFrame(tstate)) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
+    if (!_PyRop_SelfAbsent(frame, this_instr)) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
+    if (!_PyRop_MethodVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
+    if (!_PyRop_NoWeakrefs(PyValue_Borrow(*home_fn))) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
+    if (!_PyRop_FrameSpace(tstate, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
+        JUMP_TO_PREDICTED(Call_Generic);
+    }
     IR_STUB_ESCAPE();
     c = _PyRop_PushBoundExact(tstate, frame, home_fn, this_instr, ((_PyFbCall *)IR_FB(IR_D(ir_word))));
     ROP_ENTER(c, IR_A(ir_word));
 }
 #undef IR_SHARED_REGION
 #define IR_SHARED_REGION 0
-IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_BoundExact_Callee)
+IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_BoundExact_entry)
 #endif
 
         TARGET(Call_BoundExact) {
@@ -13536,22 +13547,7 @@ IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_BoundExact_Callee)
             INSTRUCTION_STATS(ROP_HANDLER_Call_BoundExact);
             PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
             _PyInterpreterFrame * c;
-            if (!_PyRop_DefaultEvalFrame(tstate)) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            if (!_PyRop_SelfAbsent(frame, this_instr)) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            if (!_PyRop_MethodVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            if (!_PyRop_NoWeakrefs(PyValue_Borrow(*home_fn))) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            if (!_PyRop_FrameSpace(tstate, ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
-                JUMP_TO_PREDICTED(Call_Generic);
-            }
-            IR_OUTLINE_HOT_GOTO(Out_Call_BoundExact_Callee);
+            IR_OUTLINE_HOT_GOTO(Out_Call_BoundExact_entry);
         }
 
         TARGET(Call_Init) {

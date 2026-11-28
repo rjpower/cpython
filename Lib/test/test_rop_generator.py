@@ -470,40 +470,45 @@ class ColdRegionTests(unittest.TestCase):
         self.assertIn("ROP_RETURN(caller, h);", body)
 
     def test_a_declared_region_is_a_hot_function(self):
-        # `Callee() outline:` in Call.Exact: the arm keeps its guards and
-        # tail-calls the callee's new frame and the switch into it
-        arm = "\n".join(self.p.lowered["Call.Exact"].body)
-        c = self.region("Call.Exact", "Callee")
+        # `Python() outline:` in Call.Generic: the arm keeps the adaptation
+        # and the native call, and tail-calls the new frame and the switch
+        # into a Python callee
+        arm = "\n".join(self.p.lowered["Call.Generic"].body)
+        c = self.region("Call.Generic", "Python")
         self.assertTrue(c.hot)
-        self.assertEqual(c.name, "Out_Call_Exact_Callee")
+        self.assertEqual(c.name, "Out_Call_Generic_Python")
         self.assertEqual(c.live, [])
-        self.assertIn("_PyRop_FunctionVersion(", arm)
-        self.assertNotIn("_PyRop_PushExact(", arm)
+        self.assertNotIn("_PyRop_PushPython(", arm)
         self.assertIn(f"IR_OUTLINE_HOT_GOTO({c.name});", arm)
         body = "\n".join(c.body)
-        self.assertIn("_PyRop_PushExact(", body)
+        self.assertIn("_PyRop_PushPython(", body)
         self.assertIn("ROP_ENTER(c, ", body)
 
     def test_an_outlined_entry_leaves_the_arm_its_decode(self):
-        # `entry() outline:` in Return.Empty: the whole retirement is the
+        # `entry() outline:` in Return.Empty and Call.Exact: the whole
+        # retirement, and the guards with the callee's entry, are the
         # function
         arm = self.p.lowered["Return.Empty"].body
         self.assertEqual([line for line in arm if "IR_OUTLINE" in line],
                          ["IR_OUTLINE_HOT_GOTO(Out_Return_Empty_entry);"])
         self.assertNotIn("_PyRop_Depart(", "\n".join(arm))
+        arm = self.p.lowered["Call.Exact"].body
+        self.assertEqual([line for line in arm if "IR_OUTLINE" in line],
+                         ["IR_OUTLINE_HOT_GOTO(Out_Call_Exact_entry);"])
+        self.assertNotIn("_PyRop_FunctionVersion(", "\n".join(arm))
 
     def test_a_declared_region_follows_its_arm_in_the_layout(self):
         order = rop_generator.layout_order(self.p)
         at = order.index("Call_Exact")
-        self.assertEqual(order[at + 1], "Out_Call_Exact_Callee")
+        self.assertEqual(order[at + 1], "Out_Call_Exact_entry")
         out = io.StringIO()
         rop_generator.write_cases(out, self.p, [])
         text = out.getvalue()
-        self.assertIn("IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_Callee)", text)
+        self.assertIn("IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_entry)", text)
         # Its frame switch is the copies' own (IR_SHARED_REGION)
-        start = text.index("IR_OUTLINED_FN(Out_Call_Exact_Callee) {")
+        start = text.index("IR_OUTLINED_FN(Out_Call_Exact_entry) {")
         self.assertEqual(text[:start].rsplit("#define IR_SHARED_REGION", 1)[1][:3], " 1\n")
-        end = text.index("IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_Callee)")
+        end = text.index("IR_OUTLINED_HOT_JIT_ENTRY(Out_Call_Exact_entry)")
         self.assertIn("#define IR_SHARED_REGION 0", text[start:end])
 
     def test_arms_share_a_region_of_the_same_text(self):

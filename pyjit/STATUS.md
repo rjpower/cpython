@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `a342fadb645` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3, J4, TR, J5, CR and JC merged, below) holds:
+`pyjit/rir90` at `fdec1631680` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3, J4, TR, J5, CR, JC and HT merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -685,8 +685,26 @@ Results:
 
 Left as a design: binding a miss to a compiled generic copy.
 
-Running: HT (the hottest arms' instructions in both evaluators, and the
-generator path, which runs 2-3 times golden87's instructions).
+**HT, merged at `fdec1631680`**: the per-arm instructions every arm paid.
+- An arm publishes its instruction pointer before its first escape point,
+  not on entry (357 arms).  The observing evaluator keeps its entry store.
+- Stencil field holes carry their range, so no masks follow them.
+- The poll's slow path and the int add's overflow are cold.
+- `Python/jit_stencils.o` rebuilds when a header changes.
+
+Over the all-29 kernels this saves 0.4% of instructions with the JIT off
+and 0.8% under `on`.  Summed instructions: interpreter 34,080M, `on`
+32,159M, golden87 32,129M.  The hot arms run at or below golden87's
+handlers, except the generator path.  There, resume and yield take about
+40 more instructions per item (`ForIter_Gen` 92 against 68, `Yield` 66
+against 48), and the register loop body saves 33.
+
+Designs handed back:
+- a generator fast frame;
+- field holes as load displacements (a new 32S hole kind);
+- the calling convention.  Register-to-register moves are 9-16% of the
+  arms' instructions under GCC 15 without `preserve_none`.  The levers, in
+  order: a clang build, a 16-bit handler id, and CET marking.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

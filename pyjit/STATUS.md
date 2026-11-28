@@ -706,6 +706,24 @@ Designs handed back:
   arms' instructions under GCC 15 without `preserve_none`.  The levers, in
   order: a clang build, a 16-bit handler id, and CET marking.
 
+Timing at `fdec1631680` (all-29, CPU 15, against golden87 with its JIT
+off; `bench/rir90-basics-fdec1631680.md` in the rir90 evidence):
+- **JIT `on` (default mode) 0.995** (from 1.031; cold 1.005), **0.976 of
+  the interpreter's time** (from 1.017), and faster than the interpreter on
+  19 of 29;
+- unpack_sequence 1.476 to 1.023 of the interpreter, logging_format 1.273
+  to 1.078, logging_simple 1.210 to 1.067, deltablue 1.143 to 1.032,
+  chaos 1.044 to 0.942, regex_compile 1.066 to 0.971, coroutines 0.792,
+  fannkuch 0.827, nbody 0.936;
+- slower under `on`: generators 1.071 and raytrace 1.063, as well as the logging
+  cases above; logging_silent reads 1.270 because the interpreter ran
+  0.764 of golden87 (`on` 0.970);
+- **interpreter 1.019** (from 1.013).  spectral_norm (0.911 to 1.018) moves
+  by code placement: its instructions are level from J5 on, and its cycles
+  move 0.835-1.038 between builds whose float arms are the same bytes.
+  fannkuch (1.051 to 1.207 timed; 1.097 by `perf stat`) runs 2.8% more
+  instructions since JC.
+
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation
 contracts (V8-style declarations, verified, replacing inference) and shared

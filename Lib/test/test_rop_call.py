@@ -77,6 +77,29 @@ class ReturnTests(unittest.TestCase):
         force(f, "RETURN_VALUE", "Return.Empty")
         self.assertEqual(f(21), 42)
 
+    def test_empty_leaves_the_slots_null(self):
+        # The plain return clears the fixed slots: the constants, the
+        # discard slot and a closure's locals.  A frame of another code at
+        # the same place finds its locals unbound.
+        k = 7
+
+        def f(a):
+            b = (a, "one", "two", "three")
+            return b[0] + k
+
+        def g():
+            try:
+                return x  # noqa: F821
+            except UnboundLocalError:
+                return "unbound"
+            x = 0  # noqa: F841
+
+        warm(f, 1)
+        self.assertIn("Return.Empty", word_names(f.__code__))
+        for _ in range(100):
+            self.assertEqual(f(1), 8)
+            self.assertEqual(g(), "unbound")
+
     def test_finalizer_of_the_dying_frame(self):
         seen = []
 
@@ -703,6 +726,42 @@ class CallGenericTests(unittest.TestCase):
         force(f, "CALL", "Call.Generic")
         warm(f, "ab")
         self.assertIn("Call.Len", word_names(f.__code__))
+
+    def test_exact_closure(self):
+        # The site's entry says the callee has free variables
+        k = 3
+
+        def g(a):
+            return a + k
+
+        def f(x):
+            return g(x)
+        force(f, "CALL", "Call.Generic")
+        warm(f, 1)
+        self.assertIn("Call.Exact", word_names(f.__code__))
+        self.assertEqual(f(1), 4)
+
+    def test_exact_misses_when_the_self_is_absent(self):
+        # Classified with the receiver present: the same function as an
+        # instance attribute takes one argument fewer at the same site
+        def g(a, b):
+            return (a, b)
+
+        class C:
+            m = g
+
+        def f(o):
+            return o.m(1)
+        c = C()
+        force(f, "CALL", "Call.Generic")
+        warm(f, c)
+        self.assertIn("Call.Exact", word_names(f.__code__))
+        self.assertEqual(f(c), (c, 1))
+        d = C()
+        d.m = g
+        with self.assertRaises(TypeError):
+            f(d)
+        self.assertEqual(f(c), (c, 1))
 
     def test_exact_misses_after_redefinition(self):
         def g(a):

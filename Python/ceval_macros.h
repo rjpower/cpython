@@ -1010,6 +1010,23 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * yields to unobserved.  The stencils (Python/jit_stencils.c) bind both to
  * nothing. */
 #if defined(_PY_JIT_SUPPORTED) && !IR_OBSERVING
+/* A declared region's function (IR_SHARED_REGION) makes the frame switch of
+ * every compiled copy of its arm: it counts with the copies' switches
+ * (Py_STATS), not as a hand-off, also when the evaluator's arm runs it. */
+#ifdef Py_STATS
+#  define IR_JIT_SWITCH_STAT() (tstate->interp->ceval.jit_switches++)
+#else
+#  define IR_JIT_SWITCH_STAT() ((void)0)
+#endif
+#define IR_JIT_HANDOFF_STAT() \
+    do { \
+        if (IR_SHARED_REGION) { \
+            IR_JIT_SWITCH_STAT(); \
+        } \
+        else { \
+            tstate->interp->ceval.jit_handoffs++; \
+        } \
+    } while (0)
 #ifdef Py_DEBUG
 #  define IR_JIT_TRACED() (frame->lltrace >= 5)
 #else
@@ -1017,7 +1034,7 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #endif
 #define IR_JIT_ENTER(ENTRIES, NEXT) \
     do { \
-        tstate->interp->ceval.jit_handoffs++; \
+        IR_JIT_HANDOFF_STAT(); \
         Py_MUSTTAIL return ((_PyIRTailFn)(ENTRIES)[(NEXT) - frame->ir_words])( \
             tstate, frame, (NEXT), ir_word); \
     } while (0)
@@ -1094,9 +1111,14 @@ _PyRop_StartSkips(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * (Python/jit_stencils.c) bind IR_OUTLINE_GOTO() to the entry for compiled
  * code, IR_OUTLINED_JIT_ENTRY (Python/ceval_evaluator.h). */
 #define IR_OUTLINED_FN(NAME) IR_TAIL_FN(NAME)
+/* Set around a declared region's function by the generated cases */
+#define IR_SHARED_REGION 0
 #define IR_OUTLINE_GOTO(NAME) \
     do { \
         Py_MUSTTAIL return IR_TAIL_ID(NAME)(tstate, frame, this_instr, ir_word); \
     } while (0)
+/* A declared region (`outline`) is outlined in the same way; the stencils
+ * bind its tail call apart, as a hot one (IR_OUTLINED_HOT_JIT_ENTRY). */
+#define IR_OUTLINE_HOT_GOTO(NAME) IR_OUTLINE_GOTO(NAME)
 #define IR_OUTLINE_IN(TYPE) ((TYPE *)(void *)IR_ACTIVATION()->outline_in)
 #define IR_OUTLINE_IN_SIZE _PyEval_OUTLINE_IN_SIZE

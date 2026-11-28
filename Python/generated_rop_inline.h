@@ -65,6 +65,10 @@ static_assert(_Generic(((_PyFbCall *)0)->type_version, uint32_t: 1, default: 0),
               "schema Call.type_version: _PyFbCall.type_version is not uint32_t");
 static_assert(_Generic(((_PyFbCall *)0)->plan, _PyBindPlan: 1, default: 0),
               "schema Call.plan: _PyFbCall.plan is not _PyBindPlan");
+static_assert(_Generic(((_PyFbCall *)0)->callee, _PyFbCallee: 1, default: 0),
+              "schema Call.callee: _PyFbCall.callee is not _PyFbCallee");
+static_assert(offsetof(_PyFbCall, callee) == offsetof(_PyFbCall, plan),
+              "schema Call: _PyFbCall.callee does not share plan's storage");
 static_assert(_Generic(((_PyAttrRecipe *)0)->type_version, uint32_t: 1, default: 0),
               "recipe Attr.type_version: _PyAttrRecipe.type_version is not uint32_t");
 static_assert(_Generic(((_PyAttrRecipe *)0)->aux, uint32_t: 1, default: 0),
@@ -88,10 +92,9 @@ static_assert(_Generic(((_PyGlobalRecipe *)0)->index, uint32_t: 1, default: 0),
 
 /* Rows declared inline: always inlined into every arm that calls them */
 static Py_ALWAYS_INLINE bool _PyRop_FloatOperands(PyValueBorrow, PyValueBorrow);
-static Py_ALWAYS_INLINE bool _PyRop_ExactPositional(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);
-static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
-static Py_ALWAYS_INLINE bool _PyRop_ExactPositionalBound(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);
-static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushBoundExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
+static Py_ALWAYS_INLINE bool _PyRop_ExactPositional(_PyInterpreterFrame *, const _PyIRWord *, const _PyFbCall *);
+static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *, const _PyFbCall *);
+static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushBoundExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *, const _PyFbCall *);
 static Py_ALWAYS_INLINE PyValue _PyRop_CallNative(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
 static Py_ALWAYS_INLINE void _PyRop_RetireFrame(PyThreadState *, _PyInterpreterFrame *);
 static Py_ALWAYS_INLINE void _PyRop_RetireFrameEmpty(PyThreadState *, _PyInterpreterFrame *);

@@ -2787,6 +2787,10 @@ call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs,
         return false;
     }
     fb->func_version = version;
+    // The callee's facts, which the exact arms read instead of the code
+    fb->callee.exec = code->_co_exec;
+    fb->callee.nslots = (uint16_t)_PyFrame_NumSlotsForCodeObject(code);
+    fb->callee.closure = code->co_nfreevars != 0;
     return true;
 }
 
@@ -2947,6 +2951,17 @@ call_classify_class(_PyFbCall *fb, PyTypeObject *tp)
     return cached;
 }
 
+/* The operands that an exact arm moves to its callee's arguments: nargs of
+ * them, past the self slot when it is NULL at run time (self_present is the
+ * presence that the guards test again) */
+static void
+call_record_operands(_PyFbCall *fb, int nargs, int self_slot, int self_present)
+{
+    fb->callee.operands = (uint16_t)nargs;
+    fb->callee.first = (uint8_t)(self_slot && !self_present);
+    fb->callee.self_present = (uint8_t)self_present;
+}
+
 int
 _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
                     const _PyIRWord *head)
@@ -2968,9 +2983,11 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
     if (PyFunction_Check(callable)) {
         PyFunctionObject *func = (PyFunctionObject *)callable;
         if (call_classify_function(fb, func, nargs, false)) {
+            call_record_operands(fb, nargs, self_slot, self_present);
             return CALL_CASE_EXACT;
         }
         if (call_classify_function(fb, func, nargs, true)) {
+            call_record_operands(fb, nargs, self_slot, self_present);
             return CALL_CASE_GENERATOR;
         }
         if (!call_classify_plan(fb, func, nargs, self_slot && !self_present)) {
@@ -2999,6 +3016,8 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
             return CALL_CASE_OTHER;
         }
         if (call_classify_function(fb, (PyFunctionObject *)func, nargs + 1, false)) {
+            // The receiver leads; the operands follow the NULL self slot
+            call_record_operands(fb, nargs, self_slot, 0);
             return CALL_CASE_BOUND_EXACT;
         }
         return call_classify_bound_general(fb, (PyFunctionObject *)func)

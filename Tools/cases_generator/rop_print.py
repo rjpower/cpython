@@ -146,7 +146,7 @@ def _term(t: Term) -> list[str]:
 def _graph(g: Graph) -> list[str]:
     lines = ["{"]
     for b in g.blocks:
-        lines.append(f"  {b.label}{_params(b.params)}:")
+        lines.append(f"  {b.label}{_params(b.params)}{' outline' if b.outline else ''}:")
         lines.extend(f"    {_stmt(s)}" for s in b.stmts)
         lines.extend(f"    {line}" for line in _term(b.term))
     lines.append("}")

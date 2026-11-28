@@ -947,9 +947,11 @@ class TestReclamation(unittest.TestCase):
         # The worker's departing frame closes a local whose finalizer
         # blocks with the GIL released: its window stays open, so the units
         # of the codes that die meanwhile wait, through the main thread's
-        # compiles; they go once the worker has left its unit
+        # compiles; they go once the worker has left its unit.  The
+        # ordinary return clears its frame in its unit (the vacant one
+        # leaves the unit first: the next test).
         out = run("""
-            import threading, _testinternalcapi as t
+            import dis, threading, _testinternalcapi as t
             entered = threading.Event()
             release = threading.Event()
             class Blocker:
@@ -959,6 +961,9 @@ class TestReclamation(unittest.TestCase):
             def depart():
                 b = Blocker()
                 return 1
+            (at,) = [i.offset for i in dis.get_instructions(depart)
+                     if i.opname == "RETURN_VALUE"]
+            t.force_arm(depart.__code__, at, "Return.Ordinary")
             def worker():
                 depart()
             def die():
@@ -979,6 +984,42 @@ class TestReclamation(unittest.TestCase):
             print(t.jit_stats()["dead"])
         """, "jit=always")
         self.assertEqual(out.split(), ["True", "0"])
+
+    @unittest.skipUnless(AVAILABLE, "the JIT is not available")
+    def test_a_vacant_return_leaves_its_unit_before_the_clear(self):
+        # Return.Empty's copy tail-calls the shared retirement (`entry()
+        # outline:`) with the window closed: a finalizer that blocks in
+        # the frame's clear keeps no unit, so the main thread's compiles
+        # free the dead ones
+        out = run("""
+            import threading, _testinternalcapi as t
+            entered = threading.Event()
+            release = threading.Event()
+            class Blocker:
+                def __del__(self):
+                    entered.set()
+                    release.wait()
+            def depart():
+                b = Blocker()
+                return 1
+            def worker():
+                depart()
+            def die():
+                ns = {}
+                exec("def f(n):\\n    return n + 1\\n", ns)
+                t.jit_compile(ns["f"].__code__)
+                assert ns["f"](1) == 2
+            t.jit_compile(depart.__code__)
+            th = threading.Thread(target=worker)
+            th.start()
+            entered.wait()
+            for i in range(5):
+                die()
+            print(t.jit_stats()["dead"] <= 1)
+            release.set()
+            th.join()
+        """, "jit=always")
+        self.assertEqual(out.split(), ["True"])
 
     @unittest.skipUnless(AVAILABLE, "the JIT is not available")
     def test_a_raising_unit_leaves_no_window(self):

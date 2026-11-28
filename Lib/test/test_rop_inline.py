@@ -180,10 +180,15 @@ class EvaluatorLayoutTests(unittest.TestCase):
         arms = self.hot + self.rest
         first = min(self.addr[s] for s in arms)
         last = max(self.addr[s] for s in arms)
+        # A declared region's entry for compiled code is an alias of its
+        # function (IR_OUTLINED_HOT_JIT_ENTRY): another name, no other code
+        own = {self.addr[s] for s in self.order if s.startswith("ir_tail_")}
         inside = [s for s in self.order
                   if first <= self.addr[s] <= last
                   and not s.startswith("ir_tail_")
-                  and not s.startswith("ir_observe_")]
+                  and not s.startswith("ir_observe_")
+                  and not (s.startswith("_PyEval_JitOut_Out_")
+                           and self.addr[s] in own)]
         self.assertEqual(inside, [])
 
 

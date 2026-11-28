@@ -250,21 +250,25 @@ class ArmLoweringTests(unittest.TestCase):
         self.assertNotIn("PyValue_XCLOSE", text)
 
     def test_anchors_of_a_literal_span_are_scalars(self):
-        # Binary.Generic anchors [x, y]: a view and an owner per source on
-        # the hot path; the aggregate exists only on the exits whose rows
+        # Binary.Generic's slot path (outlined: its case is cold) anchors
+        # [x, y]: a view and an owner per source on its way to the
+        # dispatch; the aggregate exists only on the exits whose rows
         # consume the whole anchor, and no aggregate is a compound literal
         # taken by address
-        text = "\n".join(products().lowered["Binary.Generic"].body)
-        self.assertNotIn("_PyRop_AnchorForCall(", text)
-        self.assertNotIn("_PyRop_AnchorArg(", text)
-        self.assertNotIn("&(_PyRop", text)
+        low = products().lowered["Binary.Generic"]
+        slots, = [c for c in low.cold if c.name == "Cold_Binary_Generic_Slots"]
+        text = "\n".join(slots.body)
+        for body in (text, "\n".join(low.body)):
+            self.assertNotIn("_PyRop_AnchorForCall(", body)
+            self.assertNotIn("_PyRop_AnchorArg(", body)
+            self.assertNotIn("&(_PyRop", body)
         self.assertIn("a_view0 = PyValue_Borrow(*home_x);", text)
         self.assertIn("a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) "
                       ": PyValue_NULL;", text)
         hot = text[:text.index("DISPATCH();")]
         self.assertNotIn("_PyRopAnchors", hot)
-        self.assertIn("ROP_TAIL_CLOSE(a_owned0, rop_Binary_Generic_Tail0_0);\n"
-                      "ROP_TAIL_CLOSE(a_owned1, rop_Binary_Generic_Tail0_1);", hot)
+        self.assertIn("ROP_TAIL_CLOSE(a_owned0, rop_Binary_Generic_Tail1_0);\n"
+                      "ROP_TAIL_CLOSE(a_owned1, rop_Binary_Generic_Tail1_1);", hot)
 
     def test_a_target_is_decoded_by_two_shifts(self):
         # Jump.Poll's signed 24-bit distance at bit 16: shifted up to the
@@ -523,7 +527,7 @@ class ColdRegionTests(unittest.TestCase):
         self.assertEqual(len(defined), len(set(defined)))
         sub = "\n".join(self.p.lowered["Binary.Float_NB_SUBTRACT_TTT"].body)
         self.assertEqual(self.p.lowered["Binary.Float_NB_SUBTRACT_TTT"].cold, [])
-        self.assertIn("IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);", sub)
+        self.assertIn("IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);", sub)
 
     def test_a_completion_keeps_its_cold_regions(self):
         for name, low in self.p.completions.items():

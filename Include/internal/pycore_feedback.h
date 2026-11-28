@@ -81,8 +81,13 @@ typedef struct {
     uint8_t kind;                   // _PyFbKind
     uint8_t state;                  // _PyFbState
     _Py_BackoffCounter counter;     // warmup, cooldown and backoff
-    uint16_t misses;                // reserved: the counter holds them, see above
-    uint16_t hits;                  // reserved: call-site heat for the JIT stage
+    /* The specialised arm (declared) that the word held before its current
+     * specialised arm, or 0: a word whose specialisation would return to it
+     * goes to its generic arm for good (specialize.c, toward_generic()) */
+    uint16_t prior;
+    /* 1 once a JIT stub of the word was reached: the word has run, even if
+     * its generic arm did not move the counter (Python/jit.c) */
+    uint16_t jit_reached;
     uint32_t arg;                   // the oparg, for IR formats that keep it here
     uint32_t poly;                  // 0, or the byte offset of the site's poly table plus
                                     // sizeof(_PyFbPoly): see _PyFb_PolyOf()

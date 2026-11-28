@@ -312,7 +312,8 @@ set_opcode(_PyInstr *instr, int opcode)
 #ifdef _PY_JIT_SUPPORTED
     _PyCodeExec *exec = _PyFrame_Exec(current_frame());
     if (exec->jit_unit != NULL) {
-        _PyJit_MarkWordChanged(exec, instr);
+        _PyFbHeader *h = instr_fb(instr);
+        _PyJit_MarkWordChanged(exec, instr, h != NULL && h->state >= FB_POLY);
     }
 #endif
     return 1;
@@ -668,6 +669,40 @@ typedef struct {
  * their own GIL classify concurrently, so it is per thread. */
 static _Py_thread_local attr_nomination *attr_collect;
 
+/* Feedback only moves toward generic (V8's monomorphic, polymorphic,
+ * megamorphic lattice): a specialisation that would give a word back the
+ * specialised arm it held before its current one installs the code's
+ * generic arm instead, for good.  The site has flipped between arms (a
+ * tuple and a list, a float and an int): re-specialising it again would
+ * only flip it again, and every flip diverts its compiled copies and
+ * recompiles the code (Python/jit.c).  The entry goes megamorphic and its
+ * counter unreachable, so the generic arm never samples again.  The arm
+ * that a specialised word leaves for another specialised arm is kept in
+ * the entry's prior; one that leaves for the generic arm (unspecialize())
+ * is not, so a site that deoptimises and settles again specialises again.
+ * Returns the arm to install. */
+static int
+toward_generic(_PyInstr *instr, _PyFbHeader *h, int handler)
+{
+    int current = _PyIR_DeclaredArm(IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)));
+    _PyInterpreterFrame *frame = current_frame();
+    int generic = _PyIR_DeclaredArm(_PyCode_InstrHandler(
+        _PyFrame_GetCode(frame), _PyFrame_InstrOffset(frame, instr)));
+    int declared = _PyIR_DeclaredArm(handler);
+    if (declared == current || declared == generic) {
+        return handler;
+    }
+    if (declared == h->prior) {
+        h->state = FB_MEGA;
+        set_counter(h, initial_unreachable_backoff_counter());
+        return generic;
+    }
+    if (current != generic) {
+        h->prior = (uint16_t)current;
+    }
+    return handler;
+}
+
 /* Report the access found for the site: the form of specialized_opcode
  * (which is a store opcode or an attr kind). */
 static inline void
@@ -679,6 +714,15 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
         attr_collect->kind = handler - ATTR_KIND_BASE;
         return;
     }
+    _PyFbHeader *h = instr_fb(instr);
+    if (h != NULL && !is_shared_entry(h)) {
+        int to = toward_generic(instr, h, handler);
+        if (to != handler) {
+            // The entry is megamorphic and its counter unreachable
+            set_opcode(instr, to);
+            return;
+        }
+    }
     if (!set_opcode(instr, handler)) {
         FAMILY_STAT_INC(_PyIR_HandlerFamily[handler], failure);
         SPECIALIZATION_FAIL(_PyIR_HandlerFamily[handler],
@@ -686,7 +730,6 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
         return;
     }
     FAMILY_STAT_INC(_PyIR_HandlerFamily[handler], success);
-    _PyFbHeader *h = instr_fb(instr);
     if (h == NULL) {
         // RESUME specialises without an entry
         return;
@@ -776,12 +819,17 @@ _PyRop_Install(_PyInstr *instr, _PyFbHeader *h, int handler)
     /* A nomination that does not change the word still consumes the
      * attempt, so the site does not sample again at once */
     set_counter(h, adaptive_counter_cooldown());
+    int to = toward_generic(instr, h, handler);
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
-    if (IR_HANDLER(word) == _PyIR_LocalsArm(handler, word)) {
+    if (IR_HANDLER(word) == _PyIR_LocalsArm(to, word)) {
         return 0;
     }
-    if (!set_opcode(instr, handler)) {
+    if (!set_opcode(instr, to)) {
         return -1;
+    }
+    if (to != handler) {
+        // The word runs its generic arm again, which no longer samples
+        return 1;
     }
     // A poly arm reads the rows that its own nomination found: it adds none
     if (handler != ROP_HANDLER_GetAttr_PolyShape &&

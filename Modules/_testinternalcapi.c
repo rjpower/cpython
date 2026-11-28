@@ -5532,7 +5532,8 @@ unit_plans(PyCodeObject *code, _PyJitUnit *unit)
         /* A gap's word has no copy and no arm recorded (ids start at 1) */
         int arm = unit->arms[i] ? unit->arms[i] : IR_HANDLER(unit->words[i]);
         const char *how = !unit->arms[i] ? "gap"
-                          : _PyJit_IsDiverted(unit, i) ? "diverted" : "stencil";
+                          : _PyJit_IsDiverted(unit, i) ? "diverted"
+                          : _PyJit_IsStub(unit, i) ? "stub" : "stencil";
         PyObject *item = Py_BuildValue("(ss)", handler_name(arm), how);
         PyObject *key = PyLong_FromUnsignedLong(i);
         if (item == NULL || key == NULL || PyDict_SetItem(plans, key, item) < 0) {
@@ -5568,12 +5569,14 @@ jit_unit(PyObject *self, PyObject *code_object)
         Py_RETURN_NONE;
     }
     _PyJitUnit *unit = exec->jit_unit;
-    /* The chain's length, and its copies diverted to the evaluator */
-    int units = 0, diverted = 0;
+    /* The chain's length, and its copies diverted to the evaluator; the
+     * newest unit's stubs */
+    int units = 0, diverted = 0, stubs = 0;
     for (_PyJitUnit *u = unit; u != NULL; u = u->older) {
         units++;
         for (uint32_t i = 0; i < u->nwords; i += _PyIR_WordLength(u->words[i])) {
             diverted += _PyJit_IsDiverted(u, i);
+            stubs += u == unit && _PyJit_IsStub(u, i);
         }
     }
     /* Head words */
@@ -5582,26 +5585,45 @@ jit_unit(PyObject *self, PyObject *code_object)
         heads++;
     }
     /* The code of every unit in the chain, newest first, as (address, size);
-     * a unit's unwind info lies after its code in its block */
+     * a unit's unwind info lies after its code in its block.  "chain": each
+     * unit's hot and cold bytes and plans, newest first. */
     size_t frame_offset = (size_t)(unit->unwind.eh_frame - unit->code.start);
     PyObject *ranges = PyList_New(0);
     if (ranges == NULL) {
+        return NULL;
+    }
+    PyObject *chain = PyList_New(0);
+    if (chain == NULL) {
+        Py_DECREF(ranges);
         return NULL;
     }
     for (_PyJitUnit *u = unit; u != NULL; u = u->older) {
         PyObject *range = Py_BuildValue("(Kn)",
             (unsigned long long)(uintptr_t)u->code.start,
             (Py_ssize_t)(u->unwind.eh_frame - u->code.start));
-        if (range == NULL || PyList_Append(ranges, range) < 0) {
+        PyObject *u_plans = range == NULL ? NULL : unit_plans(code, u);
+        PyObject *link = u_plans == NULL ? NULL : Py_BuildValue(
+            "{sKsIsIsisN}",
+            "start", (unsigned long long)(uintptr_t)u->code.start,
+            "hot_bytes", u->hot_bytes,
+            "cold_bytes", u->cold_bytes,
+            "invalid", (int)u->invalid,
+            "plans", u_plans);
+        if (link == NULL || PyList_Append(ranges, range) < 0 ||
+            PyList_Append(chain, link) < 0) {
             Py_XDECREF(range);
+            Py_XDECREF(link);
             Py_DECREF(ranges);
+            Py_DECREF(chain);
             return NULL;
         }
         Py_DECREF(range);
+        Py_DECREF(link);
     }
     PyObject *plans = unit_plans(code, unit);
     if (plans == NULL) {
         Py_DECREF(ranges);
+        Py_DECREF(chain);
         return NULL;
     }
     /* Each head word's entry, as an offset in the unit's block */
@@ -5621,9 +5643,10 @@ jit_unit(PyObject *self, PyObject *code_object)
     if (entries == NULL) {
         Py_DECREF(ranges);
         Py_DECREF(plans);
+        Py_DECREF(chain);
         return NULL;
     }
-    PyObject *result = Py_BuildValue("{sIsisnsnsIsIsisIsisisNsNsy#sNsN}",
+    PyObject *result = Py_BuildValue("{sIsisnsnsIsIsisIsIsisisisNsNsy#sNsNsN}",
         "nwords", unit->nwords,
         "heads", heads,
         "code_bytes", (Py_ssize_t)unit->code.size,
@@ -5631,15 +5654,18 @@ jit_unit(PyObject *self, PyObject *code_object)
         "hot_bytes", unit->hot_bytes,
         "cold_bytes", unit->cold_bytes,
         "invalid", (int)unit->invalid,
-        "compiles", exec->jit_compiles,
+        "compiles", (unsigned int)exec->jit_compiles,
+        "deopts", (unsigned int)exec->jit_deopts,
         "units", units,
         "diverted", diverted,
+        "stubs", stubs,
         "ranges", ranges,
         "published", PyBool_FromLong(exec->jit_entries == unit->entries),
         "eh_frame", (const char *)unit->unwind.eh_frame,
         (Py_ssize_t)(unit->code.size - frame_offset),
         "plans", plans,
-        "entries", entries);
+        "entries", entries,
+        "chain", chain);
     return result;
 #else
     (void)code;
@@ -5667,7 +5693,33 @@ jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
     _PyJitMemory_GetStats(&memory);
     in_use = memory.bytes_in_use;
 #endif
-    PyObject *stats = Py_BuildValue("{sKsKsKsKsKsKsKsnsn}",
+    PyObject *exits = NULL;
+#ifdef _PY_JIT_SUPPORTED
+    static const char *const exit_names[_PyJIT_EXIT_KINDS] = {
+        [_PyJIT_EXIT_MISS] = "miss",
+        [_PyJIT_EXIT_DIVERTED] = "diverted",
+        [_PyJIT_EXIT_STUB] = "stub",
+        [_PyJIT_EXIT_SWITCH] = "switch",
+        [_PyJIT_EXIT_CLOSE] = "close",
+        [_PyJIT_EXIT_GEN_RETURN] = "gen_return",
+        [_PyJIT_EXIT_ERROR] = "error",
+        [_PyJIT_EXIT_INTERPRET] = "interpret",
+    };
+    exits = PyDict_New();
+    for (int k = 0; exits != NULL && k < _PyJIT_EXIT_KINDS; k++) {
+        PyObject *n = PyLong_FromUnsignedLongLong(interp->ceval.jit_exits[k]);
+        if (n == NULL || PyDict_SetItemString(exits, exit_names[k], n) < 0) {
+            Py_CLEAR(exits);
+        }
+        Py_XDECREF(n);
+    }
+#else
+    exits = PyDict_New();
+#endif
+    if (exits == NULL) {
+        return NULL;
+    }
+    PyObject *stats = Py_BuildValue("{sKsKsKsKsKsKsKsnsnsNsK}",
         "codes", (unsigned long long)interp->ceval.jit_compiled_codes,
         "compiles", (unsigned long long)interp->ceval.jit_compiles,
         "words", (unsigned long long)interp->ceval.jit_compiled_words,
@@ -5676,7 +5728,9 @@ jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
         "cold_bytes", (unsigned long long)interp->ceval.jit_cold_bytes,
         "plt_holes", (unsigned long long)interp->ceval.jit_plt_holes,
         "memory_in_use", (Py_ssize_t)in_use,
-        "dead", dead);
+        "dead", dead,
+        "exits", exits,
+        "declined", (unsigned long long)interp->ceval.jit_declined);
 #ifdef Py_STATS
     PyObject *switches = PyLong_FromUnsignedLongLong(interp->ceval.jit_switches);
     if (stats != NULL &&

@@ -580,11 +580,14 @@ typedef struct _PyCodeExec {
      * compiled from these words, valid or not, which chains the older ones;
      * the entry table of that unit while it is valid, else NULL, through
      * which every frame switch to these words goes (Python/jit.c, publish());
-     * the warm-up events since the last compile attempt; and the compiles. */
+     * the warm-up events since the last compile attempt, or since the unit
+     * went stale; the compiles; and the recompiles that changed words asked
+     * for. */
     struct _PyJitUnit *jit_unit;
     const void *const *jit_entries;
     uint32_t jit_heat;
-    uint32_t jit_compiles;
+    uint16_t jit_compiles;
+    uint16_t jit_deopts;
     uint32_t first_traceable;   // word index of the entry RESUME
     uint32_t nfixed;        // slots below the temporaries, which IR_IS_LOCAL() reads
 } _PyCodeExec;

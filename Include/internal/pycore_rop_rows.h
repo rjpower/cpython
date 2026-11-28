@@ -516,8 +516,10 @@ _PyRop_IntBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
 /* The result of an admitted pair: inline unless it leaves the int51 range,
  * where it is boxed.  Python's // rounds towards minus infinity and % takes
  * the sign of the divisor, where C truncates; int51 operands do not trap in
- * int64 division. */
-static inline PyValue
+ * int64 division.  Always inlined: Binary.Generic's operator is the word's,
+ * and a copy may keep the switch's jump table as its own, while an outlined
+ * row's table would be data that the support image cannot take. */
+static inline Py_ALWAYS_INLINE PyValue
 _PyRop_IntBinary(uint32_t op, int64_t a, int64_t b)
 {
     assert(_PyRop_IntOpAdmits(op, b));
@@ -652,6 +654,25 @@ _PyRop_FloatBinaryApplies(uint32_t op, PyValueBorrow a, PyValueBorrow b)
     double x, y;
     return PyValue_FloatOperandValues(a, b, &x, &y)
            && _PyRop_FloatOpAdmits(op, x, y, _PyRop_FloatValue(op, x, y));
+}
+
+/* The pairs that Binary.Generic computes inline (binary_inline_kind,
+ * Python/register_ops/numeric.rop): 0, two inline ints that the operator
+ * admits; 1, a float pair whose operator admits it before the result is
+ * known (every float operator but power); 2, any other pair */
+static inline int
+_PyRop_BinaryInlineKind(uint32_t op, PyValueBorrow a, PyValueBorrow b)
+{
+    if (_PyRop_IntBinaryApplies(op, a, b)) {
+        return 0;
+    }
+    double x, y;
+    if (op != NB_POWER && op != NB_INPLACE_POWER &&
+        PyValue_FloatOperandValues(a, b, &x, &y) &&
+        _PyRop_FloatOpAdmits(op, x, y, 0.0)) {
+        return 1;
+    }
+    return 2;
 }
 
 /* Text: only the in-place add of two exact strings reaches Binary; the

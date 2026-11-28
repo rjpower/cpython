@@ -1434,6 +1434,302 @@ class TestCompiledArms(JitTestCase):
         self.assertEqual(invalid, 0)
 
 
+class TestCompilePolicy(JitTestCase):
+    """What and when the default mode (on) compiles (Python/jit.c): a word
+    that has not run compiles as a stub, a site that flips back goes
+    generic, and recompiles back off."""
+
+    def test_a_word_that_has_not_run_is_a_stub(self):
+        # The branch's words had not run when f compiled: they are stubs,
+        # which run the word in the evaluator.  Reaching them earns a
+        # warm-up, after which the code recompiles them as copies.
+        out = self.check_same("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            def f(n, flag):
+                s = 0
+                for i in range(n):
+                    s += i
+                if flag:
+                    s = s + len(str(s))
+                return s
+            for i in range(10):
+                f(10, False)
+            u = t.jit_unit(f.__code__)
+            if u is not None:
+                print("stub" in {how for _, how in u["plans"].values()},
+                      u["stubs"] > 0)
+            else:
+                print(True, True)
+            print([f(10, True) for i in range(10)])
+            u = t.jit_unit(f.__code__)
+            print(u is None or u["stubs"] == 0)
+        """, modes=("on",))
+        self.assertEqual(out.splitlines()[0], "True True")
+
+    def test_always_compiles_every_word(self):
+        out = run("""
+            import _testinternalcapi as t
+            def f(n, flag):
+                s = 0
+                for i in range(n):
+                    s += i
+                if flag:
+                    s = s + len(str(s))
+                return s
+            f(10, False)
+            print(t.jit_unit(f.__code__)["stubs"])
+        """, "jit=always")
+        self.assertEqual(out.strip(), "0")
+
+    def test_a_site_that_flips_back_goes_generic(self):
+        # Tuple, list, tuple: the site would go back to the arm it held
+        # before, so it takes the generic arm and keeps it, in the
+        # interpreter and under the JIT
+        src = """
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            def g(seqs):
+                s = 0
+                for x in seqs:
+                    a, b = x
+                    s += a + b
+                return s
+            def unpack_arm():
+                return [w[0] for w in t.get_ir(g.__code__, True)
+                        if w[0].startswith("Unpack.")]
+            arms = []
+            for k in range(8):
+                print(g([(1, 2)] * 100 if k % 2 == 0 else [[1, 2]] * 100))
+                arms.append(unpack_arm()[0])
+            print(arms[:3])
+            print(set(arms[3:]))
+        """
+        out = self.check_same(src, modes=("on", "always"))
+        lines = out.splitlines()
+        self.assertEqual(lines[-2], "['Unpack.Tuple', 'Unpack.List', 'Unpack.Generic']")
+        self.assertEqual(lines[-1], "{'Unpack.Generic'}")
+        out = run(src + """
+            u = t.jit_unit(g.__code__)
+            print([a for a, how in u["plans"].values() if a.startswith("Unpack.")],
+                  u["deopts"], u["invalid"])
+        """, "jit=on")
+        # Tuple to list deoptimises once; the move to the generic arm is the
+        # word's last and is not counted
+        self.assertEqual(out.splitlines()[-1], "['Unpack.Generic'] 1 0")
+
+    def test_words_going_generic_do_not_use_the_deopts(self):
+        # Four words flip one after another, each deoptimising once: past
+        # the two deopts a code has, the third and fourth stay diverted
+        # until they go generic, a final move whose recompile is free, so
+        # the last unit compiles all four generic arms and diverts none
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            def g(xs, ys, zs, ws):
+                s = 0
+                for i in range(len(xs)):
+                    a, b = xs[i]
+                    c, d = ys[i]
+                    e, f = zs[i]
+                    h, j = ws[i]
+                    s += a + d + e + j
+                return s
+            T, L = [(1, 2)] * 50, [[1, 2]] * 50
+            for _ in range(8):
+                g(T, T, T, T)
+            for k in range(4):
+                for seq in (L, T):
+                    args = [T] * 4
+                    args[k] = seq
+                    for _ in range(8):
+                        g(*args)
+            u = t.jit_unit(g.__code__)
+            print(sorted((a, how) for a, how in u["plans"].values()
+                         if a.startswith("Unpack.")), u["invalid"])
+        """, "jit=on")
+        self.assertEqual(out.splitlines()[-1],
+                         str([("Unpack.Generic", "stencil")] * 4) + " 0")
+
+    def test_words_going_polymorphic_do_not_use_the_deopts(self):
+        # Three attribute reads go from one shape to two, one after
+        # another: each move to the poly arm is up the lattice and free, so
+        # the last unit compiles the three poly arms and diverts none
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            class A:
+                def __init__(self): self.x = 1
+            class B:
+                def __init__(self): self.y = 0; self.x = 2
+            def g(xs, ys, zs):
+                s = 0
+                for i in range(len(xs)):
+                    s += xs[i].x
+                    s += ys[i].x
+                    s += zs[i].x
+                return s
+            a, b = [A()] * 50, [B()] * 50
+            for _ in range(8):
+                g(a, a, a)
+            for k in range(3):
+                args = [a] * 3
+                args[k] = b
+                for _ in range(8):
+                    g(*args)
+            u = t.jit_unit(g.__code__)
+            print(sorted((a, how) for a, how in u["plans"].values()
+                         if a.startswith("GetAttr.")), u["deopts"], u["invalid"])
+        """, "jit=on")
+        self.assertEqual(out.splitlines()[-1],
+                         str([("GetAttr.PolyShape", "stencil")] * 3) + " 0 0")
+
+    def test_recompiles_back_off(self):
+        # A word that leaves its specialised arm makes the unit stale; the
+        # code recompiles once it has earned another warm-up, and after two
+        # such recompiles it runs on with the changed words diverted
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            def f(n, l1, l2, l3):
+                s = 0
+                for i in range(n):
+                    a, b = l1
+                    c, d = l2
+                    e, g = l3
+                    s += a + c + e
+                return s
+            T, L = (1, 2), [1, 2]
+            for i in range(10):
+                f(100, T, T, T)
+            u = t.jit_unit(f.__code__)
+            print(u["deopts"], u["invalid"])
+            # One word changes: stale, and not recompiled within fewer events
+            # than the warm-up
+            t.set_jit_warmup(100)
+            f(60, L, T, T)
+            u = t.jit_unit(f.__code__)
+            print(u["deopts"], u["published"])
+            compiles = u["compiles"]
+            f(1, L, T, T)
+            print(t.jit_unit(f.__code__)["compiles"] == compiles)
+            for i in range(10):
+                f(100, L, T, T)
+            u = t.jit_unit(f.__code__)
+            print(u["compiles"] > compiles, u["invalid"], u["published"])
+            for i in range(10):
+                f(100, L, L, T)
+            for i in range(10):
+                f(100, L, L, L)
+            u = t.jit_unit(f.__code__)
+            print(u["deopts"], u["invalid"], u["diverted"] > 0)
+            print(f(10, L, L, L))
+        """, "jit=on")
+        lines = out.splitlines()
+        self.assertEqual(lines[0], "0 0")
+        self.assertEqual(lines[1], "1 False")
+        self.assertEqual(lines[2], "True")
+        self.assertEqual(lines[3], "True 0 True")
+        self.assertEqual(lines[4], "2 0 True")
+        self.assertEqual(lines[5], "30")
+
+
+    def test_a_loop_over_the_l1i_is_declined(self):
+        # A loop whose compiled body would not fit the L1i is declined at
+        # warm-up: the code keeps no unit.  A small one compiles.
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            def make(n):
+                body = "".join(f"        a{k}, b{k} = x\\n" for k in range(n))
+                ns = {}
+                exec(f"def f(seq):\\n    for x in seq:\\n{body}    return a0", ns)
+                return ns["f"]
+            big, small = make(400), make(4)
+            before = t.jit_stats()["declined"]
+            for i in range(10):
+                print(big([(1, 2)] * 10), small([(1, 2)] * 10))
+            print(t.jit_unit(big.__code__) is None,
+                  t.jit_unit(small.__code__) is not None,
+                  t.jit_stats()["declined"] - before)
+        """, "jit=on")
+        lines = out.splitlines()
+        self.assertEqual(lines[:10], ["1 1"] * 10)
+        self.assertEqual(lines[-1], "True True 1")
+
+    def test_a_loop_that_grows_over_the_l1i_is_retired(self):
+        # The body compiles while its unpacks have not run (stubs); once
+        # they run, the recompile would not fit the L1i: the unit is
+        # retired and the code runs in the evaluator from then on
+        out = run("""
+            import _testinternalcapi as t
+            t.set_jit_warmup(4)
+            body = "".join(f"            a{k}, b{k} = x\\n" for k in range(400))
+            ns = {}
+            exec("def f(seq, run):\\n    s = 0\\n    for x in seq:\\n"
+                 f"        if run:\\n{body}            s += a0\\n    return s", ns)
+            f = ns["f"]
+            for i in range(10):
+                print(f([(1, 2)] * 10, False))
+            u = t.jit_unit(f.__code__)
+            print(u["invalid"], u["stubs"] >= 400)
+            before = t.jit_stats()["declined"]
+            for i in range(10):
+                print(f([(1, 2)] * 10, True))
+            print(t.jit_unit(f.__code__)["invalid"] & 2,
+                  t.jit_stats()["declined"] - before)
+        """, "jit=on")
+        lines = out.splitlines()
+        self.assertEqual(lines[:10], ["0"] * 10)
+        self.assertEqual(lines[10], "0 True")
+        self.assertEqual(lines[11:21], ["10"] * 10)
+        self.assertEqual(lines[-1], "2 1")
+
+    def test_a_construction_returns_into_compiled_code(self):
+        # The __init__ shim has a unit: an object built in compiled code
+        # returns from __init__ into it, and from it into the caller's
+        # copy, with no switch to code without entries
+        out = run("""
+            import _testinternalcapi as t
+            class P:
+                def __init__(self, x):
+                    self.x = x
+            def build(n):
+                s = 0
+                for i in range(n):
+                    s += P(i).x
+                return s
+            build(100)
+            before = t.jit_stats()["exits"]["switch"]
+            print(build(1000))
+            print(t.jit_stats()["exits"]["switch"] - before < 10)
+        """, "jit=always")
+        self.assertEqual(out.splitlines(), [str(sum(range(1000))), "True"])
+
+    def test_tail_closes_stay_in_the_unit(self):
+        # A copy whose publish drops the last reference to the old value
+        # closes it by a call and goes on to the next copy: a finalizer
+        # runs, in order, and no close leaves for the evaluator
+        out = run("""
+            import _testinternalcapi as t
+            log = []
+            class D:
+                def __init__(self, k): self.k = k
+                def __sub__(self, other): return D(self.k - other.k)
+                def __del__(self): log.append(self.k)
+            def f(n, a, b):
+                x = None
+                for i in range(n):
+                    x = a - b
+                return x
+            f(10, {1, 2}, {2})
+            before = t.jit_stats()["exits"]["close"]
+            print(f(1000, {1, 2}, {2}))
+            print(f(10, D(5), D(2)).k, log.count(3))
+            print(t.jit_stats()["exits"]["close"] - before)
+        """, "jit=always")
+        self.assertEqual(out.splitlines(), ["{1}", "3 10", "0"])
+
 TRANSFER_PRELUDE = """
 import sys, weakref, _testinternalcapi as t
 def stats():

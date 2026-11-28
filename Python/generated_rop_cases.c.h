@@ -2991,6 +2991,14 @@ IR_OUTLINED_FN(Cold_Unpack_Generic_adapt_before_use_unpack1_Sample);
 #endif
 
 #ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Unpack_Generic_adapt_before_use_unpack1_NoArm);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Unpack_Generic_Iterable);
+#endif
+
+#ifndef IR_JIT_STENCILS
 IR_OUTLINED_FN(Cold_Unpack_Generic_adapt_before_use_unpack1_Sample) {
     // Unpack.Generic: the cold region from rop_Unpack_Generic_adapt_before_use_unpack1_Sample
     int opcode = ROP_HANDLER_Unpack_Generic;
@@ -3000,78 +3008,209 @@ IR_OUTLINED_FN(Cold_Unpack_Generic_adapt_before_use_unpack1_Sample) {
     next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
     size_t adapt_before_use_unpack1_n;
     PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-    _PyRopItems out1;
-    int ret2;
+    int ret1;
     PyValue own_source = PyValue_NULL;
-    _PyRopSpan span3;
-    int ret4;
+    _PyRopSpan span2;
+    int ret3;
     int adapt_before_use_unpack1_ct;
-    int ret5;
+    int ret4;
     int adapt_before_use_unpack1_cl;
-    int ret6;
+    int ret5;
+    _PyRopItems out6;
+    int ret7;
+    _PyRopItems out8;
+    int ret9;
     _PyRopItems vals;
     { const rop_in_Cold_Unpack_Generic_adapt_before_use_unpack1_Sample *ir_in = IR_OUTLINE_IN(rop_in_Cold_Unpack_Generic_adapt_before_use_unpack1_Sample);
       adapt_before_use_unpack1_n = ir_in->adapt_before_use_unpack1_n;
     }
     goto rop_Unpack_Generic_adapt_before_use_unpack1_Sample;
     rop_Unpack_Generic_adapt_before_use_unpack1_Run:
-    rop_Unpack_Generic_Run:
-    IR_PUBLISH_IP();
-    IR_STUB_ESCAPE();
-    ret2 = _PyRop_UnpackIterable(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
-    if (ret2 < 0) {
-        goto rop_Unpack_Generic_Failed;
+    ret1 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), (Py_ssize_t)IR_A(ir_word));
+    if (ret1 == 1) {
+        goto rop_Unpack_Generic_List;
     }
-    vals = out1;
+    if (ret1 == 2) {
+        goto rop_Unpack_Generic_Iterable;
+    }
+    vals = _PyRop_UnpackTuple(home_source, (Py_ssize_t)IR_A(ir_word));
+    rop_Unpack_Generic_Finish:
     if (!(ir_word & IR_F_LOCAL_B)) {
         own_source = _PyFrame_TakeHome(frame, home_source);
     }
+    IR_PUBLISH_IP();
     IR_STUB_ESCAPE();
-    span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-    _PyRop_PublishItems(&span3, &vals);
+    span2 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+    _PyRop_PublishItems(&span2, &vals);
     ROP_TAIL_CLOSE(own_source, rop_Unpack_Generic_Tail0_0);
     DISPATCH();
     rop_Unpack_Generic_Tail0_0:
     ROP_TAIL_PARK_FIRST(own_source);
     ROP_TAIL_DISPATCH();
     rop_Unpack_Generic_adapt_before_use_unpack1_Sample:
-    ret4 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), adapt_before_use_unpack1_n);
-    if (ret4 == 1) {
+    ret3 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), adapt_before_use_unpack1_n);
+    if (ret3 == 1) {
         goto rop_Unpack_Generic_adapt_before_use_unpack1_ChosenList;
     }
-    if (ret4 == 2) {
+    if (ret3 == 2) {
         goto rop_Unpack_Generic_adapt_before_use_unpack1_NoArm;
     }
     adapt_before_use_unpack1_ct = ROP_HANDLER_Unpack_Tuple;
     IR_PUBLISH_IP();
-    ret5 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_ct);
-    if (ret5 == 0) {
+    ret4 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_ct);
+    if (ret4 == 0) {
         goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
     }
-    if (ret5 < 0) {
+    if (ret4 < 0) {
         goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
     }
     rop_Unpack_Generic_adapt_before_use_unpack1_Changed:
     next_instr = this_instr;
     DISPATCH_SAME_OPARG();
     rop_Unpack_Generic_adapt_before_use_unpack1_NoArm:
-    _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h);
-    goto rop_Unpack_Generic_Run;
+    IR_OUTLINE_GOTO(Cold_Unpack_Generic_adapt_before_use_unpack1_NoArm);
     rop_Unpack_Generic_adapt_before_use_unpack1_ChosenList:
     adapt_before_use_unpack1_cl = ROP_HANDLER_Unpack_List;
     IR_PUBLISH_IP();
-    ret6 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_cl);
-    if (ret6 > 0) {
+    ret5 = _PyRop_Install(this_instr, &((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h, adapt_before_use_unpack1_cl);
+    if (ret5 > 0) {
         goto rop_Unpack_Generic_adapt_before_use_unpack1_Changed;
     }
-    if (ret6 == 0) {
+    if (ret5 == 0) {
         goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
     }
     goto rop_Unpack_Generic_adapt_before_use_unpack1_Run;
+    rop_Unpack_Generic_Iterable:
+    IR_OUTLINE_GOTO(Cold_Unpack_Generic_Iterable);
     rop_Unpack_Generic_Failed:
     PROCESS_ERROR_AT(RAISE, 196, this_instr);
+    rop_Unpack_Generic_List:
+    IR_PUBLISH_IP();
+    IR_STUB_ESCAPE();
+    ret9 = _PyRop_UnpackList(home_source, (Py_ssize_t)IR_A(ir_word), &out8);
+    if (ret9 == 0) {
+        vals = out8;
+        goto rop_Unpack_Generic_Finish;
+    }
+    goto rop_Unpack_Generic_Failed;
 }
 IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_adapt_before_use_unpack1_Sample)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Unpack_Generic_adapt_before_use_unpack1_NoArm) {
+    // Unpack.Generic: the cold region from rop_Unpack_Generic_adapt_before_use_unpack1_NoArm
+    int opcode = ROP_HANDLER_Unpack_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
+    size_t adapt_before_use_unpack1_n;
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    int ret1;
+    PyValue own_source = PyValue_NULL;
+    _PyRopSpan span2;
+    int ret3;
+    int adapt_before_use_unpack1_ct;
+    int ret4;
+    int adapt_before_use_unpack1_cl;
+    int ret5;
+    _PyRopItems out6;
+    int ret7;
+    _PyRopItems out8;
+    int ret9;
+    _PyRopItems vals;
+    goto rop_Unpack_Generic_adapt_before_use_unpack1_NoArm;
+    rop_Unpack_Generic_Run:
+    ret1 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), (Py_ssize_t)IR_A(ir_word));
+    if (ret1 == 1) {
+        goto rop_Unpack_Generic_List;
+    }
+    if (ret1 == 2) {
+        goto rop_Unpack_Generic_Iterable;
+    }
+    vals = _PyRop_UnpackTuple(home_source, (Py_ssize_t)IR_A(ir_word));
+    rop_Unpack_Generic_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_source = _PyFrame_TakeHome(frame, home_source);
+    }
+    IR_PUBLISH_IP();
+    IR_STUB_ESCAPE();
+    span2 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+    _PyRop_PublishItems(&span2, &vals);
+    ROP_TAIL_CLOSE(own_source, rop_Unpack_Generic_Tail0_0);
+    DISPATCH();
+    rop_Unpack_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
+    rop_Unpack_Generic_adapt_before_use_unpack1_NoArm:
+    _PyRop_Backoff(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h);
+    goto rop_Unpack_Generic_Run;
+    rop_Unpack_Generic_Iterable:
+    IR_OUTLINE_GOTO(Cold_Unpack_Generic_Iterable);
+    rop_Unpack_Generic_Failed:
+    PROCESS_ERROR_AT(RAISE, 196, this_instr);
+    rop_Unpack_Generic_List:
+    IR_PUBLISH_IP();
+    IR_STUB_ESCAPE();
+    ret9 = _PyRop_UnpackList(home_source, (Py_ssize_t)IR_A(ir_word), &out8);
+    if (ret9 == 0) {
+        vals = out8;
+        goto rop_Unpack_Generic_Finish;
+    }
+    goto rop_Unpack_Generic_Failed;
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_adapt_before_use_unpack1_NoArm)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Unpack_Generic_Iterable) {
+    // Unpack.Generic: the cold region from rop_Unpack_Generic_Iterable
+    int opcode = ROP_HANDLER_Unpack_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 1 + (IR_A(ir_word) + 2) / IR_OPERANDS_PER_WORD;
+    size_t adapt_before_use_unpack1_n;
+    PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
+    int ret1;
+    PyValue own_source = PyValue_NULL;
+    _PyRopSpan span2;
+    int ret3;
+    int adapt_before_use_unpack1_ct;
+    int ret4;
+    int adapt_before_use_unpack1_cl;
+    int ret5;
+    _PyRopItems out6;
+    int ret7;
+    _PyRopItems out8;
+    int ret9;
+    _PyRopItems vals;
+    goto rop_Unpack_Generic_Iterable;
+    rop_Unpack_Generic_Finish:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_source = _PyFrame_TakeHome(frame, home_source);
+    }
+    IR_PUBLISH_IP();
+    IR_STUB_ESCAPE();
+    span2 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+    _PyRop_PublishItems(&span2, &vals);
+    ROP_TAIL_CLOSE(own_source, rop_Unpack_Generic_Tail0_0);
+    DISPATCH();
+    rop_Unpack_Generic_Tail0_0:
+    ROP_TAIL_PARK_FIRST(own_source);
+    ROP_TAIL_DISPATCH();
+    rop_Unpack_Generic_Iterable:
+    IR_PUBLISH_IP();
+    IR_STUB_ESCAPE();
+    ret7 = _PyRop_UnpackIterable(home_source, (Py_ssize_t)IR_A(ir_word), &out6);
+    if (ret7 == 0) {
+        vals = out6;
+        goto rop_Unpack_Generic_Finish;
+    }
+    PROCESS_ERROR_AT(RAISE, 196, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_Iterable)
 #endif
 
         TARGET(Unpack_Generic) {
@@ -3085,33 +3224,39 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_adapt_before_use_unpack1_Sample)
             INSTRUCTION_STATS(ROP_HANDLER_Unpack_Generic);
             size_t adapt_before_use_unpack1_n;
             PyValue *const home_source = &IR_SLOT(IR_B(ir_word));
-            _PyRopItems out1;
-            int ret2;
+            int ret1;
             PyValue own_source = PyValue_NULL;
-            _PyRopSpan span3;
-            int ret4;
+            _PyRopSpan span2;
+            int ret3;
             int adapt_before_use_unpack1_ct;
-            int ret5;
+            int ret4;
             int adapt_before_use_unpack1_cl;
-            int ret6;
+            int ret5;
+            _PyRopItems out6;
+            int ret7;
+            _PyRopItems out8;
+            int ret9;
             _PyRopItems vals;
             adapt_before_use_unpack1_n = (Py_ssize_t)IR_A(ir_word);
             if (!_PyFb_TickQuiet(&((_PyFbUnary *)IR_FB(IR_C(ir_word)))->h)) {
                 goto rop_Unpack_Generic_adapt_before_use_unpack1_Sample;
             }
-            IR_PUBLISH_IP();
-            IR_STUB_ESCAPE();
-            ret2 = _PyRop_UnpackIterable(home_source, (Py_ssize_t)IR_A(ir_word), &out1);
-            if (ret2 < 0) {
-                goto rop_Unpack_Generic_Failed;
+            ret1 = _PyRop_ClassifyUnpack(PyValue_Borrow(*home_source), (Py_ssize_t)IR_A(ir_word));
+            if (ret1 == 1) {
+                goto rop_Unpack_Generic_List;
             }
-            vals = out1;
+            if (ret1 == 2) {
+                goto rop_Unpack_Generic_Iterable;
+            }
+            vals = _PyRop_UnpackTuple(home_source, (Py_ssize_t)IR_A(ir_word));
+            rop_Unpack_Generic_Finish:
             if (!(ir_word & IR_F_LOCAL_B)) {
                 own_source = _PyFrame_TakeHome(frame, home_source);
             }
+            IR_PUBLISH_IP();
             IR_STUB_ESCAPE();
-            span3 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
-            _PyRop_PublishItems(&span3, &vals);
+            span2 = (_PyRopSpan){frame, this_instr, 0, IR_A(ir_word), 1, 0};
+            _PyRop_PublishItems(&span2, &vals);
             ROP_TAIL_CLOSE(own_source, rop_Unpack_Generic_Tail0_0);
             DISPATCH();
             rop_Unpack_Generic_Tail0_0:
@@ -3122,8 +3267,19 @@ IR_OUTLINED_JIT_ENTRY(Cold_Unpack_Generic_adapt_before_use_unpack1_Sample)
               ir_in->adapt_before_use_unpack1_n = adapt_before_use_unpack1_n;
             }
             IR_OUTLINE_GOTO(Cold_Unpack_Generic_adapt_before_use_unpack1_Sample);
+            rop_Unpack_Generic_Iterable:
+            IR_OUTLINE_GOTO(Cold_Unpack_Generic_Iterable);
             rop_Unpack_Generic_Failed:
             PROCESS_ERROR_AT(RAISE, 196, this_instr);
+            rop_Unpack_Generic_List:
+            IR_PUBLISH_IP();
+            IR_STUB_ESCAPE();
+            ret9 = _PyRop_UnpackList(home_source, (Py_ssize_t)IR_A(ir_word), &out8);
+            if (ret9 == 0) {
+                vals = out8;
+                goto rop_Unpack_Generic_Finish;
+            }
+            goto rop_Unpack_Generic_Failed;
         }
 
 #ifndef IR_JIT_STENCILS
@@ -6501,7 +6657,16 @@ IR_OUTLINED_JIT_ENTRY(Cold_GlobalRead_Generic_global_at_origin1_Moved)
         }
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Generic_adapt_before_use_binary2_Sample);
+IR_OUTLINED_FN(Cold_Binary_Generic_adapt_before_use_binary3_Sample);
+#endif
+
+typedef struct __attribute__((__may_alias__)) {
+    PyValue own_x;
+    PyValue own_y;
+} rop_in_Cold_Binary_Generic_Slots;
+static_assert(sizeof(rop_in_Cold_Binary_Generic_Slots) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Generic_Slots);
 #endif
 
 typedef struct __attribute__((__may_alias__)) {
@@ -6527,54 +6692,264 @@ static_assert(sizeof(rop_in_Cold_Binary_Generic_binary_at_origin1_Moved) <= IR_O
 IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Moved);
 #endif
 
+typedef struct __attribute__((__may_alias__)) {
+    PyValue own_x;
+    PyValue own_y;
+    double float_result2_v;
+} rop_in_Cold_Binary_Generic_float_result2_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Generic_float_result2_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Generic_adapt_before_use_binary2_Sample) {
-    // Binary.Generic: the cold region from rop_Binary_Generic_adapt_before_use_binary2_Sample
+IR_OUTLINED_FN(Cold_Binary_Generic_float_result2_NaN);
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Generic_adapt_before_use_binary3_Sample) {
+    // Binary.Generic: the cold region from rop_Binary_Generic_adapt_before_use_binary3_Sample
     int opcode = ROP_HANDLER_Binary_Generic;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     next_instr += 2;
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
+    PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
-    PyValue ret1;
+    PyValueBorrow r;
+    int ret1;
+    PyValue ret2;
     PyValue own_x = PyValue_NULL;
     PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-    int adapt_before_use_binary2_c;
-    int ret2;
-    int adapt_before_use_binary2_cf;
+    int adapt_before_use_binary3_c;
     int ret3;
-    int adapt_before_use_binary2_ct;
+    int adapt_before_use_binary3_cf;
     int ret4;
-    int adapt_before_use_binary2_ce;
+    int adapt_before_use_binary3_ct;
     int ret5;
-    _PyRopAnchors a_all6;
-    _PyRopSrcs srcs7;
+    int adapt_before_use_binary3_ce;
+    int ret6;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret7;
     _PyRopAnchors a_all8;
+    _PyRopSrcs srcs9;
+    _PyRopAnchors a_all10;
+    double float_result2_v;
+    PyValue out11;
+    PyValue ret12;
+    PyValue inline_result;
     PyValue z;
     PyValue binary_at_origin1_value;
     PyValue binary_at_origin1_kept;
     PyValue binary_at_origin1_dropped;
-    goto rop_Binary_Generic_adapt_before_use_binary2_Sample;
-    rop_Binary_Generic_adapt_before_use_binary2_Run:
+    PyValue float_result2_z;
+    goto rop_Binary_Generic_adapt_before_use_binary3_Sample;
+    rop_Binary_Generic_adapt_before_use_binary3_Run:
     rop_Binary_Generic_Run:
+    l = PyValue_Borrow(*home_x);
+    r = PyValue_Borrow(*home_y);
+    ret1 = _PyRop_BinaryInlineKind((uint32_t)IR_D(ir_word), l, r);
+    if (ret1 == 1) {
+        goto rop_Binary_Generic_Float;
+    }
+    if (ret1 == 2) {
+        goto rop_Binary_Generic_Slots;
+    }
+    IR_PUBLISH_IP();
+    ret2 = _PyRop_IntBinary((uint32_t)IR_D(ir_word), _PyValue_IntScaled(l), _PyValue_IntScaled(r));
+    if (PyValue_IsNull(ret2)) {
+        goto rop_Binary_Generic_BoxFailed;
+    }
+    inline_result = ret2;
+    rop_Binary_Generic_Inline:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_x = _PyFrame_TakeHome(frame, home_x);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        own_y = _PyFrame_TakeHome(frame, home_y);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, inline_result);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(own_y, rop_Binary_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_Binary_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Generic_Tail0_2);
+    DISPATCH();
+    rop_Binary_Generic_Tail0_0:
+    IR_PUBLISH_IP();
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Binary_Generic_Tail0_Rest1;
+    rop_Binary_Generic_Tail0_1:
+    IR_PUBLISH_IP();
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Binary_Generic_Tail0_Rest2;
+    rop_Binary_Generic_Tail0_2:
+    IR_PUBLISH_IP();
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Binary_Generic_Tail0_Rest3;
+    rop_Binary_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_Binary_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Binary_Generic_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Generic_adapt_before_use_binary3_Sample:
+    _PyRop_RecordOperands(((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y));
+    if (_PyRop_IntBinaryApplies((uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Chosen;
+    }
+    goto rop_Binary_Generic_adapt_before_use_binary3_Other;
+    rop_Binary_Generic_adapt_before_use_binary3_Chosen:
+    adapt_before_use_binary3_c = _PyRop_Members_Binary_Int[(uint32_t)IR_D(ir_word)];
+    IR_PUBLISH_IP();
+    ret3 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary3_c);
+    if (ret3 == 0) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Run;
+    }
+    if (ret3 < 0) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Run;
+    }
+    rop_Binary_Generic_adapt_before_use_binary3_Changed:
+    next_instr = this_instr;
+    DISPATCH_SAME_OPARG();
+    rop_Binary_Generic_adapt_before_use_binary3_Other:
+    if (_PyRop_FloatBinaryApplies((uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_ChosenFloat;
+    }
+    goto rop_Binary_Generic_adapt_before_use_binary3_TryText;
+    rop_Binary_Generic_adapt_before_use_binary3_ChosenFloat:
+    adapt_before_use_binary3_cf = _PyRop_Members_Binary_Float[(uint32_t)IR_D(ir_word)];
+    IR_PUBLISH_IP();
+    ret4 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary3_cf);
+    if (ret4 > 0) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Changed;
+    }
+    if (ret4 == 0) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Run;
+    }
+    goto rop_Binary_Generic_adapt_before_use_binary3_Run;
+    rop_Binary_Generic_adapt_before_use_binary3_TryText:
+    if (_PyRop_TextBinaryApplies((uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_ChosenText;
+    }
+    goto rop_Binary_Generic_adapt_before_use_binary3_TryExtended;
+    rop_Binary_Generic_adapt_before_use_binary3_ChosenText:
+    adapt_before_use_binary3_ct = ROP_HANDLER_Binary_Text;
+    IR_PUBLISH_IP();
+    ret5 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary3_ct);
+    if (ret5 > 0) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Changed;
+    }
+    if (ret5 == 0) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Run;
+    }
+    goto rop_Binary_Generic_adapt_before_use_binary3_Run;
+    rop_Binary_Generic_adapt_before_use_binary3_TryExtended:
+    if (!_PyRop_FindExtension(((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), (uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_NoArm;
+    }
+    adapt_before_use_binary3_ce = ROP_HANDLER_Binary_Extended;
+    IR_PUBLISH_IP();
+    ret6 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary3_ce);
+    if (ret6 > 0) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Changed;
+    }
+    if (ret6 == 0) {
+        goto rop_Binary_Generic_adapt_before_use_binary3_Run;
+    }
+    goto rop_Binary_Generic_adapt_before_use_binary3_Run;
+    rop_Binary_Generic_adapt_before_use_binary3_NoArm:
+    _PyRop_Backoff(&((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
+    goto rop_Binary_Generic_Run;
+    rop_Binary_Generic_Slots:
+    { rop_in_Cold_Binary_Generic_Slots *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_Slots);
+      ir_in->own_x = own_x;
+      ir_in->own_y = own_y;
+    }
+    IR_OUTLINE_GOTO(Cold_Binary_Generic_Slots);
+    rop_Binary_Generic_Float:
+    float_result2_v = _PyRop_FloatValue((uint32_t)IR_D(ir_word), PyValue_NumberAsDouble(l), PyValue_NumberAsDouble(r));
+    if (!_PyValue_FloatWord(float_result2_v, &out11)) {
+        goto rop_Binary_Generic_float_result2_NaN;
+    }
+    float_result2_z = out11;
+    inline_result = float_result2_z;
+    goto rop_Binary_Generic_Inline;
+    rop_Binary_Generic_float_result2_NaN:
+    { rop_in_Cold_Binary_Generic_float_result2_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_float_result2_NaN);
+      ir_in->own_x = own_x;
+      ir_in->own_y = own_y;
+      ir_in->float_result2_v = float_result2_v;
+    }
+    IR_OUTLINE_GOTO(Cold_Binary_Generic_float_result2_NaN);
+    rop_Binary_Generic_BoxFailed:
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_adapt_before_use_binary3_Sample)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Generic_Slots) {
+    // Binary.Generic: the cold region from rop_Binary_Generic_Slots
+    int opcode = ROP_HANDLER_Binary_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    int ret1;
+    PyValue ret2;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_binary3_c;
+    int ret3;
+    int adapt_before_use_binary3_cf;
+    int ret4;
+    int adapt_before_use_binary3_ct;
+    int ret5;
+    int adapt_before_use_binary3_ce;
+    int ret6;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret7;
+    _PyRopAnchors a_all8;
+    _PyRopSrcs srcs9;
+    _PyRopAnchors a_all10;
+    double float_result2_v;
+    PyValue out11;
+    PyValue ret12;
+    PyValue inline_result;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    PyValue float_result2_z;
+    { const rop_in_Cold_Binary_Generic_Slots *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_Slots);
+      own_x = ir_in->own_x;
+      own_y = ir_in->own_y;
+    }
+    goto rop_Binary_Generic_Slots;
+    rop_Binary_Generic_Slots:
     a_view0 = PyValue_Borrow(*home_x);
     a_owned0 = (ir_word & IR_F_LOCAL_B) ? PyValue_DUP(a_view0) : PyValue_NULL;
     a_view1 = PyValue_Borrow(*home_y);
     a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) : PyValue_NULL;
     IR_PUBLISH_IP();
     IR_STUB_ESCAPE();
-    ret1 = _PyEval_value_binary_op((uint32_t)IR_D(ir_word), a_view0, a_view1);
-    if (PyValue_IsNull(ret1)) {
+    ret7 = _PyEval_value_binary_op((uint32_t)IR_D(ir_word), a_view0, a_view1);
+    if (PyValue_IsNull(ret7)) {
         goto rop_Binary_Generic_binary_at_origin1_Failed;
     }
-    binary_at_origin1_value = ret1;
+    binary_at_origin1_value = ret7;
     if (_PyRop_RedirectPending(frame)) {
         binary_at_origin1_dropped = binary_at_origin1_value;
         goto rop_Binary_Generic_binary_at_origin1_Moved;
@@ -6590,105 +6965,37 @@ IR_OUTLINED_FN(Cold_Binary_Generic_adapt_before_use_binary2_Sample) {
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
-    ROP_TAIL_CLOSE(a_owned0, rop_Binary_Generic_Tail0_0);
-    ROP_TAIL_CLOSE(a_owned1, rop_Binary_Generic_Tail0_1);
-    ROP_TAIL_CLOSE(own_y, rop_Binary_Generic_Tail0_2);
-    ROP_TAIL_CLOSE(own_x, rop_Binary_Generic_Tail0_3);
-    ROP_TAIL_CLOSE(old_dst, rop_Binary_Generic_Tail0_4);
+    ROP_TAIL_CLOSE(a_owned0, rop_Binary_Generic_Tail1_0);
+    ROP_TAIL_CLOSE(a_owned1, rop_Binary_Generic_Tail1_1);
+    ROP_TAIL_CLOSE(own_y, rop_Binary_Generic_Tail1_2);
+    ROP_TAIL_CLOSE(own_x, rop_Binary_Generic_Tail1_3);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Generic_Tail1_4);
     DISPATCH();
-    rop_Binary_Generic_Tail0_0:
+    rop_Binary_Generic_Tail1_0:
     ROP_TAIL_PARK_FIRST(a_owned0);
-    goto rop_Binary_Generic_Tail0_Rest1;
-    rop_Binary_Generic_Tail0_1:
+    goto rop_Binary_Generic_Tail1_Rest1;
+    rop_Binary_Generic_Tail1_1:
     ROP_TAIL_PARK_FIRST(a_owned1);
-    goto rop_Binary_Generic_Tail0_Rest2;
-    rop_Binary_Generic_Tail0_2:
+    goto rop_Binary_Generic_Tail1_Rest2;
+    rop_Binary_Generic_Tail1_2:
     ROP_TAIL_PARK_FIRST(own_y);
-    goto rop_Binary_Generic_Tail0_Rest3;
-    rop_Binary_Generic_Tail0_3:
+    goto rop_Binary_Generic_Tail1_Rest3;
+    rop_Binary_Generic_Tail1_3:
     ROP_TAIL_PARK_FIRST(own_x);
-    goto rop_Binary_Generic_Tail0_Rest4;
-    rop_Binary_Generic_Tail0_4:
+    goto rop_Binary_Generic_Tail1_Rest4;
+    rop_Binary_Generic_Tail1_4:
     ROP_TAIL_PARK_FIRST(old_dst);
-    goto rop_Binary_Generic_Tail0_Rest5;
-    rop_Binary_Generic_Tail0_Rest1:
+    goto rop_Binary_Generic_Tail1_Rest5;
+    rop_Binary_Generic_Tail1_Rest1:
     ROP_TAIL_PARK(a_owned1);
-    rop_Binary_Generic_Tail0_Rest2:
+    rop_Binary_Generic_Tail1_Rest2:
     ROP_TAIL_PARK(own_y);
-    rop_Binary_Generic_Tail0_Rest3:
+    rop_Binary_Generic_Tail1_Rest3:
     ROP_TAIL_PARK(own_x);
-    rop_Binary_Generic_Tail0_Rest4:
+    rop_Binary_Generic_Tail1_Rest4:
     ROP_TAIL_PARK(old_dst);
-    rop_Binary_Generic_Tail0_Rest5:
+    rop_Binary_Generic_Tail1_Rest5:
     ROP_TAIL_DISPATCH();
-    rop_Binary_Generic_adapt_before_use_binary2_Sample:
-    _PyRop_RecordOperands(((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y));
-    if (_PyRop_IntBinaryApplies((uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Chosen;
-    }
-    goto rop_Binary_Generic_adapt_before_use_binary2_Other;
-    rop_Binary_Generic_adapt_before_use_binary2_Chosen:
-    adapt_before_use_binary2_c = _PyRop_Members_Binary_Int[(uint32_t)IR_D(ir_word)];
-    IR_PUBLISH_IP();
-    ret2 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary2_c);
-    if (ret2 == 0) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Run;
-    }
-    if (ret2 < 0) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Run;
-    }
-    rop_Binary_Generic_adapt_before_use_binary2_Changed:
-    next_instr = this_instr;
-    DISPATCH_SAME_OPARG();
-    rop_Binary_Generic_adapt_before_use_binary2_Other:
-    if (_PyRop_FloatBinaryApplies((uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_ChosenFloat;
-    }
-    goto rop_Binary_Generic_adapt_before_use_binary2_TryText;
-    rop_Binary_Generic_adapt_before_use_binary2_ChosenFloat:
-    adapt_before_use_binary2_cf = _PyRop_Members_Binary_Float[(uint32_t)IR_D(ir_word)];
-    IR_PUBLISH_IP();
-    ret3 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary2_cf);
-    if (ret3 > 0) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Changed;
-    }
-    if (ret3 == 0) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Run;
-    }
-    goto rop_Binary_Generic_adapt_before_use_binary2_Run;
-    rop_Binary_Generic_adapt_before_use_binary2_TryText:
-    if (_PyRop_TextBinaryApplies((uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_ChosenText;
-    }
-    goto rop_Binary_Generic_adapt_before_use_binary2_TryExtended;
-    rop_Binary_Generic_adapt_before_use_binary2_ChosenText:
-    adapt_before_use_binary2_ct = ROP_HANDLER_Binary_Text;
-    IR_PUBLISH_IP();
-    ret4 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary2_ct);
-    if (ret4 > 0) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Changed;
-    }
-    if (ret4 == 0) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Run;
-    }
-    goto rop_Binary_Generic_adapt_before_use_binary2_Run;
-    rop_Binary_Generic_adapt_before_use_binary2_TryExtended:
-    if (!_PyRop_FindExtension(((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), (uint32_t)IR_D(ir_word), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_NoArm;
-    }
-    adapt_before_use_binary2_ce = ROP_HANDLER_Binary_Extended;
-    IR_PUBLISH_IP();
-    ret5 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h, adapt_before_use_binary2_ce);
-    if (ret5 > 0) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Changed;
-    }
-    if (ret5 == 0) {
-        goto rop_Binary_Generic_adapt_before_use_binary2_Run;
-    }
-    goto rop_Binary_Generic_adapt_before_use_binary2_Run;
-    rop_Binary_Generic_adapt_before_use_binary2_NoArm:
-    _PyRop_Backoff(&((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h);
-    goto rop_Binary_Generic_Run;
     rop_Binary_Generic_binary_at_origin1_Failed:
     { rop_in_Cold_Binary_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Failed);
       ir_in->a_view0 = a_view0;
@@ -6707,7 +7014,7 @@ IR_OUTLINED_FN(Cold_Binary_Generic_adapt_before_use_binary2_Sample) {
     }
     IR_OUTLINE_GOTO(Cold_Binary_Generic_binary_at_origin1_Moved);
 }
-IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_adapt_before_use_binary2_Sample)
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_Slots)
 #endif
 
 #ifndef IR_JIT_STENCILS
@@ -6718,32 +7025,41 @@ IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Failed) {
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     next_instr += 2;
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
+    PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
-    PyValue ret1;
+    PyValueBorrow r;
+    int ret1;
+    PyValue ret2;
     PyValue own_x = PyValue_NULL;
     PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-    int adapt_before_use_binary2_c;
-    int ret2;
-    int adapt_before_use_binary2_cf;
+    int adapt_before_use_binary3_c;
     int ret3;
-    int adapt_before_use_binary2_ct;
+    int adapt_before_use_binary3_cf;
     int ret4;
-    int adapt_before_use_binary2_ce;
+    int adapt_before_use_binary3_ct;
     int ret5;
-    _PyRopAnchors a_all6;
-    _PyRopSrcs srcs7;
+    int adapt_before_use_binary3_ce;
+    int ret6;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret7;
     _PyRopAnchors a_all8;
+    _PyRopSrcs srcs9;
+    _PyRopAnchors a_all10;
+    double float_result2_v;
+    PyValue out11;
+    PyValue ret12;
+    PyValue inline_result;
     PyValue z;
     PyValue binary_at_origin1_value;
     PyValue binary_at_origin1_kept;
     PyValue binary_at_origin1_dropped;
+    PyValue float_result2_z;
     { const rop_in_Cold_Binary_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Failed);
       a_view0 = ir_in->a_view0;
       a_owned0 = ir_in->a_owned0;
@@ -6753,9 +7069,9 @@ IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Failed) {
     goto rop_Binary_Generic_binary_at_origin1_Failed;
     rop_Binary_Generic_binary_at_origin1_Failed:
     IR_STUB_ESCAPE();
-    a_all6 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-    srcs7 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
-    _PyRop_RetireFailedCall(&a_all6, &srcs7);
+    a_all8 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    srcs9 = (_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}};
+    _PyRop_RetireFailedCall(&a_all8, &srcs9);
     PROCESS_ERROR_AT(RAISE, 23, this_instr);
 }
 IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_binary_at_origin1_Failed)
@@ -6769,32 +7085,41 @@ IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Moved) {
     _PyIRWord *const this_instr = next_instr;
     (void)this_instr;
     next_instr += 2;
-    PyValueBorrow a_view0;
-    PyValue a_owned0;
     PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
-    PyValueBorrow a_view1;
-    PyValue a_owned1;
+    PyValueBorrow l;
     PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
-    PyValue ret1;
+    PyValueBorrow r;
+    int ret1;
+    PyValue ret2;
     PyValue own_x = PyValue_NULL;
     PyValue own_y = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-    int adapt_before_use_binary2_c;
-    int ret2;
-    int adapt_before_use_binary2_cf;
+    int adapt_before_use_binary3_c;
     int ret3;
-    int adapt_before_use_binary2_ct;
+    int adapt_before_use_binary3_cf;
     int ret4;
-    int adapt_before_use_binary2_ce;
+    int adapt_before_use_binary3_ct;
     int ret5;
-    _PyRopAnchors a_all6;
-    _PyRopSrcs srcs7;
+    int adapt_before_use_binary3_ce;
+    int ret6;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret7;
     _PyRopAnchors a_all8;
+    _PyRopSrcs srcs9;
+    _PyRopAnchors a_all10;
+    double float_result2_v;
+    PyValue out11;
+    PyValue ret12;
+    PyValue inline_result;
     PyValue z;
     PyValue binary_at_origin1_value;
     PyValue binary_at_origin1_kept;
     PyValue binary_at_origin1_dropped;
+    PyValue float_result2_z;
     { const rop_in_Cold_Binary_Generic_binary_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Moved);
       a_view0 = ir_in->a_view0;
       a_owned0 = ir_in->a_owned0;
@@ -6807,11 +7132,107 @@ IR_OUTLINED_FN(Cold_Binary_Generic_binary_at_origin1_Moved) {
     IR_STUB_ESCAPE();
     _PyRop_DiscardResult(binary_at_origin1_dropped);
     IR_STUB_ESCAPE();
-    a_all8 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
-    _PyRop_RetireAbandoned(&a_all8);
+    a_all10 = (_PyRopAnchors){2, {a_view0, a_view1}, {a_owned0, a_owned1}};
+    _PyRop_RetireAbandoned(&a_all10);
     IR_REDIRECT();
 }
 IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_binary_at_origin1_Moved)
+#endif
+
+#ifndef IR_JIT_STENCILS
+IR_OUTLINED_FN(Cold_Binary_Generic_float_result2_NaN) {
+    // Binary.Generic: the cold region from rop_Binary_Generic_float_result2_NaN
+    int opcode = ROP_HANDLER_Binary_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    next_instr += 2;
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValueBorrow l;
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    PyValueBorrow r;
+    int ret1;
+    PyValue ret2;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_binary3_c;
+    int ret3;
+    int adapt_before_use_binary3_cf;
+    int ret4;
+    int adapt_before_use_binary3_ct;
+    int ret5;
+    int adapt_before_use_binary3_ce;
+    int ret6;
+    PyValueBorrow a_view0;
+    PyValue a_owned0;
+    PyValueBorrow a_view1;
+    PyValue a_owned1;
+    PyValue ret7;
+    _PyRopAnchors a_all8;
+    _PyRopSrcs srcs9;
+    _PyRopAnchors a_all10;
+    double float_result2_v;
+    PyValue out11;
+    PyValue ret12;
+    PyValue inline_result;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    PyValue float_result2_z;
+    { const rop_in_Cold_Binary_Generic_float_result2_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_float_result2_NaN);
+      own_x = ir_in->own_x;
+      own_y = ir_in->own_y;
+      float_result2_v = ir_in->float_result2_v;
+    }
+    goto rop_Binary_Generic_float_result2_NaN;
+    rop_Binary_Generic_Inline:
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_x = _PyFrame_TakeHome(frame, home_x);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        own_y = _PyFrame_TakeHome(frame, home_y);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, inline_result);
+    _PyValue_CheckHome(*home_dst);
+    ROP_TAIL_CLOSE(own_y, rop_Binary_Generic_Tail0_0);
+    ROP_TAIL_CLOSE(own_x, rop_Binary_Generic_Tail0_1);
+    ROP_TAIL_CLOSE(old_dst, rop_Binary_Generic_Tail0_2);
+    DISPATCH();
+    rop_Binary_Generic_Tail0_0:
+    IR_PUBLISH_IP();
+    ROP_TAIL_PARK_FIRST(own_y);
+    goto rop_Binary_Generic_Tail0_Rest1;
+    rop_Binary_Generic_Tail0_1:
+    IR_PUBLISH_IP();
+    ROP_TAIL_PARK_FIRST(own_x);
+    goto rop_Binary_Generic_Tail0_Rest2;
+    rop_Binary_Generic_Tail0_2:
+    IR_PUBLISH_IP();
+    ROP_TAIL_PARK_FIRST(old_dst);
+    goto rop_Binary_Generic_Tail0_Rest3;
+    rop_Binary_Generic_Tail0_Rest1:
+    ROP_TAIL_PARK(own_x);
+    rop_Binary_Generic_Tail0_Rest2:
+    ROP_TAIL_PARK(old_dst);
+    rop_Binary_Generic_Tail0_Rest3:
+    ROP_TAIL_DISPATCH();
+    rop_Binary_Generic_float_result2_Done:
+    inline_result = float_result2_z;
+    goto rop_Binary_Generic_Inline;
+    rop_Binary_Generic_float_result2_NaN:
+    IR_PUBLISH_IP();
+    ret12 = PyValue_FromDouble(float_result2_v);
+    if (!PyValue_IsNull(ret12)) {
+        float_result2_z = ret12;
+        goto rop_Binary_Generic_float_result2_Done;
+    }
+    PROCESS_ERROR_AT(RAISE, 21, this_instr);
+}
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_float_result2_NaN)
 #endif
 
         TARGET(Binary_Generic) {
@@ -6823,52 +7244,60 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_binary_at_origin1_Moved)
             IR_PUBLISH_IP_ENTRY();
             next_instr += 2;
             INSTRUCTION_STATS(ROP_HANDLER_Binary_Generic);
-            PyValueBorrow a_view0;
-            PyValue a_owned0;
             PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
-            PyValueBorrow a_view1;
-            PyValue a_owned1;
+            PyValueBorrow l;
             PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
-            PyValue ret1;
+            PyValueBorrow r;
+            int ret1;
+            PyValue ret2;
             PyValue own_x = PyValue_NULL;
             PyValue own_y = PyValue_NULL;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
-            int adapt_before_use_binary2_c;
-            int ret2;
-            int adapt_before_use_binary2_cf;
+            int adapt_before_use_binary3_c;
             int ret3;
-            int adapt_before_use_binary2_ct;
+            int adapt_before_use_binary3_cf;
             int ret4;
-            int adapt_before_use_binary2_ce;
+            int adapt_before_use_binary3_ct;
             int ret5;
-            _PyRopAnchors a_all6;
-            _PyRopSrcs srcs7;
+            int adapt_before_use_binary3_ce;
+            int ret6;
+            PyValueBorrow a_view0;
+            PyValue a_owned0;
+            PyValueBorrow a_view1;
+            PyValue a_owned1;
+            PyValue ret7;
             _PyRopAnchors a_all8;
+            _PyRopSrcs srcs9;
+            _PyRopAnchors a_all10;
+            double float_result2_v;
+            PyValue out11;
+            PyValue ret12;
+            PyValue inline_result;
             PyValue z;
             PyValue binary_at_origin1_value;
             PyValue binary_at_origin1_kept;
             PyValue binary_at_origin1_dropped;
+            PyValue float_result2_z;
             if (!_PyFb_TickQuiet(&((_PyFbBinary *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)))->h)) {
-                goto rop_Binary_Generic_adapt_before_use_binary2_Sample;
+                goto rop_Binary_Generic_adapt_before_use_binary3_Sample;
             }
-            a_view0 = PyValue_Borrow(*home_x);
-            a_owned0 = (ir_word & IR_F_LOCAL_B) ? PyValue_DUP(a_view0) : PyValue_NULL;
-            a_view1 = PyValue_Borrow(*home_y);
-            a_owned1 = (ir_word & IR_F_LOCAL_C) ? PyValue_DUP(a_view1) : PyValue_NULL;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            ret1 = _PyRop_BinaryInlineKind((uint32_t)IR_D(ir_word), l, r);
+            if (ret1 == 1) {
+                goto rop_Binary_Generic_Float;
+            }
+            if (ret1 == 2) {
+                goto rop_Binary_Generic_Slots;
+            }
             IR_PUBLISH_IP();
-            IR_STUB_ESCAPE();
-            ret1 = _PyEval_value_binary_op((uint32_t)IR_D(ir_word), a_view0, a_view1);
-            if (PyValue_IsNull(ret1)) {
-                goto rop_Binary_Generic_binary_at_origin1_Failed;
+            ret2 = _PyRop_IntBinary((uint32_t)IR_D(ir_word), _PyValue_IntScaled(l), _PyValue_IntScaled(r));
+            if (PyValue_IsNull(ret2)) {
+                goto rop_Binary_Generic_BoxFailed;
             }
-            binary_at_origin1_value = ret1;
-            if (_PyRop_RedirectPending(frame)) {
-                binary_at_origin1_dropped = binary_at_origin1_value;
-                goto rop_Binary_Generic_binary_at_origin1_Moved;
-            }
-            binary_at_origin1_kept = binary_at_origin1_value;
-            z = binary_at_origin1_kept;
+            inline_result = ret2;
+            rop_Binary_Generic_Inline:
             if (!(ir_word & IR_F_LOCAL_B)) {
                 own_x = _PyFrame_TakeHome(frame, home_x);
             }
@@ -6876,58 +7305,55 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Generic_binary_at_origin1_Moved)
                 own_y = _PyFrame_TakeHome(frame, home_y);
             }
             old_dst = *home_dst;
-            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyFrame_WriteHome(frame, home_dst, inline_result);
             _PyValue_CheckHome(*home_dst);
-            ROP_TAIL_CLOSE(a_owned0, rop_Binary_Generic_Tail0_0);
-            ROP_TAIL_CLOSE(a_owned1, rop_Binary_Generic_Tail0_1);
-            ROP_TAIL_CLOSE(own_y, rop_Binary_Generic_Tail0_2);
-            ROP_TAIL_CLOSE(own_x, rop_Binary_Generic_Tail0_3);
-            ROP_TAIL_CLOSE(old_dst, rop_Binary_Generic_Tail0_4);
+            ROP_TAIL_CLOSE(own_y, rop_Binary_Generic_Tail0_0);
+            ROP_TAIL_CLOSE(own_x, rop_Binary_Generic_Tail0_1);
+            ROP_TAIL_CLOSE(old_dst, rop_Binary_Generic_Tail0_2);
             DISPATCH();
             rop_Binary_Generic_Tail0_0:
-            ROP_TAIL_PARK_FIRST(a_owned0);
+            IR_PUBLISH_IP();
+            ROP_TAIL_PARK_FIRST(own_y);
             goto rop_Binary_Generic_Tail0_Rest1;
             rop_Binary_Generic_Tail0_1:
-            ROP_TAIL_PARK_FIRST(a_owned1);
+            IR_PUBLISH_IP();
+            ROP_TAIL_PARK_FIRST(own_x);
             goto rop_Binary_Generic_Tail0_Rest2;
             rop_Binary_Generic_Tail0_2:
-            ROP_TAIL_PARK_FIRST(own_y);
-            goto rop_Binary_Generic_Tail0_Rest3;
-            rop_Binary_Generic_Tail0_3:
-            ROP_TAIL_PARK_FIRST(own_x);
-            goto rop_Binary_Generic_Tail0_Rest4;
-            rop_Binary_Generic_Tail0_4:
+            IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
-            goto rop_Binary_Generic_Tail0_Rest5;
+            goto rop_Binary_Generic_Tail0_Rest3;
             rop_Binary_Generic_Tail0_Rest1:
-            ROP_TAIL_PARK(a_owned1);
-            rop_Binary_Generic_Tail0_Rest2:
-            ROP_TAIL_PARK(own_y);
-            rop_Binary_Generic_Tail0_Rest3:
             ROP_TAIL_PARK(own_x);
-            rop_Binary_Generic_Tail0_Rest4:
+            rop_Binary_Generic_Tail0_Rest2:
             ROP_TAIL_PARK(old_dst);
-            rop_Binary_Generic_Tail0_Rest5:
+            rop_Binary_Generic_Tail0_Rest3:
             ROP_TAIL_DISPATCH();
-            rop_Binary_Generic_adapt_before_use_binary2_Sample:
-            IR_OUTLINE_GOTO(Cold_Binary_Generic_adapt_before_use_binary2_Sample);
-            rop_Binary_Generic_binary_at_origin1_Failed:
-            { rop_in_Cold_Binary_Generic_binary_at_origin1_Failed *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Failed);
-              ir_in->a_view0 = a_view0;
-              ir_in->a_owned0 = a_owned0;
-              ir_in->a_view1 = a_view1;
-              ir_in->a_owned1 = a_owned1;
+            rop_Binary_Generic_adapt_before_use_binary3_Sample:
+            IR_OUTLINE_GOTO(Cold_Binary_Generic_adapt_before_use_binary3_Sample);
+            rop_Binary_Generic_Slots:
+            { rop_in_Cold_Binary_Generic_Slots *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_Slots);
+              ir_in->own_x = own_x;
+              ir_in->own_y = own_y;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Generic_binary_at_origin1_Failed);
-            rop_Binary_Generic_binary_at_origin1_Moved:
-            { rop_in_Cold_Binary_Generic_binary_at_origin1_Moved *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_binary_at_origin1_Moved);
-              ir_in->a_view0 = a_view0;
-              ir_in->a_owned0 = a_owned0;
-              ir_in->a_view1 = a_view1;
-              ir_in->a_owned1 = a_owned1;
-              ir_in->binary_at_origin1_dropped = binary_at_origin1_dropped;
+            IR_OUTLINE_GOTO(Cold_Binary_Generic_Slots);
+            rop_Binary_Generic_Float:
+            float_result2_v = _PyRop_FloatValue((uint32_t)IR_D(ir_word), PyValue_NumberAsDouble(l), PyValue_NumberAsDouble(r));
+            if (!_PyValue_FloatWord(float_result2_v, &out11)) {
+                goto rop_Binary_Generic_float_result2_NaN;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Generic_binary_at_origin1_Moved);
+            float_result2_z = out11;
+            inline_result = float_result2_z;
+            goto rop_Binary_Generic_Inline;
+            rop_Binary_Generic_float_result2_NaN:
+            { rop_in_Cold_Binary_Generic_float_result2_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Generic_float_result2_NaN);
+              ir_in->own_x = own_x;
+              ir_in->own_y = own_y;
+              ir_in->float_result2_v = float_result2_v;
+            }
+            IR_OUTLINE_GOTO(Cold_Binary_Generic_float_result2_NaN);
+            rop_Binary_Generic_BoxFailed:
+            PROCESS_ERROR_AT(RAISE, 21, this_instr);
         }
 
 #ifndef IR_JIT_STENCILS
@@ -26355,15 +26781,15 @@ IR_OUTLINED_JIT_ENTRY(Cold_NamespaceReadFrom_Mapping_Failed)
 
 typedef struct __attribute__((__may_alias__)) {
     double v;
-} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);
 #endif
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN) {
-    // Binary.Float_NB_INPLACE_ADD_TTT: the cold region from rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN) {
+    // Binary.Float_NB_INPLACE_ADD_TTT: the cold region from rop_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN
     int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_ADD_TTT;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -26380,27 +26806,29 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN) {
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue ret2;
     PyValue z;
-    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+    PyValue float_result1_z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);
       v = ir_in->v;
     }
-    goto rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN;
-    rop_Binary_Float_NB_INPLACE_ADD_TTT_Finish:
+    goto rop_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN;
+    rop_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_Done:
+    z = float_result1_z;
     _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     assert(PyValue_IsNull(*home_dst));
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     DISPATCH();
-    rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN:
+    rop_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN:
     IR_PUBLISH_IP();
     ret2 = PyValue_FromDouble(v);
     if (!PyValue_IsNull(ret2)) {
-        z = ret2;
-        goto rop_Binary_Float_NB_INPLACE_ADD_TTT_Finish;
+        float_result1_z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_Done;
     }
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
-IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN)
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN)
 #endif
 
         TARGET(Binary_Float_NB_INPLACE_ADD_TTT) {
@@ -26423,6 +26851,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (0));
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -26436,33 +26865,34 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN;
+                goto rop_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_INPLACE_ADD_TTT_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+            rop_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);
         }
 
 typedef struct __attribute__((__may_alias__)) {
     double v;
-} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN);
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN);
 #endif
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) {
-    // Binary.Float_NB_INPLACE_ADD_LTT: the cold region from rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN) {
+    // Binary.Float_NB_INPLACE_ADD_LTT: the cold region from rop_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN
     int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_ADD_LTT;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -26480,11 +26910,13 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) {
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue ret2;
     PyValue z;
-    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN);
+    PyValue float_result1_z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN);
       v = ir_in->v;
     }
-    goto rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN;
-    rop_Binary_Float_NB_INPLACE_ADD_LTT_Finish:
+    goto rop_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN;
+    rop_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_Done:
+    z = float_result1_z;
     _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     old_dst = *home_dst;
@@ -26496,16 +26928,16 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN) {
     IR_PUBLISH_IP();
     ROP_TAIL_PARK_FIRST(old_dst);
     ROP_TAIL_DISPATCH();
-    rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN:
+    rop_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN:
     IR_PUBLISH_IP();
     ret2 = PyValue_FromDouble(v);
     if (!PyValue_IsNull(ret2)) {
-        z = ret2;
-        goto rop_Binary_Float_NB_INPLACE_ADD_LTT_Finish;
+        float_result1_z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_Done;
     }
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
-IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN)
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN)
 #endif
 
         TARGET(Binary_Float_NB_INPLACE_ADD_LTT) {
@@ -26529,6 +26961,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_A));
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -26542,9 +26975,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN;
+                goto rop_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             old_dst = *home_dst;
@@ -26556,24 +26990,24 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_ADD_LTT_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN);
+            rop_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_LTT_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_LTT_float_result1_NaN);
         }
 
 typedef struct __attribute__((__may_alias__)) {
     double v;
-} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+} rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
 #endif
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_NaN) {
-    // Binary.Float_NB_INPLACE_ADD: the cold region from rop_Binary_Float_NB_INPLACE_ADD_NaN
+IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN) {
+    // Binary.Float_NB_INPLACE_ADD: the cold region from rop_Binary_Float_NB_INPLACE_ADD_float_result1_NaN
     int opcode = ROP_HANDLER_Binary_Float_NB_INPLACE_ADD;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -26591,11 +27025,13 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_NaN) {
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue ret2;
     PyValue z;
-    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+    PyValue float_result1_z;
+    { const rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
       v = ir_in->v;
     }
-    goto rop_Binary_Float_NB_INPLACE_ADD_NaN;
-    rop_Binary_Float_NB_INPLACE_ADD_Finish:
+    goto rop_Binary_Float_NB_INPLACE_ADD_float_result1_NaN;
+    rop_Binary_Float_NB_INPLACE_ADD_float_result1_Done:
+    z = float_result1_z;
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     }
@@ -26611,16 +27047,16 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_INPLACE_ADD_NaN) {
     IR_PUBLISH_IP();
     ROP_TAIL_PARK_FIRST(old_dst);
     ROP_TAIL_DISPATCH();
-    rop_Binary_Float_NB_INPLACE_ADD_NaN:
+    rop_Binary_Float_NB_INPLACE_ADD_float_result1_NaN:
     IR_PUBLISH_IP();
     ret2 = PyValue_FromDouble(v);
     if (!PyValue_IsNull(ret2)) {
-        z = ret2;
-        goto rop_Binary_Float_NB_INPLACE_ADD_Finish;
+        float_result1_z = ret2;
+        goto rop_Binary_Float_NB_INPLACE_ADD_float_result1_Done;
     }
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
-IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_NaN)
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN)
 #endif
 
         TARGET(Binary_Float_NB_INPLACE_ADD) {
@@ -26644,6 +27080,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -26656,9 +27093,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_INPLACE_ADD_NaN;
+                goto rop_Binary_Float_NB_INPLACE_ADD_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -26674,11 +27112,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_ADD_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_INPLACE_ADD_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_SUBTRACT_TTT) {
@@ -26701,6 +27139,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (0));
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -26714,33 +27153,34 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_INPLACE_ADD_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_SUBTRACT_TTT_NaN;
+                goto rop_Binary_Float_NB_SUBTRACT_TTT_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_SUBTRACT_TTT_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+            rop_Binary_Float_NB_SUBTRACT_TTT_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);
         }
 
 typedef struct __attribute__((__may_alias__)) {
     double v;
-} rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+} rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN);
+IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN);
 #endif
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) {
-    // Binary.Float_NB_SUBTRACT_LLL: the cold region from rop_Binary_Float_NB_SUBTRACT_LLL_NaN
+IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN) {
+    // Binary.Float_NB_SUBTRACT_LLL: the cold region from rop_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN
     int opcode = ROP_HANDLER_Binary_Float_NB_SUBTRACT_LLL;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -26758,11 +27198,13 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) {
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue ret2;
     PyValue z;
-    { const rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN);
+    PyValue float_result1_z;
+    { const rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN);
       v = ir_in->v;
     }
-    goto rop_Binary_Float_NB_SUBTRACT_LLL_NaN;
-    rop_Binary_Float_NB_SUBTRACT_LLL_Finish:
+    goto rop_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN;
+    rop_Binary_Float_NB_SUBTRACT_LLL_float_result1_Done:
+    z = float_result1_z;
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
@@ -26772,16 +27214,16 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN) {
     IR_PUBLISH_IP();
     ROP_TAIL_PARK_FIRST(old_dst);
     ROP_TAIL_DISPATCH();
-    rop_Binary_Float_NB_SUBTRACT_LLL_NaN:
+    rop_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN:
     IR_PUBLISH_IP();
     ret2 = PyValue_FromDouble(v);
     if (!PyValue_IsNull(ret2)) {
-        z = ret2;
-        goto rop_Binary_Float_NB_SUBTRACT_LLL_Finish;
+        float_result1_z = ret2;
+        goto rop_Binary_Float_NB_SUBTRACT_LLL_float_result1_Done;
     }
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
-IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN)
 #endif
 
         TARGET(Binary_Float_NB_SUBTRACT_LLL) {
@@ -26805,6 +27247,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C));
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -26818,9 +27261,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_SUBTRACT_LLL_NaN;
+                goto rop_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             old_dst = *home_dst;
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
@@ -26830,11 +27274,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_SUBTRACT_LLL_NaN:
-            { rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_NaN);
+            rop_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_SUBTRACT_LLL_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_SUBTRACT) {
@@ -26858,6 +27302,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -26870,9 +27315,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_SUBTRACT_NaN;
+                goto rop_Binary_Float_NB_SUBTRACT_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -26888,11 +27334,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_SUBTRACT_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_SUBTRACT_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_INPLACE_SUBTRACT) {
@@ -26916,6 +27362,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -26928,9 +27375,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_INPLACE_SUBTRACT_NaN;
+                goto rop_Binary_Float_NB_INPLACE_SUBTRACT_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -26946,24 +27394,24 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_SUBTRACT_LLL_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_SUBTRACT_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_INPLACE_SUBTRACT_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
 typedef struct __attribute__((__may_alias__)) {
     double v;
-} rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+} rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN);
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN);
 #endif
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN) {
-    // Binary.Float_NB_MULTIPLY_TLL: the cold region from rop_Binary_Float_NB_MULTIPLY_TLL_NaN
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN) {
+    // Binary.Float_NB_MULTIPLY_TLL: the cold region from rop_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN
     int opcode = ROP_HANDLER_Binary_Float_NB_MULTIPLY_TLL;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -26980,25 +27428,27 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN) {
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue ret2;
     PyValue z;
-    { const rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN);
+    PyValue float_result1_z;
+    { const rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN);
       v = ir_in->v;
     }
-    goto rop_Binary_Float_NB_MULTIPLY_TLL_NaN;
-    rop_Binary_Float_NB_MULTIPLY_TLL_Finish:
+    goto rop_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN;
+    rop_Binary_Float_NB_MULTIPLY_TLL_float_result1_Done:
+    z = float_result1_z;
     assert(PyValue_IsNull(*home_dst));
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     DISPATCH();
-    rop_Binary_Float_NB_MULTIPLY_TLL_NaN:
+    rop_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN:
     IR_PUBLISH_IP();
     ret2 = PyValue_FromDouble(v);
     if (!PyValue_IsNull(ret2)) {
-        z = ret2;
-        goto rop_Binary_Float_NB_MULTIPLY_TLL_Finish;
+        float_result1_z = ret2;
+        goto rop_Binary_Float_NB_MULTIPLY_TLL_float_result1_Done;
     }
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
-IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN)
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN)
 #endif
 
         TARGET(Binary_Float_NB_MULTIPLY_TLL) {
@@ -27021,6 +27471,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_B | IR_F_LOCAL_C));
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -27034,18 +27485,19 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_MULTIPLY_TLL_NaN;
+                goto rop_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_MULTIPLY_TLL_NaN:
-            { rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_NaN);
+            rop_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_MULTIPLY_TLL_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_MULTIPLY_TTT) {
@@ -27068,6 +27520,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (0));
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -27081,33 +27534,34 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TLL_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_MULTIPLY_TTT_NaN;
+                goto rop_Binary_Float_NB_MULTIPLY_TTT_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_MULTIPLY_TTT_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+            rop_Binary_Float_NB_MULTIPLY_TTT_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_TTT_float_result1_NaN);
         }
 
 typedef struct __attribute__((__may_alias__)) {
     double v;
-} rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+} rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN);
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN);
 #endif
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN) {
-    // Binary.Float_NB_MULTIPLY_TTL: the cold region from rop_Binary_Float_NB_MULTIPLY_TTL_NaN
+IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN) {
+    // Binary.Float_NB_MULTIPLY_TTL: the cold region from rop_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN
     int opcode = ROP_HANDLER_Binary_Float_NB_MULTIPLY_TTL;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -27124,26 +27578,28 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN) {
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue ret2;
     PyValue z;
-    { const rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN);
+    PyValue float_result1_z;
+    { const rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN);
       v = ir_in->v;
     }
-    goto rop_Binary_Float_NB_MULTIPLY_TTL_NaN;
-    rop_Binary_Float_NB_MULTIPLY_TTL_Finish:
+    goto rop_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN;
+    rop_Binary_Float_NB_MULTIPLY_TTL_float_result1_Done:
+    z = float_result1_z;
     _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
     assert(PyValue_IsNull(*home_dst));
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     DISPATCH();
-    rop_Binary_Float_NB_MULTIPLY_TTL_NaN:
+    rop_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN:
     IR_PUBLISH_IP();
     ret2 = PyValue_FromDouble(v);
     if (!PyValue_IsNull(ret2)) {
-        z = ret2;
-        goto rop_Binary_Float_NB_MULTIPLY_TTL_Finish;
+        float_result1_z = ret2;
+        goto rop_Binary_Float_NB_MULTIPLY_TTL_float_result1_Done;
     }
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
-IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN)
 #endif
 
         TARGET(Binary_Float_NB_MULTIPLY_TTL) {
@@ -27166,6 +27622,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_C));
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -27179,19 +27636,20 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_MULTIPLY_TTL_NaN;
+                goto rop_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_MULTIPLY_TTL_NaN:
-            { rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_NaN);
+            rop_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_MULTIPLY_TTL_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_MULTIPLY) {
@@ -27215,6 +27673,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -27227,9 +27686,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_MULTIPLY_NaN;
+                goto rop_Binary_Float_NB_MULTIPLY_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -27245,11 +27705,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_MULTIPLY_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_MULTIPLY_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_INPLACE_MULTIPLY) {
@@ -27273,6 +27733,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -27285,9 +27746,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_INPLACE_MULTIPLY_NaN;
+                goto rop_Binary_Float_NB_INPLACE_MULTIPLY_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -27303,24 +27765,24 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_MULTIPLY_TTL_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_MULTIPLY_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_INPLACE_MULTIPLY_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
 typedef struct __attribute__((__may_alias__)) {
     double v;
-} rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN;
-static_assert(sizeof(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
+} rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN;
+static_assert(sizeof(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN) <= IR_OUTLINE_IN_SIZE, "the activation holds a region's inputs");
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN);
+IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN);
 #endif
 
 #ifndef IR_JIT_STENCILS
-IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN) {
-    // Binary.Float_NB_TRUE_DIVIDE_TLT: the cold region from rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN
+IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN) {
+    // Binary.Float_NB_TRUE_DIVIDE_TLT: the cold region from rop_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN
     int opcode = ROP_HANDLER_Binary_Float_NB_TRUE_DIVIDE_TLT;
     (void)opcode;
     _PyIRWord *const this_instr = next_instr;
@@ -27337,26 +27799,28 @@ IR_OUTLINED_FN(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN) {
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue ret2;
     PyValue z;
-    { const rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN);
+    PyValue float_result1_z;
+    { const rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN);
       v = ir_in->v;
     }
-    goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN;
-    rop_Binary_Float_NB_TRUE_DIVIDE_TLT_Finish:
+    goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN;
+    rop_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_Done:
+    z = float_result1_z;
     _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
     assert(PyValue_IsNull(*home_dst));
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     DISPATCH();
-    rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN:
+    rop_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN:
     IR_PUBLISH_IP();
     ret2 = PyValue_FromDouble(v);
     if (!PyValue_IsNull(ret2)) {
-        z = ret2;
-        goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_Finish;
+        float_result1_z = ret2;
+        goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_Done;
     }
     PROCESS_ERROR_AT(RAISE, 21, this_instr);
 }
-IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
+IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN)
 #endif
 
         TARGET(Binary_Float_NB_TRUE_DIVIDE_TLT) {
@@ -27379,6 +27843,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             assert((ir_word & (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C)) == (IR_F_LOCAL_B));
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
@@ -27392,19 +27857,20 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN;
+                goto rop_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             _PyFrame_WriteHome(frame, home_y, PyValue_NULL);
             assert(PyValue_IsNull(*home_dst));
             _PyFrame_WriteHome(frame, home_dst, z);
             _PyValue_CheckHome(*home_dst);
             DISPATCH();
-            rop_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN:
-            { rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN);
+            rop_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_TRUE_DIVIDE) {
@@ -27428,6 +27894,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -27440,9 +27907,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_TRUE_DIVIDE_NaN;
+                goto rop_Binary_Float_NB_TRUE_DIVIDE_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -27458,11 +27926,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_TRUE_DIVIDE_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_TRUE_DIVIDE_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_INPLACE_TRUE_DIVIDE) {
@@ -27486,6 +27954,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -27498,9 +27967,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN;
+                goto rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -27516,11 +27986,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_INPLACE_TRUE_DIVIDE_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_POWER) {
@@ -27544,6 +28014,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -27556,9 +28027,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_POWER_NaN;
+                goto rop_Binary_Float_NB_POWER_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -27574,11 +28046,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_POWER_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_POWER_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
         TARGET(Binary_Float_NB_INPLACE_POWER) {
@@ -27602,6 +28074,7 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             PyValue ret2;
             PyValue z;
+            PyValue float_result1_z;
             l = PyValue_Borrow(*home_x);
             r = PyValue_Borrow(*home_y);
             if (!_PyRop_FloatOperands(l, r)) {
@@ -27614,9 +28087,10 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
                 JUMP_TO_PREDICTED(Binary_Generic);
             }
             if (!_PyValue_FloatWord(v, &out1)) {
-                goto rop_Binary_Float_NB_INPLACE_POWER_NaN;
+                goto rop_Binary_Float_NB_INPLACE_POWER_float_result1_NaN;
             }
-            z = out1;
+            float_result1_z = out1;
+            z = float_result1_z;
             if (!(ir_word & IR_F_LOCAL_B)) {
                 _PyFrame_WriteHome(frame, home_x, PyValue_NULL);
             }
@@ -27632,11 +28106,11 @@ IR_OUTLINED_JIT_ENTRY(Cold_Binary_Float_NB_TRUE_DIVIDE_TLT_NaN)
             IR_PUBLISH_IP();
             ROP_TAIL_PARK_FIRST(old_dst);
             ROP_TAIL_DISPATCH();
-            rop_Binary_Float_NB_INPLACE_POWER_NaN:
-            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            rop_Binary_Float_NB_INPLACE_POWER_float_result1_NaN:
+            { rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN *ir_in = IR_OUTLINE_IN(rop_in_Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
               ir_in->v = v;
             }
-            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_NaN);
+            IR_OUTLINE_GOTO(Cold_Binary_Float_NB_INPLACE_ADD_float_result1_NaN);
         }
 
         TARGET(Binary_Text) {

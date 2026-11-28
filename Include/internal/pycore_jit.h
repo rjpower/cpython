@@ -72,9 +72,42 @@ enum {
 #define _PyJIT_RETIRED  2   // the code is monitored: leave at once
 
 /* Warm-up events (frame entries and backward transfers) before jit=on
- * compiles a code object, and the most compiles of one code object. */
-#define _PyJIT_WARMUP       32
-#define _PyJIT_MAX_COMPILES 8
+ * compiles a code object.  A stale unit recompiles after as many more
+ * (Python/jit.c, _PyJit_Event()).  Words that change their arm make the
+ * unit stale at most twice under on (V8 stops optimising a function after
+ * repeated deoptimisations), and up to the cap under always, a test mode.
+ * Stubs reached also recompile, each time compiling the words that now
+ * have run, up to the cap of compiles of one code object. */
+#define _PyJIT_WARMUP               32
+#define _PyJIT_MAX_DEOPTS_ON        2
+#define _PyJIT_MAX_COMPILES         8
+
+/* Under on, a code whose compiled loop body would not fit the L1i is
+ * declined when it would compile: the hot bytes of the copies (or stubs)
+ * between a backward jump and its target, from the stencil table
+ * (Python/jit.c, loop_body_bytes()).  The body counts every path through
+ * the loop, of which an iteration runs one, so the bound is eight times a
+ * 32 KB L1i: it declines a body of straight-line copies that no L1i holds
+ * (unpack_sequence's 400 unpacks, 374 KB) but not a parser's long chain of
+ * branches whose iterations each run a few (re's _parse and _compile,
+ * 138 and 144 KB with the generic arms' sampling inline, 92 and 87 KB with
+ * it outlined).  At a 32 KB bound, which declines them, regex_compile runs
+ * 3% more instructions and cycles in the evaluator. */
+#define _PyJIT_MAX_LOOP_BYTES   (256 * 1024)
+
+/* The exits from compiled code into the evaluator, by kind
+ * (interp->ceval.jit_exits, Python/ceval_evaluator.h) */
+enum {
+    _PyJIT_EXIT_MISS,       // a guard failed: the family's generic arm
+    _PyJIT_EXIT_DIVERTED,   // the copy of a word that changed its arm
+    _PyJIT_EXIT_STUB,       // a word that had not run when it compiled
+    _PyJIT_EXIT_SWITCH,     // a frame switch to code without entries
+    _PyJIT_EXIT_CLOSE,      // the cold tail close of an arm
+    _PyJIT_EXIT_GEN_RETURN, // a generator's return
+    _PyJIT_EXIT_ERROR,      // an error: process_error
+    _PyJIT_EXIT_INTERPRET,  // a redirect, or a word again under a new arm
+    _PyJIT_EXIT_KINDS
+};
 
 typedef struct _PyJitUnit {
     /* 0 or _PyJIT_STALE | _PyJIT_RETIRED, which _PyJit_Event() reads;
@@ -141,8 +174,22 @@ extern void _PyJit_FiniInterpreter(PyInterpreterState *interp);
 
 /* Word instr of exec's code now names another arm (set_opcode(),
  * Python/specialize.c): its copy in every unit of the code goes to the
- * evaluator, and the newest unit, unless at the recompile cap, is stale. */
-extern void _PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr);
+ * evaluator, and the newest unit, unless at the recompile cap, is stale.
+ * forward: the word's entry is polymorphic or megamorphic, so the change
+ * moves the word up the feedback lattice. */
+extern void _PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr,
+                                   int forward);
+
+/* The stub of word instr of frame's code was reached (_PyEval_JitStub()):
+ * the word has run, and the reach counts as a warm-up event of the code;
+ * at the warm-up count the code's unit is stale, and the next warm-up event
+ * recompiles it with the word's copy. */
+extern void _PyJit_StubReached(PyThreadState *tstate,
+                               struct _PyInterpreterFrame *frame,
+                               const _PyInstr *instr);
+
+/* Whether word i's copy in unit is a stub (a word that had not run) */
+PyAPI_FUNC(int) _PyJit_IsStub(const _PyJitUnit *unit, uint32_t i);
 
 /* Whether word i's copy in unit goes to the evaluator, which
  * _PyJit_MarkWordChanged() makes it do */
@@ -162,7 +209,8 @@ PyAPI_FUNC(_PyJitUnit *) _PyJit_Compile(PyCodeObject *code);
 static inline void _PyJit_Retire(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_FreeUnits(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_MarkWordChanged(_PyCodeExec *Py_UNUSED(exec),
-                                          const _PyInstr *Py_UNUSED(instr)) {}
+                                          const _PyInstr *Py_UNUSED(instr),
+                                          int Py_UNUSED(forward)) {}
 static inline void _PyJit_Reclaim(PyInterpreterState *Py_UNUSED(interp)) {}
 static inline void _PyJit_FiniInterpreter(PyInterpreterState *Py_UNUSED(interp)) {}
 

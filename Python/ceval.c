@@ -2787,6 +2787,23 @@ _PyRop_SliceFromParts(const _PyRopSpan *parts)
 
 #include "ceval_tail.h"           // _PyEval_StartFrame(), _PyEval_ThrowFrame()
 
+_Py_COLD_FUNCTION void
+_PyEval_CloseParked(PyThreadState *tstate)
+{
+    _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
+    int n = activation->tail_closes;
+    assert(0 < n && n <= _PyEval_TAIL_CLOSES);
+    PyValue parked[_PyEval_TAIL_CLOSES];
+    for (int i = 0; i < n; i++) {
+        parked[i] = activation->tail_close[i];
+        _PyValue_RestoreLast(parked[i]);
+    }
+    activation->tail_closes = 0;
+    for (int i = 0; i < n; i++) {
+        PyValue_XCLOSE(parked[i]);
+    }
+}
+
 /* The driver: runs the frame to its end, the value that INTERPRETER_EXIT
  * takes, or NULL with an exception set, in the normal evaluator
  * (Python/ceval_normal.c), whose functions return only when the activation

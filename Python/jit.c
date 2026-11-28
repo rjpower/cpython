@@ -71,6 +71,8 @@ _PyJit_InitInterpreter(PyInterpreterState *interp)
     }
     interp->ceval.jit = mode;
     interp->ceval.jit_warmup = mode == _PyJIT_ALWAYS ? 1 : _PyJIT_WARMUP;
+    interp->ceval.jit_max_deopts = mode == _PyJIT_ALWAYS
+        ? _PyJIT_MAX_COMPILES : _PyJIT_MAX_DEOPTS_ON;
     /* PYTHON_JIT_WARMUP=N: the warm-up events before a code compiles under
      * on, from startup (always compiles at the first event) */
     const char *warmup = _Py_GetEnv(config->use_environment, "PYTHON_JIT_WARMUP");
@@ -109,6 +111,16 @@ _PyJit_IsAvailable(void)
  * as stencils (Python/jit_stencils.c, Tools/jit/stencils.py) */
 #include "ceval_tail.h"             // _PyEval_JitDispatch() and the other exits
 #include "generated_jit_stencils.h" // _PyJit_Stencils, the support image
+
+static_assert(_PyJIT_EXIT_KINDS <= Py_ARRAY_LENGTH(((struct _ceval_state *)0)->jit_exits),
+              "interp->ceval.jit_exits holds every exit kind");
+
+/* The code of exec compiles no more: it failed to place, or was declined */
+static void
+never_again(_PyCodeExec *exec)
+{
+    exec->jit_compiles = UINT16_MAX;
+}
 
 /* The static target of the word at i, a head word, or -1 */
 static int
@@ -284,6 +296,23 @@ part_rows(_PyJitUnwind *u, size_t *at, uint32_t *saved, size_t base,
     }
 }
 
+/* A stub's rows at offset base: the CIE's rule, which holds at every
+ * copy's start */
+static void
+stub_rows(_PyJitUnwind *u, size_t *at, uint32_t *saved, size_t base)
+{
+    assert(base >= *at);
+    _PyJitUnwind_Advance(u, (uint32_t)(base - *at));
+    *at = base;
+    for (unsigned reg = 0; reg < 32; reg++) {
+        if (reg != DWRF_REG_RA && (*saved & (1u << reg))) {
+            _PyJitUnwind_Restore(u, reg);
+        }
+    }
+    *saved = 0;
+    _PyJitUnwind_DefCfa(u, DWRF_REG_SP, 8);
+}
+
 /* The bytes of a frame for parts with ncfa ops in all */
 static size_t
 frame_bound(size_t nparts, size_t ncfa)
@@ -361,7 +390,8 @@ support_init(void)
 
 /* Where each head word's copy goes in the unit, by word index */
 typedef struct {
-    const _PyJitStencil *stencil;   // NULL: the word has no copy
+    const _PyJitStencil *stencil;   // NULL: the word has no copy of a stencil
+    uint8_t stub;                   // the word's copy is a stub (STUB below)
     uint32_t hot;                   // offsets in the block
     uint32_t cold;
     uint32_t data;
@@ -385,20 +415,30 @@ ends_in_continue(const _PyJitStencil *st)
     return 0;
 }
 
+/* The stub of a word that had not run when its unit compiled: the
+ * endbr64 that every copy starts with, so that divert_copy() can patch it as
+ * any copy, and a jmp to _PyEval_JitStub() */
+#define STUB_SIZE 9
+
 /* The state of one unit's compilation */
 typedef struct {
+    PyCodeObject *code;
+    _PyCodeExec *exec;
+    int stubs;                      // compile the words that have not run as stubs
     const _PyIRWord *words;
     uint32_t nwords;
     word_copy *copies;
     uint8_t *base;                  // the block
     uint64_t via_plt;
+    uint32_t nstubs;
 } _PyJitCompiler;
 
 /* The address of word j's copy, or 0 if it has none */
 static uintptr_t
 copy_of(const _PyJitCompiler *c, int64_t j)
 {
-    if (j < 0 || j >= c->nwords || c->copies[j].stencil == NULL) {
+    if (j < 0 || j >= c->nwords ||
+        (c->copies[j].stencil == NULL && !c->copies[j].stub)) {
         return 0;
     }
     return (uintptr_t)(c->base + c->copies[j].hot);
@@ -548,8 +588,30 @@ mark_stale(_PyJitUnit *unit)
  * each with endbr64 */
 static const uint8_t ENDBR64[4] = {0xF3, 0x0F, 0x1E, 0xFA};
 
+/* The bytes of a jmp at at to target, which every unit reaches by rel32
+ * (patch()) */
+static void
+jmp_to(uint8_t jmp[5], const uint8_t *at, const void *target)
+{
+    int64_t rel = (int64_t)((uintptr_t)target - (uintptr_t)(at + 5));
+    assert(rel == (int32_t)rel);
+    int32_t rel32 = (int32_t)rel;
+    jmp[0] = 0xE9;
+    memcpy(jmp + 1, &rel32, sizeof(rel32));
+}
+
+/* Whether the copy at start begins with a jmp to target after its endbr64 */
+static int
+jumps_to(const void *start, const void *target)
+{
+    const uint8_t *at = (const uint8_t *)start + sizeof(ENDBR64);
+    int32_t rel32;
+    memcpy(&rel32, at + 1, sizeof(rel32));
+    return at[0] == 0xE9 && (uintptr_t)(at + 5) + (intptr_t)rel32 == (uintptr_t)target;
+}
+
 /* Send each entry to word i's copy in unit to the evaluator: a jmp to
- * _PyEval_JitInterpret(), which runs the word under the arm that it names,
+ * _PyEval_JitDiverted(), which runs the word under the arm that it names,
  * over the copy's first instruction after its endbr64.  Every way into the
  * copy (an entry, the copy before it, a branch) arrives at its start with
  * next_instr at the word.  A thread that is inside the copy, at a call that
@@ -562,12 +624,8 @@ divert_copy(_PyJitUnit *unit, uint32_t i)
     assert(start >= unit->code.start && start < unit->code.start + unit->code.size);
     assert(memcmp(start, ENDBR64, sizeof(ENDBR64)) == 0);
     uint8_t *at = start + sizeof(ENDBR64);
-    uint8_t jmp[5] = {0xE9};
-    int64_t rel = (int64_t)((uintptr_t)_PyEval_JitInterpret - (uintptr_t)(at + 5));
-    /* The unit's exits reach the evaluator by rel32 (patch()) */
-    assert(rel == (int32_t)rel);
-    int32_t rel32 = (int32_t)rel;
-    memcpy(jmp + 1, &rel32, sizeof(rel32));
+    uint8_t jmp[5];
+    jmp_to(jmp, at, (const void *)_PyEval_JitDiverted);
     if (memcmp(at, jmp, sizeof(jmp)) == 0) {
         return;
     }
@@ -579,14 +637,58 @@ divert_copy(_PyJitUnit *unit, uint32_t i)
 int
 _PyJit_IsDiverted(const _PyJitUnit *unit, uint32_t i)
 {
-    if (unit->arms[i] == 0) {
-        return 0;
+    return unit->arms[i] != 0 &&
+           jumps_to(unit->entries[i], (const void *)_PyEval_JitDiverted);
+}
+
+int
+_PyJit_IsStub(const _PyJitUnit *unit, uint32_t i)
+{
+    return unit->arms[i] != 0 &&
+           jumps_to(unit->entries[i], (const void *)_PyEval_JitStub);
+}
+
+/* Whether word i of exec, the executing copy of code, has run since its
+ * code was lowered.  It has unless it names the generic arm that lowering
+ * chose and its own feedback entry is as lowering left it: cold, with the
+ * warm-up counter, which a generic arm advances at its first run, and no
+ * stub reached.  A word without an entry of its own counts as run. */
+static int
+word_has_run(PyCodeObject *code, _PyCodeExec *exec, uint32_t i)
+{
+    _PyIRWord w = exec->words[i];
+    if (_PyIR_DeclaredArm(IR_HANDLER(w)) !=
+        _PyIR_DeclaredArm(_PyCode_InstrHandler(code, (int)i))) {
+        return 1;
     }
-    const uint8_t *at = (const uint8_t *)unit->entries[i] + sizeof(ENDBR64);
-    int32_t rel32;
-    memcpy(&rel32, at + 1, sizeof(rel32));
-    return at[0] == 0xE9 &&
-           (uintptr_t)(at + 5) + (intptr_t)rel32 == (uintptr_t)_PyEval_JitInterpret;
+    _PyFbHeader *h = _PyIR_InstrFeedback(code, exec, &exec->words[i]);
+    if (h == NULL || h == _PyIR_FbEntry(exec->words, IR_FB_SHARED)) {
+        return 1;
+    }
+    return h->state != FB_COLD || h->jit_reached ||
+           h->counter.value_and_backoff != adaptive_counter_warmup().value_and_backoff;
+}
+
+void
+_PyJit_StubReached(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   const _PyInstr *instr)
+{
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    _PyCodeExec *exec = _PyFrame_Exec(frame);
+    _PyFbHeader *h = _PyIR_InstrFeedback(code, exec, instr);
+    assert(h != NULL);
+    h->jit_reached = 1;
+    _PyJitUnit *unit = exec->jit_unit;
+    if (unit == NULL || unit->invalid != 0 ||
+        exec->jit_compiles >= _PyJIT_MAX_COMPILES) {
+        return;
+    }
+    /* The unit stays published until the stubs reached earn a warm-up;
+     * then it is stale with that warm-up earned, and the next warm-up
+     * event recompiles (_PyJit_Event()) */
+    if (++exec->jit_heat >= tstate->interp->ceval.jit_warmup) {
+        mark_stale(unit);
+    }
 }
 
 /* Word instr of exec's code changed its arm (set_opcode() in
@@ -594,10 +696,19 @@ _PyJit_IsDiverted(const _PyJitUnit *unit, uint32_t i)
  * copy reads the feedback as the old arm left it: the copy goes to the
  * evaluator from now on, in the units that frames may still be running too.
  * The newest unit is stale and the next warm-up event recompiles the code.
- * A unit at the recompile cap is never marked: it runs on, its changed words
- * in the evaluator. */
+ * The recompile waits until the code earns another warm-up, so that a code
+ * whose words are still settling compiles once they have (V8 backs off
+ * reoptimisation the same way).  A code that has used its compiles, or a
+ * word that deoptimises once the code has used its recompiles for those
+ * (jit_max_deopts), leaves the unit as it is: it runs on, its changed
+ * words in the evaluator.  A word whose entry has gone polymorphic or
+ * megamorphic (forward) moves up the feedback lattice: to its poly arm, or
+ * to its generic arm for good (Python/specialize.c, toward_generic()).
+ * The recompile that answers it is not counted against the deopts: the
+ * lattice bounds such moves to two per word, and a code whose words settle
+ * one by one still compiles them all. */
 void
-_PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr)
+_PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr, int forward)
 {
     assert(instr >= exec->words && instr < exec->words + exec->nwords);
     uint32_t i = (uint32_t)(instr - exec->words);
@@ -608,11 +719,24 @@ _PyJit_MarkWordChanged(_PyCodeExec *exec, const _PyInstr *instr)
         }
     }
     _PyJitUnit *unit = exec->jit_unit;
-    if (unit != NULL && !(unit->invalid & _PyJIT_STALE) &&
-        exec->jit_compiles < _PyJIT_MAX_COMPILES)
-    {
-        mark_stale(unit);
+    if (unit == NULL || (unit->invalid & _PyJIT_STALE) ||
+        exec->jit_compiles >= _PyJIT_MAX_COMPILES) {
+        return;
     }
+    /* A word that the unit compiled as its family's generic arm (or as a
+     * stub) has new feedback, as a stub reached has; one that leaves a
+     * specialised arm deoptimises, which only jit_max_deopts recompiles
+     * answer */
+    int old = unit->arms[i];
+    int deopt = old != 0 && _PyJit_GenericOf(old) != old && !forward;
+    if (deopt &&
+        exec->jit_deopts >= _PyInterpreterState_GET()->ceval.jit_max_deopts) {
+        return;
+    }
+    exec->jit_deopts += deopt;
+    /* The recompile waits for the code to earn another warm-up */
+    exec->jit_heat = 0;
+    mark_stale(unit);
 }
 
 /* The unit's code: each head word's copy, in word order (hot parts, then
@@ -634,9 +758,16 @@ emit_unit(_PyJitCompiler *c, _PyJitUnit *unit)
              * the evaluator, which runs it */
             continue;
         }
-        wc->stencil = st;
         unit->arms[i] = (uint16_t)IR_HANDLER(words[i]);
         wc->hot = (uint32_t)hot;
+        if (c->stubs && !word_has_run(c->code, c->exec, i)) {
+            wc->stub = 1;
+            wc->hot_size = STUB_SIZE;
+            hot += STUB_SIZE;
+            nparts++;
+            continue;
+        }
+        wc->stencil = st;
         wc->hot_size = st->parts[_PyJit_PART_HOT].size;
         uint32_t next = i + (uint32_t)_PyIR_WordLength(words[i]);
         if (next < nwords && _PyJit_Stencils[IR_HANDLER(words[next])].name != NULL &&
@@ -686,6 +817,10 @@ emit_unit(_PyJitCompiler *c, _PyJitUnit *unit)
     for (int p = _PyJit_PART_HOT; p <= _PyJit_PART_COLD; p++) {
         for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
             const word_copy *wc = &c->copies[i];
+            if (wc->stub && p == _PyJit_PART_HOT) {
+                stub_rows(&u, &at, &saved, wc->hot);
+                continue;
+            }
             if (wc->stencil == NULL || wc->stencil->parts[p].bytes == NULL) {
                 continue;
             }
@@ -710,7 +845,14 @@ emit_unit(_PyJitCompiler *c, _PyJitUnit *unit)
     c->base = unit->code.start;
     memset(c->base, 0xCC, frame_offset);
     for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
-        if (c->copies[i].stencil != NULL && copy_word(c, i) < 0) {
+        if (c->copies[i].stub) {
+            uint8_t *at = c->base + c->copies[i].hot;
+            memcpy(at, ENDBR64, sizeof(ENDBR64));
+            jmp_to(at + sizeof(ENDBR64), at + sizeof(ENDBR64),
+                   (const void *)_PyEval_JitStub);
+            c->nstubs++;
+        }
+        else if (c->copies[i].stencil != NULL && copy_word(c, i) < 0) {
             PyMem_RawFree(frame);
             _PyJitMemory_Free(&unit->code);
             return 0;
@@ -746,6 +888,31 @@ free_unit(_PyJitUnit *unit)
     PyMem_RawFree(unit);
 }
 
+static _PyJitUnit *compile(PyCodeObject *code, _PyCodeExec *exec);
+
+/* The __init__ shim (_Py_InitCleanup, _PyIR_InitCleanupExec), which every
+ * object built by Call.Init returns through, is compiled once per process
+ * with the first compile, so that a construction in compiled code returns
+ * into compiled code.  Its two words (InitResult.Check and a return) have
+ * no feedback and never change: the unit is never stale, and like the
+ * static exec it lives until the process ends.  The exec is shared by
+ * every interpreter, so its entries are published once, under the lock. */
+static struct {
+    PyMutex lock;
+    int state;                      // 0 not tried, 1 compiled, -1 failed
+} shim;
+
+static void
+shim_init(void)
+{
+    PyMutex_Lock(&shim.lock);
+    if (shim.state == 0) {
+        shim.state = compile((PyCodeObject *)&_Py_InitCleanup,
+                             &_PyIR_InitCleanupExec) != NULL ? 1 : -1;
+    }
+    PyMutex_Unlock(&shim.lock);
+}
+
 /* Compile the words of exec, the executing copy of code, into a new unit
  * and make it the exec's.  Returns NULL if the code is observed, which runs
  * in the observing evaluator, or cannot be placed. */
@@ -764,8 +931,12 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     if (support_init() < 0) {
         /* No code memory, or the support image does not reach: no unit
          * will compile */
-        exec->jit_compiles = _PyJIT_MAX_COMPILES;
+        never_again(exec);
         return NULL;
+    }
+    int is_shim = exec == &_PyIR_InitCleanupExec;
+    if (!is_shim && shim.state == 0) {
+        shim_init();
     }
     const _PyIRWord *words = exec->words;
     uint32_t nwords = exec->nwords;
@@ -788,7 +959,10 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     unpublish(exec);
     unit->warm_heads = rewrite_heads(exec, ROP_HANDLER_Resume_Warm,
                                      ROP_HANDLER_Resume_Poll) > 0;
-    _PyJitCompiler c = {.words = words, .nwords = nwords, .copies = copies};
+    /* always, a test mode, compiles every word */
+    _PyJitCompiler c = {.code = code, .exec = exec,
+                        .stubs = interp->ceval.jit == _PyJIT_ON && !is_shim,
+                        .words = words, .nwords = nwords, .copies = copies};
     size_t frame_offset = emit_unit(&c, unit);
     PyMem_RawFree(copies);
     exec->jit_compiles++;
@@ -798,7 +972,7 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     if (frame_offset == 0) {
         /* Out of code memory, or a hole that does not reach: do not try
          * this code again */
-        exec->jit_compiles = _PyJIT_MAX_COMPILES;
+        never_again(exec);
         if (unit->warm_heads) {
             rewrite_heads(exec, ROP_HANDLER_Resume_Poll, ROP_HANDLER_Resume_Warm);
         }
@@ -833,6 +1007,48 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     return unit;
 }
 
+/* The most hot bytes that the compiled body of one loop of exec would take:
+ * the copies (or stubs) of the head words from a backward jump's target to
+ * the jump, from the stencil table.  A loop whose body does not fit the L1i
+ * runs its copies from beyond it, and each copy predicts its branches on
+ * its own: compiled, it runs slower than the interpreter's one copy of each
+ * arm.  Returns 0 if the hot bytes cannot be counted (no memory). */
+static size_t
+loop_body_bytes(PyCodeObject *code, _PyCodeExec *exec)
+{
+    const _PyIRWord *words = exec->words;
+    uint32_t nwords = exec->nwords;
+    /* before[i]: the hot bytes of the head words before word i */
+    size_t *before = PyMem_RawMalloc((nwords + 1) * sizeof(size_t));
+    if (before == NULL) {
+        return 0;
+    }
+    size_t hot = 0;
+    for (uint32_t i = 0; i < nwords;) {
+        uint32_t next = i + (uint32_t)_PyIR_WordLength(words[i]);
+        for (uint32_t k = i; k < next && k <= nwords; k++) {
+            before[k] = hot;
+        }
+        const _PyJitStencil *st = &_PyJit_Stencils[IR_HANDLER(words[i])];
+        if (st->name != NULL) {
+            hot += word_has_run(code, exec, i)
+                   ? st->parts[_PyJit_PART_HOT].size : STUB_SIZE;
+        }
+        i = next;
+    }
+    before[nwords] = hot;
+    size_t most = 0;
+    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+        int target = static_target(words, i);
+        if (0 <= target && (uint32_t)target <= i) {
+            size_t body = before[i + _PyIR_WordLength(words[i])] - before[target];
+            most = Py_MAX(most, body);
+        }
+    }
+    PyMem_RawFree(before);
+    return most;
+}
+
 _PyJitUnit *
 _PyJit_Event(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
@@ -848,21 +1064,36 @@ _PyJit_Event(PyThreadState *tstate, _PyInterpreterFrame *frame)
          * it off. */
         return NULL;
     }
-    if (unit != NULL && unit->invalid == _PyJIT_STALE) {
-        if (exec->jit_compiles >= _PyJIT_MAX_COMPILES) {
-            unit->invalid = 0;
-            publish(exec, unit);
-            return unit;
-        }
+    uint32_t max_compiles = _PyJIT_MAX_COMPILES;
+    if (unit != NULL && unit->invalid == _PyJIT_STALE &&
+        exec->jit_compiles >= max_compiles) {
+        unit->invalid = 0;
+        publish(exec, unit);
+        return unit;
     }
-    else {
-        if (++exec->jit_heat < tstate->interp->ceval.jit_warmup ||
-            exec->jit_compiles >= _PyJIT_MAX_COMPILES) {
-            return NULL;
-        }
+    /* A first compile, or a stale unit's recompile, once the code has
+     * earned a warm-up since it went stale */
+    if (++exec->jit_heat < tstate->interp->ceval.jit_warmup ||
+        exec->jit_compiles >= max_compiles) {
+        return NULL;
     }
     exec->jit_heat = 0;
-    return compile(_PyFrame_GetCode(frame), exec);
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    /* Under on, a code whose loop body would not fit the L1i is declined
+     * (V8 declines to optimise a function over a size limit), at its first
+     * compile or at a recompile whose words grew: a stale unit is retired,
+     * so that the code runs in the evaluator rather than through its
+     * diverted copies */
+    if (tstate->interp->ceval.jit == _PyJIT_ON &&
+        loop_body_bytes(code, exec) > _PyJIT_MAX_LOOP_BYTES) {
+        if (unit != NULL) {
+            _PyJit_Retire(exec);
+        }
+        never_again(exec);
+        tstate->interp->ceval.jit_declined++;
+        return NULL;
+    }
+    return compile(code, exec);
 }
 
 _PyJitUnit *

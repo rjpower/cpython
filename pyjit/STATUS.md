@@ -38,7 +38,7 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `36856b2389b` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3 and J4 merged, below) holds:
+`pyjit/rir90` at `caeded6d91c` (pushed; OB, JX, TI, EP, LR, CO, GN, FP, OM, LY, JT, J1, HS, J2, J3, J4, TR and J5 merged, below) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
@@ -571,11 +571,55 @@ lowering from the families.  The four completion arms that `gen_return`
 calls stay, generated into `ceval_steps.c`, and the JIT memory pool keeps
 its tests.
 
-J5 is shrinking the hot code.  The generator prints each arm's rare paths
-as functions of their own: the arm tail-calls a path that ends in an exit,
-and calls a path that rejoins through a convention that clobbers nothing.
-The fast path then pays nothing for them.  Each such function exists once
-in the binary, not in every compiled copy.
+**TR, merged at `a05d8391245`**: `test_tracemalloc` warms its assertion
+helpers past the JIT's compile, specialise and recompile steps before it
+measures.  The recompiles in the measured window were by design.  It found
+a JIT follow-up: a superseded unit stays on its code's chain until the code
+dies, up to 8 per code, because a changed word is diverted in every unit
+that frames may still be running in.
+
+**J5, merged at `caeded6d91c`**: the arms' rare paths are functions the
+generator prints.
+- A cold region that ends in a declared exit becomes a function that the
+  arm tail-calls, shared where identical (171 functions).
+- A rare case that rejoins the fast path is declared `cold` in the `.rop`
+  language, and the arm continues in an outlined copy of its rest.
+  GCC 15's register-preserving convention did not keep fast paths frameless.
+- The JIT reaches each such function's one copy in the binary.  A compiled
+  frame switch jumps straight to the callee's entry.  Stencils are compiled
+  without alignment padding.
+
+Stencil hot bytes fall 14% (195,061 to 167,743).  Per arm:
+- `Binary.Float` multiply 302 to 230;
+- `Return.Empty` 1,190 to 921;
+- `Add.Int_TLL` 169 to 151;
+- `Call.Exact` and the unpack arms barely move: what remains in them is
+  inlined helper code (frame pop and clear, frame fill, item publish), not
+  rare paths.
+
+The interpreter's arms lose 6% of their hot bytes; `add_int` gains 3.3% of
+its instructions from register shuffles.  Moving the publish loop's rest
+out of line was reverted, because it cost unpack_sequence 7% of its cycles.
+The stack protector stays.  Removing its triggers cut the protected arms
+from 103 to 58; the rest need span-pointer helper signatures made
+by-value.
+
+Timing at `caeded6d91c` (all-29, CPU 15, against golden87 with its JIT
+off; good page placement; `bench/rir90-j5-caeded6d91c.md` in the rir90
+evidence):
+- **interpreter 1.013** (from 1.026); 19 benchmarks within 5%, 26 within
+  10%;
+- **JIT always 1.024 warm** (1.087 cold), from 1.174; the default mode runs
+  1.031;
+- the JIT runs **1.011 of the interpreter's time** (from 1.144) and is
+  faster on 16 of 29: nbody 0.92, spectral_norm 0.92, deepcopy_memo 0.91,
+  comprehensions 0.94, fannkuch 0.94;
+- slower under the JIT: unpack_sequence 1.37 (400 copies of large arms),
+  logging_format 1.20, logging_simple 1.14, deltablue 1.11.
+
+Full suites at this join are running.  The next step for the JIT waits for
+the user: account the benchmarks where it is slower, then decide how to
+shrink the inlined helpers.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

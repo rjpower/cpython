@@ -99,6 +99,14 @@ typedef PyValue (Py_IR_TAIL_CC *_PyIRTailFn)(Py_IR_TAIL_PARAMS);
         Py_MUSTTAIL return IR_TAIL_ID(NAME)(tstate, frame, next_instr, ir_word); \
     } while (0)
 
+/* Give the values that an arm's tail closes parked (ROP_TAIL_CLOSE,
+ * Python/ceval_macros.h), which have no count, their last counts back before
+ * any code runs, then close them in close order.  The values leave the
+ * activation first, so that the closes, which run code, see none parked.
+ * close_dispatch calls it, and compiled code calls it before it goes on to
+ * its next copy (Python/jit_stencils.c). */
+extern void _PyEval_CloseParked(PyThreadState *tstate);
+
 /* The entries of the two evaluators, where a frame goes on at next_instr
  * after the other one switched it (the switch word, IR_H_SWITCH, or an
  * error that unwinds into a frame of the other evaluator) */

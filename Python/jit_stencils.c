@@ -137,6 +137,23 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
     } while (0)
 #undef JUMP_TO_LABEL
 #define JUMP_TO_LABEL(name) IR_JIT_GOTO(_JIT_LABEL_##name, IR_JIT_NO_WORD())
+/* An arm's tail closes (ROP_TAIL_CLOSE, Python/ceval_macros.h) close what
+ * they parked by a call, and the copy goes on to its next word's or its
+ * target's copy, as the arm would without them: the frame stays in the
+ * unit */
+#undef ROP_TAIL_DISPATCH
+#define ROP_TAIL_DISPATCH() \
+    do { \
+        _PyEval_CloseParked(tstate); \
+        DISPATCH(); \
+    } while (0)
+#undef ROP_TAIL_BRANCH
+#define ROP_TAIL_BRANCH(T) \
+    do { \
+        _PyInstr *rop_close_target = (T); \
+        _PyEval_CloseParked(tstate); \
+        IR_BRANCH(rop_close_target); \
+    } while (0)
 /* An outlined cold region runs in the normal evaluator, from its entry for
  * compiled code (IR_OUTLINED_JIT_ENTRY, Python/ceval_evaluator.h): a symbol
  * of libpython, which the reader takes as an EXTERN hole */

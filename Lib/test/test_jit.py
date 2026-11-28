@@ -1665,6 +1665,30 @@ class TestCompilePolicy(JitTestCase):
         """, "jit=always")
         self.assertEqual(out.splitlines(), [str(sum(range(1000))), "True"])
 
+    def test_tail_closes_stay_in_the_unit(self):
+        # A copy whose publish drops the last reference to the old value
+        # closes it by a call and goes on to the next copy: a finalizer
+        # runs, in order, and no close leaves for the evaluator
+        out = run("""
+            import _testinternalcapi as t
+            log = []
+            class D:
+                def __init__(self, k): self.k = k
+                def __sub__(self, other): return D(self.k - other.k)
+                def __del__(self): log.append(self.k)
+            def f(n, a, b):
+                x = None
+                for i in range(n):
+                    x = a - b
+                return x
+            f(10, {1, 2}, {2})
+            before = t.jit_stats()["exits"]["close"]
+            print(f(1000, {1, 2}, {2}))
+            print(f(10, D(5), D(2)).k, log.count(3))
+            print(t.jit_stats()["exits"]["close"] - before)
+        """, "jit=always")
+        self.assertEqual(out.splitlines(), ["{1}", "3 10", "0"])
+
 TRANSFER_PRELUDE = """
 import sys, weakref, _testinternalcapi as t
 def stats():

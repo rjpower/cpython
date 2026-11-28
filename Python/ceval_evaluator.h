@@ -117,19 +117,9 @@ IR_TAIL_FN(observe_word)
  * so that the closes, which run code, see none parked. */
 IR_TAIL_FN(close_dispatch)
 {
-    _PyEvalActivation *activation = IR_ACTIVATION();
-    int n = activation->tail_closes;
-    assert(0 < n && n <= _PyEval_TAIL_CLOSES);
-    PyValue parked[_PyEval_TAIL_CLOSES];
-    for (int i = 0; i < n; i++) {
-        parked[i] = activation->tail_close[i];
-        _PyValue_RestoreLast(parked[i]);
-    }
-    activation->tail_closes = 0;
-    for (int i = 0; i < n; i++) {
-        PyValue_XCLOSE(parked[i]);
-    }
-    /* The cold exit of a compiled arm: the frame goes back to its unit */
+    _PyEval_CloseParked(tstate);
+    /* The cold exit of an outlined region that compiled code ran: the
+     * frame goes back to its unit */
     IR_JIT_SWITCH();
     int opcode;
     DISPATCH();

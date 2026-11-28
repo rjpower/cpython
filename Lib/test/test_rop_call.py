@@ -77,6 +77,29 @@ class ReturnTests(unittest.TestCase):
         force(f, "RETURN_VALUE", "Return.Empty")
         self.assertEqual(f(21), 42)
 
+    def test_empty_leaves_the_slots_null(self):
+        # The plain return clears the fixed slots: the constants, the
+        # discard slot and a closure's locals.  A frame of another code at
+        # the same place finds its locals unbound.
+        k = 7
+
+        def f(a):
+            b = (a, "one", "two", "three")
+            return b[0] + k
+
+        def g():
+            try:
+                return x  # noqa: F821
+            except UnboundLocalError:
+                return "unbound"
+            x = 0  # noqa: F841
+
+        warm(f, 1)
+        self.assertIn("Return.Empty", word_names(f.__code__))
+        for _ in range(100):
+            self.assertEqual(f(1), 8)
+            self.assertEqual(g(), "unbound")
+
     def test_finalizer_of_the_dying_frame(self):
         seen = []
 

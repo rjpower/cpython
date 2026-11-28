@@ -748,6 +748,33 @@ _PyFrame_ClearSlots(_PyInterpreterFrame *frame, int n)
     Py_CLEAR(frame->f_locals);
 }
 
+/* _PyFrame_ClearSlots() over the fixed slots (nfixed), for a frame whose
+ * scratch is vacant.  The discard slot is the last fixed slot, so no slot
+ * above it can own a value: the clear takes the layout from the code's
+ * constant block and tests no upper range. */
+static inline void
+_PyFrame_ClearFixedSlots(_PyInterpreterFrame *frame)
+{
+    PyValue *locals = frame->base;
+    const _PyCodeExec *exec = _PyFrame_Exec(frame);
+#ifdef Py_DEBUG
+    _PyValue_CheckFrameExtent(frame, (int)exec->nfixed);
+#endif
+    PyValue *consts = locals + exec->const_first;
+    int nconst = exec->nconst;
+    PyValue *discard = consts + nconst;
+    // The cleanup shim of __init__ has no discard slot: its block is empty
+    assert(exec == &_PyIR_InitCleanupExec ||
+           discard + 1 == locals + exec->nfixed);
+    // The zeroing writes the discard slot for an odd count: close it first
+    _PyFrame_ClearSlot(discard);
+    if (nconst) {
+        _PyFrame_ZeroConstSlots(consts, nconst);
+    }
+    _PyFrame_ClearRange(locals, consts);
+    Py_CLEAR(frame->f_locals);
+}
+
 /* Retire the owners of an unlinked frame as upstream's
  * _PyFrame_ClearExceptCode() does: detach the frame object, then NULL and
  * close each of the first extent slots from the top, then close the locals

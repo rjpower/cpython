@@ -776,7 +776,7 @@ _PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
                     || tstate->last_profiled_frame == frame)) {
         return _PyEval_FrameClearAndPopGeneralWithResult(tstate, frame, result);
     }
-    _PyFrame_ClearSlots(frame, (int)_PyFrame_Exec(frame)->nfixed);
+    _PyFrame_ClearFixedSlots(frame);
     // The frame holds both, and is dead: nothing reads the pointers again
     assert(frame->f_funcobj != NULL);
     Py_DECREF(frame->f_funcobj);
@@ -2773,7 +2773,7 @@ _PyRop_RetireFrameEmpty(PyThreadState *tstate, _PyInterpreterFrame *dying)
     assert(tstate->current_frame != dying);
     assert((PyObject **)dying == tstate->datastack_limit);
     assert(_PyRop_FrameUnobserved(tstate, dying));
-    _PyFrame_ClearSlots(dying, (int)_PyFrame_Exec(dying)->nfixed);
+    _PyFrame_ClearFixedSlots(dying);
     assert(dying->f_funcobj != NULL);
     Py_DECREF(dying->f_funcobj);
     Py_DECREF(dying->f_executable);

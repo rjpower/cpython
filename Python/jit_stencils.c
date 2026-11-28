@@ -83,14 +83,29 @@ IR_JIT_EXIT(_JIT_LABEL_gen_return);
         PyThreadState *tstate, _PyInterpreterFrame *frame, \
         _PyInstr *next_instr, _PyIRWord ir_jit_word_in)
 
+/* A field is 12 bits (Include/internal/pycore_ir.h).  The hole is the
+ * displacement of a 32-bit lea, whose result x86 zero-extends; GCC, told
+ * only of a uint32_t, may compute it with a 64-bit lea and mask it after
+ * scaling it into an address (movabs, shl, and).  So the binding is the
+ * 32-bit lea itself, a 64-bit value, with the field's range: a scaled field
+ * then folds into the address that uses it. */
 #undef IR_A
 #undef IR_B
 #undef IR_C
 #undef IR_D
-#define IR_A(W) ((uint32_t)(uintptr_t)_JIT_A)
-#define IR_B(W) ((uint32_t)(uintptr_t)_JIT_B)
-#define IR_C(W) ((uint32_t)(uintptr_t)_JIT_C)
-#define IR_D(W) ((uint32_t)(uintptr_t)_JIT_D)
+#define IR_JIT_FIELD(X) \
+    ({ \
+        uint64_t ir_jit_field; \
+        __asm__("lea _JIT_" #X "(%%rip), %k0" : "=r"(ir_jit_field)); \
+        if (ir_jit_field > IR_FIELD_MAX) { \
+            __builtin_unreachable(); \
+        } \
+        (uint32_t)ir_jit_field; \
+    })
+#define IR_A(W) IR_JIT_FIELD(A)
+#define IR_B(W) IR_JIT_FIELD(B)
+#define IR_C(W) IR_JIT_FIELD(C)
+#define IR_D(W) IR_JIT_FIELD(D)
 #define ir_word FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr)
 
 #undef DISPATCH
